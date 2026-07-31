@@ -1,0 +1,23 @@
+project_id = "fpc-pms"
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "https://faceprepcampus.com"]
+jwt_expiry = 3600
+enable_signup = true
+
+# Students and staff sign in with Google. The database allowlist in
+# migration 0009 is what actually restricts who may create an account:
+# only rostered student addresses and Admin-invited staff get through.
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
+skip_nonce_check = false
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+[db]
+major_version = 17

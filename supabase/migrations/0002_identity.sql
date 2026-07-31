@@ -63,9 +63,9 @@ create table settings (
   updated_at  timestamptz not null default now()
 );
 
--- Founding Admin. Replace this address before the first real deploy.
+-- Founding Admin.
 insert into staff_invitations (email, full_name, role)
-values ('admin@faceprep.in', 'FACE Prep Admin', 'admin');
+values ('karthikraja@faceprep.in', 'Karthik Raja', 'admin');
 
 insert into settings (key, value) values
   ('offer_category_bands', '{"regularMaxLpa": 5, "dreamMaxLpa": 10}'),

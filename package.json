@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "FACE Prep Campus — Placement Management System",
+  "description": "FACE Prep Campus \u2014 Placement Management System",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -14,7 +14,9 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc -b --noEmit",
-    "check": "pnpm lint && pnpm typecheck && pnpm test:cov"
+    "check": "pnpm lint && pnpm typecheck && pnpm test:cov",
+    "db:types": "node --experimental-strip-types scripts/gen-types.mjs",
+    "db:push": "supabase db push"
   },
   "engines": {
     "node": ">=22"
@@ -42,6 +44,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
+    "@supabase/supabase-js": "^2.111.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.83.0",
