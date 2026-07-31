@@ -128,8 +128,9 @@ Modelled as a **flag**, not a status, so it composes with `draft | submitted | a
 | Field | Owner | Stage |
 |---|---|---|
 | PIF Sections 1–4 (company, role, eligibility, process) | **AE** | `draft` |
-| `drive_type` (placement / internship / internship-convertible) | **Delivery Head** | at approval — **FINAL, Central CPC cannot change** |
+| `drive_type` (placement / internship / internship-convertible) | **AE or Central CPC** | AE may set at draft; **Central CPC may edit at any pre-live stage** |
 | `offer_category` (Regular / Dream / Super Dream) | **Delivery Head** | at approval — **FINAL, Central CPC cannot change** |
+| `open_to_all_override` (see R5a) | **Central CPC** | any pre-live stage |
 | Approve / reject (+ reason) | **Delivery Head** | `submitted → approved \| rejected` |
 | Completion of remaining vacant fields | **Central CPC** | `approved` |
 | Structured rounds, audience targeting, application window | **Central CPC** | at publish |
@@ -144,6 +145,7 @@ PIF Q10 is free text; the domain needs numbers.
 | `ctc_max_lpa` | `numeric` nullable | Range ceiling; null ⇒ fixed CTC |
 | `ctc_breakup` | `text` | Free-text fixed/variable detail, display only |
 | `offer_category` | enum | **Delivery Head's** decision at approval; system *suggests* from `ctc_max_lpa ?? ctc_min_lpa`. Immutable thereafter. |
+| `open_to_all_override` | `boolean` | Central CPC's prestige-drive escape hatch — see R5a |
 
 Per-student actual offer CTC is captured separately at offer upload as `offer.ctc_lpa` — that is what drives the placement record.
 
@@ -182,14 +184,30 @@ The category-ladder rule. Governs **new** drives only.
 | `srf_status ≠ srf_approved` | hidden |
 | `participation_status ∈ {opted_out, disbarred}` | hidden |
 | not in targeted audience, or `evaluateEligibility` fails | hidden |
+| `open_to_all_override = true` | **visible** — bypasses cap **and** ladder (R5a) |
 | `drive_type ∈ {internship, internship_convertible}` **and** cap consumed | hidden — **cap is checked before the ladder** |
 | `drive_type ∈ {placement, internship_convertible}` and student not placed | **visible** |
 | `drive_type ∈ {placement, internship_convertible}` and `rank(drive) > rank(highest)` | **visible** |
 | `drive_type ∈ {placement, internship_convertible}` and `rank(drive) ≤ rank(highest)` | hidden |
 | `drive_type = internship` and cap not consumed | **visible** (parallel track — placement status irrelevant) |
 
+### R5a · The Central CPC's `open_to_all_override`
+
+A prestige-drive escape hatch. When `drive.open_to_all_override = true`, the drive is opened to **all** students regardless of placement or internship history.
+
+| Blocking rule | Overridden? |
+|---|---|
+| Category ladder (already placed at equal/higher category) | ✅ **yes** |
+| Internship cap consumed | ✅ **yes** |
+| SRF not approved | ❌ no |
+| Opted out | ❌ no — irreversible, student-initiated |
+| Disbarred | ❌ no — it is a sanction |
+| Academic eligibility / audience targeting | ❌ no |
+
+Rationale: the override exists to widen access for exceptional opportunities, not to bypass consent, sanctions, or the recruiter's own criteria. Setting it is audit-logged with a mandatory reason.
+
 Confirmed decisions:
-- Once the internship cap is consumed, the student is blocked from **both** `internship` **and** `internship_convertible` drives — even higher-category ones. The cap check precedes the ladder check.
+- Once the internship cap is consumed, the student is blocked from **both** `internship` **and** `internship_convertible` drives — even higher-category ones. The cap check precedes the ladder check. **Unless R5a applies.**
 - A placed student who has **not** consumed the cap still sees plain internship drives.
 - A self-placed student's off-campus offer does **not** affect this ladder at all.
 
@@ -225,8 +243,14 @@ The MVP shortlisting provider: deterministic, weighted, **explainable**. Emits p
 
 ## 5. Attendance
 
+**Who is "scheduled" for round 1 is decided by the recruiter, not by us.** The Central CPC's internal shortlist is exported to the recruiter purely as an *applicant list*; the recruiter returns the list of students who will actually participate in round 1, and the Central CPC uploads it. Only those students become `scheduled`.
+
+**Consequence:** a student who applied but was never put forward by the recruiter can *never* accrue an absence. Absences are only reachable by students the recruiter actually called.
+
+For rounds 2+, only students with a `selected` result in the previous round are scheduled. `waitlisted` and `on_hold` are **not** scheduled unless the Central CPC first promotes them to `selected`.
+
 - Marked **only** by CPC or Central CPC. Never the AE. Never the student (QR check-in is provisional only).
-- Marked **only for students scheduled for that round** (i.e. `selected` in the prior round, or all applicants for round 1).
+- Marked **only for students scheduled for that round**.
 - Statuses: `scheduled` → `present` | `absent` | `provisional` (QR, awaiting confirmation).
 - **Attendance page requires Select All / Unselect All.** (Confirmed in session.)
 - Overrides permitted by CPC/Central CPC, always audit-logged.
@@ -277,13 +301,21 @@ Covers: SRF approvals, semester verifications, PIF create/approve/reject, drive 
 
 ## 10. Resolved decisions log
 
+> **Later answers override earlier ones.** Rows marked ⟳ were revised after initial sign-off.
+
 | # | Decision |
 |---|---|
-| Q1 | Delivery Head sets **both** `drive_type` and `offer_category` at approval. **Final** — the Central CPC cannot edit or change either. |
-| Q2 | A consumed internship cap blocks **both** `internship` and `internship_convertible` drives. Cap is checked **before** the category ladder. |
+| Q1 ⟳ | **Delivery Head sets `offer_category` only** (final, immutable). `drive_type` may be set by the **AE or the Central CPC**, and the **Central CPC may edit it**. |
+| Q2 ⟳ | A consumed internship cap blocks **both** `internship` and `internship_convertible` drives; cap is checked **before** the ladder. **Plus R5a:** the Central CPC has an `open_to_all_override` for prestigious drives that bypasses the cap and the ladder (but never consent, sanctions or eligibility). |
 | Q3 | Placement-record ties break to the **earliest declared** offer; Central CPC override still wins. |
 | Q4 | No unlock workflow. CPC/Central CPC edit verified academic data directly and instantly (audit-logged). Students may **not** edit verified academic data; new semester data still requires CPC marksheet verification. |
 | Q5 | Drive mode value is **"Physical drive outside campus"**, not "Off-campus". |
+| Q6 | Arrear policy `no_history` is **stricter** than `no_standing` — it implies zero standing arrears *and* zero history. |
+| Q7 | `cgpa_cutoff` tests against **overall CGPA**, not latest semester. |
+| Q8 | 10th/12th stored as **percentage**, normalised at SRF entry. |
+| Q9 | Round-1 participants are chosen by the **recruiter** from the exported applicant list. Non-shortlisted students can never accrue absences. |
+| Q10 | Only `selected` advances to the next round. `waitlisted` / `on_hold` are not scheduled until promoted. |
+| Q11 | ⏸️ Skill-repository score schema **pending** — R11 `rankApplicants` is deferred until provided. |
 
 ---
 
