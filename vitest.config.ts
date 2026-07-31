@@ -28,6 +28,8 @@ export default defineConfig({
         // Composition root: no logic, exercised by Playwright rather than unit tests.
         "src/main.tsx",
         "src/mocks/**",
+        // Test-only harness; its correctness is proven by the tests that use it.
+        "src/db/harness.ts",
       ],
       // CLAUDE.md Rule 1 — these gates block CI.
       thresholds: {
