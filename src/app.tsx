@@ -1,4 +1,6 @@
 import { AppShell } from "@components/app-shell";
+import { DafPublish } from "@features/central-cpc/daf-publish";
+import { DriveCockpit } from "@features/central-cpc/drive-cockpit";
 import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
 import { AttendancePage } from "@features/cpc/attendance-page";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
@@ -23,7 +25,8 @@ export function App() {
               <Route path="/cpc/attendance" element={<AttendancePage />} />
               <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
               <Route path="/central/shortlisting" element={<ShortlistingWorkspace />} />
-              <Route path="/central/drives" element={<ShortlistingWorkspace />} />
+              <Route path="/central/drives" element={<DriveCockpit />} />
+              <Route path="/central/publish" element={<DafPublish />} />
             </Routes>
           </AppShell>
         }
