@@ -28,5 +28,5 @@
       "@components/*": ["./src/components/*"]
     }
   },
-  "include": ["src", "vitest.config.ts", "vite.config.ts"]
+  "include": ["src", "vitest.config.ts", "vite.config.ts", "vitest.setup.ts"]
 }

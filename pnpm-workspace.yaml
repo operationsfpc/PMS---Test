@@ -2,3 +2,4 @@ allowBuilds:
   lefthook: true
   "@biomejs/biome": true
   esbuild: true
+  msw: true

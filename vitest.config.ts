@@ -14,6 +14,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    setupFiles: ["./vitest.setup.ts"],
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
@@ -26,6 +27,7 @@ export default defineConfig({
         "src/**/*.d.ts",
         // Composition root: no logic, exercised by Playwright rather than unit tests.
         "src/main.tsx",
+        "src/mocks/**",
       ],
       // CLAUDE.md Rule 1 — these gates block CI.
       thresholds: {

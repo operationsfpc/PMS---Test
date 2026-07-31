@@ -1,12 +1,12 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
-import { type ReactNode, useId } from "react";
+import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { type ReactNode, useId, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { SrfSubmitError, submitSrf } from "./srf-api";
+import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
 
-/**
- * Student Registration Form — PRD §4.1.
- *
- * VISUAL MOCK: layout, brand and structure only. No validation, no submission,
- * no state. Field logic arrives once the design is approved.
- */
+/** Student Registration Form — PRD §4.1. */
 
 export const SRF_SECTIONS = [
   { id: "personal", title: "Personal details", step: 1 },
@@ -18,14 +18,13 @@ export const SRF_SECTIONS = [
   { id: "consent", title: "Consent and submission", step: 7 },
 ] as const;
 
-/** The five FINAL role categories. */
-const ROLE_CATEGORY_LABELS = [
-  ["software_technical", "Software / Technical"],
-  ["technical_support_it_ops", "Technical Support / IT Operations"],
-  ["digital_marketing", "Digital Marketing"],
-  ["sales", "Sales"],
-  ["operations_business", "Operations and Business Roles"],
-] as const;
+export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
+  software_technical: "Software / Technical",
+  technical_support_it_ops: "Technical Support / IT Operations",
+  digital_marketing: "Digital Marketing",
+  sales: "Sales",
+  operations_business: "Operations and Business Roles",
+};
 
 function Section({
   title,
@@ -65,21 +64,80 @@ function Section({
   );
 }
 
+function ErrorText({ children }: { children?: string | undefined }) {
+  if (children === undefined) return null;
+  return (
+    <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
+      {children}
+    </p>
+  );
+}
+
 const grid = "grid gap-4 sm:grid-cols-2";
 
 export function SrfPage() {
+  // Stable ids so React never re-keys an upload control on add/remove.
+  const [semesterIds, setSemesterIds] = useState<readonly number[]>([1, 2]);
+  const [submitted, setSubmitted] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<SrfFormValues>({
+    resolver: zodResolver(srfSchema),
+    defaultValues: SRF_DEFAULTS,
+    mode: "onTouched",
+  });
+
+  const selectedCategories = watch("roleCategories");
+  const resumeCategories = watch("resumeCategories");
+
+  const onSubmit = handleSubmit(async (values) => {
+    setServerError(null);
+    try {
+      await submitSrf(values as SrfSubmission);
+      setSubmitted(true);
+    } catch (error) {
+      setServerError(
+        error instanceof SrfSubmitError ? error.message : "Something went wrong. Please try again.",
+      );
+    }
+  });
+
+  const num = (name: keyof SrfFormValues) =>
+    register(name, { setValueAs: (v) => (v === "" ? Number.NaN : Number(v)) });
+
+  if (submitted) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-lg items-center px-4">
+        <div className="w-full rounded-card border border-line bg-surface p-8 text-center shadow-sm">
+          <p className="font-heading text-2xl font-bold text-ink-900">Submitted for verification</p>
+          <p className="mt-3 text-sm leading-relaxed text-ink-500">
+            Your Campus Placement Coordinator will check your entries against your uploaded
+            marksheets. You will be notified once approved — you can apply to drives from that point
+            on.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-dvh bg-surface-muted">
-      {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-line bg-brand-500 text-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3.5">
-          <div className="min-w-0">
-            <p className="font-heading text-sm font-extrabold tracking-tight sm:text-base">
-              FACE Prep Campus
-            </p>
-            <p className="truncate text-xs text-white/70">Placement Management System</p>
-          </div>
-          <span className="shrink-0 rounded-full bg-gold-500 px-2.5 py-1 text-xs font-semibold text-brand-900">
+      <header className="sticky top-0 z-10 border-b border-line bg-surface">
+        <div className="fpc-gradient h-1" aria-hidden="true" />
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
+          <img
+            src="/brand/faceprep-campus-dark.png"
+            alt="FACE Prep Campus"
+            className="h-7 w-auto"
+          />
+          <span className="rounded-full bg-gold-500 px-2.5 py-1 text-xs font-semibold text-brand-900">
             Draft
           </span>
         </div>
@@ -98,7 +156,6 @@ export function SrfPage() {
           </p>
         </div>
 
-        {/* Progress */}
         <ol className="mb-6 flex flex-wrap gap-1.5" aria-label="Form progress">
           {SRF_SECTIONS.map((s) => (
             <li
@@ -110,20 +167,47 @@ export function SrfPage() {
           ))}
         </ol>
 
-        <form className="flex flex-col gap-5">
+        <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
           <Section title="Personal details" step={1} description="How we and recruiters reach you.">
             <div className={grid}>
-              <TextField label="Full name" required defaultValue="Priya Ramesh" />
-              <TextField label="Roll number" required defaultValue="21CSE1042" disabled />
-              <TextField
-                label="Email ID"
-                type="email"
-                required
-                defaultValue="priya.r@example.edu"
-              />
-              <TextField label="Mobile number" type="tel" required placeholder="10-digit mobile" />
-              <TextField label="WhatsApp number" type="tel" placeholder="If different" />
-              <TextField label="Alternate contact number" type="tel" />
+              <div>
+                <TextField label="Full name" required {...register("fullName")} />
+                <ErrorText>{errors.fullName?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField label="Roll number" required disabled {...register("rollNumber")} />
+              </div>
+              <div>
+                <TextField label="Email ID" type="email" required {...register("email")} />
+                <ErrorText>{errors.email?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="Mobile number"
+                  type="tel"
+                  required
+                  placeholder="10-digit mobile"
+                  {...register("mobile")}
+                />
+                <ErrorText>{errors.mobile?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="WhatsApp number"
+                  type="tel"
+                  placeholder="If different"
+                  {...register("whatsapp")}
+                />
+                <ErrorText>{errors.whatsapp?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="Alternate contact number"
+                  type="tel"
+                  {...register("alternateContact")}
+                />
+                <ErrorText>{errors.alternateContact?.message}</ErrorText>
+              </div>
             </div>
           </Section>
 
@@ -133,34 +217,87 @@ export function SrfPage() {
             description="Eligibility is checked against these figures once verified."
           >
             <div className={grid}>
-              <TextField label="10th marks (%)" type="number" required placeholder="e.g. 91.4" />
-              <TextField label="12th marks (%)" type="number" required placeholder="e.g. 88.0" />
-              <SelectField
-                label="Degree"
-                required
-                options={["B.E / B.Tech", "BCA", "B.Sc CS / CT", "MCA", "M.Sc CS", "B.Com", "BBA"]}
-              />
-              <SelectField
-                label="Branch / specialisation"
-                required
-                options={["CSE", "IT", "ECE", "EEE", "Mechanical", "Civil", "Not applicable"]}
-              />
-              <TextField label="Passing year" type="number" required placeholder="e.g. 2026" />
-              <TextField
-                label="Overall CGPA"
-                type="number"
-                required
-                placeholder="e.g. 8.24"
-                hint="Cumulative across all completed semesters."
-              />
-              <TextField label="Current arrears" type="number" required defaultValue={0} />
-              <TextField
-                label="History of arrears"
-                type="number"
-                required
-                defaultValue={0}
-                hint="Total backlogs ever held, including cleared ones."
-              />
+              <div>
+                <TextField
+                  label="10th marks (%)"
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="e.g. 91.4"
+                  {...num("tenthPercentage")}
+                />
+                <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="12th marks (%)"
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="e.g. 88.0"
+                  {...num("twelfthPercentage")}
+                />
+                <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
+              </div>
+              <div>
+                <SelectField
+                  label="Degree"
+                  required
+                  options={["B.E", "B.Tech", "BCA", "B.Sc CS", "MCA", "M.Sc CS", "B.Com", "BBA"]}
+                  {...register("degree")}
+                />
+                <ErrorText>{errors.degree?.message}</ErrorText>
+              </div>
+              <div>
+                <SelectField
+                  label="Branch / specialisation"
+                  required
+                  options={["CSE", "IT", "ECE", "EEE", "Mechanical", "Civil", "Not applicable"]}
+                  {...register("branch")}
+                />
+                <ErrorText>{errors.branch?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="Passing year"
+                  type="number"
+                  required
+                  placeholder="e.g. 2026"
+                  {...num("passingYear")}
+                />
+                <ErrorText>{errors.passingYear?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="Overall CGPA"
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="e.g. 8.24"
+                  hint="Cumulative across all completed semesters, on a 10-point scale."
+                  {...num("overallCgpa")}
+                />
+                <ErrorText>{errors.overallCgpa?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="Current arrears"
+                  type="number"
+                  required
+                  {...num("currentArrears")}
+                />
+                <ErrorText>{errors.currentArrears?.message}</ErrorText>
+              </div>
+              <div>
+                <TextField
+                  label="History of arrears"
+                  type="number"
+                  required
+                  hint="Total backlogs ever held, including cleared ones."
+                  {...num("historyOfArrears")}
+                />
+                <ErrorText>{errors.historyOfArrears?.message}</ErrorText>
+              </div>
             </div>
           </Section>
 
@@ -172,15 +309,28 @@ export function SrfPage() {
             <div className={grid}>
               <FileField label="10th marksheet" required />
               <FileField label="12th marksheet" required />
-              <FileField label="Semester 1 marksheet" required />
-              <FileField label="Semester 2 marksheet" required />
+              {semesterIds.map((id, i) => (
+                <FileField key={id} label={`Semester ${i + 1} marksheet`} required />
+              ))}
             </div>
-            <button
-              type="button"
-              className="mt-4 w-full rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50 sm:w-auto"
-            >
-              + Add another semester
-            </button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSemesterIds((ids) => [...ids, Math.max(...ids) + 1])}
+                className="rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+              >
+                + Add another semester
+              </button>
+              {semesterIds.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setSemesterIds((ids) => ids.slice(0, -1))}
+                  className="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-ink-500 transition-colors hover:border-brand-300"
+                >
+                  Remove last semester
+                </button>
+              )}
+            </div>
           </Section>
 
           <Section
@@ -188,28 +338,86 @@ export function SrfPage() {
             step={4}
             description="Choose every role type you want to be considered for, then upload a tailored resume for each."
           >
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              {ROLE_CATEGORY_LABELS.map(([value, label]) => (
-                <CheckboxField key={value} label={label} name="role_category" value={value} />
-              ))}
-            </div>
-            <div className="mt-5 rounded-lg bg-surface-muted p-4">
-              <p className="mb-3 text-sm font-semibold text-ink-700">
-                Resume per selected category
-              </p>
-              <div className={grid}>
-                <FileField label="Software / Technical resume" hint="PDF only" />
-                <FileField label="Sales resume" hint="PDF only" />
+            <Controller
+              control={control}
+              name="roleCategories"
+              render={({ field }) => (
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  {ROLE_CATEGORIES.map((category) => (
+                    <CheckboxField
+                      key={category}
+                      label={ROLE_CATEGORY_LABELS[category]}
+                      checked={field.value.includes(category)}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...field.value, category]
+                          : field.value.filter((c) => c !== category);
+                        field.onChange(next);
+                        // Dropping a category must drop its resume too, or the
+                        // cross-field rule would silently pass on stale data.
+                        setValue(
+                          "resumeCategories",
+                          resumeCategories.filter((c) => next.includes(c)),
+                          { shouldValidate: true },
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            />
+            <ErrorText>{errors.roleCategories?.message}</ErrorText>
+
+            {selectedCategories.length > 0 && (
+              <div className="mt-5 rounded-lg bg-surface-muted p-4">
+                <p className="mb-3 text-sm font-semibold text-ink-700">
+                  Resume per selected category
+                </p>
+                <div className={grid}>
+                  {selectedCategories.map((category) => (
+                    <FileField
+                      key={category}
+                      label={`${ROLE_CATEGORY_LABELS[category]} resume`}
+                      hint="PDF only"
+                      required
+                      onChange={(e) => {
+                        const has = e.target.value !== "";
+                        setValue(
+                          "resumeCategories",
+                          has
+                            ? [...new Set([...resumeCategories, category])]
+                            : resumeCategories.filter((c) => c !== category),
+                          { shouldValidate: true },
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+                <ErrorText>{errors.resumeCategories?.message}</ErrorText>
               </div>
-            </div>
+            )}
           </Section>
 
           <Section title="Professional profiles" step={5} description="Optional, but they matter.">
             <div className={grid}>
-              <TextField label="LinkedIn" type="url" placeholder="linkedin.com/in/…" />
-              <TextField label="GitHub" type="url" placeholder="github.com/…" />
-              <TextField label="LeetCode" type="url" />
-              <TextField label="HackerRank" type="url" />
+              {(
+                [
+                  ["linkedin", "LinkedIn", "linkedin.com/in/…"],
+                  ["github", "GitHub", "github.com/…"],
+                  ["leetcode", "LeetCode", ""],
+                  ["hackerrank", "HackerRank", ""],
+                ] as const
+              ).map(([name, label, placeholder]) => (
+                <div key={name}>
+                  <TextField
+                    label={label}
+                    type="url"
+                    placeholder={placeholder}
+                    {...register(name)}
+                  />
+                  <ErrorText>{errors[name]?.message}</ErrorText>
+                </div>
+              ))}
             </div>
           </Section>
 
@@ -219,12 +427,28 @@ export function SrfPage() {
             description="Be specific — this feeds shortlisting."
           >
             <div className="flex flex-col gap-4">
-              <TextField label="Technical skills" placeholder="React, Python, SQL…" />
-              <TextField label="Areas of interest" placeholder="Backend engineering, data…" />
-              <TextField label="Areas of expertise" placeholder="Where you are genuinely strong" />
-              <TextField label="Projects" placeholder="Title, stack, and what you built" />
-              <TextField label="Certifications" />
-              <TextField label="Achievements" />
+              <TextField
+                label="Technical skills"
+                placeholder="React, Python, SQL…"
+                {...register("technicalSkills")}
+              />
+              <TextField
+                label="Areas of interest"
+                placeholder="Backend engineering, data…"
+                {...register("areasOfInterest")}
+              />
+              <TextField
+                label="Areas of expertise"
+                placeholder="Where you are genuinely strong"
+                {...register("areasOfExpertise")}
+              />
+              <TextField
+                label="Projects"
+                placeholder="Title, stack, and what you built"
+                {...register("projects")}
+              />
+              <TextField label="Certifications" {...register("certifications")} />
+              <TextField label="Achievements" {...register("achievements")} />
             </div>
           </Section>
 
@@ -233,13 +457,26 @@ export function SrfPage() {
               required
               label="I consent to sharing my profile and resumes with recruiting companies"
               description="Your profile, academic record and the relevant resume are shared with companies whose drives you apply to. Every share is logged."
+              {...register("consent")}
             />
+            <ErrorText>{errors.consent?.message}</ErrorText>
+
+            {serverError !== null && (
+              <p
+                role="alert"
+                className="mt-4 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+              >
+                {serverError}
+              </p>
+            )}
+
             <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">
               <button
                 type="submit"
-                className="rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 sm:px-6"
+                disabled={isSubmitting}
+                className="rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 disabled:opacity-60 sm:px-6"
               >
-                Submit for verification
+                {isSubmitting ? "Submitting…" : "Submit for verification"}
               </button>
               <button
                 type="button"
