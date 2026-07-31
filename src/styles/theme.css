@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/**
+ * FACE Prep Campus brand tokens.
+ * Extracted from faceprepcampus.com theme variables — this app will be hosted there.
+ *
+ * The marketing site is dark-themed; this is a data-dense internal tool, so we
+ * run light-first on the same palette. Dark mode is a later toggle.
+ */
+@theme {
+  /* Brand */
+  --color-brand-50: #f2f0fa;
+  --color-brand-100: #ddd8f0;
+  --color-brand-200: #bdb4e2;
+  --color-brand-300: #9a8dd2;
+  --color-brand-400: #6f61b0;
+  --color-brand-500: #3d3777; /* primary — deep indigo */
+  --color-brand-600: #352f66;
+  --color-brand-700: #2a2551;
+  --color-brand-800: #1f1b3c;
+  --color-brand-900: #151228;
+
+  /* Secondary — amber */
+  --color-gold-50: #fff8e6;
+  --color-gold-100: #ffedbf;
+  --color-gold-300: #ffd463;
+  --color-gold-500: #ffb800;
+  --color-gold-600: #d99c00;
+  --color-gold-700: #a67700;
+
+  /* Accents */
+  --color-violet-400: #a46afc;
+  --color-violet-500: #8b45fa;
+  --color-cyan-400: #1ee0e1;
+  --color-orange-500: #ff7200;
+
+  /* Feedback */
+  --color-danger-50: #fff0ec;
+  --color-danger-500: #dd4820;
+  --color-danger-700: #a63317;
+  --color-success-500: #00a86b;
+  --color-success-50: #e6f7f0;
+
+  /* Neutrals */
+  --color-ink-900: #151228;
+  --color-ink-700: #3f3d56;
+  --color-ink-500: #6b6880;
+  --color-ink-300: #a8a6b8;
+  --color-line: #e2e0ea;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f6fb;
+
+  /* Typography — matches the marketing site */
+  --font-heading: "Raleway", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 0.875rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-ink-900);
+    background-color: var(--color-surface-muted);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  /* Visible focus for keyboard users — accessibility is not optional. */
+  :focus-visible {
+    outline: 2px solid var(--color-violet-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}

@@ -20,7 +20,13 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html"],
       include: ["src/**/*.ts", "src/**/*.tsx"],
-      exclude: ["src/**/*.test.*", "src/**/index.ts", "src/**/*.d.ts"],
+      exclude: [
+        "src/**/*.test.*",
+        "src/**/index.ts",
+        "src/**/*.d.ts",
+        // Composition root: no logic, exercised by Playwright rather than unit tests.
+        "src/main.tsx",
+      ],
       // CLAUDE.md Rule 1 — these gates block CI.
       thresholds: {
         // Pure business rules must be exhaustively tested.
