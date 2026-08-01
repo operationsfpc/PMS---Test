@@ -1,5 +1,6 @@
 import { OFFER_CATEGORIES } from "@domain/offer-category";
 import {
+  APP_ROLES,
   ARREAR_POLICIES,
   ATTENDANCE_STATUSES,
   DRIVE_MODES,
@@ -34,6 +35,7 @@ describe("Postgres enums match the domain vocabularies", () => {
     ["round_result", ROUND_RESULTS],
     ["attendance_status", ATTENDANCE_STATUSES],
     ["offer_source", OFFER_SOURCES],
+    ["app_role", APP_ROLES],
   ];
 
   it.each(cases)(

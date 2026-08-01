@@ -59,6 +59,25 @@ export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 export const OFFER_SOURCES = ["on_campus", "self_placed"] as const;
 export type OfferSource = (typeof OFFER_SOURCES)[number];
 
+/**
+ * Every user role in the system. Order mirrors the Postgres `app_role` enum;
+ * `src/db/types-drift.test.ts` fails if the two ever diverge.
+ */
+export const APP_ROLES = [
+  "admin",
+  "student",
+  "campus_placement_coordinator",
+  "campus_manager",
+  "account_executive",
+  "delivery_head",
+  "central_placement_coordinator",
+  "key_account_manager",
+  "enterprise_relations",
+  "er_head",
+  "ceo",
+] as const;
+export type AppRole = (typeof APP_ROLES)[number];
+
 /** Verified academic data. The only data eligibility may be evaluated against. */
 export interface AcademicProfile {
   readonly degree: string;
