@@ -18,7 +18,7 @@ Last updated at commit `91c1642`. **344 tests passing across 18 files** (verifie
 |---|---|
 | **Layer 0 — domain rules** | ✅ Complete for MVP. R1–R10 + SRF validators. 100% coverage, enforced |
 | **Layer 1 — UI** | 🟡 SRF is real (validation + state + MSW). 6 other screens are visual mocks |
-| **Layer 2 — database** | 🟡 Schema, RLS, guards written and tested against real Postgres. **Never pushed to Supabase** |
+| **Layer 2 — database** | ✅ **Live on Supabase ap-south-1 (Mumbai).** All 10 migrations applied; local and remote history match |
 
 ```
 CLAUDE.md                    project instructions (auto-loaded)
@@ -77,31 +77,28 @@ scripts/gen-types.mjs        type generation without Docker
 
 ## 3. 🔴 The immediate next step
 
-The user was mid-way through **linking the Supabase CLI**. The CLI is installed as a project-local dev dependency (`pnpm supabase`, v2.111.0).
+**The database is live.** Setup walkthrough: `docs/SUPABASE-SETUP.md`.
 
-**They need to run these two themselves** (never ask them to paste secrets into chat):
+| | |
+|---|---|
+| Project | **FPC-PMS**, ref `poscikalmgfpvbjfytgw` |
+| Region | South Asia (Mumbai) `ap-south-1` |
+| Postgres | 17.6.1.155 |
+| Migrations | `0001`–`0010` all applied; `migration list` shows local == remote |
+| Storage | `marksheets`, `resumes`, `offer-letters` — all **private** |
+| Types | `pnpm db:types` output byte-identical after formatting ⇒ **no schema drift** |
+| `.env.local` | ✅ written (URL + anon key). Git-ignored |
+| Founding admin | `karthikraja@faceprep.in` seeded in `staff_invitations` by `0002` — **confirmed a Google account** |
 
-```bash
-cd ~/fpc-pms
-pnpm supabase login                              # opens browser
-pnpm supabase link --project-ref <PROJECT_REF>   # prompts for DB password privately
-```
+**Next coding task: the login screen + auth guard.** It does not exist — there
+is no `signInWithOAuth` call anywhere in `src/`. Until it is built the app
+still runs on MSW mocks and nobody can sign in.
 
-Then, once they confirm "linked":
+Still outstanding from the user (dashboard work, never in chat):
+- Google OAuth client ID + secret → **Supabase Dashboard → Auth → Providers → Google**
+- Redirect URI in Google Cloud Console: `https://poscikalmgfpvbjfytgw.supabase.co/auth/v1/callback`
 
-```bash
-pnpm supabase db push        # 10 migrations → Mumbai
-pnpm db:types                # regenerate types
-```
-
-**Before pushing, confirm the Supabase project is empty.** The migrations are not written to be re-runnable on a populated database.
-
-Also still needed from the user:
-- Google OAuth client ID + secret → paste into **Supabase Dashboard → Auth → Providers → Google** (not into chat)
-- Redirect URI to register in Google Cloud Console: `https://<project-ref>.supabase.co/auth/v1/callback`
-- `.env.local` from `.env.example` (URL + anon key)
-
-**Agreed plan after push:** real Google login + auth guard, then drive the SRF end-to-end against Mumbai (option (a) — one vertical slice working beats more mocks).
+**Agreed plan:** login + auth guard, then drive the SRF end-to-end against Mumbai — one vertical slice working beats more mocks.
 
 ---
 

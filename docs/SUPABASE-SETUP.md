@@ -236,21 +236,37 @@ VITE_SUPABASE_ANON_KEY=<the long anon key>
 
 ---
 
-## Step 11 — Run the app and sign in
+## Step 11 — Run the app
 
 ```
 pnpm dev
 ```
 
-Open <http://localhost:5173> and sign in with `karthikraja@faceprep.in`.
+Open <http://localhost:5173>.
 
-**Expected:** sign-in succeeds and you land in the app as Admin.
+⚠️ **You cannot sign in yet — and that is expected.**
 
-**Expected for anyone else:** sign-in is **refused** with
-"Address … is not registered. Ask your placement coordinator for an
-invitation." That is the allowlist in `0009_guards.sql` working correctly —
-students can only log in once their college roster has been uploaded, and
-staff only once an Admin invites them.
+The **login screen and auth guard have not been built**. There is a Supabase
+client at `src/lib/supabase.ts`, but nothing in the app calls it to sign in.
+Use the **"Preview as" role switcher** in the header to browse the screens;
+they are still served by the MSW mock backend, not by Mumbai.
+
+So after Step 10 the position is:
+
+| Piece | State |
+|---|---|
+| Database on Mumbai | ✅ live, RLS on, allowlist armed |
+| Google sign-in configured in Supabase | ✅ once Step 9 is done |
+| `.env.local` pointing at Mumbai | ✅ |
+| **Login screen in the app** | ❌ **not built — this is the next coding task** |
+
+Once the login screen exists, the expected behaviour is:
+
+- `karthikraja@faceprep.in` signs in and lands as Admin.
+- **Anyone else is refused** with "Address … is not registered. Ask your
+  placement coordinator for an invitation." That is `0009_guards.sql` working
+  correctly — students can only log in once their roster is uploaded, staff
+  only once an Admin invites them.
 
 ---
 
