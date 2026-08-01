@@ -1,7 +1,7 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `41ca885`. 344 tests passing.
+Last updated at commit `91c1642`. **344 tests passing across 18 files** (verified, not remembered).
 
 ---
 
@@ -157,4 +157,6 @@ pnpm test:run          # expect 344 passing
 pnpm dev               # localhost:5173, MSW-backed
 ```
 
-Git is **local only**. Nine commits, working tree clean apart from `package.json`/lockfile if the Supabase CLI install is uncommitted.
+Git is **local only**, no remote. Ten commits, working tree **clean** — the Supabase CLI dev-dependency (`^2.111.0`) is committed.
+
+`.env.local` **does not exist yet** — copy it from `.env.example` once the Supabase project is created.

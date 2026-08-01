@@ -10,3 +10,7 @@ coverage/
 playwright-report/
 test-results/
 tsconfig.tsbuildinfo
+
+# Supabase CLI local link state (project ref, pooler URL, service versions).
+# Machine-specific, and can carry credentials. Never commit.
+supabase/.temp/
