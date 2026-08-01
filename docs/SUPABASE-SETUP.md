@@ -183,32 +183,135 @@ database and the app have drifted apart.
 
 ## Step 9 — Set up Google sign-in
 
-### 9a. In Google Cloud Console
+This has three parts: Google Cloud Console (9a), the Supabase dashboard (9b),
+and one setting people always forget (9c).
 
-1. Go to <https://console.cloud.google.com/>.
-2. Create a project (or select the FACE Prep one).
-3. **APIs & Services → OAuth consent screen.** Choose **Internal** if
-   `faceprep.in` is Google Workspace, otherwise **External**. Fill in the app
-   name and support email, save.
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID.**
-5. **Application type:** Web application.
-6. Under **Authorised redirect URIs**, click Add URI and paste, replacing
-   `<PROJECT_REF>`:
+> Google renames these screens every few months. If a menu name below does not
+> match exactly, look for the nearest equivalent — the *order* of operations is
+> what matters.
+
+---
+
+### ⚠️ The one decision that matters: Internal vs External
+
+Google asks who is allowed to use your app.
+
+| Choice | Who can sign in |
+|---|---|
+| **Internal** | **Only `@faceprep.in` accounts.** Every student is blocked |
+| **External** | Any Google account — college addresses, personal Gmail |
+
+**Choose External.** Students sign in with college or personal Gmail addresses,
+not `faceprep.in` ones. Internal would lock out every student in the system.
+
+(Internal is only offered at all if `faceprep.in` is Google Workspace. Ignore
+it either way.)
+
+**"External" does not mean the public can use the PMS.** Two separate gates
+stand in the way: Google's own test-user list while the app is unpublished,
+and — permanently — the database allowlist from `0009_guards.sql`, which
+refuses any address that is not a rostered student or an invited staff member.
+
+---
+
+### 9a. Google Cloud Console
+
+1. Go to <https://console.cloud.google.com/> and sign in as
+   `karthikraja@faceprep.in`.
+
+2. Top-left project dropdown → **New Project**.
+   Name it `FACE Prep PMS` → **Create**. Wait for it to finish, then make sure
+   that new project is the one selected in the dropdown.
+
+3. Left menu → **APIs & Services → OAuth consent screen**.
+   (Newer console: **Google Auth Platform → Get started**.)
+
+4. Fill in:
+   - **App name:** `FACE Prep Campus PMS`
+   - **User support email:** `hello@faceprep.in`
+   - **Audience / User type:** **External** ← see the box above
+   - **Developer contact email:** `karthikraja@faceprep.in`
+
+   Save and continue through the remaining pages. **Do not add any scopes.**
+   The app only needs the default email and profile, and adding more would
+   trigger a Google verification review you do not want.
+
+5. Go to **Audience** (older console: *OAuth consent screen → Test users*).
+   Under **Test users** click **Add users** and add every address you intend to
+   sign in with while testing:
+   - `karthikraja@faceprep.in`
+   - the Gmail addresses you put in `scripts/seed-test-students.sql`
+
+   While the app is unpublished, **only these addresses can sign in.** An
+   address missing here gets "access blocked" from Google before our database
+   is ever consulted.
+
+6. Left menu → **Credentials** → **Create credentials** → **OAuth client ID**.
+
+7. **Application type:** **Web application**. **Name:** `Supabase`.
+
+8. Find **Authorised redirect URIs** → **Add URI** → paste **exactly** this:
 
 ```
-https://<PROJECT_REF>.supabase.co/auth/v1/callback
+https://poscikalmgfpvbjfytgw.supabase.co/auth/v1/callback
 ```
 
-7. Click Create. You get a **Client ID** and a **Client Secret**.
+   Character for character. No trailing slash, no `http://`, no spaces. This is
+   the single most common failure and it produces a `redirect_uri_mismatch`
+   error at sign-in.
 
-### 9b. In the Supabase dashboard
+   *Authorised JavaScript origins can be left empty — the browser never talks
+   to Google directly in this flow; Supabase does.*
 
-1. **Authentication → Providers → Google.**
-2. Toggle **Enable Sign in with Google** on.
-3. Paste the Client ID and Client Secret.
-4. Click **Save**.
+9. Click **Create**. A panel shows your **Client ID** and **Client Secret**.
+   Keep it open for the next part, and save both to your password manager.
 
-> Paste these into the dashboard only. Never into a chat window.
+---
+
+### 9b. Supabase dashboard
+
+1. <https://supabase.com/dashboard> → project **FPC-PMS**.
+2. **Authentication** → **Sign In / Providers** (older UI: *Providers*).
+3. Find **Google**, toggle it **on**.
+4. Paste the **Client ID** and **Client Secret** from step 9a.9.
+5. **Save**.
+
+> 🔒 These go in the dashboard only. Never paste the Client Secret into a chat
+> window, a file, or a commit. If it leaks, delete the OAuth client in Google
+> Cloud and create a new one.
+
+---
+
+### 9c. The setting everyone forgets
+
+Supabase needs to know where to send people *after* Google approves them.
+Miss this and sign-in appears to work, then dumps the user on a blank page or
+back at localhost with an error.
+
+1. **Authentication** → **URL Configuration**.
+2. **Site URL:** `http://localhost:5173`
+3. **Redirect URLs** → **Add URL:** `http://localhost:5173/**`
+   (the `/**` matters — it permits any path under localhost)
+4. **Save**.
+
+When the app is deployed for real, add the production URL here too. Both can
+coexist.
+
+---
+
+### Before real students use it: publish the app
+
+While the app is in **Testing**, only the test users from 9a.5 can sign in — a
+hard limit of 100. Real students will exceed that.
+
+When you are ready: **Google Auth Platform → Audience → Publish app**.
+
+Because the app requests only basic email and profile scopes, publishing does
+**not** require Google's verification review. If Google ever asks for
+verification, it means an extra scope crept in — tell me and I will remove it.
+
+Publishing does not widen access to the PMS itself: `0009_guards.sql` still
+refuses anyone who is not on the roster or invited.
 
 ---
 
