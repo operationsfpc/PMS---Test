@@ -89,9 +89,11 @@ Layer 2  supabase/       Schema built to match the contract Layer 1 proved.
 
 **The golden rule: business rules live in `src/domain` and nowhere else.** If a component or an RPC decides whether a student may apply to a drive, that is a bug. It calls `src/domain`.
 
-Boundaries are enforced by `dependency-cruiser` in CI:
-- `src/domain` may import **nothing** from `src/features`, `src/lib`, React, or Supabase.
+Boundaries are enforced by **`src/architecture.test.ts`** — an executable test, not a separate tool. (dependency-cruiser was dropped: it requires `typescript <7` and we run TS 7.)
+- `src/domain` may import **nothing** — not React, not Supabase, not even Node built-ins.
 - `src/features/<a>` may not import from `src/features/<b>`; share via `src/domain` or `src/components`.
+
+The test has been verified to fail on violation, not just to pass.
 
 ---
 
@@ -115,7 +117,9 @@ Boundaries are enforced by `dependency-cruiser` in CI:
 | Auth / Storage | Supabase Auth + Storage (signed, expiring URLs only) |
 | Server logic | Supabase Edge Functions (Deno) |
 | Queue | pgmq + pg_cron |
-| Email | Provider TBD — behind an `EmailProvider` interface; dev impl logs to console |
+| Email | **Gmail/Workspace** per the client; integration details pending. Keep behind an `EmailProvider` interface. ⚠️ Gmail caps ~2,000/day with no delivery webhooks — PRD §21.2 needs bursts of 2,000+ with per-student delivery status, so a transactional provider will be needed before launch. |
+| Schema testing | **PGlite** (PostgreSQL 18 in WASM) — no Docker on this machine |
+| Type generation | `pnpm db:types` — introspects migrations via PGlite (`supabase gen types` needs Docker) |
 | Hosting | Cloudflare Workers Static Assets |
 | Package manager | pnpm |
 | Lint / format | Biome |
@@ -185,10 +189,14 @@ pnpm dev            # Vite dev server (MSW mock backend)
 pnpm test           # Vitest watch  ← the TDD loop
 pnpm test:run       # Single pass
 pnpm test:cov       # Coverage, enforces gates
-pnpm e2e            # Playwright
-pnpm check          # Biome + tsc + dependency-cruiser
-pnpm db:types       # Regenerate Supabase types
+pnpm check          # Biome + tsc + full coverage suite
+pnpm db:types       # Regenerate src/db/database.types.ts from migrations
+pnpm supabase ...   # Supabase CLI (project-local dev dependency)
+pnpm db:push        # supabase db push  — NOT YET RUN against Mumbai
 ```
+
+**Read `docs/HANDOVER.md` first.** It holds current state, every confirmed
+decision, and the exact next step.
 
 ---
 
