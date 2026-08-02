@@ -10,7 +10,7 @@ import { DafPublish } from "@features/central-cpc/daf-publish";
 import { DriveCockpit } from "@features/central-cpc/drive-cockpit";
 import { OfferRoute } from "@features/central-cpc/offer-route";
 import { ResultsRoute } from "@features/central-cpc/results-route";
-import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
+import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { ParticipationQueueRoute } from "@features/cpc/participation-queue-route";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
@@ -58,7 +58,7 @@ export function App() {
                 <Route path="/cpc/participation" element={<ParticipationQueueRoute />} />
                 <Route path="/ae/pif" element={<PifPage />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
-                <Route path="/central/shortlisting" element={<ShortlistingWorkspace />} />
+                <Route path="/central/shortlisting" element={<ShortlistRoute />} />
                 <Route path="/central/drives" element={<DriveCockpit />} />
                 <Route path="/central/publish" element={<DafPublish />} />
                 <Route path="/central/results" element={<ResultsRoute />} />

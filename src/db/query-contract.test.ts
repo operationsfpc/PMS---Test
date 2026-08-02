@@ -101,3 +101,63 @@ describe("the student drives view asks only for columns that exist", () => {
     expect(await missingColumns("drives", DRIVE_COLUMNS)).toEqual([]);
   });
 });
+
+/**
+ * The same guard for every other hand-written select in the app.
+ *
+ * Each of these was written against an assumed schema at least once, and the
+ * shortlisting view got three columns wrong on the first attempt - a drive_id
+ * that does not exist on shortlist_entries, and skill_scores.skill/score
+ * instead of metric/score/max_score.
+ */
+describe("every hand-written select matches the schema", () => {
+  const SELECTS: ReadonlyArray<readonly [string, string, string]> = [
+    [
+      "shortlisting applicants",
+      "applications",
+      "id, student_id, profile_snapshot, students(full_name, roll_number), shortlist_entries(included)",
+    ],
+    ["shortlisting skills", "skill_scores", "student_id, metric, score, max_score"],
+    [
+      "shortlisting drive",
+      "drives",
+      "id, company_name, role_title, role_category, mandatory_skills",
+    ],
+    [
+      "round results",
+      "attendance",
+      "application_id, status, applications(students(full_name, roll_number))",
+    ],
+    ["round result rows", "round_results", "application_id, result"],
+    [
+      "final selection candidates",
+      "round_results",
+      "application_id, result, applications(student_id, students(full_name, roll_number))",
+    ],
+    [
+      "final selection drive",
+      "drives",
+      "id, company_name, role_title, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa",
+    ],
+    ["campus list", "campuses", "id, name, code, is_active, cities(name, state)"],
+    ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
+    ["staff profiles", "profiles", "email, is_active"],
+    ["programmes degrees", "degrees", "id, name"],
+    ["programmes branches", "branches", "id, degree_id, name, is_active"],
+    ["student participation", "self_placement_requests", "id, company_name, ctc_lpa, status"],
+    [
+      "coordinator opt-out queue",
+      "opt_out_requests",
+      "id, reason, students(full_name, roll_number)",
+    ],
+    [
+      "coordinator self-placement queue",
+      "self_placement_requests",
+      "id, company_name, ctc_lpa, students(full_name, roll_number)",
+    ],
+  ];
+
+  it.each(SELECTS)("%s", async (_name, table, spec) => {
+    expect(await missingColumns(table, spec)).toEqual([]);
+  });
+});

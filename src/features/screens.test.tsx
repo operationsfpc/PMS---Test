@@ -2,11 +2,10 @@
 
 import { AppShell } from "@components/app-shell";
 import type { AppRole } from "@domain/types";
-import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { StudentDashboard } from "@features/student/student-dashboard";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -174,37 +173,6 @@ describe("PifApprovalQueue", () => {
  * "N of 3" prior-absence count, and the "Triggers review" warning - plus new
  * ones for the empty and failure states.
  */
-
-describe("ShortlistingWorkspace", () => {
-  it("states that ranking and rationale are internal only (PRD §13.1)", () => {
-    routed(<ShortlistingWorkspace />);
-    const note = screen.getByRole("note");
-    expect(within(note).getByText(/internal only/i)).toBeDefined();
-    expect(note.textContent).toMatch(/never visible to students/i);
-  });
-
-  it("shows a rationale for every ranked candidate", () => {
-    routed(<ShortlistingWorkspace />);
-    const why = screen.getByRole("columnheader", { name: /why/i });
-    expect(why).toBeDefined();
-    expect(screen.getByText(/top coding score/i)).toBeDefined();
-  });
-
-  it("keeps the export count in step with the selection", async () => {
-    routed(<ShortlistingWorkspace />);
-    expect(screen.getByRole("button", { name: /export 2 to recruiter/i })).toBeDefined();
-
-    await userEvent.click(
-      screen.getByRole("checkbox", { name: /include vikram iyer in the recruiter export/i }),
-    );
-    expect(screen.getByRole("button", { name: /export 3 to recruiter/i })).toBeDefined();
-  });
-
-  it("offers the forward-all shortcut (PRD §13.1)", () => {
-    routed(<ShortlistingWorkspace />);
-    expect(screen.getByRole("button", { name: /forward all applicants/i })).toBeDefined();
-  });
-});
 
 describe("mobile navigation", () => {
   it("hides the nav behind a toggle and opens it on demand", async () => {
