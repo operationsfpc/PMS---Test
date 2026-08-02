@@ -503,6 +503,13 @@ export type StaffCampusAssignmentsInsert = Pick<
   "profile_id" | "campus_id"
 >;
 
+export interface StaffCampusInvitationsRow {
+  email: string;
+  campus_id: string;
+}
+
+export type StaffCampusInvitationsInsert = Pick<StaffCampusInvitationsRow, "email" | "campus_id">;
+
 export interface StaffInvitationsRow {
   email: string;
   full_name: string;

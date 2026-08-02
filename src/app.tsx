@@ -1,6 +1,7 @@
 import { AppShell } from "@components/app-shell";
 import { AdminCampusRoute } from "@features/admin/campus-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
+import { AdminStaffRoute } from "@features/admin/staff-route";
 import { LoginPage } from "@features/auth/login-page";
 import { RequireAuth } from "@features/auth/require-auth";
 import { RoleLanding } from "@features/auth/role-landing";
@@ -41,6 +42,7 @@ export function App() {
                 {/* Post-login routing is a domain rule, not a hardcoded path. */}
                 <Route path="/" element={<RoleLanding />} />
                 <Route path="/admin/campuses" element={<AdminCampusRoute />} />
+                <Route path="/admin/staff" element={<AdminStaffRoute />} />
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
