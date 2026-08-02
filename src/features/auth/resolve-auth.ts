@@ -1,6 +1,6 @@
 import type { AppRole } from "@domain/types";
+import type { AuthState } from "@lib/auth-context";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuthState } from "./require-auth";
 
 /**
  * Turns a Supabase session into an identity the UI can route on.

@@ -6,7 +6,7 @@ import { RoleLanding } from "@features/auth/role-landing";
 import { DafPublish } from "@features/central-cpc/daf-publish";
 import { DriveCockpit } from "@features/central-cpc/drive-cockpit";
 import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
-import { AttendancePage } from "@features/cpc/attendance-page";
+import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { PifPage } from "@features/pif/pif-page";
@@ -43,7 +43,7 @@ export function App() {
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
-                <Route path="/cpc/attendance" element={<AttendancePage />} />
+                <Route path="/cpc/attendance" element={<AttendanceRoute />} />
                 <Route path="/ae/pif" element={<PifPage />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
                 <Route path="/central/shortlisting" element={<ShortlistingWorkspace />} />

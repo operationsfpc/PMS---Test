@@ -3,7 +3,6 @@
 import { AppShell } from "@components/app-shell";
 import type { AppRole } from "@domain/types";
 import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
-import { AttendancePage } from "@features/cpc/attendance-page";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { StudentDashboard } from "@features/student/student-dashboard";
@@ -167,41 +166,14 @@ describe("PifApprovalQueue", () => {
   });
 });
 
-describe("AttendancePage", () => {
-  it("offers select all and unselect all", () => {
-    routed(<AttendancePage />);
-    expect(screen.getByRole("button", { name: /^select all$/i })).toBeDefined();
-    expect(screen.getByRole("button", { name: /^unselect all$/i })).toBeDefined();
-  });
-
-  it("marks everyone present when select all is used", async () => {
-    routed(<AttendancePage />);
-    await userEvent.click(screen.getByRole("button", { name: /^select all$/i }));
-    for (const box of screen.getAllByRole("checkbox")) {
-      expect((box as HTMLInputElement).checked).toBe(true);
-    }
-  });
-
-  it("clears everyone when unselect all is used", async () => {
-    routed(<AttendancePage />);
-    await userEvent.click(screen.getByRole("button", { name: /^unselect all$/i }));
-    for (const box of screen.getAllByRole("checkbox")) {
-      expect((box as HTMLInputElement).checked).toBe(false);
-    }
-  });
-
-  it("warns when marking a student absent would trigger a disbarment review", async () => {
-    // Vikram has 2 prior absences; a third reaches the limit.
-    routed(<AttendancePage />);
-    await userEvent.click(screen.getByRole("button", { name: /^unselect all$/i }));
-    expect(screen.getAllByText(/triggers review/i).length).toBeGreaterThan(0);
-  });
-
-  it("shows each student's prior absences against the limit", () => {
-    routed(<AttendancePage />);
-    expect(screen.getByText("2 of 3")).toBeDefined();
-  });
-});
+/*
+ * AttendancePage's tests now live in cpc/attendance-page.test.tsx.
+ *
+ * The screen became data-driven, so it needs a view injected. Every assertion
+ * that was here is preserved there - select all / unselect all, marking, the
+ * "N of 3" prior-absence count, and the "Triggers review" warning - plus new
+ * ones for the empty and failure states.
+ */
 
 describe("ShortlistingWorkspace", () => {
   it("states that ranking and rationale are internal only (PRD §13.1)", () => {
@@ -292,7 +264,7 @@ describe("App routing", () => {
     expect(screen.queryByLabelText(/preview as/i)).toBeNull();
   });
 
-  it("routes to the attendance page", () => {
+  it("routes to attendance, which asks which round when none is given", () => {
     render(
       <AuthContext.Provider value={signedIn("campus_placement_coordinator")}>
         <MemoryRouter initialEntries={["/cpc/attendance"]}>
@@ -300,6 +272,8 @@ describe("App routing", () => {
         </MemoryRouter>
       </AuthContext.Provider>,
     );
-    expect(screen.getByRole("heading", { level: 1, name: /attendance/i })).toBeDefined();
+    // Attendance is per-round and arrives as ?round=. Defaulting to some round
+    // would risk marking the wrong one, so the screen asks instead.
+    expect(screen.getByText(/choose a round/i)).toBeDefined();
   });
 });

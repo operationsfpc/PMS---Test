@@ -1,5 +1,5 @@
 import type { AppRole } from "@domain/types";
-import { useAuth } from "@features/auth/require-auth";
+import { useAuth } from "@lib/auth-context";
 import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router";
 
