@@ -6,8 +6,8 @@ import { AdminStaffRoute } from "@features/admin/staff-route";
 import { LoginPage } from "@features/auth/login-page";
 import { RequireAuth } from "@features/auth/require-auth";
 import { RoleLanding } from "@features/auth/role-landing";
+import { CockpitRoute } from "@features/central-cpc/cockpit-route";
 import { DafPublish } from "@features/central-cpc/daf-publish";
-import { DriveCockpit } from "@features/central-cpc/drive-cockpit";
 import { OfferRoute } from "@features/central-cpc/offer-route";
 import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
@@ -59,7 +59,7 @@ export function App() {
                 <Route path="/ae/pif" element={<PifPage />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
                 <Route path="/central/shortlisting" element={<ShortlistRoute />} />
-                <Route path="/central/drives" element={<DriveCockpit />} />
+                <Route path="/central/drives" element={<CockpitRoute />} />
                 <Route path="/central/publish" element={<DafPublish />} />
                 <Route path="/central/results" element={<ResultsRoute />} />
                 <Route path="/central/offers" element={<OfferRoute />} />

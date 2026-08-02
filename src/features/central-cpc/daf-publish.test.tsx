@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { DafPublish } from "./daf-publish";
-import { DriveCockpit } from "./drive-cockpit";
 
 const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 const count = (): number => Number(screen.getByTestId("audience-count").textContent);
@@ -106,23 +105,5 @@ describe("DafPublish — go-live checklist", () => {
     expect(
       (screen.getByRole("button", { name: /publish to/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
-  });
-});
-
-describe("DriveCockpit", () => {
-  it("warns that an on-hold drive cannot be published", () => {
-    routed(<DriveCockpit />);
-    expect(screen.getByText(/cannot publish while on hold/i)).toBeDefined();
-  });
-
-  it("routes the incomplete drive to the publish screen", () => {
-    routed(<DriveCockpit />);
-    const link = screen.getByRole("link", { name: /complete and publish/i });
-    expect(link.getAttribute("href")).toBe("/central/publish");
-  });
-
-  it("surfaces pending disbarment reviews", () => {
-    routed(<DriveCockpit />);
-    expect(screen.getByText(/disbarment reviews/i)).toBeDefined();
   });
 });

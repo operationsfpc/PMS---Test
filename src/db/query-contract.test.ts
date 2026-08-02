@@ -139,6 +139,16 @@ describe("every hand-written select matches the schema", () => {
       "drives",
       "id, company_name, role_title, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa",
     ],
+    [
+      "cockpit drives",
+      "drives",
+      "id, company_name, role_title, status, on_hold, drive_rounds(id, sequence, name)",
+    ],
+    [
+      "cockpit absence reviews",
+      "attendance",
+      "status, round_id, applications(student_id, drive_id, students(full_name, roll_number))",
+    ],
     ["campus list", "campuses", "id, name, code, is_active, cities(name, state)"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
     ["staff profiles", "profiles", "email, is_active"],
