@@ -35,8 +35,11 @@ describe("landingRouteForRole", () => {
     expect(landingRouteForRole("account_executive")).toBe("/ae/pif");
   });
 
+  it("sends an admin to roster import, the first thing a new deployment needs", () => {
+    expect(landingRouteForRole("admin")).toBe("/admin/roster");
+  });
+
   it.each([
-    "admin",
     "campus_manager",
     "key_account_manager",
     "enterprise_relations",

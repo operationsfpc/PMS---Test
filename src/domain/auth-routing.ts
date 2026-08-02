@@ -11,6 +11,7 @@ import type { AppRole } from "./types";
  * unconfirmed product decision never hides inside a redirect.
  */
 const LANDING_ROUTES: Partial<Record<AppRole, string>> = {
+  admin: "/admin/roster",
   student: "/student",
   campus_placement_coordinator: "/cpc/verification",
   account_executive: "/ae/pif",

@@ -42,7 +42,9 @@ describe("RoleLanding", () => {
   });
 
   it("tells a role with no screen yet the truth, rather than redirecting them somewhere wrong", () => {
-    renderLanding({ status: "signed-in", role: "admin", email: "a@faceprep.in" });
+    // The CEO dashboard is not built. Admin now has roster import, so it is no
+    // longer an example of a role without a screen.
+    renderLanding({ status: "signed-in", role: "ceo", email: "a@faceprep.in" });
 
     const status = screen.getByRole("status");
     expect(status.textContent).toMatch(/no dashboard yet/i);
