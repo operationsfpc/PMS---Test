@@ -8,21 +8,34 @@
 -- HOW TO RUN
 --   Supabase Dashboard -> SQL Editor -> New query -> paste this -> Run.
 --
--- BEFORE YOU RUN IT: replace the three REPLACE-ME email addresses below.
+-- BEFORE YOU RUN IT: replace ONE email address - the first one. See below.
 --
 -- ---------------------------------------------------------------------------
 -- WHY THE EMAILS MATTER
 -- ---------------------------------------------------------------------------
 -- Sign-in is Google-only, and migration 0009 refuses any address that is not
--- on this roster. So each test student's email must be a REAL Google account
--- that you can actually sign in to.
+-- on this roster. To actually LOG IN as a student, the roster address must be
+-- a REAL Google account you can sign in to.
 --
---   * Plus-aliases DO NOT work (you@gmail.com + "+test1").  Google reports the
+-- You only need ONE such address to prove the whole flow works:
+--
+--   TEC001 -> REPLACE with a real Gmail you control (a personal one is fine).
+--             Add this same address to Google Cloud Console -> Audience ->
+--             Test users, or Google will block it before we ever see it.
+--
+--   TEC002 -> left as @example.com on purpose. Nobody can ever sign in as
+--   TEC003    these. They exist so verification queues and student lists have
+--             more than one row to render. Do NOT add them to Google.
+--
+-- example.com is reserved by RFC 2606, so these can never collide with a real
+-- Google account.
+--
+-- Two traps:
+--   * Plus-aliases DO NOT work (you+test1@gmail.com).  Google reports the
 --     canonical address at sign-in, so the alias will never match the roster.
 --   * Do NOT reuse karthikraja@faceprep.in.  It is already the founding Admin;
 --     putting it here too would make one person both staff and student and
 --     fire both claim triggers.
---   * Any Gmail address works - a personal one is fine for testing.
 --
 -- Re-running this script is safe: every insert is guarded by ON CONFLICT.
 -- ============================================================================
@@ -74,9 +87,9 @@ join degrees d      on d.name = 'B.E.'
 join branches br    on br.degree_id = d.id and br.name = s.branch
 cross join (values
   -- roll_number , full_name        , email                        , branch
-  ('TEC001', 'Test Student One',   'REPLACE-ME-1@gmail.com', 'Computer Science and Engineering'),
-  ('TEC002', 'Test Student Two',   'REPLACE-ME-2@gmail.com', 'Computer Science and Engineering'),
-  ('TEC003', 'Test Student Three', 'REPLACE-ME-3@gmail.com', 'Mechanical Engineering')
+  ('TEC001', 'Test Student One',   'REPLACE-WITH-YOUR-REAL-GMAIL@gmail.com', 'Computer Science and Engineering'),
+  ('TEC002', 'Test Student Two',   'fpc.test.two@example.com',               'Computer Science and Engineering'),
+  ('TEC003', 'Test Student Three', 'fpc.test.three@example.com',             'Mechanical Engineering')
 ) as s(roll_number, full_name, email, branch)
 where c.name = 'Test Engineering College'
 on conflict (email) do nothing;
