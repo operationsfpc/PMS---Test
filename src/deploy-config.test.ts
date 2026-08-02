@@ -17,6 +17,12 @@ const config = JSON.parse(
   readFileSync(fileURLToPath(new URL("../wrangler.json", import.meta.url)), "utf8"),
 );
 
+/** Copied into dist/ by Vite, then honoured by Cloudflare at upload time. */
+const assetsIgnore = readFileSync(
+  fileURLToPath(new URL("../public/.assetsignore", import.meta.url)),
+  "utf8",
+);
+
 describe("Cloudflare deployment config", () => {
   it("serves the built assets", () => {
     expect(config.assets.directory).toBe("./dist");
@@ -28,5 +34,16 @@ describe("Cloudflare deployment config", () => {
 
   it("pins a compatibility date, so a future Workers runtime cannot change behaviour silently", () => {
     expect(config.compatibility_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  describe("keeps development-only files off the public internet", () => {
+    // Shipped on the first deploy. Harmless, but neither belongs in production.
+    it("excludes macOS directory metadata", () => {
+      expect(assetsIgnore).toMatch(/^\.DS_Store$/m);
+    });
+
+    it("excludes the MSW service worker, which can intercept network requests", () => {
+      expect(assetsIgnore).toMatch(/^mockServiceWorker\.js$/m);
+    });
   });
 });

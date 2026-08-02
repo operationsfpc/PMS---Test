@@ -1,0 +1,11 @@
+# Files Vite copies into dist/ that must NOT be served in production.
+# Cloudflare reads this from the assets directory at upload time.
+
+# macOS directory metadata. Leaks file names; no reason to publish it.
+.DS_Store
+
+# The MSW mock backend's service worker. Mocks are opt-in via VITE_USE_MOCKS
+# and never start in a production build, so this is dead weight - but a service
+# worker that can intercept every network request has no business being
+# reachable on the public internet.
+mockServiceWorker.js
