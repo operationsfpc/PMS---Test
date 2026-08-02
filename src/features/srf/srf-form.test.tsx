@@ -1,10 +1,32 @@
 // @vitest-environment jsdom
+import { setSupabaseClient } from "@lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { delay, HttpResponse, http } from "msw";
+import { afterEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import { SrfPage } from "./srf-page";
+
+/**
+ * Submission now goes to Supabase, so refusals are PostgREST errors rather
+ * than a JSON `error` field from the retired /api/srf stand-in.
+ */
+const BASE = "https://project.supabase.co";
+
+function signedIn() {
+  const client = createClient(BASE, "anon-key", {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  client.auth.getSession = (async () => ({
+    data: { session: { user: { id: "40000000-0000-0000-0000-000000000001" } } },
+    error: null,
+  })) as unknown as typeof client.auth.getSession;
+  setSupabaseClient(client);
+}
+
+const studentsPatch = (respond: () => Response | Promise<Response>) =>
+  server.use(http.patch(`${BASE}/rest/v1/students`, respond));
 
 /** Behaviour of the real SRF: validation, dynamic fields, submission. */
 
@@ -140,7 +162,12 @@ describe("SRF dynamic fields", () => {
 });
 
 describe("SRF submission", () => {
+  afterEach(() => setSupabaseClient(undefined));
+
   it("confirms submission and sets the expectation of verification", async () => {
+    studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
+    signedIn();
+
     const user = userEvent.setup();
     render(<SrfPage />);
     await fillValidForm(user);
@@ -152,28 +179,30 @@ describe("SRF submission", () => {
   });
 
   it("surfaces a server refusal without losing the student's work", async () => {
-    server.use(
-      http.post("/api/srf", () =>
-        HttpResponse.json(
-          { error: "This roll number has already been registered." },
-          { status: 409 },
-        ),
+    // The verified-academics guard from 0009 - a refusal a student can really hit.
+    studentsPatch(() =>
+      HttpResponse.json(
+        { code: "42501", message: "permission denied", details: null, hint: null },
+        { status: 403 },
       ),
     );
+    signedIn();
 
     const user = userEvent.setup();
     render(<SrfPage />);
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    const alert = await screen.findByText(/already been registered/i);
-    expect(alert).toBeDefined();
+    expect(
+      await screen.findByText(/can only be changed by your placement coordinator/i),
+    ).toBeDefined();
     // The form is still there, still filled in.
     expect((screen.getByLabelText(/overall cgpa/i) as HTMLInputElement).value).toBe("8.24");
   });
 
   it("falls back to a generic message when the server fails opaquely", async () => {
-    server.use(http.post("/api/srf", () => new HttpResponse(null, { status: 500 })));
+    studentsPatch(() => new HttpResponse(null, { status: 500 }));
+    signedIn();
 
     const user = userEvent.setup();
     render(<SrfPage />);
@@ -184,6 +213,12 @@ describe("SRF submission", () => {
   });
 
   it("disables the submit button while in flight", async () => {
+    studentsPatch(async () => {
+      await delay(80);
+      return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
+    });
+    signedIn();
+
     const user = userEvent.setup();
     render(<SrfPage />);
     await fillValidForm(user);

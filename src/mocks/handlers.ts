@@ -1,23 +1,14 @@
-import { delay, HttpResponse, http } from "msw";
+import type { RequestHandler } from "msw";
 
 /**
- * The API contract the UI is built against.
- * Layer 2 replaces these handlers with Supabase; the shapes stay identical.
+ * Remaining mock endpoints.
+ *
+ * The SRF handler has been retired: submission now goes to Supabase through
+ * `srf-api.ts`, and leaving a stand-in behind would let a broken wiring pass
+ * tests by silently answering from here instead.
+ *
+ * Screens still on mock data (PIF approvals, shortlisting, DAF publish,
+ * attendance) read from in-component fixtures rather than HTTP, so they need
+ * no handlers yet. Set VITE_USE_MOCKS=true to run the app without a database.
  */
-export const handlers = [
-  http.post("/api/srf", async ({ request }) => {
-    const body = (await request.json()) as { rollNumber?: string };
-    await delay(400);
-
-    // A roll number already claimed by another account is the one server-side
-    // failure the student can actually hit.
-    if (body.rollNumber === "TAKEN") {
-      return HttpResponse.json(
-        { error: "This roll number has already been registered." },
-        { status: 409 },
-      );
-    }
-
-    return HttpResponse.json({ id: "srf_01", status: "srf_submitted" }, { status: 201 });
-  }),
-];
+export const handlers: RequestHandler[] = [];
