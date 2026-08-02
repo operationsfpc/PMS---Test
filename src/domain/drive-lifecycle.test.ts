@@ -129,3 +129,50 @@ describe("decidePif", () => {
     expect(result.ok).toBe(false);
   });
 });
+
+/**
+ * Coverage of the two fields nothing exercised: a drive that reaches the
+ * Central CPC without a role category or a drive type. Both are settable by
+ * more than one role (Q1), which is exactly why neither can be assumed set.
+ */
+describe("missingBeforeGoLive names every unset field", () => {
+  it("names the role category when it was never chosen", () => {
+    const missing = missingBeforeGoLive({
+      companyName: "Zoho",
+      roleTitle: "MTS",
+      roleCategory: null,
+      jobDescription: "Build things",
+      locations: ["Chennai"],
+      ctcMinLpa: 6,
+      driveType: "placement",
+      offerCategory: "dream",
+      hasEligibilityCriteria: true,
+      roundCount: 2,
+      applicationStart: "2026-01-01T00:00:00Z",
+      applicationEnd: "2026-01-10T00:00:00Z",
+      onHold: false,
+    });
+
+    expect(missing).toContain("Role category");
+  });
+
+  it("names the drive type when it was never chosen", () => {
+    const missing = missingBeforeGoLive({
+      companyName: "Zoho",
+      roleTitle: "MTS",
+      roleCategory: "software_technical",
+      jobDescription: "Build things",
+      locations: ["Chennai"],
+      ctcMinLpa: 6,
+      driveType: null,
+      offerCategory: "dream",
+      hasEligibilityCriteria: true,
+      roundCount: 2,
+      applicationStart: "2026-01-01T00:00:00Z",
+      applicationEnd: "2026-01-10T00:00:00Z",
+      onHold: false,
+    });
+
+    expect(missing).toContain("Drive type");
+  });
+});

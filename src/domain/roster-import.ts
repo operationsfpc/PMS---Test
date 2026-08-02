@@ -72,7 +72,9 @@ export function parseRoster(rows: readonly (readonly string[])[]): RosterParseRe
     const rowNumber = i + 1;
 
     // Spreadsheets are full of trailing blank rows; they are not errors.
-    if (raw.every((v) => (v ?? "").trim() === "")) continue;
+    // `every` skips holes in a sparse row, and the element type is string, so
+    // no undefined guard is reachable here. Short rows are handled by `cell`.
+    if (raw.every((v) => v.trim() === "")) continue;
 
     const rollNumber = cell(raw, 0);
     const fullName = cell(raw, 1);

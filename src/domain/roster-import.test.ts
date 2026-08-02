@@ -58,6 +58,32 @@ describe("parseRoster", () => {
     expect(result.rejected[0]?.reason).toMatch(/email/i);
   });
 
+  /**
+   * A row missing any of these is a student who can never be imported, and so
+   * can never sign in. Each is reported with its row number rather than
+   * skipped - a silently dropped row is a student locked out of placements.
+   */
+  it("rejects a row with no roll number", () => {
+    const result = parseRoster([header, ["", ...row.slice(1)]]);
+
+    expect(result.accepted).toEqual([]);
+    expect(result.rejected[0]?.reason).toMatch(/roll number/i);
+  });
+
+  it("rejects a row with no name", () => {
+    const result = parseRoster([header, [row[0] ?? "", "", ...row.slice(2)]]);
+
+    expect(result.accepted).toEqual([]);
+    expect(result.rejected[0]?.reason).toMatch(/name/i);
+  });
+
+  it("rejects a row with no degree", () => {
+    const result = parseRoster([header, [...row.slice(0, 3), "", ...row.slice(4)]]);
+
+    expect(result.accepted).toEqual([]);
+    expect(result.rejected[0]?.reason).toMatch(/degree/i);
+  });
+
   it("rejects a malformed email", () => {
     const result = parseRoster([header, [...row.slice(0, 2), "not-an-email", ...row.slice(3)]]);
     expect(result.rejected[0]?.reason).toMatch(/email/i);
@@ -102,5 +128,41 @@ describe("parseRoster", () => {
 
     expect(result.accepted.map((s) => s.rollNumber)).toEqual(["TEC001", "TEC002"]);
     expect(result.rejected).toHaveLength(1);
+  });
+});
+
+/**
+ * Real spreadsheets are ragged: a row that ends early has no cells at all
+ * beyond its last value, and an exported file can carry holes. Neither may
+ * throw - the importer's whole job is to explain bad input, not die on it.
+ */
+describe("ragged files", () => {
+  it("treats missing trailing cells as blank rather than crashing", () => {
+    const result = parseRoster([header, ["TEC001"]]);
+
+    expect(result.fatal).toBeNull();
+    expect(result.accepted).toEqual([]);
+    expect(result.rejected[0]?.reason).toMatch(/name/i);
+  });
+
+  it("skips a row that is entirely holes", () => {
+    const holes: string[] = [];
+    holes.length = 6;
+
+    const result = parseRoster([header, holes]);
+
+    expect(result.fatal).toBeNull();
+    expect(result.accepted).toEqual([]);
+    expect(result.rejected).toEqual([]);
+  });
+
+  it("survives a missing row entirely", () => {
+    const rows: (readonly string[])[] = [header];
+    rows.length = 3;
+
+    const result = parseRoster(rows);
+
+    expect(result.fatal).toBeNull();
+    expect(result.accepted).toEqual([]);
   });
 });
