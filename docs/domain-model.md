@@ -319,6 +319,25 @@ Covers: SRF approvals, semester verifications, PIF create/approve/reject, drive 
 
 ---
 
+## 10a. Open questions and unconfirmed assumptions
+
+> Authorised on 2026-08-02: *"make suitable assumptions wherever required"*.
+> Every assumption below is marked `⚠️ ASSUMPTION — UNCONFIRMED` at its call
+> site. They are cheap to change now and expensive to change after real data
+> exists, so they are listed here rather than buried in code.
+
+| # | Area | Assumption taken | Cost if wrong |
+|---|---|---|---|
+| A1 | SRF resubmission | A `srf_rejected` student may edit and resubmit; the CPC sees it as a fresh `srf_submitted`. History is kept in the audit log only | Low — status transition only |
+| A2 | Marksheet uploads | Uploads are **required** to submit the SRF, matching the existing form validation. No "submit now, upload later" path | Medium — changes the student journey |
+| A3 | Student landing | A student always lands on `/student`, even before SRF submission. Routing them to `/srf` when `srf_status` is `registered` needs the status in auth state | Low — one redirect |
+| A4 | Degree/branch | Admin-managed tables, not the 6 hardcoded degrees in PIF Q13 | **High** — schema-level; confirm before the AE PIF form |
+| A5 | Roster format | `public/templates/student-roster-template.xlsx` is my invention. No real college file has been seen | **High** — drives the import feature |
+| A6 | Role landing routes | Roles with no screen get an honest "not built yet" page rather than a borrowed dashboard | Low |
+| A7 | Skill scores | R11 `rankApplicants` still deferred; `skill_scores` stays generic | Blocks shortlisting |
+
+---
+
 ## 11. Build order
 
 1. ✅ Scaffold repo + test harness; prove one red→green cycle.
