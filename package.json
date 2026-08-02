@@ -16,7 +16,9 @@
     "typecheck": "tsc -b --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm test:cov",
     "db:types": "node --experimental-strip-types scripts/gen-types.mjs",
-    "db:push": "supabase db push"
+    "db:push": "supabase db push",
+    "cf:dev": "pnpm build && wrangler dev",
+    "deploy": "pnpm build && wrangler deploy"
   },
   "engines": {
     "node": ">=22"
@@ -41,7 +43,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.118.0"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.5.7",
