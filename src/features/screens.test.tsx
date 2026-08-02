@@ -59,16 +59,43 @@ describe("StudentDashboard", () => {
 });
 
 describe("SrfVerificationQueue", () => {
-  it("separates standing arrears from arrear history", () => {
+  /**
+   * Now data-driven, so these supply a repository instead of reading fixtures.
+   *
+   * The marksheet assertion changed shape: the mock rendered one "View 3 files"
+   * link per student, which named a count rather than a document. Real data
+   * gives one named link per marksheet, so a coordinator can tell which
+   * document they are opening. Intent (PRD 4.2 - link the evidence beside the
+   * figure) is unchanged.
+   */
+  const stub = {
+    pending: async () => [
+      {
+        id: "s1",
+        fullName: "Asha Ramanathan",
+        rollNumber: "TEC001",
+        overallCgpa: 8.2,
+        currentArrears: 0,
+        historyOfArrears: 1,
+        tenthPercentage: 91.4,
+        twelfthPercentage: 88,
+        submittedAt: "2026-08-01T10:00:00Z",
+        documents: [{ kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" }],
+      },
+    ],
+    decide: async () => undefined,
+  };
+
+  it("separates standing arrears from arrear history", async () => {
     // Drives filter on each independently (decision Q6).
-    routed(<SrfVerificationQueue />);
-    expect(screen.getByRole("columnheader", { name: /standing arrears/i })).toBeDefined();
+    routed(<SrfVerificationQueue repository={stub} />);
+    expect(await screen.findByRole("columnheader", { name: /standing arrears/i })).toBeDefined();
     expect(screen.getByRole("columnheader", { name: /arrear history/i })).toBeDefined();
   });
 
-  it("links the marksheets that justify the figures", () => {
-    routed(<SrfVerificationQueue />);
-    expect(screen.getAllByRole("link", { name: /view \d+ files/i }).length).toBeGreaterThan(0);
+  it("links the marksheets that justify the figures", async () => {
+    routed(<SrfVerificationQueue repository={stub} />);
+    expect(await screen.findByRole("link", { name: /10th marksheet/i })).toBeDefined();
   });
 });
 
