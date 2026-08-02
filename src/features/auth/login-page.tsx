@@ -1,6 +1,7 @@
 import { Button } from "@components/ui";
 import { supabase } from "@lib/supabase";
-import { useSearchParams } from "react-router";
+import { Navigate, useSearchParams } from "react-router";
+import { useAuth } from "./require-auth";
 
 /** Where a refused or confused user is told to write. */
 export const SUPPORT_EMAIL = "hello@faceprep.in";
@@ -18,21 +19,27 @@ function refusalMessage(errorDescription: string): string {
   const notOnAllowlist = /not registered/i.test(errorDescription);
 
   return notOnAllowlist
-    ? `That Google account is not set up for placements yet. Students are added by their college; staff are invited by an administrator. If you believe this is a mistake, write to ${SUPPORT_EMAIL}.`
-    : `Sign-in could not be completed. Please try again. If it keeps happening, write to ${SUPPORT_EMAIL}.`;
+    ? `That Google account is not set up for placements yet. Write to ${SUPPORT_EMAIL} to get invited to the placement management system.`
+    : `Sign-in could not be completed. Please try again. If it keeps happening, write to ${SUPPORT_EMAIL} to get invited to the placement management system.`;
 }
 
 export function LoginPage() {
   const [params] = useSearchParams();
+  const auth = useAuth();
   const error = params.get("error");
   const message = error === null ? null : refusalMessage(params.get("error_description") ?? "");
 
   async function signIn() {
     await supabase().auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      // Must be /login: Supabase returns OAuth *errors* here too, and an
+      // allowlist refusal would be lost anywhere else.
+      options: { redirectTo: `${window.location.origin}/login` },
     });
   }
+
+  // A successful sign-in also lands here. Hand over to role routing.
+  if (auth.status === "signed-in") return <Navigate to="/" replace />;
 
   return (
     <main className="grid min-h-dvh place-items-center bg-[#F5F5F5] px-4">

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { AppShell } from "@components/app-shell";
+import type { AppRole } from "@domain/types";
 import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
 import { AttendancePage } from "@features/cpc/attendance-page";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
@@ -11,6 +12,13 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { App } from "../app";
+import { AuthContext, type AuthState } from "./auth/require-auth";
+
+const signedIn = (role: AppRole): AuthState => ({
+  status: "signed-in",
+  role,
+  email: "test@example.com",
+});
 
 const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
@@ -184,20 +192,36 @@ describe("mobile navigation", () => {
 });
 
 describe("App routing", () => {
-  it("lands on the student dashboard by default", () => {
+  it("sends a signed-out visitor to the login screen instead of any dashboard", () => {
     render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>,
+      <AuthContext.Provider value={{ status: "signed-out" }}>
+        <MemoryRouter initialEntries={["/student"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+    expect(screen.getByRole("button", { name: /sign in with google/i })).toBeDefined();
+    expect(screen.queryByRole("heading", { level: 1, name: /welcome back/i })).toBeNull();
+  });
+
+  it("lands a student on their dashboard, via the domain landing rule", () => {
+    render(
+      <AuthContext.Provider value={signedIn("student")}>
+        <MemoryRouter initialEntries={["/"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     );
     expect(screen.getByRole("heading", { level: 1, name: /welcome back/i })).toBeDefined();
   });
 
   it("renders the SRF outside the app shell, with its own chrome", () => {
     render(
-      <MemoryRouter initialEntries={["/srf"]}>
-        <App />
-      </MemoryRouter>,
+      <AuthContext.Provider value={signedIn("student")}>
+        <MemoryRouter initialEntries={["/srf"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     );
     expect(
       screen.getByRole("heading", { level: 1, name: /student registration form/i }),
@@ -208,9 +232,11 @@ describe("App routing", () => {
 
   it("routes to the attendance page", () => {
     render(
-      <MemoryRouter initialEntries={["/cpc/attendance"]}>
-        <App />
-      </MemoryRouter>,
+      <AuthContext.Provider value={signedIn("campus_placement_coordinator")}>
+        <MemoryRouter initialEntries={["/cpc/attendance"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
     );
     expect(screen.getByRole("heading", { level: 1, name: /attendance/i })).toBeDefined();
   });

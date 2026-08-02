@@ -3,9 +3,10 @@ import { setSupabaseClient } from "@lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LoginPage, SUPPORT_EMAIL } from "./login-page";
+import { AuthContext, type AuthState } from "./require-auth";
 
 /**
  * The single login screen. Confirmed decisions:
@@ -18,11 +19,16 @@ import { LoginPage, SUPPORT_EMAIL } from "./login-page";
  * an error in the query string. There is nothing to sign out of.
  */
 
-function renderAt(path: string) {
+function renderAt(path: string, auth: AuthState = { status: "signed-out" }) {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <LoginPage />
-    </MemoryRouter>,
+    <AuthContext.Provider value={auth}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<p>Signed in already</p>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
   );
 }
 
@@ -76,10 +82,14 @@ describe("LoginPage", () => {
       expect(alert.textContent).not.toMatch(/placement coordinator for an invitation/);
     });
 
-    it("gives them somewhere to write to", () => {
+    it("tells them exactly what writing in will achieve", () => {
       stubAuth();
       renderAt(`/login?error=server_error&error_description=${encodeURIComponent(REFUSAL)}`);
-      expect(screen.getByRole("alert").textContent).toContain(SUPPORT_EMAIL);
+
+      const alert = screen.getByRole("alert");
+      expect(alert.textContent).toContain(SUPPORT_EMAIL);
+      // Not just an address to shout at - say what it gets them.
+      expect(alert.textContent).toMatch(/to get invited to the placement management system/i);
     });
   });
 
@@ -96,5 +106,18 @@ describe("LoginPage", () => {
     stubAuth();
     renderAt("/login");
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  /**
+   * Supabase returns OAuth results to `redirectTo`, so that URL must be /login
+   * or an allowlist refusal would be silently lost. A successful sign-in
+   * therefore also lands here, and must be moved along to role routing.
+   */
+  it("moves an already signed-in user along instead of offering sign-in again", () => {
+    stubAuth();
+    renderAt("/login", { status: "signed-in", role: "student", email: "s@example.com" });
+
+    expect(screen.getByText("Signed in already")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();
   });
 });
