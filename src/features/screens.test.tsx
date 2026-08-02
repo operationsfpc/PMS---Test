@@ -100,35 +100,70 @@ describe("SrfVerificationQueue", () => {
 });
 
 describe("PifApprovalQueue", () => {
-  it("suggests an offer category using the real domain rule", () => {
-    routed(<PifApprovalQueue />);
-    // Goldman Sachs is ₹18–22 LPA → Super Dream via classifyOfferCategory.
-    const select = screen.getByLabelText(/offer category/i, { selector: "#cat-p3" });
-    expect((select as HTMLSelectElement).value).toBe("super_dream");
+  /**
+   * Data-driven now, so these supply a repository. The assertions are
+   * unchanged: banding comes from the real domain rule, and both irreversible
+   * consequences must be stated before the click.
+   */
+  const stub = {
+    pending: async () => [
+      {
+        id: "p3",
+        companyName: "Goldman Sachs",
+        roleTitle: "Analyst",
+        ctcMinLpa: 18,
+        ctcMaxLpa: 22,
+        driveType: "placement",
+        onHold: true,
+        createdAt: "2026-08-01T09:00:00Z",
+      },
+      {
+        id: "p1",
+        companyName: "Zoho",
+        roleTitle: "MTS",
+        ctcMinLpa: 6.5,
+        ctcMaxLpa: 9,
+        driveType: "placement",
+        onHold: false,
+        createdAt: "2026-08-01T10:00:00Z",
+      },
+    ],
+    decide: async () => undefined,
+  };
+
+  it("suggests an offer category using the real domain rule", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    // Goldman Sachs is INR 18-22 LPA -> Super Dream via classifyOfferCategory.
+    const select = (await screen.findByLabelText(/offer category/i, {
+      selector: "#cat-p3",
+    })) as HTMLSelectElement;
+    expect(select.value).toBe("super_dream");
   });
 
-  it("bands a ₹6.5–9 LPA drive as Dream", () => {
-    routed(<PifApprovalQueue />);
-    const select = screen.getByLabelText(/offer category/i, { selector: "#cat-p1" });
-    expect((select as HTMLSelectElement).value).toBe("dream");
+  it("bands a 6.5-9 LPA drive as Dream", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    const select = (await screen.findByLabelText(/offer category/i, {
+      selector: "#cat-p1",
+    })) as HTMLSelectElement;
+    expect(select.value).toBe("dream");
   });
 
-  it("warns that rejection is permanent before the click", () => {
-    routed(<PifApprovalQueue />);
-    expect(screen.getAllByText(/rejection is final/i).length).toBeGreaterThan(0);
+  it("warns that rejection is permanent before the click", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    expect((await screen.findAllByText(/rejection is final/i)).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /reject permanently/i }).length).toBeGreaterThan(
       0,
     );
   });
 
-  it("marks the classification as final", () => {
-    routed(<PifApprovalQueue />);
-    expect(screen.getAllByText(/cannot be changed later/i).length).toBeGreaterThan(0);
+  it("marks the classification as final", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    expect((await screen.findAllByText(/cannot be changed later/i)).length).toBeGreaterThan(0);
   });
 
-  it("surfaces an on-hold PIF", () => {
-    routed(<PifApprovalQueue />);
-    expect(screen.getAllByText(/on hold/i).length).toBeGreaterThan(0);
+  it("surfaces an on-hold PIF", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    expect((await screen.findAllByText(/on hold/i)).length).toBeGreaterThan(0);
   });
 });
 
