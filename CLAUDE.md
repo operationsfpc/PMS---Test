@@ -4,7 +4,7 @@ Project instructions. Read this file completely at the start of every session.
 
 ---
 
-## 🔴 RULE 1 — TEST-DRIVEN DEVELOPMENT IS MANDATORY
+## 🔴 THE STANDING RULE — TEST-DRIVEN DEVELOPMENT IS MANDATORY
 
 **No production code is written before a failing test exists for it. No exceptions.**
 
@@ -41,23 +41,6 @@ Non-negotiables:
 | Journeys | Playwright | One end-to-end journey per role |
 
 Query by role and accessible name (`getByRole`, `getByLabelText`). Do not assert on CSS classes or test IDs unless there is no accessible alternative.
-
----
-
-## 🔴 RULE 2 — ASK ALL QUESTIONS BEFORE STARTING WORK, AT EVERY STAGE
-
-**Before beginning any new stage of work, surface every question, ambiguity, assumption and conflict — and wait for answers.**
-
-This applies at *every* stage, not just at project kickoff: before a new module, a new screen, a schema change, a refactor, a deployment.
-
-- If the PRD and the PIF disagree, **stop and ask**. Do not silently pick one.
-- If a requirement is ambiguous, **ask**. Do not guess and build.
-- If an answer implies a change elsewhere in the system, **say so** before building.
-- Prefer asking too many questions over building the wrong thing.
-- State assumptions explicitly and get them confirmed. Never bury an assumption in code.
-- When a stage completes, ask the questions for the next stage before starting it.
-
-Open items live in `docs/domain-model.md` under **Open Questions** and must be marked `⚠️ ASSUMPTION — UNCONFIRMED` in code comments until answered.
 
 ---
 
@@ -178,6 +161,7 @@ These five values are used for student preferences, resume uploads, and drive ro
 - **Audit:** every mutating action writes an audit entry with actor, timestamp, before, after, reason. Enforced by Postgres triggers, not application code. The audit table is **append-only** (UPDATE/DELETE revoked).
 - **Immutability:** applications snapshot the student profile + role-relevant resume at apply time. All downstream steps read the **snapshot**, never the live profile.
 - **Naming:** files `kebab-case`, components `PascalCase`, domain functions `camelCase` and verb-led (`canApplyToDrive`, `classifyOfferCategory`).
+- **Assumptions:** where a decision was made without confirmation, mark it `⚠️ ASSUMPTION — UNCONFIRMED` at the call site and list it in `docs/domain-model.md` §10a, so it is cheap to find and reverse later.
 - **Commits:** Conventional Commits. Each commit leaves the suite green.
 
 ---
@@ -206,4 +190,4 @@ decision, and the exact next step.
 - Do not scaffold a module until its domain rules exist and are green.
 - Do not add a dependency without saying why and getting agreement.
 - Keep responses concise. Show file paths clearly.
-- When a stage finishes: run the suite, report the result, then **ask the next stage's questions**.
+- When a stage finishes: run the suite and report the result.

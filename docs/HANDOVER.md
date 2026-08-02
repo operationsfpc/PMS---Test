@@ -7,10 +7,14 @@ Last updated at commit `afdeac4`. **614 tests passing across 51 files** (verifie
 
 ---
 
-## 0. The two standing rules (from CLAUDE.md — non-negotiable)
+## 0. The standing rule (from CLAUDE.md — non-negotiable)
 
-1. **TDD is mandatory.** Red → green → refactor. No production code before a failing test. Never edit a test to fit broken code. Never `.skip` to go green.
-2. **Ask every question before starting any stage** — not just at kickoff. If the PRD and the PIF disagree, stop and ask. Never silently pick one.
+**TDD is mandatory.** Red → green → refactor. No production code before a failing test. Never edit a test to fit broken code. Never `.skip` to go green.
+
+The former "ask every question first" rule was **removed on 2026-08-02** at the
+user's request. Make reasonable assumptions and keep moving; mark them
+`⚠️ ASSUMPTION — UNCONFIRMED` at the call site and list them in
+`docs/domain-model.md` §10a.
 
 ---
 
