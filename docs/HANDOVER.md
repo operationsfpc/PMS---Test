@@ -1,9 +1,9 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `bb6f06a`. **588 tests passing across 48 files** (verified, not remembered).
+Last updated at commit `afdeac4`. **614 tests passing across 51 files** (verified, not remembered).
 
-**Live:** <https://fpc-pms.faceprep.workers.dev> · database on Supabase ap-south-1 · Google sign-in **confirmed working end to end**.
+**Live:** <https://fpc-pms.faceprep.workers.dev> · database on Supabase ap-south-1 · Google sign-in **confirmed working end to end by the user**.
 
 ---
 
@@ -79,6 +79,20 @@ scripts/gen-types.mjs        type generation without Docker
 
 ## 3. 🔴 The immediate next step
 
+**Next task: the round results screen, then offer declaration.** Both have
+tested repositories already (`rounds-repository.recordResult`,
+`offers-repository.declareOffer`) and no UI. Follow the shape of
+`cpc/attendance-page.tsx` — component takes an injected view, route wrapper
+builds the Supabase one.
+
+**Two decisions the user still owes:**
+1. **Email provider** — explicitly deferred on 2026-08-02. Notifications and
+   pgmq cannot be built until it is chosen. Gmail's ~2,000/day cap with no
+   delivery webhooks does not meet PRD §21.2.
+2. **A spreadsheet library** (SheetJS or similar) — needed for `.xlsx` roster
+   import and the recruiter export pack. Roster import currently accepts
+   **CSV only**. Do not add it without asking.
+
 **The database is live.** Setup walkthrough: `docs/SUPABASE-SETUP.md`.
 
 | | |
@@ -114,6 +128,20 @@ Still outstanding from the user (dashboard work, never in chat):
   1. Bootstrap deadlock: `profiles.id → auth.users` while the allowlist required a profile first, so no staff could ever sign in. Fixed with `staff_invitations`.
   2. `protect_verified_academics` **failed open** — students have no `profiles` row, so the role lookup returned NULL and every student passed. Now identifies the actor positively.
 - **`src/domain` must import nothing.** Enforced by `src/architecture.test.ts`.
+- **One feature must never import another.** The same test enforces it, and it
+  fired for real this session. Auth state therefore lives in
+  `src/lib/auth-context.tsx`, not in `features/auth` — `features/auth` merely
+  re-exports it.
+- **`pnpm test:run` is NOT enough before committing.** Vitest does not
+  typecheck. `pnpm check` caught five defects it could not see, including
+  PostgREST returning embedded to-one relations as an object while the
+  generated types declare an array (see `one<T>()` in `student/drives-view.ts`).
+- **Prefer the `edit` tool over scripted find-and-replace.** A `python`
+  replacement silently no-oped this session because Biome had reformatted the
+  target, and the failure surfaced later as a confusing test error.
+- **Mocks vs real:** `/student` is still a VISUAL MOCK with fabricated data
+  (Priya, Freshworks). The real student screen is `/student/drives`. Do not
+  demo `/student`.
 - **Postgres enums and `src/domain/types.ts` must stay identical.** Enforced by `src/db/types-drift.test.ts`.
 
 ---
@@ -130,7 +158,7 @@ Still outstanding from the user (dashboard work, never in chat):
 
 ---
 
-## 5a. What was built in the 2026-08-02 session
+## 5a. What was built in the 2026-08-02 session (27 commits, 344 → 614 tests)
 
 All test-first, every cycle watched failing. 344 → 588 tests.
 
@@ -153,11 +181,11 @@ All test-first, every cycle watched failing. 344 → 588 tests.
 ## 6. Not built yet
 
 **Rules and repositories exist; the SCREEN does not:**
-- Roster import UI (parser + repository are done and tested)
-- Attendance / results screens against `rounds-repository` (still mocks)
-- Offer declaration screen (repository done)
-- Recruiter export UI + XLSX/ZIP generation (`buildRecruiterExport` is done)
+- Round results / progression screen (`rounds-repository.recordResult`, `nextRoundParticipants`)
+- Offer declaration screen (`offers-repository.declareOffer`)
+- Recruiter export UI + XLSX/ZIP generation (`buildRecruiterExport` is done) — **needs a dependency decision**
 - Central CPC publish screen against `publish-repository` (still a mock)
+- `.xlsx` roster import (CSV works today; `parseCsv` is ours, in `src/domain/csv.ts`)
 
 **Not started at all:**
 - Executive / CEO / KAM / admin dashboards
