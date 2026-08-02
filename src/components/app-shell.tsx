@@ -70,9 +70,16 @@ function Logo() {
   );
 }
 
+/** Initials from the signed-in address: the account badge must not lie. */
+function initialsOf(email: string): string {
+  const local = email.split("@")[0] ?? "";
+  return local.slice(0, 2).toUpperCase();
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const signedInRole = auth.status === "signed-in" ? auth.role : "student";
+  const signedInEmail = auth.status === "signed-in" ? auth.email : "";
 
   // Development only: lets screens be reviewed without a database. Never
   // shipped - see app-shell.test.tsx.
@@ -131,8 +138,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </select>
               </>
             )}
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
-              PR
+            <span
+              title={signedInEmail}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
+            >
+              {initialsOf(signedInEmail)}
             </span>
           </div>
         </div>

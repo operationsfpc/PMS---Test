@@ -76,3 +76,23 @@ describe("the preview-as switcher", () => {
     expect(screen.queryByLabelText(/preview as/i)).toBeNull();
   });
 });
+
+/**
+ * The avatar was hardcoded to "PR", a leftover from the mock era. It told
+ * every signed-in user they were someone else, which is a small lie the whole
+ * session then rests on.
+ */
+describe("the account avatar", () => {
+  it("shows the signed-in user's own initials", () => {
+    shellFor({ status: "signed-in", role: "admin", email: "karthikraja@faceprep.in" });
+    expect(screen.getByTitle(/karthikraja@faceprep.in/i).textContent).toBe("KA");
+  });
+
+  it("does not show one fixed set of initials to everybody", () => {
+    shellFor({ status: "signed-in", role: "student", email: "priya@gmail.com" });
+    expect(screen.getByTitle(/priya@gmail.com/i).textContent).toBe("PR");
+
+    shellFor({ status: "signed-in", role: "admin", email: "arjun@faceprep.in" });
+    expect(screen.getByTitle(/arjun@faceprep.in/i).textContent).toBe("AR");
+  });
+});

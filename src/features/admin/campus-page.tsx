@@ -2,15 +2,17 @@ import { Button, Card, PageHeader } from "@components/ui";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import type { CampusListItem, CampusRepository, NewCampus } from "./campus-repository";
 
+// Order is the reading order of the form: identity, then place, then who to
+// call. City sits beside State because one qualifies the other.
 const FIELDS = [
-  { name: "name", label: "Campus name", type: "text" },
-  { name: "cityName", label: "City", type: "text" },
-  { name: "state", label: "State", type: "text" },
-  { name: "code", label: "Code", type: "text" },
-  { name: "address", label: "Address", type: "text" },
-  { name: "primaryContactName", label: "Primary contact name", type: "text" },
-  { name: "primaryContactEmail", label: "Primary contact email", type: "email" },
-  { name: "primaryContactPhone", label: "Primary contact phone", type: "tel" },
+  { name: "name", label: "Campus name", type: "text", wide: false },
+  { name: "code", label: "Code", type: "text", wide: false },
+  { name: "cityName", label: "City", type: "text", wide: false },
+  { name: "state", label: "State", type: "text", wide: false },
+  { name: "address", label: "Address", type: "text", wide: true },
+  { name: "primaryContactName", label: "Primary contact name", type: "text", wide: false },
+  { name: "primaryContactEmail", label: "Primary contact email", type: "email", wide: false },
+  { name: "primaryContactPhone", label: "Primary contact phone", type: "tel", wide: false },
 ] as const;
 
 type FieldName = (typeof FIELDS)[number]["name"];
@@ -99,7 +101,7 @@ export function CampusPage({ repository }: { repository: CampusRepository }) {
         <form onSubmit={submit} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map((field) => (
-              <div key={field.name}>
+              <div key={field.name} className={field.wide ? "sm:col-span-2" : undefined}>
                 <label
                   htmlFor={`campus-${field.name}`}
                   className="mb-1 block text-sm font-medium text-ink-700"
