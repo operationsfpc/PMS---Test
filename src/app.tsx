@@ -10,6 +10,7 @@ import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfPage } from "@features/srf/srf-page";
+import { StudentDrivesPage } from "@features/student/drives-page";
 import { StudentDashboard } from "@features/student/student-dashboard";
 import { Route, Routes } from "react-router";
 
@@ -38,6 +39,7 @@ export function App() {
                 {/* Post-login routing is a domain rule, not a hardcoded path. */}
                 <Route path="/" element={<RoleLanding />} />
                 <Route path="/student" element={<StudentDashboard />} />
+                <Route path="/student/drives" element={<StudentDrivesPage />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
                 <Route path="/cpc/attendance" element={<AttendancePage />} />
                 <Route path="/ae/pif" element={<PifPage />} />
