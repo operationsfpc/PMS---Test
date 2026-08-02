@@ -1,7 +1,9 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `91c1642`. **344 tests passing across 18 files** (verified, not remembered).
+Last updated at commit `bb6f06a`. **588 tests passing across 48 files** (verified, not remembered).
+
+**Live:** <https://fpc-pms.faceprep.workers.dev> · database on Supabase ap-south-1 · Google sign-in **confirmed working end to end**.
 
 ---
 
@@ -17,7 +19,7 @@ Last updated at commit `91c1642`. **344 tests passing across 18 files** (verifie
 | Layer | State |
 |---|---|
 | **Layer 0 — domain rules** | ✅ Complete for MVP. R1–R10 + SRF validators. 100% coverage, enforced |
-| **Layer 1 — UI** | 🟡 SRF is real (validation + state + MSW). 6 other screens are visual mocks |
+| **Layer 1 — UI** | 🟡 Real: login, SRF, CPC verification queue, AE PIF form, Delivery Head approvals, student drives list. Still mocks: student dashboard, shortlisting, DAF publish, attendance |
 | **Layer 2 — database** | ✅ **Live on Supabase ap-south-1 (Mumbai).** All 10 migrations applied; local and remote history match |
 
 ```
@@ -128,17 +130,42 @@ Still outstanding from the user (dashboard work, never in chat):
 
 ---
 
+## 5a. What was built in the 2026-08-02 session
+
+All test-first, every cycle watched failing. 344 → 588 tests.
+
+| Area | Modules |
+|---|---|
+| **Auth** | `login-page` · `require-auth` · `resolve-auth` · `auth-provider` · `role-landing` · domain `auth-routing` |
+| **Domain rules added** | `srf-decision` · `drive-lifecycle` · `application-snapshot` (R7) · `rounds` · `roster-import` · `recruiter-export` · `APP_ROLES` |
+| **Repositories (live DB)** | SRF submit · CPC verification · PIF · approval · publish · apply · rounds · offers · roster |
+| **Screens wired** | CPC verification queue · AE PIF form · Delivery Head approvals · student drives list |
+| **Infra** | Cloudflare Workers deploy (`pnpm deploy`) · `.assetsignore` · migration `0011` (PIF Q13 degrees) |
+
+**Things worth knowing:**
+- **R7 `buildApplicationSnapshot` did not exist** despite being specified. It is the immutability rule everything downstream reads.
+- The **"Preview as" switcher was shipping to production** and drove navigation instead of the signed-in role. Now dev-only, pinned by a test that stubs `DEV: false`.
+- `.DS_Store` and `mockServiceWorker.js` were publicly served on the first deploy. Now excluded, pinned by tests.
+- `pnpm test:run` is **not sufficient** before committing. `pnpm check` caught four defects Vitest could not see (Vitest does not typecheck).
+
+---
+
 ## 6. Not built yet
 
-- AE PIF creation form
-- Round scheduling, result upload, result corrections
-- Executive / CEO / KAM dashboards
-- Recruiter export (Excel + resume ZIP)
-- Notifications UI and the pgmq queue
-- Login screen and auth guard ← **next**
+**Rules and repositories exist; the SCREEN does not:**
+- Roster import UI (parser + repository are done and tested)
+- Attendance / results screens against `rounds-repository` (still mocks)
+- Offer declaration screen (repository done)
+- Recruiter export UI + XLSX/ZIP generation (`buildRecruiterExport` is done)
+- Central CPC publish screen against `publish-repository` (still a mock)
+
+**Not started at all:**
+- Executive / CEO / KAM / admin dashboards
+- Notifications UI and the pgmq queue (no email provider chosen)
 - Opt-out and self-placed flows
+- Result corrections
+- R11 `rankApplicants` — still blocked on the skill-score schema
 - Playwright E2E (configured in plan, no specs written)
-- Cloudflare deployment
 
 `/central/drives` → cockpit and `/central/publish` → DAF targeting both work. Use the **"Preview as" role switcher** in the header to browse the mocks without auth.
 
