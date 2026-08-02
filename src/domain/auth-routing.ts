@@ -5,20 +5,24 @@ import type { AppRole } from "./types";
  *
  * One login screen serves everybody; this rule decides where they go next.
  *
- * `null` means the role has no dedicated screen yet. Only four screens exist
- * today. Rather than invent landing pages for the remaining seven roles, this
- * returns null and the UI shows an explicit "no dashboard yet" state, so an
- * unconfirmed product decision never hides inside a redirect.
+ * The five read-only reporting roles share ONE dashboard. RLS already scopes
+ * what each can read, so a Campus Manager simply sees fewer rows than a CEO.
+ * Five separate screens would be five chances to compute "placed" differently.
  */
-const LANDING_ROUTES: Partial<Record<AppRole, string>> = {
-  admin: "/admin/roster",
+const LANDING_ROUTES: Record<AppRole, string> = {
+  admin: "/admin/campuses",
   student: "/student",
   campus_placement_coordinator: "/cpc/verification",
   account_executive: "/ae/pif",
   delivery_head: "/delivery-head/pif-approvals",
   central_placement_coordinator: "/central/drives",
+  campus_manager: "/dashboard",
+  key_account_manager: "/dashboard",
+  enterprise_relations: "/dashboard",
+  er_head: "/dashboard",
+  ceo: "/dashboard",
 };
 
-export function landingRouteForRole(role: AppRole): string | null {
-  return LANDING_ROUTES[role] ?? null;
+export function landingRouteForRole(role: AppRole): string {
+  return LANDING_ROUTES[role];
 }

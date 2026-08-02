@@ -14,6 +14,7 @@ import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { ParticipationQueueRoute } from "@features/cpc/participation-queue-route";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
+import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfPage } from "@features/srf/srf-page";
@@ -46,6 +47,7 @@ export function App() {
               <Routes>
                 {/* Post-login routing is a domain rule, not a hardcoded path. */}
                 <Route path="/" element={<RoleLanding />} />
+                <Route path="/dashboard" element={<DashboardRoute />} />
                 <Route path="/admin/campuses" element={<AdminCampusRoute />} />
                 <Route path="/admin/staff" element={<AdminStaffRoute />} />
                 <Route path="/admin/programmes" element={<AdminProgrammesRoute />} />

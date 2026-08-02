@@ -9,8 +9,8 @@ import { RoleLanding } from "./role-landing";
  * Where signing in drops you. The mapping itself is a domain rule
  * (landingRouteForRole); this component only obeys it.
  *
- * Roles whose screen does not exist yet get an honest message rather than a
- * redirect to somebody else's dashboard.
+ * The five read-only reporting roles share one dashboard; RLS scopes what
+ * each of them can actually see.
  */
 function renderLanding(state: AuthState) {
   return render(
@@ -20,6 +20,7 @@ function renderLanding(state: AuthState) {
           <Route path="/" element={<RoleLanding />} />
           <Route path="/student" element={<p>Student dashboard</p>} />
           <Route path="/central/drives" element={<p>Drive cockpit</p>} />
+          <Route path="/dashboard" element={<p>Dashboard</p>} />
         </Routes>
       </MemoryRouter>
     </AuthContext.Provider>,
@@ -41,14 +42,8 @@ describe("RoleLanding", () => {
     expect(screen.getByText("Drive cockpit")).toBeDefined();
   });
 
-  it("tells a role with no screen yet the truth, rather than redirecting them somewhere wrong", () => {
-    // The CEO dashboard is not built. Admin now has roster import, so it is no
-    // longer an example of a role without a screen.
-    renderLanding({ status: "signed-in", role: "ceo", email: "a@faceprep.in" });
-
-    const status = screen.getByRole("status");
-    expect(status.textContent).toMatch(/no dashboard yet/i);
-    // The signed-in identity is still shown, so it is clear login worked.
-    expect(status.textContent).toContain("a@faceprep.in");
+  it("drops a CEO on the shared dashboard", () => {
+    renderLanding({ status: "signed-in", role: "ceo", email: "ceo@faceprep.in" });
+    expect(screen.getByText("Dashboard")).toBeDefined();
   });
 });

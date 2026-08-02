@@ -34,6 +34,11 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/cpc/participation", label: "Opt-outs & offers" },
   ],
   account_executive: [{ to: "/ae/pif", label: "Position information form" }],
+  campus_manager: [{ to: "/dashboard", label: "Campus overview" }],
+  key_account_manager: [{ to: "/dashboard", label: "Account overview" }],
+  enterprise_relations: [{ to: "/dashboard", label: "Overview" }],
+  er_head: [{ to: "/dashboard", label: "Overview" }],
+  ceo: [{ to: "/dashboard", label: "Executive overview" }],
   delivery_head: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
   central_placement_coordinator: [
     { to: "/central/drives", label: "Drive cockpit" },
@@ -50,12 +55,6 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/admin/programmes", label: "Degrees & branches" },
     { to: "/admin/roster", label: "Import roster" },
   ],
-  // No screens yet. An empty list is honest; borrowing another role's nav is not.
-  campus_manager: [],
-  key_account_manager: [],
-  enterprise_relations: [],
-  er_head: [],
-  ceo: [],
 };
 
 /** Labels for the development-only preview switcher. */

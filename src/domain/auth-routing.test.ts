@@ -9,10 +9,9 @@ import { APP_ROLES } from "./types";
  * by role. That mapping is a business rule, not a UI detail, so it lives here
  * and the login screen merely obeys it.
  *
- * `null` means "this role has no dedicated screen yet". It is deliberately not
- * a guess at a future route: only four screens exist today, and inventing
- * landing pages for the other seven roles would bury an unconfirmed product
- * decision in code.
+ * Every role now has a screen, so the mapping is exhaustive and the compiler
+ * enforces it: adding a role to APP_ROLES without a landing route is a type
+ * error, not a runtime surprise.
  */
 describe("landingRouteForRole", () => {
   it("sends a student to their dashboard", () => {
@@ -35,23 +34,32 @@ describe("landingRouteForRole", () => {
     expect(landingRouteForRole("account_executive")).toBe("/ae/pif");
   });
 
-  it("sends an admin to roster import, the first thing a new deployment needs", () => {
-    expect(landingRouteForRole("admin")).toBe("/admin/roster");
+  /**
+   * Campuses, not roster import. A roster cannot be imported until a campus
+   * exists, so landing on the importer was landing on a dead end - which is
+   * exactly what a new deployment hit in practice.
+   */
+  it("sends an admin to campuses, the first thing a new deployment needs", () => {
+    expect(landingRouteForRole("admin")).toBe("/admin/campuses");
   });
 
+  /**
+   * These five are read-only reporting roles. They now share one dashboard:
+   * building five would be five chances to compute "placed" differently.
+   */
   it.each([
     "campus_manager",
     "key_account_manager",
     "enterprise_relations",
     "er_head",
     "ceo",
-  ] as const)("returns null for %s, whose screen does not exist yet", (role) => {
-    expect(landingRouteForRole(role)).toBeNull();
+  ] as const)("lands %s on the shared dashboard", (role) => {
+    expect(landingRouteForRole(role)).toBe("/dashboard");
   });
 
-  it("handles every role in the system", () => {
+  it("gives every role in the system a real route", () => {
     for (const role of APP_ROLES) {
-      expect(() => landingRouteForRole(role)).not.toThrow();
+      expect(landingRouteForRole(role)).toMatch(/^\//);
     }
   });
 });

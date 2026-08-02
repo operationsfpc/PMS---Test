@@ -57,9 +57,15 @@ describe("AppShell navigation", () => {
     expect(screen.getByRole("link", { name: /open drives/i })).toBeDefined();
   });
 
-  it("shows no navigation for a role with no screens yet", () => {
+  it("gives a CEO their read-only overview", () => {
     shellFor(signedIn("ceo"));
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.getByRole("link", { name: /executive overview/i })).toBeDefined();
+  });
+
+  /** The reporting roles share one dashboard, labelled for each of them. */
+  it("labels the shared dashboard for the role reading it", () => {
+    shellFor(signedIn("campus_manager"));
+    expect(screen.getByRole("link", { name: /campus overview/i })).toBeDefined();
   });
 });
 
