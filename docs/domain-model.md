@@ -332,7 +332,7 @@ Covers: SRF approvals, semester verifications, PIF create/approve/reject, drive 
 | A2 | Marksheet uploads | Uploads are **required** to submit the SRF, matching the existing form validation. No "submit now, upload later" path | Medium — changes the student journey |
 | A3 | Student landing | A student always lands on `/student`, even before SRF submission. Routing them to `/srf` when `srf_status` is `registered` needs the status in auth state | Low — one redirect |
 | A4 | Degree/branch | Admin-managed tables, not the 6 hardcoded degrees in PIF Q13 | **High** — schema-level; confirm before the AE PIF form |
-| A5 | Roster format | `public/templates/student-roster-template.xlsx` is my invention. No real college file has been seen | **High** — drives the import feature |
+| A5 | Roster format | ~~My invention~~ **RESOLVED 2026-08-02: authorised as canonical.** `public/templates/student-roster-template.xlsx` is now the format colleges must supply. Columns: roll_number, name, email, degree, branch, passing_year | Now a spec, not a guess. If a real college file differs, the importer changes |
 | A6 | Role landing routes | Roles with no screen get an honest "not built yet" page rather than a borrowed dashboard | Low |
 | A7 | Skill scores | R11 `rankApplicants` still deferred; `skill_scores` stays generic | Blocks shortlisting |
 
