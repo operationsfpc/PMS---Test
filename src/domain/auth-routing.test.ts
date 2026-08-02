@@ -31,10 +31,13 @@ describe("landingRouteForRole", () => {
     expect(landingRouteForRole("central_placement_coordinator")).toBe("/central/drives");
   });
 
+  it("sends an account executive to the PIF they raise drives with", () => {
+    expect(landingRouteForRole("account_executive")).toBe("/ae/pif");
+  });
+
   it.each([
     "admin",
     "campus_manager",
-    "account_executive",
     "key_account_manager",
     "enterprise_relations",
     "er_head",

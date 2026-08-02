@@ -8,6 +8,7 @@ import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-worksp
 import { AttendancePage } from "@features/cpc/attendance-page";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
+import { PifPage } from "@features/pif/pif-page";
 import { SrfPage } from "@features/srf/srf-page";
 import { StudentDashboard } from "@features/student/student-dashboard";
 import { Route, Routes } from "react-router";
@@ -39,6 +40,7 @@ export function App() {
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
                 <Route path="/cpc/attendance" element={<AttendancePage />} />
+                <Route path="/ae/pif" element={<PifPage />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
                 <Route path="/central/shortlisting" element={<ShortlistingWorkspace />} />
                 <Route path="/central/drives" element={<DriveCockpit />} />

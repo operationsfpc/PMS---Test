@@ -13,6 +13,7 @@ import type { AppRole } from "./types";
 const LANDING_ROUTES: Partial<Record<AppRole, string>> = {
   student: "/student",
   campus_placement_coordinator: "/cpc/verification",
+  account_executive: "/ae/pif",
   delivery_head: "/delivery-head/pif-approvals",
   central_placement_coordinator: "/central/drives",
 };
