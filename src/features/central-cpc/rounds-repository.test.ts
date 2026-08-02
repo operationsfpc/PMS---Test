@@ -110,6 +110,30 @@ describe("createSupabaseRoundsRepository", () => {
         repo("campus_placement_coordinator").recordResult("r1", "app1", "selected", true),
       ).rejects.toBeInstanceOf(RoundsError);
     });
+
+    /**
+     * A15. round_results is unique on (round_id, application_id), so a plain
+     * insert makes a correction impossible - promoting a waitlisted student
+     * to selected, which Q10 requires before they can be scheduled, would die
+     * on a duplicate key. A correction replaces the row; the audit trigger
+     * keeps the previous value.
+     */
+    it("replaces an existing result rather than failing on the unique key", async () => {
+      let prefer = "";
+      let body: Record<string, unknown> = {};
+      server.use(
+        http.post(`${BASE}/rest/v1/round_results`, async ({ request }) => {
+          prefer = request.headers.get("prefer") ?? "";
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ id: "rr1" });
+        }),
+      );
+
+      await repo().recordResult("r1", "app1", "selected", true);
+
+      expect(prefer).toMatch(/resolution=merge-duplicates/);
+      expect(body.result).toBe("selected");
+    });
   });
 
   describe("nextRoundParticipants", () => {

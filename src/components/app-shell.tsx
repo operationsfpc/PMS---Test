@@ -38,6 +38,8 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/central/publish", label: "Publish and target" },
     { to: "/central/shortlisting", label: "Shortlisting" },
     { to: "/cpc/attendance", label: "Attendance" },
+    { to: "/central/results", label: "Round results" },
+    { to: "/central/offers", label: "Final selection" },
   ],
   admin: [
     { to: "/admin/campuses", label: "Campuses" },

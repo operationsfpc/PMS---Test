@@ -102,14 +102,20 @@ export function createSupabaseRoundsRepository(
 
       const actorId = await actor();
 
+      // A15: one student, one round, one CURRENT result. Corrections and Q10
+      // promotions (waitlisted -> selected) replace the row; the audit trigger
+      // keeps the previous value. A plain insert would die on the unique key.
       const { error } = await client
         .from("round_results")
-        .insert({
-          round_id: roundId,
-          application_id: applicationId,
-          result,
-          declared_by: actorId,
-        })
+        .upsert(
+          {
+            round_id: roundId,
+            application_id: applicationId,
+            result,
+            declared_by: actorId,
+          },
+          { onConflict: "round_id,application_id" },
+        )
         .select("id")
         .single();
 

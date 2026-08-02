@@ -8,6 +8,8 @@ import { RequireAuth } from "@features/auth/require-auth";
 import { RoleLanding } from "@features/auth/role-landing";
 import { DafPublish } from "@features/central-cpc/daf-publish";
 import { DriveCockpit } from "@features/central-cpc/drive-cockpit";
+import { OfferRoute } from "@features/central-cpc/offer-route";
+import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistingWorkspace } from "@features/central-cpc/shortlisting-workspace";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
@@ -55,6 +57,8 @@ export function App() {
                 <Route path="/central/shortlisting" element={<ShortlistingWorkspace />} />
                 <Route path="/central/drives" element={<DriveCockpit />} />
                 <Route path="/central/publish" element={<DafPublish />} />
+                <Route path="/central/results" element={<ResultsRoute />} />
+                <Route path="/central/offers" element={<OfferRoute />} />
               </Routes>
             </AppShell>
           </RequireAuth>
