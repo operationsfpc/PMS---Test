@@ -28,7 +28,8 @@ const studentRow = {
   participation_status: "active",
   degrees: { name: "B.E" },
   branches: { name: "CSE" },
-  campuses: { name: "Test Engineering College", city: "Chennai" },
+  // Shape mirrors PostgREST: city is an embedded resource, not a column.
+  campuses: { name: "Test Engineering College", cities: { name: "Chennai" } },
   student_documents: [],
 };
 

@@ -74,6 +74,8 @@ export async function createTestDb(): Promise<TestDb> {
 /** A minimal but complete world: campus, degree, staff, and two students. */
 export async function seed(t: TestDb) {
   const ids = {
+    cityChennai: "11000000-0000-0000-0000-000000000001",
+    cityBengaluru: "11000000-0000-0000-0000-000000000002",
     campusA: "10000000-0000-0000-0000-000000000001",
     campusB: "10000000-0000-0000-0000-000000000002",
     degree: "20000000-0000-0000-0000-000000000001",
@@ -88,8 +90,17 @@ export async function seed(t: TestDb) {
   };
 
   await t.sql(
-    `insert into campuses (id, name, city) values ($1,'Alliance University','Chennai'), ($2,'VIT Bangalore','Bengaluru')`,
-    [ids.campusA, ids.campusB],
+    `insert into cities (id, name, state) values ($1,'Chennai','Tamil Nadu'), ($2,'Bengaluru','Karnataka')`,
+    [ids.cityChennai, ids.cityBengaluru],
+  );
+  await t.sql(
+    `insert into campuses (id, name, city_id, code, address,
+                          primary_contact_name, primary_contact_email, primary_contact_phone)
+     values ($1,'Alliance University',$3,'ALU','Anna Salai, Chennai',
+             'Meera Iyer','meera@alliance.edu','9840000001'),
+            ($2,'VIT Bangalore',$4,'VITB','Whitefield, Bengaluru',
+             'Rahul Nair','rahul@vit.edu','9840000002')`,
+    [ids.campusA, ids.campusB, ids.cityChennai, ids.cityBengaluru],
   );
   await t.sql(`insert into degrees (id, name) values ($1, 'B.E')`, [ids.degree]);
   await t.sql(`insert into branches (id, degree_id, name) values ($1, $2, 'CSE')`, [

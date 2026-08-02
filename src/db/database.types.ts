@@ -100,10 +100,11 @@ export interface BranchesRow {
   id: string;
   degree_id: string;
   name: string;
+  is_active: boolean;
 }
 
 export type BranchesInsert = Pick<BranchesRow, "degree_id" | "name"> &
-  Partial<Pick<BranchesRow, "id">>;
+  Partial<Pick<BranchesRow, "id" | "is_active">>;
 
 export interface CampusDegreesRow {
   campus_id: string;
@@ -115,12 +116,35 @@ export type CampusDegreesInsert = Pick<CampusDegreesRow, "campus_id" | "degree_i
 export interface CampusesRow {
   id: string;
   name: string;
-  city: string;
   created_at: string;
+  city_id: string;
+  code: string;
+  address: string;
+  primary_contact_name: string;
+  primary_contact_email: string;
+  primary_contact_phone: string;
+  is_active: boolean;
 }
 
-export type CampusesInsert = Pick<CampusesRow, "name" | "city"> &
-  Partial<Pick<CampusesRow, "id" | "created_at">>;
+export type CampusesInsert = Pick<
+  CampusesRow,
+  | "name"
+  | "city_id"
+  | "code"
+  | "address"
+  | "primary_contact_name"
+  | "primary_contact_email"
+  | "primary_contact_phone"
+> &
+  Partial<Pick<CampusesRow, "id" | "created_at" | "is_active">>;
+
+export interface CitiesRow {
+  id: string;
+  name: string;
+  state: string;
+}
+
+export type CitiesInsert = Pick<CitiesRow, "name" | "state"> & Partial<Pick<CitiesRow, "id">>;
 
 export interface DegreesRow {
   id: string;

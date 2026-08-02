@@ -26,15 +26,17 @@ const REFUSALS: Record<string, string> = {
   drive_not_live: "This drive is not open.",
 };
 
-const STUDENT_COLUMNS = `
+/** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
+export const STUDENT_COLUMNS = `
   id, full_name, roll_number, email, passing_year, overall_cgpa, tenth_percentage,
   twelfth_percentage, current_arrears, history_of_arrears, technical_skills,
   srf_status, participation_status,
-  degrees(name), branches(name), campuses(name, city),
+  degrees(name), branches(name), campuses(name, cities(name)),
   student_documents(id, kind, role_category)
 `;
 
-const DRIVE_COLUMNS = `
+/** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
+export const DRIVE_COLUMNS = `
   id, company_name, role_title, role_category, drive_type, offer_category,
   open_to_all_override, status, application_start, application_end,
   ctc_min_lpa, ctc_max_lpa, min_overall_cgpa, min_tenth_percentage,
@@ -90,7 +92,10 @@ export function createSupabaseDrivesView(
       twelfthPercentage: (row.twelfth_percentage as number | null) ?? 0,
       currentArrears: (row.current_arrears as number | null) ?? 0,
       historyOfArrears: (row.history_of_arrears as number | null) ?? 0,
-      city: one<{ city: string }>(row.campuses)?.city ?? "",
+      // City is its own table now, so it arrives nested one level deeper.
+      // R2 still matches a drive's targetCities by name, so the name is what
+      // the domain needs here - not the id.
+      city: one<{ name: string }>(one<{ cities: unknown }>(row.campuses)?.cities)?.name ?? "",
       campus: one<{ name: string }>(row.campuses)?.name ?? "",
     };
 
