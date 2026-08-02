@@ -42,6 +42,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
   admin: [
     { to: "/admin/campuses", label: "Campuses" },
     { to: "/admin/staff", label: "Staff" },
+    { to: "/admin/programmes", label: "Degrees & branches" },
     { to: "/admin/roster", label: "Import roster" },
   ],
   // No screens yet. An empty list is honest; borrowing another role's nav is not.

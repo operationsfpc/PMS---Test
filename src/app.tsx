@@ -1,5 +1,6 @@
 import { AppShell } from "@components/app-shell";
 import { AdminCampusRoute } from "@features/admin/campus-route";
+import { AdminProgrammesRoute } from "@features/admin/programmes-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
 import { LoginPage } from "@features/auth/login-page";
@@ -43,6 +44,7 @@ export function App() {
                 <Route path="/" element={<RoleLanding />} />
                 <Route path="/admin/campuses" element={<AdminCampusRoute />} />
                 <Route path="/admin/staff" element={<AdminStaffRoute />} />
+                <Route path="/admin/programmes" element={<AdminProgrammesRoute />} />
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
                 <Route path="/student" element={<StudentDashboard />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />

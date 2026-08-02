@@ -53,6 +53,24 @@ export function createSupabaseRosterRepository(client: SupabaseClient): RosterRe
         );
       }
 
+      // A11. A blank branch is legitimate - some degrees have none - but a
+      // branch that was written down and is not recognised must not be
+      // silently nulled. That student would fail every branch-restricted
+      // drive's eligibility (R2) with nothing on screen to explain why.
+      const unknownBranches = [
+        ...new Set(
+          students
+            .filter((s) => s.branch.trim() !== "" && !branchByName.has(s.branch.toLowerCase()))
+            .map((s) => s.branch),
+        ),
+      ];
+
+      if (unknownBranches.length > 0) {
+        throw new RosterError(
+          `These branches are not set up in the system: ${unknownBranches.join(", ")}. Add them first, then re-import.`,
+        );
+      }
+
       const rows = students.map((s) => ({
         campus_id: campusId,
         degree_id: degreeByName.get(s.degree.toLowerCase()),

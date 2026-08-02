@@ -98,3 +98,40 @@ describe("createSupabaseRosterRepository", () => {
     expect(result.imported).toBe(0);
   });
 });
+
+/**
+ * A11. An unknown DEGREE was refused by name, but an unknown BRANCH was
+ * silently imported as null. That student then quietly fails every
+ * branch-restricted drive's eligibility (R2) and nobody can see why. A blank
+ * branch is still legitimate - some degrees have none.
+ */
+describe("unknown branches", () => {
+  it("refuses a branch the system does not know, naming it", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/degrees`, () => HttpResponse.json([{ id: "deg1", name: "B.E" }])),
+      http.get(`${BASE}/rest/v1/branches`, () => HttpResponse.json([])),
+    );
+
+    await expect(repo().importStudents(CAMPUS, students)).rejects.toThrow(/CSE/);
+  });
+
+  it("still accepts a blank branch, because some degrees have none", async () => {
+    let body: Array<Record<string, unknown>> = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/degrees`, () => HttpResponse.json([{ id: "deg1", name: "B.E" }])),
+      http.get(`${BASE}/rest/v1/branches`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/students`, async ({ request }) => {
+        body = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(body.map((_, i) => ({ id: `s${i}` })));
+      }),
+    );
+
+    const result = await repo().importStudents(
+      CAMPUS,
+      students.map((s) => ({ ...s, branch: "" })),
+    );
+
+    expect(body[0]?.branch_id).toBeNull();
+    expect(result.imported).toBe(1);
+  });
+});
