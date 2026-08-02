@@ -452,6 +452,36 @@ export interface RoundResultsRow {
 export type RoundResultsInsert = Pick<RoundResultsRow, "round_id" | "application_id" | "result"> &
   Partial<Pick<RoundResultsRow, "id" | "declared_by" | "declared_at">>;
 
+export interface SelfPlacementRequestsRow {
+  id: string;
+  student_id: string;
+  company_name: string;
+  role_title: string | null;
+  ctc_lpa: number;
+  offer_letter_id: string | null;
+  status: Enums["verification_status"];
+  decided_by: string | null;
+  decided_at: string | null;
+  created_at: string;
+}
+
+export type SelfPlacementRequestsInsert = Pick<
+  SelfPlacementRequestsRow,
+  "student_id" | "company_name" | "ctc_lpa"
+> &
+  Partial<
+    Pick<
+      SelfPlacementRequestsRow,
+      | "id"
+      | "role_title"
+      | "offer_letter_id"
+      | "status"
+      | "decided_by"
+      | "decided_at"
+      | "created_at"
+    >
+  >;
+
 export interface SettingsRow {
   key: string;
   value: Json;
