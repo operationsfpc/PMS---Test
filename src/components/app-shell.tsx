@@ -1,3 +1,5 @@
+import type { AppRole } from "@domain/types";
+import { useAuth } from "@features/auth/require-auth";
 import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router";
 
@@ -19,37 +21,40 @@ export interface RoleNav {
   readonly items: readonly NavItem[];
 }
 
-export const ROLE_NAVS: readonly RoleNav[] = [
-  {
-    role: "student",
-    label: "Student",
-    items: [
-      { to: "/student", label: "My dashboard" },
-      { to: "/srf", label: "My registration form" },
-    ],
-  },
-  {
-    role: "cpc",
-    label: "Campus Placement Coordinator",
-    items: [
-      { to: "/cpc/verification", label: "Verification queue" },
-      { to: "/cpc/attendance", label: "Attendance" },
-    ],
-  },
-  {
-    role: "delivery_head",
-    label: "Delivery Head",
-    items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
-  },
-  {
-    role: "central_cpc",
-    label: "Central Placement Coordinator",
-    items: [
-      { to: "/central/drives", label: "Drive cockpit" },
-      { to: "/central/shortlisting", label: "Shortlisting" },
-      { to: "/cpc/attendance", label: "Attendance" },
-    ],
-  },
+export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
+  student: [
+    { to: "/student", label: "My dashboard" },
+    { to: "/student/drives", label: "Open drives" },
+    { to: "/srf", label: "My registration form" },
+  ],
+  campus_placement_coordinator: [
+    { to: "/cpc/verification", label: "Verification queue" },
+    { to: "/cpc/attendance", label: "Attendance" },
+  ],
+  account_executive: [{ to: "/ae/pif", label: "Position information form" }],
+  delivery_head: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
+  central_placement_coordinator: [
+    { to: "/central/drives", label: "Drive cockpit" },
+    { to: "/central/publish", label: "Publish and target" },
+    { to: "/central/shortlisting", label: "Shortlisting" },
+    { to: "/cpc/attendance", label: "Attendance" },
+  ],
+  // No screens yet. An empty list is honest; borrowing another role's nav is not.
+  admin: [],
+  campus_manager: [],
+  key_account_manager: [],
+  enterprise_relations: [],
+  er_head: [],
+  ceo: [],
+};
+
+/** Labels for the development-only preview switcher. */
+const PREVIEW_ROLES: readonly AppRole[] = [
+  "student",
+  "campus_placement_coordinator",
+  "account_executive",
+  "delivery_head",
+  "central_placement_coordinator",
 ];
 
 function Logo() {
@@ -63,10 +68,17 @@ function Logo() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const [roleIndex, setRoleIndex] = useState(0);
+  const auth = useAuth();
+  const signedInRole = auth.status === "signed-in" ? auth.role : "student";
+
+  // Development only: lets screens be reviewed without a database. Never
+  // shipped - see app-shell.test.tsx.
+  const previewable = import.meta.env.DEV;
+  const [preview, setPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const active = ROLE_NAVS[roleIndex] ?? ROLE_NAVS[0];
-  if (active === undefined) throw new Error("ROLE_NAVS must not be empty");
+
+  const role = previewable && preview !== null ? preview : signedInRole;
+  const items = ROLE_NAVS[role] ?? [];
 
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
     `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -94,24 +106,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Logo />
 
           <div className="ml-auto flex items-center gap-3">
-            <label
-              className="hidden text-xs font-medium text-ink-500 sm:block"
-              htmlFor="role-switch"
-            >
-              Preview as
-            </label>
-            <select
-              id="role-switch"
-              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none"
-              value={roleIndex}
-              onChange={(e) => setRoleIndex(Number(e.target.value))}
-            >
-              {ROLE_NAVS.map((r, i) => (
-                <option key={r.role} value={i}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
+            {previewable && (
+              <>
+                <label
+                  className="hidden text-xs font-medium text-ink-500 sm:block"
+                  htmlFor="role-switch"
+                >
+                  Preview as
+                </label>
+                <select
+                  id="role-switch"
+                  className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none"
+                  value={preview ?? signedInRole}
+                  onChange={(e) => setPreview(e.target.value as AppRole)}
+                >
+                  {PREVIEW_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
               PR
             </span>
@@ -125,10 +141,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           className={`${menuOpen ? "block" : "hidden"} w-full shrink-0 lg:block lg:w-60`}
         >
           <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-ink-300">
-            {active.label}
+            {role.replaceAll("_", " ")}
           </p>
           <ul className="flex flex-col gap-1">
-            {active.items.map((item) => (
+            {items.map((item) => (
               <li key={item.to}>
                 <NavLink to={item.to} className={linkClass} onClick={() => setMenuOpen(false)}>
                   {item.label}
