@@ -238,6 +238,23 @@ describe("App routing", () => {
     expect(screen.queryByRole("heading", { level: 1, name: /welcome back/i })).toBeNull();
   });
 
+  /**
+   * Without this route an admin cannot create a campus, and with no campus
+   * there is no roster, no student and no drive. It is the first link in the
+   * chain, so it is pinned.
+   */
+  it("gives an admin a screen on which to create the first campus", async () => {
+    render(
+      <AuthContext.Provider value={signedIn("admin")}>
+        <MemoryRouter initialEntries={["/admin/campuses"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: /campuses/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /add campus/i })).toBeDefined();
+  });
+
   it("lands a student on their dashboard, via the domain landing rule", () => {
     render(
       <AuthContext.Provider value={signedIn("student")}>
