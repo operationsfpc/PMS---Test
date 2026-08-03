@@ -8,7 +8,9 @@
       "!node_modules",
       "!coverage",
       "!dist",
-      "!supabase/.temp"
+      "!supabase/.temp",
+      "!test-results",
+      "!playwright-report"
     ]
   },
   "formatter": {

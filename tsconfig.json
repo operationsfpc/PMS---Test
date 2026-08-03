@@ -28,5 +28,12 @@
       "@components/*": ["./src/components/*"]
     }
   },
-  "include": ["src", "vitest.config.ts", "vite.config.ts", "vitest.setup.ts"]
+  "include": [
+    "src",
+    "e2e",
+    "vitest.config.ts",
+    "vite.config.ts",
+    "vitest.setup.ts",
+    "playwright.config.ts"
+  ]
 }
