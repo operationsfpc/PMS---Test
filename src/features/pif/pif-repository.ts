@@ -59,6 +59,38 @@ function toRow(values: PifFormValues, actorId: string, status: "draft" | "submit
   };
 }
 
+/**
+ * Turns a PostgREST failure into something with a remedy in it.
+ *
+ * A PIF failed against the live project and the only diagnostic anyone had was
+ * "please try again" - which was wrong in every one of these cases. Each of
+ * these has a different fix, and the AE or the Admin reading it needs to know
+ * which one they are looking at.
+ */
+function explain(error: { code?: string; message?: string }): string {
+  const message = error.message ?? "";
+
+  switch (error.code) {
+    case "42501":
+      return "You do not have permission to raise a PIF. Ask an Admin to check your role.";
+    case "PGRST204":
+    case "PGRST205":
+      // The app is asking for a column the project does not have: migrations
+      // have not been pushed. Nothing the AE does will fix it.
+      return `The database is out of date and cannot store this PIF yet (${message}). This needs an Admin, not a retry.`;
+    case "23502":
+      return `A required field was empty: ${message}`;
+    case "23514":
+      return `A value broke one of the drive's rules: ${message}`;
+    case "23505":
+      return "That drive already exists.";
+    case "23503":
+      return `Something this PIF refers to does not exist: ${message}`;
+    default:
+      return message === "" ? "Could not save the PIF." : `Could not save the PIF: ${message}`;
+  }
+}
+
 export function createSupabasePifRepository(
   client: SupabaseClient,
   getActorId: GetActorId = async () => {
@@ -79,11 +111,9 @@ export function createSupabasePifRepository(
       .single();
 
     if (error !== null) {
-      throw new PifError(
-        error.code === "42501"
-          ? "You do not have permission to raise a PIF."
-          : "Could not save the PIF. Please try again.",
-      );
+      // Keep the original as `cause`: the message is for the AE, the cause is
+      // for whoever has to work out why it happened.
+      throw new PifError(explain(error), { cause: error });
     }
 
     return { id: data.id as string, status: data.status as string };

@@ -106,4 +106,56 @@ describe("createSupabasePifRepository", () => {
 
     await expect(repo().submit(values)).rejects.toBeInstanceOf(PifError);
   });
+
+  /**
+   * A PIF failed in production and the only thing anyone could see was "please
+   * try again". Every one of these has a different remedy, and none of them is
+   * "try again", so each has to say what it actually is.
+   */
+  describe("says what actually went wrong", () => {
+    const failsWith = (body: Record<string, unknown>, status: number) => {
+      server.use(http.post(`${BASE}/rest/v1/drives`, () => HttpResponse.json(body, { status })));
+    };
+
+    it("names a missing column, which means the schema is behind the app", async () => {
+      failsWith(
+        { code: "PGRST204", message: "Could not find the 'spoc_name' column", details: null },
+        400,
+      );
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(/database is out of date/i);
+    });
+
+    it("names a required field the database rejected as empty", async () => {
+      failsWith(
+        {
+          code: "23502",
+          message: 'null value in column "company_name" violates not-null constraint',
+          details: null,
+        },
+        400,
+      );
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(/company_name/);
+    });
+
+    it("names the rule a value broke", async () => {
+      failsWith(
+        {
+          code: "23514",
+          message: 'new row violates check constraint "ctc_range_ascends"',
+          details: null,
+        },
+        400,
+      );
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(/ctc_range_ascends/);
+    });
+
+    it("keeps the underlying failure attached, so support can see it", async () => {
+      failsWith({ code: "XX000", message: "deadlock detected", details: null }, 500);
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(/deadlock detected/);
+    });
+  });
 });

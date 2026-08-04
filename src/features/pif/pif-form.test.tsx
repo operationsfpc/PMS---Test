@@ -100,4 +100,25 @@ describe("PifForm", () => {
       "Zoho Corporation",
     );
   });
+
+  /**
+   * A blanket "could not save" made a real production failure impossible to
+   * diagnose: the repository knew exactly what went wrong and the form threw
+   * that away. The AE cannot act on "try again" when the answer is "you are not
+   * permitted to do this".
+   */
+  it("shows the reason it failed, not a blanket apology", async () => {
+    const onSubmit = vi
+      .fn()
+      .mockRejectedValue(new Error("You do not have permission to raise a PIF."));
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("You do not have permission to raise a PIF.");
+    expect(alert.textContent).toContain("Your entries are still here");
+  });
 });

@@ -120,8 +120,15 @@ export function PifForm({
       setFailure(null);
       try {
         await (mode === "draft" ? onSaveDraft(values) : onSubmit(values));
-      } catch {
-        setFailure("Could not save the PIF. Your entries are still here — please try again.");
+      } catch (cause) {
+        // The repository knows WHY it failed. Replacing that with a blanket
+        // apology made a production failure impossible to diagnose, and told
+        // the AE to "try again" at something that could never succeed.
+        const reason =
+          cause instanceof Error && cause.message !== ""
+            ? cause.message
+            : "Could not save the PIF.";
+        setFailure(`${reason} Your entries are still here.`);
       }
     });
   };

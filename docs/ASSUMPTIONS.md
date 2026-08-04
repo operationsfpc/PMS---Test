@@ -23,7 +23,7 @@ Authorised 2026-08-02: *"wherever required, you make necessary assumptions"*.
 | A11 | Branch import | A **blank** branch cell imports as null (some degrees have none); a **non-blank unknown** branch is refused, exactly as an unknown degree is. Silent nulling would break R2 branch eligibility invisibly | 🟡 |
 | A12 | Skill score shape | `skill_scores(student_id, skill, score 0–100, assessed_at)`. R11 weights CGPA 40 / skill match 30 / arrears 15 / role-preference 15, all admin-tunable. **Invented — replace when the real schema arrives** | 🔴 |
 | A13 | Staff invite | An Admin may invite **any** role including another Admin (confirmed). Campus assignment happens on the same screen | 🟢 |
-| A14 | Staff removal | Staff are **deactivated** (`profiles.is_active = false`), never deleted — audit rows reference them | 🟡 |
+| A14 | Staff removal | ~~Staff are deactivated, never deleted~~ **Superseded 2026-08-04** — see A25 | 🟡 |
 | A15 | Result corrections | A corrected round result **replaces** the row and writes the previous value to the audit log, rather than appending a second result. One student, one round, one current result | 🟡 |
 | A16 | Offer CTC | Pre-filled from the drive's `ctc_max_lpa ?? ctc_min_lpa` and editable per student, since the actual figure decides the placement record (R9) | 🟢 |
 | A17 | Offer letter | Not required at declaration. Declaration is metadata; the letter may be attached later | 🟡 |
@@ -34,3 +34,5 @@ Authorised 2026-08-02: *"wherever required, you make necessary assumptions"*.
 | A22 | Recruiter export | CSV + a manifest, not XLSX/ZIP, until a spreadsheet library is agreed — see PENDING P2 | 🟢 |
 | A23 | Absence review | At 3 absences the student is **flagged for review** on the Central CPC's screen. Never auto-disbarred (domain model R8) | 🟢 |
 | A24 | Round creation | The Central CPC defines rounds at publish time and may add a round later while the drive is `in_rounds` | 🟡 |
+| A25 | Staff removal | **Supersedes A14** (user request, 2026-08-04). An Admin may **change a role** and **remove** a staff member outright. Removal deletes the invitation (the login allowlist entry), any staged campuses, and the profile. Postgres refuses the profile delete when drives/offers/results still reference them, and the UI then says "deactivate instead", so PRD §19 attribution survives. The `auth.users` row is **not** deleted (the browser cannot), but with no profile they resolve to nobody and are locked out | 🟡 |
+| A26 | Last Admin | An Admin may not change their own role, remove their own account, or demote/remove the **last active Admin**. A deactivated Admin does not count as cover | 🟢 |
