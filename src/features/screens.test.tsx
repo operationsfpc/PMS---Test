@@ -4,7 +4,6 @@ import { AppShell } from "@components/app-shell";
 import type { AppRole } from "@domain/types";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
-import { StudentDashboard } from "@features/student/student-dashboard";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
@@ -40,21 +39,13 @@ describe("AppShell", () => {
   });
 });
 
-describe("StudentDashboard", () => {
-  it("explains the category ladder to a placed student", () => {
-    // PRD §7.5 is confusing if unexplained: a placed student suddenly sees
-    // fewer drives. The UI must say why.
-    const { container } = routed(<StudentDashboard />);
-    // The sentence is broken up by <strong>, so match on normalised text content.
-    const text = container.textContent?.replace(/\s+/g, " ") ?? "";
-    expect(text).toMatch(/only see new drives above the Dream category/i);
-  });
-
-  it("shows the absence count against the limit", () => {
-    routed(<StudentDashboard />);
-    expect(screen.getByText("1 of 3")).toBeDefined();
-  });
-});
+/**
+ * The two StudentDashboard tests that lived here asserted on the visual mock
+ * ('1 of 3' absences, the Dream-category sentence) with no data behind them.
+ * Both behaviours are now asserted against real data in
+ * student-dashboard.test.tsx - the ladder explanation and the absence count
+ * against ABSENCE_LIMIT - so they are not lost, only moved.
+ */
 
 describe("SrfVerificationQueue", () => {
   /**
@@ -231,7 +222,10 @@ describe("App routing", () => {
         </MemoryRouter>
       </AuthContext.Provider>,
     );
-    expect(screen.getByRole("heading", { level: 1, name: /welcome back/i })).toBeDefined();
+    // The dashboard is now real: it loads the student's own record before it
+    // can greet them by name, so what routing proves here is that the student
+    // dashboard - not another role's screen - is the one doing the loading.
+    expect(screen.getByRole("status").textContent).toMatch(/loading your dashboard/i);
   });
 
   it("renders the SRF outside the app shell, with its own chrome", async () => {

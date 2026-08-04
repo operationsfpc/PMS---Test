@@ -20,7 +20,7 @@ import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
 import { ParticipationRoute } from "@features/student/participation-route";
-import { StudentDashboard } from "@features/student/student-dashboard";
+import { StudentDashboardRoute } from "@features/student/student-dashboard-route";
 import { Route, Routes } from "react-router";
 
 export function App() {
@@ -52,7 +52,7 @@ export function App() {
                 <Route path="/admin/staff" element={<AdminStaffRoute />} />
                 <Route path="/admin/programmes" element={<AdminProgrammesRoute />} />
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
-                <Route path="/student" element={<StudentDashboard />} />
+                <Route path="/student" element={<StudentDashboardRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
                 <Route path="/student/participation" element={<ParticipationRoute />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
