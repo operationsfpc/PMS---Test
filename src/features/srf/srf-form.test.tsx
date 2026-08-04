@@ -93,6 +93,28 @@ describe("SRF validation", () => {
     expect(screen.queryByText(/submitted for verification/i)).toBeNull();
   });
 
+  /**
+   * Requested 2026-08-04: "when file is not submitted, reason has to be
+   * highlighted". A group message under a row of uploads does not say WHICH
+   * one is missing when several are on screen.
+   */
+  it("marks the specific resume that is missing, not just the group", async () => {
+    const user = userEvent.setup();
+    render(<SrfPage />);
+
+    // The whole form has to be otherwise valid: the missing-resume rule is an
+    // object-level .refine(), and Zod only runs those once every field parses.
+    await fillValidForm(user);
+    await user.click(screen.getByRole("checkbox", { name: /^sales/i }));
+    await user.click(screen.getByRole("button", { name: /submit/i }));
+
+    const missing = await screen.findByLabelText(/sales resume/i);
+    expect(missing.getAttribute("aria-invalid")).toBe("true");
+    expect(
+      screen.getByLabelText(/software \/ technical resume/i).getAttribute("aria-invalid"),
+    ).toBe(null);
+  });
+
   it("rejects a malformed mobile number", async () => {
     const user = userEvent.setup();
     render(<SrfPage />);

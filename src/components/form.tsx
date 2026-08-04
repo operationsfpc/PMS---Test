@@ -12,30 +12,59 @@ const controlClass =
   "hover:border-brand-300 focus:border-brand-500 focus:outline-none " +
   "focus:ring-2 focus:ring-violet-400/40 disabled:bg-surface-muted";
 
+/**
+ * One field, with its own label, limits and failure reason.
+ *
+ * The asterisk used to be `aria-hidden`, which called "required" out to
+ * sighted users only, and there was nowhere to put a validation message - a
+ * student who omitted a marksheet was told the form failed but never which
+ * one. Both are the field's job, so every control gets them for free.
+ */
 export function Field({
   label,
   hint,
   required,
+  error,
   children,
 }: {
   label: string;
   hint?: string | undefined;
   required?: boolean | undefined;
-  children: (id: string) => ReactNode;
+  error?: string | undefined;
+  children: (id: string, describedBy: string | undefined) => ReactNode;
 }) {
   const id = useId();
+  const errorId = `${id}-error`;
+  const hintId = `${id}-hint`;
+  const describedBy =
+    [error !== undefined ? errorId : null, hint !== undefined ? hintId : null]
+      .filter((x): x is string => x !== null)
+      .join(" ") || undefined;
+
   return (
     <div className="flex flex-col gap-1.5">
       <label htmlFor={id} className="text-sm font-medium text-ink-700">
         {label}
         {required === true && (
-          <span className="ml-0.5 text-danger-500" aria-hidden="true">
-            *
-          </span>
+          <>
+            <span className="ml-0.5 text-danger-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </>
         )}
       </label>
-      {children(id)}
-      {hint !== undefined && <p className="text-xs text-ink-500">{hint}</p>}
+      {children(id, describedBy)}
+      {hint !== undefined && (
+        <p id={hintId} className="text-xs text-ink-500">
+          {hint}
+        </p>
+      )}
+      {error !== undefined && (
+        <p id={errorId} role="alert" className="text-xs font-medium text-danger-700">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -43,11 +72,25 @@ export function Field({
 export function TextField({
   label,
   hint,
+  error,
   ...props
-}: { label: string; hint?: string | undefined } & InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  label: string;
+  hint?: string | undefined;
+  error?: string | undefined;
+} & InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <Field label={label} hint={hint} required={props.required}>
-      {(id) => <input id={id} className={controlClass} {...props} />}
+    <Field label={label} hint={hint} required={props.required} error={error}>
+      {(id, describedBy) => (
+        <input
+          id={id}
+          className={controlClass}
+          aria-required={props.required === true ? true : undefined}
+          aria-invalid={error !== undefined ? true : undefined}
+          aria-describedby={describedBy}
+          {...props}
+        />
+      )}
     </Field>
   );
 }
@@ -119,17 +162,26 @@ export const UPLOAD_LIMITS = `PDF only, up to ${UPLOAD_MAX_MB} MB.`;
 export function FileField({
   label,
   hint,
+  error,
   ...props
-}: { label: string; hint?: string | undefined } & InputHTMLAttributes<HTMLInputElement>) {
+}: {
+  label: string;
+  hint?: string | undefined;
+  error?: string | undefined;
+} & InputHTMLAttributes<HTMLInputElement>) {
   const withLimits = hint === undefined ? UPLOAD_LIMITS : `${hint} ${UPLOAD_LIMITS}`;
 
   return (
-    <Field label={label} hint={withLimits} required={props.required}>
-      {(id) => (
+    <Field label={label} hint={withLimits} required={props.required} error={error}>
+      {(id, describedBy) => (
         <input
           id={id}
           type="file"
           accept={UPLOAD_ACCEPT}
+          // No aria-required here: a file input has no role that supports it,
+          // and the native `required` from props already conveys the state.
+          aria-invalid={error !== undefined ? true : undefined}
+          aria-describedby={describedBy}
           className="w-full cursor-pointer rounded-lg border border-dashed border-line bg-surface-muted px-3 py-2.5 text-sm text-ink-500 file:mr-3 file:rounded-md file:border-0 file:bg-brand-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:border-brand-300"
           {...props}
         />

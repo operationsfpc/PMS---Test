@@ -53,9 +53,18 @@ const driveRow = {
   eligible_passing_years: [],
 };
 
-function stub(opts: { drives?: unknown[]; applications?: unknown[]; offers?: unknown[] } = {}) {
+function stub(
+  opts: {
+    drives?: unknown[];
+    applications?: unknown[];
+    offers?: unknown[];
+    student?: Record<string, unknown>;
+  } = {},
+) {
   server.use(
-    http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json(studentRow)),
+    http.get(`${BASE}/rest/v1/students`, () =>
+      HttpResponse.json({ ...studentRow, ...(opts.student ?? {}) }),
+    ),
     http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [driveRow])),
     http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json(opts.applications ?? [])),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
@@ -68,6 +77,104 @@ const view = () =>
     async () => "u1",
     () => new Date("2026-09-05T00:00:00Z"),
   );
+
+/**
+ * Confirmed 2026-08-04: eligibility is judged on the LATEST VERIFIED semester,
+ * not on the single cumulative figure the student typed once.
+ *
+ * A student enters their own marks, so an unverified line deciding whether
+ * they may apply would let anyone qualify for anything by typing 10.
+ */
+describe("which CGPA eligibility is judged on", () => {
+  const cutoff = [{ ...driveRow, min_overall_cgpa: 8 }];
+
+  it("uses the latest verified semester, not students.overall_cgpa", async () => {
+    stub({
+      drives: cutoff,
+      student: {
+        overall_cgpa: 9.5,
+        student_semesters: [
+          {
+            semester_number: 1,
+            cgpa: 9.5,
+            current_arrears: 0,
+            history_of_arrears: 0,
+            status: "verified",
+          },
+          {
+            semester_number: 2,
+            cgpa: 6.2,
+            current_arrears: 0,
+            history_of_arrears: 0,
+            status: "verified",
+          },
+        ],
+      },
+    });
+
+    // Latest verified is 6.2, below the 8.0 cutoff, so R5 hides the drive.
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  it("ignores a later semester nobody has verified", async () => {
+    stub({
+      drives: cutoff,
+      student: {
+        student_semesters: [
+          {
+            semester_number: 1,
+            cgpa: 8.6,
+            current_arrears: 0,
+            history_of_arrears: 0,
+            status: "verified",
+          },
+          {
+            semester_number: 2,
+            cgpa: 10,
+            current_arrears: 0,
+            history_of_arrears: 0,
+            status: "pending",
+          },
+        ],
+      },
+    });
+
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+
+  it("takes the arrear counts from that same semester", async () => {
+    stub({
+      drives: [{ ...driveRow, min_overall_cgpa: null, arrears_policy: "no_standing" }],
+      student: {
+        current_arrears: 0,
+        student_semesters: [
+          {
+            semester_number: 3,
+            cgpa: 9,
+            current_arrears: 2,
+            history_of_arrears: 2,
+            status: "verified",
+          },
+        ],
+      },
+    });
+
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  /**
+   * Falls back to the roster figure rather than locking every student out on
+   * the day this ships: nobody has a verified semester yet.
+   */
+  it("falls back to the roster CGPA when no semester is verified yet", async () => {
+    stub({
+      drives: cutoff,
+      student: { overall_cgpa: 8.24, student_semesters: [] },
+    });
+
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+});
 
 describe("createSupabaseDrivesView", () => {
   it("lists a live drive the student is eligible for, and offers to apply", async () => {

@@ -1,3 +1,4 @@
+import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import type { Offer } from "@domain/offers";
 import type { AcademicProfile, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
@@ -32,7 +33,8 @@ export const STUDENT_COLUMNS = `
   twelfth_percentage, current_arrears, history_of_arrears, technical_skills,
   srf_status, participation_status,
   degrees(name), branches(name), campuses(name, cities(name)),
-  student_documents(id, kind, role_category)
+  student_documents(id, kind, role_category),
+  student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
@@ -83,15 +85,38 @@ export function createSupabaseDrivesView(
       client.from("offers").select("drive_type, offer_category, status").eq("student_id", row.id),
     ]);
 
+    /**
+     * Confirmed 2026-08-04: eligibility is judged on the LATEST VERIFIED
+     * semester. A student types their own marks, so an unverified line
+     * deciding whether they may apply would let anyone qualify by typing 10.
+     *
+     * The roster figures remain the fallback rather than a hard failure: on
+     * the day this ships nobody has a verified semester, and locking every
+     * student out of every drive is a worse answer than the number the
+     * coordinator already imported.
+     */
+    const semesters = ((row.student_semesters ?? []) as Array<Record<string, unknown>>).map(
+      (s): SemesterRecord => ({
+        semesterNumber: Number(s.semester_number),
+        cgpa: Number(s.cgpa),
+        currentArrears: Number(s.current_arrears ?? 0),
+        historyOfArrears: Number(s.history_of_arrears ?? 0),
+        verified: s.status === "verified",
+      }),
+    );
+
+    const standing = academicStandingFrom(semesters);
+
     const academics: AcademicProfile = {
       degree: one<{ name: string }>(row.degrees)?.name ?? "",
       branch: one<{ name: string }>(row.branches)?.name ?? "",
       passingYear: row.passing_year as number,
-      overallCgpa: (row.overall_cgpa as number | null) ?? 0,
+      overallCgpa: standing?.cgpa ?? (row.overall_cgpa as number | null) ?? 0,
       tenthPercentage: (row.tenth_percentage as number | null) ?? 0,
       twelfthPercentage: (row.twelfth_percentage as number | null) ?? 0,
-      currentArrears: (row.current_arrears as number | null) ?? 0,
-      historyOfArrears: (row.history_of_arrears as number | null) ?? 0,
+      currentArrears: standing?.currentArrears ?? (row.current_arrears as number | null) ?? 0,
+      historyOfArrears:
+        standing?.historyOfArrears ?? (row.history_of_arrears as number | null) ?? 0,
       // City is its own table now, so it arrives nested one level deeper.
       // R2 still matches a drive's targetCities by name, so the name is what
       // the domain needs here - not the id.

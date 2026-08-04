@@ -393,8 +393,16 @@ export function SrfPage() {
                     <FileField
                       key={category}
                       label={`${ROLE_CATEGORY_LABELS[category]} resume`}
-                      hint="PDF only"
                       required
+                      // The group message cannot say WHICH upload is missing
+                      // when several are on screen, so the reason goes on the
+                      // field that is actually empty.
+                      error={
+                        errors.resumeCategories !== undefined &&
+                        !resumeCategories.includes(category)
+                          ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
+                          : undefined
+                      }
                       onChange={(e) => {
                         const has = e.target.value !== "";
                         setValue(
