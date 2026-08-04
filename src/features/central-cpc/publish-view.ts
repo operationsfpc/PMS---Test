@@ -9,7 +9,7 @@ import type {
   PublishView,
   TargetingOptions,
 } from "./daf-publish";
-import { createSupabasePublishRepository } from "./publish-repository";
+import { createSupabasePublishRepository, type GetActorId } from "./publish-repository";
 
 /** PostgREST returns an embedded to-one relation as an object; the types say array. */
 const one = <T>(value: unknown): T | null =>
@@ -100,8 +100,18 @@ function toCandidate(row: Record<string, unknown>): PublishCandidate {
  * moment students can see a drive, so it must never become visible with the
  * targeting half-written.
  */
-export function createSupabasePublishView(client: SupabaseClient, driveId: string): PublishView {
-  const publishRepo = createSupabasePublishRepository(client);
+export function createSupabasePublishView(
+  client: SupabaseClient,
+  driveId: string,
+  /**
+   * Who is publishing. Defaults to the live session, and is injectable for the
+   * same reason every other view here takes one: without it, the publish path
+   * can only be exercised against a real browser session, which is precisely
+   * the path most worth testing.
+   */
+  getActorId?: GetActorId,
+): PublishView {
+  const publishRepo = createSupabasePublishRepository(client, getActorId);
 
   async function loadDriveRow(): Promise<Record<string, unknown>> {
     const { data, error } = await client
