@@ -62,7 +62,8 @@ scripts/gen-types.mjs        type generation without Docker
 | **R5a override** | Central CPC's prestige-drive escape hatch. Bypasses ladder + cap. **Never** bypasses SRF approval, opt-out, disbarment or eligibility. Mandatory audit reason |
 | Placement record | Highest CTC; ties → earliest declared; Central CPC override wins |
 | Arrears | `no_history` is **stricter** than `no_standing` (forbids cleared backlogs too) |
-| CGPA cutoff | Tests against **overall** CGPA |
+| CGPA cutoff | ~~Tests against overall CGPA~~ **SUPERSEDED 2026-08-04:** tests against the **latest VERIFIED semester** CGPA. Unverified lines never decide eligibility — a student types their own marks. Falls back to the roster figure while no semester is verified |
+| Academics | **Semester-wise.** Student declares UG or PG. UG: one line per semester, max **10**. PG: one aggregate line for the completed UG, then max **4** PG lines. Each line = CGPA (not GPA) + standing arrears + history of arrears |
 | 10th/12th | Stored as **percentage** |
 | Round 1 participants | Chosen by the **recruiter** from the exported list. Non-shortlisted students can never accrue absences |
 | Round advancement | Only `selected` advances. `waitlisted`/`on_hold` are not scheduled until promoted |
