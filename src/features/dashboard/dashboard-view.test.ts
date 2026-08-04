@@ -20,13 +20,21 @@ const client = () =>
 
 const student = (over: Record<string, unknown> = {}) => ({
   id: "s1",
+  srf_status: "srf_approved",
   participation_status: "active",
   campus_id: "c1",
   campuses: { name: "Alliance University" },
   ...over,
 });
 
-function stub(opts: { students?: unknown[]; offers?: unknown[]; drives?: unknown[] } = {}): {
+function stub(
+  opts: {
+    students?: unknown[];
+    offers?: unknown[];
+    drives?: unknown[];
+    applications?: unknown[];
+  } = {},
+): {
   studentQueries: string[];
 } {
   const studentQueries: string[] = [];
@@ -38,6 +46,7 @@ function stub(opts: { students?: unknown[]; offers?: unknown[]; drives?: unknown
     }),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
     http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [])),
+    http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json(opts.applications ?? [])),
   );
 
   return { studentQueries };
@@ -179,5 +188,100 @@ describe("createSupabaseDashboardView", () => {
 
     expect(snapshot.students).toEqual([]);
     expect(snapshot.offersByCategory).toEqual({});
+  });
+});
+
+/**
+ * The figures added 2026-08-05: the registration funnel and the package.
+ *
+ * The rule that matters is R9 — a student with several offers contributes ONE
+ * figure, at their placement record. Feeding every offer row into the average
+ * would inflate the package and disagree with the placed count printed beside
+ * it on the same screen.
+ */
+describe("the funnel and package inputs", () => {
+  it("carries each student's registration state for the funnel", async () => {
+    stub({ students: [student({ srf_status: "srf_approved" })] });
+
+    const snapshot = await createSupabaseDashboardView(client()).snapshot();
+
+    expect(snapshot.students[0]?.srfStatus).toBe("srf_approved");
+  });
+
+  it("defaults a student with no recorded SRF state to invited", async () => {
+    stub({ students: [student({ srf_status: null })] });
+
+    expect((await createSupabaseDashboardView(client()).snapshot()).students[0]?.srfStatus).toBe(
+      "invited",
+    );
+  });
+
+  it("knows which students have applied to something", async () => {
+    stub({
+      students: [student(), student({ id: "s2" })],
+      applications: [{ student_id: "s1" }],
+    });
+
+    const snapshot = await createSupabaseDashboardView(client()).snapshot();
+
+    expect(snapshot.students[0]?.hasApplied).toBe(true);
+    expect(snapshot.students[1]?.hasApplied).toBe(false);
+  });
+
+  it("reduces a student's offers to the one that is their placement record", async () => {
+    stub({
+      offers: [
+        {
+          id: "o1",
+          student_id: "s1",
+          drive_id: "d1",
+          source: "on_campus",
+          drive_type: "placement",
+          offer_category: "dream",
+          ctc_lpa: "7.00",
+          declared_at: "2026-06-01T00:00:00Z",
+        },
+        {
+          id: "o2",
+          student_id: "s1",
+          drive_id: "d2",
+          source: "on_campus",
+          drive_type: "placement",
+          offer_category: "super_dream",
+          ctc_lpa: "14.00",
+          declared_at: "2026-06-10T00:00:00Z",
+        },
+      ],
+    });
+
+    const snapshot = await createSupabaseDashboardView(client()).snapshot();
+
+    // One student, one figure — the higher package (R9).
+    expect(snapshot.placements).toEqual([{ studentId: "s1", ctcLpa: 14, category: "super_dream" }]);
+  });
+
+  it("keeps a self-placed offer out of the package figures (PRD §16.2)", async () => {
+    stub({
+      offers: [
+        {
+          id: "o1",
+          student_id: "s1",
+          drive_id: null,
+          source: "self_placed",
+          drive_type: "placement",
+          offer_category: "dream",
+          ctc_lpa: "20.00",
+          declared_at: "2026-06-01T00:00:00Z",
+        },
+      ],
+    });
+
+    expect((await createSupabaseDashboardView(client()).snapshot()).placements).toEqual([]);
+  });
+
+  it("reports no placements when nobody holds an offer", async () => {
+    stub();
+
+    expect((await createSupabaseDashboardView(client()).snapshot()).placements).toEqual([]);
   });
 });

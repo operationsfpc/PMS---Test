@@ -1,4 +1,6 @@
-import type { ParticipationStatus } from "@domain/types";
+import type { PlacementCtc } from "@domain/ctc-statistics";
+import { type Offer, resolvePlacementRecord } from "@domain/offers";
+import type { DriveType, ParticipationStatus, SrfStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CampusBreakdown, DashboardSnapshot, DashboardView } from "./dashboard-page";
 
@@ -26,7 +28,7 @@ export function createSupabaseDashboardView(
     async snapshot(): Promise<DashboardSnapshot> {
       const studentQuery = client
         .from("students")
-        .select("id, participation_status, campus_id, campuses(name)");
+        .select("id, participation_status, srf_status, campus_id, campuses(name)");
 
       const { data: students } =
         campusIds === undefined || campusIds.length === 0
@@ -36,22 +38,48 @@ export function createSupabaseDashboardView(
       const studentRows = (students ?? []) as Array<Record<string, unknown>>;
       const studentIds = studentRows.map((s) => s.id as string);
 
-      const [{ data: offers }, { data: drives }] = await Promise.all([
+      const [{ data: offers }, { data: drives }, { data: applications }] = await Promise.all([
         studentIds.length === 0
           ? Promise.resolve({ data: [] })
           : client
               .from("offers")
-              .select("student_id, source, drive_type, offer_category")
+              .select(
+                "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at",
+              )
               .in("student_id", studentIds),
         client.from("drives").select("status"),
+        studentIds.length === 0
+          ? Promise.resolve({ data: [] })
+          : client.from("applications").select("student_id").in("student_id", studentIds),
       ]);
 
       const onCampus = new Set<string>();
       const selfPlaced = new Set<string>();
       const offersByCategory: Record<string, number> = {};
 
+      // Kept per student so R9 can pick the ONE offer that is their placement
+      // record. Averaging every row instead would count a student holding three
+      // offers three times and inflate the package.
+      const offersByStudent = new Map<string, Offer[]>();
+
+      const applied = new Set(
+        ((applications ?? []) as Array<Record<string, unknown>>).map((a) => a.student_id as string),
+      );
+
       for (const offer of (offers ?? []) as Array<Record<string, unknown>>) {
         const studentId = offer.student_id as string;
+
+        const forStudent = offersByStudent.get(studentId) ?? [];
+        forStudent.push({
+          id: offer.id as string,
+          driveId: (offer.drive_id as string | null) ?? "",
+          driveType: offer.drive_type as DriveType,
+          offerCategory: (offer.offer_category as Offer["offerCategory"]) ?? null,
+          ctcLpa: Number(offer.ctc_lpa ?? 0),
+          declaredAt: new Date(offer.declared_at as string),
+          source: offer.source as Offer["source"],
+        });
+        offersByStudent.set(studentId, forStudent);
 
         if (offer.source === "self_placed") {
           selfPlaced.add(studentId);
@@ -98,13 +126,25 @@ export function createSupabaseDashboardView(
         });
       }
 
+      // R9 decides which offer is the student's placement, so the package
+      // figures and the placed count can never disagree.
+      const placements: PlacementCtc[] = [];
+      for (const [studentId, held] of offersByStudent) {
+        const record = resolvePlacementRecord(held);
+        if (record === null) continue;
+        placements.push({ studentId, ctcLpa: record.ctcLpa, category: record.offerCategory });
+      }
+
       return {
         students: studentRows.map((row) => ({
           studentId: row.id as string,
           participationStatus: (row.participation_status as ParticipationStatus) ?? "active",
+          srfStatus: (row.srf_status as SrfStatus | null) ?? "invited",
+          hasApplied: applied.has(row.id as string),
           hasOnCampusPlacement: onCampus.has(row.id as string),
           hasSelfPlacement: selfPlaced.has(row.id as string),
         })),
+        placements,
         drivesByStatus,
         offersByCategory,
         campuses: [...campusTotals.values()].sort((a, b) =>
