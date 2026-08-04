@@ -27,6 +27,8 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
   const [problem, setProblem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setStaff(await repository.list());
@@ -79,6 +81,41 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not update that staff member.");
+    }
+  }
+
+  /**
+   * The domain refuses self-demotion and the removal of the last Admin, so the
+   * reason it gives is shown verbatim - it is the only explanation the Admin
+   * will get, and "could not update" would send them looking in the wrong place.
+   */
+  async function changeRole(target: string, newRole: AppRole) {
+    setError(null);
+    setBusy(target);
+    try {
+      await repository.changeRole(target, newRole);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not change that role.");
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function remove(target: string) {
+    setError(null);
+    setBusy(target);
+    try {
+      await repository.remove(target);
+      setConfirming(null);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not remove that staff member.");
+      setConfirming(null);
+      await refresh();
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -190,20 +227,71 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       ) : (
         <Card className="divide-y divide-neutral-200">
           {staff.map((member) => (
-            <div key={member.email} className="flex items-center justify-between gap-4 p-4">
-              <div className="min-w-0">
+            <div key={member.email} className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-ink-900">{member.fullName}</p>
                 <p className="text-sm text-ink-500">
-                  <span>{member.email}</span> ·{" "}
-                  <span className="capitalize">{label(member.role)}</span>
+                  <span>{member.email}</span>
                   {member.acceptedAt === null && " · Not signed in yet"}
                   {member.isActive ? "" : " · Deactivated"}
                 </p>
               </div>
-              {member.isActive && (
-                <Button variant="secondary" size="sm" onClick={() => void deactivate(member.email)}>
-                  Deactivate
-                </Button>
+
+              {confirming === member.email ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-destructive">
+                    Permanently remove {member.fullName}? Their sign-in stops working.
+                  </p>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy === member.email}
+                    onClick={() => void remove(member.email)}
+                  >
+                    Yes, remove
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <label className="sr-only" htmlFor={`role-${member.email}`}>
+                    Role for {member.fullName}
+                  </label>
+                  <select
+                    id={`role-${member.email}`}
+                    value={member.role}
+                    disabled={busy === member.email}
+                    onChange={(e) => void changeRole(member.email, e.target.value as AppRole)}
+                    className="rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm capitalize"
+                  >
+                    {INVITABLE.map((r) => (
+                      <option key={r} value={r}>
+                        {label(r)}
+                      </option>
+                    ))}
+                  </select>
+
+                  {member.isActive && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void deactivate(member.email)}
+                    >
+                      Deactivate
+                    </Button>
+                  )}
+
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    aria-label={`Remove ${member.fullName}`}
+                    onClick={() => setConfirming(member.email)}
+                  >
+                    Remove
+                  </Button>
+                </>
               )}
             </div>
           ))}

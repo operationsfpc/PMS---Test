@@ -19,6 +19,8 @@ function repo(overrides: Partial<StaffRepository> = {}): StaffRepository {
     campuses: async () => [{ id: "c1", name: "Alliance University" }],
     invite: async () => undefined,
     setActive: async () => undefined,
+    changeRole: async () => undefined,
+    remove: async () => undefined,
     ...overrides,
   };
 }
@@ -32,6 +34,99 @@ const EXISTING = [
     isActive: true,
   },
 ];
+
+/**
+ * Correcting a mistake. An invitation is a login, so an Admin who picks the
+ * wrong role or the wrong address has created the wrong account - and until
+ * now had no way to undo it without database access.
+ */
+describe("changing a staff member's role", () => {
+  it("offers each member's current role, and saves a change to it", async () => {
+    const changeRole = vi.fn();
+    const user = userEvent.setup();
+    render(<StaffPage repository={repo({ list: async () => EXISTING, changeRole })} />);
+
+    const select = await screen.findByRole("combobox", { name: /role for cpc one/i });
+    expect((select as HTMLSelectElement).value).toBe("campus_placement_coordinator");
+
+    await user.selectOptions(select, "delivery_head");
+
+    await waitFor(() =>
+      expect(changeRole).toHaveBeenCalledWith("cpc@faceprep.in", "delivery_head"),
+    );
+  });
+
+  it("shows why a refused change was refused", async () => {
+    const user = userEvent.setup();
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => EXISTING,
+          changeRole: async () => {
+            throw new Error("This is the last Admin. Promote someone else to Admin first.");
+          },
+        })}
+      />,
+    );
+
+    const select = await screen.findByRole("combobox", { name: /role for cpc one/i });
+    await user.selectOptions(select, "delivery_head");
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/last admin/i);
+  });
+});
+
+describe("removing a staff member", () => {
+  /**
+   * Removal revokes a login and cannot be undone from this screen, so it asks
+   * first. A misclick next to "Deactivate" must not delete an account.
+   */
+  it("asks for confirmation before revoking a login", async () => {
+    const remove = vi.fn();
+    const user = userEvent.setup();
+    render(<StaffPage repository={repo({ list: async () => EXISTING, remove })} />);
+
+    await user.click(await screen.findByRole("button", { name: /remove cpc one/i }));
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(screen.getByText(/permanently remove/i)).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /yes, remove/i }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith("cpc@faceprep.in"));
+  });
+
+  it("lets the Admin back out", async () => {
+    const remove = vi.fn();
+    const user = userEvent.setup();
+    render(<StaffPage repository={repo({ list: async () => EXISTING, remove })} />);
+
+    await user.click(await screen.findByRole("button", { name: /remove cpc one/i }));
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(screen.queryByText(/permanently remove/i)).toBeNull();
+  });
+
+  it("explains when the person's work is still on record", async () => {
+    const user = userEvent.setup();
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => EXISTING,
+          remove: async () => {
+            throw new Error("drives or results are still attributed to them. Deactivate instead.");
+          },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /remove cpc one/i }));
+    await user.click(screen.getByRole("button", { name: /yes, remove/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/deactivate/i);
+  });
+});
 
 describe("StaffPage", () => {
   it("lists who has been invited and whether they have signed in yet", async () => {

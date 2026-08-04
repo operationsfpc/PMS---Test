@@ -1,4 +1,9 @@
-import { canInviteRole } from "@domain/staff";
+import {
+  canChangeStaffRole,
+  canInviteRole,
+  canRemoveStaff,
+  type StaffChangeContext,
+} from "@domain/staff";
 import type { AppRole } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -29,9 +34,16 @@ export interface StaffRepository {
   list(): Promise<readonly StaffMember[]>;
   campuses(): Promise<readonly CampusOption[]>;
   invite(invitation: NewInvitation): Promise<void>;
-  /** Deactivation, never deletion: audit rows reference these people. */
+  /** Reversible. The account survives, and so does everything it did. */
   setActive(email: string, isActive: boolean): Promise<void>;
+  /** Moves someone to a different role, invitation and profile together. */
+  changeRole(email: string, newRole: AppRole): Promise<void>;
+  /** Revokes the login outright. Refused when their work is still referenced. */
+  remove(email: string): Promise<void>;
 }
+
+/** Who is asking. Both destructive operations need the email, not just the role. */
+export type GetActor = () => Promise<{ role: AppRole; email: string }>;
 
 /**
  * Staff invitations.
@@ -43,9 +55,31 @@ export interface StaffRepository {
  */
 export function createSupabaseStaffRepository(
   client: SupabaseClient,
-  getActorRole: () => Promise<AppRole>,
+  getActor: GetActor,
 ): StaffRepository {
-  return {
+  /**
+   * Builds the decision context the domain needs.
+   *
+   * `targetIsLastAdmin` counts only ACTIVE Admins: a deactivated one cannot
+   * sign in, so treating them as cover would let the organisation demote its
+   * way into having no usable Admin at all.
+   */
+  async function contextFor(email: string): Promise<StaffChangeContext> {
+    const [actor, staff] = await Promise.all([getActor(), repository.list()]);
+    const target = staff.find((m) => m.email.toLowerCase() === email.trim().toLowerCase());
+
+    if (target === undefined) throw new StaffError("That staff member no longer exists.");
+
+    const activeAdmins = staff.filter((m) => m.role === "admin" && m.isActive);
+
+    return {
+      actor,
+      target: { email: target.email, role: target.role },
+      targetIsLastAdmin: target.role === "admin" && target.isActive && activeAdmins.length <= 1,
+    };
+  }
+
+  const repository: StaffRepository = {
     async list() {
       const [{ data: invitations, error }, { data: profiles }] = await Promise.all([
         client.from("staff_invitations").select("email, full_name, role, accepted_at"),
@@ -85,7 +119,7 @@ export function createSupabaseStaffRepository(
     },
 
     async invite(invitation) {
-      const permission = canInviteRole(await getActorRole(), invitation.role);
+      const permission = canInviteRole((await getActor()).role, invitation.role);
       if (!permission.allowed) throw new StaffError(permission.reason);
 
       const { error } = await client
@@ -136,5 +170,66 @@ export function createSupabaseStaffRepository(
 
       if (error !== null) throw new StaffError("Could not update that staff member.");
     },
+
+    async changeRole(email, newRole) {
+      const permission = canChangeStaffRole(await contextFor(email), newRole);
+      if (!permission.allowed) throw new StaffError(permission.reason);
+
+      const target = email.trim().toLowerCase();
+
+      // The invitation carries the role materialised on first sign-in, so it
+      // has to move too - otherwise anyone who has not signed in yet arrives
+      // with the old role and nobody can see why.
+      const { error: inviteError } = await client
+        .from("staff_invitations")
+        .update({ role: newRole })
+        .eq("email", target)
+        .select("email");
+
+      if (inviteError !== null) {
+        throw new StaffError("Could not change that role. Please try again.");
+      }
+
+      // No profile exists until first sign-in; updating nothing is correct then.
+      const { error: profileError } = await client
+        .from("profiles")
+        .update({ role: newRole })
+        .eq("email", target)
+        .select("email");
+
+      if (profileError !== null) {
+        throw new StaffError(
+          "The invitation was updated, but their signed-in role was not. Please try again.",
+        );
+      }
+    },
+
+    async remove(email) {
+      const permission = canRemoveStaff(await contextFor(email));
+      if (!permission.allowed) throw new StaffError(permission.reason);
+
+      const target = email.trim().toLowerCase();
+
+      // Order matters: revoke the login first, so a failure part-way through
+      // leaves an account that cannot be used rather than one that can.
+      for (const table of ["staff_invitations", "staff_campus_invitations"]) {
+        const { error } = await client.from(table).delete().eq("email", target);
+        if (error !== null) throw new StaffError("Could not remove that staff member.");
+      }
+
+      const { error } = await client.from("profiles").delete().eq("email", target);
+
+      if (error !== null) {
+        // PRD 19 keeps attribution: Postgres refuses to orphan the drives,
+        // offers and results this person is named on. Retrying cannot help.
+        throw new StaffError(
+          error.code === "23503"
+            ? "Their login has been revoked, but their record cannot be deleted because drives or results are still attributed to them. Deactivate them instead."
+            : "Could not remove that staff member.",
+        );
+      }
+    },
   };
+
+  return repository;
 }

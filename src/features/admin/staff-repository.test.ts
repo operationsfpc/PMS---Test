@@ -14,11 +14,31 @@ import { createSupabaseStaffRepository, StaffError } from "./staff-repository";
  */
 const BASE = "https://project.supabase.co";
 
-const repo = (role: AppRole = "admin") =>
+const repo = (role: AppRole = "admin", email = "admin@faceprep.in") =>
   createSupabaseStaffRepository(
     createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } }),
-    async () => role,
+    async () => ({ role, email }),
   );
+
+/** Whatever the staff list holds for these tests. */
+function staffList(
+  rows: readonly { email: string; role: string; accepted_at?: string | null }[],
+  profiles: readonly { email: string; is_active: boolean }[] = [],
+) {
+  server.use(
+    http.get(`${BASE}/rest/v1/staff_invitations`, () =>
+      HttpResponse.json(
+        rows.map((r) => ({
+          email: r.email,
+          full_name: r.email,
+          role: r.role,
+          accepted_at: r.accepted_at ?? "2026-01-01",
+        })),
+      ),
+    ),
+    http.get(`${BASE}/rest/v1/profiles`, () => HttpResponse.json(profiles)),
+  );
+}
 
 const INVITATION = {
   fullName: "Meera Iyer",
@@ -174,5 +194,133 @@ describe("who may invite", () => {
 
   it("refuses to invite a student, whatever the caller", async () => {
     await expect(repo().invite({ ...INVITATION, role: "student" })).rejects.toThrow(/roster/i);
+  });
+});
+
+/**
+ * Changing a role and removing an account. The domain owns both decisions; the
+ * repository's job is to ask, and then to leave the invitation and the profile
+ * agreeing with each other.
+ */
+describe("changeRole", () => {
+  it("updates the invitation and the profile together", async () => {
+    staffList([
+      { email: "admin@faceprep.in", role: "admin" },
+      { email: "ae@faceprep.in", role: "account_executive" },
+    ]);
+    const patched: Record<string, unknown> = {};
+    server.use(
+      http.patch(`${BASE}/rest/v1/staff_invitations`, async ({ request }) => {
+        patched.invitation = await request.json();
+        return HttpResponse.json([{ email: "ae@faceprep.in" }]);
+      }),
+      http.patch(`${BASE}/rest/v1/profiles`, async ({ request }) => {
+        patched.profile = await request.json();
+        return HttpResponse.json([{ email: "ae@faceprep.in" }]);
+      }),
+    );
+
+    await repo().changeRole("ae@faceprep.in", "delivery_head");
+
+    expect(patched.invitation).toEqual({ role: "delivery_head" });
+    expect(patched.profile).toEqual({ role: "delivery_head" });
+  });
+
+  it("refuses a non-Admin", async () => {
+    staffList([{ email: "ae@faceprep.in", role: "account_executive" }]);
+
+    await expect(
+      repo("central_placement_coordinator", "cpc@faceprep.in").changeRole(
+        "ae@faceprep.in",
+        "admin",
+      ),
+    ).rejects.toThrow(/only an admin/i);
+  });
+
+  it("refuses to demote the last remaining Admin", async () => {
+    staffList([
+      { email: "admin@faceprep.in", role: "admin" },
+      { email: "ae@faceprep.in", role: "account_executive" },
+    ]);
+
+    await expect(
+      repo("admin", "ae@faceprep.in").changeRole("admin@faceprep.in", "ceo"),
+    ).rejects.toThrow(/last admin/i);
+  });
+
+  it("does not count a deactivated Admin as cover for demoting the other one", async () => {
+    staffList(
+      [
+        { email: "admin@faceprep.in", role: "admin" },
+        { email: "old-admin@faceprep.in", role: "admin" },
+      ],
+      [{ email: "old-admin@faceprep.in", is_active: false }],
+    );
+
+    await expect(
+      repo("admin", "old-admin@faceprep.in").changeRole("admin@faceprep.in", "ceo"),
+    ).rejects.toThrow(/last admin/i);
+  });
+});
+
+describe("remove", () => {
+  it("deletes the invitation, the staged campuses and the profile", async () => {
+    staffList([
+      { email: "admin@faceprep.in", role: "admin" },
+      { email: "ae@faceprep.in", role: "account_executive" },
+    ]);
+    const deleted: string[] = [];
+    for (const table of ["staff_invitations", "staff_campus_invitations", "profiles"]) {
+      server.use(
+        http.delete(`${BASE}/rest/v1/${table}`, () => {
+          deleted.push(table);
+          return HttpResponse.json([]);
+        }),
+      );
+    }
+
+    await repo().remove("ae@faceprep.in");
+
+    expect(deleted).toContain("staff_invitations");
+    expect(deleted).toContain("staff_campus_invitations");
+    expect(deleted).toContain("profiles");
+  });
+
+  it("refuses to remove the account the Admin is signed in as", async () => {
+    staffList([
+      { email: "admin@faceprep.in", role: "admin" },
+      { email: "other@faceprep.in", role: "admin" },
+    ]);
+
+    await expect(repo("admin", "admin@faceprep.in").remove("ADMIN@faceprep.in")).rejects.toThrow(
+      /your own account/i,
+    );
+  });
+
+  /**
+   * PRD 19: attribution has to survive. Postgres refuses the delete when the
+   * person's work is still referenced, and "try again" is the wrong advice -
+   * deactivation is the remedy, so the message has to say so.
+   */
+  it("tells the Admin to deactivate when the person's work is still on record", async () => {
+    staffList([
+      { email: "admin@faceprep.in", role: "admin" },
+      { email: "ae@faceprep.in", role: "account_executive" },
+    ]);
+    server.use(
+      http.delete(`${BASE}/rest/v1/staff_invitations`, () => HttpResponse.json([])),
+      http.delete(`${BASE}/rest/v1/staff_campus_invitations`, () => HttpResponse.json([])),
+      http.delete(`${BASE}/rest/v1/profiles`, () =>
+        HttpResponse.json(
+          {
+            code: "23503",
+            message: 'update or delete on table "profiles" violates foreign key constraint',
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(repo().remove("ae@faceprep.in")).rejects.toThrow(/deactivate/i);
   });
 });
