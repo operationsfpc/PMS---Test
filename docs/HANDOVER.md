@@ -4,10 +4,19 @@
 Last updated at commit `c31c0b7`. **1093 tests passing across 85 files**, plus
 **1 Playwright journey** (verified by running them, not remembered).
 
-**Live:** <https://fpc-pms.faceprep.workers.dev> · database on Supabase
-ap-south-1 · migrations `0001`–`0019`. ⚠️ **`0018` and `0019` have NOT been
-pushed to Mumbai yet, and this session's code has NOT been deployed.** Run
-`pnpm db:push` then `pnpm deploy`.
+**Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
+(version `7d005c95-41ea-4173-bdab-0e327bfb32a2`) · database on Supabase
+ap-south-1 · migrations `0001`–`0019`, **local == remote** (`supabase migration
+list --linked`).
+
+Verified after shipping, not assumed:
+- `is_campus_reader()` on the remote includes `key_account_manager`;
+  `is_org_reader()` includes `enterprise_relations`
+- all nine new/replaced policies exist; the old `semesters_rw_staff` is gone
+- the deployed bundle contains the new screens and **none** of the mock's
+  strings — no "Welcome back", no "Freshworks", no "Download offer letter"
+- live row counts unchanged (3 students, 1 drive, 5 profiles): `0018`/`0019`
+  touch policies only, never data
 
 ---
 
@@ -24,10 +33,7 @@ Make reasonable assumptions and keep moving; mark them
 
 ## 1. 🔴 The immediate next step
 
-**Ship what is built.** `pnpm db:push` (migrations `0018`, `0019`) then
-`pnpm deploy`. The two new screens are live in the repo and nowhere else.
-
-Then, in order:
+Everything built in this session is **shipped**. In order:
 
 1. **`pnpm check` is still red** — functions 79.78% (needs 80) and branches
    66.06% (needs 80). It was red *before* this session too, proved against a
@@ -37,11 +43,19 @@ Then, in order:
    7%, `participation-view` 3%, `attendance-view` 17%. `src/domain` is at 100%
    and must stay there. Take one view per sitting, MSW-stubbed, the way
    `dashboard-view.test.ts` now does it.
-2. **Per-semester marksheet uploads** tied to `student_semesters.marksheet_id`.
+2. **Nobody has exercised the two new screens against live data.** There are
+   0 applications and 0 semesters in Mumbai, so the student dashboard shows its
+   empty states and the portfolio shows one TCS drive with no applicants. Get
+   one student through SRF → CPC verification → apply, and the whole chain is
+   proved against real data for the first time.
+3. **No KAM or ER profile exists yet**, so `0018` is correct-but-unexercised in
+   production. The first KAM invitation is the real test: assign campuses on
+   the Staff screen and confirm they see those students and no others.
+4. **Per-semester marksheet uploads** tied to `student_semesters.marksheet_id`.
    The uploads exist; nothing attaches them to the semester row they evidence.
-3. **Playwright journeys for the other roles.** The student journey is the only
+5. **Playwright journeys for the other roles.** The student journey is the only
    one, and it is the only thing that proves the wiring.
-4. **Result corrections** (A15) and the notifications UI (blocked on P1).
+6. **Result corrections** (A15) and the notifications UI (blocked on P1).
 
 ---
 
@@ -262,6 +276,7 @@ pnpm dev             # localhost:5173
 ```
 
 Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
-run this session; **neither is automatic** — committing does not deploy.
+run this session and both succeeded; **neither is automatic** — committing does
+not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 66 commits, working tree clean.
+Git is **local only**, no remote. 67 commits, working tree clean.
