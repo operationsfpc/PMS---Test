@@ -1,4 +1,5 @@
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
+import { applicationWindow } from "@domain/drive-analytics";
 import {
   type DriveRole,
   driveProgress,
@@ -30,6 +31,8 @@ export interface PortfolioDrive {
   readonly publishedBy: string | null;
   readonly totalRounds: number;
   readonly roundsDecided: number;
+  readonly applicationStart: string | null;
+  readonly applicationEnd: string | null;
   readonly applicants: readonly PortfolioApplicant[];
 }
 
@@ -74,10 +77,13 @@ export function DrivePortfolioPage({
   view,
   profileId,
   title,
+  /** Passed in, never read from the browser — see src/domain/drive-analytics. */
+  now = new Date(),
 }: {
   view: PortfolioView;
   profileId: string;
   title: string;
+  now?: Date;
 }) {
   const [drives, setDrives] = useState<readonly PortfolioDrive[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -175,6 +181,14 @@ export function DrivePortfolioPage({
               {visible.map((drive) => {
                 const progress = driveProgress(drive);
                 const funnel = summariseFunnel(drive.applicants);
+                const window = applicationWindow(
+                  {
+                    start:
+                      drive.applicationStart === null ? null : new Date(drive.applicationStart),
+                    end: drive.applicationEnd === null ? null : new Date(drive.applicationEnd),
+                  },
+                  now,
+                );
                 const hats = involvementIn(drive, profileId);
                 const open = expanded === drive.driveId;
 
@@ -196,6 +210,10 @@ export function DrivePortfolioPage({
                               ))}
                               <Badge tone={progress.terminal ? "neutral" : "warning"}>
                                 {progress.phase}
+                              </Badge>
+                              {window.urgent && <Badge tone="danger">Closing soon</Badge>}
+                              <Badge tone={window.state === "open" ? "success" : "neutral"}>
+                                {window.label}
                               </Badge>
                               {drive.totalRounds > 0 && (
                                 <span className="text-xs text-ink-500">

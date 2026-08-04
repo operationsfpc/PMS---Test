@@ -24,6 +24,7 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
 export const PORTFOLIO_DRIVE_COLUMNS = `
   id, company_name, role_title, status, on_hold,
   created_by, approved_by, published_by,
+  application_start, application_end,
   drive_rounds(
     id, sequence, name,
     round_participants(application_id),
@@ -126,6 +127,8 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           createdBy: (row.created_by as string | null) ?? null,
           approvedBy: (row.approved_by as string | null) ?? null,
           publishedBy: (row.published_by as string | null) ?? null,
+          applicationStart: (row.application_start as string | null) ?? null,
+          applicationEnd: (row.application_end as string | null) ?? null,
           totalRounds: roundRows.length,
           // A round counts as decided when a result has been declared in it -
           // not when it was merely scheduled or attended.

@@ -21,6 +21,8 @@ const client = () =>
 
 const DRIVE = {
   id: "d1",
+  application_start: "2026-09-01T00:00:00Z",
+  application_end: "2026-09-10T00:00:00Z",
   company_name: "Zoho Corporation",
   role_title: "Member Technical Staff",
   status: "in_rounds",
@@ -146,6 +148,22 @@ describe("createSupabasePortfolioView", () => {
     stub([DRIVE], [{ drive_id: "elsewhere", student_id: "s1" }]);
 
     expect((await view().drives())[0]?.applicants[0]?.hasOffer).toBe(false);
+  });
+
+  it("carries the application window so the owner can see the time left", async () => {
+    stub();
+    const [drive] = await view().drives();
+
+    expect(drive?.applicationStart).toBe("2026-09-01T00:00:00Z");
+    expect(drive?.applicationEnd).toBe("2026-09-10T00:00:00Z");
+  });
+
+  it("reports an unpublished drive's window as unset rather than guessing one", async () => {
+    stub([{ ...DRIVE, application_start: null, application_end: null }]);
+    const [drive] = await view().drives();
+
+    expect(drive?.applicationStart).toBeNull();
+    expect(drive?.applicationEnd).toBeNull();
   });
 
   it("survives a drive with no rounds and no applicants", async () => {

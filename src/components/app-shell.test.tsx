@@ -94,6 +94,42 @@ describe("the drive cockpit", () => {
  * they have raised/approved, applicants to the drive, the progress of the
  * drives". The cockpit shows every drive; this is theirs.
  */
+/**
+ * Requested 2026-08-05: dashboards "for all relevant stakeholders".
+ *
+ * The coordinators who do the work had no overview at all - they could see
+ * their own queues and nothing about how the cohort was doing. RLS decides
+ * what each of them gets back, so the Campus CPC sees their campus and the
+ * Central CPC sees the organisation.
+ *
+ * The AE is deliberately excluded: they have no read policy on students, so a
+ * placement overview would render zeroes and look broken. Their drives are
+ * their view.
+ */
+describe("the placement overview", () => {
+  it.each([
+    ["campus_placement_coordinator"],
+    ["central_placement_coordinator"],
+    ["admin"],
+    ["campus_manager"],
+    ["key_account_manager"],
+    ["ceo"],
+  ] as const)("is offered to %s", (role) => {
+    shellFor(signedIn(role));
+    expect(screen.getByRole("link", { name: /overview/i })).toBeDefined();
+  });
+
+  it("is not offered to an Account Executive, who cannot read students", () => {
+    shellFor(signedIn("account_executive"));
+    expect(screen.queryByRole("link", { name: /overview/i })).toBeNull();
+  });
+
+  it("is not offered to a student", () => {
+    shellFor(signedIn("student"));
+    expect(screen.queryByRole("link", { name: /overview/i })).toBeNull();
+  });
+});
+
 describe("the drive portfolio", () => {
   it("is offered to the Delivery Head", () => {
     shellFor(signedIn("delivery_head"));

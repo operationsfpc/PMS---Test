@@ -28,6 +28,8 @@ const DRIVE: PortfolioDrive = {
   publishedBy: "cpc-1",
   totalRounds: 4,
   roundsDecided: 2,
+  applicationStart: "2026-09-01T00:00:00.000Z",
+  applicationEnd: "2026-09-10T00:00:00.000Z",
   applicants: [
     {
       applicationId: "a1",
@@ -76,6 +78,8 @@ const OTHERS: PortfolioDrive = {
   publishedBy: null,
   totalRounds: 0,
   roundsDecided: 0,
+  applicationStart: null,
+  applicationEnd: null,
   applicants: [],
 };
 
@@ -83,12 +87,21 @@ const view = (drives: readonly PortfolioDrive[] = [DRIVE, OTHERS]): PortfolioVie
   drives: async () => drives,
 });
 
-const show = (overrides: { view?: PortfolioView; profileId?: string; title?: string } = {}) =>
+const show = (
+  overrides: {
+    view?: PortfolioView;
+    profileId?: string;
+    title?: string;
+    /** The clock is injected so "4 days left" is exact, not relative to today. */
+    now?: string;
+  } = {},
+) =>
   render(
     <DrivePortfolioPage
       view={overrides.view ?? view()}
       profileId={overrides.profileId ?? "ae-1"}
       title={overrides.title ?? "My drives"}
+      now={new Date(overrides.now ?? "2026-09-05T10:00:00.000Z")}
     />,
   );
 
@@ -222,5 +235,42 @@ describe("DrivePortfolioPage", () => {
     show({ view: { drives } });
 
     expect(await screen.findByRole("alert")).toBeDefined();
+  });
+});
+
+/**
+ * The application window, on the screen of the people who own the drive.
+ *
+ * An AE is asked by their client "how many applied, and how long is left?".
+ * The clock comes from src/domain/drive-analytics.ts and `now` is passed in,
+ * so the answer is the same one the student's drive list is working to.
+ */
+describe("the application window", () => {
+  it("shows how long is left to apply", async () => {
+    show();
+
+    const drive = await screen.findByRole("region", { name: "Zoho Corporation" });
+    expect(within(drive).getByText("4 days left")).toBeDefined();
+  });
+
+  it("flags a drive closing within two days", async () => {
+    show({ now: "2026-09-09T10:00:00.000Z" });
+
+    const drive = await screen.findByRole("region", { name: "Zoho Corporation" });
+    expect(within(drive).getByText(/closing soon/i)).toBeDefined();
+  });
+
+  it("says a closed drive is closed", async () => {
+    show({ now: "2026-09-20T10:00:00.000Z" });
+
+    const drive = await screen.findByRole("region", { name: "Zoho Corporation" });
+    expect(within(drive).getByText("Closed")).toBeDefined();
+  });
+
+  it("says a drive with no window set is unscheduled, not closed", async () => {
+    show();
+
+    const drive = await screen.findByRole("region", { name: "Freshworks" });
+    expect(within(drive).getByText(/no application window set/i)).toBeDefined();
   });
 });

@@ -28,7 +28,11 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/srf", label: "My registration form" },
     { to: "/student/participation", label: "My participation" },
   ],
+  // The coordinators who do the work had no overview at all until 2026-08-05:
+  // their own queues, and nothing about how the cohort was doing. RLS scopes
+  // the campus CPC to their campus and the Central CPC to the organisation.
   campus_placement_coordinator: [
+    { to: "/dashboard", label: "Campus overview" },
     { to: "/cpc/verification", label: "Verification queue" },
     { to: "/cpc/attendance", label: "Attendance" },
     { to: "/cpc/participation", label: "Opt-outs & offers" },
@@ -52,6 +56,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/dashboard", label: "Placement overview" },
   ],
   central_placement_coordinator: [
+    { to: "/dashboard", label: "Placement overview" },
     { to: "/central/drives", label: "Drive cockpit" },
     { to: "/central/publish", label: "Publish and target" },
     { to: "/central/shortlisting", label: "Shortlisting" },
@@ -61,6 +66,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/central/offers", label: "Final selection" },
   ],
   admin: [
+    { to: "/dashboard", label: "Placement overview" },
     { to: "/admin/campuses", label: "Campuses" },
     { to: "/admin/staff", label: "Staff" },
     { to: "/admin/programmes", label: "Degrees & branches" },

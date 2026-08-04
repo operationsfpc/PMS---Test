@@ -19,7 +19,10 @@ const TITLES: Record<string, string> = {
   er_head: "Enterprise relations overview",
   campus_manager: "Campus overview",
   delivery_head: "Delivery overview",
-  admin: "Overview",
+  admin: "Placement overview",
+  // Added 2026-08-05: the coordinators who do the work had no overview at all.
+  campus_placement_coordinator: "Campus overview",
+  central_placement_coordinator: "Placement overview",
 };
 
 export function DashboardRoute() {
