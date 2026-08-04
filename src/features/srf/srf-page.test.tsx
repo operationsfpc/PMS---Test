@@ -66,16 +66,21 @@ describe("SrfPage", () => {
       expect(screen.getByLabelText(/12th marks \(%\)/i)).toBeDefined();
     });
 
-    it("captures overall CGPA, which is what eligibility tests against (decision Q7)", () => {
+    /**
+     * Superseded 2026-08-04: the single cumulative CGPA and one-off arrear
+     * counts are gone. Academics are per semester, and eligibility reads the
+     * latest VERIFIED line (src/domain/academics.ts).
+     */
+    it("captures CGPA per semester, which is what eligibility tests against", () => {
       render(<SrfPage />);
-      expect(screen.getByLabelText(/overall cgpa/i)).toBeDefined();
+      expect(screen.getByLabelText(/semester 1 cgpa/i)).toBeDefined();
     });
 
-    it("captures current arrears and arrear history separately", () => {
+    it("captures current arrears and arrear history separately, per semester", () => {
       render(<SrfPage />);
       // The distinction drives the no_standing vs no_history policies (Q6).
-      expect(screen.getByLabelText(/current arrears/i)).toBeDefined();
-      expect(screen.getByLabelText(/history of arrears/i)).toBeDefined();
+      expect(screen.getByLabelText(/semester 1 standing arrears/i)).toBeDefined();
+      expect(screen.getByLabelText(/semester 1 arrear history/i)).toBeDefined();
     });
   });
 

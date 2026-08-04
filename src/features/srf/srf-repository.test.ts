@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import { createSupabaseSrfRepository, type SrfSubmitError } from "./srf-repository";
 import { SRF_DEFAULTS, type SrfSubmission } from "./srf-schema";
@@ -12,6 +12,19 @@ import { SRF_DEFAULTS, type SrfSubmission } from "./srf-schema";
 
 const BASE = "https://project.supabase.co";
 const USER = "40000000-0000-0000-0000-000000000001";
+
+/**
+ * Submitting writes the student row AND their semester lines. Tests that care
+ * about the student row still have to let the semester writes through, or MSW
+ * fails them for an unhandled request that has nothing to do with what they
+ * are asserting.
+ */
+beforeEach(() => {
+  server.use(
+    http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+    http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+  );
+});
 
 const repo = (userId: string | null = USER) =>
   createSupabaseSrfRepository(
@@ -28,11 +41,69 @@ const values: SrfSubmission = {
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
-  overallCgpa: 8.24,
+  programmeLevel: "ug",
+  ugAggregateCgpa: null,
+  semesters: [
+    { semesterNumber: 1, cgpa: 8.1, currentArrears: 0, historyOfArrears: 0 },
+    { semesterNumber: 2, cgpa: 8.24, currentArrears: 1, historyOfArrears: 2 },
+  ],
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
   consent: true,
 } as SrfSubmission;
+
+/**
+ * Semester lines are their own table, so submitting the SRF writes twice.
+ * They are replaced wholesale rather than merged: the form shows the student's
+ * whole record, so what is on screen must be what ends up stored.
+ */
+describe("semester-wise academics", () => {
+  it("replaces the student's semester rows with what was submitted", async () => {
+    let deleted = false;
+    let inserted: Array<Record<string, unknown>> = [];
+    server.use(
+      http.patch(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }),
+      ),
+      http.delete(`${BASE}/rest/v1/student_semesters`, () => {
+        deleted = true;
+        return HttpResponse.json([]);
+      }),
+      http.post(`${BASE}/rest/v1/student_semesters`, async ({ request }) => {
+        inserted = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(inserted);
+      }),
+    );
+
+    await repo().submit(values);
+
+    expect(deleted).toBe(true);
+    expect(inserted).toHaveLength(2);
+    expect(inserted[1]).toMatchObject({
+      semester_number: 2,
+      cgpa: 8.24,
+      current_arrears: 1,
+      history_of_arrears: 2,
+    });
+  });
+
+  it("records a postgraduate's completed UG aggregate on the student", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
+      }),
+      http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+    );
+
+    await repo().submit({ ...values, programmeLevel: "pg", ugAggregateCgpa: 7.85 });
+
+    expect(body.programme_level).toBe("pg");
+    expect(body.ug_aggregate_cgpa).toBe(7.85);
+  });
+});
 
 describe("createSupabaseSrfRepository", () => {
   it("updates the student's own pre-loaded row rather than inserting one", async () => {

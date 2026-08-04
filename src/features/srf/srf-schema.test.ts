@@ -3,6 +3,9 @@ import { SRF_DEFAULTS, type SrfFormValues, srfSchema } from "./srf-schema";
 
 const valid: SrfFormValues = {
   ...SRF_DEFAULTS,
+  fullName: "Asha Rao",
+  rollNumber: "21CSE1042",
+  email: "asha@example.edu",
   mobile: "9876543210",
   // Mandatory since 2026-08-04.
   alternateContact: "9876500000",
@@ -11,7 +14,11 @@ const valid: SrfFormValues = {
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
-  overallCgpa: 8.24,
+  programmeLevel: "ug",
+  semesters: [
+    { semesterNumber: 1, cgpa: 8.1, currentArrears: 0, historyOfArrears: 0 },
+    { semesterNumber: 2, cgpa: 8.24, currentArrears: 0, historyOfArrears: 0 },
+  ],
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
   consent: true,
@@ -46,22 +53,82 @@ describe("srfSchema", () => {
     expect(errors.resumeCategories).toMatch(/resume for every role category/i);
   });
 
-  it("rejects arrear history lower than standing arrears", () => {
-    expect(errorsFor({ currentArrears: 3, historyOfArrears: 1 }).historyOfArrears).toMatch(
-      /cannot be lower/i,
-    );
-  });
+  // Arrears and CGPA moved onto the semester lines on 2026-08-04. The rules
+  // did not go away - they are asserted per-semester in "semester-wise
+  // academics" below, and exhaustively in src/domain/academics.test.ts.
 
   it("accepts cleared backlogs — history above current", () => {
-    expect(errorsFor({ currentArrears: 0, historyOfArrears: 4 })).toEqual({});
-  });
-
-  it("rejects a percentage typed into the CGPA field", () => {
-    expect(errorsFor({ overallCgpa: 82.4 }).overallCgpa).toMatch(/10-point scale/i);
+    expect(
+      errorsFor({
+        semesters: [{ semesterNumber: 1, cgpa: 8, currentArrears: 0, historyOfArrears: 4 }],
+      }),
+    ).toEqual({});
   });
 
   it("rejects marks above 100", () => {
     expect(errorsFor({ tenthPercentage: 105 }).tenthPercentage).toMatch(/between 0 and 100/i);
+  });
+
+  /**
+   * Semester-wise academics, confirmed 2026-08-04. The single cumulative CGPA
+   * this form used to collect is gone; the rules live in src/domain/academics.
+   */
+  describe("semester-wise academics", () => {
+    it("accepts an undergraduate with semester lines", () => {
+      expect(errorsFor({})).toEqual({});
+    });
+
+    it("needs at least one semester", () => {
+      expect(errorsFor({ semesters: [] }).semesters).toMatch(/at least one semester/i);
+    });
+
+    it("refuses an eleventh undergraduate semester", () => {
+      const eleven = Array.from({ length: 11 }, (_, i) => ({
+        semesterNumber: i + 1,
+        cgpa: 8,
+        currentArrears: 0,
+        historyOfArrears: 0,
+      }));
+      expect(errorsFor({ semesters: eleven }).semesters).toMatch(/at most 10 semesters/i);
+    });
+
+    it("refuses a fifth postgraduate semester", () => {
+      const five = Array.from({ length: 5 }, (_, i) => ({
+        semesterNumber: i + 1,
+        cgpa: 8,
+        currentArrears: 0,
+        historyOfArrears: 0,
+      }));
+      expect(
+        errorsFor({ programmeLevel: "pg", ugAggregateCgpa: 7.4, semesters: five }).semesters,
+      ).toMatch(/at most 4 semesters/i);
+    });
+
+    it("refuses a CGPA off the 10-point scale, because it is a CGPA not a GPA", () => {
+      expect(
+        errorsFor({
+          semesters: [{ semesterNumber: 1, cgpa: 78, currentArrears: 0, historyOfArrears: 0 }],
+        }).semesters,
+      ).toMatch(/10-point scale/i);
+    });
+
+    it("refuses a history of arrears below the standing count", () => {
+      expect(
+        errorsFor({
+          semesters: [{ semesterNumber: 1, cgpa: 8, currentArrears: 3, historyOfArrears: 1 }],
+        }).semesters,
+      ).toMatch(/history of arrears/i);
+    });
+
+    it("requires a postgraduate to give their completed UG result", () => {
+      expect(errorsFor({ programmeLevel: "pg", ugAggregateCgpa: null }).ugAggregateCgpa).toMatch(
+        /undergraduate/i,
+      );
+    });
+
+    it("does not ask an undergraduate for one", () => {
+      expect(errorsFor({ programmeLevel: "ug", ugAggregateCgpa: null })).toEqual({});
+    });
   });
 
   it("rejects a malformed mobile number", () => {
@@ -101,16 +168,11 @@ describe("srfSchema", () => {
   it("reports every problem at once so the student fixes them in one pass", () => {
     const errors = errorsFor({
       mobile: "abc",
-      overallCgpa: 99,
+      semesters: [{ semesterNumber: 1, cgpa: 99, currentArrears: 0, historyOfArrears: 0 }],
       degree: "",
       roleCategories: [],
       resumeCategories: [],
     });
-    expect(Object.keys(errors).sort()).toEqual([
-      "degree",
-      "mobile",
-      "overallCgpa",
-      "roleCategories",
-    ]);
+    expect(Object.keys(errors).sort()).toEqual(["degree", "mobile", "roleCategories", "semesters"]);
   });
 });

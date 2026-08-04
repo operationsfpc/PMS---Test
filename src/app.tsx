@@ -17,7 +17,7 @@ import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { PifPage } from "@features/pif/pif-page";
-import { SrfPage } from "@features/srf/srf-page";
+import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
 import { ParticipationRoute } from "@features/student/participation-route";
 import { StudentDashboard } from "@features/student/student-dashboard";
@@ -34,7 +34,7 @@ export function App() {
         path="/srf"
         element={
           <RequireAuth>
-            <SrfPage />
+            <SrfRoute />
           </RequireAuth>
         }
       />

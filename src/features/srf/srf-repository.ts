@@ -48,9 +48,8 @@ export function createSupabaseSrfRepository(
           tenth_percentage: values.tenthPercentage,
           twelfth_percentage: values.twelfthPercentage,
           passing_year: values.passingYear,
-          overall_cgpa: values.overallCgpa,
-          current_arrears: values.currentArrears,
-          history_of_arrears: values.historyOfArrears,
+          programme_level: values.programmeLevel,
+          ug_aggregate_cgpa: values.ugAggregateCgpa,
           technical_skills: values.technicalSkills,
           areas_of_interest: values.areasOfInterest,
           areas_of_expertise: values.areasOfExpertise,
@@ -73,7 +72,37 @@ export function createSupabaseSrfRepository(
         throw new SrfSubmitError(translate(error.code, error.message));
       }
 
-      return { id: data.id as string, status: data.srf_status as Enums["srf_status"] };
+      const studentId = data.id as string;
+
+      /**
+       * Semester lines live in their own table, and are replaced wholesale
+       * rather than merged: the form shows the student's whole academic
+       * record, so what is on screen must be what ends up stored. Merging
+       * would silently keep a line the student deleted.
+       *
+       * Written AFTER the student row, because the per-level cap trigger reads
+       * programme_level from it - inserting first would size a postgraduate's
+       * record against the undergraduate limit.
+       */
+      await client.from("student_semesters").delete().eq("student_id", studentId);
+
+      if (values.semesters.length > 0) {
+        const { error: semesterError } = await client.from("student_semesters").insert(
+          values.semesters.map((s) => ({
+            student_id: studentId,
+            semester_number: s.semesterNumber,
+            cgpa: s.cgpa,
+            current_arrears: s.currentArrears,
+            history_of_arrears: s.historyOfArrears,
+          })),
+        );
+
+        if (semesterError !== null) {
+          throw new SrfSubmitError(translate(semesterError.code, semesterError.message));
+        }
+      }
+
+      return { id: studentId, status: data.srf_status as Enums["srf_status"] };
     },
   };
 }

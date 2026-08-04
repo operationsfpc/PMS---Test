@@ -1,7 +1,7 @@
 import { setSupabaseClient } from "@lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import { SrfSubmitError, submitSrf } from "./srf-api";
 import { SRF_DEFAULTS, type SrfSubmission } from "./srf-schema";
@@ -34,11 +34,26 @@ const values = {
   tenthPercentage: 91.4,
   twelfthPercentage: 88,
   passingYear: 2026,
+  programmeLevel: "ug",
+  ugAggregateCgpa: null,
+  semesters: [{ semesterNumber: 1, cgpa: 8.24, currentArrears: 0, historyOfArrears: 0 }],
   overallCgpa: 8.24,
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
   consent: true,
 } as SrfSubmission;
+
+/**
+ * Submitting writes the student row AND their semester lines (2026-08-04), so
+ * every test here has to let the semester writes through even when it is only
+ * asserting the student row.
+ */
+beforeEach(() => {
+  server.use(
+    http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+    http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+  );
+});
 
 afterEach(() => setSupabaseClient(undefined));
 

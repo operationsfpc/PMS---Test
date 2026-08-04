@@ -1,10 +1,12 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
+import { MAX_SEMESTERS } from "@domain/academics";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useId, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { SrfSubmitError, submitSrf } from "./srf-api";
+import type { SrfProfile } from "./srf-profile";
 import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
 
 /** Student Registration Form — PRD §4.1. */
@@ -76,7 +78,12 @@ function ErrorText({ children }: { children?: string | undefined }) {
 
 const grid = "grid gap-4 sm:grid-cols-2";
 
-export function SrfPage() {
+/**
+ * `profile` is the student's roster record. Name, roll number and email are
+ * not theirs to type - those fields are disabled - so without it the form
+ * cannot be completed at all.
+ */
+export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
   const { signOut } = useAuthActions();
   // Stable ids so React never re-keys an upload control on add/remove.
   const [semesterIds, setSemesterIds] = useState<readonly number[]>([1, 2]);
@@ -92,12 +99,27 @@ export function SrfPage() {
     formState: { errors, isSubmitting },
   } = useForm<SrfFormValues>({
     resolver: zodResolver(srfSchema),
-    defaultValues: SRF_DEFAULTS,
+    defaultValues: {
+      ...SRF_DEFAULTS,
+      ...(profile === null || profile === undefined
+        ? {}
+        : {
+            fullName: profile.fullName,
+            rollNumber: profile.rollNumber,
+            email: profile.email,
+            degree: profile.degree,
+            branch: profile.branch,
+            passingYear: profile.passingYear,
+          }),
+    },
     mode: "onTouched",
   });
 
   const selectedCategories = watch("roleCategories");
   const resumeCategories = watch("resumeCategories");
+  const programmeLevel = watch("programmeLevel");
+  const semesters = watch("semesters");
+  const maxSemesters = MAX_SEMESTERS[programmeLevel];
 
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
@@ -111,7 +133,7 @@ export function SrfPage() {
     }
   });
 
-  const num = (name: keyof SrfFormValues) =>
+  const num = (name: Parameters<typeof register>[0]) =>
     register(name, { setValueAs: (v) => (v === "" ? Number.NaN : Number(v)) });
 
   if (submitted) {
@@ -282,37 +304,141 @@ export function SrfPage() {
                 />
                 <ErrorText>{errors.passingYear?.message}</ErrorText>
               </div>
-              <div>
+            </div>
+
+            {/* Semester-wise since 2026-08-04. Eligibility reads the latest
+                VERIFIED line, so each one is entered and checked separately. */}
+            <fieldset className="mt-6">
+              <legend className="mb-2 text-sm font-medium text-ink-700">
+                Which are you pursuing?
+                <span className="ml-0.5 text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
+              </legend>
+              <div className="flex flex-wrap gap-4">
+                {(
+                  [
+                    ["ug", "Undergraduate (UG)"],
+                    ["pg", "Postgraduate (PG)"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <label key={value} className="flex items-center gap-2 text-sm text-ink-700">
+                    <input
+                      type="radio"
+                      value={value}
+                      checked={programmeLevel === value}
+                      onChange={() => {
+                        setValue("programmeLevel", value, { shouldValidate: true });
+                        // Coming back from PG to UG must not leave a 5th line
+                        // behind that the cap would then reject on submit.
+                        setValue("semesters", semesters.slice(0, MAX_SEMESTERS[value]));
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <ErrorText>{errors.programmeLevel?.message}</ErrorText>
+            </fieldset>
+
+            {programmeLevel === "pg" && (
+              <div className="mt-4 max-w-xs">
                 <TextField
-                  label="Overall CGPA"
+                  label="Undergraduate CGPA"
                   type="number"
                   step="0.01"
                   required
-                  placeholder="e.g. 8.24"
-                  hint="Cumulative across all completed semesters, on a 10-point scale."
-                  {...num("overallCgpa")}
+                  hint="One figure for the degree you have already completed."
+                  error={errors.ugAggregateCgpa?.message}
+                  {...num("ugAggregateCgpa")}
                 />
-                <ErrorText>{errors.overallCgpa?.message}</ErrorText>
               </div>
-              <div>
-                <TextField
-                  label="Current arrears"
-                  type="number"
-                  required
-                  {...num("currentArrears")}
-                />
-                <ErrorText>{errors.currentArrears?.message}</ErrorText>
+            )}
+
+            <div className="mt-6">
+              <p className="mb-2 text-sm font-medium text-ink-700">
+                Semester results
+                <span className="ml-0.5 text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
+              </p>
+              <p className="mb-3 text-xs text-ink-500">
+                CGPA, not GPA: cumulative to the end of each semester, on a 10-point scale. At most{" "}
+                {maxSemesters} for a {programmeLevel === "pg" ? "postgraduate" : "undergraduate"}.
+              </p>
+
+              <div className="flex flex-col gap-3">
+                {semesters.map((semester, index) => (
+                  <div
+                    key={semester.semesterNumber}
+                    className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
+                  >
+                    <TextField
+                      label={`Semester ${semester.semesterNumber} CGPA`}
+                      type="number"
+                      step="0.01"
+                      required
+                      {...num(`semesters.${index}.cgpa`)}
+                    />
+                    <TextField
+                      label={`Semester ${semester.semesterNumber} standing arrears`}
+                      type="number"
+                      required
+                      {...num(`semesters.${index}.currentArrears`)}
+                    />
+                    <TextField
+                      label={`Semester ${semester.semesterNumber} arrear history`}
+                      type="number"
+                      required
+                      hint="Including cleared ones."
+                      {...num(`semesters.${index}.historyOfArrears`)}
+                    />
+                    {semesters.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label={`Remove semester ${semester.semesterNumber}`}
+                        onClick={() =>
+                          setValue(
+                            "semesters",
+                            semesters
+                              .filter((_, i) => i !== index)
+                              // Numbers are positional, so close the gap.
+                              .map((s, i) => ({ ...s, semesterNumber: i + 1 })),
+                            { shouldValidate: true },
+                          )
+                        }
+                        className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div>
-                <TextField
-                  label="History of arrears"
-                  type="number"
-                  required
-                  hint="Total backlogs ever held, including cleared ones."
-                  {...num("historyOfArrears")}
-                />
-                <ErrorText>{errors.historyOfArrears?.message}</ErrorText>
-              </div>
+
+              <ErrorText>{errors.semesters?.message ?? errors.semesters?.root?.message}</ErrorText>
+
+              {semesters.length < maxSemesters && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setValue("semesters", [
+                      ...semesters,
+                      {
+                        semesterNumber: semesters.length + 1,
+                        cgpa: Number.NaN,
+                        currentArrears: 0,
+                        historyOfArrears: 0,
+                      },
+                    ])
+                  }
+                  className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+                >
+                  Add semester
+                </button>
+              )}
             </div>
           </Section>
 

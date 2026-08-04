@@ -234,7 +234,7 @@ describe("App routing", () => {
     expect(screen.getByRole("heading", { level: 1, name: /welcome back/i })).toBeDefined();
   });
 
-  it("renders the SRF outside the app shell, with its own chrome", () => {
+  it("renders the SRF outside the app shell, with its own chrome", async () => {
     render(
       <AuthContext.Provider value={signedIn("student")}>
         <MemoryRouter initialEntries={["/srf"]}>
@@ -242,8 +242,10 @@ describe("App routing", () => {
         </MemoryRouter>
       </AuthContext.Provider>,
     );
+    // The route loads the student's roster record first, so the form arrives
+    // asynchronously - identity is prefilled, never typed.
     expect(
-      screen.getByRole("heading", { level: 1, name: /student registration form/i }),
+      await screen.findByRole("heading", { level: 1, name: /student registration form/i }),
     ).toBeDefined();
     // No role switcher: the SRF is a focused, full-bleed page.
     expect(screen.queryByLabelText(/preview as/i)).toBeNull();
