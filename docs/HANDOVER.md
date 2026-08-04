@@ -1,11 +1,13 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `f12bb6d`. **949 tests passing across 77 files**, plus
+Last updated at commit `c31c0b7`. **1093 tests passing across 85 files**, plus
 **1 Playwright journey** (verified by running them, not remembered).
 
-**Live:** <https://fpc-pms.faceprep.workers.dev> (version `42d938fe`) · database on
-Supabase ap-south-1 · migrations `0001`–`0017`, local == remote.
+**Live:** <https://fpc-pms.faceprep.workers.dev> · database on Supabase
+ap-south-1 · migrations `0001`–`0019`. ⚠️ **`0018` and `0019` have NOT been
+pushed to Mumbai yet, and this session's code has NOT been deployed.** Run
+`pnpm db:push` then `pnpm deploy`.
 
 ---
 
@@ -22,59 +24,105 @@ Make reasonable assumptions and keep moving; mark them
 
 ## 1. 🔴 The immediate next step
 
-**Two dashboards were asked for and are NOT built. Do these next.**
+**Ship what is built.** `pnpm db:push` (migrations `0018`, `0019`) then
+`pnpm deploy`. The two new screens are live in the repo and nowhere else.
 
-### (a) The student dashboard — `/student` is still a mock
+Then, in order:
 
-`src/features/student/student-dashboard.tsx` is hardcoded JSX: *"Welcome back,
-Priya"*, a fabricated Freshworks offer, a fake "Download offer letter" button.
-It is **the student's landing route** (`landingRouteForRole("student")`), so it
-is the first thing every student sees, and it is live in production.
+1. **`pnpm check` is still red** — functions 79.78% (needs 80) and branches
+   66.06% (needs 80). It was red *before* this session too, proved against a
+   clean `f12bb6d` worktree: lines were 77.62%, now 81.49%. The gap is almost
+   entirely `*-route.tsx` wrappers and the `*-view.ts` files that have never
+   been tested at all: `cockpit-view` 3%, `shortlist-view` 3%, `publish-view`
+   7%, `participation-view` 3%, `attendance-view` 17%. `src/domain` is at 100%
+   and must stay there. Take one view per sitting, MSW-stubbed, the way
+   `dashboard-view.test.ts` now does it.
+2. **Per-semester marksheet uploads** tied to `student_semesters.marksheet_id`.
+   The uploads exist; nothing attaches them to the semester row they evidence.
+3. **Playwright journeys for the other roles.** The student journey is the only
+   one, and it is the only thing that proves the wiring.
+4. **Result corrections** (A15) and the notifications UI (blocked on P1).
 
-Build it the way every other real screen is built: a `StudentDashboardView`
-interface, a `createSupabaseStudentDashboardView`, a route wrapper. It should
-show the student's **own** SRF status, their semester record, drives they have
-applied to, their rounds and their offers.
+---
 
-The SRF half of this is already done — `SrfRoute` prefills identity from the
-roster (`srf-profile.ts`). Follow that shape.
+## 1a. What was built on 2026-08-05
 
-### (b) Delivery Head and Account Executive dashboards
+**Both dashboards that §1 asked for, and the RLS defect that blocked them.**
 
-Requested 2026-08-04: *"they should be able to see all drives they have
-raised/approved, applicants to the drive, the progress of the drives"*.
+| Commit | What |
+|---|---|
+| `0f4911f` | **Campus scoping finished** (`0018`) |
+| `dfd8d44` | **Student dashboard on real data** |
+| `971dbd3` | **Drive portfolio for the Delivery Head and the AE** (`0019`) |
+| `8751800` | Open-drive count now runs R5 instead of counting live drives |
+| `c31c0b7` | Tests for the shared reporting view; assumptions recorded |
 
-Neither role has a dashboard. Both currently get the **Drive cockpit**
-(`/central/drives`), which shows drives + rounds + application counts, but not
-"raised by me" / "approved by me", and no applicant list.
+### The RLS fix — answers the question §7 was blocked on
 
-`/dashboard` already exists and is REAL (`dashboard-view.ts`) — placement
-statistics, campus-scopable. It serves CEO, ER Head, Campus Manager, KAM, ER.
-Consider extending it rather than building a sixth variant; `DashboardRoute`
-already labels it per role.
+**Confirmed by the user: "a key account manager takes care of a few campuses;
+campuses have to be mapped to a key account manager."** So a KAM is
+campus-scoped. `staff_campus_assignments` already held the mapping and
+`requiresCampusAssignment()` already collected it at invitation time — no
+policy ever read it, so a KAM could read **zero** students.
 
-### ⚠️ Before building (a) or (b), fix this — it is a live defect
+Fixing that exposed the bigger hole. `students` was campus-filtered;
+`applications`, `offers`, `student_documents` and `student_semesters` were
+**not**, so any campus role could read every row in all four — and an
+application carries `profile_snapshot`, a frozen copy of the entire profile.
+Campus-scoping the student row while leaving the application open scoped
+nothing.
 
-`is_campus_staff()` in `0008_rls.sql` is **`campus_placement_coordinator` and
-`campus_manager` only**. `is_org_reader()` is **admin, central CPC, delivery
-head, ceo, er_head**.
+`0018` now separates reading from writing:
 
-So **`key_account_manager` and `enterprise_relations` match NEITHER**. They can
-read **zero students**. Both already have a nav link to `/dashboard`, which will
-render all zeros for them and look broken.
+- `is_campus_reader()` — CPC, Campus Manager, **KAM** → select, campus-scoped
+- `is_campus_staff()` — CPC, Campus Manager → write, campus-scoped
+- `my_student_ids()` scopes all four tables plus self-placement requests
+- **A29:** `enterprise_relations` reads organisation-wide, mirroring `er_head`
+- **A30:** the AE who *raised* a drive may read its applications, shortlist and
+  offers — that drive only, select-only (`0019`)
 
-This is **latent, not yet visible**: no KAM or ER profile exists on the live
-project today (checked). It bites the moment one is invited.
+All of it is proved as a real user in `src/db/campus-scope.test.ts` (21 tests).
 
-Worse, `requiresCampusAssignment()` in `src/domain/staff.ts` **does** include
-`key_account_manager` — so a KAM is given campus assignments that no policy ever
-consults. Decide whether KAM is campus-scoped (likely, then add it to
-`is_campus_staff()`) or org-wide, and write the RLS test first.
+### (a) The student dashboard — `/student`
 
-`DashboardRoute` passes **no** `campusIds` and relies entirely on RLS for
-scoping. That is the right design, but it means the RLS above is the ONLY thing
-preventing a Campus Manager from seeing another campus's students. Untested RLS
-is a data breach (CLAUDE.md).
+Was hardcoded JSX: *"Welcome back, Priya"*, a fabricated Freshworks offer, a
+"Download offer letter" button that downloaded nothing.
+
+Now `StudentDashboardView` + `createSupabaseStudentDashboardView` + a route
+wrapper. Their own identity, SRF state, semester record, applications with
+every round of the drive, offers, and absences against `ABSENCE_LIMIT`.
+
+New domain rules in `src/domain/student-progress.ts` (100% covered):
+- `applicationProgress()` — offer > rejection > waitlist/hold > cleared
+  everything > current round > applied. "Cleared every round but no offer yet"
+  is its own state; saying "Round 3 of 3" there would be a lie.
+- `studentPrompt()` — the one thing to do next. Participation is asked *before*
+  the SRF, so an opted-out student is never nagged to finish a form.
+
+Rounds are keyed by **application id**, so no student is ever shown another's
+result. `openDrives` runs R5 through `drives-view`, so "3 drives are open to
+you" means three they can actually apply to.
+
+### (b) The Delivery Head / AE portfolio — `/my-drives`
+
+Requested 2026-08-04: *"all drives they have raised/approved, applicants to the
+drive, the progress of the drives"*. Approving a PIF used to be the last a
+Delivery Head saw of it.
+
+One screen for both roles, filtered by raised / approved / all. Per drive: the
+lifecycle phase and a progress bar, rounds decided out of total, an on-hold
+flag, a five-stage funnel, and an applicant list on demand.
+
+New domain rules in `src/domain/drive-portfolio.ts` (100% covered):
+- `involvementIn()` — every hat one person wore, in pipeline order
+- `driveProgress()` — position on the pipeline. A **rejected** drive comes off
+  it rather than reading "14% done"
+- `summariseFunnel()` — counted with the *same* `applicationProgress` the
+  student sees, so the two screens cannot disagree about one applicant
+
+Applicants are named from `profile_snapshot`, never the live student row (PRD
+§7.3) — which is also the only reason an AE, who cannot read `students`, can
+see who applied.
 
 ---
 
@@ -96,6 +144,13 @@ is a data breach (CLAUDE.md).
 ---
 
 ## 3. Confirmed decisions — later answers override earlier ones
+
+**Added 2026-08-05:**
+
+| # | Decision |
+|---|---|
+| **KAM scope** | A Key Account Manager **looks after a few campuses**, and campuses are **mapped** to them. Campus-scoped, and **read-only**: a KAM does not verify marksheets or mark attendance |
+| **DH / AE** | Both get `/my-drives` — their own drives, the applicants, and the progress. The Delivery Head also gets the placement overview they had no link to |
 
 Unchanged decisions are in `git log` and `docs/ASSUMPTIONS.md`. **Changed or
 added on 2026-08-04:**
@@ -124,6 +179,12 @@ added on 2026-08-04:**
   mid-session and destroyed ~7 tests I had just written. Commit first.
 - **PGlite runs as superuser, so it bypasses RLS.** A schema test passing does
   not prove a policy works for a real user — use `t.asUser(...)`.
+- **A count query is a `HEAD` request.** `select(..., { head: true })` is not
+  matched by an `http.get` handler, and MSW's unhandled-request error surfaces
+  as a 5-second test timeout, not as a failure that names the cause.
+- **Nested `aria-label`s collide.** `getByRole("region", { name: /zoho/i })`
+  matched both a drive and its applicant list. A string name matches exactly;
+  a regex does not.
 - **MSW is `onUnhandledRequest: "error"`.** Adding a write to a repository
   breaks every existing test that stubs only the old call. Add the new
   handler to the shared helper, not to each test.
@@ -137,7 +198,7 @@ added on 2026-08-04:**
 
 ---
 
-## 5. Live database state (checked this session)
+## 5. Live database state (last checked 2026-08-04 — NOT re-checked this session)
 
 ```
 students 3 · drives 1 · staff 5 · student_semesters 0 · applications 0
@@ -160,8 +221,8 @@ students 3 · drives 1 · staff 5 · student_semesters 0 · applications 0
 ## 6. Not built yet
 
 **Screens missing, rules and repositories present:**
-- Student dashboard on real data (§1a)
-- Delivery Head / AE dashboards (§1b)
+- ~~Student dashboard on real data~~ **built 2026-08-05**
+- ~~Delivery Head / AE dashboards~~ **built 2026-08-05**
 - Per-semester **marksheet** uploads tied to their semester row (the uploads
   exist but are not attached to `student_semesters.marksheet_id`)
 - Recruiter export UI + XLSX/ZIP (`buildRecruiterExport` is done) — **needs a
@@ -185,7 +246,6 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 | **P2** | Approve a spreadsheet library (SheetJS/ExcelJS) for `.xlsx` roster import and the recruiter export |
 | **P3** | The skill-repository score schema (R11 ranking is invented — A12) |
 | **P7** | Google OAuth verification if >100 users are expected |
-| **new** | Is **KAM campus-scoped or org-wide?** Blocks §1's RLS fix |
 | **new** | A27: a PG student's UG aggregate is stored as **CGPA on the 10-point scale**, not a percentage. Cheap to reverse now |
 
 ---
@@ -196,7 +256,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 949 passing across 77 files
+pnpm test:run        # expect 1093 passing across 85 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -204,4 +264,4 @@ pnpm dev             # localhost:5173
 Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session; **neither is automatic** — committing does not deploy.
 
-Git is **local only**, no remote. 61 commits, working tree clean.
+Git is **local only**, no remote. 66 commits, working tree clean.
