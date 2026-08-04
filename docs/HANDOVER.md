@@ -1,13 +1,13 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `344d424`. **1318 tests passing across 97 files**, plus
-**1 Playwright journey** (verified by running them, not remembered).
+Last updated at commit `e733062`-deploy. **1407 tests passing across 101 files**,
+plus **1 Playwright journey** (verified by running them, not remembered).
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
-(version `fda30ffd-604a-4981-b1d1-b8d1fbf62a70`) · database on Supabase
-ap-south-1 · migrations `0001`–`0019`, **local == remote** (`supabase migration
+(version `e733062e-e267-4243-b384-d68226683151`) · database on Supabase
+ap-south-1 · migrations `0001`–`0022`, **local == remote** (`supabase migration
 list --linked`).
 
 Verified after shipping, not assumed:
@@ -29,6 +29,44 @@ failing test. Never edit a test to fit broken code. Never `.skip` to go green.
 Make reasonable assumptions and keep moving; mark them
 `⚠️ ASSUMPTION — UNCONFIRMED` at the call site and list them in
 `docs/ASSUMPTIONS.md`.
+
+---
+
+## 1a. UAT round 1 — all six items fixed and shipped (2026-08-05)
+
+| # | Reported | Fix |
+|---|---|---|
+| 1 | Registration form not submitting | `0020` — **it never could** |
+| 2 | No way back to Home or previous sections | Progress pills are links, sections have anchors, header links to the dashboard |
+| 3 | Off-campus offer letter not mandatory | `0022` — required in DB, domain and UI; coordinator gets a signed link |
+| 4 | Progress tracker not reflecting real progress | `src/domain/srf-progress.ts`; it was hardcoded |
+| 5 | No draft / auto-save | `0021` — debounced auto-save + a **Save draft button that did nothing before** |
+| 6 | Opt-out declaration not mandatory | `0022` — same shape as (3), photographs accepted |
+
+### Why (1) happened, because it will happen again
+
+`protect_verified_academics` (0009) refused any student change to
+`tenth_percentage`, `twelfth_percentage` or `srf_status`. The SRF writes all
+three in one statement, so **every submission had always failed**.
+
+Nothing caught it because the layers were tested apart: `srf-repository` against
+MSW, which has no triggers, and the trigger with raw SQL that never resembled a
+submission. `src/db/srf-submission.test.ts` is now that missing middle — the
+exact statement the repository issues, run as the student who issues it.
+**When you add a write a student performs, test it there too.**
+
+The guard's intent was right and is unchanged; it just never distinguished
+*declaring* marks from *changing verified* ones. Before verification the figures
+are the student's to correct; after `srf_approved` they are the coordinator's.
+
+### Live data to chase
+
+- **One `self_placement_request` predates the offer-letter requirement.** Both
+  new constraints are `NOT VALID` so it survives; a coordinator should ask that
+  student for their letter, or reject it.
+- Students on the live project: 3, none `srf_approved`. Now that submission
+  works, getting one through SRF → verification proves the chain for the first
+  time.
 
 ---
 
@@ -248,6 +286,13 @@ added on 2026-08-04:**
   mid-session and destroyed ~7 tests I had just written. Commit first.
 - **PGlite runs as superuser, so it bypasses RLS.** A schema test passing does
   not prove a policy works for a real user — use `t.asUser(...)`.
+- **`cmd | grep` returns GREP's exit code.** `pnpm test:run | grep Tests && git commit`
+  will happily commit a red suite — it did, on 2026-08-05. Redirect to a file
+  and check `$?`, or use `set -o pipefail`.
+- **The suite is capped at 4 workers** (`vitest.config.ts`). Thirteen files
+  start a PostgreSQL in WASM; one worker per core drove the 8GB machine into
+  memory pressure and jsdom tests stalled past their timeout. Uncapping it
+  brings the flakiness straight back — and capping made the run *faster*.
 - **A missing asset path returns `index.html` with HTTP 200.** Verifying a
   deploy with `curl .../assets/<wrong-name>.js | grep -c` therefore reports 0
   for everything and looks like a broken deploy. Read the asset name out of the
