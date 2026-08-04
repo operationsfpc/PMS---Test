@@ -1,11 +1,56 @@
 import type { PlacementCtc } from "@domain/ctc-statistics";
 import { type Offer, resolvePlacementRecord } from "@domain/offers";
-import type { DriveType, ParticipationStatus, SrfStatus } from "@domain/types";
+import type {
+  AcademicProfile,
+  DriveStatus,
+  DriveType,
+  ParticipationStatus,
+  SrfStatus,
+} from "@domain/types";
+import { isDriveVisibleToStudent, type VisibleDrive } from "@domain/visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CampusBreakdown, DashboardSnapshot, DashboardView } from "./dashboard-page";
+import type {
+  CampusBreakdown,
+  DashboardSnapshot,
+  DashboardView,
+  LiveDrive,
+} from "./dashboard-page";
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
+
+const rows = (value: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
+
+/** Names out of an embedded link table, e.g. drive_eligible_degrees(degrees(name)). */
+const linkedNames = (value: unknown, key: string): readonly string[] =>
+  rows(value)
+    .map((row) => one<{ name?: string }>(row[key])?.name)
+    .filter((name): name is string => typeof name === "string" && name !== "");
+
+/**
+ * Exported so src/db/query-contract.test.ts can prove it against the real schema.
+ *
+ * The link tables are the drive's targeting. Without them every targeted drive
+ * would count the whole roster as eligible - see the same fix in drives-view.
+ */
+export const DASHBOARD_LIVE_DRIVE_COLUMNS = `
+  id, company_name, role_title, status, drive_type, offer_category,
+  open_to_all_override, application_start, application_end,
+  min_overall_cgpa, min_tenth_percentage, min_twelfth_percentage,
+  arrears_policy, eligible_passing_years,
+  drive_eligible_degrees(degrees(name)),
+  drive_eligible_branches(branches(name)),
+  drive_target_campuses(campuses(name, cities(name)))
+`;
+
+/** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
+export const DASHBOARD_COHORT_COLUMNS = `
+  id, participation_status, srf_status, campus_id, passing_year,
+  overall_cgpa, tenth_percentage, twelfth_percentage,
+  current_arrears, history_of_arrears,
+  degrees(name), branches(name), campuses(name, cities(name))
+`;
 
 /** Drive types that count as an on-campus PLACEMENT. An internship is not one. */
 const PLACEMENT_TYPES = new Set(["placement", "internship_convertible"]);
@@ -23,12 +68,12 @@ const PLACEMENT_TYPES = new Set(["placement", "internship_convertible"]);
 export function createSupabaseDashboardView(
   client: SupabaseClient,
   campusIds?: readonly string[],
+  /** Injected so the drive clock is testable; never read inside a component. */
+  clock: () => Date = () => new Date(),
 ): DashboardView {
   return {
     async snapshot(): Promise<DashboardSnapshot> {
-      const studentQuery = client
-        .from("students")
-        .select("id, participation_status, srf_status, campus_id, campuses(name)");
+      const studentQuery = client.from("students").select(DASHBOARD_COHORT_COLUMNS);
 
       const { data: students } =
         campusIds === undefined || campusIds.length === 0
@@ -50,8 +95,13 @@ export function createSupabaseDashboardView(
         client.from("drives").select("status"),
         studentIds.length === 0
           ? Promise.resolve({ data: [] })
-          : client.from("applications").select("student_id").in("student_id", studentIds),
+          : client.from("applications").select("student_id, drive_id").in("student_id", studentIds),
       ]);
+
+      const { data: openDrives } = await client
+        .from("drives")
+        .select(DASHBOARD_LIVE_DRIVE_COLUMNS)
+        .eq("status", "live");
 
       const onCampus = new Set<string>();
       const selfPlaced = new Set<string>();
@@ -126,6 +176,86 @@ export function createSupabaseDashboardView(
         });
       }
 
+      /**
+       * "Eligible" is the honest R5 number: the students this drive is
+       * actually open to. Counting the roster instead would make every
+       * conversion look terrible and every targeted drive look ignored.
+       *
+       * Run over the students this viewer can read, so a Campus Manager's
+       * eligible count is their campus - the same scoping as every other
+       * figure on the screen.
+       */
+      const contexts = studentRows.map((row) => {
+        const campus = one<{ name?: string; cities?: unknown }>(row.campuses);
+        const academics: AcademicProfile = {
+          degree: one<{ name?: string }>(row.degrees)?.name ?? "",
+          branch: one<{ name?: string }>(row.branches)?.name ?? "",
+          passingYear: Number(row.passing_year ?? 0),
+          overallCgpa: Number(row.overall_cgpa ?? 0),
+          tenthPercentage: Number(row.tenth_percentage ?? 0),
+          twelfthPercentage: Number(row.twelfth_percentage ?? 0),
+          currentArrears: Number(row.current_arrears ?? 0),
+          historyOfArrears: Number(row.history_of_arrears ?? 0),
+          city: one<{ name?: string }>(campus?.cities)?.name ?? "",
+          campus: campus?.name ?? "",
+        };
+
+        return {
+          srfStatus: (row.srf_status as SrfStatus | null) ?? "invited",
+          participationStatus: (row.participation_status as ParticipationStatus) ?? "active",
+          academics,
+          offers: offersByStudent.get(row.id as string) ?? [],
+        };
+      });
+
+      const appliedRows = (applications ?? []) as Array<Record<string, unknown>>;
+      const offerRows = (offers ?? []) as Array<Record<string, unknown>>;
+
+      const liveDrives: LiveDrive[] = rows(openDrives).map((row): LiveDrive => {
+        const driveId = row.id as string;
+        const start = row.application_start as string | null;
+        const end = row.application_end as string | null;
+
+        const drive: VisibleDrive = {
+          id: driveId,
+          status: (row.status as DriveStatus | null) ?? "live",
+          driveType: (row.drive_type as DriveType | null) ?? "placement",
+          offerCategory: (row.offer_category as VisibleDrive["offerCategory"]) ?? null,
+          openToAllOverride: Boolean(row.open_to_all_override),
+          // R5 itself never reads the window; canApply does. Any instant is
+          // therefore safe here, and the epoch is the honest placeholder.
+          applicationStart: new Date(start ?? 0),
+          applicationEnd: new Date(end ?? 0),
+          criteria: {
+            eligibleDegrees: linkedNames(row.drive_eligible_degrees, "degrees"),
+            eligibleBranches: linkedNames(row.drive_eligible_branches, "branches"),
+            eligiblePassingYears: (row.eligible_passing_years as number[]) ?? [],
+            minOverallCgpa: (row.min_overall_cgpa as number | null) ?? null,
+            minTenthPercentage: (row.min_tenth_percentage as number | null) ?? null,
+            minTwelfthPercentage: (row.min_twelfth_percentage as number | null) ?? null,
+            arrearPolicy: (row.arrears_policy as "flexible") ?? "flexible",
+            targetCities: rows(row.drive_target_campuses)
+              .map(
+                (c) => one<{ name?: string }>(one<{ cities?: unknown }>(c.campuses)?.cities)?.name,
+              )
+              .filter((name): name is string => typeof name === "string" && name !== ""),
+            targetCampuses: linkedNames(row.drive_target_campuses, "campuses"),
+          },
+        };
+
+        return {
+          driveId,
+          companyName: (row.company_name as string | null) ?? "Unnamed drive",
+          roleTitle: (row.role_title as string | null) ?? null,
+          applicationStart: start,
+          applicationEnd: end,
+          eligible: contexts.filter((student) => isDriveVisibleToStudent(student, drive).visible)
+            .length,
+          applied: appliedRows.filter((a) => a.drive_id === driveId).length,
+          offers: offerRows.filter((o) => o.drive_id === driveId).length,
+        };
+      });
+
       // R9 decides which offer is the student's placement, so the package
       // figures and the placed count can never disagree.
       const placements: PlacementCtc[] = [];
@@ -145,6 +275,8 @@ export function createSupabaseDashboardView(
           hasSelfPlacement: selfPlaced.has(row.id as string),
         })),
         placements,
+        liveDrives,
+        now: clock().toISOString(),
         drivesByStatus,
         offersByCategory,
         campuses: [...campusTotals.values()].sort((a, b) =>

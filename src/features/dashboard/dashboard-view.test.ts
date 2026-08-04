@@ -45,7 +45,13 @@ function stub(
       return HttpResponse.json(opts.students ?? [student()]);
     }),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
-    http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [])),
+    http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
+      const all = (opts.drives ?? []) as Array<Record<string, unknown>>;
+      // The live-drive query filters server-side; emulate it, or the assertion
+      // that only open drives are listed would pass whatever the code did.
+      const status = new URL(request.url).searchParams.get("status");
+      return HttpResponse.json(status === "eq.live" ? all.filter((d) => d.status === "live") : all);
+    }),
     http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json(opts.applications ?? [])),
   );
 
@@ -283,5 +289,151 @@ describe("the funnel and package inputs", () => {
     stub();
 
     expect((await createSupabaseDashboardView(client()).snapshot()).placements).toEqual([]);
+  });
+});
+
+/**
+ * Live drives: eligible, applied, offers.
+ *
+ * "Eligible" is the honest R5 number — the students the drive is actually open
+ * to — not "everyone on the roster". Counting the roster would make every
+ * conversion look terrible and every targeted drive look ignored.
+ */
+describe("live drive figures", () => {
+  const LIVE_DRIVE = {
+    id: "d1",
+    company_name: "Zoho Corporation",
+    role_title: "MTS",
+    status: "live",
+    drive_type: "placement",
+    offer_category: "dream",
+    open_to_all_override: false,
+    application_start: "2026-09-01T00:00:00Z",
+    application_end: "2026-09-10T00:00:00Z",
+    min_overall_cgpa: null,
+    min_tenth_percentage: null,
+    min_twelfth_percentage: null,
+    arrears_policy: "flexible",
+    eligible_passing_years: [],
+    drive_eligible_degrees: [],
+    drive_eligible_branches: [],
+    drive_target_campuses: [],
+  };
+
+  const eligibleStudent = (over: Record<string, unknown> = {}) =>
+    student({
+      srf_status: "srf_approved",
+      passing_year: 2026,
+      overall_cgpa: 8.4,
+      tenth_percentage: 90,
+      twelfth_percentage: 88,
+      current_arrears: 0,
+      history_of_arrears: 0,
+      degrees: { name: "B.E" },
+      branches: { name: "CSE" },
+      campuses: { name: "Alliance University", cities: { name: "Chennai" } },
+      ...over,
+    });
+
+  it("counts the students a live drive is genuinely open to", async () => {
+    stub({
+      students: [eligibleStudent(), eligibleStudent({ id: "s2" })],
+      drives: [LIVE_DRIVE],
+    });
+
+    const [drive] = (await createSupabaseDashboardView(client()).snapshot()).liveDrives;
+
+    expect(drive?.eligible).toBe(2);
+  });
+
+  it("does not count a student whose form is not verified", async () => {
+    stub({
+      students: [eligibleStudent(), eligibleStudent({ id: "s2", srf_status: "srf_submitted" })],
+      drives: [LIVE_DRIVE],
+    });
+
+    expect((await createSupabaseDashboardView(client()).snapshot()).liveDrives[0]?.eligible).toBe(
+      1,
+    );
+  });
+
+  it("does not count a student the drive's cutoff excludes", async () => {
+    stub({
+      students: [eligibleStudent(), eligibleStudent({ id: "s2", overall_cgpa: 5 })],
+      drives: [{ ...LIVE_DRIVE, min_overall_cgpa: 7 }],
+    });
+
+    expect((await createSupabaseDashboardView(client()).snapshot()).liveDrives[0]?.eligible).toBe(
+      1,
+    );
+  });
+
+  it("does not count a student at a campus the drive does not target", async () => {
+    stub({
+      students: [eligibleStudent()],
+      drives: [
+        {
+          ...LIVE_DRIVE,
+          drive_target_campuses: [
+            { campuses: { name: "VIT Bangalore", cities: { name: "Bengaluru" } } },
+          ],
+        },
+      ],
+    });
+
+    expect((await createSupabaseDashboardView(client()).snapshot()).liveDrives[0]?.eligible).toBe(
+      0,
+    );
+  });
+
+  it("counts applications and offers against the drive they belong to", async () => {
+    stub({
+      students: [eligibleStudent()],
+      drives: [LIVE_DRIVE],
+      applications: [
+        { student_id: "s1", drive_id: "d1" },
+        { student_id: "s1", drive_id: "other" },
+      ],
+      offers: [
+        {
+          id: "o1",
+          student_id: "s1",
+          drive_id: "d1",
+          source: "on_campus",
+          drive_type: "placement",
+          offer_category: "dream",
+          ctc_lpa: "9.00",
+          declared_at: "2026-06-01T00:00:00Z",
+        },
+      ],
+    });
+
+    const [drive] = (await createSupabaseDashboardView(client()).snapshot()).liveDrives;
+
+    expect(drive?.applied).toBe(1);
+    expect(drive?.offers).toBe(1);
+  });
+
+  it("lists only drives that are open, not every drive ever raised", async () => {
+    stub({
+      students: [eligibleStudent()],
+      drives: [LIVE_DRIVE, { ...LIVE_DRIVE, id: "d2", status: "completed" }],
+    });
+
+    const { liveDrives } = await createSupabaseDashboardView(client()).snapshot();
+
+    expect(liveDrives.map((d) => d.driveId)).toEqual(["d1"]);
+  });
+
+  it("stamps the snapshot with the instant it was taken", async () => {
+    stub({ drives: [] });
+
+    const snapshot = await createSupabaseDashboardView(
+      client(),
+      undefined,
+      () => new Date("2026-09-05T10:00:00Z"),
+    ).snapshot();
+
+    expect(snapshot.now).toBe("2026-09-05T10:00:00.000Z");
   });
 });

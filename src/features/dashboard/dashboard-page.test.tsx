@@ -39,6 +39,19 @@ const SNAPSHOT: DashboardSnapshot = {
   ],
   placements: [{ studentId: "a", ctcLpa: 9, category: "dream" }],
   drivesByStatus: { live: 2, in_rounds: 1, completed: 4 },
+  liveDrives: [
+    {
+      driveId: "d1",
+      companyName: "Zoho Corporation",
+      roleTitle: "Member Technical Staff",
+      applicationStart: "2026-09-01T00:00:00.000Z",
+      applicationEnd: "2026-09-10T00:00:00.000Z",
+      eligible: 120,
+      applied: 30,
+      offers: 3,
+    },
+  ],
+  now: "2026-09-05T10:00:00.000Z",
   offersByCategory: { regular: 3, dream: 2, super_dream: 1 },
   campuses: [
     { campusId: "c1", campusName: "Alliance University", eligible: 2, placed: 1 },
@@ -108,6 +121,8 @@ describe("DashboardPage", () => {
           drivesByStatus: {},
           offersByCategory: {},
           campuses: [],
+          liveDrives: [],
+          now: "2026-09-05T10:00:00.000Z",
         })}
       />,
     );
@@ -223,5 +238,100 @@ describe("the package figures", () => {
 
     expect(within(packages).getByText(/no packages yet/i)).toBeDefined();
     expect(within(packages).queryByText("₹0 LPA")).toBeNull();
+  });
+});
+
+/**
+ * Live drive data, requested 2026-08-05: "drives completed, number of offers
+ * got in drives, open drives time left, number of eligible to applied
+ * students".
+ *
+ * The clock and the conversion both come from src/domain/drive-analytics.ts,
+ * and `now` is passed in rather than read from the browser — a coordinator's
+ * laptop clock is not the authority on when applications close.
+ */
+describe("live drives", () => {
+  it("counts how many drives have completed", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    const headline = await screen.findByRole("region", { name: /headline/i });
+    expect(within(headline).getByText(/drives completed/i)).toBeDefined();
+    expect(within(headline).getByText("4")).toBeDefined();
+  });
+
+  it("shows each open drive with the time left to apply", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText("Zoho Corporation")).toBeDefined();
+    expect(within(live).getByText("4 days left")).toBeDefined();
+  });
+
+  it("shows how many eligible students actually applied", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText(/30 of 120 eligible/i)).toBeDefined();
+    expect(within(live).getByText("25%")).toBeDefined();
+  });
+
+  it("shows the offers that came out of the drive", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    const row = within(live).getByText("Zoho Corporation").closest("li");
+    if (row === null) throw new Error("row not found");
+
+    expect(row.textContent).toContain("3 offers");
+  });
+
+  it("marks a drive closing within two days as urgent", async () => {
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          liveDrives: [
+            {
+              ...(SNAPSHOT.liveDrives[0] as (typeof SNAPSHOT.liveDrives)[number]),
+              applicationEnd: "2026-09-06T09:00:00.000Z",
+            },
+          ],
+        })}
+      />,
+    );
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText(/closing soon/i)).toBeDefined();
+  });
+
+  it("says a drive with no window set is unscheduled, rather than closed", async () => {
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          liveDrives: [
+            {
+              ...(SNAPSHOT.liveDrives[0] as (typeof SNAPSHOT.liveDrives)[number]),
+              applicationStart: null,
+              applicationEnd: null,
+            },
+          ],
+        })}
+      />,
+    );
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText(/no application window set/i)).toBeDefined();
+  });
+
+  it("says so when no drive is open, rather than showing an empty list", async () => {
+    render(
+      <DashboardPage title="Executive overview" view={view({ ...SNAPSHOT, liveDrives: [] })} />,
+    );
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText(/no drives are open/i)).toBeDefined();
   });
 });

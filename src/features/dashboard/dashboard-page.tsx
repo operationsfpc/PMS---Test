@@ -1,5 +1,6 @@
-import { Card, PageHeader, StatCard } from "@components/ui";
+import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
+import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
 import { registrationFunnel } from "@domain/registration-funnel";
 import { computePlacementStats, type StudentPlacementFacts } from "@domain/statistics";
 import type { SrfStatus } from "@domain/types";
@@ -23,8 +24,27 @@ export type DashboardStudent = StudentPlacementFacts & {
   readonly hasApplied: boolean;
 };
 
+export interface LiveDrive {
+  readonly driveId: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly applicationStart: string | null;
+  readonly applicationEnd: string | null;
+  /** Students this drive is actually open to, judged by R5. */
+  readonly eligible: number;
+  readonly applied: number;
+  readonly offers: number;
+}
+
 export interface DashboardSnapshot {
   readonly students: readonly DashboardStudent[];
+  readonly liveDrives: readonly LiveDrive[];
+  /**
+   * The instant the snapshot was taken, ISO. Passed in rather than read from
+   * the browser: a laptop clock is not the authority on when a drive closes,
+   * and a component that calls Date.now() cannot be tested.
+   */
+  readonly now: string;
   /**
    * One entry per PLACED student, already reduced to their placement record
    * (R9) by the view. Never one per offer - see src/domain/ctc-statistics.ts.
@@ -106,7 +126,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
         </Card>
       ) : (
         <>
-          <section aria-label="Headline" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <section aria-label="Headline" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard label="Placement rate" value={`${stats.placementRate}%`} tone="brand" />
             <StatCard
               label="Placed on campus"
@@ -114,7 +134,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               hint={`of ${stats.eligible} eligible`}
             />
             <StatCard label="Self-placed" value={stats.selfPlaced} tone="warning" />
+            {/* Opt-outs leave the placement denominator, so the number they
+                leave by is reported rather than quietly absorbed. */}
             <StatCard label="Opted out" value={stats.optedOut} />
+            <StatCard
+              label="Drives completed"
+              value={snapshot.drivesByStatus.completed ?? 0}
+              hint={`${snapshot.liveDrives.length} open now`}
+            />
           </section>
 
           <div className="mb-6 grid gap-6 lg:grid-cols-2">
@@ -235,6 +262,71 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               </section>
             </Card>
           </div>
+
+          <Card className="mt-6 p-5">
+            <section aria-label="Open drives">
+              <h2 className="text-lg text-ink-900">Open drives</h2>
+              {snapshot.liveDrives.length === 0 ? (
+                <p className="mt-3 text-sm text-ink-700">
+                  No drives are open right now. Published drives appear here with the time left to
+                  apply.
+                </p>
+              ) : (
+                <ul className="mt-3 divide-y divide-line">
+                  {snapshot.liveDrives.map((drive) => {
+                    const window = applicationWindow(
+                      {
+                        start:
+                          drive.applicationStart === null ? null : new Date(drive.applicationStart),
+                        end: drive.applicationEnd === null ? null : new Date(drive.applicationEnd),
+                      },
+                      new Date(snapshot.now),
+                    );
+                    const outcome = driveOutcome(drive);
+
+                    return (
+                      <li key={drive.driveId} className="py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink-900">{drive.companyName}</p>
+                            {drive.roleTitle !== null && (
+                              <p className="text-sm text-ink-500">{drive.roleTitle}</p>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {window.urgent && <Badge tone="danger">Closing soon</Badge>}
+                            <Badge tone={window.state === "open" ? "brand" : "neutral"}>
+                              {window.label}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-500">
+                          <span>
+                            <span className="font-semibold text-ink-900">
+                              {drive.applied} of {drive.eligible} eligible
+                            </span>{" "}
+                            applied
+                          </span>
+                          <span className="font-semibold text-ink-900">
+                            {outcome.applicationRate}%
+                          </span>
+                          <span>{drive.offers} offers</span>
+                        </div>
+
+                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                          <div
+                            className="h-full bg-brand-500"
+                            style={{ width: `${outcome.applicationRate}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          </Card>
 
           <Card className="mt-6 p-5">
             <section aria-label="By campus">

@@ -1,4 +1,8 @@
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
+import {
+  DASHBOARD_COHORT_COLUMNS,
+  DASHBOARD_LIVE_DRIVE_COLUMNS,
+} from "@features/dashboard/dashboard-view";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
 import { DRIVE_COLUMNS, STUDENT_COLUMNS } from "@features/student/drives-view";
@@ -177,17 +181,14 @@ describe("every hand-written select matches the schema", () => {
     ["student dashboard attendance", "attendance", "round_id, application_id, status"],
     ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
     ["drive portfolio offers", "offers", "drive_id, student_id"],
-    [
-      "dashboard students",
-      "students",
-      "id, participation_status, srf_status, campus_id, campuses(name)",
-    ],
+    ["dashboard students", "students", DASHBOARD_COHORT_COLUMNS],
+    ["dashboard live drives", "drives", DASHBOARD_LIVE_DRIVE_COLUMNS],
     [
       "dashboard offers",
       "offers",
       "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at",
     ],
-    ["dashboard applications", "applications", "student_id"],
+    ["dashboard applications", "applications", "student_id, drive_id"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
     ["staff profiles", "profiles", "email, is_active"],
     ["programmes degrees", "degrees", "id, name"],
