@@ -23,7 +23,7 @@ export const PUBLISH_DRIVE_COLUMNS = `
   status, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa,
   application_start, application_end, on_hold,
   min_overall_cgpa, arrears_policy,
-  drive_rounds(id)
+  drive_rounds(id, sequence, name)
 `;
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
@@ -138,7 +138,9 @@ export function createSupabasePublishView(client: SupabaseClient, driveId: strin
         branches: names(branches),
       };
 
-      const rounds = Array.isArray(row.drive_rounds) ? row.drive_rounds : [];
+      const roundRows = (Array.isArray(row.drive_rounds) ? row.drive_rounds : []) as Array<
+        Record<string, unknown>
+      >;
 
       const drive: PublishDrive = {
         id: row.id as string,
@@ -148,14 +150,21 @@ export function createSupabasePublishView(client: SupabaseClient, driveId: strin
         status: (row.status as DriveStatus | null) ?? "draft",
         driveType: (row.drive_type as DriveType | null) ?? null,
         offerCategory: (row.offer_category as PublishDrive["offerCategory"]) ?? null,
+        roleCategory: (row.role_category as RoleCategory | null) ?? null,
+        jobDescription: (row.job_description as string | null) ?? "",
+        locations:
+          typeof row.work_locations === "string" && row.work_locations !== ""
+            ? [row.work_locations]
+            : [],
+        ctcMinLpa: (row.ctc_min_lpa as number | null) ?? null,
         applicationStart:
           row.application_start === null ? null : new Date(row.application_start as string),
         applicationEnd:
           row.application_end === null ? null : new Date(row.application_end as string),
         onHold: Boolean(row.on_hold),
-        hasJobDescription: Boolean(row.job_description),
-        hasCtc: row.ctc_min_lpa !== null,
-        hasRounds: rounds.length > 0,
+        rounds: roundRows
+          .map((r) => ({ sequence: Number(r.sequence), name: r.name as string }))
+          .sort((a, b) => a.sequence - b.sequence),
       };
 
       const cohort = ((students.data ?? []) as Array<Record<string, unknown>>).map(toCandidate);
@@ -180,6 +189,12 @@ export function createSupabasePublishView(client: SupabaseClient, driveId: strin
         idsFor("branches", input.branches),
       ]);
 
+      // `datetime-local` has no zone. It is wall-clock time in the coordinator's
+      // browser, which is Asia/Kolkata, and `new Date(...)` reads it as exactly
+      // that before toISOString converts it to the UTC the column stores.
+      const instant = (local: string | null) =>
+        local === null || local === "" ? null : new Date(local).toISOString();
+
       const { error: updateError } = await client
         .from("drives")
         .update({
@@ -187,6 +202,8 @@ export function createSupabasePublishView(client: SupabaseClient, driveId: strin
           arrears_policy: input.arrearPolicy,
           open_to_all_override: input.openToAllOverride,
           open_to_all_reason: input.overrideReason,
+          application_start: instant(input.applicationStart),
+          application_end: instant(input.applicationEnd),
         })
         .eq("id", input.driveId)
         .select("id")
@@ -207,6 +224,23 @@ export function createSupabasePublishView(client: SupabaseClient, driveId: strin
         client.from("drive_eligible_degrees").delete().eq("drive_id", input.driveId),
         client.from("drive_eligible_branches").delete().eq("drive_id", input.driveId),
       ]);
+
+      // Rounds are positional, so they are replaced wholesale rather than
+      // reconciled - renumbering in place would collide with the (drive_id,
+      // sequence) key half way through.
+      await client.from("drive_rounds").delete().eq("drive_id", input.driveId);
+      if (input.rounds.length > 0) {
+        const { error: roundError } = await client.from("drive_rounds").insert(
+          input.rounds.map((r) => ({
+            drive_id: input.driveId,
+            sequence: r.sequence,
+            name: r.name,
+          })),
+        );
+        if (roundError !== null) {
+          throw new Error(`Could not save the rounds: ${roundError.message}`);
+        }
+      }
 
       await Promise.all([
         campusIds.length === 0

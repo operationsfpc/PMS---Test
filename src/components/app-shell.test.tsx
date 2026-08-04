@@ -63,6 +63,32 @@ describe("signing out", () => {
   });
 });
 
+/**
+ * Requested 2026-08-04: the drive cockpit is not the Central CPC's alone.
+ *
+ * The Delivery Head approves PIFs and then had nowhere to see what became of
+ * them, and the AE who raised a drive could not follow it either. RLS already
+ * decides what each of them actually gets back - the Delivery Head reads every
+ * drive, the AE only their own - so this is a navigation gap, not a new
+ * permission.
+ */
+describe("the drive cockpit", () => {
+  it("is offered to the Delivery Head, who approves the drives", () => {
+    shellFor(signedIn("delivery_head"));
+    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+  });
+
+  it("is offered to the Account Executive, who raises them", () => {
+    shellFor(signedIn("account_executive"));
+    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+  });
+
+  it("is still not offered to a student", () => {
+    shellFor(signedIn("student"));
+    expect(screen.queryByRole("link", { name: /drive cockpit/i })).toBeNull();
+  });
+});
+
 describe("AppShell navigation", () => {
   it("shows a student their own links", () => {
     shellFor(signedIn("student"));

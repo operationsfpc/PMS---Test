@@ -1,7 +1,8 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { type DriveReadiness, missingBeforeGoLive } from "@domain/drive-lifecycle";
 import type { EligibilityCriteria } from "@domain/eligibility";
 import type { OfferCategory } from "@domain/offer-category";
-import type { DriveStatus, DriveType } from "@domain/types";
+import type { DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import type { StudentContext, VisibilityReason, VisibleDrive } from "@domain/visibility";
 import { isDriveVisibleToStudent } from "@domain/visibility";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -32,6 +33,11 @@ export interface TargetingOptions {
   readonly branches: readonly string[];
 }
 
+export interface DriveRound {
+  readonly sequence: number;
+  readonly name: string;
+}
+
 export interface PublishDrive {
   readonly id: string;
   readonly companyName: string;
@@ -40,12 +46,14 @@ export interface PublishDrive {
   readonly status: DriveStatus;
   readonly driveType: DriveType | null;
   readonly offerCategory: OfferCategory | null;
+  readonly roleCategory: RoleCategory | null;
+  readonly jobDescription: string;
+  readonly locations: readonly string[];
+  readonly ctcMinLpa: number | null;
   readonly applicationStart: Date | null;
   readonly applicationEnd: Date | null;
   readonly onHold: boolean;
-  readonly hasJobDescription: boolean;
-  readonly hasCtc: boolean;
-  readonly hasRounds: boolean;
+  readonly rounds: readonly DriveRound[];
 }
 
 export interface PublishInput {
@@ -58,6 +66,10 @@ export interface PublishInput {
   readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
   readonly openToAllOverride: boolean;
   readonly overrideReason: string | null;
+  /** `datetime-local` values, or null when never set. */
+  readonly applicationStart: string | null;
+  readonly applicationEnd: string | null;
+  readonly rounds: readonly DriveRound[];
 }
 
 export interface PublishView {
@@ -67,6 +79,15 @@ export interface PublishView {
     cohort: readonly PublishCandidate[];
   }>;
   publish(input: PublishInput): Promise<void>;
+}
+
+/** A Date as a `datetime-local` value, in the browser's own zone. */
+function toLocalInput(value: Date | null): string {
+  if (value === null) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}T${pad(
+    value.getHours(),
+  )}:${pad(value.getMinutes())}`;
 }
 
 const EXCLUSION_LABEL: Record<Exclude<VisibilityReason, "visible">, string> = {
@@ -138,10 +159,20 @@ export function DafPublish({ view }: { view: PublishView }) {
     useState<EligibilityCriteria["arrearPolicy"]>("no_standing");
   const [openToAll, setOpenToAll] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
+  const [windowStart, setWindowStart] = useState("");
+  const [windowEnd, setWindowEnd] = useState("");
+  const [rounds, setRounds] = useState<readonly DriveRound[]>([]);
+  const [roundName, setRoundName] = useState("");
 
   const load = useCallback(async () => {
     try {
-      setLoaded(await view.load());
+      const next = await view.load();
+      setLoaded(next);
+      // Seed the editors from whatever the drive already has, so an existing
+      // window or round list is edited rather than silently replaced.
+      setWindowStart(toLocalInput(next.drive.applicationStart));
+      setWindowEnd(toLocalInput(next.drive.applicationEnd));
+      setRounds(next.drive.rounds);
       setLoadError(null);
     } catch {
       setLoadError("Could not load this drive. Please try again.");
@@ -205,6 +236,35 @@ export function DafPublish({ view }: { view: PublishView }) {
   const overrideIncomplete = openToAll && overrideReason.trim() === "";
 
   /**
+   * The readiness list is the domain's, not a hand-written one.
+   *
+   * The mock ticked "Rounds configured" and "Application window set"
+   * unconditionally, so a drive that could never go live looked ready. Asking
+   * `missingBeforeGoLive` means the checklist and the refusal can never
+   * disagree - they are the same rule.
+   */
+  const readiness: DriveReadiness | null =
+    loadedDrive === null
+      ? null
+      : {
+          companyName: loadedDrive.companyName,
+          roleTitle: loadedDrive.roleTitle ?? "",
+          roleCategory: loadedDrive.roleCategory,
+          jobDescription: loadedDrive.jobDescription,
+          locations: loadedDrive.locations,
+          ctcMinLpa: loadedDrive.ctcMinLpa,
+          driveType: loadedDrive.driveType,
+          offerCategory: loadedDrive.offerCategory,
+          hasEligibilityCriteria: true,
+          roundCount: rounds.length,
+          applicationStart: windowStart === "" ? null : windowStart,
+          applicationEnd: windowEnd === "" ? null : windowEnd,
+          onHold: loadedDrive.onHold,
+        };
+
+  const missing = readiness === null ? [] : missingBeforeGoLive(readiness);
+
+  /**
    * A disabled button with the reason buried in a checklist is what made this
    * look broken. The press is always accepted; if it cannot go ahead, it says
    * so where the coordinator is looking.
@@ -216,6 +276,10 @@ export function DafPublish({ view }: { view: PublishView }) {
       setFailure(
         "An override reason is required before this drive can go live. It is audit-logged.",
       );
+      return;
+    }
+    if (missing.length > 0) {
+      setFailure(`This drive cannot go live yet. Missing: ${missing.join(", ")}.`);
       return;
     }
     if (audience.included.length === 0) {
@@ -236,6 +300,9 @@ export function DafPublish({ view }: { view: PublishView }) {
         arrearPolicy,
         openToAllOverride: openToAll,
         overrideReason: openToAll ? overrideReason.trim() : null,
+        applicationStart: windowStart === "" ? null : windowStart,
+        applicationEnd: windowEnd === "" ? null : windowEnd,
+        rounds,
       });
       setPublished(true);
     } catch (cause) {
@@ -362,6 +429,112 @@ export function DafPublish({ view }: { view: PublishView }) {
             </div>
           </Card>
 
+          {/* A24: the window and the rounds are decided here, at publish time.
+              Neither had an input anywhere in the application before this. */}
+          <Card className="p-5">
+            <h2 className="mb-4 text-lg text-ink-900">Application window and rounds</h2>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="window-start"
+                  className="mb-1.5 block text-sm font-medium text-ink-700"
+                >
+                  Applications open
+                </label>
+                <input
+                  id="window-start"
+                  type="datetime-local"
+                  value={windowStart}
+                  onChange={(e) => setWindowStart(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="window-end"
+                  className="mb-1.5 block text-sm font-medium text-ink-700"
+                >
+                  Applications close
+                </label>
+                <input
+                  id="window-end"
+                  type="datetime-local"
+                  value={windowEnd}
+                  onChange={(e) => setWindowEnd(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <p className="mb-1.5 text-sm font-medium text-ink-700">Rounds</p>
+              {rounds.length === 0 ? (
+                <p className="mb-2 text-xs text-ink-300">
+                  No rounds yet. A drive cannot go live without at least one.
+                </p>
+              ) : (
+                <ol className="mb-3 flex flex-col gap-1.5">
+                  {rounds.map((round) => (
+                    <li
+                      key={`${round.sequence}-${round.name}`}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-line px-3 py-2 text-sm"
+                    >
+                      <span className="text-ink-900">
+                        {round.sequence}. {round.name}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${round.name}`}
+                        onClick={() =>
+                          setRounds((current) =>
+                            current
+                              .filter((r) => r.sequence !== round.sequence)
+                              // Sequence is positional, so closing the gap keeps
+                              // 1..n contiguous for the schema's check constraint.
+                              .map((r, index) => ({ ...r, sequence: index + 1 })),
+                          )
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-48 flex-1">
+                  <label
+                    htmlFor="round-name"
+                    className="mb-1.5 block text-xs font-medium text-ink-500"
+                  >
+                    Round name
+                  </label>
+                  <input
+                    id="round-name"
+                    value={roundName}
+                    onChange={(e) => setRoundName(e.target.value)}
+                    placeholder="e.g. Aptitude test"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  />
+                </div>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    const name = roundName.trim();
+                    if (name === "") return;
+                    setRounds((current) => [...current, { sequence: current.length + 1, name }]);
+                    setRoundName("");
+                  }}
+                >
+                  Add round
+                </Button>
+              </div>
+            </div>
+          </Card>
+
           {/* R5a — deliberately styled as an exception, not a convenience. */}
           <Card className="border-gold-300 p-5">
             <div className="flex items-start gap-3">
@@ -445,16 +618,10 @@ export function DafPublish({ view }: { view: PublishView }) {
                 </p>
                 <ul className="flex flex-col gap-1.5 text-sm">
                   {[
-                    ["Company, role and JD", loadedDrive.hasJobDescription],
-                    ["CTC and classification", loadedDrive.hasCtc],
-                    ["Rounds configured", loadedDrive.hasRounds],
-                    [
-                      "Application window set",
-                      loadedDrive.applicationStart !== null && loadedDrive.applicationEnd !== null,
-                    ],
-                    ["Not on hold", !loadedDrive.onHold],
-                    ["At least one student targeted", audience.included.length > 0],
-                    ["Override reason supplied", !overrideIncomplete],
+                    ...missing.map((field) => [field, false] as const),
+                    ["Not on hold", !loadedDrive.onHold] as const,
+                    ["At least one student targeted", audience.included.length > 0] as const,
+                    ["Override reason supplied", !overrideIncomplete] as const,
                   ].map(([label, done]) => (
                     <li key={String(label)} className="flex items-center gap-2">
                       <span

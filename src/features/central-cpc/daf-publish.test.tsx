@@ -55,12 +55,22 @@ const DRIVE = {
   status: "approved" as const,
   driveType: "placement" as const,
   offerCategory: "dream" as const,
+  roleCategory: "software_technical" as const,
+  jobDescription: "Build things.",
+  locations: ["Chennai"],
+  ctcMinLpa: 6,
   applicationStart: new Date("2026-08-01T00:00:00Z"),
   applicationEnd: new Date("2026-08-14T00:00:00Z"),
   onHold: false,
-  hasJobDescription: true,
-  hasCtc: true,
-  hasRounds: true,
+  rounds: [{ sequence: 1, name: "Aptitude test" }],
+};
+
+/** A drive in the state the TCS drive was actually in: approved, but bare. */
+const BARE_DRIVE = {
+  ...DRIVE,
+  applicationStart: null,
+  applicationEnd: null,
+  rounds: [] as ReadonlyArray<{ sequence: number; name: string }>,
 };
 
 function view(over: Partial<PublishView> = {}, cohort?: readonly PublishCandidate[]): PublishView {
@@ -139,6 +149,78 @@ describe("DafPublish — live audience", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "CSE" }));
 
     await waitFor(() => expect(count()).toBe(1));
+  });
+});
+
+/**
+ * The window and the rounds are set here, at publish time (A24).
+ *
+ * Neither had any input anywhere in the application. The mock drew green ticks
+ * next to "Rounds configured" and "Application window set" regardless, so a
+ * drive that could never go live looked ready, and the only way to find out
+ * otherwise was to press a button that did nothing.
+ */
+describe("DafPublish — window and rounds", () => {
+  it("shows what the drive is still missing, from the domain rules", async () => {
+    routed(view({ load: async () => ({ ...(await view().load()), drive: BARE_DRIVE }) }));
+
+    expect(await screen.findByText(/at least one round/i)).toBeDefined();
+    expect(screen.getByText(/application start/i)).toBeDefined();
+  });
+
+  it("prefills a window the drive already has", async () => {
+    routed(view());
+
+    const start = (await screen.findByLabelText(/applications open/i)) as HTMLInputElement;
+    expect(start.value).toContain("2026-08-01");
+  });
+
+  it("adds a round", async () => {
+    routed(view({ load: async () => ({ ...(await view().load()), drive: BARE_DRIVE }) }));
+    await screen.findByRole("button", { name: /add round/i });
+
+    await userEvent.type(screen.getByLabelText(/round name/i), "Technical interview");
+    await userEvent.click(screen.getByRole("button", { name: /add round/i }));
+
+    expect(await screen.findByText(/1\. Technical interview/i)).toBeDefined();
+  });
+
+  it("removes a round", async () => {
+    routed(view());
+    await screen.findByText(/1\. Aptitude test/i);
+
+    await userEvent.click(screen.getByRole("button", { name: /remove aptitude test/i }));
+
+    await waitFor(() => expect(screen.queryByText(/1\. Aptitude test/i)).toBeNull());
+  });
+
+  it("publishes the window and the rounds it was given", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    const sent = publish.mock.calls[0]?.[0] as { applicationStart: string; rounds: unknown };
+
+    // The field is `datetime-local`, so it carries wall-clock time in the
+    // browser's zone (Asia/Kolkata in production). Asserting a literal string
+    // would just pin the test machine's offset; what matters is that the
+    // instant survives the round trip without drifting.
+    expect(new Date(sent.applicationStart).getTime()).toBe(DRIVE.applicationStart.getTime());
+    expect(sent.rounds).toEqual([{ sequence: 1, name: "Aptitude test" }]);
+  });
+
+  it("will not publish a drive with no rounds, and says which field is missing", async () => {
+    const publish = vi.fn();
+    routed(view({ publish, load: async () => ({ ...(await view().load()), drive: BARE_DRIVE }) }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    expect(publish).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/at least one round/i);
   });
 });
 

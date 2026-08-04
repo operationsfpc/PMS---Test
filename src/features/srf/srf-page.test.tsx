@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { AuthActionsContext } from "@lib/auth-context";
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { SRF_SECTIONS, SrfPage } from "./srf-page";
 
 /**
@@ -13,6 +15,27 @@ import { SRF_SECTIONS, SrfPage } from "./srf-page";
  *
  * PRD §4.1.
  */
+/**
+ * The SRF is full-bleed: it deliberately has its own chrome rather than the
+ * app shell. That meant it also had no way to sign out - and it is the FIRST
+ * screen a student sees, so for a student there was no way out of the
+ * application at all.
+ */
+describe("SrfPage — signing out", () => {
+  it("offers a way out from its own header", async () => {
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AuthActionsContext.Provider value={{ signOut }}>
+        <SrfPage />
+      </AuthActionsContext.Provider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /sign out/i }));
+
+    expect(signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("SrfPage", () => {
   it("announces itself with a single top-level heading", () => {
     render(<SrfPage />);

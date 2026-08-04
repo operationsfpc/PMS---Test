@@ -1,6 +1,7 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useId, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { SrfSubmitError, submitSrf } from "./srf-api";
@@ -76,6 +77,7 @@ function ErrorText({ children }: { children?: string | undefined }) {
 const grid = "grid gap-4 sm:grid-cols-2";
 
 export function SrfPage() {
+  const { signOut } = useAuthActions();
   // Stable ids so React never re-keys an upload control on add/remove.
   const [semesterIds, setSemesterIds] = useState<readonly number[]>([1, 2]);
   const [submitted, setSubmitted] = useState(false);
@@ -137,9 +139,20 @@ export function SrfPage() {
             alt="FACE Prep Campus"
             className="h-7 w-auto"
           />
-          <span className="rounded-full bg-gold-500 px-2.5 py-1 text-xs font-semibold text-brand-900">
-            Draft
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-gold-500 px-2.5 py-1 text-xs font-semibold text-brand-900">
+              Draft
+            </span>
+            {/* This screen has its own chrome, so it needs its own way out.
+                For a student it is the first screen they ever see. */}
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted"
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
