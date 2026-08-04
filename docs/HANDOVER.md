@@ -1,8 +1,9 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `c31c0b7`. **1093 tests passing across 85 files**, plus
+Last updated at commit `01a0645`. **1215 tests passing across 90 files**, plus
 **1 Playwright journey** (verified by running them, not remembered).
+**`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
 (version `7d005c95-41ea-4173-bdab-0e327bfb32a2`) · database on Supabase
@@ -35,27 +36,19 @@ Make reasonable assumptions and keep moving; mark them
 
 Everything built in this session is **shipped**. In order:
 
-1. **`pnpm check` is still red** — functions 79.78% (needs 80) and branches
-   66.06% (needs 80). It was red *before* this session too, proved against a
-   clean `f12bb6d` worktree: lines were 77.62%, now 81.49%. The gap is almost
-   entirely `*-route.tsx` wrappers and the `*-view.ts` files that have never
-   been tested at all: `cockpit-view` 3%, `shortlist-view` 3%, `publish-view`
-   7%, `participation-view` 3%, `attendance-view` 17%. `src/domain` is at 100%
-   and must stay there. Take one view per sitting, MSW-stubbed, the way
-   `dashboard-view.test.ts` now does it.
-2. **Nobody has exercised the two new screens against live data.** There are
+1. **Nobody has exercised the two new screens against live data.** There are
    0 applications and 0 semesters in Mumbai, so the student dashboard shows its
    empty states and the portfolio shows one TCS drive with no applicants. Get
    one student through SRF → CPC verification → apply, and the whole chain is
    proved against real data for the first time.
-3. **No KAM or ER profile exists yet**, so `0018` is correct-but-unexercised in
+2. **No KAM or ER profile exists yet**, so `0018` is correct-but-unexercised in
    production. The first KAM invitation is the real test: assign campuses on
    the Staff screen and confirm they see those students and no others.
-4. **Per-semester marksheet uploads** tied to `student_semesters.marksheet_id`.
+3. **Per-semester marksheet uploads** tied to `student_semesters.marksheet_id`.
    The uploads exist; nothing attaches them to the semester row they evidence.
-5. **Playwright journeys for the other roles.** The student journey is the only
+4. **Playwright journeys for the other roles.** The student journey is the only
    one, and it is the only thing that proves the wiring.
-6. **Result corrections** (A15) and the notifications UI (blocked on P1).
+5. **Result corrections** (A15) and the notifications UI (blocked on P1).
 
 ---
 
@@ -70,6 +63,32 @@ Everything built in this session is **shipped**. In order:
 | `971dbd3` | **Drive portfolio for the Delivery Head and the AE** (`0019`) |
 | `8751800` | Open-drive count now runs R5 instead of counting live drives |
 | `c31c0b7` | Tests for the shared reporting view; assumptions recorded |
+| `bface80` | **Shipped:** `0018`/`0019` to Mumbai, app to Cloudflare |
+| `36ceec7` | Cockpit, final-selection and participation-queue views covered |
+| `01a0645` | The last five untested views covered — **`pnpm check` green** |
+
+### The coverage gate, closed
+
+It had been red for longer than this session — proved against a clean
+`f12bb6d` worktree before touching anything: statements 76.68%, branches
+62.08%, functions 76.53%, lines 77.62%. Now **90.50 / 80.22 / 90.05 / 91.54**.
+
+What closed it was testing the eight `*-view.ts` files that had never been
+exercised at all. They are the layer where a wrong query silently returns wrong
+data to a coordinator, so this was worth doing for its own sake, not for the
+number. `src/lib/mock-data.ts` also went — 379 lines of mock-era fixtures with
+zero importers.
+
+**These tests were written against code that already existed, so none of them
+could fail first.** Each file was therefore mutation-checked instead: 21
+deliberate breakages, every one caught, and four tests strengthened when the
+first attempt let a mutation through. Two of the mutations found real problems:
+`publish-view` had no actor seam (its publish path could only run against a
+live browser session), and one of my own assertions was simply wrong about the
+domain — an opted-out student *may* record a self-placement (PRD §16.2).
+
+**If you add a `*-view.ts`, test it in the same sitting.** The gate is green
+now and every commit from here should keep it there.
 
 ### The RLS fix — answers the question §7 was blocked on
 
