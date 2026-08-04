@@ -1,24 +1,39 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `7d8b86f`. **1407 tests passing across 102 files**, plus
-**1 Playwright journey** — re-verified at the start of the 2026-08-06 session by
-running them, not remembered.
+Last updated at commit `5be9700`. **1464 tests passing across 104 files**, plus
+**1 Playwright journey** — run, not remembered.
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
-**Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
-(version `e733062e-e267-4243-b384-d68226683151`) · database on Supabase
-ap-south-1 · migrations `0001`–`0022`, **local == remote** (`supabase migration
+**Live and shipped 2026-08-06:** <https://fpc-pms.faceprep.workers.dev>
+(version `67dfa94e-6811-44a2-9051-78ed0cc75fe5`) · database on Supabase
+ap-south-1 · migrations `0001`–`0023`, **local == remote** (`supabase migration
 list --linked`).
 
-Verified after shipping, not assumed:
-- `is_campus_reader()` on the remote includes `key_account_manager`;
-  `is_org_reader()` includes `enterprise_relations`
-- all nine new/replaced policies exist; the old `semesters_rw_staff` is gone
-- the deployed bundle contains the new screens and **none** of the mock's
-  strings — no "Welcome back", no "Freshworks", no "Download offer letter"
-- live row counts unchanged (3 students, 1 drive, 5 profiles): `0018`/`0019`
-  touch policies only, never data
+Verified after shipping 2026-08-06, not assumed:
+- `student_semesters.marksheet_id` is `NOT NULL` on the remote
+- `document_kind` carries `ug_consolidated_marksheet`; `students.ug_marksheet_id`
+  exists
+- both new triggers are present: `enforce_marksheet_belongs_to_student`,
+  `enforce_ug_marksheet_belongs_to_student`
+- the `marksheets` bucket is private, 5 MB, pdf/jpeg/png, and the
+  "students upload own documents" INSERT policy covers it
+- live row counts **unchanged** (3 students, 1 drive, 5 profiles, 1
+  self-placement): `0023` adds constraints only, never data
+- the deployed JS hashes **identically** to the local build
+  (`e70663000ea82215…`, 740 291 bytes) and contains "Declared semesters",
+  "No semesters declared", "Consolidated UG marksheet"; the retired
+  "Add another semester" / "Remove last semester" strings are gone
+
+⚠️ **The edge cache serves a stale `index.html` for a minute or two after a
+deploy.** The first verification fetch returned the PREVIOUS asset name and
+looked like a failed deploy. `cache-control` is `max-age=0, must-revalidate`,
+so browsers revalidate and real users are fine — but append a cache-buster
+when you verify, or you will chase a deploy that already worked.
+
+Earlier, still true (shipped 2026-08-05):
+- `is_campus_reader()` includes `key_account_manager`; `is_org_reader()`
+  includes `enterprise_relations`; the old `semesters_rw_staff` is gone
 
 ---
 
@@ -75,19 +90,74 @@ are the student's to correct; after `srf_approved` they are the coordinator's.
 
 Everything built in this session is **shipped**. In order:
 
-1. **Nobody has exercised the two new screens against live data.** There are
-   0 applications and 0 semesters in Mumbai, so the student dashboard shows its
-   empty states and the portfolio shows one TCS drive with no applicants. Get
-   one student through SRF → CPC verification → apply, and the whole chain is
-   proved against real data for the first time.
-2. **No KAM or ER profile exists yet**, so `0018` is correct-but-unexercised in
+1. **Get one student through SRF → CPC verification → apply on live data.**
+   Still the single most valuable thing, and now the only way to prove the
+   evidence chain end to end: a real file reaching the `marksheets` bucket, a
+   real `student_semesters.marksheet_id`, and a coordinator opening a signed
+   link from the queue. **Nothing has ever uploaded to that bucket in
+   production** — 0 documents, 0 semesters — so the very first submission is
+   also the first exercise of the storage policy from a real browser session.
+2. ⚠️ **Marksheet uploads are PDF-only** (`UPLOAD_ACCEPT` in
+   `src/components/form.tsx`), and the `marksheets` bucket accepts
+   pdf/jpeg/png. PRD §21.2 says students are primarily on **phones**, where a
+   marksheet is photographed, not scanned — and an iPhone photo is HEIC, which
+   neither allows. These uploads are now **mandatory**, so this stops being
+   theoretical the moment a student tries. Decide deliberately: widen the
+   accept list (and the bucket) to jpeg/png/heic, or tell students to convert.
+   Not changed here because it is a product decision, not a defect.
+3. **No KAM or ER profile exists yet**, so `0018` is correct-but-unexercised in
    production. The first KAM invitation is the real test: assign campuses on
    the Staff screen and confirm they see those students and no others.
-3. **Per-semester marksheet uploads** tied to `student_semesters.marksheet_id`.
-   The uploads exist; nothing attaches them to the semester row they evidence.
 4. **Playwright journeys for the other roles.** The student journey is the only
    one, and it is the only thing that proves the wiring.
 5. **Result corrections** (A15) and the notifications UI (blocked on P1).
+
+---
+
+## 2z. What was built on 2026-08-06 — marksheet evidence (`5be9700`, shipped)
+
+**The SRF collected the marksheets and threw them away.**
+
+The uploads were marked required, the student picked their files, and every one
+was discarded: the `FileField`s had no handler that kept the file, only one
+that flipped a boolean for the progress bar. No storage object, no
+`student_documents` row, and `student_semesters.marksheet_id` — created in
+`0003` for exactly this — **was never written by anything**.
+
+So the coordinator's verification queue showed a declared CGPA with nothing to
+check it against, which is the entire point of verification. "Approve" meant
+endorsing the student's own typing. **That is load-bearing:** R5 reads the
+latest *verified* semester to decide whether a student may apply to a drive, so
+the hole sat precisely where a business rule depends on it.
+
+| Layer | What |
+|---|---|
+| 0 | `src/domain/marksheets.ts` (new, 100%). `requiredMarksheets()` derives the required evidence from what the student **declared**; one shared key derivation so a file can never be stored under one name and looked for under another |
+| 0 | `srf-progress`: the section was complete after **any one** file. Now needs every required one, so declaring another semester correctly re-opens it |
+| 0 | `srf-draft`: uploads are **never** restored from a draft. A `File` stringifies to `{}`, so a restored draft would have counted evidence that was gone |
+| 1 | Files are part of the submission and validated per slot; the missing one is named **on the field that is empty** |
+| 1 | The semester marksheet list was driven by its **own** counter with its own "add another semester" button — the form opened asking for two semester marksheets while the academic record had one line. It now follows the declared record |
+| 1 | The repository uploads → records → links, and stores evidence **before** the form enters the queue |
+| 1 | The queue shows each declared semester with its CGPA, arrears and a signed marksheet link — or says "No marksheet" rather than a dead link |
+| 2 | `0023`: `marksheet_id` **NOT NULL**, plus two triggers |
+
+### Things worth knowing
+
+- **The foreign key never said *whose*.** `marksheet_id references
+  student_documents(id)` allowed one student's marksheet to evidence another's
+  CGPA, or a résumé to. Both are now refused by trigger, proved as a real user.
+- **No test had ever proved a student can insert their own
+  `student_documents` row.** Every fixture wrote documents as the superuser,
+  which bypasses RLS. The policy was fine; the coverage was not. `seed()` does
+  **not** set `auth_user_id` — a student claims their row by inserting into
+  `auth.users` with their rostered email. Do that, or your "as the student"
+  test proves nothing.
+- **`toMatchObject({ marksheets: {} })` matches any object.** A test written
+  after its code passed against the broken version. Mutation-checking caught
+  it; `toEqual` fixed it. Two tests here were written after their code and both
+  were mutation-checked — do that, or say so.
+- Ordering is a correctness rule: uploading after the status flip would ask a
+  coordinator to verify against documents that do not exist.
 
 ---
 
@@ -326,6 +396,7 @@ added on 2026-08-04:**
 ```
 students 3 · drives 1 · staff 5 · student_semesters 0
 applications 0 · offers 0 · self_placement_requests 1
+student_documents 0          ← nothing has EVER been uploaded in production
 ```
 
 SRF status: **1 `registered`, 2 `invited`** — nobody has submitted the form
@@ -352,8 +423,8 @@ most valuable thing to prove next; see §1.
 **Screens missing, rules and repositories present:**
 - ~~Student dashboard on real data~~ **built 2026-08-05**
 - ~~Delivery Head / AE dashboards~~ **built 2026-08-05**
-- Per-semester **marksheet** uploads tied to their semester row (the uploads
-  exist but are not attached to `student_semesters.marksheet_id`)
+- ~~Per-semester **marksheet** uploads tied to their semester row~~ **built and
+  shipped 2026-08-06** (`0023`) — the files were being collected and discarded
 - Recruiter export UI + XLSX/ZIP (`buildRecruiterExport` is done) — **needs a
   dependency decision (P2)**
 
@@ -385,7 +456,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1407 passing across 102 files
+pnpm test:run        # expect 1464 passing across 104 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -394,4 +465,4 @@ Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session and both succeeded; **neither is automatic** — committing does
 not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 85 commits, working tree clean.
+Git is **local only**, no remote. 87 commits, working tree clean.
