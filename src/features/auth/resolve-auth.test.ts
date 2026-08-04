@@ -60,10 +60,19 @@ describe("resolveAuthState", () => {
     expect(state).toEqual({ status: "signed-in", role: "student", email: "someone@example.com" });
   });
 
-  it("refuses to guess a role for an account that is neither", async () => {
+  /**
+   * Signed in to Google, recognised by nobody here.
+   *
+   * This was reported as "cannot log in" and looked like nothing at all: the
+   * user authenticated, resolved to signed-out, and was sent back to /login,
+   * where Google immediately signed them in again. An invisible loop with no
+   * message. It is a distinct state and has to be named as one, or it cannot
+   * be explained to the person stuck in it.
+   */
+  it("reports an authenticated account that belongs to nobody, and says who", async () => {
     const state = await resolveAuthState(
       fakeClient({ session: SESSION, profile: null, student: null }),
     );
-    expect(state).toEqual({ status: "signed-out" });
+    expect(state).toEqual({ status: "unrecognised", email: "someone@example.com" });
   });
 });

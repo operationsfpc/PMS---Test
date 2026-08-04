@@ -9,11 +9,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * not - they are identified by their roster record in `students`, claimed on
  * first sign-in by the trigger in 0009_guards.sql.
  *
- * CONFIRMED: everyone signing in is staff or student, guaranteed by the login
- * allowlist. The final fallback is therefore unreachable in practice. It
- * returns signed-out rather than assuming 'student', because handing an
- * unidentifiable account a student's view of the system would be a data
- * exposure, and a refused login is the safer failure.
+ * The final case is NOT unreachable, though it was assumed to be: the
+ * allowlist only guards the creation of an auth.users row, and that row
+ * outlives both the invitation and the profile. Someone removed and re-invited
+ * still has an account, so this ran in production and returned signed-out,
+ * which read as "nothing happened".
+ *
+ * It never assumes 'student' - handing an unidentifiable account a student's
+ * view would be a data exposure. It reports the address instead, so the login
+ * screen can explain the refusal to the person it is refusing.
  */
 export async function resolveAuthState(client: SupabaseClient): Promise<AuthState> {
   const { data } = await client.auth.getSession();
@@ -42,5 +46,5 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
     return { status: "signed-in", role: "student", email };
   }
 
-  return { status: "signed-out" };
+  return { status: "unrecognised", email };
 }

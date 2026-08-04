@@ -45,6 +45,13 @@ describe("RequireAuth", () => {
     expect(screen.getByText("Confidential student data")).toBeDefined();
   });
 
+  it("sends an authenticated but unrecognised account to the login screen too", () => {
+    renderGuarded({ status: "unrecognised", email: "ghost@faceprep.in" });
+
+    expect(screen.getByText("Login screen")).toBeDefined();
+    expect(screen.queryByText("Confidential student data")).toBeNull();
+  });
+
   it("waits while the session is still being restored, rather than bouncing to login", () => {
     renderGuarded({ status: "loading" });
 

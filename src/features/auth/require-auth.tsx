@@ -17,7 +17,9 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  if (auth.status === "signed-out") {
+  // An unrecognised account is authenticated but belongs to nobody here. The
+  // login screen is where that gets explained, so both go to the same place.
+  if (auth.status === "signed-out" || auth.status === "unrecognised") {
     return <Navigate to="/login" replace />;
   }
 

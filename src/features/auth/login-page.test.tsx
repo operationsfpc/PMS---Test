@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { AuthActionsContext } from "@lib/auth-context";
 import { setSupabaseClient } from "@lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { render, screen } from "@testing-library/react";
@@ -119,5 +120,47 @@ describe("LoginPage", () => {
 
     expect(screen.getByText("Signed in already")).toBeDefined();
     expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();
+  });
+
+  /**
+   * Reported as "cannot log in", and it looked like nothing happening at all.
+   * Google signs them in, the app recognises nobody, sends them back here, and
+   * Google signs them straight in again. The loop is invisible unless this
+   * screen says what is wrong - and offers a way out of the Google session,
+   * because otherwise they cannot even try a different account.
+   */
+  describe("an account Google accepts but this system does not know", () => {
+    const unrecognised: AuthState = { status: "unrecognised", email: "ghost@faceprep.in" };
+
+    it("says so, and names the address it does not recognise", () => {
+      stubAuth();
+      renderAt("/login", unrecognised);
+
+      const alert = screen.getByRole("alert");
+      expect(alert.textContent).toContain("ghost@faceprep.in");
+      expect(alert.textContent).toContain(SUPPORT_EMAIL);
+    });
+
+    it("offers a way out, so another account can be tried", async () => {
+      stubAuth();
+      const signOut = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+
+      render(
+        <AuthActionsContext.Provider value={{ signOut }}>
+          <AuthContext.Provider value={unrecognised}>
+            <MemoryRouter initialEntries={["/login"]}>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+              </Routes>
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </AuthActionsContext.Provider>,
+      );
+
+      await user.click(screen.getByRole("button", { name: /use a different account/i }));
+
+      expect(signOut).toHaveBeenCalledTimes(1);
+    });
   });
 });

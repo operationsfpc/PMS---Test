@@ -62,6 +62,95 @@ describe("an Admin changing a staff member's role", () => {
   });
 });
 
+/**
+ * Regression, found in production: an invitation could only ever be accepted
+ * at the moment `auth.users` gained a row.
+ *
+ * `accept_staff_invitation` is AFTER INSERT ON auth.users. Google sign-in only
+ * inserts once, ever. So anyone who had already signed in - because they were
+ * removed and invited again, or invited again under a different role - got a
+ * new invitation that nothing would ever act on: no profile, and
+ * `resolveAuthState` returns signed-out, so they bounce off /login forever
+ * with no way to tell why.
+ *
+ * Accepting an invitation has to be idempotent and driven by the invitation,
+ * not by a one-time side effect of account creation.
+ */
+describe("inviting someone whose Google account already exists", () => {
+  beforeEach(async () => {
+    // Ashok signed in once, then was removed: the auth account outlives both
+    // the invitation and the profile, because the browser cannot delete it.
+    await t.sql(`delete from profiles where email = 'ae@faceprep.in'`);
+    await t.sql(`delete from staff_invitations where email = 'ae@faceprep.in'`);
+  });
+
+  it("materialises the profile straight away, without another sign-in", async () => {
+    await t.sql(
+      `insert into staff_invitations (email, full_name, role)
+       values ('ae@faceprep.in','Ashok Kumar','admin')`,
+    );
+
+    const rows = await t.sql(`select id, role from profiles where email = 'ae@faceprep.in'`);
+    expect(rows[0]?.role).toBe("admin");
+    expect(rows[0]?.id).toBe(AE_USER);
+  });
+
+  it("marks the invitation accepted, because it plainly has been", async () => {
+    await t.sql(
+      `insert into staff_invitations (email, full_name, role)
+       values ('ae@faceprep.in','Ashok Kumar','admin')`,
+    );
+
+    const rows = await t.sql(
+      `select accepted_at from staff_invitations where email = 'ae@faceprep.in'`,
+    );
+    expect(rows[0]?.accepted_at).not.toBeNull();
+  });
+
+  it("applies the campuses staged against the new invitation", async () => {
+    await t.sql(`insert into staff_campus_invitations (email, campus_id) values ($1,$2)`, [
+      "ae@faceprep.in",
+      ids.campusA,
+    ]);
+
+    await t.sql(
+      `insert into staff_invitations (email, full_name, role)
+       values ('ae@faceprep.in','Ashok Kumar','campus_placement_coordinator')`,
+    );
+
+    const rows = await t.sql(
+      `select campus_id from staff_campus_assignments where profile_id = $1`,
+      [AE_USER],
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("leaves an invitation for someone who has never signed in alone", async () => {
+    await t.sql(
+      `insert into staff_invitations (email, full_name, role)
+       values ('never@faceprep.in','Never Signed In','account_executive')`,
+    );
+
+    const profiles = await t.sql(`select id from profiles where email = 'never@faceprep.in'`);
+    const invite = await t.sql(
+      `select accepted_at from staff_invitations where email = 'never@faceprep.in'`,
+    );
+    expect(profiles).toHaveLength(0);
+    expect(invite[0]?.accepted_at).toBeNull();
+  });
+
+  it("moves an existing profile to the newly invited role", async () => {
+    await t.sql(
+      `insert into staff_invitations (email, full_name, role)
+       values ('ae@faceprep.in','Ashok Kumar','enterprise_relations')`,
+    );
+    await t.sql(`update staff_invitations set role = 'admin' where email = 'ae@faceprep.in'`);
+
+    const rows = await t.sql(`select role from profiles where email = 'ae@faceprep.in'`);
+    expect(rows[0]?.role).toBe("admin");
+  });
+});
+
 describe("an Admin removing a staff member", () => {
   it("deletes the invitation, which is the login allowlist entry", async () => {
     await t.asUser(ids.adminUser, `delete from staff_invitations where email = 'ae@faceprep.in'`);

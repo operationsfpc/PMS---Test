@@ -1,4 +1,5 @@
 import { Button } from "@components/ui";
+import { useAuthActions } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { Navigate, useSearchParams } from "react-router";
 import { useAuth } from "./require-auth";
@@ -26,8 +27,20 @@ function refusalMessage(errorDescription: string): string {
 export function LoginPage() {
   const [params] = useSearchParams();
   const auth = useAuth();
+  const { signOut } = useAuthActions();
   const error = params.get("error");
-  const message = error === null ? null : refusalMessage(params.get("error_description") ?? "");
+
+  // Two different refusals land here. One never got a session at all (the
+  // allowlist fired before the account was created); the other has a perfectly
+  // good Google session that matches nobody in this system, and without a way
+  // to end it they cannot even try another account.
+  const stranded = auth.status === "unrecognised";
+
+  const message = stranded
+    ? `You are signed in to Google as ${auth.email}, but that address is not set up for placements. Write to ${SUPPORT_EMAIL} to get invited, or sign out and use the account your college has on record.`
+    : error === null
+      ? null
+      : refusalMessage(params.get("error_description") ?? "");
 
   async function signIn() {
     await supabase().auth.signInWithOAuth({
@@ -56,9 +69,15 @@ export function LoginPage() {
           </p>
         )}
 
-        <Button className="mt-6 w-full" onClick={signIn}>
-          Sign in with Google
-        </Button>
+        {stranded ? (
+          <Button className="mt-6 w-full" onClick={() => void signOut()}>
+            Use a different account
+          </Button>
+        ) : (
+          <Button className="mt-6 w-full" onClick={signIn}>
+            Sign in with Google
+          </Button>
+        )}
 
         <p className="mt-6 text-xs text-neutral-500">
           Use the Google account your college or administrator has on record.
