@@ -1,8 +1,9 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `e733062`-deploy. **1407 tests passing across 101 files**,
-plus **1 Playwright journey** (verified by running them, not remembered).
+Last updated at commit `7d8b86f`. **1407 tests passing across 102 files**, plus
+**1 Playwright journey** — re-verified at the start of the 2026-08-06 session by
+running them, not remembered.
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
@@ -90,7 +91,7 @@ Everything built in this session is **shipped**. In order:
 
 ---
 
-## 1a. What was built on 2026-08-05
+## 2a. What was built on 2026-08-05
 
 **Both dashboards that §1 asked for, and the RLS defect that blocked them.**
 
@@ -320,23 +321,29 @@ added on 2026-08-04:**
 
 ---
 
-## 5. Live database state (last checked 2026-08-04 — NOT re-checked this session)
+## 5. Live database state (re-checked 2026-08-06)
 
 ```
-students 3 · drives 1 · staff 5 · student_semesters 0 · applications 0
+students 3 · drives 1 · staff 5 · student_semesters 0
+applications 0 · offers 0 · self_placement_requests 1
 ```
 
-- All 3 students are `BCA / AI and DS / 2027`, **none `srf_approved`** — so the
-  publish screen correctly shows **0 of 3** eligible, all excluded as *"SRF not
-  yet verified"*. That is not a bug.
+SRF status: **1 `registered`, 2 `invited`** — nobody has submitted the form
+since the fix that made submitting possible at all (`0020`). That is the single
+most valuable thing to prove next; see §1.
+
+- All 3 students are `BCA / AI and DS / 2027`. The publish screen correctly
+  shows **0 of 3** eligible, all excluded as *"SRF not yet verified"*. Not a bug.
 - The one drive is **TCS, `approved`**, with **no application window and no
   rounds** — it cannot go live until someone sets them on `/central/publish`.
+- **The one self-placement request is `FACE, ₹4.00 LPA, pending, with no offer
+  letter.`** It predates `0022`, which is why both constraints are `NOT VALID`.
+  A coordinator should ask that student for their letter or reject it — the
+  screen now shows "No offer letter was uploaded with this request".
 - `thanush@faceprep.in` has an `auth.users` row but **no invitation and no
   profile** — a ghost from a removal. Re-invite them from the Staff page and
   `0016` will materialise the profile immediately.
-- Nobody has a verified semester, so eligibility is running on the **A28
-  fallback**. Getting one student through SRF → CPC verification would prove
-  the chain against real data for the first time.
+- Nobody has a verified semester, so eligibility runs on the **A28 fallback**.
 
 ---
 
@@ -378,7 +385,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1093 passing across 85 files
+pnpm test:run        # expect 1407 passing across 102 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -387,4 +394,4 @@ Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session and both succeeded; **neither is automatic** — committing does
 not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 67 commits, working tree clean.
+Git is **local only**, no remote. 85 commits, working tree clean.
