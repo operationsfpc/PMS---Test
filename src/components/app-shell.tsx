@@ -1,5 +1,5 @@
 import type { AppRole } from "@domain/types";
-import { useAuth } from "@lib/auth-context";
+import { useAuth, useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useState } from "react";
 import { NavLink } from "react-router";
 
@@ -84,6 +84,7 @@ function initialsOf(email: string): string {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const auth = useAuth();
+  const { signOut } = useAuthActions();
   const signedInRole = auth.status === "signed-in" ? auth.role : "student";
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
 
@@ -150,6 +151,16 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               {initialsOf(signedInEmail)}
             </span>
+
+            {/* Campus machines are shared. Leaving no way out means the next
+                person to open the browser is signed in as the last one. */}
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </header>

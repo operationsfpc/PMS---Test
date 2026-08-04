@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
+import { useAuthActions } from "@lib/auth-context";
 import { setSupabaseClient } from "@lib/supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SupabaseAuthProvider } from "./auth-provider";
 import { useAuth } from "./require-auth";
@@ -12,12 +14,14 @@ function Consumer() {
 }
 
 const unsubscribe = vi.fn();
+const signOutSpy = vi.fn().mockResolvedValue({ error: null });
 
 function fakeClient(session: unknown): SupabaseClient {
   return {
     auth: {
       getSession: async () => ({ data: { session }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe } } }),
+      signOut: signOutSpy,
     },
     from: () => ({
       select: () => ({
@@ -51,6 +55,34 @@ describe("SupabaseAuthProvider", () => {
       </SupabaseAuthProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("state").textContent).toBe("ceo"));
+  });
+
+  /**
+   * Signing out has to reach Supabase, not just clear local state: the session
+   * lives in localStorage and survives a reload, so a "sign out" that only
+   * forgot it in memory would put the next person straight back in.
+   */
+  it("ends the Supabase session when a consumer signs out", async () => {
+    setSupabaseClient(fakeClient({ user: { id: "u1", email: "boss@faceprep.in" } }));
+
+    function SignOutButton() {
+      const { signOut } = useAuthActions();
+      return (
+        <button type="button" onClick={() => void signOut()}>
+          out
+        </button>
+      );
+    }
+
+    render(
+      <SupabaseAuthProvider>
+        <SignOutButton />
+      </SupabaseAuthProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "out" }));
+
+    await waitFor(() => expect(signOutSpy).toHaveBeenCalledTimes(1));
   });
 
   it("stops listening when unmounted", async () => {

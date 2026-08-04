@@ -17,10 +17,40 @@ import { createContext, useContext } from "react";
 export type AuthState =
   | { readonly status: "loading" }
   | { readonly status: "signed-out" }
+  /**
+   * Authenticated with Google, but matched to no staff invitation and no
+   * roster record. Distinct from `signed-out` on purpose: collapsing the two
+   * produced an invisible loop - Google signs them in, the app sends them back
+   * to /login, Google signs them in again, and nothing ever says why.
+   */
+  | { readonly status: "unrecognised"; readonly email: string }
   | { readonly status: "signed-in"; readonly role: AppRole; readonly email: string };
 
 export const AuthContext = createContext<AuthState>({ status: "loading" });
 
 export function useAuth(): AuthState {
   return useContext(AuthContext);
+}
+
+/**
+ * What a signed-in user can do about being signed in.
+ *
+ * Separate from `AuthState` because state is a value that changes on every
+ * auth event, and this is a stable capability. Keeping them apart means the
+ * shell can offer a way out without subscribing to session churn.
+ *
+ * The default is a no-op rather than a throw: `AppShell` renders in tests and
+ * in development previews that have no provider above them, and a shell that
+ * crashes because nobody can sign out is worse than a button that does nothing.
+ */
+export interface AuthActions {
+  signOut(): Promise<void>;
+}
+
+export const AuthActionsContext = createContext<AuthActions>({
+  signOut: async () => {},
+});
+
+export function useAuthActions(): AuthActions {
+  return useContext(AuthActionsContext);
 }

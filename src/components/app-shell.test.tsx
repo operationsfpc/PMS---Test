@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import type { AppRole } from "@domain/types";
 import { AuthContext, type AuthState } from "@features/auth/require-auth";
-import { render, screen } from "@testing-library/react";
+import { AuthActionsContext } from "@lib/auth-context";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
@@ -14,13 +16,15 @@ import { AppShell } from "./app-shell";
  * role's screens: RLS would return nothing, but offering the route at all is
  * misleading and invites support tickets about "broken" pages.
  */
-function shellFor(auth: AuthState) {
+function shellFor(auth: AuthState, signOut: () => Promise<void> = async () => {}) {
   return render(
-    <AuthContext.Provider value={auth}>
-      <MemoryRouter>
-        <AppShell>content</AppShell>
-      </MemoryRouter>
-    </AuthContext.Provider>,
+    <AuthActionsContext.Provider value={{ signOut }}>
+      <AuthContext.Provider value={auth}>
+        <MemoryRouter>
+          <AppShell>content</AppShell>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </AuthActionsContext.Provider>,
   );
 }
 
@@ -31,6 +35,33 @@ const signedIn = (role: AppRole): AuthState => ({
 });
 
 afterEach(() => vi.unstubAllEnvs());
+
+/**
+ * Signing out.
+ *
+ * There was no way to do it at all: the only route out of a session was
+ * clearing site data by hand. On a shared campus machine that is a real
+ * exposure - the next person to open the browser is signed in as the last.
+ */
+describe("signing out", () => {
+  it("offers every signed-in role a way out", () => {
+    for (const role of ["student", "admin", "account_executive"] as const) {
+      const { unmount } = shellFor(signedIn(role));
+      expect(screen.getByRole("button", { name: /sign out/i })).toBeDefined();
+      unmount();
+    }
+  });
+
+  it("ends the session when used", async () => {
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    shellFor(signedIn("admin"), signOut);
+
+    await user.click(screen.getByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+  });
+});
 
 describe("AppShell navigation", () => {
   it("shows a student their own links", () => {

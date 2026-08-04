@@ -1,5 +1,6 @@
+import { type AuthActions, AuthActionsContext } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { AuthContext, type AuthState } from "./require-auth";
 import { resolveAuthState } from "./resolve-auth";
 
@@ -35,5 +36,24 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>;
+  /**
+   * Signing out goes through Supabase so the stored session is destroyed, not
+   * merely forgotten in memory - it lives in localStorage and would otherwise
+   * come back on the next reload. `onAuthStateChange` then re-resolves and
+   * RequireAuth sends them to /login, so there is no navigation to do here.
+   */
+  const actions = useMemo<AuthActions>(
+    () => ({
+      signOut: async () => {
+        await supabase().auth.signOut();
+      },
+    }),
+    [],
+  );
+
+  return (
+    <AuthActionsContext.Provider value={actions}>
+      <AuthContext.Provider value={state}>{children}</AuthContext.Provider>
+    </AuthActionsContext.Provider>
+  );
 }
