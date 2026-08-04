@@ -1,12 +1,12 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `01a0645`. **1215 tests passing across 90 files**, plus
+Last updated at commit `344d424`. **1318 tests passing across 97 files**, plus
 **1 Playwright journey** (verified by running them, not remembered).
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
-(version `15ffa6d9-e71d-4b2b-8bba-ac43244deac0`) · database on Supabase
+(version `fda30ffd-604a-4981-b1d1-b8d1fbf62a70`) · database on Supabase
 ap-south-1 · migrations `0001`–`0019`, **local == remote** (`supabase migration
 list --linked`).
 
@@ -66,6 +66,42 @@ Everything built in this session is **shipped**. In order:
 | `bface80` | **Shipped:** `0018`/`0019` to Mumbai, app to Cloudflare |
 | `36ceec7` | Cockpit, final-selection and participation-queue views covered |
 | `01a0645` | The last five untested views covered — **`pnpm check` green** |
+| `3c11891` | **Analytics domain rules**: CTC, funnel, drive clock, `math.ts` |
+| `f27202b` | Registration funnel + package figures on the shared dashboard |
+| `9b1d5d3` | **Drive targeting enforced** — it was recorded and never read |
+| `2a26a06` | Live drive figures: time left, eligible vs applied, offers |
+| `344d424` | The overview given to every relevant stakeholder |
+
+### Stakeholder dashboards (2026-08-05, shipped)
+
+Asked for: *"total registered students to number of students placed to CTC
+details … live drive data like drives completed, number of offers got in
+drives, open drives time left, number of eligible to applied students … for all
+relevant stakeholders."*
+
+Built on the **one** shared dashboard rather than as a sixth variant, so no two
+roles can be shown different arithmetic. RLS decides what each of them sees.
+
+| Panel | Rule behind it |
+|---|---|
+| Registration funnel — roster → submitted → verified → applied → placed | `registrationFunnel`, computed cumulatively so it can never widen as it descends |
+| Package — highest / average / median / lowest, and per ladder rung | `summariseCtc`, fed **one figure per placed student** via `resolvePlacementRecord` (R9) |
+| Open drives — time left, applied of eligible, offers | `applicationWindow` + `driveOutcome`, with `now` passed in |
+| Drives completed | `drivesByStatus` |
+
+Who has it now: CEO, ER, ER Head, Campus Manager, KAM, Delivery Head, Admin,
+**campus CPC** and **Central CPC**. The **AE is deliberately excluded** — they
+have no read policy on `students`, so it would render zeroes and look broken.
+Their drives are their view, and those carry the window clock instead.
+
+**A real defect fell out of building it (`9b1d5d3`).** `evaluateEligibility`
+documents that an empty criteria list means *any, never none* — and
+`drives-view` passed empty arrays for degrees, branches, campuses and cities
+because it never loaded the three link tables. Every drive the Central CPC
+targeted on the publish screen was therefore open to the **entire roster**: a
+B.E CSE drive at one campus was visible, and applyable, to a BCA student at
+another. The targeting was being written and read by nothing. Now enforced,
+with six regression tests.
 
 ### The coverage gate, closed
 
@@ -212,6 +248,14 @@ added on 2026-08-04:**
   mid-session and destroyed ~7 tests I had just written. Commit first.
 - **PGlite runs as superuser, so it bypasses RLS.** A schema test passing does
   not prove a policy works for a real user — use `t.asUser(...)`.
+- **A missing asset path returns `index.html` with HTTP 200.** Verifying a
+  deploy with `curl .../assets/<wrong-name>.js | grep -c` therefore reports 0
+  for everything and looks like a broken deploy. Read the asset name out of the
+  live `index.html` each time, and check the size or hash.
+- **`git checkout <file>` will eat uncommitted work** — the warning below is
+  there because it happened again on 2026-08-05, to `dashboard-view.ts`, during
+  a mutation check. Back the file up *before* mutating, restore from the
+  backup, and never let `git checkout` near it.
 - **A count query is a `HEAD` request.** `select(..., { head: true })` is not
   matched by an `http.get` handler, and MSW's unhandled-request error surfaces
   as a 5-second test timeout, not as a failure that names the cause.
