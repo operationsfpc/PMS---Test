@@ -13,6 +13,12 @@ only you can supply. Everything else proceeds on assumptions (`ASSUMPTIONS.md`).
 | **P6** | Staff onboarding | Real staff names, emails and roles to invite | Only `karthikraja@faceprep.in` exists. The Invite staff screen is built; the list of people is yours |
 | **P7** | Go-live | Google OAuth consent screen verification, if you expect >100 users | Unverified apps hit a user cap |
 
+## Answered
+
+| # | Question | Answer | Where it landed |
+|---|---|---|---|
+| **KAM scope** | Is a Key Account Manager campus-scoped or organisation-wide? | **Campus-scoped.** "A key account manager takes care of a few campuses. Campuses have to be mapped to a key account manager." (2026-08-05) | Migration `0018`: `is_campus_reader()` now includes `key_account_manager`, scoped by `staff_campus_assignments` — the mapping the Admin already makes at invitation time. Read-only: a KAM does not verify marksheets or mark attendance |
+
 ## Not blocking, but worth your attention
 
 - **Coverage gate.** `pnpm check` is red and **was red before this session's work** (proved against a clean `HEAD`): `src/domain` sits at 97.51% against the 100% rule, global branches 76.85% against 80%. Being brought back up.
