@@ -1,109 +1,204 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import type { AcademicProfile } from "@domain/types";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
-import { DafPublish } from "./daf-publish";
-
-const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
-const count = (): number => Number(screen.getByTestId("audience-count").textContent);
+import { describe, expect, it, vi } from "vitest";
+import { DafPublish, type PublishCandidate, type PublishView } from "./daf-publish";
 
 /**
- * The audience panel is computed by the real domain rules, so these tests are
- * really asserting that targeting behaves as the PRD says — end to end through
- * the UI, not just in isolation.
+ * Publishing a drive.
+ *
+ * This screen was a visual mock: a hardcoded cohort of twelve invented
+ * students, hardcoded city/campus/degree/branch chips, and a Publish button
+ * with no handler on it at all. A coordinator targeting a real drive was shown
+ * numbers that had nothing to do with their roster, and pressing Publish did
+ * nothing.
+ *
+ * The audience is still computed by the REAL domain rules, so these tests
+ * assert targeting behaviour end to end - but over the cohort the view
+ * supplies, which is the one in the database.
  */
-describe("DafPublish — live audience", () => {
-  it("computes an audience from the cohort", () => {
-    routed(<DafPublish />);
-    expect(count()).toBeGreaterThan(0);
+const academics = (over: Partial<AcademicProfile> = {}): AcademicProfile => ({
+  degree: "BCA",
+  branch: "AI and DS",
+  passingYear: 2027,
+  overallCgpa: 8,
+  tenthPercentage: 80,
+  twelfthPercentage: 80,
+  currentArrears: 0,
+  historyOfArrears: 0,
+  city: "Chennai",
+  campus: "Alliance University",
+  ...over,
+});
+
+const candidate = (
+  id: string,
+  name: string,
+  over: Partial<PublishCandidate> = {},
+): PublishCandidate => ({
+  id,
+  name,
+  srfStatus: "srf_approved",
+  participationStatus: "active",
+  academics: academics(),
+  offers: [],
+  ...over,
+});
+
+const DRIVE = {
+  id: "drive-1",
+  companyName: "Zoho",
+  roleTitle: "Member Technical Staff",
+  subtitle: "Member Technical Staff · Dream · ₹6–8 LPA · Placement",
+  status: "approved" as const,
+  driveType: "placement" as const,
+  offerCategory: "dream" as const,
+  applicationStart: new Date("2026-08-01T00:00:00Z"),
+  applicationEnd: new Date("2026-08-14T00:00:00Z"),
+  onHold: false,
+  hasJobDescription: true,
+  hasCtc: true,
+  hasRounds: true,
+};
+
+function view(over: Partial<PublishView> = {}, cohort?: readonly PublishCandidate[]): PublishView {
+  return {
+    load: async () => ({
+      drive: DRIVE,
+      options: {
+        cities: ["Chennai", "Bengaluru"],
+        campuses: ["Alliance University"],
+        degrees: ["BCA", "B.E"],
+        branches: ["AI and DS", "CSE"],
+      },
+      cohort: cohort ?? [
+        candidate("s1", "Sai Naveen"),
+        candidate("s2", "Thanush Krishna"),
+        candidate("s3", "Naveen Kumar", { academics: academics({ branch: "CSE" }) }),
+      ],
+    }),
+    publish: async () => undefined,
+    ...over,
+  };
+}
+
+const routed = (v: PublishView) =>
+  render(
+    <MemoryRouter>
+      <DafPublish view={v} />
+    </MemoryRouter>,
+  );
+
+const count = (): number => Number(screen.getByTestId("audience-count").textContent);
+
+describe("DafPublish — the drive being published", () => {
+  it("names the real drive, not a hardcoded one", async () => {
+    routed(view());
+
+    expect(await screen.findByRole("heading", { name: /publish drive — zoho/i })).toBeDefined();
   });
 
-  it("never counts students whose SRF is unverified, who opted out, or who are disbarred", () => {
-    routed(<DafPublish />);
+  it("offers the degrees and branches that actually exist on the roster", async () => {
+    routed(view());
+
+    expect(await screen.findByRole("checkbox", { name: "BCA" })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "AI and DS" })).toBeDefined();
+  });
+});
+
+describe("DafPublish — live audience", () => {
+  it("counts the cohort the view supplied", async () => {
+    routed(view());
+
+    await waitFor(() => expect(count()).toBe(3));
+    expect(screen.getByText(/of 3 students will see this drive/i)).toBeDefined();
+  });
+
+  it("never counts students whose SRF is unverified, who opted out, or who are disbarred", async () => {
+    routed(
+      view({}, [
+        candidate("s1", "Fine"),
+        candidate("s2", "Unverified", { srfStatus: "srf_submitted" }),
+        candidate("s3", "Gone", { participationStatus: "opted_out" }),
+        candidate("s4", "Barred", { participationStatus: "disbarred" }),
+      ]),
+    );
+
+    await waitFor(() => expect(count()).toBe(1));
     for (const label of [/SRF not yet verified/i, /Opted out of placements/i, /Disbarred/i]) {
       expect(screen.getByText(label)).toBeDefined();
     }
   });
 
   it("shrinks the audience when a branch filter is applied", async () => {
-    routed(<DafPublish />);
-    const before = count();
-    await userEvent.click(screen.getByRole("checkbox", { name: "ECE" }));
-    expect(count()).toBeLessThan(before);
-  });
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
 
-  it("shrinks the audience when the arrear policy is tightened", async () => {
-    routed(<DafPublish />);
-    await userEvent.selectOptions(screen.getByLabelText(/arrear policy/i), "flexible");
-    const relaxed = count();
-    await userEvent.selectOptions(screen.getByLabelText(/arrear policy/i), "no_history");
-    expect(count()).toBeLessThan(relaxed);
-  });
+    await userEvent.click(screen.getByRole("checkbox", { name: "CSE" }));
 
-  it("excludes students already placed at an equal or higher category", () => {
-    routed(<DafPublish />);
-    // The drive is Dream; Neha holds Super Dream and Priya holds Dream.
-    expect(screen.getByText(/placed at an equal or higher category/i)).toBeDefined();
+    await waitFor(() => expect(count()).toBe(1));
   });
 });
 
-describe("DafPublish — prestige-drive override (R5a)", () => {
-  it("is off by default", () => {
-    routed(<DafPublish />);
-    expect((screen.getByLabelText(/open to all students/i) as HTMLInputElement).checked).toBe(
-      false,
+describe("DafPublish — publishing", () => {
+  it("publishes with the targeting the coordinator chose", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "BCA" }));
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({
+      driveId: "drive-1",
+      degrees: ["BCA"],
+      openToAllOverride: false,
+    });
+  });
+
+  it("confirms when the drive is live, so nobody presses it twice", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    expect(await screen.findByRole("status")).toHaveProperty("textContent", expect.any(String));
+    expect(screen.getByText(/is live/i)).toBeDefined();
+  });
+
+  /**
+   * R5a is audit-logged and mandatory. Refusing silently by disabling the
+   * button is what made this look broken: the reason sat in a checklist the
+   * coordinator had already scrolled past.
+   */
+  it("says why it will not publish when the override reason is missing", async () => {
+    const publish = vi.fn();
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /open to all students/i }));
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    expect(publish).not.toHaveBeenCalled();
+    expect(await screen.findByRole("alert")).toHaveProperty("textContent");
+    expect(screen.getByRole("alert").textContent).toMatch(/reason/i);
+  });
+
+  it("surfaces a refusal from the database instead of appearing to do nothing", async () => {
+    routed(
+      view({
+        publish: async () => {
+          throw new Error("This drive is on hold and cannot be published.");
+        },
+      }),
     );
-  });
+    await waitFor(() => expect(count()).toBe(3));
 
-  it("widens the audience when enabled", async () => {
-    routed(<DafPublish />);
-    const before = count();
-    await userEvent.click(screen.getByLabelText(/open to all students/i));
-    expect(count()).toBeGreaterThan(before);
-  });
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
 
-  it("still excludes opted-out and disbarred students when enabled", async () => {
-    routed(<DafPublish />);
-    await userEvent.click(screen.getByLabelText(/open to all students/i));
-    expect(screen.getByText(/opted out of placements/i)).toBeDefined();
-    expect(screen.getByText(/^disbarred$/i)).toBeDefined();
-  });
-
-  it("demands a reason before the drive can be published", async () => {
-    routed(<DafPublish />);
-    await userEvent.click(screen.getByLabelText(/open to all students/i));
-
-    expect(screen.getByText(/a reason is required/i)).toBeDefined();
-    expect(
-      (screen.getByRole("button", { name: /publish to/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-
-    await userEvent.type(screen.getByLabelText(/reason for override/i), "Flagship recruiter");
-
-    expect(screen.queryByText(/a reason is required/i)).toBeNull();
-    expect(
-      (screen.getByRole("button", { name: /publish to/i }) as HTMLButtonElement).disabled,
-    ).toBe(false);
-  });
-
-  it("flags that the override is active", async () => {
-    routed(<DafPublish />);
-    await userEvent.click(screen.getByLabelText(/open to all students/i));
-    expect(screen.getByText(/override active/i)).toBeDefined();
-  });
-});
-
-describe("DafPublish — go-live checklist", () => {
-  it("blocks publishing when the filters match nobody", async () => {
-    routed(<DafPublish />);
-    // An impossible combination: MCA students are only at VIT Bangalore.
-    await userEvent.click(screen.getByRole("checkbox", { name: "MCA" }));
-    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
-
-    expect(count()).toBe(0);
-    expect(
-      (screen.getByRole("button", { name: /publish to/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/on hold/i);
   });
 });

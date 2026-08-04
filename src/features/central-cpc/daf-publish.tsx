@@ -1,9 +1,10 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import type { EligibilityCriteria } from "@domain/eligibility";
-import type { VisibilityReason, VisibleDrive } from "@domain/visibility";
+import type { OfferCategory } from "@domain/offer-category";
+import type { DriveStatus, DriveType } from "@domain/types";
+import type { StudentContext, VisibilityReason, VisibleDrive } from "@domain/visibility";
 import { isDriveVisibleToStudent } from "@domain/visibility";
-import { COHORT } from "@lib/mock-data";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /**
  * Central CPC — DAF creation and audience targeting. PRD §7.1, §6.2, §6.5.
@@ -11,12 +12,62 @@ import { useMemo, useState } from "react";
  * The live audience count is computed by running the REAL domain rules over the
  * cohort. Nothing here re-implements eligibility or the ladder, so what the
  * coordinator sees before publishing is exactly what students will get.
+ *
+ * Everything it runs those rules over now comes from the view: the drive, the
+ * targeting options, and the students. It used to be a hardcoded cohort of
+ * twelve invented people and four hardcoded chip lists, which meant the
+ * audience number on screen had nothing to do with the roster.
  */
 
-const CITIES = ["Chennai", "Bengaluru"] as const;
-const CAMPUSES = ["Alliance University", "VIT Bangalore"] as const;
-const DEGREES = ["B.E", "MCA", "B.Sc CS"] as const;
-const BRANCHES = ["CSE", "IT", "ECE"] as const;
+/** One student, as the domain needs them, plus enough to name them. */
+export interface PublishCandidate extends StudentContext {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface TargetingOptions {
+  readonly cities: readonly string[];
+  readonly campuses: readonly string[];
+  readonly degrees: readonly string[];
+  readonly branches: readonly string[];
+}
+
+export interface PublishDrive {
+  readonly id: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly subtitle: string;
+  readonly status: DriveStatus;
+  readonly driveType: DriveType | null;
+  readonly offerCategory: OfferCategory | null;
+  readonly applicationStart: Date | null;
+  readonly applicationEnd: Date | null;
+  readonly onHold: boolean;
+  readonly hasJobDescription: boolean;
+  readonly hasCtc: boolean;
+  readonly hasRounds: boolean;
+}
+
+export interface PublishInput {
+  readonly driveId: string;
+  readonly cities: readonly string[];
+  readonly campuses: readonly string[];
+  readonly degrees: readonly string[];
+  readonly branches: readonly string[];
+  readonly minOverallCgpa: number | null;
+  readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
+  readonly openToAllOverride: boolean;
+  readonly overrideReason: string | null;
+}
+
+export interface PublishView {
+  load(): Promise<{
+    drive: PublishDrive;
+    options: TargetingOptions;
+    cohort: readonly PublishCandidate[];
+  }>;
+  publish(input: PublishInput): Promise<void>;
+}
 
 const EXCLUSION_LABEL: Record<Exclude<VisibilityReason, "visible">, string> = {
   srf_not_approved: "SRF not yet verified",
@@ -71,7 +122,13 @@ function MultiSelect({
   );
 }
 
-export function DafPublish() {
+export function DafPublish({ view }: { view: PublishView }) {
+  const [loaded, setLoaded] = useState<Awaited<ReturnType<PublishView["load"]>> | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [published, setPublished] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+
   const [cities, setCities] = useState<readonly string[]>([]);
   const [campuses, setCampuses] = useState<readonly string[]>([]);
   const [degrees, setDegrees] = useState<readonly string[]>([]);
@@ -82,55 +139,157 @@ export function DafPublish() {
   const [openToAll, setOpenToAll] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
 
+  const load = useCallback(async () => {
+    try {
+      setLoaded(await view.load());
+      setLoadError(null);
+    } catch {
+      setLoadError("Could not load this drive. Please try again.");
+    }
+  }, [view]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   const toggle =
     (set: (fn: (cur: readonly string[]) => readonly string[]) => void) =>
     (value: string): void =>
       set((cur) => (cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value]));
 
-  const drive: VisibleDrive = useMemo(
-    () => ({
-      id: "d1",
-      status: "approved",
-      driveType: "placement",
-      offerCategory: "dream",
-      openToAllOverride: openToAll,
-      applicationStart: new Date("2026-08-01T00:00:00Z"),
-      applicationEnd: new Date("2026-08-14T23:59:59Z"),
-      criteria: {
-        eligibleDegrees: degrees,
-        eligibleBranches: branches,
-        eligiblePassingYears: [],
-        minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
-        minTenthPercentage: null,
-        minTwelfthPercentage: null,
-        arrearPolicy,
-        targetCities: cities,
-        targetCampuses: campuses,
-      },
-    }),
-    [degrees, branches, minCgpa, arrearPolicy, cities, campuses, openToAll],
+  const cohort = loaded?.cohort ?? [];
+  const loadedDrive = loaded?.drive ?? null;
+
+  const drive: VisibleDrive | null = useMemo(
+    () =>
+      loadedDrive === null
+        ? null
+        : {
+            id: loadedDrive.id,
+            status: loadedDrive.status,
+            driveType: loadedDrive.driveType ?? "placement",
+            offerCategory: loadedDrive.offerCategory,
+            openToAllOverride: openToAll,
+            // A drive with no window yet must not silently exclude everyone:
+            // the window is set elsewhere and checked by the readiness list.
+            applicationStart: loadedDrive.applicationStart ?? new Date(0),
+            applicationEnd: loadedDrive.applicationEnd ?? new Date(8.64e15),
+            criteria: {
+              eligibleDegrees: degrees,
+              eligibleBranches: branches,
+              eligiblePassingYears: [],
+              minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
+              minTenthPercentage: null,
+              minTwelfthPercentage: null,
+              arrearPolicy,
+              targetCities: cities,
+              targetCampuses: campuses,
+            },
+          },
+    [loadedDrive, degrees, branches, minCgpa, arrearPolicy, cities, campuses, openToAll],
   );
 
   const audience = useMemo(() => {
     const included: string[] = [];
     const excluded = new Map<string, number>();
-    for (const student of COHORT) {
-      const result = isDriveVisibleToStudent(student, drive);
-      if (result.visible) included.push(student.name);
-      else excluded.set(result.reason, (excluded.get(result.reason) ?? 0) + 1);
+    if (drive !== null) {
+      for (const student of cohort) {
+        const result = isDriveVisibleToStudent(student, drive);
+        if (result.visible) included.push(student.name);
+        else excluded.set(result.reason, (excluded.get(result.reason) ?? 0) + 1);
+      }
     }
     return { included, excluded: [...excluded.entries()] };
-  }, [drive]);
+  }, [drive, cohort]);
 
   const overrideIncomplete = openToAll && overrideReason.trim() === "";
-  const canPublish = audience.included.length > 0 && !overrideIncomplete;
+
+  /**
+   * A disabled button with the reason buried in a checklist is what made this
+   * look broken. The press is always accepted; if it cannot go ahead, it says
+   * so where the coordinator is looking.
+   */
+  async function publish() {
+    setFailure(null);
+
+    if (overrideIncomplete) {
+      setFailure(
+        "An override reason is required before this drive can go live. It is audit-logged.",
+      );
+      return;
+    }
+    if (audience.included.length === 0) {
+      setFailure("Nobody matches this targeting yet, so there would be nobody to publish to.");
+      return;
+    }
+    if (loadedDrive === null) return;
+
+    setPublishing(true);
+    try {
+      await view.publish({
+        driveId: loadedDrive.id,
+        cities,
+        campuses,
+        degrees,
+        branches,
+        minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
+        arrearPolicy,
+        openToAllOverride: openToAll,
+        overrideReason: openToAll ? overrideReason.trim() : null,
+      });
+      setPublished(true);
+    } catch (cause) {
+      setFailure(cause instanceof Error ? cause.message : "Could not publish this drive.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  if (loadError !== null) {
+    return (
+      <Card className="p-6">
+        <p role="alert" className="text-sm text-danger-700">
+          {loadError}
+        </p>
+      </Card>
+    );
+  }
+
+  if (loaded === null || loadedDrive === null) {
+    return (
+      <p role="status" className="p-6 text-sm text-ink-500">
+        Loading this drive…
+      </p>
+    );
+  }
+
+  if (published) {
+    return (
+      <Card className="p-6">
+        <h1 className="font-heading text-xl font-bold text-brand-600">
+          {loadedDrive.companyName} is live
+        </h1>
+        <p role="status" className="mt-2 text-sm text-ink-700">
+          {audience.included.length} students can now see and apply to this drive.
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <>
       <PageHeader
-        title="Publish drive — Goldman Sachs"
-        subtitle="Analyst — Engineering · Super Dream · ₹18–22 LPA · Placement"
+        title={`Publish drive — ${loadedDrive.companyName}`}
+        subtitle={loadedDrive.subtitle}
       />
+
+      {failure !== null && (
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-700">
+            {failure}
+          </p>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="flex flex-col gap-4">
@@ -139,25 +298,25 @@ export function DafPublish() {
             <div className="flex flex-col gap-5">
               <MultiSelect
                 label="Cities"
-                options={CITIES}
+                options={loaded.options.cities}
                 selected={cities}
                 onToggle={toggle(setCities)}
               />
               <MultiSelect
                 label="Campuses"
-                options={CAMPUSES}
+                options={loaded.options.campuses}
                 selected={campuses}
                 onToggle={toggle(setCampuses)}
               />
               <MultiSelect
                 label="Degrees"
-                options={DEGREES}
+                options={loaded.options.degrees}
                 selected={degrees}
                 onToggle={toggle(setDegrees)}
               />
               <MultiSelect
                 label="Branches"
-                options={BRANCHES}
+                options={loaded.options.branches}
                 selected={branches}
                 onToggle={toggle(setBranches)}
               />
@@ -257,7 +416,7 @@ export function DafPublish() {
                 {audience.included.length}
               </p>
               <p className="text-xs text-white/70">
-                of {COHORT.length} students will see this drive
+                of {cohort.length} students will see this drive
               </p>
             </div>
 
@@ -286,10 +445,14 @@ export function DafPublish() {
                 </p>
                 <ul className="flex flex-col gap-1.5 text-sm">
                   {[
-                    ["Company, role and JD", true],
-                    ["CTC and classification", true],
-                    ["Rounds configured", true],
-                    ["Application window set", true],
+                    ["Company, role and JD", loadedDrive.hasJobDescription],
+                    ["CTC and classification", loadedDrive.hasCtc],
+                    ["Rounds configured", loadedDrive.hasRounds],
+                    [
+                      "Application window set",
+                      loadedDrive.applicationStart !== null && loadedDrive.applicationEnd !== null,
+                    ],
+                    ["Not on hold", !loadedDrive.onHold],
                     ["At least one student targeted", audience.included.length > 0],
                     ["Override reason supplied", !overrideIncomplete],
                   ].map(([label, done]) => (
@@ -308,8 +471,14 @@ export function DafPublish() {
                 </ul>
               </div>
 
-              <Button className="mt-4 w-full" disabled={!canPublish}>
-                Publish to {audience.included.length} students
+              {/* Never disabled while there is something to explain: a dead
+                  button is indistinguishable from a broken one. */}
+              <Button className="mt-4 w-full" disabled={publishing} onClick={() => void publish()}>
+                {publishing
+                  ? "Publishing…"
+                  : `Publish to ${audience.included.length} student${
+                      audience.included.length === 1 ? "" : "s"
+                    }`}
               </Button>
               {openToAll && (
                 <p className="mt-2 text-center text-xs">

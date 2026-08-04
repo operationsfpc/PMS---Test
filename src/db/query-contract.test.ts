@@ -1,3 +1,4 @@
+import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
 import { DRIVE_COLUMNS, STUDENT_COLUMNS } from "@features/student/drives-view";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./harness";
@@ -144,6 +145,10 @@ describe("every hand-written select matches the schema", () => {
       "drives",
       "id, company_name, role_title, status, on_hold, drive_rounds(id, sequence, name)",
     ],
+    // The publish screen ran on invented data until 2026-08-04, so neither of
+    // these selects had ever met the schema.
+    ["publish drive", "drives", PUBLISH_DRIVE_COLUMNS],
+    ["publish cohort", "students", PUBLISH_COHORT_COLUMNS],
     [
       "cockpit absence reviews",
       "attendance",
