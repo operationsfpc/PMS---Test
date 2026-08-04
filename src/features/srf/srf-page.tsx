@@ -1,13 +1,14 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
+import { mergeSrfDraft } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
-import { type ReactNode, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Link } from "react-router";
-import { SrfSubmitError, submitSrf } from "./srf-api";
+import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
 import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
 
@@ -90,12 +91,24 @@ const grid = "grid gap-4 sm:grid-cols-2";
  * not theirs to type - those fields are disabled - so without it the form
  * cannot be completed at all.
  */
-export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
+export function SrfPage({
+  profile,
+  /** The student's unsent form, if they have one. */
+  draft,
+  /** Injected so the page can be tested without a database. */
+  saveDraft = (values: unknown) => saveSrfDraft(values),
+}: {
+  profile?: SrfProfile | null;
+  draft?: unknown;
+  saveDraft?: (values: unknown) => Promise<boolean>;
+}) {
   const { signOut } = useAuthActions();
   // Stable ids so React never re-keys an upload control on add/remove.
   const [semesterIds, setSemesterIds] = useState<readonly number[]>([1, 2]);
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
 
   const {
     register,
@@ -103,22 +116,19 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
     control,
     watch,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<SrfFormValues>({
     resolver: zodResolver(srfSchema),
-    defaultValues: {
-      ...SRF_DEFAULTS,
-      ...(profile === null || profile === undefined
-        ? {}
-        : {
-            fullName: profile.fullName,
-            rollNumber: profile.rollNumber,
-            email: profile.email,
-            degree: profile.degree,
-            branch: profile.branch,
-            passingYear: profile.passingYear,
-          }),
-    },
+    /**
+     * Roster beats draft beats defaults - the order is a domain rule, because
+     * a draft can be weeks older than a roster correction and must never
+     * quietly restore a stale roll number for verification to fail on.
+     */
+    defaultValues: mergeSrfDraft(
+      SRF_DEFAULTS as unknown as Record<string, unknown>,
+      profile === null || profile === undefined ? null : { ...profile },
+      draft,
+    ) as unknown as SrfFormValues,
     mode: "onTouched",
   });
 
@@ -154,6 +164,54 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
     roleCategories: selectedCategories,
     resumeCategories,
     consent: watch("consent") === true,
+  };
+
+  /**
+   * Auto-save (UAT 2026-08-05).
+   *
+   * Debounced, because saving on every keystroke would be a request per
+   * character. It deliberately does nothing until the student has actually
+   * changed something: an untouched form has nothing worth storing, and
+   * writing one would tell them their entries were saved when there are none.
+   */
+  const savingRef = useRef(false);
+
+  /**
+   * The dependency is the SERIALISED form, not the object.
+   *
+   * `watch()` returns a fresh object every render, so depending on it would
+   * restart the debounce for ever and never save. Serialising also makes what
+   * is stored exactly what survives the round trip into a jsonb column, rather
+   * than something that looks right in memory and comes back different.
+   */
+  const serialised = JSON.stringify(watch());
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const timer = setTimeout(() => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setDraftState("saving");
+
+      void saveDraft(JSON.parse(serialised))
+        .then((ok) => {
+          setDraftState(ok ? "saved" : "failed");
+          if (ok) setDraftSavedAt(new Date());
+        })
+        .finally(() => {
+          savingRef.current = false;
+        });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [serialised, isDirty, saveDraft]);
+
+  const saveNow = async () => {
+    setDraftState("saving");
+    const ok = await saveDraft(JSON.parse(serialised));
+    setDraftState(ok ? "saved" : "failed");
+    if (ok) setDraftSavedAt(new Date());
   };
 
   const progress = srfSectionProgress(progressInput);
@@ -257,10 +315,31 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
               </li>
             ))}
           </ol>
-          <p className="mt-2 text-xs text-ink-500">
-            <span className="font-semibold text-ink-700">{completion}% complete</span> — your
-            entries are saved as you go.
-          </p>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-ink-500">
+              <span className="font-semibold text-ink-700">{completion}% complete</span> — your
+              entries are saved as you go.
+            </p>
+
+            {/* Said out loud, because "saved as you go" is a promise, and a
+                student who has just typed for ten minutes deserves to see it
+                kept - or to be told plainly that it was not. */}
+            <span role="status" className="text-xs text-ink-500">
+              {draftState === "saving" && "Saving…"}
+              {draftState === "saved" &&
+                draftSavedAt !== null &&
+                `Draft saved at ${draftSavedAt.toLocaleTimeString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}`}
+              {draftState === "failed" && (
+                <span className="text-danger-700">
+                  Your draft could not be saved. Check your connection.
+                </span>
+              )}
+            </span>
+          </div>
         </nav>
 
         <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
@@ -715,11 +794,15 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
               >
                 {isSubmitting ? "Submitting…" : "Submit for verification"}
               </button>
+              {/* This button existed and did NOTHING - the form advertised
+                  draft saving it had never implemented. */}
               <button
                 type="button"
-                className="rounded-lg border border-line bg-surface px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:border-brand-300"
+                onClick={() => void saveNow()}
+                disabled={draftState === "saving"}
+                className="rounded-lg border border-line bg-surface px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:border-brand-300 disabled:opacity-60"
               >
-                Save draft
+                {draftState === "saving" ? "Saving…" : "Save draft"}
               </button>
             </div>
           </Section>

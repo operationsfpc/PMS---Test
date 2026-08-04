@@ -45,5 +45,5 @@ export function SrfRoute() {
     );
   }
 
-  return <SrfPage profile={profile} />;
+  return <SrfPage profile={profile} draft={profile?.draft ?? null} />;
 }

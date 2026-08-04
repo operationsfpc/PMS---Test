@@ -13,6 +13,11 @@ import type { SrfSubmission } from "./srf-schema";
 
 export interface SrfRepository {
   submit(values: SrfSubmission): Promise<{ id: string; status: Enums["srf_status"] }>;
+  /**
+   * Stores the unsent form. Resolves `false` rather than throwing when it
+   * fails - see the implementation for why.
+   */
+  saveDraft(values: unknown): Promise<boolean>;
 }
 
 export class SrfSubmitError extends Error {}
@@ -63,6 +68,11 @@ export function createSupabaseSrfRepository(
           consent_given_at: new Date().toISOString(),
           srf_status: "srf_submitted" satisfies Enums["srf_status"],
           srf_submitted_at: new Date().toISOString(),
+          // The draft has served its purpose. Left behind, the next visit
+          // would restore a copy of a form already submitted and the student
+          // would edit something that no longer means anything.
+          srf_draft: null,
+          srf_draft_saved_at: null,
         })
         .eq("auth_user_id", userId)
         .select("id, srf_status")
@@ -103,6 +113,33 @@ export function createSupabaseSrfRepository(
       }
 
       return { id: studentId, status: data.srf_status as Enums["srf_status"] };
+    },
+
+    /**
+     * Saves the form as a draft (UAT 2026-08-05).
+     *
+     * It writes ONLY the draft column. Not srf_status - submitting is what
+     * moves the form forward - and not a single verified field, which the
+     * 0009 guard would refuse anyway and which would make an auto-save a way
+     * of editing marks a coordinator had already checked.
+     *
+     * It never throws. Auto-save runs while the student is typing, and an
+     * exception there would surface as a failure of whatever they were doing.
+     * The worst honest outcome is that this attempt is lost and the next one,
+     * a few seconds later, succeeds.
+     */
+    async saveDraft(values) {
+      const userId = await getAuthUserId();
+      if (userId === null) return false;
+
+      const { error } = await client
+        .from("students")
+        .update({ srf_draft: values, srf_draft_saved_at: new Date().toISOString() })
+        .eq("auth_user_id", userId)
+        .select("id")
+        .single();
+
+      return error === null;
     },
   };
 }

@@ -17,6 +17,21 @@ export class SrfSubmitError extends Error {}
  * the Supabase adapter, so RLS and the verified-field guards in 0009 apply.
  * The page's contract is unchanged: it awaits this and catches SrfSubmitError.
  */
+/**
+ * Stores the unsent form (UAT 2026-08-05).
+ *
+ * Never throws: auto-save runs while the student is typing, and an exception
+ * there would surface as a failure of whatever they were doing. It reports
+ * whether it worked so the screen can say so honestly.
+ */
+export async function saveSrfDraft(values: unknown): Promise<boolean> {
+  try {
+    return await createSupabaseSrfRepository(supabase()).saveDraft(values);
+  } catch {
+    return false;
+  }
+}
+
 export async function submitSrf(values: SrfSubmission): Promise<SrfSubmitResult> {
   const repository = createSupabaseSrfRepository(supabase());
 

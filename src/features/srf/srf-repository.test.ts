@@ -32,6 +32,18 @@ const repo = (userId: string | null = USER) =>
     async () => userId,
   );
 
+/** Records what a draft save actually sends. */
+function captureDraftWrites() {
+  const writes: { body: unknown; search: string }[] = [];
+  server.use(
+    http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
+      writes.push({ body: await request.clone().json(), search: new URL(request.url).search });
+      return HttpResponse.json({ id: "s1" });
+    }),
+  );
+  return writes;
+}
+
 const values: SrfSubmission = {
   ...SRF_DEFAULTS,
   mobile: "9876543210",
@@ -221,5 +233,72 @@ describe("createSupabaseSrfRepository", () => {
       expect(error?.message).toBe("Could not submit your form. Please try again.");
       expect(error?.message).not.toContain("pg_catalog");
     });
+  });
+});
+
+/**
+ * Draft saving, requested from UAT 2026-08-05.
+ *
+ * A draft is a convenience: it must never move the form forward, never touch
+ * a verified column, and never fail loudly enough to interrupt someone who is
+ * mid-sentence. All three are asserted here.
+ */
+describe("saving a draft", () => {
+  /**
+   * Otherwise the next visit restores a draft of a form already submitted,
+   * and the student edits a copy that no longer means anything.
+   */
+  it("is cleared when the form is finally submitted", async () => {
+    const writes = captureDraftWrites();
+
+    await repo().submit(values);
+
+    expect(writes[0]?.body).toMatchObject({ srf_draft: null, srf_draft_saved_at: null });
+  });
+
+  it("writes the values against the signed-in student, with the time", async () => {
+    const writes = captureDraftWrites();
+
+    await repo().saveDraft({ mobile: "9876543210" });
+
+    expect(writes[0]?.body).toMatchObject({ srf_draft: { mobile: "9876543210" } });
+    expect(writes[0]?.body).toMatchObject({ srf_draft_saved_at: expect.any(String) });
+    expect(writes[0]?.search).toContain(`auth_user_id=eq.${USER}`);
+  });
+
+  it("never moves the form forward - that is what submitting is for", async () => {
+    const writes = captureDraftWrites();
+
+    await repo().saveDraft({ mobile: "9876543210" });
+
+    expect(writes[0]?.body).not.toHaveProperty("srf_status");
+    expect(writes[0]?.body).not.toHaveProperty("tenth_percentage");
+  });
+
+  /**
+   * Auto-save runs while the student is typing. A failed save must never throw
+   * into their session: the worst honest outcome is that this attempt is lost
+   * and the next one succeeds.
+   */
+  it("swallows a failure rather than interrupting the student", async () => {
+    server.use(
+      http.patch(`${BASE}/rest/v1/students`, () => new HttpResponse(null, { status: 500 })),
+    );
+
+    await expect(repo().saveDraft({ mobile: "9876543210" })).resolves.toBe(false);
+  });
+
+  it("says it saved when it did", async () => {
+    captureDraftWrites();
+
+    await expect(repo().saveDraft({ mobile: "9876543210" })).resolves.toBe(true);
+  });
+
+  it("does not try to save for a student with no session", async () => {
+    const writes = captureDraftWrites();
+    const anonymous = repo(null);
+
+    await expect(anonymous.saveDraft({ mobile: "9876543210" })).resolves.toBe(false);
+    expect(writes).toHaveLength(0);
   });
 });

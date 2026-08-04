@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { AuthActionsContext } from "@lib/auth-context";
-import { render as rtlRender, screen, within } from "@testing-library/react";
+import { act, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -33,6 +33,7 @@ const ROSTER = {
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
+  draft: null,
 };
 
 describe("SrfPage — signing out", () => {
@@ -204,5 +205,88 @@ describe("SrfPage — progress and navigation", () => {
 
     const home = await screen.findByRole("link", { name: /my dashboard/i });
     expect(home.getAttribute("href")).toBe("/student");
+  });
+});
+
+/**
+ * Draft saving, requested from UAT 2026-08-05: "students can continue the
+ * registration later without losing their data."
+ *
+ * The tracker tells the student their entries are saved as they go, so this
+ * has to be true — a promise on screen that the application does not keep is
+ * worse than no promise.
+ */
+describe("SrfPage — saving a draft", () => {
+  const flush = async () => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+  };
+
+  it("saves what the student has typed, without being asked", async () => {
+    const saveDraft = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={saveDraft} />);
+
+    await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
+    await flush();
+
+    expect(saveDraft).toHaveBeenCalled();
+    expect(saveDraft.mock.calls.at(-1)?.[0]).toMatchObject({ mobile: "9876543210" });
+  });
+
+  it("tells the student it has saved, and when", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} />);
+
+    await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
+    await flush();
+
+    expect(await screen.findByText(/draft saved/i)).toBeDefined();
+  });
+
+  it("lets the student save on demand, for when they are about to leave", async () => {
+    const saveDraft = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={saveDraft} />);
+
+    await user.click(screen.getByRole("button", { name: /save draft/i }));
+
+    await waitFor(() => expect(saveDraft).toHaveBeenCalled());
+  });
+
+  it("says plainly when a draft could not be saved, rather than pretending", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => false} />);
+
+    await user.click(screen.getByRole("button", { name: /save draft/i }));
+
+    expect(await screen.findByText(/could not be saved/i)).toBeDefined();
+  });
+
+  it("reopens the form where the student left it", async () => {
+    render(
+      <SrfPage profile={ROSTER} draft={{ mobile: "9876543210", technicalSkills: "TypeScript" }} />,
+    );
+
+    const mobile = screen.getByLabelText(/^mobile number/i) as HTMLInputElement;
+    expect(mobile.value).toBe("9876543210");
+  });
+
+  /** The roster is authoritative for identity, however old the draft is. */
+  it("does not let a stale draft overwrite the roster's identity", async () => {
+    render(<SrfPage profile={ROSTER} draft={{ rollNumber: "OLD-ROLL", branch: "ECE" }} />);
+
+    const roll = screen.getByLabelText(/roll number/i) as HTMLInputElement;
+    expect(roll.value).toBe("21CSE1042");
+  });
+
+  it("does not nag a student who has typed nothing", async () => {
+    const saveDraft = vi.fn().mockResolvedValue(true);
+    render(<SrfPage profile={ROSTER} saveDraft={saveDraft} />);
+
+    await flush();
+
+    expect(saveDraft).not.toHaveBeenCalled();
   });
 });

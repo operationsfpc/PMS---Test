@@ -66,6 +66,7 @@ const ROSTER = {
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
+  draft: null,
 };
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {

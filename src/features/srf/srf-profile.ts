@@ -17,11 +17,14 @@ export interface SrfProfile {
   readonly degree: string;
   readonly branch: string;
   readonly passingYear: number;
+  /** Their unsent form, if they saved one. Null when they have not. */
+  readonly draft: unknown;
 }
 
 /** Exported so src/db/query-contract.test.ts can prove it against the schema. */
 export const SRF_PROFILE_COLUMNS = `
-  full_name, roll_number, email, passing_year, degrees(name), branches(name)
+  full_name, roll_number, email, passing_year, srf_draft,
+  degrees(name), branches(name)
 `;
 
 const name = (value: unknown): string => {
@@ -52,6 +55,7 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
       degree: name(row.degrees),
       branch: name(row.branches),
       passingYear: (row.passing_year as number | null) ?? Number.NaN,
+      draft: row.srf_draft ?? null,
     };
   };
 }
