@@ -40,6 +40,16 @@ const studentsPatch = (respond: () => Response | Promise<Response>) =>
 /** Behaviour of the real SRF: validation, dynamic fields, submission. */
 
 /**
+ * `delay: null` removes userEvent's wait between keystrokes.
+ *
+ * This is the largest form in the application and these tests type into most
+ * of it, so the default delay pushed several of them past the 5s timeout under
+ * parallel load - they failed intermittently, which is worse than failing.
+ * Behaviour is unchanged: every keystroke still dispatches its real events.
+ */
+const setup = () => userEvent.setup({ delay: null });
+
+/**
  * The student's roster record. Identity used to arrive as fabricated defaults
  * ('Priya Ramesh', '21CSE1042') - what was reported as the form showing random
  * data. Those fields are disabled, so with the fake defaults gone the form
@@ -71,7 +81,7 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
 
 describe("SRF validation", () => {
   it("blocks submission and reports problems rather than silently failing", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
@@ -82,7 +92,7 @@ describe("SRF validation", () => {
   });
 
   it("rejects a percentage typed into a semester CGPA", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
@@ -101,7 +111,7 @@ describe("SRF validation", () => {
     // Cross-field, and Zod only evaluates object-level refinements once every
     // individual field parses - so the form must otherwise be valid, which is
     // exactly how a student meets this.
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
@@ -131,7 +141,7 @@ describe("SRF validation", () => {
     });
 
     it("adds the next semester, numbering it automatically", async () => {
-      const user = userEvent.setup();
+      const user = setup();
       render(<SrfPage profile={ROSTER} />);
 
       await user.click(screen.getByRole("button", { name: /add semester/i }));
@@ -140,7 +150,7 @@ describe("SRF validation", () => {
     });
 
     it("stops an undergraduate at ten semesters", async () => {
-      const user = userEvent.setup();
+      const user = setup();
       render(<SrfPage profile={ROSTER} />);
 
       for (let i = 0; i < 12; i += 1) {
@@ -155,7 +165,7 @@ describe("SRF validation", () => {
     });
 
     it("stops a postgraduate at four, and asks for their completed UG result", async () => {
-      const user = userEvent.setup();
+      const user = setup();
       render(<SrfPage profile={ROSTER} />);
 
       await user.click(screen.getByRole("radio", { name: /postgraduate/i }));
@@ -179,7 +189,7 @@ describe("SRF validation", () => {
     });
 
     it("removes a semester the student added by mistake", async () => {
-      const user = userEvent.setup();
+      const user = setup();
       render(<SrfPage profile={ROSTER} />);
 
       await user.click(screen.getByRole("button", { name: /add semester/i }));
@@ -202,7 +212,7 @@ describe("SRF validation", () => {
    * one is missing when several are on screen.
    */
   it("marks the specific resume that is missing, not just the group", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
     await fillValidForm(user);
@@ -217,7 +227,7 @@ describe("SRF validation", () => {
   });
 
   it("rejects a malformed mobile number", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
     await user.type(screen.getByLabelText(/mobile number/i), "12345");
@@ -227,7 +237,7 @@ describe("SRF validation", () => {
   });
 
   it("requires consent", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
     expect(await screen.findByText(/must consent/i)).toBeDefined();
@@ -236,7 +246,7 @@ describe("SRF validation", () => {
 
 describe("SRF dynamic fields", () => {
   it("shows a resume slot only for the categories the student picked", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
     expect(screen.queryByLabelText(/sales resume/i)).toBeNull();
@@ -248,7 +258,7 @@ describe("SRF dynamic fields", () => {
   });
 
   it("removes the resume slot when the category is deselected", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
     const sales = screen.getByRole("checkbox", { name: /^sales$/i });
@@ -260,7 +270,7 @@ describe("SRF dynamic fields", () => {
   });
 
   it("demands a resume for every selected category", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
@@ -272,7 +282,7 @@ describe("SRF dynamic fields", () => {
   });
 
   it("lets a student add and remove semester marksheet slots", async () => {
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
     expect(screen.getByLabelText(/semester 2 marksheet/i)).toBeDefined();
@@ -293,7 +303,7 @@ describe("SRF submission", () => {
     studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
     signedIn();
 
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
@@ -313,7 +323,7 @@ describe("SRF submission", () => {
     );
     signedIn();
 
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
@@ -329,7 +339,7 @@ describe("SRF submission", () => {
     studentsPatch(() => new HttpResponse(null, { status: 500 }));
     signedIn();
 
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
@@ -344,7 +354,7 @@ describe("SRF submission", () => {
     });
     signedIn();
 
-    const user = userEvent.setup();
+    const user = setup();
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
