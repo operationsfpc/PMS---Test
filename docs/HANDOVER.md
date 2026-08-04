@@ -6,7 +6,7 @@ Last updated at commit `01a0645`. **1215 tests passing across 90 files**, plus
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-05:** <https://fpc-pms.faceprep.workers.dev>
-(version `7d005c95-41ea-4173-bdab-0e327bfb32a2`) · database on Supabase
+(version `15ffa6d9-e71d-4b2b-8bba-ac43244deac0`) · database on Supabase
 ap-south-1 · migrations `0001`–`0019`, **local == remote** (`supabase migration
 list --linked`).
 
