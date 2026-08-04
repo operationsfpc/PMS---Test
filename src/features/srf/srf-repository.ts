@@ -1,3 +1,9 @@
+import {
+  type MarksheetKind,
+  marksheetSlotKey,
+  missingMarksheets,
+  requiredMarksheets,
+} from "@domain/marksheets";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Enums } from "../../db/database.types";
 import type { SrfSubmission } from "./srf-schema";
@@ -22,6 +28,74 @@ export interface SrfRepository {
 
 export class SrfSubmitError extends Error {}
 
+/** Private since 0010. Nothing here is ever served publicly. */
+const MARKSHEET_BUCKET = "marksheets";
+
+/**
+ * Stores the marksheets and records each one against the student.
+ *
+ * Returns document ids keyed by marksheet slot, so the caller can point each
+ * declared figure at the document that evidences it. This is what was missing
+ * entirely: the form collected these files and dropped them on the floor, so
+ * `student_semesters.marksheet_id` was never written and the coordinator's
+ * queue had nothing to check a declared CGPA against.
+ */
+async function storeMarksheets(
+  client: SupabaseClient,
+  studentId: string,
+  values: SrfSubmission,
+): Promise<ReadonlyMap<string, string>> {
+  const slots = requiredMarksheets(values);
+
+  const files = slots.flatMap((slot) => {
+    const file = values.marksheets[slot.key];
+    return file === undefined ? [] : [{ slot, file }];
+  });
+
+  if (files.length === 0) return new Map();
+
+  const rows: Array<{
+    student_id: string;
+    kind: MarksheetKind;
+    storage_path: string;
+    size_bytes: number;
+  }> = [];
+
+  for (const { slot, file } of files) {
+    // Namespaced by student id because that is exactly what the storage policy
+    // checks (0022), and stamped so a re-upload never collides with an earlier
+    // one - storage_path is unique, and a student correcting a bad scan is
+    // normal. The slot key is in the name so a coordinator reading the bucket
+    // can tell which figure the file belongs to.
+    const path = `${studentId}/${slot.key}-${Date.now()}-${file.name}`;
+
+    const { error } = await client.storage
+      .from(MARKSHEET_BUCKET)
+      .upload(path, file, { contentType: file.type });
+
+    if (error !== null) {
+      throw new SrfSubmitError(
+        `Could not upload your ${slot.label}. Check your connection and try again.`,
+      );
+    }
+
+    rows.push({
+      student_id: studentId,
+      kind: slot.kind,
+      storage_path: path,
+      size_bytes: file.size,
+    });
+  }
+
+  const { data, error } = await client.from("student_documents").insert(rows).select("id");
+
+  if (error !== null || data === null) {
+    throw new SrfSubmitError("Could not save your marksheets. Please try again.");
+  }
+
+  return new Map(files.map(({ slot }, index) => [slot.key, data[index]?.id as string]));
+}
+
 /** Resolves the signed-in user. Injected so the dependency is explicit and testable. */
 export type GetAuthUserId = () => Promise<string | null>;
 
@@ -42,6 +116,38 @@ export function createSupabaseSrfRepository(
       if (userId === null) {
         throw new SrfSubmitError("Your session has expired. Please sign in again.");
       }
+
+      /**
+       * Belt and braces with the schema. A repository that trusted its caller
+       * would let any other code path drop a form with no evidence into the
+       * verification queue, which is the defect this whole change exists to
+       * close.
+       */
+      const missing = missingMarksheets(values, Object.keys(values.marksheets));
+      if (missing.length > 0) {
+        throw new SrfSubmitError(
+          `Upload your ${missing.map((s) => s.label).join(", ")} before submitting.`,
+        );
+      }
+
+      /**
+       * The id is resolved BEFORE anything is written, because the evidence
+       * has to reach storage before the form reaches the queue. Submitting
+       * first and uploading second would ask a coordinator to verify figures
+       * against documents that do not exist.
+       */
+      const { data: own, error: ownError } = await client
+        .from("students")
+        .select("id")
+        .eq("auth_user_id", userId)
+        .single();
+
+      if (ownError !== null || own === null) {
+        throw new SrfSubmitError(translate(ownError?.code, ownError?.message ?? ""));
+      }
+
+      const studentId = own.id as string;
+      const documentIds = await storeMarksheets(client, studentId, values);
 
       const { data, error } = await client
         .from("students")
@@ -65,6 +171,9 @@ export function createSupabaseSrfRepository(
           github_url: values.github === "" ? null : values.github,
           leetcode_url: values.leetcode === "" ? null : values.leetcode,
           hackerrank_url: values.hackerrank === "" ? null : values.hackerrank,
+          // A postgraduate's UG aggregate stands in for an entire degree, so
+          // it is evidenced like any other declared mark (A31).
+          ug_marksheet_id: documentIds.get("ug_consolidated") ?? null,
           consent_given_at: new Date().toISOString(),
           srf_status: "srf_submitted" satisfies Enums["srf_status"],
           srf_submitted_at: new Date().toISOString(),
@@ -81,8 +190,6 @@ export function createSupabaseSrfRepository(
       if (error !== null) {
         throw new SrfSubmitError(translate(error.code, error.message));
       }
-
-      const studentId = data.id as string;
 
       /**
        * Semester lines live in their own table, and are replaced wholesale
@@ -104,6 +211,15 @@ export function createSupabaseSrfRepository(
             cgpa: s.cgpa,
             current_arrears: s.currentArrears,
             history_of_arrears: s.historyOfArrears,
+            // The point of the whole exercise: this line and the document that
+            // proves it, so the coordinator verifies one against the other.
+            marksheet_id:
+              documentIds.get(
+                marksheetSlotKey({
+                  kind: "semester_marksheet",
+                  semesterNumber: s.semesterNumber,
+                }),
+              ) ?? null,
           })),
         );
 

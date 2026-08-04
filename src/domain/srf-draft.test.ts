@@ -117,3 +117,25 @@ describe("mergeSrfDraft", () => {
     expect(defaults.mobile).toBe("");
   });
 });
+
+/**
+ * A File cannot survive a draft.
+ *
+ * `JSON.stringify` turns one into `{}`, so a draft written while the student
+ * had picked their marksheets comes back as `{"tenth": {}}` — keys present,
+ * files gone. Restoring that would count the evidence as provided, mark the
+ * section complete, and let a form reach the coordinator with marks nobody can
+ * check against anything. Uploads are re-picked, deliberately.
+ */
+describe("uploads are never restored from a draft", () => {
+  it("drops marksheets a draft claims to carry", () => {
+    const merged = mergeSrfDraft({ mobile: "", marksheets: {} }, null, {
+      mobile: "9876543210",
+      marksheets: { tenth: {}, twelfth: {} },
+    });
+
+    expect(merged.marksheets).toEqual({});
+    // Everything else in the same draft is still restored.
+    expect(merged.mobile).toBe("9876543210");
+  });
+});

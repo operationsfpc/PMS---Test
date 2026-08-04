@@ -1,4 +1,5 @@
 import { validateSemesters } from "@domain/academics";
+import { missingMarksheets } from "@domain/marksheets";
 import {
   isValidIndianMobile,
   isValidPassingYear,
@@ -62,6 +63,17 @@ export const srfSchema = z
       )
       .min(1, "Add at least one semester"),
 
+    /**
+     * The marksheets that evidence every figure above, keyed by
+     * `src/domain/marksheets.ts` (`tenth`, `twelfth`, `semester-3`, …).
+     *
+     * These uploads were REQUIRED on screen and then thrown away: the files
+     * never left the browser, so a coordinator verified a declared CGPA
+     * against nothing. Carrying them in the submission is what makes
+     * verification mean anything.
+     */
+    marksheets: z.record(z.string(), z.instanceof(File, { error: "Choose a file to upload" })),
+
     // Preferences
     roleCategories: z.array(z.enum(ROLE_CATEGORIES)).min(1, "Select at least one role category"),
     resumeCategories: z.array(z.enum(ROLE_CATEGORIES)),
@@ -95,6 +107,19 @@ export const srfSchema = z
 
     if (problems.length > 0) {
       ctx.addIssue({ code: "custom", path: ["semesters"], message: problems.join(" ") });
+    }
+
+    // Which documents are required is derived from what the student declared,
+    // so adding a semester adds its marksheet. The message names each missing
+    // one: "uploads are required" against six file inputs helps nobody.
+    const missing = missingMarksheets(d, Object.keys(d.marksheets));
+
+    if (missing.length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["marksheets"],
+        message: `Upload your ${missing.map((s) => s.label).join(", ")}.`,
+      });
     }
 
     // A postgraduate has a completed degree behind them; a recruiter filtering
@@ -137,6 +162,7 @@ export const SRF_DEFAULTS: SrfFormValues = {
   programmeLevel: "ug",
   ugAggregateCgpa: null,
   semesters: [{ semesterNumber: 1, cgpa: Number.NaN, currentArrears: 0, historyOfArrears: 0 }],
+  marksheets: {},
   roleCategories: [],
   resumeCategories: [],
   linkedin: "",

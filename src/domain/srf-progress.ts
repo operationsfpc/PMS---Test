@@ -12,6 +12,7 @@
  * lives beside the schema's own predicates rather than in the component.
  */
 
+import { missingMarksheets } from "./marksheets";
 import { missingResumesFor } from "./srf-rules";
 import type { RoleCategory } from "./types";
 
@@ -23,8 +24,18 @@ export interface SrfProgressInput {
   readonly twelfthPercentage: number;
   readonly programmeLevel: "ug" | "pg";
   readonly ugAggregateCgpa: number | null;
-  readonly semesters: readonly { readonly cgpa: number }[];
-  readonly marksheetCount: number;
+  readonly semesters: readonly {
+    readonly semesterNumber: number;
+    readonly cgpa: number;
+  }[];
+  /**
+   * Keys of the marksheets actually provided (`src/domain/marksheets.ts`).
+   *
+   * Was a bare count, which let ANY single file complete the section. The
+   * uploads were discarded anyway, so a student could reach 100% having
+   * evidenced nothing at all.
+   */
+  readonly marksheets: readonly string[];
   readonly roleCategories: readonly RoleCategory[];
   readonly resumeCategories: readonly RoleCategory[];
   readonly consent: boolean;
@@ -72,7 +83,10 @@ export function srfSectionProgress(input: SrfProgressInput): readonly SrfSection
       title: "Marksheet uploads",
       step: 3,
       optional: false,
-      complete: input.marksheetCount > 0,
+      // Every declared figure needs the document that proves it, so declaring
+      // another semester re-opens this section - which is correct: there is
+      // now a mark on the form that no coordinator can check.
+      complete: missingMarksheets(input, input.marksheets).length === 0,
     },
     {
       id: "preferences",

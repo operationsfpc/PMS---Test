@@ -281,6 +281,48 @@ describe("SrfPage — saving a draft", () => {
     expect(roll.value).toBe("21CSE1042");
   });
 
+  /**
+   * A File does not survive JSON — it stringifies to `{}`. Storing one would
+   * put `{"tenth": {}}` in the draft, and the next visit would restore a
+   * marksheet that is not there, count it as provided, and let the student
+   * submit marks nobody can verify. Uploads are deliberately re-picked.
+   */
+  it("never stores a picked file in the draft, because a file cannot survive one", async () => {
+    const saveDraft = vi.fn().mockResolvedValue(true);
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={saveDraft} />);
+
+    await user.upload(
+      screen.getByLabelText(/^10th marksheet/i),
+      new File(["scan"], "10th.pdf", { type: "application/pdf" }),
+    );
+    await flush();
+
+    expect(saveDraft).toHaveBeenCalled();
+    // toEqual, not toMatchObject: `toMatchObject({ marksheets: {} })` passes
+    // against `{ tenth: {} }` too, and would have proved nothing.
+    const saved = saveDraft.mock.calls.at(-1)?.[0] as { marksheets: Record<string, unknown> };
+    expect(saved.marksheets).toEqual({});
+  });
+
+  it("does not restore a marksheet from a draft that cannot contain one", async () => {
+    render(
+      <SrfPage
+        profile={ROSTER}
+        // Exactly what JSON.stringify makes of a form full of picked files:
+        // every key present, every value an empty object.
+        draft={{
+          mobile: "9876543210",
+          marksheets: { tenth: {}, twelfth: {}, "semester-1": {} },
+        }}
+      />,
+    );
+
+    // Nothing is evidenced, so the tracker must not report the section done.
+    expect(screen.queryByRole("link", { name: /marksheet uploads — done/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /^marksheet uploads$/i })).toBeDefined();
+  });
+
   it("does not nag a student who has typed nothing", async () => {
     const saveDraft = vi.fn().mockResolvedValue(true);
     render(<SrfPage profile={ROSTER} saveDraft={saveDraft} />);

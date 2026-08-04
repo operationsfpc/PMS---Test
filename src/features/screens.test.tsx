@@ -70,6 +70,18 @@ describe("SrfVerificationQueue", () => {
         twelfthPercentage: 88,
         submittedAt: "2026-08-01T10:00:00Z",
         documents: [{ kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" }],
+        // Each declared semester beside the marksheet that evidences it - the
+        // uploads used to be discarded, so this column had nothing in it.
+        semesters: [
+          {
+            semesterNumber: 1,
+            cgpa: 8.1,
+            currentArrears: 0,
+            historyOfArrears: 0,
+            status: "pending",
+            marksheetUrl: "https://signed/sem1",
+          },
+        ],
       },
     ],
     decide: async () => undefined,

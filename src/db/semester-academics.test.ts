@@ -13,10 +13,28 @@ import { createTestDb, seed, type TestDb } from "./harness";
 let t: TestDb;
 let ids: Awaited<ReturnType<typeof seed>>;
 
+/**
+ * Every semester line carries the marksheet that evidences it (0023) - a
+ * declared CGPA with no document is exactly what left the verification queue
+ * with nothing to check. These tests are about the CAP, so the evidence is
+ * created alongside rather than asserted on.
+ */
 const addSemesters = (studentId: string, count: number, from = 1) =>
   t.sql(
-    `insert into student_semesters (student_id, semester_number, cgpa)
-     select $1, generate_series($2::int, $3::int), 8.0`,
+    `with evidence as (
+       insert into student_documents (student_id, kind, storage_path, size_bytes)
+       select $1::uuid, 'semester_marksheet', $1::text || '/sem' || n || '.pdf', 1000
+         from generate_series($2::int, $3::int) as n
+       returning id, storage_path
+     )
+     insert into student_semesters (student_id, semester_number, cgpa, marksheet_id)
+     select $1::uuid,
+            -- The semester number is read back off the path: a uuid is full of
+            -- hyphens, so splitting on one would parse the student id instead.
+            (substring(storage_path from '([0-9]+).pdf$'))::int,
+            8.0,
+            id
+       from evidence`,
     [studentId, from, from + count - 1],
   );
 

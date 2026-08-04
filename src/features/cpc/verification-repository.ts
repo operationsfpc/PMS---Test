@@ -12,6 +12,24 @@ export interface StudentDocument {
   readonly url: string;
 }
 
+/**
+ * One declared semester, beside the document that evidences it.
+ *
+ * This is the queue's whole purpose. Until the SRF actually stored the
+ * uploads, a coordinator saw a CGPA and had nothing to check it against, so
+ * "verified" was a signature on the student's own typing - and a verified
+ * semester is what decides whether they may apply to a drive (R5).
+ */
+export interface DeclaredSemester {
+  readonly semesterNumber: number;
+  readonly cgpa: number;
+  readonly currentArrears: number;
+  readonly historyOfArrears: number;
+  readonly status: string;
+  /** Null when nothing was uploaded. Never a dead link. */
+  readonly marksheetUrl: string | null;
+}
+
 export interface PendingSrf {
   readonly id: string;
   readonly fullName: string;
@@ -22,13 +40,16 @@ export interface PendingSrf {
   readonly tenthPercentage: number | null;
   readonly twelfthPercentage: number | null;
   readonly submittedAt: string | null;
+  /** The school marksheets, which belong to no single semester. */
   readonly documents: readonly StudentDocument[];
+  readonly semesters: readonly DeclaredSemester[];
 }
 
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
   tenth_marksheet: "10th marksheet",
   twelfth_marksheet: "12th marksheet",
   semester_marksheet: "Semester marksheet",
+  ug_consolidated_marksheet: "Consolidated UG marksheet",
 };
 
 /** Signed URLs expire; 10 minutes is ample for a verification pass. */
@@ -41,8 +62,13 @@ export interface VerificationRepository {
 
 export type GetActorId = () => Promise<string | null>;
 
+/**
+ * One query, not one per student: the queue can hold a whole cohort, and a
+ * round trip per row would be N+1 against exactly the screen a coordinator
+ * uses to work through a backlog.
+ */
 const COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents(kind, storage_path)";
+  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path))";
 
 /**
  * Reads and decides the SRF verification queue.
@@ -54,23 +80,73 @@ const COLUMNS =
  * The transition itself is decided by `decideSrf` in the domain layer, never
  * here - an invalid transition must not reach the network at all.
  */
+/** Signs a batch of paths, in the order given. Buckets are private (0010). */
+async function sign(
+  client: SupabaseClient,
+  paths: readonly string[],
+): Promise<ReadonlyArray<string | undefined>> {
+  if (paths.length === 0) return [];
+  const { data } = await client.storage
+    .from("marksheets")
+    .createSignedUrls([...paths], SIGNED_URL_TTL_SECONDS);
+  return (data ?? []).map((entry) => entry?.signedUrl ?? undefined);
+}
+
+/**
+ * The semester lines, in degree order, each with its own signed marksheet.
+ *
+ * Sorted here rather than trusted from the query: PostgREST does not promise
+ * an order on an embedded resource, and a coordinator reads a degree forwards.
+ */
+async function signSemesters(
+  client: SupabaseClient,
+  rows: Array<Record<string, unknown>>,
+): Promise<readonly DeclaredSemester[]> {
+  const ordered = [...rows].sort(
+    (a, b) => Number(a.semester_number ?? 0) - Number(b.semester_number ?? 0),
+  );
+
+  const paths = ordered.map((row) => {
+    const doc = row.student_documents as { storage_path?: string } | null | undefined;
+    return doc?.storage_path;
+  });
+
+  const signed = await sign(
+    client,
+    paths.filter((path): path is string => path !== undefined),
+  );
+
+  let next = 0;
+  return ordered.map((row, index) => ({
+    semesterNumber: Number(row.semester_number ?? 0),
+    cgpa: Number(row.cgpa ?? 0),
+    currentArrears: Number(row.current_arrears ?? 0),
+    historyOfArrears: Number(row.history_of_arrears ?? 0),
+    status: (row.status as string | undefined) ?? "pending",
+    // A path we cannot sign reads as no evidence rather than a dead link: a
+    // coordinator must never think they have checked something they have not.
+    marksheetUrl: paths[index] === undefined ? null : (signed[next++] ?? null),
+  }));
+}
+
 async function signDocuments(
   client: SupabaseClient,
   rows: Array<{ kind: string; storage_path: string }>,
 ): Promise<readonly StudentDocument[]> {
-  const marksheets = rows.filter((d) => d.kind !== "resume");
+  // Semester marksheets are shown against their own line, not in this list.
+  const marksheets = rows.filter((d) => d.kind !== "resume" && d.kind !== "semester_marksheet");
   if (marksheets.length === 0) return [];
 
-  const { data } = await client.storage.from("marksheets").createSignedUrls(
+  const data = await sign(
+    client,
     marksheets.map((d) => d.storage_path),
-    SIGNED_URL_TTL_SECONDS,
   );
 
   return marksheets.flatMap((doc, index) => {
-    const url = data?.[index]?.signedUrl;
+    const url = data[index];
     // A document we cannot sign is omitted rather than rendered as a dead
     // link: a coordinator must never think they have checked something.
-    if (!url) return [];
+    if (url === undefined) return [];
     return [{ kind: doc.kind, label: DOCUMENT_LABELS[doc.kind] ?? "Marksheet", url }];
   });
 }
@@ -108,6 +184,10 @@ export function createSupabaseVerificationRepository(
           documents: await signDocuments(
             client,
             (row.student_documents ?? []) as Array<{ kind: string; storage_path: string }>,
+          ),
+          semesters: await signSemesters(
+            client,
+            (row.student_semesters ?? []) as Array<Record<string, unknown>>,
           ),
         })),
       );

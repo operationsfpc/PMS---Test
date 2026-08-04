@@ -21,16 +21,48 @@ const USER = "40000000-0000-0000-0000-000000000001";
  */
 beforeEach(() => {
   server.use(
+    // Submitting now resolves the student's own id BEFORE it writes anything,
+    // so that evidence can be stored before the form enters the queue.
+    http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "student-1" })),
+    http.patch(`${BASE}/rest/v1/students`, () =>
+      HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" }),
+    ),
     http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
     http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+      const rows = (await request.json()) as Array<Record<string, unknown>>;
+      return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+    }),
   );
 });
 
-const repo = (userId: string | null = USER) =>
-  createSupabaseSrfRepository(
-    createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } }),
-    async () => userId,
-  );
+/**
+ * Storage is stubbed at the client, not over HTTP: supabase-js signs and
+ * chunks uploads, and none of that is what these tests are about.
+ */
+function storageStub(opts: { uploadFails?: boolean } = {}) {
+  const client = createClient(BASE, "anon-key", {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const uploads: { bucket: string; path: string; size: number }[] = [];
+
+  client.storage.from = ((bucket: string) => ({
+    upload: async (path: string, file: File) => {
+      uploads.push({ bucket, path, size: file.size });
+      return opts.uploadFails === true
+        ? { data: null, error: new Error("network") }
+        : { data: { path }, error: null };
+    },
+  })) as unknown as typeof client.storage.from;
+
+  return { client, uploads };
+}
+
+const repo = (userId: string | null = USER, opts: { uploadFails?: boolean } = {}) =>
+  createSupabaseSrfRepository(storageStub(opts).client, async () => userId);
+
+/** A picked file, as the browser hands it to us. */
+const sheet = (name: string) => new File(["scan-bytes"], name, { type: "application/pdf" });
 
 /** Records what a draft save actually sends. */
 function captureDraftWrites() {
@@ -59,10 +91,169 @@ const values: SrfSubmission = {
     { semesterNumber: 1, cgpa: 8.1, currentArrears: 0, historyOfArrears: 0 },
     { semesterNumber: 2, cgpa: 8.24, currentArrears: 1, historyOfArrears: 2 },
   ],
+  marksheets: {
+    tenth: sheet("10th.pdf"),
+    twelfth: sheet("12th.pdf"),
+    "semester-1": sheet("sem1.pdf"),
+    "semester-2": sheet("sem2.pdf"),
+  },
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
   consent: true,
 } as SrfSubmission;
+
+/**
+ * Marksheet evidence — the reason verification exists.
+ *
+ * The SRF marked these uploads required, let the student pick their files, and
+ * discarded every one. Nothing reached storage, nothing was recorded, and
+ * `student_semesters.marksheet_id` — the column built for exactly this — was
+ * never written. A coordinator opening the queue saw a declared CGPA and no
+ * document, which makes "verified" a signature on the student's own typing.
+ */
+describe("marksheet evidence", () => {
+  it("uploads every marksheet into the student's own folder", async () => {
+    const { client, uploads } = storageStub();
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(values);
+
+    expect(uploads).toHaveLength(4);
+    expect(uploads.every((u) => u.bucket === "marksheets")).toBe(true);
+    // The storage policy checks the first path segment is the student's id.
+    expect(uploads.every((u) => u.path.startsWith("student-1/"))).toBe(true);
+  });
+
+  it("names each object uniquely, so re-uploading never collides", async () => {
+    const { client, uploads } = storageStub();
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(values);
+
+    expect(new Set(uploads.map((u) => u.path)).size).toBe(4);
+  });
+
+  it("records each upload against the student with its kind", async () => {
+    let rows: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        rows = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+      }),
+    );
+
+    await repo().submit(values);
+
+    expect(rows.map((r) => r.kind)).toEqual([
+      "tenth_marksheet",
+      "twelfth_marksheet",
+      "semester_marksheet",
+      "semester_marksheet",
+    ]);
+    expect(rows.every((r) => r.student_id === "student-1")).toBe(true);
+    expect(rows.every((r) => (r.size_bytes as number) > 0)).toBe(true);
+  });
+
+  /** The whole point: each declared line points at the document proving it. */
+  it("links each semester row to the marksheet that evidences it", async () => {
+    let inserted: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        const rows = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(
+          rows.map((row) => ({
+            ...row,
+            id: `doc-for-${String(row.storage_path).split("-").pop()}`,
+          })),
+        );
+      }),
+      http.post(`${BASE}/rest/v1/student_semesters`, async ({ request }) => {
+        inserted = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(inserted);
+      }),
+    );
+
+    await repo().submit(values);
+
+    expect(inserted[0]?.marksheet_id).toBe("doc-for-sem1.pdf");
+    expect(inserted[1]?.marksheet_id).toBe("doc-for-sem2.pdf");
+  });
+
+  it("records a postgraduate's consolidated UG marksheet on the student", async () => {
+    let kinds: unknown[] = [];
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        const rows = (await request.json()) as Array<Record<string, unknown>>;
+        kinds = rows.map((r) => r.kind);
+        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+      }),
+      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
+      }),
+    );
+
+    await repo().submit({
+      ...values,
+      programmeLevel: "pg",
+      ugAggregateCgpa: 7.85,
+      semesters: [values.semesters[0] as (typeof values.semesters)[number]],
+      marksheets: {
+        tenth: sheet("10th.pdf"),
+        twelfth: sheet("12th.pdf"),
+        ug_consolidated: sheet("ug.pdf"),
+        "semester-1": sheet("sem1.pdf"),
+      },
+    });
+
+    expect(kinds).toContain("ug_consolidated_marksheet");
+    expect(body.ug_marksheet_id).toEqual(expect.any(String));
+  });
+
+  /**
+   * Ordering is a correctness rule, not a preference. If the form reached the
+   * queue first and the upload then failed, a coordinator would be asked to
+   * verify figures against documents that do not exist.
+   */
+  it("stores the evidence before the form enters the verification queue", async () => {
+    const order: string[] = [];
+    server.use(
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        order.push("documents");
+        const rows = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+      }),
+      http.patch(`${BASE}/rest/v1/students`, () => {
+        order.push("submit");
+        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
+      }),
+    );
+
+    await repo().submit(values);
+
+    expect(order).toEqual(["documents", "submit"]);
+  });
+
+  it("leaves the form unsubmitted when an upload fails", async () => {
+    let submitted = false;
+    server.use(
+      http.patch(`${BASE}/rest/v1/students`, () => {
+        submitted = true;
+        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
+      }),
+    );
+
+    await expect(repo(USER, { uploadFails: true }).submit(values)).rejects.toThrow(
+      /could not upload/i,
+    );
+    expect(submitted).toBe(false);
+  });
+
+  it("refuses to submit a form that is missing evidence for a declared figure", async () => {
+    // Belt and braces with the schema: a repository that trusted its caller
+    // would let any other code path put an unverifiable form in the queue.
+    await expect(repo().submit({ ...values, marksheets: {} })).rejects.toThrow(/marksheet/i);
+  });
+});
 
 /**
  * Semester lines are their own table, so submitting the SRF writes twice.
@@ -110,7 +301,19 @@ describe("semester-wise academics", () => {
       http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
     );
 
-    await repo().submit({ ...values, programmeLevel: "pg", ugAggregateCgpa: 7.85 });
+    await repo().submit({
+      ...values,
+      programmeLevel: "pg",
+      ugAggregateCgpa: 7.85,
+      semesters: [values.semesters[0] as (typeof values.semesters)[number]],
+      // A postgraduate must evidence the degree behind them too (A31).
+      marksheets: {
+        tenth: sheet("10th.pdf"),
+        twelfth: sheet("12th.pdf"),
+        ug_consolidated: sheet("ug.pdf"),
+        "semester-1": sheet("sem1.pdf"),
+      },
+    });
 
     expect(body.programme_level).toBe("pg");
     expect(body.ug_aggregate_cgpa).toBe(7.85);

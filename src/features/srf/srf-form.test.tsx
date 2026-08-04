@@ -18,6 +18,12 @@ const render = (ui: React.ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRout
  */
 const BASE = "https://project.supabase.co";
 
+/**
+ * Storage is stubbed at the client: supabase-js signs and chunks uploads and
+ * none of that is what these tests are about. The uploads are returned so a
+ * test can prove the student's files actually left the browser — which, until
+ * this change, they never did.
+ */
 function signedIn() {
   const client = createClient(BASE, "anon-key", {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -26,7 +32,17 @@ function signedIn() {
     data: { session: { user: { id: "40000000-0000-0000-0000-000000000001" } } },
     error: null,
   })) as unknown as typeof client.auth.getSession;
+
+  const uploads: string[] = [];
+  client.storage.from = ((bucket: string) => ({
+    upload: async (path: string) => {
+      uploads.push(`${bucket}/${path}`);
+      return { data: { path }, error: null };
+    },
+  })) as unknown as typeof client.storage.from;
+
   setSupabaseClient(client);
+  return uploads;
 }
 
 /**
@@ -36,9 +52,16 @@ function signedIn() {
  */
 const studentsPatch = (respond: () => Response | Promise<Response>) =>
   server.use(
+    // Submitting resolves the student's own id first, so the evidence reaches
+    // storage before the form reaches the verification queue.
+    http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
     http.patch(`${BASE}/rest/v1/students`, respond),
     http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
     http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+      const rows = (await request.json()) as Array<Record<string, unknown>>;
+      return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+    }),
   );
 
 /** Behaviour of the real SRF: validation, dynamic fields, submission. */
@@ -69,6 +92,8 @@ const ROSTER = {
   draft: null,
 };
 
+const scan = (name: string) => new File(["scan"], name, { type: "application/pdf" });
+
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
   // Mandatory since 2026-08-04.
@@ -76,6 +101,11 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/10th marks \(%\)/i), "91.4");
   await user.type(screen.getByLabelText(/12th marks \(%\)/i), "88");
   await user.type(screen.getByLabelText(/semester 1 cgpa/i), "8.24");
+  // Evidence for every declared figure. A form without it is no longer valid:
+  // the coordinator would have nothing to verify the marks against.
+  await user.upload(screen.getByLabelText(/^10th marksheet/i), scan("10th.pdf"));
+  await user.upload(screen.getByLabelText(/^12th marksheet/i), scan("12th.pdf"));
+  await user.upload(screen.getByLabelText(/semester 1 marksheet/i), scan("sem1.pdf"));
   await user.click(screen.getByRole("checkbox", { name: /software \/ technical/i }));
   await user.upload(
     screen.getByLabelText(/software \/ technical resume/i),
@@ -286,18 +316,108 @@ describe("SRF dynamic fields", () => {
     expect(await screen.findByText(/resume for every role category/i)).toBeDefined();
   });
 
-  it("lets a student add and remove semester marksheet slots", async () => {
+  /**
+   * SPEC CHANGE. The marksheet uploads used to be driven by their OWN counter,
+   * with its own "add another semester" button - so the form opened asking for
+   * two semester marksheets while the academic record had one semester line,
+   * and the two lists could disagree indefinitely. Evidence follows what the
+   * student declared, because that is what a coordinator verifies.
+   */
+  it("asks for exactly one marksheet per declared semester", async () => {
     const user = setup();
     render(<SrfPage profile={ROSTER} />);
 
+    expect(screen.getByLabelText(/semester 1 marksheet/i)).toBeDefined();
+    expect(screen.queryByLabelText(/semester 2 marksheet/i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /add semester/i }));
+
     expect(screen.getByLabelText(/semester 2 marksheet/i)).toBeDefined();
-    expect(screen.queryByLabelText(/semester 3 marksheet/i)).toBeNull();
+  });
 
-    await user.click(screen.getByRole("button", { name: /add another semester/i }));
-    expect(screen.getByLabelText(/semester 3 marksheet/i)).toBeDefined();
+  it("drops a semester's marksheet slot when that semester is removed", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
 
-    await user.click(screen.getByRole("button", { name: /remove last semester/i }));
-    expect(screen.queryByLabelText(/semester 3 marksheet/i)).toBeNull();
+    await user.click(screen.getByRole("button", { name: /add semester/i }));
+    expect(screen.getByLabelText(/semester 2 marksheet/i)).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /remove semester 2/i }));
+
+    expect(screen.queryByLabelText(/semester 2 marksheet/i)).toBeNull();
+  });
+
+  it("asks a postgraduate to evidence the degree behind them", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+
+    expect(screen.queryByLabelText(/consolidated ug marksheet/i)).toBeNull();
+
+    await user.click(screen.getByRole("radio", { name: /postgraduate/i }));
+
+    expect(screen.getByLabelText(/consolidated ug marksheet/i)).toBeDefined();
+  });
+});
+
+/**
+ * The defect this whole change exists to close.
+ *
+ * The SRF marked these uploads required, let the student pick their files, and
+ * then discarded every one - nothing reached storage and nothing was recorded.
+ * The coordinator's verification queue, whose entire purpose is checking a
+ * declared CGPA against the marksheet that proves it, had nothing to check
+ * against.
+ */
+describe("SRF marksheet evidence", () => {
+  afterEach(() => setSupabaseClient(undefined));
+
+  it("blocks submission until every declared figure is evidenced", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    // A second semester declared, with no marksheet behind it.
+    await user.click(screen.getByRole("button", { name: /add semester/i }));
+    await user.type(screen.getByLabelText(/semester 2 cgpa/i), "8.4");
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    // Scoped to the alert: the field's own LABEL says "Semester 2 marksheet"
+    // too, so a bare text match would pass with no validation at all.
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.some((a) => /semester 2 marksheet/i.test(a.textContent ?? ""))).toBe(true);
+    expect(screen.queryByText(/submitted for verification/i)).toBeNull();
+  });
+
+  /** Requested 2026-08-04: a missing upload is marked on that upload. */
+  it("marks the specific marksheet that is missing, not just the group", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    await user.click(screen.getByRole("button", { name: /add semester/i }));
+    await user.type(screen.getByLabelText(/semester 2 cgpa/i), "8.4");
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/semester 2 marksheet/i).getAttribute("aria-invalid")).toBe(
+        "true",
+      );
+    });
+    expect(screen.getByLabelText(/semester 1 marksheet/i).getAttribute("aria-invalid")).toBe(null);
+  });
+
+  it("sends the student's files to storage instead of dropping them", async () => {
+    studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
+    const uploads = signedIn();
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
+    expect(uploads).toHaveLength(3);
+    expect(uploads.every((u) => u.startsWith("marksheets/s1/"))).toBe(true);
   });
 });
 

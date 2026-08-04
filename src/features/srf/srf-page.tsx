@@ -1,5 +1,6 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
+import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
 import { mergeSrfDraft } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
@@ -103,8 +104,6 @@ export function SrfPage({
   saveDraft?: (values: unknown) => Promise<boolean>;
 }) {
   const { signOut } = useAuthActions();
-  // Stable ids so React never re-keys an upload control on add/remove.
-  const [semesterIds, setSemesterIds] = useState<readonly number[]>([1, 2]);
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
@@ -139,16 +138,41 @@ export function SrfPage({
   const maxSemesters = MAX_SEMESTERS[programmeLevel];
 
   /**
-   * Which marksheets the student has actually chosen.
+   * The marksheets the student has chosen, held in FORM state.
    *
-   * Kept here rather than in form state because the files are not part of the
-   * submission payload - attaching each one to its semester row is still
-   * outstanding. The tracker must reflect what the student has done, though,
-   * so it counts the choices they have made.
+   * They used to be a bag of booleans beside the form, because the files were
+   * not part of the submission at all - the student picked them and they were
+   * discarded. Nothing was stored, so the coordinator's queue had nothing to
+   * check the declared CGPA against, which is the entire point of
+   * verification. They are now submitted, uploaded and linked to the semester
+   * row they evidence.
    */
-  const [marksheets, setMarksheets] = useState<Record<string, boolean>>({});
-  const noteMarksheet = (key: string, chosen: boolean) =>
-    setMarksheets((current) => ({ ...current, [key]: chosen }));
+  const marksheets = watch("marksheets");
+
+  /**
+   * Which documents are required is derived from what the student declared -
+   * one per semester line, plus the two school marksheets, plus a completed
+   * UG degree for a postgraduate.
+   *
+   * This list used to be driven by its OWN counter with its own "add another
+   * semester" button, so the form opened asking for two semester marksheets
+   * while the academic record had one semester line, and nothing kept the two
+   * in step.
+   */
+  const requiredSheets = requiredMarksheets({
+    programmeLevel,
+    semesters: semesters ?? [],
+  });
+
+  const chooseMarksheet = (key: string, file: File | undefined) => {
+    const next = { ...marksheets };
+    if (file === undefined) {
+      delete next[key];
+    } else {
+      next[key] = file;
+    }
+    setValue("marksheets", next, { shouldValidate: true, shouldDirty: true });
+  };
 
   const progressInput = {
     mobile: watch("mobile"),
@@ -159,8 +183,11 @@ export function SrfPage({
     // The field is optional in the form's input type, but "not yet entered"
     // and "deliberately none" are the same thing to the tracker.
     ugAggregateCgpa: watch("ugAggregateCgpa") ?? null,
-    semesters: (semesters ?? []).map((s) => ({ cgpa: s.cgpa })),
-    marksheetCount: Object.values(marksheets).filter(Boolean).length,
+    semesters: (semesters ?? []).map((s) => ({
+      semesterNumber: s.semesterNumber,
+      cgpa: s.cgpa,
+    })),
+    marksheets: Object.keys(marksheets),
     roleCategories: selectedCategories,
     resumeCategories,
     consent: watch("consent") === true,
@@ -184,7 +211,15 @@ export function SrfPage({
    * is stored exactly what survives the round trip into a jsonb column, rather
    * than something that looks right in memory and comes back different.
    */
-  const serialised = JSON.stringify(watch());
+  /**
+   * The dependency is the SERIALISED form, minus the files.
+   *
+   * A File does not survive JSON - it stringifies to `{}` - so leaving them in
+   * would store `{"tenth": {}}` in the draft and the next visit would restore
+   * a marksheet that is not there, count it as provided, and let the student
+   * submit unevidenced marks. The uploads are deliberately re-picked.
+   */
+  const serialised = JSON.stringify({ ...watch(), marksheets: {} });
 
   useEffect(() => {
     if (!isDirty) return;
@@ -594,44 +629,38 @@ export function SrfPage({
             step={3}
             description="Your Coordinator verifies every figure above against these documents."
           >
+            <p className="mb-4 text-xs text-ink-500">
+              One per figure you entered above. Adding a semester adds its marksheet — a mark nobody
+              can check against a document cannot be verified.
+            </p>
             <div className={grid}>
-              <FileField
-                label="10th marksheet"
-                required
-                onChange={(e) => noteMarksheet("tenth", e.target.value !== "")}
-              />
-              <FileField
-                label="12th marksheet"
-                required
-                onChange={(e) => noteMarksheet("twelfth", e.target.value !== "")}
-              />
-              {semesterIds.map((id, i) => (
+              {requiredSheets.map((slot) => (
                 <FileField
-                  key={id}
-                  label={`Semester ${i + 1} marksheet`}
+                  key={slot.key}
+                  label={slot.label}
                   required
-                  onChange={(e) => noteMarksheet(`semester-${id}`, e.target.value !== "")}
+                  // The group message cannot say WHICH upload is missing when
+                  // several are on screen, so the reason goes on the field
+                  // that is actually empty (requested 2026-08-04).
+                  error={
+                    errors.marksheets !== undefined && marksheets[slot.key] === undefined
+                      ? `Your ${slot.label} is required.`
+                      : undefined
+                  }
+                  onChange={(e) => chooseMarksheet(slot.key, e.target.files?.[0])}
                 />
               ))}
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setSemesterIds((ids) => [...ids, Math.max(...ids) + 1])}
-                className="rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
-              >
-                + Add another semester
-              </button>
-              {semesterIds.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setSemesterIds((ids) => ids.slice(0, -1))}
-                  className="rounded-lg border border-line px-4 py-2.5 text-sm font-semibold text-ink-500 transition-colors hover:border-brand-300"
-                >
-                  Remove last semester
-                </button>
-              )}
-            </div>
+            <ErrorText>
+              {errors.marksheets === undefined
+                ? undefined
+                : `Upload your ${missingMarksheets(
+                    { programmeLevel, semesters: semesters ?? [] },
+                    Object.keys(marksheets),
+                  )
+                    .map((s) => s.label)
+                    .join(", ")}.`}
+            </ErrorText>
           </Section>
 
           <Section

@@ -108,3 +108,137 @@ describe("createSupabaseVerificationRepository", () => {
     });
   });
 });
+
+/**
+ * The queue's whole purpose: a declared figure beside the document that proves
+ * it. The SRF discarded the uploads, so this screen showed a CGPA and nothing
+ * to check it against — verification meant clicking Approve on the student's
+ * own typing. Semester lines are now linked to their marksheet (0023).
+ */
+describe("the evidence behind each declared figure", () => {
+  const withSemesters = (rows: unknown) =>
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json([
+          {
+            id: "s1",
+            full_name: "Asha R",
+            roll_number: "TEC001",
+            overall_cgpa: 8.2,
+            student_semesters: rows,
+            student_documents: [
+              { kind: "tenth_marksheet", storage_path: "s1/tenth.pdf" },
+              { kind: "twelfth_marksheet", storage_path: "s1/twelfth.pdf" },
+            ],
+          },
+        ]),
+      ),
+    );
+
+  const signing = () => {
+    const client = createClient(BASE, "anon-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    client.storage.from = ((bucket: string) => ({
+      createSignedUrls: async (paths: string[]) => ({
+        data: paths.map((path) => ({ signedUrl: `https://signed/${bucket}/${path}` })),
+        error: null,
+      }),
+    })) as unknown as typeof client.storage.from;
+    return createSupabaseVerificationRepository(client, async () => CPC);
+  };
+
+  it("returns each declared semester with the marksheet that evidences it", async () => {
+    withSemesters([
+      {
+        semester_number: 2,
+        cgpa: 8.4,
+        current_arrears: 0,
+        history_of_arrears: 1,
+        status: "pending",
+        student_documents: { storage_path: "s1/sem2.pdf" },
+      },
+      {
+        semester_number: 1,
+        cgpa: 8.1,
+        current_arrears: 0,
+        history_of_arrears: 0,
+        status: "pending",
+        student_documents: { storage_path: "s1/sem1.pdf" },
+      },
+    ]);
+
+    const [student] = await signing().pending();
+
+    // Ordered by semester, however PostgREST returned them: a coordinator
+    // reads a degree forwards.
+    expect(student?.semesters.map((s) => s.semesterNumber)).toEqual([1, 2]);
+    expect(student?.semesters[0]).toMatchObject({
+      semesterNumber: 1,
+      cgpa: 8.1,
+      marksheetUrl: "https://signed/marksheets/s1/sem1.pdf",
+    });
+  });
+
+  it("carries the arrears declared for each semester, which drives filter on", async () => {
+    withSemesters([
+      {
+        semester_number: 1,
+        cgpa: 8.1,
+        current_arrears: 2,
+        history_of_arrears: 3,
+        status: "pending",
+        student_documents: { storage_path: "s1/sem1.pdf" },
+      },
+    ]);
+
+    const [student] = await signing().pending();
+
+    expect(student?.semesters[0]).toMatchObject({ currentArrears: 2, historyOfArrears: 3 });
+  });
+
+  /**
+   * A dead link is worse than a missing one: a coordinator who clicks through
+   * to nothing may still believe they checked it. Say so instead.
+   */
+  it("says plainly when a semester has no marksheet to check against", async () => {
+    withSemesters([
+      {
+        semester_number: 1,
+        cgpa: 8.1,
+        current_arrears: 0,
+        history_of_arrears: 0,
+        status: "pending",
+        student_documents: null,
+      },
+    ]);
+
+    const [student] = await signing().pending();
+
+    expect(student?.semesters[0]?.marksheetUrl).toBeNull();
+  });
+
+  it("still lists the school marksheets, which belong to no semester", async () => {
+    withSemesters([]);
+
+    const [student] = await signing().pending();
+
+    expect(student?.documents.map((d) => d.label)).toEqual(["10th marksheet", "12th marksheet"]);
+  });
+
+  it("asks the database for the semester lines and their marksheets in one query", async () => {
+    let url = "";
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, ({ request }) => {
+        url = request.url;
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await repo().pending();
+
+    // A second round trip per student would be N+1 against a queue that can
+    // hold a whole cohort.
+    expect(decodeURIComponent(url)).toContain("student_semesters(");
+  });
+});

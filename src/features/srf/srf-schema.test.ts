@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { SRF_DEFAULTS, type SrfFormValues, srfSchema } from "./srf-schema";
 
+/** A picked file, as the browser hands it to us. */
+const file = (name: string) => new File(["scan"], name, { type: "application/pdf" });
+
 const valid: SrfFormValues = {
   ...SRF_DEFAULTS,
   fullName: "Asha Rao",
@@ -19,6 +22,14 @@ const valid: SrfFormValues = {
     { semesterNumber: 1, cgpa: 8.1, currentArrears: 0, historyOfArrears: 0 },
     { semesterNumber: 2, cgpa: 8.24, currentArrears: 0, historyOfArrears: 0 },
   ],
+  // Every declared figure needs the document that proves it. Before this the
+  // form validated - and submitted - with no evidence whatsoever.
+  marksheets: {
+    tenth: file("10th.pdf"),
+    twelfth: file("12th.pdf"),
+    "semester-1": file("sem1.pdf"),
+    "semester-2": file("sem2.pdf"),
+  },
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
   consent: true,
@@ -61,8 +72,60 @@ describe("srfSchema", () => {
     expect(
       errorsFor({
         semesters: [{ semesterNumber: 1, cgpa: 8, currentArrears: 0, historyOfArrears: 4 }],
+        marksheets: {
+          tenth: file("10th.pdf"),
+          twelfth: file("12th.pdf"),
+          "semester-1": file("s.pdf"),
+        },
       }),
     ).toEqual({});
+  });
+
+  /**
+   * The whole point of verification. The SRF marked these uploads required,
+   * let the student pick their files, and then discarded them — so the
+   * coordinator's queue had nothing to check the declared CGPA against.
+   */
+  describe("marksheet evidence", () => {
+    it("refuses a form with no marksheets at all", () => {
+      expect(errorsFor({ marksheets: {} }).marksheets).toMatch(/marksheet/i);
+    });
+
+    it("names exactly what is missing", () => {
+      const message = errorsFor({
+        marksheets: { tenth: file("10th.pdf"), "semester-1": file("s1.pdf") },
+      }).marksheets;
+
+      expect(message).toMatch(/12th marksheet/i);
+      expect(message).toMatch(/Semester 2 marksheet/i);
+      expect(message).not.toMatch(/10th marksheet/i);
+    });
+
+    it("requires one for every semester declared, not just one overall", () => {
+      expect(
+        errorsFor({
+          marksheets: {
+            tenth: file("10th.pdf"),
+            twelfth: file("12th.pdf"),
+            "semester-1": file("s1.pdf"),
+          },
+        }).marksheets,
+      ).toMatch(/Semester 2 marksheet/i);
+    });
+
+    it("requires a postgraduate's consolidated UG marksheet", () => {
+      expect(errorsFor({ programmeLevel: "pg", ugAggregateCgpa: 7.4 }).marksheets).toMatch(
+        /consolidated ug marksheet/i,
+      );
+    });
+
+    it("rejects anything that is not a file", () => {
+      expect(
+        Object.keys(
+          errorsFor({ marksheets: { tenth: "already-uploaded.pdf" } as unknown as never }),
+        ),
+      ).toContain("marksheets.tenth");
+    });
   });
 
   it("rejects marks above 100", () => {

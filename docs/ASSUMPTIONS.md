@@ -40,3 +40,19 @@ Authorised 2026-08-02: *"wherever required, you make necessary assumptions"*.
 | A26 | Last Admin | An Admin may not change their own role, remove their own account, or demote/remove the **last active Admin**. A deactivated Admin does not count as cover | 🟢 |
 | A29 | Enterprise Relations scope | `enterprise_relations` reads **organisation-wide**, mirroring `er_head`, which already did. ER is a company-facing role, so campus assignment would not describe their work. Before 0018 they matched no policy at all and saw zero students. Reversible: remove them from `is_org_reader()` | 🟡 |
 | A30 | AE drive visibility | The AE who **raised** a drive may read its applications, its shortlist and its offers — that drive only, select-only. Their portfolio otherwise reports a confident zero rather than nothing. Applicant identity comes from `profile_snapshot`, so an AE still cannot read the `students` table | 🟡 |
+
+## A31 — a postgraduate evidences their UG aggregate with a consolidated marksheet
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** A PG student declares one aggregate CGPA
+standing in for an entire completed degree (0017). Unevidenced it is the
+largest unverifiable figure on the form, so it is now required like any other
+declared mark: `document_kind.ug_consolidated_marksheet` and
+`students.ug_marksheet_id` (0023).
+
+What is unconfirmed is whether a *consolidated* marksheet is the document a PG
+student can actually produce — some universities issue only per-semester UG
+marksheets and a degree certificate. Cheap to reverse: stop requiring the slot
+in `src/domain/marksheets.ts` and the column simply goes unused.
+
+Call sites: `src/domain/marksheets.ts` (`requiredMarksheets`),
+`supabase/migrations/0023_marksheet_evidence.sql`.

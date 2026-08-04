@@ -27,6 +27,18 @@ const ROSTER_OWNED = [
 
 export type RosterOwnedField = (typeof ROSTER_OWNED)[number];
 
+/**
+ * Fields a draft can never carry, whatever it claims.
+ *
+ * A File does not survive `JSON.stringify` — it becomes `{}` — so a draft
+ * written while the student had picked their marksheets comes back with every
+ * key present and every file gone. Restoring that would count the evidence as
+ * provided, mark the section complete, and let a form reach the coordinator
+ * carrying marks with nothing to check them against. The uploads are re-picked
+ * instead, which is the only honest option.
+ */
+const NEVER_DRAFTED = ["marksheets"] as const;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -46,6 +58,7 @@ export function mergeSrfDraft<TValues extends Record<string, unknown>>(
 
   if (isRecord(draft)) {
     for (const key of Object.keys(defaults)) {
+      if (NEVER_DRAFTED.includes(key as (typeof NEVER_DRAFTED)[number])) continue;
       if (key in draft) merged[key] = draft[key];
     }
   }

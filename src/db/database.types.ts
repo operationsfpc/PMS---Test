@@ -25,7 +25,9 @@ export interface Enums {
     | "twelfth_marksheet"
     | "semester_marksheet"
     | "resume"
-    | "offer_letter";
+    | "offer_letter"
+    | "opt_out_declaration"
+    | "ug_consolidated_marksheet";
   drive_mode: "on_campus" | "physical_outside_campus" | "virtual" | "pooled";
   drive_status:
     | "draft"
@@ -40,6 +42,7 @@ export interface Enums {
   offer_category: "regular" | "dream" | "super_dream";
   offer_source: "on_campus" | "self_placed";
   participation_status: "active" | "opted_out" | "disbarred";
+  programme_level: "ug" | "pg";
   role_category:
     | "software_technical"
     | "technical_support_it_ops"
@@ -383,10 +386,16 @@ export interface OptOutRequestsRow {
   decided_by: string | null;
   decided_at: string | null;
   created_at: string;
+  declaration_id: string | null;
 }
 
 export type OptOutRequestsInsert = Pick<OptOutRequestsRow, "student_id" | "reason"> &
-  Partial<Pick<OptOutRequestsRow, "id" | "status" | "decided_by" | "decided_at" | "created_at">>;
+  Partial<
+    Pick<
+      OptOutRequestsRow,
+      "id" | "status" | "decided_by" | "decided_at" | "created_at" | "declaration_id"
+    >
+  >;
 
 export interface PlacementRecordOverridesRow {
   student_id: string;
@@ -585,7 +594,7 @@ export interface StudentSemestersRow {
   cgpa: number;
   current_arrears: number;
   history_of_arrears: number;
-  marksheet_id: string | null;
+  marksheet_id: string;
   status: Enums["verification_status"];
   verified_by: string | null;
   verified_at: string | null;
@@ -594,7 +603,7 @@ export interface StudentSemestersRow {
 
 export type StudentSemestersInsert = Pick<
   StudentSemestersRow,
-  "student_id" | "semester_number" | "cgpa"
+  "student_id" | "semester_number" | "cgpa" | "marksheet_id"
 > &
   Partial<
     Pick<
@@ -602,7 +611,6 @@ export type StudentSemestersInsert = Pick<
       | "id"
       | "current_arrears"
       | "history_of_arrears"
-      | "marksheet_id"
       | "status"
       | "verified_by"
       | "verified_at"
@@ -647,6 +655,11 @@ export interface StudentsRow {
   srf_rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+  programme_level: Enums["programme_level"];
+  ug_aggregate_cgpa: number | null;
+  srf_draft: Json | null;
+  srf_draft_saved_at: string | null;
+  ug_marksheet_id: string | null;
 }
 
 export type StudentsInsert = Pick<
@@ -686,5 +699,10 @@ export type StudentsInsert = Pick<
       | "srf_rejection_reason"
       | "created_at"
       | "updated_at"
+      | "programme_level"
+      | "ug_aggregate_cgpa"
+      | "srf_draft"
+      | "srf_draft_saved_at"
+      | "ug_marksheet_id"
     >
   >;

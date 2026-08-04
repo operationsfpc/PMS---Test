@@ -106,7 +106,8 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                 "12th %",
                 "Standing arrears",
                 "Arrear history",
-                "Marksheets",
+                "School marksheets",
+                "Declared semesters",
                 "Decision",
               ]}
             >
@@ -142,6 +143,51 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                           </a>
                         ))}
                       </span>
+                    )}
+                  </td>
+                  {/* The reason this screen exists: every declared figure
+                      beside the document that proves it. Until the SRF
+                      actually stored the uploads, this cell could not exist -
+                      a coordinator saw a CGPA and had nothing to check it
+                      against, and a VERIFIED semester is what decides whether
+                      the student may apply to a drive (R5). */}
+                  <td className="px-3 py-2 text-sm">
+                    {student.semesters.length === 0 ? (
+                      <span className="text-[#DD4820]">No semesters declared</span>
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {student.semesters.map((semester) => (
+                          <li
+                            key={semester.semesterNumber}
+                            className="flex flex-wrap items-baseline gap-x-2"
+                          >
+                            <span className="text-ink-500">Semester {semester.semesterNumber}</span>
+                            <strong className="font-semibold">{semester.cgpa}</strong>
+                            <span className="text-xs text-ink-500">
+                              {semester.currentArrears} standing, {semester.historyOfArrears} in
+                              history
+                            </span>
+                            {semester.marksheetUrl === null ? (
+                              // Never a dead link: a coordinator must not be
+                              // left to assume they checked something.
+                              <span className="text-xs text-[#DD4820]">No marksheet</span>
+                            ) : (
+                              <a
+                                href={semester.marksheetUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                // Named per student: several rows carry a
+                                // "Semester 1 marksheet" and an accessible
+                                // name has to identify one of them.
+                                aria-label={`Semester ${semester.semesterNumber} marksheet for ${student.fullName}`}
+                                className="text-xs text-[#3D3777] underline"
+                              >
+                                Marksheet
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </td>
                   <td className="px-3 py-2">

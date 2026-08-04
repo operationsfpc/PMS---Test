@@ -105,10 +105,15 @@ beforeAll(async () => {
        values ($1,'resume','software_technical',$2,1000)`,
       [student, `${student}/cv.pdf`],
     );
+    // A semester line carries the marksheet that evidences it (0023).
     await t.sql(
-      `insert into student_semesters (student_id, semester_number, cgpa)
-       values ($1, 4, 8.1)`,
-      [student],
+      `with evidence as (
+         insert into student_documents (student_id, kind, storage_path, size_bytes)
+         values ($1,'semester_marksheet',$2,1000) returning id
+       )
+       insert into student_semesters (student_id, semester_number, cgpa, marksheet_id)
+       select $1, 4, 8.1, id from evidence`,
+      [student, `${student}/semester-4.pdf`],
     );
   }
 }, 60_000);

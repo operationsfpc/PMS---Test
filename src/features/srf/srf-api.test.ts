@@ -24,9 +24,16 @@ function signedInClient() {
     data: { session: { user: { id: USER } } },
     error: null,
   })) as unknown as typeof client.auth.getSession;
+  // Marksheets now reach storage before the form reaches the queue; the
+  // upload itself is supabase-js's business, not this test's.
+  client.storage.from = (() => ({
+    upload: async (path: string) => ({ data: { path }, error: null }),
+  })) as unknown as typeof client.storage.from;
   setSupabaseClient(client);
   return client;
 }
+
+const scan = (name: string) => new File(["scan"], name, { type: "application/pdf" });
 
 const values = {
   ...SRF_DEFAULTS,
@@ -37,6 +44,12 @@ const values = {
   programmeLevel: "ug",
   ugAggregateCgpa: null,
   semesters: [{ semesterNumber: 1, cgpa: 8.24, currentArrears: 0, historyOfArrears: 0 }],
+  // Every declared figure needs the document that proves it.
+  marksheets: {
+    tenth: scan("10th.pdf"),
+    twelfth: scan("12th.pdf"),
+    "semester-1": scan("sem1.pdf"),
+  },
   overallCgpa: 8.24,
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
@@ -50,8 +63,13 @@ const values = {
  */
 beforeEach(() => {
   server.use(
+    http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
     http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
     http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+      const rows = (await request.json()) as Array<Record<string, unknown>>;
+      return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+    }),
   );
 });
 

@@ -21,7 +21,7 @@ const EMPTY: SrfProgressInput = {
   programmeLevel: "ug",
   ugAggregateCgpa: null,
   semesters: [],
-  marksheetCount: 0,
+  marksheets: [],
   roleCategories: [],
   resumeCategories: [],
   consent: false,
@@ -34,8 +34,8 @@ const FILLED: SrfProgressInput = {
   twelfthPercentage: 88,
   programmeLevel: "ug",
   ugAggregateCgpa: null,
-  semesters: [{ cgpa: 8.24 }],
-  marksheetCount: 2,
+  semesters: [{ semesterNumber: 1, cgpa: 8.24 }],
+  marksheets: ["tenth", "twelfth", "semester-1"],
   roleCategories: ["software_technical"],
   resumeCategories: ["software_technical"],
   consent: true,
@@ -76,9 +76,10 @@ describe("srfSectionProgress", () => {
   });
 
   it("does not count a semester the student has left blank", () => {
-    expect(section({ ...FILLED, semesters: [{ cgpa: Number.NaN }] }, "academic")?.complete).toBe(
-      false,
-    );
+    expect(
+      section({ ...FILLED, semesters: [{ semesterNumber: 1, cgpa: Number.NaN }] }, "academic")
+        ?.complete,
+    ).toBe(false);
   });
 
   /** A postgraduate has a whole completed degree the form must still capture. */
@@ -89,9 +90,43 @@ describe("srfSectionProgress", () => {
     expect(section({ ...pg, ugAggregateCgpa: 7.8 }, "academic")?.complete).toBe(true);
   });
 
-  it("completes marksheets once anything is uploaded", () => {
+  /**
+   * SPEC CHANGE. This used to read "completes marksheets once anything is
+   * uploaded" — one file, any file, and the section went green. Combined with
+   * the uploads being discarded entirely, a student could be shown a finished
+   * form having evidenced nothing. Every declared figure needs its document.
+   */
+  it("completes marksheets only when every required one is provided", () => {
     expect(section(EMPTY, "marksheets")?.complete).toBe(false);
+    expect(section({ ...FILLED, marksheets: ["tenth"] }, "marksheets")?.complete).toBe(false);
+    expect(section({ ...FILLED, marksheets: ["tenth", "twelfth"] }, "marksheets")?.complete).toBe(
+      false,
+    );
     expect(section(FILLED, "marksheets")?.complete).toBe(true);
+  });
+
+  it("re-opens the marksheet section when a new semester is declared", () => {
+    const two = {
+      ...FILLED,
+      semesters: [
+        { semesterNumber: 1, cgpa: 8.24 },
+        { semesterNumber: 2, cgpa: 8.4 },
+      ],
+    };
+
+    expect(section(two, "marksheets")?.complete).toBe(false);
+    expect(
+      section({ ...two, marksheets: [...two.marksheets, "semester-2"] }, "marksheets")?.complete,
+    ).toBe(true);
+  });
+
+  it("asks a postgraduate for their consolidated UG marksheet too", () => {
+    const pg = { ...FILLED, programmeLevel: "pg" as const, ugAggregateCgpa: 7.8 };
+
+    expect(section(pg, "marksheets")?.complete).toBe(false);
+    expect(
+      section({ ...pg, marksheets: [...pg.marksheets, "ug_consolidated"] }, "marksheets")?.complete,
+    ).toBe(true);
   });
 
   it("needs a resume for every category chosen before preferences count", () => {
