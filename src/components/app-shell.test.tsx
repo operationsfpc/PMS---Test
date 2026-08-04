@@ -89,6 +89,28 @@ describe("the drive cockpit", () => {
   });
 });
 
+/**
+ * Requested 2026-08-04: the Delivery Head and the AE should see "all drives
+ * they have raised/approved, applicants to the drive, the progress of the
+ * drives". The cockpit shows every drive; this is theirs.
+ */
+describe("the drive portfolio", () => {
+  it("is offered to the Delivery Head", () => {
+    shellFor(signedIn("delivery_head"));
+    expect(screen.getByRole("link", { name: /my drives/i })).toBeDefined();
+  });
+
+  it("is offered to the Account Executive", () => {
+    shellFor(signedIn("account_executive"));
+    expect(screen.getByRole("link", { name: /my drives/i })).toBeDefined();
+  });
+
+  it("is not offered to a student, who raises nothing", () => {
+    shellFor(signedIn("student"));
+    expect(screen.queryByRole("link", { name: /my drives/i })).toBeNull();
+  });
+});
+
 describe("AppShell navigation", () => {
   it("shows a student their own links", () => {
     shellFor(signedIn("student"));

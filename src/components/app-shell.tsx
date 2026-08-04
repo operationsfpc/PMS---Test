@@ -36,6 +36,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
   // The AE follows the drives they raised; RLS scopes the cockpit to those.
   account_executive: [
     { to: "/ae/pif", label: "Position information form" },
+    { to: "/my-drives", label: "My drives" },
     { to: "/central/drives", label: "Drive cockpit" },
   ],
   campus_manager: [{ to: "/dashboard", label: "Campus overview" }],
@@ -46,7 +47,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
   // Approving a PIF used to be the end of the Delivery Head's visibility.
   delivery_head: [
     { to: "/delivery-head/pif-approvals", label: "PIF approvals" },
+    { to: "/my-drives", label: "My drives" },
     { to: "/central/drives", label: "Drive cockpit" },
+    { to: "/dashboard", label: "Placement overview" },
   ],
   central_placement_coordinator: [
     { to: "/central/drives", label: "Drive cockpit" },

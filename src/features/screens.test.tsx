@@ -258,3 +258,32 @@ describe("App routing", () => {
     expect(screen.getByText(/choose a round/i)).toBeDefined();
   });
 });
+
+/**
+ * The drive portfolio, requested 2026-08-04 for the two roles that own a drive
+ * but had nowhere to follow it: the AE who raised it and the Delivery Head who
+ * approved it.
+ */
+describe("the drive portfolio route", () => {
+  it("gives an Account Executive their own drives", () => {
+    render(
+      <AuthContext.Provider value={signedIn("account_executive")}>
+        <MemoryRouter initialEntries={["/my-drives"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+    expect(screen.getByRole("status").textContent).toMatch(/loading your drives/i);
+  });
+
+  it("labels the same screen for the Delivery Head who approved them", async () => {
+    render(
+      <AuthContext.Provider value={signedIn("delivery_head")}>
+        <MemoryRouter initialEntries={["/my-drives"]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+    expect(screen.getByRole("status").textContent).toMatch(/loading your drives/i);
+  });
+});

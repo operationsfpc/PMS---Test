@@ -31,6 +31,8 @@ const OTHER_AE_USER = "31000000-0000-0000-0000-000000000004";
 /** Their drive, and one application to it from each campus. */
 let aeDrive: string;
 let otherDrive: string;
+let aeApplication: string;
+let otherApplication: string;
 
 async function signIn(userId: string, email: string, name: string, role: string) {
   await t.sql(
@@ -68,16 +70,28 @@ beforeAll(async () => {
     )
   )[0]?.id as string;
 
+  const applicationIds: string[] = [];
   for (const [drive, student] of [
     [aeDrive, ids.priya],
     [aeDrive, ids.arjun],
     [otherDrive, ids.priya],
   ] as const) {
-    await t.sql(
+    const inserted = await t.sql(
       `insert into applications (drive_id, student_id, profile_snapshot)
-       values ($1,$2,'{"profile":{"fullName":"secret"}}'::jsonb)`,
+       values ($1,$2,'{"profile":{"fullName":"secret"}}'::jsonb) returning id`,
       [drive, student],
     );
+    applicationIds.push(inserted[0]?.id as string);
+  }
+  aeApplication = applicationIds[0] as string;
+  otherApplication = applicationIds[2] as string;
+
+  // The shortlist IS the list the recruiter receives, so the AE who owns the
+  // client relationship needs to see it. Students never may (PRD §13.1).
+  for (const application of [aeApplication, otherApplication]) {
+    await t.sql(`insert into shortlist_entries (application_id, included) values ($1, true)`, [
+      application,
+    ]);
   }
 
   for (const student of [ids.priya, ids.arjun]) {
@@ -189,6 +203,35 @@ describe("an Account Executive can follow the drives they raised", () => {
 
   it("does not let an AE read the students table wholesale", async () => {
     const rows = await t.asUser(AE_USER, `select id from students`);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("shows an AE whether an applicant to their drive was shortlisted", async () => {
+    const rows = await t.asUser(
+      AE_USER,
+      `select included from shortlist_entries where application_id = $1`,
+      [aeApplication],
+    );
+    expect(rows[0]?.included).toBe(true);
+  });
+
+  it("hides the shortlist for a drive someone else raised", async () => {
+    const rows = await t.asUser(
+      AE_USER,
+      `select included from shortlist_entries where application_id = $1`,
+      [otherApplication],
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("shows an AE the offers that came out of their own drive", async () => {
+    const rows = await t.asUser(AE_USER, `select drive_id from offers`);
+    expect(rows).not.toHaveLength(0);
+    expect(rows.every((r) => r.drive_id === aeDrive)).toBe(true);
+  });
+
+  it("never shows a student their own shortlist entry (PRD §13.1)", async () => {
+    const rows = await t.asUser(ids.priyaUser, `select included from shortlist_entries`);
     expect(rows).toHaveLength(0);
   });
 

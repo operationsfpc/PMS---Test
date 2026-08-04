@@ -16,6 +16,7 @@ import { ParticipationQueueRoute } from "@features/cpc/participation-queue-route
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
+import { DrivePortfolioRoute } from "@features/drive-portfolio/portfolio-route";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
@@ -59,6 +60,7 @@ export function App() {
                 <Route path="/cpc/attendance" element={<AttendanceRoute />} />
                 <Route path="/cpc/participation" element={<ParticipationQueueRoute />} />
                 <Route path="/ae/pif" element={<PifPage />} />
+                <Route path="/my-drives" element={<DrivePortfolioRoute />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
                 <Route path="/central/shortlisting" element={<ShortlistRoute />} />
                 <Route path="/central/drives" element={<CockpitRoute />} />

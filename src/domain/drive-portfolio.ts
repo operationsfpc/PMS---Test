@@ -1,0 +1,174 @@
+/**
+ * A drive seen by the people who own it.
+ *
+ * Requested 2026-08-04: the Account Executive who raised a drive and the
+ * Delivery Head who approved it should be able to see "all drives they have
+ * raised/approved, the applicants to the drive, the progress of the drives".
+ *
+ * All three questions are answered here rather than on their screens, and the
+ * applicant's stage is decided by the same `applicationProgress` the student
+ * sees on their own dashboard. Two screens describing one applicant must never
+ * be able to disagree.
+ */
+
+import { type ApplicantRound, applicationProgress } from "./student-progress";
+import type { DriveStatus } from "./types";
+
+export type DriveRole = "raised" | "approved" | "published";
+
+export interface DriveOwnership {
+  readonly createdBy: string | null;
+  readonly approvedBy: string | null;
+  readonly publishedBy: string | null;
+}
+
+/**
+ * Which hats this person wore on this drive.
+ *
+ * A list rather than a single answer: one person can raise a drive and publish
+ * it, and a screen that had to pick one would have to pick wrongly. Order is
+ * pipeline order, so the labels read in the sequence the work happened.
+ */
+export function involvementIn(drive: DriveOwnership, profileId: string): readonly DriveRole[] {
+  const roles: DriveRole[] = [];
+  if (drive.createdBy === profileId) roles.push("raised");
+  if (drive.approvedBy === profileId) roles.push("approved");
+  if (drive.publishedBy === profileId) roles.push("published");
+  return roles;
+}
+
+/**
+ * The lifecycle as a pipeline, in the order a drive actually travels it.
+ *
+ * `rejected` is deliberately absent: it is not a point on the journey, it is
+ * the journey ending. Typing the phases as a Record over "every status except
+ * rejected" means a new drive status cannot be added without deciding where on
+ * the pipeline it sits - the compiler asks.
+ */
+const PIPELINE: readonly Exclude<DriveStatus, "rejected">[] = [
+  "draft",
+  "submitted",
+  "approved",
+  "live",
+  "applications_closed",
+  "in_rounds",
+  "completed",
+];
+
+const PHASE: Readonly<Record<Exclude<DriveStatus, "rejected">, string>> = {
+  draft: "Draft",
+  submitted: "Awaiting approval",
+  approved: "Approved — not yet published",
+  live: "Applications open",
+  applications_closed: "Applications closed",
+  in_rounds: "Rounds in progress",
+  completed: "Completed",
+};
+
+export interface DriveProgressFacts {
+  readonly status: DriveStatus;
+  readonly onHold: boolean;
+  readonly totalRounds: number;
+  /** Rounds where at least one result has been declared. */
+  readonly roundsDecided: number;
+}
+
+export interface DriveProgress {
+  readonly phase: string;
+  readonly stageIndex: number;
+  readonly stageCount: number;
+  readonly percentComplete: number;
+  readonly roundsDecided: number;
+  readonly totalRounds: number;
+  /** Nothing more will happen to this drive without someone intervening. */
+  readonly terminal: boolean;
+  /** Why the drive cannot move, in words, or null. */
+  readonly blocked: string | null;
+}
+
+/**
+ * How far along a drive is.
+ *
+ * Position on the pipeline, not a weighted guess: every stage is worth the
+ * same, because inventing weights would make the number look precise while
+ * meaning nothing. A rejected drive is taken OFF the pipeline entirely - it
+ * never travels further, and showing it as 14% done would imply it might.
+ *
+ * `onHold` is reported alongside the stage rather than replacing it, because
+ * that is what it is: a flag that composes with the lifecycle (§3.2).
+ */
+export function driveProgress(facts: DriveProgressFacts): DriveProgress {
+  const stageCount = PIPELINE.length;
+  const blocked = facts.onHold ? "On hold — it cannot be published until the hold is lifted" : null;
+  const rounds = { roundsDecided: facts.roundsDecided, totalRounds: facts.totalRounds };
+
+  if (facts.status === "rejected") {
+    return {
+      ...rounds,
+      phase: "Rejected",
+      stageIndex: 0,
+      stageCount,
+      percentComplete: 0,
+      terminal: true,
+      blocked,
+    };
+  }
+
+  const stageIndex = PIPELINE.indexOf(facts.status);
+
+  return {
+    ...rounds,
+    phase: PHASE[facts.status],
+    stageIndex,
+    stageCount,
+    percentComplete: Math.round((stageIndex / (stageCount - 1)) * 100),
+    terminal: facts.status === "completed",
+    blocked,
+  };
+}
+
+export interface ApplicantFacts {
+  readonly applicationId: string;
+  /** A coordinator included them in the list sent to the recruiter. */
+  readonly shortlisted: boolean;
+  readonly hasOffer: boolean;
+  readonly rounds: readonly ApplicantRound[];
+}
+
+export interface DriveFunnel {
+  readonly applied: number;
+  readonly shortlisted: number;
+  readonly inRounds: number;
+  readonly offers: number;
+  readonly notSelected: number;
+}
+
+/**
+ * The funnel, counted from the same stages the applicants themselves are shown.
+ *
+ * "In rounds" therefore means what it means everywhere else: a round has named
+ * this applicant. Applying is not being in a round - round 1 is the
+ * recruiter's choice from the exported list (Q9), and counting applicants as
+ * participants would tell an AE that 300 people are sitting an interview.
+ */
+export function summariseFunnel(applicants: readonly ApplicantFacts[]): DriveFunnel {
+  let shortlisted = 0;
+  let inRounds = 0;
+  let offers = 0;
+  let notSelected = 0;
+
+  for (const applicant of applicants) {
+    if (applicant.shortlisted) shortlisted += 1;
+
+    const { stage } = applicationProgress({
+      rounds: applicant.rounds,
+      hasOffer: applicant.hasOffer,
+    });
+
+    if (stage === "in_process") inRounds += 1;
+    if (stage === "selected") offers += 1;
+    if (stage === "not_selected") notSelected += 1;
+  }
+
+  return { applied: applicants.length, shortlisted, inRounds, offers, notSelected };
+}
