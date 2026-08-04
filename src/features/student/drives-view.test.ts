@@ -209,3 +209,70 @@ describe("createSupabaseDrivesView", () => {
     expect(rows[0]?.ctcLabel).toBe("₹6.5 LPA");
   });
 });
+
+/**
+ * Drive TARGETING — the degrees, branches and campuses the Central CPC picks
+ * on the publish screen.
+ *
+ * `evaluateEligibility` documents that an empty list means "any, never none",
+ * so a view that does not load the link tables at all silently makes every
+ * targeted drive open to everybody. A drive raised for B.E CSE at one campus
+ * was visible to a BCA student at another, and applyable by them.
+ */
+describe("drive targeting is enforced, not just recorded", () => {
+  const targeted = (over: Record<string, unknown>) => [{ ...driveRow, ...over }];
+
+  it("hides a drive targeted at a different degree", async () => {
+    stub({ drives: targeted({ drive_eligible_degrees: [{ degrees: { name: "B.Tech" } }] }) });
+
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  it("shows a drive targeted at the student's own degree", async () => {
+    stub({ drives: targeted({ drive_eligible_degrees: [{ degrees: { name: "B.E" } }] }) });
+
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+
+  it("hides a drive targeted at a different branch", async () => {
+    stub({ drives: targeted({ drive_eligible_branches: [{ branches: { name: "ECE" } }] }) });
+
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  it("hides a drive targeted at another campus", async () => {
+    stub({
+      drives: targeted({
+        drive_target_campuses: [
+          { campuses: { name: "VIT Bangalore", cities: { name: "Bengaluru" } } },
+        ],
+      }),
+    });
+
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  it("shows a drive targeted at the student's own campus", async () => {
+    stub({
+      drives: targeted({
+        drive_target_campuses: [
+          { campuses: { name: "Test Engineering College", cities: { name: "Chennai" } } },
+        ],
+      }),
+    });
+
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+
+  it("leaves an untargeted drive open to everyone, as an empty list means any", async () => {
+    stub({
+      drives: targeted({
+        drive_eligible_degrees: [],
+        drive_eligible_branches: [],
+        drive_target_campuses: [],
+      }),
+    });
+
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+});

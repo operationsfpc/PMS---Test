@@ -37,13 +37,45 @@ export const STUDENT_COLUMNS = `
   student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 
-/** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
+/**
+ * Exported so src/db/query-contract.test.ts can prove it against the real schema.
+ *
+ * The three link tables are the drive's TARGETING, chosen by the Central CPC
+ * on the publish screen. They were not loaded here at all, and because
+ * `evaluateEligibility` treats an empty list as "any, never none", every
+ * targeted drive was silently open to the whole roster - a B.E CSE drive at
+ * one campus was visible, and applyable, to a BCA student at another.
+ */
 export const DRIVE_COLUMNS = `
   id, company_name, role_title, role_category, drive_type, offer_category,
   open_to_all_override, status, application_start, application_end,
   ctc_min_lpa, ctc_max_lpa, min_overall_cgpa, min_tenth_percentage,
-  min_twelfth_percentage, arrears_policy, eligible_passing_years
+  min_twelfth_percentage, arrears_policy, eligible_passing_years,
+  drive_eligible_degrees(degrees(name)),
+  drive_eligible_branches(branches(name)),
+  drive_target_campuses(campuses(name, cities(name)))
 `;
+
+/** Names out of an embedded link table, e.g. drive_eligible_degrees(degrees(name)). */
+function linkedNames(rows: unknown, key: string): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => one<{ name?: string }>((row as Record<string, unknown>)[key])?.name)
+    .filter((name): name is string => typeof name === "string" && name !== "");
+}
+
+/** Cities are reached through the targeted campus, which is where they live. */
+function targetedCities(rows: unknown): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map(
+      (row) =>
+        one<{ name?: string }>(
+          one<{ cities?: unknown }>((row as Record<string, unknown>).campuses)?.cities,
+        )?.name,
+    )
+    .filter((name): name is string => typeof name === "string" && name !== "");
+}
 
 /**
  * Assembles the student's drive list.
@@ -163,15 +195,15 @@ export function createSupabaseDrivesView(
       applicationEnd: new Date(raw.application_end as string),
       roleCategory: raw.role_category as RoleCategory,
       criteria: {
-        eligibleDegrees: [],
-        eligibleBranches: [],
+        eligibleDegrees: linkedNames(raw.drive_eligible_degrees, "degrees"),
+        eligibleBranches: linkedNames(raw.drive_eligible_branches, "branches"),
         eligiblePassingYears: (raw.eligible_passing_years as number[]) ?? [],
         minOverallCgpa: (raw.min_overall_cgpa as number | null) ?? null,
         minTenthPercentage: (raw.min_tenth_percentage as number | null) ?? null,
         minTwelfthPercentage: (raw.min_twelfth_percentage as number | null) ?? null,
         arrearPolicy: (raw.arrears_policy as "flexible") ?? "flexible",
-        targetCities: [],
-        targetCampuses: [],
+        targetCities: targetedCities(raw.drive_target_campuses),
+        targetCampuses: linkedNames(raw.drive_target_campuses, "campuses"),
       },
     };
   }
