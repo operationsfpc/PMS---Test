@@ -4,6 +4,8 @@ import { SRF_DEFAULTS, type SrfFormValues, srfSchema } from "./srf-schema";
 const valid: SrfFormValues = {
   ...SRF_DEFAULTS,
   mobile: "9876543210",
+  // Mandatory since 2026-08-04.
+  alternateContact: "9876500000",
   tenthPercentage: 91.4,
   twelfthPercentage: 88,
   degree: "B.E",
@@ -66,12 +68,25 @@ describe("srfSchema", () => {
     expect(errorsFor({ mobile: "12345" }).mobile).toMatch(/10-digit/i);
   });
 
-  it("allows optional contact numbers to be blank", () => {
-    expect(errorsFor({ whatsapp: "", alternateContact: "" })).toEqual({});
+  it("allows WhatsApp to be blank", () => {
+    expect(errorsFor({ whatsapp: "" })).toEqual({});
   });
 
   it("rejects a malformed optional number when one is supplied", () => {
     expect(errorsFor({ whatsapp: "123" }).whatsapp).toMatch(/10-digit/i);
+  });
+
+  /**
+   * Requested 2026-08-04. A drive-day no-show that cannot be reached costs the
+   * student the opportunity and the college the recruiter, so a second number
+   * is not optional.
+   */
+  it("requires an alternate contact number", () => {
+    expect(errorsFor({ alternateContact: "" }).alternateContact).toMatch(/required|10-digit/i);
+  });
+
+  it("still rejects a malformed alternate number", () => {
+    expect(errorsFor({ alternateContact: "123" }).alternateContact).toMatch(/10-digit/i);
   });
 
   it("allows blank professional profile links but rejects malformed ones", () => {

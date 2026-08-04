@@ -217,6 +217,8 @@ export function SrfPage() {
                 <TextField
                   label="Alternate contact number"
                   type="tel"
+                  required
+                  hint="A number that reaches you if your main one does not."
                   {...register("alternateContact")}
                 />
                 <ErrorText>{errors.alternateContact?.message}</ErrorText>

@@ -104,18 +104,32 @@ export function CheckboxField({
   );
 }
 
+/**
+ * Upload limits, stated once.
+ *
+ * 5 MB is the storage cap set by 0010; PDF is what the picker has always
+ * restricted to. Neither was ever shown to the student, so the first they knew
+ * of either was a rejected upload. Exported so the tests - and any other
+ * upload surface - use the same numbers the input enforces.
+ */
+export const UPLOAD_MAX_MB = 5;
+export const UPLOAD_ACCEPT = "application/pdf";
+export const UPLOAD_LIMITS = `PDF only, up to ${UPLOAD_MAX_MB} MB.`;
+
 export function FileField({
   label,
   hint,
   ...props
 }: { label: string; hint?: string | undefined } & InputHTMLAttributes<HTMLInputElement>) {
+  const withLimits = hint === undefined ? UPLOAD_LIMITS : `${hint} ${UPLOAD_LIMITS}`;
+
   return (
-    <Field label={label} hint={hint} required={props.required}>
+    <Field label={label} hint={withLimits} required={props.required}>
       {(id) => (
         <input
           id={id}
           type="file"
-          accept="application/pdf"
+          accept={UPLOAD_ACCEPT}
           className="w-full cursor-pointer rounded-lg border border-dashed border-line bg-surface-muted px-3 py-2.5 text-sm text-ink-500 file:mr-3 file:rounded-md file:border-0 file:bg-brand-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:border-brand-300"
           {...props}
         />

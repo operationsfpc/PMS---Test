@@ -32,7 +32,12 @@ export const srfSchema = z
     email: z.email("Enter a valid email address"),
     mobile: z.string().refine(isValidIndianMobile, "Enter a valid 10-digit mobile number"),
     whatsapp: optionalMobile,
-    alternateContact: optionalMobile,
+    // Mandatory (requested 2026-08-04): a student who cannot be reached on
+    // drive day loses the opportunity, and the college loses the recruiter.
+    alternateContact: z
+      .string()
+      .min(1, "An alternate contact number is required.")
+      .refine(isValidIndianMobile, "Enter a valid 10-digit mobile number"),
 
     // Academic
     tenthPercentage: percentage,

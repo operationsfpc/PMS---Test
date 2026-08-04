@@ -31,7 +31,9 @@ const studentsPatch = (respond: () => Response | Promise<Response>) =>
 /** Behaviour of the real SRF: validation, dynamic fields, submission. */
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/mobile number/i), "9876543210");
+  await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
+  // Mandatory since 2026-08-04.
+  await user.type(screen.getByLabelText(/alternate contact number/i), "9876500000");
   await user.type(screen.getByLabelText(/10th marks \(%\)/i), "91.4");
   await user.type(screen.getByLabelText(/12th marks \(%\)/i), "88");
   await user.selectOptions(screen.getByLabelText(/^degree/i), "B.E");
