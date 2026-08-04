@@ -43,6 +43,16 @@ export async function createTestDb(): Promise<TestDb> {
   const sql = async (query: string, params: unknown[] = []) =>
     (await db.query(query, params)).rows as Record<string, unknown>[];
 
+  /**
+   * Run SQL as an authenticated end user, with RLS enforced.
+   *
+   * The claim is CLEARED afterwards, not just the role. It is set at session
+   * scope (PGlite gives each database one connection), so leaving it behind
+   * made every later `sql()` call still look like that student to anything
+   * reading `auth.uid()` - which is how the SRF trigger came to refuse the
+   * superuser statements that were setting a test up. `sql()` is meant to be
+   * the trusted server context, so it has to actually be one.
+   */
   const asUser = async (userId: string | null, query: string, params: unknown[] = []) => {
     await db.exec("set role authenticated");
     await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId ?? ""]);
@@ -50,6 +60,7 @@ export async function createTestDb(): Promise<TestDb> {
       return (await db.query(query, params)).rows as Record<string, unknown>[];
     } finally {
       await db.exec("reset role");
+      await db.query("select set_config('request.jwt.claim.sub', '', false)");
     }
   };
 
