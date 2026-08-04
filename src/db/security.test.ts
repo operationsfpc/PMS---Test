@@ -207,15 +207,26 @@ describe("irreversible decisions stay irreversible", () => {
   });
 
   it("records at most one approved opt-out per student", async () => {
+    // Since 0022 an opt-out must carry the student's signed declaration.
+    const declaration = (
+      await t.sql(
+        `insert into student_documents (student_id, kind, storage_path, size_bytes)
+         values ($1,'opt_out_declaration','arjun/declaration.jpg',2000) returning id`,
+        [ids.arjun],
+      )
+    )[0]?.id as string;
+
     await t.sql(
-      `insert into opt_out_requests (student_id, reason, status) values ($1,'Higher studies','verified')`,
-      [ids.arjun],
+      `insert into opt_out_requests (student_id, reason, status, declaration_id)
+       values ($1,'Higher studies','verified',$2)`,
+      [ids.arjun, declaration],
     );
     await t.expectRejection(
       () =>
         t.sql(
-          `insert into opt_out_requests (student_id, reason, status) values ($1,'Again','verified')`,
-          [ids.arjun],
+          `insert into opt_out_requests (student_id, reason, status, declaration_id)
+           values ($1,'Again','verified',$2)`,
+          [ids.arjun, declaration],
         ),
       /duplicate key|unique/i,
     );

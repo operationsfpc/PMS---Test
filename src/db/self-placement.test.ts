@@ -14,20 +14,30 @@ import { createTestDb, seed, type TestDb } from "./harness";
  */
 let t: TestDb;
 let ids: Awaited<ReturnType<typeof seed>>;
+let letter: string;
 
 beforeAll(async () => {
   t = await createTestDb();
   ids = await seed(t);
   await t.sql(`insert into auth.users (id, email) values ($1,'priya@gmail.com')`, [ids.priyaUser]);
+
+  // Since 0022 an off-campus offer must carry its letter (UAT 2026-08-05).
+  letter = (
+    await t.sql(
+      `insert into student_documents (student_id, kind, storage_path, size_bytes)
+       values ($1,'offer_letter','priya/offer.pdf',1000) returning id`,
+      [ids.priya],
+    )
+  )[0]?.id as string;
 }, 60_000);
 
 describe("self-placement requests", () => {
   it("lets a student record one, pending approval", async () => {
     await t.asUser(
       ids.priyaUser,
-      `insert into self_placement_requests (student_id, company_name, role_title, ctc_lpa)
-       values ($1, 'Freshworks', 'SDE', 12.0)`,
-      [ids.priya],
+      `insert into self_placement_requests (student_id, company_name, role_title, ctc_lpa, offer_letter_id)
+       values ($1, 'Freshworks', 'SDE', 12.0, $2)`,
+      [ids.priya, letter],
     );
 
     const rows = await t.sql(`select status from self_placement_requests where student_id = $1`, [
@@ -41,9 +51,9 @@ describe("self-placement requests", () => {
       () =>
         t.asUser(
           ids.priyaUser,
-          `insert into self_placement_requests (student_id, company_name, ctc_lpa)
-           values ($1, 'Ghostwriting Inc', 30.0)`,
-          [ids.arjun],
+          `insert into self_placement_requests (student_id, company_name, ctc_lpa, offer_letter_id)
+           values ($1, 'Ghostwriting Inc', 30.0, $2)`,
+          [ids.arjun, letter],
         ),
       /row-level security|permission denied|violates/i,
     );

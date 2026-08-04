@@ -5,6 +5,62 @@ import type { ParticipationView } from "./participation-page";
 
 export class ParticipationError extends Error {}
 
+/** Where each kind of evidence lives. Both buckets are private (0010, 0022). */
+const BUCKETS = {
+  offer_letter: "offer-letters",
+  opt_out_declaration: "declarations",
+} as const;
+
+/**
+ * Stores one piece of evidence and records it against the student.
+ *
+ * Objects are namespaced by student id - `<student>/<name>` - because that is
+ * exactly what the storage policy checks: a student may only ever write inside
+ * their own folder.
+ *
+ * The file is uploaded BEFORE the request row is written, and a failure throws
+ * rather than continuing. A request with no evidence is what the database now
+ * refuses, and a student who was told their opt-out was sent when it was not
+ * is the worst possible outcome here.
+ */
+async function uploadEvidence(
+  client: SupabaseClient,
+  studentId: string,
+  kind: keyof typeof BUCKETS,
+  file: File,
+): Promise<string> {
+  // The name is prefixed so re-uploading never collides with an earlier one;
+  // storage_path is unique, and a student correcting a bad photo is normal.
+  const path = `${studentId}/${Date.now()}-${file.name}`;
+
+  const { error: uploadError } = await client.storage
+    .from(BUCKETS[kind])
+    .upload(path, file, { contentType: file.type });
+
+  if (uploadError !== null) {
+    throw new ParticipationError(
+      "Could not upload your document. Check your connection and try again.",
+    );
+  }
+
+  const { data, error } = await client
+    .from("student_documents")
+    .insert({
+      student_id: studentId,
+      kind,
+      storage_path: `${BUCKETS[kind]}/${path}`,
+      size_bytes: file.size,
+    })
+    .select("id")
+    .single();
+
+  if (error !== null || data === null) {
+    throw new ParticipationError("Could not save your document. Please try again.");
+  }
+
+  return data.id as string;
+}
+
 /**
  * The student's own participation, against live data.
  *
@@ -51,19 +107,32 @@ export function createSupabaseParticipationView(
       };
     },
 
-    async requestOptOut(reason) {
+    async requestOptOut({ reason, declaration }) {
       const studentId = await student();
       const current = await this.status();
 
       const decision = canRequestOptOut({
         participationStatus: current.participationStatus,
         hasPendingRequest: current.hasPendingRequest,
+        hasDeclaration: declaration !== undefined,
       });
       if (!decision.allowed) throw new ParticipationError(decision.reason);
 
+      const declarationId = await uploadEvidence(
+        client,
+        studentId,
+        "opt_out_declaration",
+        declaration,
+      );
+
       const { error } = await client
         .from("opt_out_requests")
-        .insert({ student_id: studentId, reason, status: "pending" })
+        .insert({
+          student_id: studentId,
+          reason,
+          status: "pending",
+          declaration_id: declarationId,
+        })
         .select("id")
         .single();
 
@@ -78,8 +147,16 @@ export function createSupabaseParticipationView(
 
       const decision = canRecordSelfPlacement({
         participationStatus: current.participationStatus,
+        hasOfferLetter: placement.offerLetter !== undefined,
       });
       if (!decision.allowed) throw new ParticipationError(decision.reason);
+
+      const offerLetterId = await uploadEvidence(
+        client,
+        studentId,
+        "offer_letter",
+        placement.offerLetter,
+      );
 
       // Raised as a REQUEST. The `offers` row - and with it the statistic - is
       // created only when a coordinator approves (A18), because there is no
@@ -91,6 +168,7 @@ export function createSupabaseParticipationView(
           company_name: placement.companyName,
           role_title: placement.roleTitle === "" ? null : placement.roleTitle,
           ctc_lpa: placement.ctcLpa,
+          offer_letter_id: offerLetterId,
         })
         .select("id")
         .single();

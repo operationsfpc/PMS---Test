@@ -8,6 +8,33 @@ export class ParticipationQueueError extends Error {}
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
 
+/** Long enough to read a document, short enough not to be worth sharing. */
+const SIGNED_URL_TTL_SECONDS = 300;
+
+/**
+ * A short-lived link to a document (PRD §21.2 - nothing is public).
+ *
+ * `storage_path` carries the bucket, because the two kinds of evidence live in
+ * different ones. A path we cannot sign returns null so the screen can say so:
+ * a coordinator must never believe they have checked something they could not
+ * open.
+ */
+async function signedUrlFor(
+  client: SupabaseClient,
+  storagePath: string | null | undefined,
+): Promise<string | null> {
+  if (storagePath === null || storagePath === undefined || storagePath === "") return null;
+
+  const [bucket, ...rest] = storagePath.split("/");
+  if (bucket === undefined || rest.length === 0) return null;
+
+  const { data } = await client.storage
+    .from(bucket)
+    .createSignedUrl(rest.join("/"), SIGNED_URL_TTL_SECONDS);
+
+  return data?.signedUrl ?? null;
+}
+
 /**
  * Opt-out and self-placement approvals, against live data.
  *
@@ -37,37 +64,48 @@ export function createSupabaseParticipationQueueView(
       const [{ data: optOuts }, { data: placements }] = await Promise.all([
         client
           .from("opt_out_requests")
-          .select("id, reason, students(full_name, roll_number)")
+          .select("id, reason, students(full_name, roll_number), student_documents(storage_path)")
           .eq("status", "pending"),
         client
           .from("self_placement_requests")
-          .select("id, company_name, ctc_lpa, students(full_name, roll_number)")
+          .select(
+            "id, company_name, ctc_lpa, students(full_name, roll_number), student_documents(storage_path)",
+          )
           .eq("status", "pending"),
       ]);
 
       const name = (row: Record<string, unknown>) =>
         one<{ full_name?: string; roll_number?: string }>(row.students);
 
+      const evidenceOf = (row: Record<string, unknown>) =>
+        one<{ storage_path?: string }>(row.student_documents)?.storage_path;
+
       return {
-        optOuts: (optOuts ?? []).map((row) => {
-          const student = name(row);
-          return {
-            id: row.id as string,
-            studentName: student?.full_name ?? "Unknown student",
-            rollNumber: student?.roll_number ?? "—",
-            reason: (row.reason as string | null) ?? "",
-          };
-        }),
-        selfPlacements: (placements ?? []).map((row) => {
-          const student = name(row);
-          return {
-            id: row.id as string,
-            studentName: student?.full_name ?? "Unknown student",
-            rollNumber: student?.roll_number ?? "—",
-            companyName: (row.company_name as string | null) ?? "Unknown company",
-            ctcLpa: (row.ctc_lpa as number | null) ?? 0,
-          };
-        }),
+        optOuts: await Promise.all(
+          (optOuts ?? []).map(async (row) => {
+            const student = name(row);
+            return {
+              id: row.id as string,
+              studentName: student?.full_name ?? "Unknown student",
+              rollNumber: student?.roll_number ?? "—",
+              reason: (row.reason as string | null) ?? "",
+              declarationUrl: await signedUrlFor(client, evidenceOf(row)),
+            };
+          }),
+        ),
+        selfPlacements: await Promise.all(
+          (placements ?? []).map(async (row) => {
+            const student = name(row);
+            return {
+              id: row.id as string,
+              studentName: student?.full_name ?? "Unknown student",
+              rollNumber: student?.roll_number ?? "—",
+              companyName: (row.company_name as string | null) ?? "Unknown company",
+              ctcLpa: (row.ctc_lpa as number | null) ?? 0,
+              offerLetterUrl: await signedUrlFor(client, evidenceOf(row)),
+            };
+          }),
+        ),
       };
     },
 

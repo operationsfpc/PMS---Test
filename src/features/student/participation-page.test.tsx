@@ -40,9 +40,18 @@ describe("ParticipationPage", () => {
     expect(requestOptOut).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText(/why are you opting out/i), "Joining family business");
+    // Mandatory since UAT 2026-08-05; the request is refused without it.
+    await user.upload(
+      screen.getByLabelText(/signed declaration/i),
+      new File(["signed"], "declaration.jpg", { type: "image/jpeg" }),
+    );
     await user.click(screen.getByRole("button", { name: /request opt-out/i }));
 
-    await waitFor(() => expect(requestOptOut).toHaveBeenCalledWith("Joining family business"));
+    await waitFor(() =>
+      expect(requestOptOut).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: "Joining family business" }),
+      ),
+    );
   });
 
   it("tells a student whose request is pending that it is waiting, and offers no second one", async () => {
@@ -87,14 +96,16 @@ describe("ParticipationPage", () => {
     await user.type(await screen.findByLabelText(/company/i), "Freshworks");
     await user.type(screen.getByLabelText(/role/i), "SDE");
     await user.type(screen.getByLabelText(/ctc/i), "12");
-    await user.click(screen.getByRole("button", { name: /submit off-campus offer/i }));
+    await user.upload(
+      screen.getByLabelText(/offer letter/i),
+      new File(["offer"], "offer.pdf", { type: "application/pdf" }),
+    );
+    await user.click(screen.getByRole("button", { name: /record.*offer/i }));
 
     await waitFor(() =>
-      expect(recordSelfPlacement).toHaveBeenCalledWith({
-        companyName: "Freshworks",
-        roleTitle: "SDE",
-        ctcLpa: 12,
-      }),
+      expect(recordSelfPlacement).toHaveBeenCalledWith(
+        expect.objectContaining({ companyName: "Freshworks", roleTitle: "SDE", ctcLpa: 12 }),
+      ),
     );
   });
 
@@ -134,9 +145,89 @@ describe("ParticipationPage", () => {
     );
 
     await user.type(await screen.findByLabelText(/why are you opting out/i), "Higher studies");
+    await user.upload(
+      screen.getByLabelText(/signed declaration/i),
+      new File(["signed"], "declaration.jpg", { type: "image/jpeg" }),
+    );
     await user.click(screen.getByRole("button", { name: /request opt-out/i }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/already waiting/i);
+  });
+});
+
+/**
+ * Evidence, required from UAT 2026-08-05.
+ *
+ * Both of these decisions are irreversible in practice, so neither may rest on
+ * a student's word alone. The refusal comes from the domain, so the screen and
+ * the database refuse for the same reason and say the same thing.
+ */
+describe("ParticipationPage — evidence", () => {
+  const file = (name = "offer.pdf") => new File(["evidence"], name, { type: "application/pdf" });
+
+  it("will not send an opt-out without the signed declaration", async () => {
+    const requestOptOut = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<ParticipationPage view={view({ requestOptOut })} />);
+
+    await user.type(await screen.findByLabelText(/why are you opting out/i), "Higher studies");
+    await user.click(screen.getByRole("button", { name: /request opt-out/i }));
+
+    expect(requestOptOut).not.toHaveBeenCalled();
+    expect(await screen.findByText(/handwritten declaration/i)).toBeDefined();
+  });
+
+  it("says what the declaration has to be, before the student goes looking", async () => {
+    render(<ParticipationPage view={view()} />);
+
+    expect(await screen.findByText(/handwritten and signed/i)).toBeDefined();
+  });
+
+  it("sends the declaration with the request", async () => {
+    const requestOptOut = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<ParticipationPage view={view({ requestOptOut })} />);
+
+    await user.type(await screen.findByLabelText(/why are you opting out/i), "Higher studies");
+    await user.upload(screen.getByLabelText(/signed declaration/i), file("declaration.jpg"));
+    await user.click(screen.getByRole("button", { name: /request opt-out/i }));
+
+    await waitFor(() => expect(requestOptOut).toHaveBeenCalled());
+    expect(requestOptOut.mock.calls[0]?.[0]).toMatchObject({ reason: "Higher studies" });
+    expect(requestOptOut.mock.calls[0]?.[0].declaration).toBeInstanceOf(File);
+  });
+
+  it("will not record an off-campus offer without the offer letter", async () => {
+    const recordSelfPlacement = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<ParticipationPage view={view({ recordSelfPlacement })} />);
+
+    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
+    await user.type(screen.getByLabelText(/ctc/i), "7.5");
+    await user.click(screen.getByRole("button", { name: /record.*offer/i }));
+
+    expect(recordSelfPlacement).not.toHaveBeenCalled();
+    expect(await screen.findByText(/upload your offer letter/i)).toBeDefined();
+  });
+
+  it("sends the offer letter with the offer", async () => {
+    const recordSelfPlacement = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<ParticipationPage view={view({ recordSelfPlacement })} />);
+
+    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
+    await user.type(screen.getByLabelText(/ctc/i), "7.5");
+    await user.upload(screen.getByLabelText(/offer letter/i), file());
+    await user.click(screen.getByRole("button", { name: /record.*offer/i }));
+
+    await waitFor(() => expect(recordSelfPlacement).toHaveBeenCalled());
+    expect(recordSelfPlacement.mock.calls[0]?.[0].offerLetter).toBeInstanceOf(File);
+  });
+
+  it("says the coordinator has to verify it, so nobody expects it to count yet", async () => {
+    render(<ParticipationPage view={view()} />);
+
+    expect(await screen.findByText(/verified by your.*coordinator/i)).toBeDefined();
   });
 });

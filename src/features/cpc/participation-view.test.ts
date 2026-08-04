@@ -81,14 +81,68 @@ function stub(
   return writes;
 }
 
+/** Storage is stubbed at the client: signing is not what these tests are about. */
+function signingClient() {
+  const base = client();
+  base.storage.from = ((bucket: string) => ({
+    createSignedUrl: async (path: string) => ({
+      data: { signedUrl: `https://signed/${bucket}/${path}` },
+      error: null,
+    }),
+  })) as unknown as typeof base.storage.from;
+  return base;
+}
+
 const view = (role = "campus_placement_coordinator", actorId: string | null = "cpc-1") =>
   createSupabaseParticipationQueueView(
-    client(),
+    signingClient(),
     async () => actorId,
     async () => role as "campus_placement_coordinator",
   );
 
 describe("the pending queue", () => {
+  it("mints a signed URL for the evidence behind each request", async () => {
+    stub({
+      optOuts: [
+        {
+          id: "req-1",
+          reason: "Higher studies",
+          students: { full_name: "Anjali", roll_number: "21CSE1042" },
+          student_documents: { storage_path: "declarations/s1/declaration.jpg" },
+        },
+      ],
+      placements: [
+        {
+          id: "sp-1",
+          company_name: "Freshworks",
+          ctc_lpa: 7.5,
+          students: { full_name: "Rahul", roll_number: "21CSE1099" },
+          student_documents: { storage_path: "offer-letters/s1/offer.pdf" },
+        },
+      ],
+    });
+
+    const { optOuts, selfPlacements } = await view().pending();
+
+    expect(optOuts[0]?.declarationUrl).toBe("https://signed/declarations/s1/declaration.jpg");
+    expect(selfPlacements[0]?.offerLetterUrl).toBe("https://signed/offer-letters/s1/offer.pdf");
+  });
+
+  it("reports a request with no document rather than a dead link", async () => {
+    stub({
+      optOuts: [
+        {
+          id: "req-1",
+          reason: "Higher studies",
+          students: null,
+          student_documents: null,
+        },
+      ],
+    });
+
+    expect((await view().pending()).optOuts[0]?.declarationUrl).toBeNull();
+  });
+
   it("shows a pending opt-out with the student and their reason", async () => {
     stub({
       optOuts: [
@@ -108,6 +162,8 @@ describe("the pending queue", () => {
         studentName: "Anjali Subramanian",
         rollNumber: "21CSE1042",
         reason: "Joining the family business",
+        // No document embedded in this fixture, so there is nothing to sign.
+        declarationUrl: null,
       },
     ]);
   });

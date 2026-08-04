@@ -7,6 +7,13 @@ export type Decision =
 export interface OptOutContext {
   readonly participationStatus: ParticipationStatus;
   readonly hasPendingRequest: boolean;
+  /**
+   * A handwritten, signed declaration confirming the decision (UAT
+   * 2026-08-05). Required because approval is irreversible: once granted,
+   * 0009 refuses to move the student back, so "I never asked to opt out" has
+   * to be answerable with a document.
+   */
+  readonly hasDeclaration: boolean;
 }
 
 /**
@@ -29,6 +36,15 @@ export function canRequestOptOut(context: OptOutContext): Decision {
   if (context.hasPendingRequest) {
     return { allowed: false, reason: "Your opt-out request is already waiting for approval." };
   }
+  // Asked LAST of the refusals: a student who has already opted out should be
+  // told that, not asked for a document they no longer need.
+  if (!context.hasDeclaration) {
+    return {
+      allowed: false,
+      reason:
+        "Upload a handwritten declaration, signed by you, confirming that you are opting out.",
+    };
+  }
   return { allowed: true };
 }
 
@@ -41,11 +57,23 @@ export function canRequestOptOut(context: OptOutContext): Decision {
  */
 export function canRecordSelfPlacement(context: {
   readonly participationStatus: ParticipationStatus;
+  /**
+   * The offer letter (A18, and UAT 2026-08-05). There is no drive to
+   * corroborate an off-campus offer, and it becomes a number the college
+   * reports, so the letter is the only evidence a coordinator can verify.
+   */
+  readonly hasOfferLetter: boolean;
 }): Decision {
   if (context.participationStatus === "disbarred") {
     return {
       allowed: false,
       reason: "A disbarred student cannot record an offer. Speak to your placement coordinator.",
+    };
+  }
+  if (!context.hasOfferLetter) {
+    return {
+      allowed: false,
+      reason: "Upload your offer letter. Your coordinator has to verify it before it counts.",
     };
   }
   return { allowed: true };

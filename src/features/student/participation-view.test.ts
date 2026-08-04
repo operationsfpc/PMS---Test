@@ -45,6 +45,12 @@ function stub(
     http.get(`${BASE}/rest/v1/self_placement_requests`, () =>
       HttpResponse.json(opts.placements ?? []),
     ),
+    // The document write always succeeds: `writeFails` is about the REQUEST,
+    // and failing the upload instead would test a different thing.
+    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+      writes.push({ table: "student_documents", body: await request.clone().json() });
+      return HttpResponse.json({ id: "doc-1" });
+    }),
     http.post(`${BASE}/rest/v1/opt_out_requests`, ({ request }) =>
       write("opt_out_requests", request),
     ),
@@ -56,10 +62,34 @@ function stub(
   return writes;
 }
 
-const view = (studentId: string | null = "s1") =>
-  createSupabaseParticipationView(client(), async () => studentId);
+/**
+ * Storage is stubbed at the client, not over HTTP: supabase-js signs and
+ * chunks uploads, and none of that is what these tests are about.
+ */
+function withStorage(base = client(), opts: { uploadFails?: boolean } = {}) {
+  const uploads: string[] = [];
+  base.storage.from = ((bucket: string) => ({
+    upload: async (path: string) => {
+      uploads.push(`${bucket}/${path}`);
+      return opts.uploadFails === true
+        ? { data: null, error: new Error("network") }
+        : { data: { path }, error: null };
+    },
+  })) as unknown as typeof base.storage.from;
+  return { client: base, uploads };
+}
 
-const OFFER = { companyName: "Family Business", roleTitle: "Analyst", ctcLpa: 4.5 };
+const evidence = () => new File(["evidence"], "evidence.pdf", { type: "application/pdf" });
+
+const view = (studentId: string | null = "s1") =>
+  createSupabaseParticipationView(withStorage().client, async () => studentId);
+
+const OFFER = {
+  companyName: "Family Business",
+  roleTitle: "Analyst",
+  ctcLpa: 4.5,
+  offerLetter: new File(["offer"], "offer.pdf", { type: "application/pdf" }),
+};
 
 describe("reading the student's participation", () => {
   it("reports an active student as active", async () => {
@@ -124,9 +154,10 @@ describe("requesting an opt-out", () => {
   it("sends the reason with the request, as pending", async () => {
     const writes = stub();
 
-    await view().requestOptOut("Joining the family business");
+    await view().requestOptOut({ reason: "Joining the family business", declaration: evidence() });
 
-    expect(writes[0]?.body).toMatchObject({
+    // writes[0] is now the document; the request follows it.
+    expect(writes.find((w) => w.table === "opt_out_requests")?.body).toMatchObject({
       student_id: "s1",
       reason: "Joining the family business",
       status: "pending",
@@ -136,21 +167,27 @@ describe("requesting an opt-out", () => {
   it("refuses a second request while one is pending", async () => {
     const writes = stub({ requests: [{ id: "r1", status: "pending" }] });
 
-    await expect(view().requestOptOut("Again")).rejects.toThrow(/already/i);
+    await expect(
+      view().requestOptOut({ reason: "Again", declaration: evidence() }),
+    ).rejects.toThrow(/already/i);
     expect(writes).toHaveLength(0);
   });
 
   it("refuses a student who has already opted out — it is irreversible", async () => {
     const writes = stub({ student: { participation_status: "opted_out" } });
 
-    await expect(view().requestOptOut("Changed my mind")).rejects.toThrow(/opted out/i);
+    await expect(
+      view().requestOptOut({ reason: "Changed my mind", declaration: evidence() }),
+    ).rejects.toThrow(/opted out/i);
     expect(writes).toHaveLength(0);
   });
 
   it("says so when the request could not be sent", async () => {
     stub({ writeFails: true });
 
-    await expect(view().requestOptOut("Reason")).rejects.toThrow(/could not send/i);
+    await expect(
+      view().requestOptOut({ reason: "Reason", declaration: evidence() }),
+    ).rejects.toThrow(/could not send/i);
   });
 });
 
@@ -165,8 +202,8 @@ describe("recording a self-placement", () => {
 
     await view().recordSelfPlacement(OFFER);
 
-    expect(writes[0]?.table).toBe("self_placement_requests");
-    expect(writes[0]?.body).toMatchObject({
+    expect(writes.map((w) => w.table)).toEqual(["student_documents", "self_placement_requests"]);
+    expect(writes[1]?.body).toMatchObject({
       student_id: "s1",
       company_name: "Family Business",
       role_title: "Analyst",
@@ -179,7 +216,9 @@ describe("recording a self-placement", () => {
 
     await view().recordSelfPlacement({ ...OFFER, roleTitle: "" });
 
-    expect(writes[0]?.body).toMatchObject({ role_title: null });
+    expect(writes.find((w) => w.table === "self_placement_requests")?.body).toMatchObject({
+      role_title: null,
+    });
   });
 
   /**
@@ -193,7 +232,7 @@ describe("recording a self-placement", () => {
 
     await view().recordSelfPlacement(OFFER);
 
-    expect(writes).toHaveLength(1);
+    expect(writes.filter((w) => w.table === "self_placement_requests")).toHaveLength(1);
   });
 
   it("refuses a disbarred student, who must speak to their coordinator", async () => {
@@ -207,5 +246,86 @@ describe("recording a self-placement", () => {
     stub({ writeFails: true });
 
     await expect(view().recordSelfPlacement(OFFER)).rejects.toThrow(/could not record/i);
+  });
+});
+
+/**
+ * Uploading the evidence (UAT 2026-08-05).
+ *
+ * The file goes to a private bucket under the student's own folder, a
+ * student_documents row records it, and the request points at that row. If the
+ * upload fails the request must NOT be raised: a request with no evidence is
+ * exactly what the database now refuses, and the student would be left
+ * believing they had opted out.
+ */
+describe("evidence uploads", () => {
+  const file = () => new File(["evidence"], "offer.pdf", { type: "application/pdf" });
+
+  function stubStorage(opts: { uploadFails?: boolean } = {}) {
+    const uploads: string[] = [];
+    const client = createClient(BASE, "anon-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    client.storage.from = ((bucket: string) => ({
+      upload: async (path: string) => {
+        uploads.push(`${bucket}/${path}`);
+        return opts.uploadFails === true
+          ? { data: null, error: new Error("network") }
+          : { data: { path }, error: null };
+      },
+    })) as unknown as typeof client.storage.from;
+
+    return { client, uploads };
+  }
+
+  it("puts an offer letter in the student's own folder, and records it", async () => {
+    const { client, uploads } = stubStorage();
+    const writes = stub();
+    server.use(
+      http.post(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json({ id: "doc-1" })),
+    );
+
+    await createSupabaseParticipationView(client, async () => "s1").recordSelfPlacement({
+      companyName: "Freshworks",
+      roleTitle: "SDE",
+      ctcLpa: 7.5,
+      offerLetter: file(),
+    });
+
+    expect(uploads[0]).toMatch(/^offer-letters\/s1\//);
+    const request = writes.find((w) => w.table === "self_placement_requests");
+    expect(request?.body).toMatchObject({ offer_letter_id: "doc-1" });
+  });
+
+  it("puts a declaration in its own bucket, and records it", async () => {
+    const { client, uploads } = stubStorage();
+    const writes = stub();
+    server.use(
+      http.post(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json({ id: "doc-2" })),
+    );
+
+    await createSupabaseParticipationView(client, async () => "s1").requestOptOut({
+      reason: "Higher studies",
+      declaration: file(),
+    });
+
+    expect(uploads[0]).toMatch(/^declarations\/s1\//);
+    const request = writes.find((w) => w.table === "opt_out_requests");
+    expect(request?.body).toMatchObject({ declaration_id: "doc-2", reason: "Higher studies" });
+  });
+
+  it("does not raise the request when the upload fails", async () => {
+    const { client } = stubStorage({ uploadFails: true });
+    const writes = stub();
+
+    await expect(
+      createSupabaseParticipationView(client, async () => "s1").requestOptOut({
+        reason: "Higher studies",
+        declaration: file(),
+      }),
+    ).rejects.toThrow(/could not upload/i);
+
+    expect(writes.some((w) => w.table === "opt_out_requests")).toBe(false);
   });
 });

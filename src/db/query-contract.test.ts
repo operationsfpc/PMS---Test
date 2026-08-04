@@ -197,12 +197,12 @@ describe("every hand-written select matches the schema", () => {
     [
       "coordinator opt-out queue",
       "opt_out_requests",
-      "id, reason, students(full_name, roll_number)",
+      "id, reason, students(full_name, roll_number), student_documents(storage_path)",
     ],
     [
       "coordinator self-placement queue",
       "self_placement_requests",
-      "id, company_name, ctc_lpa, students(full_name, roll_number)",
+      "id, company_name, ctc_lpa, students(full_name, roll_number), student_documents(storage_path)",
     ],
   ];
 

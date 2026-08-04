@@ -1,5 +1,5 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
-import { canRequestOptOut } from "@domain/participation";
+import { canRecordSelfPlacement, canRequestOptOut } from "@domain/participation";
 import type { ParticipationStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 
@@ -20,11 +20,19 @@ export interface NewSelfPlacement {
   readonly companyName: string;
   readonly roleTitle: string;
   readonly ctcLpa: number;
+  /** Mandatory (UAT 2026-08-05): the coordinator has to verify it. */
+  readonly offerLetter: File;
+}
+
+export interface NewOptOut {
+  readonly reason: string;
+  /** Mandatory (UAT 2026-08-05): handwritten, signed, and irreversible. */
+  readonly declaration: File;
 }
 
 export interface ParticipationView {
   status(): Promise<ParticipationStatusView>;
-  requestOptOut(reason: string): Promise<void>;
+  requestOptOut(request: NewOptOut): Promise<void>;
   recordSelfPlacement(placement: NewSelfPlacement): Promise<void>;
 }
 
@@ -41,6 +49,8 @@ export function ParticipationPage({ view }: { view: ParticipationView }) {
   const [company, setCompany] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
   const [ctc, setCtc] = useState("");
+  const [declaration, setDeclaration] = useState<File | null>(null);
+  const [offerLetter, setOfferLetter] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -53,10 +63,24 @@ export function ParticipationPage({ view }: { view: ParticipationView }) {
 
   async function optOut() {
     if (reason.trim() === "") return;
+
+    // The domain refuses without the declaration, so the screen and the
+    // database refuse for the same reason and say the same thing.
+    const decision = canRequestOptOut({
+      participationStatus: status?.participationStatus ?? "active",
+      hasPendingRequest: status?.hasPendingRequest ?? false,
+      hasDeclaration: declaration !== null,
+    });
+    if (!decision.allowed) {
+      setError(decision.reason);
+      return;
+    }
+
     setError(null);
     try {
-      await view.requestOptOut(reason.trim());
+      await view.requestOptOut({ reason: reason.trim(), declaration: declaration as File });
       setReason("");
+      setDeclaration(null);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not send your request.");
@@ -69,16 +93,28 @@ export function ParticipationPage({ view }: { view: ParticipationView }) {
       setError("Enter the company and a valid CTC in LPA.");
       return;
     }
+
+    const decision = canRecordSelfPlacement({
+      participationStatus: status?.participationStatus ?? "active",
+      hasOfferLetter: offerLetter !== null,
+    });
+    if (!decision.allowed) {
+      setError(decision.reason);
+      return;
+    }
+
     setError(null);
     try {
       await view.recordSelfPlacement({
         companyName: company.trim(),
         roleTitle: roleTitle.trim(),
         ctcLpa: value,
+        offerLetter: offerLetter as File,
       });
       setCompany("");
       setRoleTitle("");
       setCtc("");
+      setOfferLetter(null);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not record the offer.");
@@ -91,6 +127,9 @@ export function ParticipationPage({ view }: { view: ParticipationView }) {
       : canRequestOptOut({
           participationStatus: status.participationStatus,
           hasPendingRequest: status.hasPendingRequest,
+          // Only the state of their participation should hide the form; a
+          // missing document is a thing to ask for, not a reason to refuse.
+          hasDeclaration: true,
         });
 
   return (
@@ -139,6 +178,26 @@ export function ParticipationPage({ view }: { view: ParticipationView }) {
               rows={3}
               className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
             />
+            <div className="mt-4">
+              <label
+                htmlFor="optout-declaration"
+                className="mb-1 block text-sm font-medium text-ink-700"
+              >
+                Signed declaration <span className="text-destructive">*</span>
+              </label>
+              <p className="mb-2 text-xs text-ink-500">
+                A <strong>handwritten and signed</strong> letter confirming that you are opting out.
+                A clear photograph is fine. Your Campus Placement Coordinator has to approve it, and
+                opting out cannot be reversed afterwards.
+              </p>
+              <input
+                id="optout-declaration"
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={(e) => setDeclaration(e.target.files?.[0] ?? null)}
+                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              />
+            </div>
             <div className="mt-3">
               <Button variant="secondary" onClick={() => void optOut()}>
                 Request opt-out
@@ -193,7 +252,26 @@ export function ParticipationPage({ view }: { view: ParticipationView }) {
         </div>
 
         <div className="mt-4">
-          <Button onClick={() => void selfPlace()}>Submit off-campus offer</Button>
+          <label htmlFor="sp-letter" className="mb-1 block text-sm font-medium text-ink-700">
+            Offer letter <span className="text-destructive">*</span>
+          </label>
+          <p className="mb-2 text-xs text-ink-500">
+            Required. There is no drive behind an off-campus offer, so the letter is the only
+            evidence there is — it must be{" "}
+            <strong>verified by your Campus Placement Coordinator</strong> before it counts towards
+            anything.
+          </p>
+          <input
+            id="sp-letter"
+            type="file"
+            accept="application/pdf,image/*"
+            onChange={(e) => setOfferLetter(e.target.files?.[0] ?? null)}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="mt-4">
+          <Button onClick={() => void selfPlace()}>Record off-campus offer</Button>
         </div>
 
         {status !== null && status.selfPlacements.length > 0 && (

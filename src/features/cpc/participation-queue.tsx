@@ -6,6 +6,8 @@ export interface PendingOptOut {
   readonly studentName: string;
   readonly rollNumber: string;
   readonly reason: string;
+  /** Short-lived signed URL for the student's signed declaration (PRD §21.2). */
+  readonly declarationUrl: string | null;
 }
 
 export interface PendingSelfPlacement {
@@ -14,6 +16,32 @@ export interface PendingSelfPlacement {
   readonly rollNumber: string;
   readonly companyName: string;
   readonly ctcLpa: number;
+  /** Short-lived signed URL for the offer letter (PRD §21.2). */
+  readonly offerLetterUrl: string | null;
+}
+
+/**
+ * The document behind a request.
+ *
+ * A coordinator approving evidence they cannot open is rubber-stamping, and
+ * both of these decisions are irreversible in practice. The URL is signed and
+ * short-lived (PRD §21.2), so it is minted per view rather than stored.
+ */
+function Evidence({ url, label, missing }: { url: string | null; label: string; missing: string }) {
+  if (url === null) {
+    return <p className="mt-1 text-xs text-danger-700">{missing}</p>;
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-1 inline-block text-xs font-semibold text-brand-500 underline"
+    >
+      View {label}
+    </a>
+  );
 }
 
 export interface PendingParticipation {
@@ -101,6 +129,11 @@ export function ParticipationQueue({ view }: { view: ParticipationQueueView }) {
                       <p className="font-medium text-ink-900">{request.studentName}</p>
                       <p className="text-sm text-ink-500">{request.rollNumber}</p>
                       <p className="mt-1 text-sm text-ink-700">“{request.reason}”</p>
+                      <Evidence
+                        url={request.declarationUrl}
+                        label="signed declaration"
+                        missing="No signed declaration was uploaded with this request."
+                      />
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -139,6 +172,11 @@ export function ParticipationQueue({ view }: { view: ParticipationQueueView }) {
                       <p className="text-sm text-ink-500">
                         {placement.rollNumber} · {placement.companyName} · ₹{placement.ctcLpa} LPA
                       </p>
+                      <Evidence
+                        url={placement.offerLetterUrl}
+                        label="offer letter"
+                        missing="No offer letter was uploaded with this request."
+                      />
                     </div>
                     <Button
                       size="sm"
