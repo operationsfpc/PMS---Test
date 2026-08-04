@@ -3,6 +3,7 @@ import type { OfferCategory } from "@domain/offer-category";
 import type { ApplicantRound } from "@domain/student-progress";
 import type { AttendanceStatus, OfferSource, RoundResult } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseDrivesView } from "./drives-view";
 import type {
   StudentApplicationRow,
   StudentDashboardSnapshot,
@@ -56,6 +57,11 @@ export function createSupabaseStudentDashboardView(
     return data.session?.user.id ?? null;
   },
 ): StudentDashboardView {
+  // R5 decides which drives are open to THIS student. Counting live drives
+  // instead would promise "3 drives are open to you" to someone eligible for
+  // none of them, and the list they arrive at would be empty.
+  const drivesView = createSupabaseDrivesView(client, getAuthUserId);
+
   return {
     async snapshot(): Promise<StudentDashboardSnapshot> {
       const userId = await getAuthUserId();
@@ -77,7 +83,7 @@ export function createSupabaseStudentDashboardView(
 
       const studentId = student.id as string;
 
-      const [{ data: applications }, { data: offers }, { count: liveDrives }] = await Promise.all([
+      const [{ data: applications }, { data: offers }, openDrives] = await Promise.all([
         client
           .from("applications")
           .select(DASHBOARD_APPLICATION_COLUMNS)
@@ -89,7 +95,7 @@ export function createSupabaseStudentDashboardView(
             "id, drive_id, company_name, role_title, ctc_lpa, offer_category, declared_at, source",
           )
           .eq("student_id", studentId),
-        client.from("drives").select("id", { count: "exact", head: true }).eq("status", "live"),
+        drivesView.openDrives(),
       ]);
 
       const applicationRows = rows(applications);
@@ -181,7 +187,7 @@ export function createSupabaseStudentDashboardView(
         srfStatus: student.srf_status as StudentDashboardSnapshot["srfStatus"],
         participationStatus:
           student.participation_status as StudentDashboardSnapshot["participationStatus"],
-        openDrives: liveDrives ?? 0,
+        openDrives: openDrives.filter((drive) => drive.canApply).length,
         semesters: rows(student.student_semesters)
           .map((s) => ({
             semesterNumber: Number(s.semester_number),

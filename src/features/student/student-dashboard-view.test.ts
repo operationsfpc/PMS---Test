@@ -33,8 +33,32 @@ const STUDENT = {
   ],
 };
 
+/** A live drive with no cutoff the seeded student fails. */
+const OPEN_DRIVE = {
+  id: "d1",
+  company_name: "Zoho Corporation",
+  role_title: "MTS",
+  role_category: "software_technical",
+  drive_type: "placement",
+  offer_category: "dream",
+  open_to_all_override: false,
+  status: "live",
+  application_start: "2020-01-01T00:00:00Z",
+  application_end: "2030-01-01T00:00:00Z",
+  ctc_min_lpa: 6.5,
+  ctc_max_lpa: 9,
+  min_overall_cgpa: null,
+  min_tenth_percentage: null,
+  min_twelfth_percentage: null,
+  arrears_policy: "flexible",
+  eligible_passing_years: [],
+};
+
 const APPLICATION = {
   id: "app-1",
+  // Real applications carry the foreign key as well as the embedded drive:
+  // the drives view reads drive_id, this one reads the embed.
+  drive_id: "d1",
   applied_at: "2026-07-01T04:30:00Z",
   drives: {
     id: "d1",
@@ -71,14 +95,9 @@ function stub(
     ),
     http.get(`${BASE}/rest/v1/round_results`, () => HttpResponse.json(opts.results ?? [])),
     http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
-    // The live-drive count is a HEAD request: PostgREST answers it in the
-    // content-range header, and supabase-js reads the total from there.
-    http.head(`${BASE}/rest/v1/drives`, () => {
-      const total = (opts.drives ?? []).length;
-      return new HttpResponse(null, {
-        headers: { "content-range": `0-${Math.max(total - 1, 0)}/${total}` },
-      });
-    }),
+    // Open drives are counted by running R5 over the live ones, so this is a
+    // full read rather than a head count.
+    http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [])),
   );
 }
 
@@ -219,10 +238,42 @@ describe("createSupabaseStudentDashboardView", () => {
     expect(snapshot.attendance.map((a) => a.status)).toContain("absent");
   });
 
-  it("reports how many live drives exist for the prompt to talk about", async () => {
-    stub({ drives: [{ id: "d9" }, { id: "d8" }] });
+  /**
+   * "3 drives are open to you" must mean three drives THEY can apply to.
+   * Counting every live drive would promise a student who is eligible for none
+   * of them a list that turns out to be empty - and R5 exists precisely so a
+   * student is never shown a drive they can never apply to.
+   */
+  it("counts only the drives the student may actually apply to (R5)", async () => {
+    stub({
+      drives: [
+        { ...OPEN_DRIVE, id: "d8" },
+        { ...OPEN_DRIVE, id: "d9", min_overall_cgpa: 9.9 },
+      ],
+    });
 
-    expect((await view().snapshot()).openDrives).toBe(2);
+    expect((await view().snapshot()).openDrives).toBe(1);
+  });
+
+  it("does not count a drive whose application window has not opened", async () => {
+    stub({
+      drives: [
+        {
+          ...OPEN_DRIVE,
+          id: "d8",
+          application_start: "2030-01-01T00:00:00Z",
+          application_end: "2030-02-01T00:00:00Z",
+        },
+      ],
+    });
+
+    expect((await view().snapshot()).openDrives).toBe(0);
+  });
+
+  it("does not count a drive the student has already applied to", async () => {
+    stub({ drives: [OPEN_DRIVE], applications: [APPLICATION] });
+
+    expect((await view().snapshot()).openDrives).toBe(0);
   });
 
   it("refuses to guess when there is no session", async () => {

@@ -1,6 +1,11 @@
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
+import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
 import { DRIVE_COLUMNS, STUDENT_COLUMNS } from "@features/student/drives-view";
+import {
+  DASHBOARD_APPLICATION_COLUMNS,
+  DASHBOARD_STUDENT_COLUMNS,
+} from "@features/student/student-dashboard-view";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./harness";
 
@@ -157,6 +162,21 @@ describe("every hand-written select matches the schema", () => {
       "status, round_id, applications(student_id, drive_id, students(full_name, roll_number))",
     ],
     ["campus list", "campuses", "id, name, code, is_active, cities(name, state)"],
+    // The student's own dashboard and the DH/AE drive portfolio, added
+    // 2026-08-05. The portfolio embeds three tables under drive_rounds, which
+    // is exactly the shape that has been wrong before.
+    ["student dashboard identity", "students", DASHBOARD_STUDENT_COLUMNS],
+    ["student dashboard applications", "applications", DASHBOARD_APPLICATION_COLUMNS],
+    [
+      "student dashboard offers",
+      "offers",
+      "id, drive_id, company_name, role_title, ctc_lpa, offer_category, declared_at, source",
+    ],
+    ["student dashboard rounds", "round_participants", "round_id, application_id"],
+    ["student dashboard results", "round_results", "round_id, application_id, result"],
+    ["student dashboard attendance", "attendance", "round_id, application_id, status"],
+    ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
+    ["drive portfolio offers", "offers", "drive_id, student_id"],
     ["dashboard students", "students", "id, participation_status, campus_id, campuses(name)"],
     ["dashboard offers", "offers", "student_id, source, drive_type, offer_category"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
