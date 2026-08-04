@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { AuthActionsContext } from "@lib/auth-context";
-import { render, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
+
 import { SRF_SECTIONS, SrfPage } from "./srf-page";
+
+/** The form links back to the dashboard, so every render needs a router. */
+const render = (ui: React.ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * Structural contract for the Student Registration Form.
@@ -21,6 +26,15 @@ import { SRF_SECTIONS, SrfPage } from "./srf-page";
  * screen a student sees, so for a student there was no way out of the
  * application at all.
  */
+const ROSTER = {
+  fullName: "Asha Rao",
+  rollNumber: "21CSE1042",
+  email: "asha@example.edu",
+  degree: "B.E",
+  branch: "CSE",
+  passingYear: 2026,
+};
+
 describe("SrfPage — signing out", () => {
   it("offers a way out from its own header", async () => {
     const signOut = vi.fn().mockResolvedValue(undefined);
@@ -123,5 +137,72 @@ describe("SrfPage", () => {
     // prevents a support burden later.
     render(<SrfPage />);
     expect(screen.getByText(/verified by your campus placement coordinator/i)).toBeDefined();
+  });
+});
+
+/**
+ * Reported from UAT 2026-08-05.
+ *
+ * The progress tracker was hardcoded: the first pill was lit the moment the
+ * form opened and the other six never lit at all. And there was no way back to
+ * the dashboard or to a section already filled in, so a student who wanted to
+ * check something they had entered had to scroll and hope.
+ */
+describe("SrfPage — progress and navigation", () => {
+  it("lights no step before the student has entered anything", async () => {
+    render(<SrfPage profile={ROSTER} />);
+
+    const progress = await screen.findByRole("navigation", { name: /form progress/i });
+    expect(within(progress).queryAllByRole("link", { current: "step" })).toHaveLength(0);
+  });
+
+  it("marks a section done as soon as it is genuinely complete", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} />);
+
+    await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
+    await user.type(screen.getByLabelText(/alternate contact number/i), "9876500000");
+
+    const progress = screen.getByRole("navigation", { name: /form progress/i });
+    const personal = within(progress).getByRole("link", { name: /personal details/i });
+    expect(personal.getAttribute("aria-current")).toBe("step");
+  });
+
+  it("does not mark a section done while it is half filled in", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} />);
+
+    await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
+
+    const progress = screen.getByRole("navigation", { name: /form progress/i });
+    const personal = within(progress).getByRole("link", { name: /personal details/i });
+    expect(personal.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("says how far through the student is", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} />);
+
+    await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
+    await user.type(screen.getByLabelText(/alternate contact number/i), "9876500000");
+
+    expect(screen.getByText(/20% complete/i)).toBeDefined();
+  });
+
+  it("lets the student jump back to any section from the tracker", async () => {
+    render(<SrfPage profile={ROSTER} />);
+
+    const progress = await screen.findByRole("navigation", { name: /form progress/i });
+    const academic = within(progress).getByRole("link", { name: /academic record/i });
+
+    expect(academic.getAttribute("href")).toBe("#academic");
+    expect(document.getElementById("academic")).not.toBeNull();
+  });
+
+  it("offers a way back to the dashboard without losing the form", async () => {
+    render(<SrfPage profile={ROSTER} />);
+
+    const home = await screen.findByRole("link", { name: /my dashboard/i });
+    expect(home.getAttribute("href")).toBe("/student");
   });
 });

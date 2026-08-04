@@ -1,10 +1,12 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
+import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useId, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
+import { Link } from "react-router";
 import { SrfSubmitError, submitSrf } from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
 import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
@@ -30,11 +32,14 @@ export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
 };
 
 function Section({
+  id,
   title,
   step,
   description,
   children,
 }: {
+  /** Anchor target, so the progress tracker can jump back to it. */
+  id: string;
   title: string;
   step: number;
   description?: string;
@@ -43,8 +48,10 @@ function Section({
   const headingId = useId();
   return (
     <section
+      id={id}
+      // Without this the sticky header covers the heading being jumped to.
+      className="scroll-mt-24 rounded-card border border-line bg-surface p-5 shadow-sm sm:p-6"
       aria-labelledby={headingId}
-      className="rounded-card border border-line bg-surface p-5 shadow-sm sm:p-6"
     >
       <div className="mb-5 flex items-start gap-3">
         <span
@@ -121,6 +128,37 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
   const semesters = watch("semesters");
   const maxSemesters = MAX_SEMESTERS[programmeLevel];
 
+  /**
+   * Which marksheets the student has actually chosen.
+   *
+   * Kept here rather than in form state because the files are not part of the
+   * submission payload - attaching each one to its semester row is still
+   * outstanding. The tracker must reflect what the student has done, though,
+   * so it counts the choices they have made.
+   */
+  const [marksheets, setMarksheets] = useState<Record<string, boolean>>({});
+  const noteMarksheet = (key: string, chosen: boolean) =>
+    setMarksheets((current) => ({ ...current, [key]: chosen }));
+
+  const progressInput = {
+    mobile: watch("mobile"),
+    alternateContact: watch("alternateContact"),
+    tenthPercentage: watch("tenthPercentage"),
+    twelfthPercentage: watch("twelfthPercentage"),
+    programmeLevel,
+    // The field is optional in the form's input type, but "not yet entered"
+    // and "deliberately none" are the same thing to the tracker.
+    ugAggregateCgpa: watch("ugAggregateCgpa") ?? null,
+    semesters: (semesters ?? []).map((s) => ({ cgpa: s.cgpa })),
+    marksheetCount: Object.values(marksheets).filter(Boolean).length,
+    roleCategories: selectedCategories,
+    resumeCategories,
+    consent: watch("consent") === true,
+  };
+
+  const progress = srfSectionProgress(progressInput);
+  const completion = srfCompletion(progressInput);
+
   const onSubmit = handleSubmit(async (values) => {
     setServerError(null);
     try {
@@ -162,9 +200,14 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
             className="h-7 w-auto"
           />
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-gold-500 px-2.5 py-1 text-xs font-semibold text-brand-900">
-              Draft
-            </span>
+            {/* A student filling this in had no way back to their own
+                dashboard, or to anything else. */}
+            <Link
+              to="/student"
+              className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted"
+            >
+              My dashboard
+            </Link>
             {/* This screen has its own chrome, so it needs its own way out.
                 For a student it is the first screen they ever see. */}
             <button
@@ -191,19 +234,42 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
           </p>
         </div>
 
-        <ol className="mb-6 flex flex-wrap gap-1.5" aria-label="Form progress">
-          {SRF_SECTIONS.map((s) => (
-            <li
-              key={s.id}
-              className="flex-1 rounded-full bg-line py-1 text-center text-[10px] font-semibold text-ink-500 first:bg-brand-500 first:text-white"
-            >
-              {s.step}
-            </li>
-          ))}
-        </ol>
+        {/* Was hardcoded: step 1 lit on load, the other six never. It now
+            reads the domain rule, and every pill is a link back to its
+            section - the student had no way to review what they had entered. */}
+        <nav aria-label="Form progress" className="mb-6">
+          <ol className="flex flex-wrap gap-1.5">
+            {progress.map((s) => (
+              <li key={s.id} className="min-w-9 flex-1">
+                <a
+                  href={`#${s.id}`}
+                  aria-current={s.complete && !s.optional ? "step" : undefined}
+                  aria-label={`${s.title}${s.complete && !s.optional ? " — done" : ""}`}
+                  title={s.title}
+                  className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
+                    s.complete && !s.optional
+                      ? "bg-brand-500 text-white"
+                      : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
+                  }`}
+                >
+                  {s.complete && !s.optional ? "\u2713" : s.step}
+                </a>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-2 text-xs text-ink-500">
+            <span className="font-semibold text-ink-700">{completion}% complete</span> — your
+            entries are saved as you go.
+          </p>
+        </nav>
 
         <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
-          <Section title="Personal details" step={1} description="How we and recruiters reach you.">
+          <Section
+            id="personal"
+            title="Personal details"
+            step={1}
+            description="How we and recruiters reach you."
+          >
             <div className={grid}>
               <div>
                 <TextField label="Full name" required {...register("fullName")} />
@@ -249,6 +315,7 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
           </Section>
 
           <Section
+            id="academic"
             title="Academic record"
             step={2}
             description="Eligibility is checked against these figures once verified."
@@ -443,15 +510,29 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
           </Section>
 
           <Section
+            id="marksheets"
             title="Marksheet uploads"
             step={3}
             description="Your Coordinator verifies every figure above against these documents."
           >
             <div className={grid}>
-              <FileField label="10th marksheet" required />
-              <FileField label="12th marksheet" required />
+              <FileField
+                label="10th marksheet"
+                required
+                onChange={(e) => noteMarksheet("tenth", e.target.value !== "")}
+              />
+              <FileField
+                label="12th marksheet"
+                required
+                onChange={(e) => noteMarksheet("twelfth", e.target.value !== "")}
+              />
               {semesterIds.map((id, i) => (
-                <FileField key={id} label={`Semester ${i + 1} marksheet`} required />
+                <FileField
+                  key={id}
+                  label={`Semester ${i + 1} marksheet`}
+                  required
+                  onChange={(e) => noteMarksheet(`semester-${id}`, e.target.value !== "")}
+                />
               ))}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -475,6 +556,7 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
           </Section>
 
           <Section
+            id="preferences"
             title="Placement preferences"
             step={4}
             description="Choose every role type you want to be considered for, then upload a tailored resume for each."
@@ -547,7 +629,12 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
             )}
           </Section>
 
-          <Section title="Professional profiles" step={5} description="Optional, but they matter.">
+          <Section
+            id="profiles"
+            title="Professional profiles"
+            step={5}
+            description="Optional, but they matter."
+          >
             <div className={grid}>
               {(
                 [
@@ -571,6 +658,7 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
           </Section>
 
           <Section
+            id="additional"
             title="Skills and achievements"
             step={6}
             description="Be specific — this feeds shortlisting."
@@ -601,7 +689,7 @@ export function SrfPage({ profile }: { profile?: SrfProfile | null }) {
             </div>
           </Section>
 
-          <Section title="Consent and submission" step={7}>
+          <Section id="consent" title="Consent and submission" step={7}>
             <CheckboxField
               required
               label="I consent to sharing my profile and resumes with recruiting companies"

@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { setSupabaseClient } from "@lib/supabase";
 import { createClient } from "@supabase/supabase-js";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, HttpResponse, http } from "msw";
+import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import { SrfPage } from "./srf-page";
+
+/** The form links back to the dashboard, so every render needs a router. */
+const render = (ui: React.ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * Submission now goes to Supabase, so refusals are PostgREST errors rather
