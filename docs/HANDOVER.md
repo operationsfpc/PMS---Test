@@ -1,11 +1,15 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2036 tests passing across 126 files**, plus **1 Playwright journey** — run,
+**2041 tests passing across 126 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Working tree clean. Last updated at commit `6ea5297` — written after that
-commit existed, and never amended since. Verify with
-`git merge-base --is-ancestor 6ea5297 HEAD`, not with `git cat-file`.
+gate. Working tree clean. Last updated at commit `33d266f` — written after that commit
+existed, and never amended since. Verify with
+`git merge-base --is-ancestor 33d266f HEAD`, not with `git cat-file`.
+
+**Re-verified at the start of the 2026-08-06 session, not remembered:**
+`pnpm check` exits 0 (2041 tests, 126 files), the Playwright journey passes,
+the working tree is clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
