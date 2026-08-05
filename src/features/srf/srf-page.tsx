@@ -20,6 +20,7 @@ import {
 } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { Link } from "react-router";
+import type { AddSemesterView } from "./add-semester";
 import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
 import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
@@ -155,12 +156,15 @@ export function SrfPage({
   rejectionReason,
   /** Injected so the page can be tested without a database. */
   saveDraft = (values: unknown) => saveSrfDraft(values),
+  /** F13: adding a semester that finished after the form was approved. */
+  addSemester,
 }: {
   profile?: SrfProfile | null;
   draft?: unknown;
   status?: SrfStatus;
   rejectionReason?: string | null;
   saveDraft?: (values: unknown) => Promise<boolean>;
+  addSemester?: AddSemesterView;
 }) {
   const { signOut } = useAuthActions();
   /**
@@ -463,7 +467,11 @@ export function SrfPage({
          * change it from here.
          */}
         {access.mode === "view" && profile != null && (
-          <SrfSummary profile={profile} access={access} />
+          <SrfSummary
+            profile={profile}
+            access={access}
+            {...(addSemester === undefined ? {} : { addSemester })}
+          />
         )}
 
         {/*

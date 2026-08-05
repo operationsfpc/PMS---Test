@@ -1,6 +1,7 @@
 import { Card } from "@components/ui";
 import type { SrfAccess } from "@domain/srf-access";
 import { Link } from "react-router";
+import { AddSemester, type AddSemesterView } from "./add-semester";
 import type { SrfProfile } from "./srf-profile";
 
 /**
@@ -31,7 +32,16 @@ const shown = (value: string | number | null | undefined): string => {
   return value.trim() === "" ? "—" : value;
 };
 
-export function SrfSummary({ profile, access }: { profile: SrfProfile; access: SrfAccess }) {
+export function SrfSummary({
+  profile,
+  access,
+  addSemester,
+}: {
+  profile: SrfProfile;
+  access: SrfAccess;
+  /** F13. Absent only where there is no backend to add against (tests). */
+  addSemester?: AddSemesterView;
+}) {
   const semesters = profile.semesters ?? [];
 
   return (
@@ -95,6 +105,24 @@ export function SrfSummary({ profile, access }: { profile: SrfProfile; access: S
               ))}
             </dl>
           </>
+        )}
+
+        {/*
+         * F13: results arrive after registration, and the form is locked once
+         * verified — for a good reason (§7.2 judges eligibility on verified
+         * data). Adding the NEXT semester is the narrower permission: it lands
+         * pending, and counts for nothing until a coordinator checks it.
+         */}
+        {addSemester !== undefined && (
+          <div className="mt-5">
+            <AddSemester
+              srfStatus={profile.srfStatus ?? "registered"}
+              programmeLevel={profile.programmeLevel ?? "ug"}
+              declaredSemesters={semesters.map((s) => s.semesterNumber)}
+              marksScale={profile.marksScale ?? "cgpa"}
+              view={addSemester}
+            />
+          </div>
         )}
       </Card>
 

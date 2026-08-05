@@ -1,5 +1,6 @@
 import { supabase } from "@lib/supabase";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createSupabaseAddSemesterView } from "./add-semester-repository";
 import { SrfPage } from "./srf-page";
 import { createSupabaseSrfProfile, type SrfProfile } from "./srf-profile";
 
@@ -37,6 +38,33 @@ export function SrfRoute() {
     };
   }, []);
 
+  /**
+   * F13. Built from the profile because it needs the student's own marks
+   * scale - one per degree, unchanging - and their id. Both arrive with the
+   * profile, so there is nothing to build until it does.
+   */
+  const addSemester = useMemo(
+    () =>
+      createSupabaseAddSemesterView(
+        supabase(),
+        async () => {
+          const { data } = await supabase().auth.getSession();
+          const authUserId = data.session?.user.id;
+          if (authUserId === undefined) return null;
+
+          const { data: student } = await supabase()
+            .from("students")
+            .select("id")
+            .eq("auth_user_id", authUserId)
+            .maybeSingle();
+
+          return (student?.id as string | undefined) ?? null;
+        },
+        profile?.marksScale ?? "cgpa",
+      ),
+    [profile?.marksScale],
+  );
+
   if (profile === undefined) {
     return (
       <p role="status" className="p-8 text-sm text-ink-500">
@@ -54,6 +82,7 @@ export function SrfRoute() {
       // is a nuisance, but locking someone out of registering is the end of it.
       status={profile?.srfStatus ?? "registered"}
       rejectionReason={profile?.rejectionReason ?? null}
+      addSemester={addSemester}
     />
   );
 }

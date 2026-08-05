@@ -1,3 +1,5 @@
+import type { ProgrammeLevel } from "@domain/academics";
+import type { MarksScale } from "@domain/marks";
 import type { SrfStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -17,6 +19,8 @@ export interface SubmittedSemester {
   readonly marks: number;
   readonly currentArrears: number;
   readonly historyOfArrears: number;
+  /** The scale the figure was declared on, so it always says what it means. */
+  readonly marksScale?: MarksScale;
 }
 
 export interface SrfProfile {
@@ -49,6 +53,9 @@ export interface SrfProfile {
   readonly certifications?: string | null;
   readonly achievements?: string | null;
   readonly semesters?: readonly SubmittedSemester[];
+  /** F13: decides how many semesters there are to add, and on what scale. */
+  readonly programmeLevel?: ProgrammeLevel;
+  readonly marksScale?: MarksScale;
   /** Where the form is in its life. Decides whether it is a form at all. */
   readonly srfStatus?: SrfStatus;
   /** Why a coordinator sent it back. Null unless they did. */
@@ -69,8 +76,9 @@ export const SRF_PROFILE_COLUMNS = `
   tenth_institution, tenth_percentage, twelfth_institution, twelfth_percentage,
   technical_skills, areas_of_interest, areas_of_expertise,
   projects, certifications, achievements,
+  programme_level,
   degrees(name), branches(name),
-  student_semesters(semester_number, declared_marks, current_arrears, history_of_arrears)
+  student_semesters(semester_number, declared_marks, marks_scale, current_arrears, history_of_arrears)
 `;
 
 const name = (value: unknown): string => {
@@ -100,6 +108,7 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
         marks: Number(s.declared_marks ?? 0),
         currentArrears: Number(s.current_arrears ?? 0),
         historyOfArrears: Number(s.history_of_arrears ?? 0),
+        marksScale: (s.marks_scale as MarksScale | null) ?? "cgpa",
       }))
       // PostgREST promises no order on an embedded resource, and a degree
       // reads forwards.
@@ -116,6 +125,10 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
       degree: name(row.degrees),
       branch: name(row.branches),
       passingYear: (row.passing_year as number | null) ?? Number.NaN,
+      programmeLevel: (row.programme_level as ProgrammeLevel | null) ?? "ug",
+      // One scale for the whole degree (2026-08-06), so any declared line
+      // answers the question. Defaults to CGPA when nothing is declared yet.
+      marksScale: semesters[0]?.marksScale ?? "cgpa",
       draft: row.srf_draft ?? null,
       srfStatus: (row.srf_status as SrfStatus | null) ?? "registered",
       rejectionReason: text(row.srf_rejection_reason),

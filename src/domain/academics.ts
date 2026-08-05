@@ -12,6 +12,8 @@
  * what makes a number load-bearing.
  */
 
+import type { SrfStatus } from "./types";
+
 export type ProgrammeLevel = "ug" | "pg";
 
 /** Confirmed: 10 for an undergraduate, 4 for a postgraduate. */
@@ -125,4 +127,86 @@ export function validateSemesters(
   }
 
   return problems;
+}
+
+/**
+ * Adding a semester AFTER the form has been verified. F13 (UAT 2026-08-06).
+ *
+ * "students might get subsequent semester results after they have registered
+ * to placements. So they must be able to submit marks of subsequent semesters.
+ * But this should be visible only after approval from Campus PC."
+ *
+ * This is deliberately NOT the same permission as editing the form. `srfAccess`
+ * locks an approved form for a real reason: §7.2 judges eligibility on VERIFIED
+ * data, so a student changing a checked figure silently invalidates every
+ * shortlist it has already been measured for. ADDING the next semester takes
+ * nothing away from the coordinator - the new line arrives `pending`, and
+ * `academicStandingFrom` counts only verified rows, so it changes no
+ * eligibility until someone has compared it to a marksheet.
+ */
+export type SemesterAdditionDecision =
+  | { readonly allowed: true }
+  | { readonly allowed: false; readonly reason: string };
+
+export interface SemesterAdditionContext {
+  readonly srfStatus: SrfStatus;
+  readonly programmeLevel: ProgrammeLevel;
+  readonly declaredSemesters: readonly number[];
+  readonly semesterNumber: number;
+}
+
+/**
+ * The one semester a student may add next, or null when there is none.
+ *
+ * Counted from the HIGHEST declared rather than from how many there are: a
+ * record of semesters 1 and 3 is a gap somebody has to explain, and offering
+ * to add semester 3 again would not be the way to explain it.
+ */
+export function nextSemesterFor(context: {
+  readonly programmeLevel: ProgrammeLevel;
+  readonly declaredSemesters: readonly number[];
+}): number | null {
+  const highest = context.declaredSemesters.reduce((max, n) => Math.max(max, n), 0);
+  const next = highest + 1;
+
+  return next > maxSemestersFor(context.programmeLevel) ? null : next;
+}
+
+export function canAddLaterSemester(context: SemesterAdditionContext): SemesterAdditionDecision {
+  if (context.srfStatus !== "srf_approved") {
+    return {
+      allowed: false,
+      reason:
+        "You can add later semesters once your registration form has been verified. Until then, add them to the form itself.",
+    };
+  }
+
+  if (context.declaredSemesters.includes(context.semesterNumber)) {
+    return {
+      allowed: false,
+      reason: `Semester ${context.semesterNumber} is already on your record. Ask your coordinator to correct it.`,
+    };
+  }
+
+  const next = nextSemesterFor(context);
+
+  if (next === null) {
+    return {
+      allowed: false,
+      reason: `${LEVEL_LABEL[context.programmeLevel]} has at most ${maxSemestersFor(
+        context.programmeLevel,
+      )} semesters.`,
+    };
+  }
+
+  // Results arrive in order. Semester 7 landing before 6 means one of the two
+  // is wrong, and guessing which would put an unchecked figure on the record.
+  if (context.semesterNumber !== next) {
+    return {
+      allowed: false,
+      reason: `Add semester ${next} next. Results are recorded in order.`,
+    };
+  }
+
+  return { allowed: true };
 }

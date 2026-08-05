@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   academicStandingFrom,
+  canAddLaterSemester,
   latestVerifiedSemester,
   MAX_SEMESTERS,
   maxSemestersFor,
+  nextSemesterFor,
   type SemesterRecord,
   validateSemesters,
 } from "./academics";
@@ -159,5 +161,142 @@ describe("validateSemesters", () => {
     ]);
 
     expect(problems.length).toBeGreaterThan(2);
+  });
+});
+
+/**
+ * F13 (UAT 2026-08-06): "there has to be a '+' button for students to add
+ * their semesters and the marks against those semesters, however, these marks
+ * have to be verified. This is required, as students might get subsequent
+ * semester results after they have registered to placements ... But this
+ * should be visible only after approval from Campus PC."
+ *
+ * Results arrive after registration. The form locks on approval (srfAccess),
+ * for good reason — a student editing a verified record silently invalidates
+ * every shortlist it has been judged for — so ADDING a later semester is a
+ * separate, narrower permission from editing the form.
+ */
+describe("canAddLaterSemester", () => {
+  const declared = [1, 2, 3, 4];
+
+  it("lets an approved student add the semester after their last", () => {
+    const decision = canAddLaterSemester({
+      srfStatus: "srf_approved",
+      programmeLevel: "ug",
+      declaredSemesters: declared,
+      semesterNumber: 5,
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  /**
+   * Adding is not editing. A semester already declared has been checked
+   * against a marksheet, and replacing it here would route around the
+   * coordinator entirely.
+   */
+  it("refuses to re-declare a semester that already exists", () => {
+    const decision = canAddLaterSemester({
+      srfStatus: "srf_approved",
+      programmeLevel: "ug",
+      declaredSemesters: declared,
+      semesterNumber: 3,
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/already/i);
+  });
+
+  /** Results arrive in order. Semester 7 before 6 means one of them is wrong. */
+  it("refuses to skip a semester", () => {
+    const decision = canAddLaterSemester({
+      srfStatus: "srf_approved",
+      programmeLevel: "ug",
+      declaredSemesters: declared,
+      semesterNumber: 7,
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/semester 5/i);
+  });
+
+  it("refuses to go past the end of the programme", () => {
+    // Ten for an undergraduate, per MAX_SEMESTERS.
+    const decision = canAddLaterSemester({
+      srfStatus: "srf_approved",
+      programmeLevel: "ug",
+      declaredSemesters: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      semesterNumber: 11,
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/10 semesters/i);
+  });
+
+  it("respects a postgraduate's shorter programme", () => {
+    const decision = canAddLaterSemester({
+      srfStatus: "srf_approved",
+      programmeLevel: "pg",
+      declaredSemesters: [1, 2, 3, 4],
+      semesterNumber: 5,
+    });
+
+    expect(decision.allowed).toBe(false);
+  });
+
+  /**
+   * Before approval the form itself is the place to add a semester. Offering
+   * two ways in would let a student add one while the coordinator is
+   * comparing the list to their marksheets.
+   */
+  it("refuses while the form is still being verified", () => {
+    const decision = canAddLaterSemester({
+      srfStatus: "srf_submitted",
+      programmeLevel: "ug",
+      declaredSemesters: declared,
+      semesterNumber: 5,
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/verified|approved/i);
+  });
+
+  it("refuses on a form that was never submitted", () => {
+    expect(
+      canAddLaterSemester({
+        srfStatus: "registered",
+        programmeLevel: "ug",
+        declaredSemesters: [],
+        semesterNumber: 1,
+      }).allowed,
+    ).toBe(false);
+  });
+
+  it("refuses on a form that was sent back", () => {
+    expect(
+      canAddLaterSemester({
+        srfStatus: "srf_rejected",
+        programmeLevel: "ug",
+        declaredSemesters: declared,
+        semesterNumber: 5,
+      }).allowed,
+    ).toBe(false);
+  });
+
+  it("names the semester the student may add next", () => {
+    expect(nextSemesterFor({ programmeLevel: "ug", declaredSemesters: [1, 2, 3] })).toBe(4);
+  });
+
+  it("starts at semester 1 when nothing has been declared", () => {
+    expect(nextSemesterFor({ programmeLevel: "ug", declaredSemesters: [] })).toBe(1);
+  });
+
+  /** Nothing left to add: the screen shows no "+" rather than a dead one. */
+  it("names no next semester once the programme is complete", () => {
+    expect(nextSemesterFor({ programmeLevel: "pg", declaredSemesters: [1, 2, 3, 4] })).toBeNull();
+  });
+
+  it("counts from the highest declared, not from how many there are", () => {
+    expect(nextSemesterFor({ programmeLevel: "ug", declaredSemesters: [1, 3] })).toBe(4);
   });
 });
