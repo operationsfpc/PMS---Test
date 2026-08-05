@@ -1,9 +1,23 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `a4f1c9e`. **1556 tests passing across 107 files**, plus
-**1 Playwright journey** — run, not remembered.
-**`pnpm check` exits 0** — lint, typecheck and every coverage gate.
+Last updated at commit `7fc594e`. **1556 tests passing across 107 files**, plus
+**1 Playwright journey** — re-run at the start of the next session, not
+remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
+
+📌 **THE FIRST REAL SUBMISSION LANDED IN PRODUCTION.** See §1b. The evidence
+chain that every session since 2026-08-04 has been asking someone to prove is
+now proven against live data, not against MSW.
+
+⚠️ **Two corrections to earlier entries in this file.**
+1. Commits `a4f1c9e` and `d0c1e2f`, cited in previous headers, **do not
+   exist** — they were written into the doc before the commit was made. Real
+   HEAD is `7fc594e`. Quote a hash only after `git log` shows it.
+2. **Work labelled "2026-08-06" throughout this file, `docs/ASSUMPTIONS.md`
+   and several code comments was actually done on 2026-08-05.** The system
+   clock and the database agree (`date` → Wed Aug 5 2026 IST; `select now()`
+   → 2026-08-05 UTC). The day is wrong, not the order; treat "2026-08-06" as
+   a label for the last block of work, not a date.
 
 **Live and shipped 2026-08-06:** <https://fpc-pms.faceprep.workers.dev>
 (version `040eb121-2bdb-46b3-952f-77010d0614d0`) · database on Supabase
@@ -86,20 +100,51 @@ are the student's to correct; after `srf_approved` they are the coordinator's.
 
 ---
 
+## 1b. 📌 The first production submission — verified 2026-08-05 07:36 UTC
+
+`Shashwathi Test` (roll `9876543`) submitted the rebuilt SRF **53 seconds
+before this session's first query**, and the whole chain held. Read live, not
+inferred:
+
+| What was unproven | Now |
+|---|---|
+| A real file reaching the `marksheets` bucket | **4 objects**, every one under `<student-id>/…` — exactly what the storage policy checks |
+| `student_semesters.marksheet_id` ever written | Both semesters linked |
+| Evidence belonging to the right student | `d.student_id = ss.student_id` → **true** for both |
+| The right kind of document | `semester_marksheet` on both |
+| The scale surviving honestly | `declared_marks 8.50`, `marks_scale cgpa`, `cgpa 8.50` |
+| Row state | `status = pending` — in the coordinator's queue |
+
+**A caution about reading this too early.** The first counts of the session
+said `semesters 0, documents 0` and looked like a broken submission. They were
+taken *mid-flight*, seconds apart, while the student was still submitting.
+**Re-read before concluding anything from a zero.**
+
+**The PDF-only friction is now evidenced, not theoretical.** Every uploaded
+file is named `images (N).pdf` — the tester had to convert photographs to PDF
+to get them accepted. That is §1 item 2, and a real student will not do it.
+
+### The next thing to prove, and it is one screen away
+
+Nobody has **verified** that submission. `/cpc/verification` should now show
+the two declared semesters, each beside a signed link to its marksheet. Open
+it as the campus CPC, click a link, approve. That closes the loop
+SRF → evidence → verification → eligibility, and it has never been run
+against real data.
+
+---
+
 ## 1. 🔴 The immediate next step
 
 Everything built in this session is **shipped**. In order:
 
-0. **The SRF academic section changed shape entirely (2026-08-06).** Nobody
-   has filled the new one in against live data. All 4 live students are
-   `invited`/`registered`, so all 4 land straight on it.
-1. **Get one student through SRF → CPC verification → apply on live data.**
-   Still the single most valuable thing, and now the only way to prove the
-   evidence chain end to end: a real file reaching the `marksheets` bucket, a
-   real `student_semesters.marksheet_id`, and a coordinator opening a signed
-   link from the queue. **Nothing has ever uploaded to that bucket in
-   production** — 0 documents, 0 semesters — so the very first submission is
-   also the first exercise of the storage policy from a real browser session.
+0. ~~Get a student through the rebuilt SRF~~ **DONE 2026-08-05, see §1b.**
+   The submission half of the chain is proven live.
+1. **Verify that submission as the campus CPC.** `/cpc/verification` now has a
+   real row in it for the first time: two semesters, each with a signed
+   marksheet link. Open it, follow a link, approve. Then the student becomes
+   `srf_approved` and R5 has a **verified** semester to read — which is the
+   first time eligibility will run on anything other than the A28 fallback.
 2. ⚠️ **Marksheet uploads are PDF-only** (`UPLOAD_ACCEPT` in
    `src/components/form.tsx`), and the `marksheets` bucket accepts
    pdf/jpeg/png. PRD §21.2 says students are primarily on **phones**, where a
@@ -503,6 +548,10 @@ added on 2026-08-04:**
   there because it happened again on 2026-08-05, to `dashboard-view.ts`, during
   a mutation check. Back the file up *before* mutating, restore from the
   backup, and never let `git checkout` near it.
+- **`pnpm supabase db query --linked` fails intermittently** with
+  `FATAL: password authentication failed for user "cli_login_postgres"`. It is
+  transient — the CLI provisions a temp role each time. Wait a few seconds and
+  re-run; it is not a credentials problem and needs no `SUPABASE_DB_PASSWORD`.
 - **A count query is a `HEAD` request.** `select(..., { head: true })` is not
   matched by an `http.get` handler, and MSW's unhandled-request error surfaces
   as a 5-second test timeout, not as a failure that names the cause.
