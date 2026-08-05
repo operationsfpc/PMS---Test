@@ -1,3 +1,4 @@
+import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
 import {
   DASHBOARD_COHORT_COLUMNS,
@@ -159,6 +160,9 @@ describe("every hand-written select matches the schema", () => {
     // these selects had ever met the schema.
     ["publish drive", "drives", PUBLISH_DRIVE_COLUMNS],
     ["srf prefill", "students", SRF_PROFILE_COLUMNS],
+    // Decides where a student lands after signing in, so a drift here would
+    // strand every student on a fallback route rather than their form.
+    ["student landing standing", "students", STUDENT_STANDING_COLUMNS],
     ["publish cohort", "students", PUBLISH_COHORT_COLUMNS],
     [
       "cockpit absence reviews",

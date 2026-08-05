@@ -56,3 +56,17 @@ in `src/domain/marksheets.ts` and the column simply goes unused.
 
 Call sites: `src/domain/marksheets.ts` (`requiredMarksheets`),
 `supabase/migrations/0023_marksheet_evidence.sql`.
+
+## A32 — a rejected registration form lands on the dashboard, not the form
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** "When a student logs in for the first time, he
+should directly land on the registration page" (2026-08-06) is implemented for
+`invited` and `registered` — a student who has never submitted.
+
+A student whose form was **rejected** still lands on `/student`, because the
+dashboard is the only screen that shows the coordinator's reason for sending it
+back; landing straight on the form would hide it behind a back-navigation. They
+get a prompt with a direct link.
+
+Reverse by returning `/srf` for `srf_rejected` in `studentLandingRoute`
+(`src/domain/auth-routing.ts`) — one line, one test.

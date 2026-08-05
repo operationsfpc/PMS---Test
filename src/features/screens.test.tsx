@@ -4,7 +4,7 @@ import { AppShell } from "@components/app-shell";
 import type { AppRole } from "@domain/types";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -226,7 +226,18 @@ describe("App routing", () => {
     expect(screen.getByRole("button", { name: /add campus/i })).toBeDefined();
   });
 
-  it("lands a student on their dashboard, via the domain landing rule", () => {
+  /**
+   * SPEC CHANGE 2026-08-06. A student's landing is no longer decided by their
+   * role alone: one who has not registered goes straight to the form
+   * (`studentLandingRoute`). So "/" now resolves their standing first, and
+   * only then routes.
+   *
+   * Here the lookup cannot succeed - there is no configured backend - which
+   * exercises the fallback that matters most: a student whose standing we
+   * cannot read must still land somewhere useful, never on a form that may be
+   * the wrong screen for them.
+   */
+  it("resolves a student's standing before landing them, and falls back safely", async () => {
     render(
       <AuthContext.Provider value={signedIn("student")}>
         <MemoryRouter initialEntries={["/"]}>
@@ -234,10 +245,14 @@ describe("App routing", () => {
         </MemoryRouter>
       </AuthContext.Provider>,
     );
-    // The dashboard is now real: it loads the student's own record before it
-    // can greet them by name, so what routing proves here is that the student
-    // dashboard - not another role's screen - is the one doing the loading.
-    expect(screen.getByRole("status").textContent).toMatch(/loading your dashboard/i);
+
+    // Never a blank screen straight after signing in.
+    expect(screen.getByRole("status").textContent).toMatch(/signing you in/i);
+
+    // The student dashboard - not another role's screen - is what it settles on.
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toMatch(/loading your dashboard/i),
+    );
   });
 
   it("renders the SRF outside the app shell, with its own chrome", async () => {
