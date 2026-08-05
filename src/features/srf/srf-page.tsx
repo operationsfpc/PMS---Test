@@ -116,7 +116,7 @@ const ScaleSelect = forwardRef<
         {...props}
       >
         <option value="cgpa">CGPA (out of 10)</option>
-        <option value="percentage">Percentage (%)</option>
+        <option value="percentage">Cumulative percentage (%)</option>
       </select>
     </div>
   );
@@ -187,6 +187,7 @@ export function SrfPage({
    * carrying its input state over to the third. An array index as a key does
    * exactly that.
    */
+  const collegeMarksScale = watch("collegeMarksScale");
   const otherProfiles = useFieldArray({ control, name: "otherProfiles" });
   const maxSemesters = MAX_SEMESTERS[programmeLevel];
   const hasDiplomaMarks = diplomaMarks !== null && !Number.isNaN(diplomaMarks);
@@ -603,24 +604,26 @@ export function SrfPage({
                   />
                   <ErrorText>{errors.diplomaInstitution?.message}</ErrorText>
                 </div>
+                {/* Scale before marks: the scale tells the student what the
+                    box below expects, so asking for the figure first invites
+                    them to type it on the wrong one. */}
                 <div className="grid grid-cols-2 gap-2">
+                  <ScaleSelect label="Diploma scale" {...register("diplomaMarksScale")} />
                   <TextField
-                    label="Diploma result"
+                    label="Diploma marks"
                     type="number"
                     step="0.01"
                     {...nullableNum("diplomaMarks")}
                   />
-                  <ScaleSelect label="Diploma scale" {...register("diplomaMarksScale")} />
                 </div>
                 <ErrorText>{errors.diplomaMarks?.message}</ErrorText>
-                {hasDiplomaMarks && (
-                  <FileField
-                    label="Diploma marksheet"
-                    required
-                    error={marksheetError("diploma")}
-                    onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
-                  />
-                )}
+                {/* Offered, not demanded (2026-08-06). No diploma figure feeds
+                    an eligibility cutoff. */}
+                <FileField
+                  label="Diploma marksheet"
+                  hint="Optional."
+                  onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
+                />
               </div>
             </fieldset>
 
@@ -659,6 +662,19 @@ export function SrfPage({
                 ))}
               </div>
               <ErrorText>{errors.programmeLevel?.message}</ErrorText>
+
+              {/* ONE selection for the whole degree (2026-08-06): "the metric
+                  will not change semester to semester. It will be the same
+                  throughout the UG/PG." Asking per semester invited eight
+                  chances to answer inconsistently, and left eligibility
+                  comparing figures that were never on the same scale. */}
+              <div className="mt-4 max-w-xs">
+                <ScaleSelect
+                  label="How your college reports marks"
+                  {...register("collegeMarksScale")}
+                />
+                <p className="mt-1 text-xs text-ink-500">Applies to every semester below.</p>
+              </div>
             </fieldset>
 
             {/* A postgraduate has a whole finished degree behind them. The form
@@ -698,20 +714,19 @@ export function SrfPage({
                     <ErrorText>{errors.ugBranch?.message}</ErrorText>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
+                    <ScaleSelect label="UG scale" {...register("ugAggregateScale")} />
                     <TextField
-                      label="UG result"
+                      label="UG marks"
                       type="number"
                       step="0.01"
                       required
                       {...nullableNum("ugAggregate")}
                     />
-                    <ScaleSelect label="UG scale" {...register("ugAggregateScale")} />
                   </div>
                   <ErrorText>{errors.ugAggregate?.message}</ErrorText>
                   <FileField
                     label="Consolidated UG marksheet"
-                    required
-                    error={marksheetError("ug_consolidated")}
+                    hint="Optional."
                     onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
                   />
                 </div>
@@ -779,19 +794,14 @@ export function SrfPage({
                     key={semester.semesterNumber}
                     className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2"
                   >
-                    <div className="grid grid-cols-2 gap-2">
-                      <TextField
-                        label={`Semester ${semester.semesterNumber} result`}
-                        type="number"
-                        step="0.01"
-                        required
-                        {...num(`semesters.${index}.marks`)}
-                      />
-                      <ScaleSelect
-                        label={`Semester ${semester.semesterNumber} scale`}
-                        {...register(`semesters.${index}.marksScale`)}
-                      />
-                    </div>
+                    <TextField
+                      label={`Semester ${semester.semesterNumber} result`}
+                      type="number"
+                      step="0.01"
+                      required
+                      hint={collegeMarksScale === "percentage" ? "Cumulative %" : "CGPA out of 10"}
+                      {...num(`semesters.${index}.marks`)}
+                    />
                     <FileField
                       label={`Semester ${semester.semesterNumber} marksheet`}
                       required
@@ -848,7 +858,6 @@ export function SrfPage({
                       {
                         semesterNumber: semesters.length + 1,
                         marks: Number.NaN,
-                        marksScale: "cgpa",
                         currentArrears: 0,
                         historyOfArrears: 0,
                       },

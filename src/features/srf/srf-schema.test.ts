@@ -24,14 +24,12 @@ const valid: SrfFormValues = {
     {
       semesterNumber: 1,
       marks: 8.1,
-      marksScale: "cgpa" as const,
       currentArrears: 0,
       historyOfArrears: 0,
     },
     {
       semesterNumber: 2,
       marks: 8.24,
-      marksScale: "cgpa" as const,
       currentArrears: 0,
       historyOfArrears: 0,
     },
@@ -89,7 +87,6 @@ describe("srfSchema", () => {
           {
             semesterNumber: 1,
             marks: 8,
-            marksScale: "cgpa" as const,
             currentArrears: 0,
             historyOfArrears: 4,
           },
@@ -135,10 +132,17 @@ describe("srfSchema", () => {
       ).toMatch(/Semester 2 marksheet/i);
     });
 
-    it("requires a postgraduate's consolidated UG marksheet", () => {
-      expect(errorsFor({ programmeLevel: "pg", ugAggregate: 7.4 }).marksheets).toMatch(
-        /consolidated ug marksheet/i,
-      );
+    /** SPEC CHANGE 2026-08-06: offered, not demanded. */
+    it("does not demand a postgraduate's consolidated UG marksheet", () => {
+      expect(
+        errorsFor({
+          programmeLevel: "pg",
+          ugAggregate: 7.4,
+          ugDegree: "B.Sc",
+          ugCollege: "Loyola",
+          ugBranch: "CS",
+        }).marksheets,
+      ).toBeUndefined();
     });
 
     it("rejects anything that is not a file", () => {
@@ -171,7 +175,6 @@ describe("srfSchema", () => {
       const eleven = Array.from({ length: 11 }, (_, i) => ({
         semesterNumber: i + 1,
         marks: 8,
-        marksScale: "cgpa" as const,
         currentArrears: 0,
         historyOfArrears: 0,
       }));
@@ -182,7 +185,6 @@ describe("srfSchema", () => {
       const five = Array.from({ length: 5 }, (_, i) => ({
         semesterNumber: i + 1,
         marks: 8,
-        marksScale: "cgpa" as const,
         currentArrears: 0,
         historyOfArrears: 0,
       }));
@@ -198,7 +200,6 @@ describe("srfSchema", () => {
             {
               semesterNumber: 1,
               marks: 78,
-              marksScale: "cgpa" as const,
               currentArrears: 0,
               historyOfArrears: 0,
             },
@@ -214,7 +215,6 @@ describe("srfSchema", () => {
             {
               semesterNumber: 1,
               marks: 8,
-              marksScale: "cgpa" as const,
               currentArrears: 3,
               historyOfArrears: 1,
             },
@@ -275,7 +275,6 @@ describe("srfSchema", () => {
         {
           semesterNumber: 1,
           marks: 99,
-          marksScale: "cgpa" as const,
           currentArrears: 0,
           historyOfArrears: 0,
         },
@@ -302,8 +301,10 @@ describe("srfSchema", () => {
    * ever say the latter, so a percentage-scale student could not register.
    */
   describe("marks on either scale", () => {
-    const semester = (marks: number, marksScale: "cgpa" | "percentage") => ({
-      semesters: [{ semesterNumber: 1, marks, marksScale, currentArrears: 0, historyOfArrears: 0 }],
+    // One scale for the whole degree (2026-08-06), not one per semester.
+    const semester = (marks: number, collegeMarksScale: "cgpa" | "percentage") => ({
+      collegeMarksScale,
+      semesters: [{ semesterNumber: 1, marks, currentArrears: 0, historyOfArrears: 0 }],
       marksheets: {
         tenth: file("10th.pdf"),
         twelfth: file("12th.pdf"),
@@ -338,14 +339,15 @@ describe("srfSchema", () => {
       ).toMatch(/college/i);
     });
 
-    it("asks for the marksheet once a figure is entered", () => {
+    /** SPEC CHANGE 2026-08-06: the diploma marksheet is offered, not demanded. */
+    it("does not demand the marksheet once a figure is entered", () => {
       expect(
         errorsFor({
           diplomaMarks: 78,
           diplomaMarksScale: "percentage",
           diplomaInstitution: "Government Polytechnic",
         }).marksheets,
-      ).toMatch(/diploma marksheet/i);
+      ).toBeUndefined();
     });
   });
 

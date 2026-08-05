@@ -142,24 +142,26 @@ describe("srfSectionProgress", () => {
     ).toBe(true);
   });
 
-  it("asks a postgraduate for their consolidated UG marksheet too", () => {
+  /**
+   * SPEC CHANGE 2026-08-06: the consolidated UG marksheet and the diploma
+   * marksheet are OFFERED, not demanded, so neither can hold a postgraduate's
+   * form open. School and semester evidence still can — the semester figure is
+   * what decides whether they may apply to a drive.
+   */
+  it("does not hold a postgraduate open for a consolidated UG marksheet", () => {
     const pg = { ...FILLED, programmeLevel: "pg" as const, ugAggregateCgpa: 7.8 };
 
-    expect(section(pg, "academic")?.complete).toBe(false);
-    expect(
-      section({ ...pg, marksheets: [...pg.marksheets, "ug_consolidated"] }, "academic")?.complete,
-    ).toBe(true);
+    expect(section(pg, "academic")?.complete).toBe(true);
   });
 
-  /** Optional to declare; once declared, it must be evidenced like any mark. */
-  it("requires a diploma marksheet only once diploma marks are declared", () => {
-    expect(section({ ...FILLED, hasDiplomaMarks: true }, "academic")?.complete).toBe(false);
-    expect(
-      section(
-        { ...FILLED, hasDiplomaMarks: true, marksheets: [...FILLED.marksheets, "diploma"] },
-        "academic",
-      )?.complete,
-    ).toBe(true);
+  it("does not hold the form open for a diploma marksheet either", () => {
+    expect(section({ ...FILLED, hasDiplomaMarks: true }, "academic")?.complete).toBe(true);
+  });
+
+  it("still holds it open for a semester marksheet, which decides eligibility", () => {
+    expect(section({ ...FILLED, marksheets: ["tenth", "twelfth"] }, "academic")?.complete).toBe(
+      false,
+    );
   });
 
   /** The school name sits before the marks it belongs to (2026-08-06). */

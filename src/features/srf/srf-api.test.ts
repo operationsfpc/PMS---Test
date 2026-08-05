@@ -49,7 +49,6 @@ const values = {
     {
       semesterNumber: 1,
       marks: 8.24,
-      marksScale: "cgpa" as const,
       currentArrears: 0,
       historyOfArrears: 0,
     },

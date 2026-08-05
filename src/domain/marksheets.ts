@@ -22,12 +22,23 @@ export type MarksheetKind =
   | "semester_marksheet";
 
 export interface MarksheetSlot {
-  /** Stable identity for one required document, for form state and uploads. */
+  /** Stable identity for one document, for form state and uploads. */
   readonly key: string;
   readonly kind: MarksheetKind;
   readonly label: string;
   /** Set on semester marksheets only; null on the whole-qualification ones. */
   readonly semesterNumber: number | null;
+  /**
+   * Whether the form may be submitted without it.
+   *
+   * School and semester evidence is required: the semester figure is what R5
+   * reads to decide whether a student may apply to a drive, so an unverifiable
+   * one is the defect this whole area exists to prevent.
+   *
+   * The diploma and a postgraduate's consolidated UG marksheet are OFFERED but
+   * not demanded (2026-08-06, reversing part of A31). Neither feeds a cutoff.
+   */
+  readonly required: boolean;
 }
 
 /** The academic record the requirement is derived from — nothing else. */
@@ -75,10 +86,26 @@ export function marksheetSlotKey(slot: MarksheetSlotRef): string {
     : FIXED_KEYS[slot.kind];
 }
 
-export function requiredMarksheets(academics: DeclaredAcademics): readonly MarksheetSlot[] {
+/**
+ * Every marksheet the form offers, required or not, in the order it asks for
+ * them. `requiredMarksheets` is this list filtered.
+ */
+export function marksheetSlots(academics: DeclaredAcademics): readonly MarksheetSlot[] {
   const slots: MarksheetSlot[] = [
-    { key: "tenth", kind: "tenth_marksheet", label: "10th marksheet", semesterNumber: null },
-    { key: "twelfth", kind: "twelfth_marksheet", label: "12th marksheet", semesterNumber: null },
+    {
+      key: "tenth",
+      kind: "tenth_marksheet",
+      label: "10th marksheet",
+      semesterNumber: null,
+      required: true,
+    },
+    {
+      key: "twelfth",
+      kind: "twelfth_marksheet",
+      label: "12th marksheet",
+      semesterNumber: null,
+      required: true,
+    },
   ];
 
   // Between school and the degree, which is where the form asks for it.
@@ -88,6 +115,7 @@ export function requiredMarksheets(academics: DeclaredAcademics): readonly Marks
       kind: "diploma_marksheet",
       label: "Diploma marksheet",
       semesterNumber: null,
+      required: false,
     });
   }
 
@@ -101,6 +129,7 @@ export function requiredMarksheets(academics: DeclaredAcademics): readonly Marks
       kind: "ug_consolidated_marksheet",
       label: "Consolidated UG marksheet",
       semesterNumber: null,
+      required: false,
     });
   }
 
@@ -117,10 +146,15 @@ export function requiredMarksheets(academics: DeclaredAcademics): readonly Marks
       kind: "semester_marksheet",
       label: `Semester ${semesterNumber} marksheet`,
       semesterNumber,
+      required: true,
     });
   }
 
   return slots;
+}
+
+export function requiredMarksheets(academics: DeclaredAcademics): readonly MarksheetSlot[] {
+  return marksheetSlots(academics).filter((slot) => slot.required);
 }
 
 /**

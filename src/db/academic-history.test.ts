@@ -85,11 +85,28 @@ describe("diploma", () => {
     expect(rows[0]?.diploma_marksheet_id).toBe(doc);
   });
 
-  it("refuses a declared diploma figure with no evidence behind it", async () => {
+  /**
+   * SPEC CHANGE 2026-08-06: the diploma marksheet is OFFERED, not demanded.
+   * No diploma figure feeds an eligibility cutoff, so an unevidenced one
+   * cannot decide anything — unlike a semester CGPA, which R5 reads and which
+   * must still be evidenced.
+   */
+  it("accepts a declared diploma figure with no marksheet yet", async () => {
+    await expect(
+      t.sql(
+        `update students set diploma_institution = 'Government Polytechnic',
+                diploma_marks = 78.5, diploma_marks_scale = 'percentage' where id = $1`,
+        [ids.priya],
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  /** 78.5 means nothing without knowing which scale to read it on. */
+  it("still refuses a figure with no scale to read it on", async () => {
     await t.expectRejection(
       () =>
         t.sql(
-          `update students set diploma_marks = 78.5, diploma_marks_scale = 'percentage'
+          `update students set diploma_marks = 78.5, diploma_marks_scale = null
                 where id = $1`,
           [ids.priya],
         ),

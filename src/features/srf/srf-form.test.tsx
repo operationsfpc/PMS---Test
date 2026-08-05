@@ -207,7 +207,7 @@ describe("SRF validation", () => {
 
       await user.click(screen.getByRole("radio", { name: /postgraduate/i }));
 
-      expect(screen.getByLabelText(/ug result/i)).toBeDefined();
+      expect(screen.getByLabelText(/ug marks(?!heet)/i)).toBeDefined();
 
       for (let i = 0; i < 6; i += 1) {
         const add = screen.queryByRole("button", { name: /add semester/i });
@@ -222,7 +222,7 @@ describe("SRF validation", () => {
     it("does not ask an undergraduate for a separate UG aggregate", () => {
       render(<SrfPage profile={ROSTER} />);
 
-      expect(screen.queryByLabelText(/ug result/i)).toBeNull();
+      expect(screen.queryByLabelText(/ug marks(?!heet)/i)).toBeNull();
     });
 
     it("removes a semester the student added by mistake", async () => {

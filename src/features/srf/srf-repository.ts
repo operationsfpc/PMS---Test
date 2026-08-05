@@ -2,8 +2,8 @@ import { normaliseToCgpa } from "@domain/marks";
 import {
   type MarksheetKind,
   marksheetSlotKey,
+  marksheetSlots,
   missingMarksheets,
-  requiredMarksheets,
 } from "@domain/marksheets";
 import { normaliseProfileLinks } from "@domain/profile-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -47,7 +47,14 @@ async function storeMarksheets(
   studentId: string,
   values: SrfSubmission,
 ): Promise<ReadonlyMap<string, string>> {
-  const slots = requiredMarksheets({
+  /**
+   * EVERY slot the form offers, not just the required ones.
+   *
+   * Iterating the required list would silently discard an optional diploma or
+   * consolidated UG marksheet the student had actually uploaded - which is
+   * precisely the defect this whole area was built to fix.
+   */
+  const slots = marksheetSlots({
     ...values,
     hasDiplomaMarks: values.diplomaMarks !== null,
   });
@@ -244,9 +251,11 @@ export function createSupabaseSrfRepository(
             // Both, deliberately: `cgpa` is the only figure a cutoff can be
             // compared against, `declared_marks` is what the student typed and
             // what the coordinator finds on the marksheet.
-            cgpa: normaliseToCgpa(s.marks, s.marksScale),
+            cgpa: normaliseToCgpa(s.marks, values.collegeMarksScale),
             declared_marks: s.marks,
-            marks_scale: s.marksScale,
+            // One scale for the whole degree (2026-08-06), still recorded on
+            // every row so a stored figure always says what it means.
+            marks_scale: values.collegeMarksScale,
             current_arrears: s.currentArrears,
             history_of_arrears: s.historyOfArrears,
             // The point of the whole exercise: this line and the document that

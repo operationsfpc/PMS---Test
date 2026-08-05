@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   marksheetSlotKey,
+  marksheetSlots,
   missingMarksheets,
   requiredMarksheets,
   semesterMarksheetKey,
@@ -42,6 +43,7 @@ describe("requiredMarksheets", () => {
       kind: "semester_marksheet",
       label: "Semester 3 marksheet",
       semesterNumber: 3,
+      required: true,
     });
   });
 
@@ -60,14 +62,17 @@ describe("requiredMarksheets", () => {
     expect(slots.filter((s) => s.key === "semester-1")).toHaveLength(1);
   });
 
-  it("also requires a consolidated UG marksheet from a postgraduate", () => {
-    // A PG student declares one aggregate CGPA standing in for a whole degree
-    // (0017). Unevidenced, it is the single largest unverifiable number on the
-    // form. ASSUMPTION - UNCONFIRMED (A31).
-    const slots = requiredMarksheets({ programmeLevel: "pg", semesters: sem(1) });
+  /**
+   * SPEC CHANGE 2026-08-06: a postgraduate is OFFERED a consolidated UG
+   * marksheet, not required to produce one. It is still asked for in the same
+   * place, between school and the degree they are studying now.
+   */
+  it("offers a consolidated UG marksheet to a postgraduate", () => {
+    const slots = marksheetSlots({ programmeLevel: "pg", semesters: sem(1) });
 
     expect(slots.map((s) => s.key)).toEqual(["tenth", "twelfth", "ug_consolidated", "semester-1"]);
     expect(slots[2]?.kind).toBe("ug_consolidated_marksheet");
+    expect(slots[2]?.required).toBe(false);
   });
 
   it("never asks an undergraduate for a consolidated UG marksheet", () => {
@@ -161,8 +166,8 @@ describe("diploma marks", () => {
     expect(slots.some((s) => s.key === "diploma")).toBe(false);
   });
 
-  it("requires the marksheet once diploma marks are declared", () => {
-    const slots = requiredMarksheets({ ...ug, hasDiplomaMarks: true });
+  it("offers the marksheet once diploma marks are declared", () => {
+    const slots = marksheetSlots({ ...ug, hasDiplomaMarks: true });
 
     expect(slots.map((s) => s.key)).toEqual(["tenth", "twelfth", "diploma", "semester-1"]);
     expect(slots.find((s) => s.key === "diploma")).toEqual({
@@ -170,11 +175,13 @@ describe("diploma marks", () => {
       kind: "diploma_marksheet",
       label: "Diploma marksheet",
       semesterNumber: null,
+      // Offered, not demanded (2026-08-06).
+      required: false,
     });
   });
 
   it("places the diploma after school and before the degree, as the form does", () => {
-    const slots = requiredMarksheets({
+    const slots = marksheetSlots({
       programmeLevel: "pg",
       semesters: [{ semesterNumber: 1 }],
       hasDiplomaMarks: true,
@@ -193,15 +200,79 @@ describe("diploma marks", () => {
     expect(requiredMarksheets(ug).some((s) => s.key === "diploma")).toBe(false);
   });
 
-  it("reports a missing diploma marksheet by name", () => {
+  /** SPEC CHANGE 2026-08-06: an absent diploma marksheet holds up nothing. */
+  it("does not report an absent diploma marksheet as missing", () => {
     expect(
-      missingMarksheets({ ...ug, hasDiplomaMarks: true }, ["tenth", "twelfth", "semester-1"]).map(
-        (s) => s.label,
-      ),
-    ).toEqual(["Diploma marksheet"]);
+      missingMarksheets({ ...ug, hasDiplomaMarks: true }, ["tenth", "twelfth", "semester-1"]),
+    ).toEqual([]);
   });
 
   it("keys it the same way whichever route built it", () => {
     expect(marksheetSlotKey({ kind: "diploma_marksheet", semesterNumber: null })).toBe("diploma");
+  });
+});
+
+/**
+ * Optional evidence, 2026-08-06: the diploma marksheet and a postgraduate's
+ * consolidated UG marksheet are now upload fields the student MAY fill in,
+ * not ones they must.
+ *
+ * This reverses part of A31. It is defensible: neither figure feeds an
+ * eligibility cutoff — those read the latest VERIFIED semester (R5), and a
+ * semester marksheet is still required. See A31 in docs/ASSUMPTIONS.md for
+ * what a coordinator can and cannot verify as a result.
+ */
+describe("required versus merely offered", () => {
+  const pgWithDiploma = {
+    programmeLevel: "pg" as const,
+    semesters: [{ semesterNumber: 1 }],
+    hasDiplomaMarks: true,
+  };
+
+  it("offers every slot, in form order", () => {
+    expect(marksheetSlots(pgWithDiploma).map((s) => s.key)).toEqual([
+      "tenth",
+      "twelfth",
+      "diploma",
+      "ug_consolidated",
+      "semester-1",
+    ]);
+  });
+
+  it("marks school and semester evidence as required", () => {
+    const slots = marksheetSlots(pgWithDiploma);
+
+    expect(slots.filter((s) => s.required).map((s) => s.key)).toEqual([
+      "tenth",
+      "twelfth",
+      "semester-1",
+    ]);
+  });
+
+  it("marks the diploma and the consolidated UG marksheet as optional", () => {
+    const optional = marksheetSlots(pgWithDiploma).filter((s) => !s.required);
+
+    expect(optional.map((s) => s.key)).toEqual(["diploma", "ug_consolidated"]);
+  });
+
+  it("still offers a diploma upload only once diploma marks are declared", () => {
+    const none = marksheetSlots({ ...pgWithDiploma, hasDiplomaMarks: false });
+
+    expect(none.some((s) => s.key === "diploma")).toBe(false);
+  });
+
+  /** The whole point: neither can hold a submission up any more. */
+  it("does not report an absent diploma or UG marksheet as missing", () => {
+    expect(missingMarksheets(pgWithDiploma, ["tenth", "twelfth", "semester-1"])).toEqual([]);
+  });
+
+  it("still reports an absent semester marksheet as missing", () => {
+    expect(missingMarksheets(pgWithDiploma, ["tenth", "twelfth"]).map((s) => s.key)).toEqual([
+      "semester-1",
+    ]);
+  });
+
+  it("keeps requiredMarksheets meaning exactly what its name says", () => {
+    expect(requiredMarksheets(pgWithDiploma).every((s) => s.required)).toBe(true);
   });
 });

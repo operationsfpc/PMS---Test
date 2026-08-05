@@ -93,14 +93,12 @@ const values: SrfSubmission = {
     {
       semesterNumber: 1,
       marks: 8.1,
-      marksScale: "cgpa" as const,
       currentArrears: 0,
       historyOfArrears: 0,
     },
     {
       semesterNumber: 2,
       marks: 8.24,
-      marksScale: "cgpa" as const,
       currentArrears: 1,
       historyOfArrears: 2,
     },

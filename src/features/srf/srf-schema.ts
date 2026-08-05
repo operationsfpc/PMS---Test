@@ -77,15 +77,22 @@ export const srfSchema = z
     ugAggregate: z.number().nullable().default(null),
     ugAggregateScale: z.enum(MARKS_SCALES).default("cgpa"),
 
+    /**
+     * ONE scale for the whole degree, chosen right after the UG/PG question.
+     *
+     * 2026-08-06: "just one selection for all field to enter CGPA/Percentage.
+     * The metric will not change semester to semester. It will be the same
+     * throughout the UG/PG." A college reports one way or the other; asking
+     * per semester invited eight chances to answer inconsistently and left
+     * eligibility comparing figures that were never on the same scale.
+     */
+    collegeMarksScale: z.enum(MARKS_SCALES).default("cgpa"),
+
     semesters: z
       .array(
         z.object({
           semesterNumber: z.number().int(),
-          // "Some colleges have CGPA and some have % in college marks"
-          // (2026-08-06). What the student declares is kept as declared; the
-          // comparable CGPA is derived from it in one place, `marks.ts`.
           marks: z.number({ error: "Enter the marks for this semester" }),
-          marksScale: z.enum(MARKS_SCALES).default("cgpa"),
           currentArrears: z.number().int("Whole numbers only"),
           historyOfArrears: z.number().int("Whole numbers only"),
         }),
@@ -143,12 +150,12 @@ export const srfSchema = z
     // percentage and a nonsense CGPA, and the old schema could only say the
     // latter.
     d.semesters.forEach((s, index) => {
-      if (!isValidForScale(s.marks, s.marksScale)) {
+      if (!isValidForScale(s.marks, d.collegeMarksScale)) {
         ctx.addIssue({
           code: "custom",
           path: ["semesters", index, "marks"],
           message:
-            s.marksScale === "percentage"
+            d.collegeMarksScale === "percentage"
               ? "A percentage is between 0 and 100."
               : "A CGPA is on the 10-point scale.",
         });
@@ -161,7 +168,7 @@ export const srfSchema = z
       d.programmeLevel,
       d.semesters.map((s) => ({
         ...s,
-        cgpa: normaliseToCgpa(s.marks, s.marksScale),
+        cgpa: normaliseToCgpa(s.marks, d.collegeMarksScale),
         verified: false,
       })),
     );
@@ -294,11 +301,11 @@ export const SRF_DEFAULTS: SrfFormValues = {
   ugBranch: "",
   ugAggregate: null,
   ugAggregateScale: "cgpa",
+  collegeMarksScale: "cgpa",
   semesters: [
     {
       semesterNumber: 1,
       marks: Number.NaN,
-      marksScale: "cgpa",
       currentArrears: 0,
       historyOfArrears: 0,
     },
