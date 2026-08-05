@@ -279,6 +279,25 @@ export function SrfPage({
   const savingRef = useRef(false);
 
   /**
+   * The auto-save callback, held by reference rather than by identity.
+   *
+   * `saveDraft` is a DEFAULT PARAMETER, so when the page is used for real -
+   * which is to say, whenever it is not a test passing its own stub in - it is
+   * a brand-new function on every render. With it in the effect's dependency
+   * array, a save re-rendered the page, the re-render made a new callback, the
+   * new callback re-ran the effect, and the effect saved again a second later.
+   *
+   * That ran for as long as the tab was open. One student on this form wrote
+   * ~50 rows a minute to `students` for 35 minutes (audit log, 2026-08-05),
+   * and because auditing is append-only every one of those is permanent.
+   *
+   * The effect wants the LATEST callback, never the identity of one, so keep
+   * it in a ref and depend on the form contents alone.
+   */
+  const saveDraftRef = useRef(saveDraft);
+  saveDraftRef.current = saveDraft;
+
+  /**
    * The dependency is the SERIALISED form, not the object.
    *
    * `watch()` returns a fresh object every render, so depending on it would
@@ -304,7 +323,8 @@ export function SrfPage({
       savingRef.current = true;
       setDraftState("saving");
 
-      void saveDraft(JSON.parse(serialised))
+      void saveDraftRef
+        .current(JSON.parse(serialised))
         .then((ok) => {
           setDraftState(ok ? "saved" : "failed");
           if (ok) setDraftSavedAt(new Date());
@@ -315,7 +335,7 @@ export function SrfPage({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [serialised, isDirty, saveDraft]);
+  }, [serialised, isDirty]);
 
   const saveNow = async () => {
     setDraftState("saving");

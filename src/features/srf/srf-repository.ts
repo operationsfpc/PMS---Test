@@ -241,7 +241,21 @@ export function createSupabaseSrfRepository(
        * programme_level from it - inserting first would size a postgraduate's
        * record against the undergraduate limit.
        */
-      await client.from("student_semesters").delete().eq("student_id", studentId);
+      const { error: clearError } = await client
+        .from("student_semesters")
+        .delete()
+        .eq("student_id", studentId);
+
+      /**
+       * Checked, not assumed. Throwing this result away is exactly how the
+       * re-submission bug shipped: with no DELETE policy (fixed in 0027) RLS
+       * filtered the delete to nothing, PostgREST answered a perfectly
+       * ordinary 204, and the insert below walked into a unique-key collision
+       * it could never win. A clear-out that did not clear must stop here.
+       */
+      if (clearError !== null) {
+        throw new SrfSubmitError(translate(clearError.code, clearError.message));
+      }
 
       if (values.semesters.length > 0) {
         const { error: semesterError } = await client.from("student_semesters").insert(
@@ -323,6 +337,14 @@ function translate(code: string | undefined, message: string): string {
   }
   if (code === "PGRST116") {
     return "We could not find your student record. Contact your placement coordinator.";
+  }
+  /**
+   * A semester line that survived the clear-out, because 0027 lets a student
+   * remove only their own PENDING rows. So this is a line a coordinator has
+   * already verified - which is a person to talk to, not a fault to retry.
+   */
+  if (code === "23505" && /student_semesters_student_id_semester_number/.test(message)) {
+    return "Verified academic data can only be changed by your placement coordinator.";
   }
   return "Could not submit your form. Please try again.";
 }

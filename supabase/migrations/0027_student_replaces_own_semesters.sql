@@ -1,0 +1,51 @@
+-- A student may replace their own semester lines when they re-submit the SRF.
+--
+-- UAT 2026-08-05: "Shashwathi Test is not able to submit the student
+-- registration form." Her first submission worked. The next eight failed, and
+-- the edge logs name the failure exactly: eight
+-- `POST /rest/v1/student_semesters` returning **409**, one per attempt.
+--
+-- The form shows the student's whole academic record, so submitting replaces
+-- the semester lines wholesale - delete, then insert. Merging would silently
+-- keep a line the student deleted. But 0008 gave a student SELECT and INSERT
+-- on `student_semesters` and nothing else:
+--
+--   semesters_read_self    select   student_id = current_student_id()
+--   semesters_insert_self  insert   student_id = current_student_id()
+--
+-- With no DELETE policy the delete matched no rows. RLS does not raise on
+-- that - it is a filter, not a guard - so the client saw a perfectly ordinary
+-- 204 and moved on to the insert, which hit
+-- `student_semesters_student_id_semester_number_key`.
+--
+-- So the FIRST submission always succeeded and every later one was impossible.
+-- Correcting a mistyped CGPA or re-uploading a marksheet is the normal case,
+-- and it was unreachable for every student who had already submitted once.
+--
+-- Two separate things were missing, at two different levels.
+
+-- 1. THE GRANT. 0008 grants `select, insert, update` to `authenticated` and no
+--    delete, so on a database built purely from these migrations NOBODY could
+--    delete a semester line - not even a coordinator, whose `semesters_write_staff`
+--    policy is `for all` and has been quietly unusable for deletes.
+--
+--    The live database does not show this, because a Supabase project ships
+--    with `grant all` already applied to `authenticated`. That drift is why
+--    the schema tests could not reproduce the production failure: locally the
+--    delete died at the grant, in production it sailed through and deleted
+--    nothing. Granting it here makes the migrations describe the database we
+--    actually run, which is the only way the tests can be trusted.
+grant delete on student_semesters to authenticated;
+
+-- 2. THE POLICY. Scoped exactly like the insert it undoes: the student's own
+--    rows, and only while they are still PENDING.
+--
+--    `status = 'pending'` is the whole safety of this. Once a coordinator has
+--    verified a line it belongs to them, not to the student - a student who
+--    could delete a verified 6.2 and insert a declared 8.5 in its place would
+--    launder an unchecked figure through a row that eligibility has already
+--    been run against. That is the same principle `protect_verified_academics`
+--    (0009) enforces on the students table, applied to the table the marks
+--    actually live in.
+create policy semesters_delete_self on student_semesters for delete
+  using (student_id = current_student_id() and status = 'pending');

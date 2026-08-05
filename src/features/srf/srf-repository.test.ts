@@ -302,6 +302,56 @@ describe("semester-wise academics", () => {
     });
   });
 
+  /**
+   * The live failure, UAT 2026-08-05. Eight submissions in a row died on a
+   * 409 from `POST /rest/v1/student_semesters` and the student was told
+   * "Could not submit your form. Please try again." eight times. Trying again
+   * was the one thing that could never work.
+   *
+   * 0027 gives the delete a policy, so the ordinary re-submit now clears the
+   * old lines first. What can still collide is a line a COORDINATOR has
+   * verified, which the student is deliberately not allowed to remove - and
+   * that has an answer the student can act on, so say it.
+   */
+  it("explains a semester line the student is no longer allowed to replace", async () => {
+    server.use(
+      http.post(`${BASE}/rest/v1/student_semesters`, () =>
+        HttpResponse.json(
+          {
+            code: "23505",
+            message:
+              'duplicate key value violates unique constraint "student_semesters_student_id_semester_number_key"',
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(repo().submit(values)).rejects.toThrow(/placement coordinator/i);
+  });
+
+  /**
+   * The delete's result was thrown away entirely. That is precisely how this
+   * shipped: RLS filtered it to nothing, PostgREST answered 204, and the code
+   * walked into an insert that could not succeed. A clear-out that did not
+   * clear anything must stop the submission, not feed it.
+   */
+  it("stops when the old lines could not be cleared, rather than colliding with them", async () => {
+    let inserted = false;
+    server.use(
+      http.delete(`${BASE}/rest/v1/student_semesters`, () =>
+        HttpResponse.json({ code: "42501", message: "permission denied" }, { status: 403 }),
+      ),
+      http.post(`${BASE}/rest/v1/student_semesters`, () => {
+        inserted = true;
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await expect(repo().submit(values)).rejects.toThrow(/placement coordinator/i);
+    expect(inserted).toBe(false);
+  });
+
   it("records a postgraduate's completed UG aggregate on the student", async () => {
     let body: Record<string, unknown> = {};
     server.use(
