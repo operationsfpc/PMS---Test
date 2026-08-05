@@ -1,5 +1,5 @@
 import { Button, Card, PageHeader } from "@components/ui";
-import { requiresCampusAssignment } from "@domain/staff";
+import { campusScopeFor, requiresCampusAssignment, validateCampusSelection } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import type { CampusOption, StaffMember, StaffRepository } from "./staff-repository";
@@ -50,8 +50,12 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       setProblem("A full name and an email address are required.");
       return;
     }
-    if (needsCampus && campusIds.length === 0) {
-      setProblem("Select at least one campus for this role.");
+    // The domain decides how many campuses this role may hold, so inviting a
+    // coordinator to two is refused here for the same reason the repository
+    // refuses it: the mapping is where their authority to verify comes from.
+    const selection = validateCampusSelection(role, campusIds);
+    if (!selection.ok) {
+      setProblem(selection.error);
       return;
     }
 
@@ -97,6 +101,26 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not change that role.");
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Maps a coordinator to a campus. One campus, so this replaces rather than
+   * adds - and an empty choice is simply not sent, because the domain would
+   * refuse it and "none" is never a mapping anyone wants on purpose.
+   */
+  async function mapCampus(target: string, campusId: string) {
+    if (campusId === "") return;
+    setError(null);
+    setBusy(target);
+    try {
+      await repository.setCampuses(target, [campusId]);
+      await refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not change that campus.");
       await refresh();
     } finally {
       setBusy(null);
@@ -235,6 +259,16 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                   {member.acceptedAt === null && " · Not signed in yet"}
                   {member.isActive ? "" : " · Deactivated"}
                 </p>
+                {/*
+                 * Said out loud, because silence here cost a day: a
+                 * coordinator with no campus signs in perfectly well and then
+                 * sees an empty verification queue with no explanation.
+                 */}
+                {campusScopeFor(member.role) !== "none" && member.campuses.length === 0 && (
+                  <p className="text-sm text-destructive">
+                    No campus mapped — they cannot see any students yet.
+                  </p>
+                )}
               </div>
 
               {confirming === member.email ? (
@@ -256,6 +290,28 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 </div>
               ) : (
                 <>
+                  {campusScopeFor(member.role) === "one" && (
+                    <>
+                      <label className="sr-only" htmlFor={`campus-${member.email}`}>
+                        Campus for {member.fullName}
+                      </label>
+                      <select
+                        id={`campus-${member.email}`}
+                        value={member.campuses[0]?.id ?? ""}
+                        disabled={busy === member.email}
+                        onChange={(e) => void mapCampus(member.email, e.target.value)}
+                        className="rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm"
+                      >
+                        <option value="">Select a campus…</option>
+                        {campuses.map((campus) => (
+                          <option key={campus.id} value={campus.id}>
+                            {campus.name}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+
                   <label className="sr-only" htmlFor={`role-${member.email}`}>
                     Role for {member.fullName}
                   </label>

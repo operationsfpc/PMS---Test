@@ -24,7 +24,21 @@ export type AuthState =
    * to /login, Google signs them in again, and nothing ever says why.
    */
   | { readonly status: "unrecognised"; readonly email: string }
-  | { readonly status: "signed-in"; readonly role: AppRole; readonly email: string };
+  | {
+      readonly status: "signed-in";
+      readonly role: AppRole;
+      readonly email: string;
+      /**
+       * The campuses a staff member is mapped to, by name. Empty for students
+       * and for organisation-wide roles.
+       *
+       * Shown beneath the role because the mapping IS the authority: a
+       * coordinator verifies the students of their campus and no others. One
+       * mapped to nothing sees an empty queue, and until this was on screen
+       * there was no way to tell that from a campus with nobody in it.
+       */
+      readonly campuses: readonly string[];
+    };
 
 export const AuthContext = createContext<AuthState>({ status: "loading" });
 

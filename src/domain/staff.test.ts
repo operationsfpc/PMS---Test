@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  campusScopeFor,
   canChangeStaffRole,
   canInviteRole,
   canRemoveStaff,
   requiresCampusAssignment,
   type StaffChangeContext,
+  validateCampusSelection,
 } from "./staff";
 import { APP_ROLES } from "./types";
 
@@ -168,5 +170,67 @@ describe("requiresCampusAssignment", () => {
     expect(requiresCampusAssignment("enterprise_relations")).toBe(false);
     expect(requiresCampusAssignment("er_head")).toBe(false);
     expect(requiresCampusAssignment("student")).toBe(false);
+  });
+});
+
+/**
+ * A Campus Placement Coordinator belongs to ONE campus.
+ *
+ * Confirmed 2026-08-05: "remember that a placement coordinator is for one
+ * campus alone. this has to be mapped by admin while mapping their role."
+ *
+ * It is not a presentation detail. The CPC is the person who verifies a
+ * student's marksheets and decides whether their registration is true, and
+ * `my_student_ids()` derives that authority from this mapping. Two campuses
+ * would silently widen it; none removes it entirely - which is exactly what
+ * was found in production, where the only coordinator had no campus at all
+ * and so could see no students to verify.
+ */
+describe("campusScopeFor", () => {
+  it("gives a placement coordinator exactly one campus", () => {
+    expect(campusScopeFor("campus_placement_coordinator")).toBe("one");
+  });
+
+  it("lets the roles that genuinely span campuses hold several", () => {
+    expect(campusScopeFor("campus_manager")).toBe("many");
+    expect(campusScopeFor("key_account_manager")).toBe("many");
+  });
+
+  it("gives organisation-wide roles no campus scope at all", () => {
+    for (const role of ["admin", "central_placement_coordinator", "ceo"] as const) {
+      expect(campusScopeFor(role)).toBe("none");
+    }
+  });
+});
+
+describe("validateCampusSelection", () => {
+  it("accepts the one campus a coordinator is mapped to", () => {
+    expect(validateCampusSelection("campus_placement_coordinator", ["c1"])).toEqual({ ok: true });
+  });
+
+  /** The live failure: a coordinator who can see nobody and cannot say why. */
+  it("refuses a coordinator with no campus, which leaves them unable to work", () => {
+    const result = validateCampusSelection("campus_placement_coordinator", []);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/one campus/i);
+  });
+
+  it("refuses a coordinator spread across two campuses", () => {
+    const result = validateCampusSelection("campus_placement_coordinator", ["c1", "c2"]);
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/one campus/i);
+  });
+
+  it("lets a campus manager hold several", () => {
+    expect(validateCampusSelection("campus_manager", ["c1", "c2"])).toEqual({ ok: true });
+  });
+
+  it("still refuses a campus-scoped role with nothing selected", () => {
+    expect(validateCampusSelection("campus_manager", []).ok).toBe(false);
+  });
+
+  it("ignores a campus handed to a role that has no campus scope", () => {
+    expect(validateCampusSelection("admin", [])).toEqual({ ok: true });
+    expect(validateCampusSelection("ceo", ["c1"])).toEqual({ ok: true });
   });
 });

@@ -33,7 +33,28 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
     .maybeSingle();
 
   if (profile) {
-    return { status: "signed-in", role: profile.role as AppRole, email };
+    /**
+     * The campuses this staff member is mapped to.
+     *
+     * Read here rather than by the shell, so it arrives with the identity and
+     * every screen can rely on it. A failure is reported as "no campuses"
+     * rather than thrown: not knowing the campus must never cost someone
+     * their session.
+     */
+    const { data: assignments } = await client
+      .from("staff_campus_assignments")
+      .select("campuses(name)")
+      .eq("profile_id", session.user.id);
+
+    const campuses = (assignments ?? []).flatMap((row: Record<string, unknown>) => {
+      const campus = (Array.isArray(row.campuses) ? row.campuses[0] : row.campuses) as
+        | { name?: string }
+        | null
+        | undefined;
+      return campus?.name === undefined ? [] : [campus.name];
+    });
+
+    return { status: "signed-in", role: profile.role as AppRole, email, campuses };
   }
 
   const { data: student } = await client
@@ -43,7 +64,9 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
     .maybeSingle();
 
   if (student) {
-    return { status: "signed-in", role: "student", email };
+    // A student is not staff: there are no assignment rows to read, and asking
+    // would be a round trip that can only ever come back empty.
+    return { status: "signed-in", role: "student", email, campuses: [] };
   }
 
   return { status: "unrecognised", email };

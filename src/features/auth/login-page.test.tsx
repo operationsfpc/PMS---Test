@@ -116,7 +116,12 @@ describe("LoginPage", () => {
    */
   it("moves an already signed-in user along instead of offering sign-in again", () => {
     stubAuth();
-    renderAt("/login", { status: "signed-in", role: "student", email: "s@example.com" });
+    renderAt("/login", {
+      status: "signed-in",
+      role: "student",
+      email: "s@example.com",
+      campuses: [],
+    });
 
     expect(screen.getByText("Signed in already")).toBeDefined();
     expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();

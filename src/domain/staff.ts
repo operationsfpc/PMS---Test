@@ -126,3 +126,50 @@ const CAMPUS_SCOPED: readonly AppRole[] = [
 export function requiresCampusAssignment(role: AppRole): boolean {
   return CAMPUS_SCOPED.includes(role);
 }
+
+/** How many campuses a role may be mapped to. */
+export type CampusScope = "none" | "one" | "many";
+
+/**
+ * A Campus Placement Coordinator belongs to ONE campus (confirmed 2026-08-05).
+ *
+ * This mapping is not a label. It is where a coordinator's authority comes
+ * from: `my_student_ids()` reads it to decide whose marksheets they may verify
+ * and whose registration they may approve. A second campus silently widens
+ * that authority; none removes it altogether, which is how production ended up
+ * with a coordinator who could see no students and no way to be told why.
+ *
+ * Campus Managers and Key Account Managers genuinely span campuses, so they
+ * keep the list.
+ */
+export function campusScopeFor(role: AppRole): CampusScope {
+  if (role === "campus_placement_coordinator") return "one";
+  return CAMPUS_SCOPED.includes(role) ? "many" : "none";
+}
+
+export type CampusSelection =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: string };
+
+/** Checks a campus mapping before it is written, whatever wrote it. */
+export function validateCampusSelection(
+  role: AppRole,
+  campusIds: readonly string[],
+): CampusSelection {
+  const scope = campusScopeFor(role);
+
+  if (scope === "none") return { ok: true };
+
+  if (scope === "one" && campusIds.length !== 1) {
+    return {
+      ok: false,
+      error: "A placement coordinator works with one campus. Select exactly one.",
+    };
+  }
+
+  if (campusIds.length === 0) {
+    return { ok: false, error: "Select at least one campus for this role." };
+  }
+
+  return { ok: true };
+}

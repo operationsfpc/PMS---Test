@@ -15,6 +15,7 @@ const signedIn = (role: AppRole): AuthState => ({
   status: "signed-in",
   role,
   email: "test@example.com",
+  campuses: [],
 });
 
 const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);

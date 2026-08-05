@@ -28,10 +28,11 @@ function shellFor(auth: AuthState, signOut: () => Promise<void> = async () => {}
   );
 }
 
-const signedIn = (role: AppRole): AuthState => ({
+const signedIn = (role: AppRole, campuses: readonly string[] = []): AuthState => ({
   status: "signed-in",
   role,
   email: "x@example.com",
+  campuses,
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -205,15 +206,20 @@ describe("the preview-as switcher", () => {
  */
 describe("the account avatar", () => {
   it("shows the signed-in user's own initials", () => {
-    shellFor({ status: "signed-in", role: "admin", email: "karthikraja@faceprep.in" });
+    shellFor({
+      status: "signed-in",
+      role: "admin",
+      email: "karthikraja@faceprep.in",
+      campuses: [],
+    });
     expect(screen.getByTitle(/karthikraja@faceprep.in/i).textContent).toBe("KA");
   });
 
   it("does not show one fixed set of initials to everybody", () => {
-    shellFor({ status: "signed-in", role: "student", email: "priya@gmail.com" });
+    shellFor({ status: "signed-in", role: "student", email: "priya@gmail.com", campuses: [] });
     expect(screen.getByTitle(/priya@gmail.com/i).textContent).toBe("PR");
 
-    shellFor({ status: "signed-in", role: "admin", email: "arjun@faceprep.in" });
+    shellFor({ status: "signed-in", role: "admin", email: "arjun@faceprep.in", campuses: [] });
     expect(screen.getByTitle(/arjun@faceprep.in/i).textContent).toBe("AR");
   });
 });

@@ -21,6 +21,7 @@ function repo(overrides: Partial<StaffRepository> = {}): StaffRepository {
     setActive: async () => undefined,
     changeRole: async () => undefined,
     remove: async () => undefined,
+    setCampuses: async () => undefined,
     ...overrides,
   };
 }
@@ -32,6 +33,7 @@ const EXISTING = [
     role: "campus_placement_coordinator" as const,
     acceptedAt: null,
     isActive: true,
+    campuses: [],
   },
 ];
 
@@ -164,7 +166,13 @@ describe("StaffPage", () => {
     ).not.toContain("student");
   });
 
-  /** A campus-scoped role with no campus can see nothing at all. */
+  /**
+   * A campus-scoped role with no campus can see nothing at all.
+   *
+   * The wording differs by role since 2026-08-05, and deliberately: a
+   * coordinator is mapped to ONE campus, so "at least one" would describe a
+   * choice they do not have. Both are refused; they are told different things.
+   */
   it("requires a campus for a campus-scoped role, and writes nothing without one", async () => {
     const invite = vi.fn();
     const user = userEvent.setup();
@@ -173,6 +181,20 @@ describe("StaffPage", () => {
     await user.type(await screen.findByLabelText(/full name/i), "Ravi Kumar");
     await user.type(screen.getByLabelText(/email/i), "ravi@faceprep.in");
     await user.selectOptions(screen.getByLabelText(/role/i), "campus_placement_coordinator");
+    await user.click(screen.getByRole("button", { name: /send invitation/i }));
+
+    expect(await screen.findByText(/one campus/i)).toBeDefined();
+    expect(invite).not.toHaveBeenCalled();
+  });
+
+  it("still asks a multi-campus role for at least one", async () => {
+    const invite = vi.fn();
+    const user = userEvent.setup();
+    render(<StaffPage repository={repo({ invite })} />);
+
+    await user.type(await screen.findByLabelText(/full name/i), "Ravi Kumar");
+    await user.type(screen.getByLabelText(/email/i), "ravi@faceprep.in");
+    await user.selectOptions(screen.getByLabelText(/role/i), "campus_manager");
     await user.click(screen.getByRole("button", { name: /send invitation/i }));
 
     expect(await screen.findByText(/at least one campus/i)).toBeDefined();
@@ -226,5 +248,107 @@ describe("StaffPage", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/already been invited/i);
+  });
+});
+
+/**
+ * Mapping a coordinator to their campus.
+ *
+ * Found in production 2026-08-05: the only Campus Placement Coordinator was
+ * mapped to no campus, so their verification queue was empty however many
+ * students had submitted, and the screen gave no hint why. Campuses could only
+ * be chosen while INVITING, so there was no way to put it right.
+ *
+ * A coordinator is for one campus alone, so this is a choice, not a list.
+ */
+describe("mapping an existing staff member to a campus", () => {
+  const CPC = [
+    {
+      email: "cpc@faceprep.in",
+      fullName: "CPC One",
+      role: "campus_placement_coordinator" as const,
+      acceptedAt: "2026-01-01",
+      isActive: true,
+      campuses: [{ id: "c1", name: "Alliance University" }],
+    },
+  ];
+
+  const CAMPUSES = [
+    { id: "c1", name: "Alliance University" },
+    { id: "c2", name: "SDNB Vaishnav College for Women" },
+  ];
+
+  it("shows the campus a coordinator is mapped to", async () => {
+    render(
+      <StaffPage repository={repo({ list: async () => CPC, campuses: async () => CAMPUSES })} />,
+    );
+
+    // Asserted on the row's own control, not on the text: the invite form
+    // above lists every campus name too, so findByText would pass on that and
+    // prove nothing about the mapping.
+    const select = await screen.findByRole("combobox", { name: /campus for cpc one/i });
+    expect((select as HTMLSelectElement).value).toBe("c1");
+  });
+
+  /** The production state. Silence here is what made it invisible for a day. */
+  it("says plainly when a coordinator has no campus, and why it matters", async () => {
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => [{ ...CPC[0], campuses: [] }] as typeof CPC,
+          campuses: async () => CAMPUSES,
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/no campus/i)).toBeDefined();
+  });
+
+  it("maps them to a campus the Admin picks", async () => {
+    const setCampuses = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <StaffPage
+        repository={repo({ list: async () => CPC, campuses: async () => CAMPUSES, setCampuses })}
+      />,
+    );
+
+    const select = await screen.findByRole("combobox", { name: /campus for cpc one/i });
+    await user.selectOptions(select, "c2");
+
+    await waitFor(() => expect(setCampuses).toHaveBeenCalledWith("cpc@faceprep.in", ["c2"]));
+  });
+
+  /** One campus alone: a multi-select would offer authority we do not grant. */
+  it("offers a coordinator a single choice, not a set of checkboxes", async () => {
+    render(
+      <StaffPage repository={repo({ list: async () => CPC, campuses: async () => CAMPUSES })} />,
+    );
+
+    const select = await screen.findByRole("combobox", { name: /campus for cpc one/i });
+    expect((select as HTMLSelectElement).multiple).toBe(false);
+  });
+
+  it("does not offer a campus to a role that has none", async () => {
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => [
+            {
+              email: "ceo@faceprep.in",
+              fullName: "The CEO",
+              role: "ceo" as const,
+              acceptedAt: "2026-01-01",
+              isActive: true,
+              campuses: [],
+            },
+          ],
+          campuses: async () => CAMPUSES,
+        })}
+      />,
+    );
+
+    await screen.findByText("The CEO");
+    expect(screen.queryByRole("combobox", { name: /campus for the ceo/i })).toBeNull();
   });
 });

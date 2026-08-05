@@ -35,7 +35,12 @@ function renderLanding(
   );
 }
 
-const student: AuthState = { status: "signed-in", role: "student", email: "s@example.com" };
+const student: AuthState = {
+  status: "signed-in",
+  role: "student",
+  email: "s@example.com",
+  campuses: [],
+};
 
 describe("RoleLanding", () => {
   it("drops a verified student on the student dashboard", async () => {
@@ -48,12 +53,13 @@ describe("RoleLanding", () => {
       status: "signed-in",
       role: "central_placement_coordinator",
       email: "c@example.com",
+      campuses: [],
     });
     expect(screen.getByText("Drive cockpit")).toBeDefined();
   });
 
   it("drops a CEO on the shared dashboard", () => {
-    renderLanding({ status: "signed-in", role: "ceo", email: "ceo@faceprep.in" });
+    renderLanding({ status: "signed-in", role: "ceo", email: "ceo@faceprep.in", campuses: [] });
     expect(screen.getByText("Dashboard")).toBeDefined();
   });
 
@@ -130,7 +136,7 @@ describe("RoleLanding", () => {
   it("does not look up a standing for a role that has no student record", async () => {
     const readStanding = vi.fn();
     renderLanding(
-      { status: "signed-in", role: "ceo", email: "ceo@faceprep.in" },
+      { status: "signed-in", role: "ceo", email: "ceo@faceprep.in", campuses: [] },
       readStanding as unknown as () => Promise<StudentStanding | null>,
     );
 

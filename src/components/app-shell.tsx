@@ -1,3 +1,4 @@
+import { campusScopeFor } from "@domain/staff";
 import type { AppRole } from "@domain/types";
 import { useAuth, useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useState } from "react";
@@ -104,6 +105,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { signOut } = useAuthActions();
   const signedInRole = auth.status === "signed-in" ? auth.role : "student";
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
+  const campuses = auth.status === "signed-in" ? auth.campuses : [];
 
   // Development only: lets screens be reviewed without a database. Never
   // shipped - see app-shell.test.tsx.
@@ -187,9 +189,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-label="Main"
           className={`${menuOpen ? "block" : "hidden"} w-full shrink-0 lg:block lg:w-60`}
         >
-          <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-ink-300">
+          <p className="px-3 text-xs font-semibold uppercase tracking-wide text-ink-300">
             {role.replaceAll("_", " ")}
           </p>
+          {/*
+           * The campus sits under the role because for these roles it IS part
+           * of the role: a coordinator verifies their own campus's students
+           * and nobody else's. Mapped to nothing, every queue they open is
+           * empty - which reads as a quiet week rather than a broken account,
+           * so it says so outright.
+           */}
+          {campusScopeFor(role) !== "none" &&
+            (campuses.length > 0 ? (
+              <p className="px-3 text-sm font-medium text-ink-700">{campuses.join(" · ")}</p>
+            ) : (
+              <p className="px-3 text-sm font-medium text-destructive">
+                No campus mapped — ask an Admin
+              </p>
+            ))}
+          <div className="mb-2" />
           <ul className="flex flex-col gap-1">
             {items.map((item) => (
               <li key={item.to}>

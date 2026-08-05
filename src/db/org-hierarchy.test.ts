@@ -161,13 +161,22 @@ describe("reference and identity tables reject student writes", () => {
     );
   });
 
-  it("stops a student granting themselves a campus assignment", async () => {
+  /**
+   * Targets a profile with NO existing mapping, deliberately.
+   *
+   * It used to name the coordinator, who is already mapped to a campus - so
+   * once 0029 added the one-campus-per-coordinator trigger, that trigger
+   * refused the row BEFORE row-level security ever looked at it. The test
+   * still went red, but had it been written that way from the start it would
+   * have passed while proving nothing about RLS at all.
+   */
+  it("stops a student granting a campus assignment", async () => {
     await t.expectRejection(
       () =>
         t.asUser(
           ids.priyaUser,
           `insert into staff_campus_assignments (profile_id, campus_id) values ($1, $2)`,
-          [ids.cpcUser, ids.campusB],
+          [ids.adminUser, ids.campusB],
         ),
       /permission denied|row-level security|violates/i,
     );

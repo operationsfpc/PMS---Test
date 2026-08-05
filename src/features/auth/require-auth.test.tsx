@@ -40,7 +40,7 @@ describe("RequireAuth", () => {
   });
 
   it("lets a signed-in user through", () => {
-    renderGuarded({ status: "signed-in", role: "student", email: "a@b.com" });
+    renderGuarded({ status: "signed-in", role: "student", email: "a@b.com", campuses: [] });
 
     expect(screen.getByText("Confidential student data")).toBeDefined();
   });

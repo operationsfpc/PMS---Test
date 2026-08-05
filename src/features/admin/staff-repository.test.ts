@@ -20,11 +20,36 @@ const repo = (role: AppRole = "admin", email = "admin@faceprep.in") =>
     async () => ({ role, email }),
   );
 
+/**
+ * The reads `list()` makes that no single test is about.
+ *
+ * It resolves the campus mapping as well as the invitation now, so every test
+ * that reaches `list()` - which includes every guarded mutation, because they
+ * all look the target up first - has to let those through or MSW fails them
+ * for a request unrelated to what they assert.
+ */
+function campusReads(
+  assignments: readonly { profile_id: string; campus_id: string }[] = [],
+  staged: readonly { email: string; campus_id: string }[] = [],
+) {
+  server.use(
+    http.get(`${BASE}/rest/v1/campuses`, () =>
+      HttpResponse.json([
+        { id: "campus-1", name: "SDNB Vaishnav College for Women" },
+        { id: "campus-2", name: "Alliance University" },
+      ]),
+    ),
+    http.get(`${BASE}/rest/v1/staff_campus_assignments`, () => HttpResponse.json(assignments)),
+    http.get(`${BASE}/rest/v1/staff_campus_invitations`, () => HttpResponse.json(staged)),
+  );
+}
+
 /** Whatever the staff list holds for these tests. */
 function staffList(
   rows: readonly { email: string; role: string; accepted_at?: string | null }[],
   profiles: readonly { email: string; is_active: boolean }[] = [],
 ) {
+  campusReads();
   server.use(
     http.get(`${BASE}/rest/v1/staff_invitations`, () =>
       HttpResponse.json(
@@ -49,6 +74,7 @@ const INVITATION = {
 
 describe("createSupabaseStaffRepository", () => {
   it("marks someone who has never signed in as still invited", async () => {
+    campusReads();
     server.use(
       http.get(`${BASE}/rest/v1/staff_invitations`, () =>
         HttpResponse.json([
@@ -70,6 +96,7 @@ describe("createSupabaseStaffRepository", () => {
   });
 
   it("reflects a deactivated profile", async () => {
+    campusReads();
     server.use(
       http.get(`${BASE}/rest/v1/staff_invitations`, () =>
         HttpResponse.json([
@@ -322,5 +349,135 @@ describe("remove", () => {
     );
 
     await expect(repo().remove("ae@faceprep.in")).rejects.toThrow(/deactivate/i);
+  });
+});
+
+/**
+ * Mapping a campus to someone who already exists.
+ *
+ * Found in production 2026-08-05: the only Campus Placement Coordinator had
+ * no campus at all, so `my_student_ids()` returned nothing and their
+ * verification queue was empty however many students had submitted. There was
+ * no way to fix it from the application - campuses could only ever be chosen
+ * at INVITE time, and this coordinator had been invited before that existed.
+ *
+ * So the mapping has to be readable and changeable for staff already on the
+ * list, not just for the next person invited.
+ */
+describe("campus mapping for existing staff", () => {
+  const withAssignments = (
+    assignments: readonly { profile_id: string; campus_id: string }[],
+    profiles: readonly { id: string; email: string }[],
+  ) => {
+    server.use(
+      http.get(`${BASE}/rest/v1/staff_invitations`, () =>
+        HttpResponse.json([
+          {
+            email: "cpc@faceprep.in",
+            full_name: "CPC One",
+            role: "campus_placement_coordinator",
+            accepted_at: "2026-01-01",
+          },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/profiles`, () =>
+        HttpResponse.json(profiles.map((p) => ({ ...p, is_active: true }))),
+      ),
+      http.get(`${BASE}/rest/v1/staff_campus_assignments`, () => HttpResponse.json(assignments)),
+      http.get(`${BASE}/rest/v1/staff_campus_invitations`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/campuses`, () =>
+        HttpResponse.json([
+          { id: "campus-1", name: "SDNB Vaishnav College for Women" },
+          { id: "campus-2", name: "Alliance University" },
+        ]),
+      ),
+    );
+  };
+
+  it("shows which campus a coordinator is mapped to", async () => {
+    withAssignments(
+      [{ profile_id: "p1", campus_id: "campus-1" }],
+      [{ id: "p1", email: "cpc@faceprep.in" }],
+    );
+
+    const [member] = await repo().list();
+
+    expect(member?.campuses).toEqual([{ id: "campus-1", name: "SDNB Vaishnav College for Women" }]);
+  });
+
+  /** The production state, and the one a coordinator cannot diagnose alone. */
+  it("shows plainly when a coordinator is mapped to no campus", async () => {
+    withAssignments([], [{ id: "p1", email: "cpc@faceprep.in" }]);
+
+    const [member] = await repo().list();
+
+    expect(member?.campuses).toEqual([]);
+  });
+
+  it("maps a coordinator to a campus, replacing whatever was there", async () => {
+    const deleted: string[] = [];
+    let inserted: Array<Record<string, unknown>> = [];
+    withAssignments(
+      [{ profile_id: "p1", campus_id: "campus-2" }],
+      [{ id: "p1", email: "cpc@faceprep.in" }],
+    );
+    server.use(
+      http.delete(`${BASE}/rest/v1/staff_campus_assignments`, ({ request }) => {
+        deleted.push(new URL(request.url).search);
+        return HttpResponse.json([]);
+      }),
+      http.post(`${BASE}/rest/v1/staff_campus_assignments`, async ({ request }) => {
+        inserted = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(inserted);
+      }),
+    );
+
+    await repo().setCampuses("cpc@faceprep.in", ["campus-1"]);
+
+    expect(deleted[0]).toContain("profile_id=eq.p1");
+    expect(inserted).toEqual([{ profile_id: "p1", campus_id: "campus-1" }]);
+  });
+
+  /** The domain owns this rule; the repository must not be a way around it. */
+  it("refuses to map a coordinator to two campuses", async () => {
+    withAssignments([], [{ id: "p1", email: "cpc@faceprep.in" }]);
+
+    await expect(repo().setCampuses("cpc@faceprep.in", ["campus-1", "campus-2"])).rejects.toThrow(
+      /one campus/i,
+    );
+  });
+
+  it("refuses to leave a coordinator with no campus at all", async () => {
+    withAssignments([], [{ id: "p1", email: "cpc@faceprep.in" }]);
+
+    await expect(repo().setCampuses("cpc@faceprep.in", [])).rejects.toThrow(/one campus/i);
+  });
+
+  /**
+   * They have no profile row until first sign-in, so the mapping has to be
+   * staged against the invited email exactly as `invite` stages it.
+   */
+  it("stages the mapping when they have not signed in yet", async () => {
+    let staged: Array<Record<string, unknown>> = [];
+    withAssignments([], []);
+    server.use(
+      http.delete(`${BASE}/rest/v1/staff_campus_invitations`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/staff_campus_invitations`, async ({ request }) => {
+        staged = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(staged);
+      }),
+    );
+
+    await repo().setCampuses("cpc@faceprep.in", ["campus-1"]);
+
+    expect(staged).toEqual([{ email: "cpc@faceprep.in", campus_id: "campus-1" }]);
+  });
+
+  it("lets only an Admin change a mapping", async () => {
+    withAssignments([], [{ id: "p1", email: "cpc@faceprep.in" }]);
+
+    await expect(
+      repo("campus_manager", "cm@faceprep.in").setCampuses("cpc@faceprep.in", ["campus-1"]),
+    ).rejects.toThrow(/admin/i);
   });
 });

@@ -18,17 +18,24 @@ function fakeClient(opts: {
   session: unknown;
   profile?: { role: string } | null;
   student?: { id: string } | null;
+  /** Campus rows as PostgREST returns them, with the name embedded. */
+  campuses?: Array<{ campuses: { name: string } }>;
 }): SupabaseClient {
   return {
     auth: { getSession: async () => ({ data: { session: opts.session }, error: null }) },
     from: (table: string) => ({
       select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({
-            data: table === "profiles" ? (opts.profile ?? null) : (opts.student ?? null),
-            error: null,
-          }),
-        }),
+        // The campus lookup returns a set and is awaited directly; the
+        // identity lookups return one row and end in `.maybeSingle()`.
+        eq: () =>
+          table === "staff_campus_assignments"
+            ? Promise.resolve({ data: opts.campuses ?? [], error: null })
+            : {
+                maybeSingle: async () => ({
+                  data: table === "profiles" ? (opts.profile ?? null) : (opts.student ?? null),
+                  error: null,
+                }),
+              },
       }),
     }),
   } as unknown as SupabaseClient;
@@ -50,6 +57,8 @@ describe("resolveAuthState", () => {
       status: "signed-in",
       role: "delivery_head",
       email: "someone@example.com",
+      // An organisation-wide role is mapped to no campus, and says so.
+      campuses: [],
     });
   });
 
@@ -57,7 +66,12 @@ describe("resolveAuthState", () => {
     const state = await resolveAuthState(
       fakeClient({ session: SESSION, profile: null, student: { id: "s1" } }),
     );
-    expect(state).toEqual({ status: "signed-in", role: "student", email: "someone@example.com" });
+    expect(state).toEqual({
+      status: "signed-in",
+      role: "student",
+      email: "someone@example.com",
+      campuses: [],
+    });
   });
 
   /**
@@ -74,5 +88,60 @@ describe("resolveAuthState", () => {
       fakeClient({ session: SESSION, profile: null, student: null }),
     );
     expect(state).toEqual({ status: "unrecognised", email: "someone@example.com" });
+  });
+});
+
+/**
+ * The campus a staff member is mapped to.
+ *
+ * Asked for 2026-08-05: "below role campus placement coordinator, also display
+ * the campus name." It is not decoration. A coordinator's whole authority -
+ * whose marksheets they may verify, whose registration they may approve -
+ * comes from this mapping, and in production one was mapped to no campus at
+ * all and simply saw an empty queue with nothing to explain it.
+ */
+describe("the campus a staff member works with", () => {
+  it("reports the campus a coordinator is mapped to", async () => {
+    const state = await resolveAuthState(
+      fakeClient({
+        session: SESSION,
+        profile: { role: "campus_placement_coordinator" },
+        campuses: [{ campuses: { name: "SDNB Vaishnav College for Women" } }],
+      }),
+    );
+
+    expect(state).toMatchObject({
+      status: "signed-in",
+      campuses: ["SDNB Vaishnav College for Women"],
+    });
+  });
+
+  it("reports an empty list when they are mapped to none, rather than guessing", async () => {
+    const state = await resolveAuthState(
+      fakeClient({ session: SESSION, profile: { role: "campus_placement_coordinator" } }),
+    );
+
+    expect(state).toMatchObject({ status: "signed-in", campuses: [] });
+  });
+
+  it("carries every campus for a role that spans several", async () => {
+    const state = await resolveAuthState(
+      fakeClient({
+        session: SESSION,
+        profile: { role: "campus_manager" },
+        campuses: [{ campuses: { name: "Alliance" } }, { campuses: { name: "VIT" } }],
+      }),
+    );
+
+    expect(state).toMatchObject({ campuses: ["Alliance", "VIT"] });
+  });
+
+  /** A student is not staff: they have no assignment rows to read. */
+  it("does not go looking for a student's staff assignments", async () => {
+    const state = await resolveAuthState(
+      fakeClient({ session: SESSION, profile: null, student: { id: "s1" } }),
+    );
+
+    expect(state).toMatchObject({ status: "signed-in", role: "student", campuses: [] });
   });
 });

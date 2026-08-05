@@ -3,6 +3,7 @@ import {
   canInviteRole,
   canRemoveStaff,
   type StaffChangeContext,
+  validateCampusSelection,
 } from "@domain/staff";
 import type { AppRole } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -16,6 +17,12 @@ export interface StaffMember {
   /** Null until they first sign in - the invitation is still outstanding. */
   readonly acceptedAt: string | null;
   readonly isActive: boolean;
+  /**
+   * The campuses they are mapped to. Empty is a real and visible state: a
+   * coordinator with no campus can see no students, and until this was shown
+   * on the staff screen there was no way to tell that from an empty cohort.
+   */
+  readonly campuses: readonly CampusOption[];
 }
 
 export interface CampusOption {
@@ -38,6 +45,14 @@ export interface StaffRepository {
   setActive(email: string, isActive: boolean): Promise<void>;
   /** Moves someone to a different role, invitation and profile together. */
   changeRole(email: string, newRole: AppRole): Promise<void>;
+  /**
+   * Maps an EXISTING staff member to campuses, replacing what they had.
+   *
+   * Campuses could previously only be chosen while inviting, so a coordinator
+   * invited before that existed - or invited without one - was stuck with no
+   * campus and no students, and no way to fix it outside the database.
+   */
+  setCampuses(email: string, campusIds: readonly string[]): Promise<void>;
   /** Revokes the login outright. Refused when their work is still referenced. */
   remove(email: string): Promise<void>;
 }
@@ -79,11 +94,29 @@ export function createSupabaseStaffRepository(
     };
   }
 
+  /**
+   * Resolves an email to the profile id the assignment table is keyed by.
+   *
+   * Null until they first sign in: `staff_campus_assignments` references
+   * `profiles(id)`, which does not exist yet, so the mapping has to be staged
+   * against the email instead.
+   */
+  async function profileIdFor(email: string): Promise<string | null> {
+    const { data } = await client
+      .from("profiles")
+      .select("id")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+
+    return (data?.id as string | undefined) ?? null;
+  }
+
   const repository: StaffRepository = {
     async list() {
-      const [{ data: invitations, error }, { data: profiles }] = await Promise.all([
+      const [{ data: invitations, error }, { data: profiles }, campuses] = await Promise.all([
         client.from("staff_invitations").select("email, full_name, role, accepted_at"),
-        client.from("profiles").select("email, is_active"),
+        client.from("profiles").select("id, email, is_active"),
+        repository.campuses(),
       ]);
 
       if (error !== null) throw new StaffError("Could not load the staff list.");
@@ -91,6 +124,35 @@ export function createSupabaseStaffRepository(
       const activeByEmail = new Map(
         (profiles ?? []).map((p) => [String(p.email).toLowerCase(), p.is_active as boolean]),
       );
+      const emailByProfileId = new Map(
+        (profiles ?? []).map((p) => [String(p.id), String(p.email).toLowerCase()]),
+      );
+      const campusById = new Map(campuses.map((c) => [c.id, c]));
+
+      // Both halves of the mapping: applied for anyone who has signed in,
+      // still staged against the email for anyone who has not. Reading only
+      // the applied half would show an invited coordinator as having no
+      // campus when one is already waiting for them.
+      const [{ data: assignments }, { data: staged }] = await Promise.all([
+        client.from("staff_campus_assignments").select("profile_id, campus_id"),
+        client.from("staff_campus_invitations").select("email, campus_id"),
+      ]);
+
+      const campusesByEmail = new Map<string, CampusOption[]>();
+      const add = (email: string | undefined, campusId: string) => {
+        const campus = campusById.get(campusId);
+        if (email === undefined || campus === undefined) return;
+        const list = campusesByEmail.get(email) ?? [];
+        if (!list.some((c) => c.id === campus.id)) list.push(campus);
+        campusesByEmail.set(email, list);
+      };
+
+      for (const row of assignments ?? []) {
+        add(emailByProfileId.get(String(row.profile_id)), String(row.campus_id));
+      }
+      for (const row of staged ?? []) {
+        add(String(row.email).toLowerCase(), String(row.campus_id));
+      }
 
       return (invitations ?? [])
         .map(
@@ -102,9 +164,49 @@ export function createSupabaseStaffRepository(
             // Someone who has never signed in has no profile row yet, and is
             // therefore still "active" in the sense that matters: invited.
             isActive: activeByEmail.get(String(row.email).toLowerCase()) ?? true,
+            campuses: campusesByEmail.get(String(row.email).toLowerCase()) ?? [],
           }),
         )
         .sort((a, b) => a.fullName.localeCompare(b.fullName));
+    },
+
+    async setCampuses(email, campusIds) {
+      const actor = await getActor();
+      if (actor.role !== "admin") {
+        throw new StaffError("Only an Admin may change a campus mapping.");
+      }
+
+      const staff = await repository.list();
+      const target = staff.find((m) => m.email.toLowerCase() === email.trim().toLowerCase());
+      if (target === undefined) throw new StaffError("That staff member no longer exists.");
+
+      // The domain owns the rule - one campus for a coordinator, at least one
+      // for the others - so this cannot become a way around it.
+      const selection = validateCampusSelection(target.role, campusIds);
+      if (!selection.ok) throw new StaffError(selection.error);
+
+      const address = email.trim().toLowerCase();
+      const profileId = await profileIdFor(address);
+
+      // Replaced wholesale, so the mapping on screen is the mapping stored.
+      // Applied where they have signed in, staged where they have not.
+      const table = profileId === null ? "staff_campus_invitations" : "staff_campus_assignments";
+      const column = profileId === null ? "email" : "profile_id";
+      const key = profileId ?? address;
+
+      const { error: clearError } = await client.from(table).delete().eq(column, key);
+      if (clearError !== null) {
+        throw new StaffError("Could not change that campus mapping. Please try again.");
+      }
+
+      const { error } = await client
+        .from(table)
+        .insert(campusIds.map((campusId) => ({ [column]: key, campus_id: campusId })))
+        .select("campus_id");
+
+      if (error !== null) {
+        throw new StaffError("Could not change that campus mapping. Please try again.");
+      }
     },
 
     async campuses() {
