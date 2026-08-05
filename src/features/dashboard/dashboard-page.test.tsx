@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { DashboardPage, type DashboardSnapshot, type DashboardView } from "./dashboard-page";
 
@@ -19,6 +20,8 @@ const SNAPSHOT: DashboardSnapshot = {
       hasSelfPlacement: false,
       srfStatus: "srf_approved",
       hasApplied: true,
+      campusId: "c1",
+      campusName: "Alliance University",
     },
     {
       studentId: "b",
@@ -27,6 +30,8 @@ const SNAPSHOT: DashboardSnapshot = {
       hasSelfPlacement: true,
       srfStatus: "srf_approved",
       hasApplied: true,
+      campusId: "c2",
+      campusName: "VIT Bangalore",
     },
     {
       studentId: "c",
@@ -35,6 +40,8 @@ const SNAPSHOT: DashboardSnapshot = {
       hasSelfPlacement: false,
       srfStatus: "invited",
       hasApplied: false,
+      campusId: "c1",
+      campusName: "Alliance University",
     },
   ],
   placements: [{ studentId: "a", ctcLpa: 9, category: "dream" }],
@@ -56,6 +63,42 @@ const SNAPSHOT: DashboardSnapshot = {
   campuses: [
     { campusId: "c1", campusName: "Alliance University", eligible: 2, placed: 1 },
     { campusId: "c2", campusName: "VIT Bangalore", eligible: 0, placed: 0 },
+  ],
+  driveProgress: [
+    {
+      driveId: "d1",
+      driveName: "Zoho Corporation — Member Technical Staff",
+      campusNames: ["Alliance University"],
+      participation: {
+        eligible: 120,
+        applied: 30,
+        shortlisted: 12,
+        offers: 3,
+        rounds: [
+          {
+            roundId: "r1",
+            sequence: 1,
+            name: "Aptitude",
+            participants: [
+              { studentId: "a", attendance: "present", result: "selected" },
+              { studentId: "b", attendance: "absent", result: null },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      driveId: "d2",
+      driveName: "Freshworks — SDE",
+      campusNames: ["VIT Bangalore"],
+      participation: {
+        eligible: 40,
+        applied: 10,
+        shortlisted: 4,
+        offers: 1,
+        rounds: [],
+      },
+    },
   ],
 };
 
@@ -122,6 +165,7 @@ describe("DashboardPage", () => {
           offersByCategory: {},
           campuses: [],
           liveDrives: [],
+          driveProgress: [],
           now: "2026-09-05T10:00:00.000Z",
         })}
       />,
@@ -139,27 +183,37 @@ describe("DashboardPage", () => {
  * the package quoted in a board pack come from the same rules the coordinators
  * work against.
  */
-describe("the registration funnel", () => {
-  it("shows every stage from the roster down to placed", async () => {
+describe("the students overview", () => {
+  /**
+   * F5 (UAT 2026-08-06): "The current registration funnel should have only the
+   * items 1,2,3 and 5. rENAME IT AS students overview or so."
+   */
+  it("shows the four stages that are facts about a student", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 
-    const funnel = await screen.findByRole("region", { name: /registration funnel/i });
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
 
     for (const stage of [
       "On the roster",
       "Registration form submitted",
       "Verified by a coordinator",
-      "Applied to a drive",
       "Placed",
     ]) {
       expect(within(funnel).getByText(stage)).toBeDefined();
     }
   });
 
+  it("no longer carries the drive-specific stage", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
+    expect(within(funnel).queryByText("Applied to a drive")).toBeNull();
+  });
+
   it("counts each stage, and says what share of the roster it is", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 
-    const funnel = await screen.findByRole("region", { name: /registration funnel/i });
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
     const roster = within(funnel).getByText("On the roster").closest("li");
     if (roster === null) throw new Error("stage not found");
 
@@ -170,7 +224,7 @@ describe("the registration funnel", () => {
   it("shows the two students who registered, of the three on the roster", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 
-    const funnel = await screen.findByRole("region", { name: /registration funnel/i });
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
     const verified = within(funnel).getByText("Verified by a coordinator").closest("li");
     if (verified === null) throw new Error("stage not found");
 
@@ -333,5 +387,152 @@ describe("live drives", () => {
 
     const live = await screen.findByRole("region", { name: /open drives/i });
     expect(within(live).getByText(/no drives are open/i)).toBeDefined();
+  });
+});
+
+/**
+ * F4 (UAT 2026-08-06): "The registration funnel should be available both
+ * overall and campus-wise. There can be a small drop down that shows all
+ * campuses as default and a drop down to select a campus. The Central
+ * Placement Coordinator should have access to a consolidated dashboard with
+ * the ability to switch between individual campuses."
+ */
+describe("switching campus", () => {
+  it("offers every campus, and starts on all of them", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const picker = (await screen.findByLabelText("Campus")) as HTMLSelectElement;
+
+    expect(picker.value).toBe("");
+    expect(within(picker).getByRole("option", { name: /all campuses/i })).toBeDefined();
+    expect(within(picker).getByRole("option", { name: "Alliance University" })).toBeDefined();
+    expect(within(picker).getByRole("option", { name: "VIT Bangalore" })).toBeDefined();
+  });
+
+  it("counts the whole roster until a campus is chosen", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
+    const roster = within(funnel).getByText("On the roster").closest("li");
+    if (roster === null) throw new Error("stage not found");
+
+    expect(within(roster).getByText("3")).toBeDefined();
+  });
+
+  it("narrows the students overview to the campus chosen", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText("Campus"), "c2");
+
+    const funnel = screen.getByRole("region", { name: /students overview/i });
+    const roster = within(funnel).getByText("On the roster").closest("li");
+    if (roster === null) throw new Error("stage not found");
+
+    expect(within(roster).getByText("1")).toBeDefined();
+  });
+
+  /** The headline must follow the funnel, or the screen quotes two cohorts. */
+  it("narrows the placement figures to the same campus", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText("Campus"), "c1");
+
+    // Alliance: two students, one placed, one opted out -> 1 of 1 counted.
+    const headline = screen.getByRole("region", { name: /headline/i });
+    expect(within(headline).getByText("100%")).toBeDefined();
+  });
+
+  it("says which campus is being shown, so a filtered screen is never mistaken for the whole", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText("Campus"), "c2");
+
+    expect(screen.getByText(/showing vit bangalore/i)).toBeDefined();
+  });
+});
+
+/**
+ * F5 (UAT 2026-08-06): "There has to be another box to track drive specific
+ * data. This should have Drive name and College name filters. wITHIN this,
+ * should have information of eligible students (students to whom a drive is
+ * opened), applied students, attendance and clearance in each round till final
+ * offer."
+ */
+describe("the drive-specific box", () => {
+  const box = () => screen.findByRole("region", { name: /drive progress/i });
+
+  it("is a separate box from the students overview", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    expect(await box()).toBeDefined();
+  });
+
+  it("shows the stages of a drive, from eligible through to the final offer", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await box();
+    const zoho = within(section).getByText(/zoho/i).closest("div");
+    if (zoho === null) throw new Error("drive not found");
+
+    for (const stage of ["Eligible", "Applied", "Shortlisted", "1. Aptitude", "Final offer"]) {
+      expect(within(zoho).getByText(stage)).toBeDefined();
+    }
+  });
+
+  it("reports attendance and clearance for each round", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await box();
+    const round = within(section).getByText("1. Aptitude").closest("li");
+    if (round === null) throw new Error("round not found");
+
+    // Two called, one present, one absent, one selected of the one who came.
+    expect(within(round).getByText(/1 of 2 attended/i)).toBeDefined();
+    expect(within(round).getByText(/1 cleared/i)).toBeDefined();
+  });
+
+  it("filters by drive name", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.type(await screen.findByLabelText(/drive name/i), "freshworks");
+
+    const section = await box();
+    expect(within(section).getByText(/freshworks/i)).toBeDefined();
+    expect(within(section).queryByText(/zoho/i)).toBeNull();
+  });
+
+  it("filters by college name", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText(/college/i), "VIT Bangalore");
+
+    const section = await box();
+    expect(within(section).getByText(/freshworks/i)).toBeDefined();
+    expect(within(section).queryByText(/zoho/i)).toBeNull();
+  });
+
+  it("says so when the filters match no drive at all", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.type(await screen.findByLabelText(/drive name/i), "nobody");
+
+    expect(within(await box()).getByText(/no drives match/i)).toBeDefined();
+  });
+
+  it("shows a drive with no rounds yet without inventing any", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.type(await screen.findByLabelText(/drive name/i), "freshworks");
+
+    const section = await box();
+    expect(within(section).getByText("Eligible")).toBeDefined();
+    expect(within(section).queryByText(/attended/i)).toBeNull();
   });
 });

@@ -1,10 +1,13 @@
 import type { PlacementCtc } from "@domain/ctc-statistics";
+import type { RoundParticipant } from "@domain/drive-funnel";
 import { type Offer, resolvePlacementRecord } from "@domain/offers";
 import type {
   AcademicProfile,
+  AttendanceStatus,
   DriveStatus,
   DriveType,
   ParticipationStatus,
+  RoundResult,
   SrfStatus,
 } from "@domain/types";
 import { isDriveVisibleToStudent, type VisibleDrive } from "@domain/visibility";
@@ -13,6 +16,7 @@ import type {
   CampusBreakdown,
   DashboardSnapshot,
   DashboardView,
+  DriveProgressSnapshot,
   LiveDrive,
 } from "./dashboard-page";
 
@@ -42,6 +46,15 @@ export const DASHBOARD_LIVE_DRIVE_COLUMNS = `
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name)))
+`;
+
+/**
+ * The drive-specific box (F5). Exported so src/db/query-contract.test.ts can
+ * prove it against the real schema.
+ */
+export const DASHBOARD_DRIVE_BOX_COLUMNS = `
+  id, company_name, role_title, status,
+  drive_target_campuses(campuses(name))
 `;
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
@@ -95,13 +108,37 @@ export function createSupabaseDashboardView(
         client.from("drives").select("status"),
         studentIds.length === 0
           ? Promise.resolve({ data: [] })
-          : client.from("applications").select("student_id, drive_id").in("student_id", studentIds),
+          : // `id` is not decoration: the drive box counts shortlist entries
+            // and round participants, both of which key on the APPLICATION.
+            client
+              .from("applications")
+              .select("id, student_id, drive_id")
+              .in("student_id", studentIds),
       ]);
 
       const { data: openDrives } = await client
         .from("drives")
         .select(DASHBOARD_LIVE_DRIVE_COLUMNS)
         .eq("status", "live");
+
+      // F5: the drive-specific box. Read for EVERY drive, not just the live
+      // ones - a drive in its rounds is exactly the one a coordinator is
+      // chasing, and it is no longer open for applications.
+      const { data: allDrives } = await client.from("drives").select(DASHBOARD_DRIVE_BOX_COLUMNS);
+
+      const [
+        { data: rounds },
+        { data: participants },
+        { data: marks },
+        { data: outcomes },
+        { data: shortlisted },
+      ] = await Promise.all([
+        client.from("drive_rounds").select("id, drive_id, sequence, name"),
+        client.from("round_participants").select("round_id, application_id"),
+        client.from("attendance").select("round_id, application_id, status"),
+        client.from("round_results").select("round_id, application_id, result"),
+        client.from("shortlist_entries").select("application_id, included"),
+      ]);
 
       const onCampus = new Set<string>();
       const selfPlaced = new Set<string>();
@@ -211,6 +248,10 @@ export function createSupabaseDashboardView(
       const appliedRows = (applications ?? []) as Array<Record<string, unknown>>;
       const offerRows = (offers ?? []) as Array<Record<string, unknown>>;
 
+      // Reused by the drive box, so "eligible" means the same R5 number in
+      // both places on the screen.
+      const eligibleByDrive = new Map<string, number>();
+
       const liveDrives: LiveDrive[] = rows(openDrives).map((row): LiveDrive => {
         const driveId = row.id as string;
         const start = row.application_start as string | null;
@@ -243,14 +284,18 @@ export function createSupabaseDashboardView(
           },
         };
 
+        const eligible = contexts.filter(
+          (student) => isDriveVisibleToStudent(student, drive).visible,
+        ).length;
+        eligibleByDrive.set(driveId, eligible);
+
         return {
           driveId,
           companyName: (row.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (row.role_title as string | null) ?? null,
           applicationStart: start,
           applicationEnd: end,
-          eligible: contexts.filter((student) => isDriveVisibleToStudent(student, drive).visible)
-            .length,
+          eligible,
           applied: appliedRows.filter((a) => a.drive_id === driveId).length,
           offers: offerRows.filter((o) => o.drive_id === driveId).length,
         };
@@ -265,6 +310,85 @@ export function createSupabaseDashboardView(
         placements.push({ studentId, ctcLpa: record.ctcLpa, category: record.offerCategory });
       }
 
+      // ------------------------------------------------- F5: per-drive progress
+      const applicationsByDrive = new Map<string, string[]>();
+      for (const row of appliedRows) {
+        const driveId = row.drive_id as string;
+        applicationsByDrive.set(driveId, [
+          ...(applicationsByDrive.get(driveId) ?? []),
+          row.id as string,
+        ]);
+      }
+
+      const attendanceOf = new Map<string, AttendanceStatus>();
+      for (const row of rows(marks)) {
+        attendanceOf.set(
+          `${row.round_id as string}:${row.application_id as string}`,
+          (row.status as AttendanceStatus | null) ?? "scheduled",
+        );
+      }
+
+      const resultOf = new Map<string, RoundResult>();
+      for (const row of rows(outcomes)) {
+        resultOf.set(
+          `${row.round_id as string}:${row.application_id as string}`,
+          row.result as RoundResult,
+        );
+      }
+
+      const includedApplications = new Set(
+        rows(shortlisted)
+          .filter((row) => row.included === true)
+          .map((row) => row.application_id as string),
+      );
+
+      const driveProgress: DriveProgressSnapshot[] = rows(allDrives).map((row) => {
+        const driveId = row.id as string;
+        const roleTitle = (row.role_title as string | null) ?? null;
+        const company = (row.company_name as string | null) ?? "Unnamed drive";
+        const applications = applicationsByDrive.get(driveId) ?? [];
+        const applicationIds = new Set(applications);
+
+        return {
+          driveId,
+          // Named for a human, because the filter above it is typed by one.
+          driveName: roleTitle === null || roleTitle === "" ? company : `${company} — ${roleTitle}`,
+          campusNames: linkedNames(row.drive_target_campuses, "campuses"),
+          participation: {
+            eligible: eligibleByDrive.get(driveId) ?? 0,
+            applied: applications.length,
+            shortlisted: applications.filter((id) => includedApplications.has(id)).length,
+            offers: offerRows.filter((o) => o.drive_id === driveId).length,
+            rounds: rows(rounds)
+              .filter((round) => round.drive_id === driveId)
+              .map((round) => {
+                const roundId = round.id as string;
+                return {
+                  roundId,
+                  sequence: Number(round.sequence ?? 0),
+                  name: (round.name as string | null) ?? "Round",
+                  participants: rows(participants)
+                    .filter(
+                      (p) =>
+                        p.round_id === roundId && applicationIds.has(p.application_id as string),
+                    )
+                    .map((p): RoundParticipant => {
+                      const key = `${roundId}:${p.application_id as string}`;
+                      return {
+                        studentId: p.application_id as string,
+                        // No attendance row means the round has not happened
+                        // to them yet. Reading that as an absence would put
+                        // students on the R8 disbarment ladder for nothing.
+                        attendance: attendanceOf.get(key) ?? "scheduled",
+                        result: resultOf.get(key) ?? null,
+                      };
+                    }),
+                };
+              }),
+          },
+        };
+      });
+
       return {
         students: studentRows.map((row) => ({
           studentId: row.id as string,
@@ -273,7 +397,13 @@ export function createSupabaseDashboardView(
           hasApplied: applied.has(row.id as string),
           hasOnCampusPlacement: onCampus.has(row.id as string),
           hasSelfPlacement: selfPlaced.has(row.id as string),
+          // F4: the campus switcher filters on these, so every row carries
+          // them. A student with no campus stays on the roster and is named
+          // as unassigned rather than quietly dropped.
+          campusId: (row.campus_id as string | null) ?? "unknown",
+          campusName: one<{ name?: string }>(row.campuses)?.name ?? "Unassigned campus",
         })),
+        driveProgress,
         placements,
         liveDrives,
         now: clock().toISOString(),

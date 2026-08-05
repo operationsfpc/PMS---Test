@@ -3,6 +3,7 @@ import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
   DASHBOARD_COHORT_COLUMNS,
+  DASHBOARD_DRIVE_BOX_COLUMNS,
   DASHBOARD_LIVE_DRIVE_COLUMNS,
 } from "@features/dashboard/dashboard-view";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
@@ -258,12 +259,31 @@ describe("every hand-written select matches the schema", () => {
       "offers",
       "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at",
     ],
-    ["dashboard applications", "applications", "student_id, drive_id"],
+    ["dashboard applications", "applications", "id, student_id, drive_id"],
+    // F5's drive-specific box. Registered here because the verification
+    // queue's select was NOT, which is the only reason that file stayed green
+    // while the queue 400'd for every coordinator.
+    ["dashboard drive box", "drives", DASHBOARD_DRIVE_BOX_COLUMNS],
+    ["dashboard drive rounds", "drive_rounds", "id, drive_id, sequence, name"],
+    ["dashboard round participants", "round_participants", "round_id, application_id"],
+    ["dashboard round attendance", "attendance", "round_id, application_id, status"],
+    ["dashboard round results", "round_results", "round_id, application_id, result"],
+    ["dashboard shortlist entries", "shortlist_entries", "application_id, included"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
     ["staff profiles", "profiles", "email, is_active"],
     ["programmes degrees", "degrees", "id, name"],
     ["programmes branches", "branches", "id, degree_id, name, is_active"],
-    ["student participation", "self_placement_requests", "id, company_name, ctc_lpa, status"],
+    // F3: the student reads their own decided requests back, with the reason.
+    [
+      "student participation",
+      "self_placement_requests",
+      "id, company_name, role_title, ctc_lpa, status, decision_reason, created_at",
+    ],
+    [
+      "student opt-out history",
+      "opt_out_requests",
+      "id, reason, status, decision_reason, created_at",
+    ],
     [
       "coordinator opt-out queue",
       "opt_out_requests",

@@ -1,7 +1,11 @@
 import { canRecordSelfPlacement, canRequestOptOut } from "@domain/participation";
 import type { ParticipationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ParticipationView } from "./participation-page";
+import {
+  hasPendingRequest,
+  type ParticipationView,
+  type RequestStatus,
+} from "./participation-contract";
 
 export class ParticipationError extends Error {}
 
@@ -85,24 +89,44 @@ export function createSupabaseParticipationView(
 
       const [{ data: row }, { data: requests }, { data: placements }] = await Promise.all([
         client.from("students").select("participation_status").eq("id", studentId).single(),
-        client.from("opt_out_requests").select("id, status").eq("student_id", studentId),
+        // F3: every request, decided or not. This used to ask only whether one
+        // was pending, which is why an approved request could not be shown
+        // back to the student who raised it.
+        client
+          .from("opt_out_requests")
+          .select("id, reason, status, decision_reason, created_at")
+          .eq("student_id", studentId)
+          .order("created_at", { ascending: false }),
         // Pending ones live here, not in `offers`: that table refuses a
         // self-placed row without an approver (0006).
         client
           .from("self_placement_requests")
-          .select("id, company_name, ctc_lpa, status")
-          .eq("student_id", studentId),
+          .select("id, company_name, role_title, ctc_lpa, status, decision_reason, created_at")
+          .eq("student_id", studentId)
+          .order("created_at", { ascending: false }),
       ]);
+
+      const decided = (value: unknown): RequestStatus =>
+        value === "verified" || value === "rejected" ? value : "pending";
 
       return {
         participationStatus:
           (row?.participation_status as ParticipationStatus | undefined) ?? "active",
-        hasPendingRequest: (requests ?? []).some((r) => r.status === "pending"),
+        optOutRequests: (requests ?? []).map((r) => ({
+          id: r.id as string,
+          reason: (r.reason as string | null) ?? "",
+          submittedAt: (r.created_at as string | null) ?? "",
+          status: decided(r.status),
+          decisionReason: (r.decision_reason as string | null) ?? null,
+        })),
         selfPlacements: (placements ?? []).map((p) => ({
           id: p.id as string,
           companyName: (p.company_name as string | null) ?? "Unknown company",
+          roleTitle: (p.role_title as string | null) ?? null,
           ctcLpa: (p.ctc_lpa as number | null) ?? 0,
-          approved: p.status === "verified",
+          submittedAt: (p.created_at as string | null) ?? "",
+          status: decided(p.status),
+          decisionReason: (p.decision_reason as string | null) ?? null,
         })),
       };
     },
@@ -113,7 +137,7 @@ export function createSupabaseParticipationView(
 
       const decision = canRequestOptOut({
         participationStatus: current.participationStatus,
-        hasPendingRequest: current.hasPendingRequest,
+        hasPendingRequest: hasPendingRequest(current.optOutRequests),
         hasDeclaration: declaration !== undefined,
       });
       if (!decision.allowed) throw new ParticipationError(decision.reason);

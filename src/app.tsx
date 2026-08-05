@@ -12,7 +12,7 @@ import { PublishRoute } from "@features/central-cpc/publish-route";
 import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
-import { ParticipationQueueRoute } from "@features/cpc/participation-queue-route";
+import { OffCampusQueueRoute, OptOutQueueRoute } from "@features/cpc/participation-queue-routes";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
@@ -20,7 +20,7 @@ import { DrivePortfolioRoute } from "@features/drive-portfolio/portfolio-route";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
-import { ParticipationRoute } from "@features/student/participation-route";
+import { StudentOffCampusRoute, StudentOptOutRoute } from "@features/student/participation-routes";
 import { StudentProfileRoute } from "@features/student/profile-route";
 import { StudentDashboardRoute } from "@features/student/student-dashboard-route";
 import { Route, Routes } from "react-router";
@@ -56,11 +56,14 @@ export function App() {
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
                 <Route path="/student" element={<StudentDashboardRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
-                <Route path="/student/participation" element={<ParticipationRoute />} />
+                {/* F2: two decisions, two heads. */}
+                <Route path="/student/opt-out" element={<StudentOptOutRoute />} />
+                <Route path="/student/off-campus" element={<StudentOffCampusRoute />} />
                 <Route path="/student/profile" element={<StudentProfileRoute />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
                 <Route path="/cpc/attendance" element={<AttendanceRoute />} />
-                <Route path="/cpc/participation" element={<ParticipationQueueRoute />} />
+                <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
+                <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
                 <Route path="/ae/pif" element={<PifPage />} />
                 <Route path="/my-drives" element={<DrivePortfolioRoute />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />

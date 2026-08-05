@@ -33,6 +33,11 @@ function stub(
     offers?: unknown[];
     drives?: unknown[];
     applications?: unknown[];
+    rounds?: unknown[];
+    participants?: unknown[];
+    attendance?: unknown[];
+    results?: unknown[];
+    shortlists?: unknown[];
   } = {},
 ): {
   studentQueries: string[];
@@ -53,6 +58,13 @@ function stub(
       return HttpResponse.json(status === "eq.live" ? all.filter((d) => d.status === "live") : all);
     }),
     http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json(opts.applications ?? [])),
+    http.get(`${BASE}/rest/v1/drive_rounds`, () => HttpResponse.json(opts.rounds ?? [])),
+    http.get(`${BASE}/rest/v1/round_participants`, () =>
+      HttpResponse.json(opts.participants ?? []),
+    ),
+    http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
+    http.get(`${BASE}/rest/v1/round_results`, () => HttpResponse.json(opts.results ?? [])),
+    http.get(`${BASE}/rest/v1/shortlist_entries`, () => HttpResponse.json(opts.shortlists ?? [])),
   );
 
   return { studentQueries };
@@ -435,5 +447,143 @@ describe("live drive figures", () => {
     ).snapshot();
 
     expect(snapshot.now).toBe("2026-09-05T10:00:00.000Z");
+  });
+});
+
+/**
+ * F4 and F5 (UAT 2026-08-06).
+ *
+ * The campus switcher filters students in the browser, so every student row
+ * has to carry its campus. The drive box needs one entry per drive, with the
+ * round participation the domain's `driveFunnel` reduces.
+ */
+describe("createSupabaseDashboardView — campus switching and drive progress", () => {
+  const view = () => createSupabaseDashboardView(client());
+
+  it("carries each student's campus, so the switcher has something to filter on", async () => {
+    stub({
+      students: [
+        {
+          id: "s1",
+          participation_status: "active",
+          srf_status: "srf_approved",
+          campus_id: "c1",
+          campuses: { name: "Alliance University", cities: { name: "Chennai" } },
+        },
+      ],
+    });
+
+    const [student] = (await view().snapshot()).students;
+
+    expect(student?.campusId).toBe("c1");
+    expect(student?.campusName).toBe("Alliance University");
+  });
+
+  it("names a student with no campus rather than dropping them from the roster", async () => {
+    stub({ students: [{ id: "s1", participation_status: "active", srf_status: "invited" }] });
+
+    const [student] = (await view().snapshot()).students;
+
+    expect(student?.campusId).toBe("unknown");
+    expect(student?.campusName).toBe("Unassigned campus");
+  });
+
+  it("reports one drive-progress entry per drive, named for a human", async () => {
+    stub({
+      drives: [{ id: "d1", company_name: "Zoho Corporation", role_title: "MTS", status: "live" }],
+    });
+
+    const [drive] = (await view().snapshot()).driveProgress;
+
+    expect(drive?.driveId).toBe("d1");
+    expect(drive?.driveName).toMatch(/zoho corporation/i);
+    expect(drive?.driveName).toMatch(/mts/i);
+  });
+
+  it("carries the colleges a drive was opened to, for the college filter", async () => {
+    stub({
+      drives: [
+        {
+          id: "d1",
+          company_name: "Zoho",
+          status: "live",
+          drive_target_campuses: [{ campuses: { name: "Alliance University" } }],
+        },
+      ],
+    });
+
+    expect((await view().snapshot()).driveProgress[0]?.campusNames).toEqual([
+      "Alliance University",
+    ]);
+  });
+
+  it("counts applications and offers against the drive they belong to", async () => {
+    stub({
+      students: [{ id: "s1", participation_status: "active", srf_status: "srf_approved" }],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
+      offers: [
+        {
+          id: "o1",
+          student_id: "s1",
+          drive_id: "d1",
+          source: "on_campus",
+          drive_type: "placement",
+          offer_category: "dream",
+          ctc_lpa: 9,
+          declared_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+
+    const [drive] = (await view().snapshot()).driveProgress;
+
+    expect(drive?.participation.applied).toBe(1);
+    expect(drive?.participation.offers).toBe(1);
+  });
+
+  it("reports each round with who was called, who came and who cleared", async () => {
+    stub({
+      students: [{ id: "s1", participation_status: "active", srf_status: "srf_approved" }],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
+      rounds: [{ id: "r1", drive_id: "d1", sequence: 1, name: "Aptitude" }],
+      participants: [{ round_id: "r1", application_id: "a1" }],
+      attendance: [{ round_id: "r1", application_id: "a1", status: "present" }],
+      results: [{ round_id: "r1", application_id: "a1", result: "selected" }],
+    });
+
+    const [round] = (await view().snapshot()).driveProgress[0]?.participation.rounds ?? [];
+
+    expect(round?.name).toBe("Aptitude");
+    expect(round?.participants).toEqual([
+      { studentId: "a1", attendance: "present", result: "selected" },
+    ]);
+  });
+
+  it("treats a called student with no attendance row as scheduled, not absent", async () => {
+    stub({
+      students: [{ id: "s1", participation_status: "active", srf_status: "srf_approved" }],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
+      rounds: [{ id: "r1", drive_id: "d1", sequence: 1, name: "Aptitude" }],
+      participants: [{ round_id: "r1", application_id: "a1" }],
+    });
+
+    const [round] = (await view().snapshot()).driveProgress[0]?.participation.rounds ?? [];
+
+    expect(round?.participants[0]?.attendance).toBe("scheduled");
+    expect(round?.participants[0]?.result).toBeNull();
+  });
+
+  it("counts the students a drive was shortlisted down to", async () => {
+    stub({
+      students: [{ id: "s1", participation_status: "active", srf_status: "srf_approved" }],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
+      shortlists: [{ application_id: "a1", drive_id: "d1", included: true }],
+    });
+
+    expect((await view().snapshot()).driveProgress[0]?.participation.shortlisted).toBe(1);
   });
 });

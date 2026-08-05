@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
+import { hasPendingRequest } from "./participation-contract";
 import { createSupabaseParticipationView } from "./participation-view";
 
 /**
@@ -107,19 +108,56 @@ describe("reading the student's participation", () => {
   it("knows a request is already pending", async () => {
     stub({ requests: [{ id: "r1", status: "pending" }] });
 
-    expect((await view().status()).hasPendingRequest).toBe(true);
+    expect(hasPendingRequest((await view().status()).optOutRequests)).toBe(true);
   });
 
   it("does not count a decided request as pending", async () => {
     stub({ requests: [{ id: "r1", status: "rejected" }] });
 
-    expect((await view().status()).hasPendingRequest).toBe(false);
+    expect(hasPendingRequest((await view().status()).optOutRequests)).toBe(false);
   });
 
-  it("shows a self-placement and whether a coordinator has verified it", async () => {
+  /**
+   * F3 (UAT 2026-08-06): a decided request must stay readable. The screen used
+   * to be told only whether one was pending, so an approved or declined
+   * request could not be shown at all.
+   */
+  it("keeps every opt-out request, decided or not, with its reason and outcome", async () => {
+    stub({
+      requests: [
+        {
+          id: "r1",
+          reason: "Higher studies",
+          status: "rejected",
+          decision_reason: "Your declaration was not signed.",
+          created_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+
+    const [request] = (await view().status()).optOutRequests;
+
+    expect(request).toEqual({
+      id: "r1",
+      reason: "Higher studies",
+      submittedAt: "2026-08-01T00:00:00Z",
+      status: "rejected",
+      decisionReason: "Your declaration was not signed.",
+    });
+  });
+
+  it("shows a self-placement and what the coordinator decided about it", async () => {
     stub({
       placements: [
-        { id: "sp1", company_name: "Freshworks", ctc_lpa: 7.5, status: "verified" },
+        {
+          id: "sp1",
+          company_name: "Freshworks",
+          role_title: "SDE",
+          ctc_lpa: 7.5,
+          status: "verified",
+          decision_reason: null,
+          created_at: "2026-08-01T00:00:00Z",
+        },
         { id: "sp2", company_name: "Zoho", ctc_lpa: 6, status: "pending" },
       ],
     });
@@ -129,10 +167,32 @@ describe("reading the student's participation", () => {
     expect(selfPlacements[0]).toEqual({
       id: "sp1",
       companyName: "Freshworks",
+      roleTitle: "SDE",
       ctcLpa: 7.5,
-      approved: true,
+      submittedAt: "2026-08-01T00:00:00Z",
+      status: "verified",
+      decisionReason: null,
     });
-    expect(selfPlacements[1]?.approved).toBe(false);
+    expect(selfPlacements[1]?.status).toBe("pending");
+  });
+
+  /** F1: the decline reason is the only thing the student is told. */
+  it("carries the coordinator's decline reason back to the student", async () => {
+    stub({
+      placements: [
+        {
+          id: "sp1",
+          company_name: "Freshworks",
+          ctc_lpa: 7.5,
+          status: "rejected",
+          decision_reason: "The letter is unreadable.",
+        },
+      ],
+    });
+
+    expect((await view().status()).selfPlacements[0]?.decisionReason).toBe(
+      "The letter is unreadable.",
+    );
   });
 
   it("survives a self-placement row with missing detail", async () => {

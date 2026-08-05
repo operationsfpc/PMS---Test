@@ -223,3 +223,91 @@ describe("the account avatar", () => {
     expect(screen.getByTitle(/arjun@faceprep.in/i).textContent).toBe("AR");
   });
 });
+
+/**
+ * F2 (UAT 2026-08-06): "Keep these two as separate heads for student and
+ * Central PC. nOW THEY ARE in one bucket in side bar." And F5's page: "Opt out
+ * and Off campus offers should be different tabs."
+ *
+ * They are two unrelated decisions. Opting out is irreversible and removes the
+ * student from everything; recording an off-campus offer changes nothing about
+ * their eligibility. One nav item called "Opt-outs & offers" invited a student
+ * to open the wrong one.
+ */
+describe("opting out and off-campus offers are separate heads", () => {
+  it("gives the student one entry for each", () => {
+    shellFor(signedIn("student"));
+
+    expect(screen.getByRole("link", { name: /opting out/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /off-campus offer/i })).toBeDefined();
+  });
+
+  it("does not put them in one bucket for the student", () => {
+    shellFor(signedIn("student"));
+
+    expect(screen.queryByRole("link", { name: /opt-outs & offers/i })).toBeNull();
+  });
+
+  it("gives the Central Placement Coordinator one entry for each", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+
+    expect(screen.getByRole("link", { name: /opt-out requests/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /off-campus offers/i })).toBeDefined();
+  });
+
+  it("gives the campus coordinator one entry for each too", () => {
+    shellFor(signedIn("campus_placement_coordinator", ["Alliance"]));
+
+    expect(screen.getByRole("link", { name: /opt-out requests/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /off-campus offers/i })).toBeDefined();
+  });
+
+  it("sends each entry to its own screen", () => {
+    shellFor(signedIn("student"));
+
+    expect(screen.getByRole("link", { name: /opting out/i }).getAttribute("href")).toBe(
+      "/student/opt-out",
+    );
+    expect(screen.getByRole("link", { name: /off-campus offer/i }).getAttribute("href")).toBe(
+      "/student/off-campus",
+    );
+  });
+});
+
+/**
+ * F6 (UAT 2026-08-06): "A separate page for degree and branches is not
+ * required for the admin. This is always mapped to colleges for a particular
+ * year of Passing."
+ */
+describe("degrees and branches are not their own page", () => {
+  it("is gone from the Admin's navigation", () => {
+    shellFor(signedIn("admin"));
+
+    expect(screen.queryByRole("link", { name: /degrees & branches/i })).toBeNull();
+  });
+
+  it("still offers the colleges they are now maintained under", () => {
+    shellFor(signedIn("admin"));
+
+    expect(screen.getByRole("link", { name: /campuses/i })).toBeDefined();
+  });
+});
+
+/**
+ * F15 (UAT 2026-08-06): "The drive module of view present for the account
+ * executive must be the present for Central Placement Coordinator with
+ * shortlisting access."
+ */
+describe("the Central Placement Coordinator's drive module", () => {
+  it("offers the same drive cockpit the AE has", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+
+    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+  });
+
+  it("keeps the shortlisting entry the AE does not have", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+
+    expect(screen.getByRole("link", { name: /shortlisting/i })).toBeDefined();
+  });
+});

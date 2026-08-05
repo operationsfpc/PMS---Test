@@ -1,7 +1,10 @@
-import { canApproveParticipationChange } from "@domain/participation";
+import {
+  canApproveParticipationChange,
+  canDeclineParticipationRequest,
+} from "@domain/participation";
 import type { AppRole } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ParticipationQueueView } from "./participation-queue";
+import type { ParticipationQueueView } from "./participation-queue-contract";
 
 export class ParticipationQueueError extends Error {}
 
@@ -50,6 +53,22 @@ export function createSupabaseParticipationQueueView(
 ): ParticipationQueueView {
   async function approver() {
     const decision = canApproveParticipationChange(await getActorRole());
+    if (!decision.allowed) throw new ParticipationQueueError(decision.reason);
+
+    const id = await getActorId();
+    if (id === null) {
+      throw new ParticipationQueueError("Your session has expired. Please sign in again.");
+    }
+    return id;
+  }
+
+  /**
+   * F1: the decline is refused HERE if the reason is not one, before anything
+   * is written. 0032 refuses it again in the database, and both quote the
+   * domain, so the coordinator is told the same thing either way.
+   */
+  async function decliner(reason: string) {
+    const decision = canDeclineParticipationRequest(await getActorRole(), reason);
     if (!decision.allowed) throw new ParticipationQueueError(decision.reason);
 
     const id = await getActorId();
@@ -138,17 +157,44 @@ export function createSupabaseParticipationQueueView(
       }
     },
 
-    async rejectOptOut(requestId) {
-      const actorId = await approver();
+    async declineOptOut(requestId, reason) {
+      const actorId = await decliner(reason);
 
       const { error } = await client
         .from("opt_out_requests")
-        .update({ status: "rejected", decided_by: actorId, decided_at: new Date().toISOString() })
+        .update({
+          status: "rejected",
+          decided_by: actorId,
+          decided_at: new Date().toISOString(),
+          decision_reason: reason.trim(),
+        })
         .eq("id", requestId)
         .select("id")
         .single();
 
-      if (error !== null) throw new ParticipationQueueError("Could not reject the request.");
+      if (error !== null) throw new ParticipationQueueError("Could not decline the request.");
+    },
+
+    /**
+     * Nothing is created. The student keeps the ability to record another
+     * offer, which is the point: they were told what was wrong with the first.
+     */
+    async declineSelfPlacement(requestId, reason) {
+      const actorId = await decliner(reason);
+
+      const { error } = await client
+        .from("self_placement_requests")
+        .update({
+          status: "rejected",
+          decided_by: actorId,
+          decided_at: new Date().toISOString(),
+          decision_reason: reason.trim(),
+        })
+        .eq("id", requestId)
+        .select("id")
+        .single();
+
+      if (error !== null) throw new ParticipationQueueError("Could not decline the offer.");
     },
 
     async approveSelfPlacement(requestId) {

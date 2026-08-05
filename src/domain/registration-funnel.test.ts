@@ -73,7 +73,9 @@ describe("registrationFunnel", () => {
       student({ srfStatus: "srf_approved" }),
     ]);
 
-    expect(funnel.find((s) => s.key === "applied")).toBeUndefined();
+    // Typed as a string on purpose: the point is that no stage carries this
+    // key, and comparing against the narrowed union would not compile.
+    expect(funnel.find((s) => (s.key as string) === "applied")).toBeUndefined();
   });
 
   /** Applying still proves the stages above it were reached. */

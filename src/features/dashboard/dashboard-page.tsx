@@ -1,6 +1,7 @@
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
+import { type DriveParticipation, driveFunnel } from "@domain/drive-funnel";
 import { registrationFunnel } from "@domain/registration-funnel";
 import { computePlacementStats, type StudentPlacementFacts } from "@domain/statistics";
 import type { SrfStatus } from "@domain/types";
@@ -22,7 +23,24 @@ export interface CampusBreakdown {
 export type DashboardStudent = StudentPlacementFacts & {
   readonly srfStatus: SrfStatus;
   readonly hasApplied: boolean;
+  /** F4: the campus switcher filters on this, so it must be per student. */
+  readonly campusId: string;
+  readonly campusName: string;
 };
+
+/**
+ * One drive's progress, as the domain's `driveFunnel` needs it. F5.
+ *
+ * `campusNames` is the drive's TARGETING, which is what the college filter
+ * matches on: the question is "how is this drive going at that college", and a
+ * drive never opened there has no answer.
+ */
+export interface DriveProgressSnapshot {
+  readonly driveId: string;
+  readonly driveName: string;
+  readonly campusNames: readonly string[];
+  readonly participation: DriveParticipation;
+}
 
 export interface LiveDrive {
   readonly driveId: string;
@@ -53,6 +71,8 @@ export interface DashboardSnapshot {
   readonly drivesByStatus: Readonly<Record<string, number>>;
   readonly offersByCategory: Readonly<Record<string, number>>;
   readonly campuses: readonly CampusBreakdown[];
+  /** F5: the drive-specific box. Empty until a drive has an audience. */
+  readonly driveProgress: readonly DriveProgressSnapshot[];
 }
 
 export interface DashboardView {
@@ -77,20 +97,57 @@ const rate = (placed: number, eligible: number) =>
  */
 export function DashboardPage({ view, title }: { view: DashboardView; title: string }) {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  /** "" is every campus — the default the request asked for (F4). */
+  const [campusId, setCampusId] = useState("");
+  const [driveQuery, setDriveQuery] = useState("");
+  const [collegeFilter, setCollegeFilter] = useState("");
 
   useEffect(() => {
     void view.snapshot().then(setSnapshot);
   }, [view]);
 
-  const stats = useMemo(
-    () => (snapshot === null ? null : computePlacementStats({ students: snapshot.students })),
+  /**
+   * F4: "available both overall and campus-wise ... the ability to switch
+   * between individual campuses to analyze the registration and placement
+   * funnel for each campus separately."
+   *
+   * Filtered ONCE, here, and fed to both the funnel and the placement stats:
+   * two filters would eventually disagree and the screen would quote two
+   * different cohorts side by side.
+   */
+  const cohort = useMemo(
+    () =>
+      snapshot === null
+        ? []
+        : campusId === ""
+          ? snapshot.students
+          : snapshot.students.filter((s) => s.campusId === campusId),
+    [snapshot, campusId],
+  );
+
+  const stats = useMemo(() => computePlacementStats({ students: cohort }), [cohort]);
+
+  const funnel = useMemo(() => registrationFunnel(cohort), [cohort]);
+
+  const campusName =
+    snapshot?.campuses.find((c) => c.campusId === campusId)?.campusName ?? "All campuses";
+
+  /** Every college any drive was opened to, for the drive box's filter. */
+  const colleges = useMemo(
+    () =>
+      [...new Set((snapshot?.driveProgress ?? []).flatMap((d) => d.campusNames))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
     [snapshot],
   );
 
-  const funnel = useMemo(
-    () => (snapshot === null ? [] : registrationFunnel(snapshot.students)),
-    [snapshot],
-  );
+  const drives = useMemo(() => {
+    const query = driveQuery.trim().toLowerCase();
+    return (snapshot?.driveProgress ?? [])
+      .filter((d) => query === "" || d.driveName.toLowerCase().includes(query))
+      .filter((d) => collegeFilter === "" || d.campusNames.includes(collegeFilter))
+      .map((d) => ({ ...d, funnel: driveFunnel(d.participation) }));
+  }, [snapshot, driveQuery, collegeFilter]);
 
   const packages = useMemo(
     () => (snapshot === null ? null : summariseCtc(snapshot.placements)),
@@ -102,7 +159,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     [snapshot],
   );
 
-  if (snapshot === null || stats === null) {
+  if (snapshot === null) {
     return (
       <div>
         <PageHeader title={title} />
@@ -119,6 +176,30 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
         title={title}
         subtitle="Opt-outs leave the denominator; self-placed is its own line."
       />
+
+      {/* F4: all campuses by default, one campus on request. */}
+      {snapshot.campuses.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <label htmlFor="campus-filter" className="text-sm font-medium text-ink-700">
+            Campus
+          </label>
+          <select
+            id="campus-filter"
+            value={campusId}
+            onChange={(e) => setCampusId(e.target.value)}
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+          >
+            <option value="">All campuses</option>
+            {snapshot.campuses.map((campus) => (
+              <option key={campus.campusId} value={campus.campusId}>
+                {campus.campusName}
+              </option>
+            ))}
+          </select>
+          {/* A filtered screen that does not say so is read as the whole org. */}
+          {campusId !== "" && <Badge tone="brand">Showing {campusName}</Badge>}
+        </div>
+      )}
 
       {snapshot.students.length === 0 ? (
         <Card className="p-6">
@@ -146,8 +227,10 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
 
           <div className="mb-6 grid gap-6 lg:grid-cols-2">
             <Card className="p-5">
-              <section aria-label="Registration funnel">
-                <h2 className="text-lg text-ink-900">Registration funnel</h2>
+              {/* F5: renamed, because "funnel" promised a drive-by-drive story
+                  it could not tell. These four are facts about a STUDENT. */}
+              <section aria-label="Students overview">
+                <h2 className="text-lg text-ink-900">Students overview</h2>
                 <p className="mt-1 mb-3 text-sm text-ink-500">
                   Where the cohort is, from the roster to a signed offer.
                 </p>
@@ -324,6 +407,107 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                     );
                   })}
                 </ul>
+              )}
+            </section>
+          </Card>
+
+          {/*
+           * F5: the drive-specific box. It was the fourth row of the funnel,
+           * where its denominator was the roster rather than the drive's own
+           * audience — so the one number anybody wanted to act on was the one
+           * number that was wrong.
+           */}
+          <Card className="mt-6 p-5">
+            <section aria-label="Drive progress">
+              <h2 className="text-lg text-ink-900">Drive progress</h2>
+              <p className="mt-1 mb-4 text-sm text-ink-500">
+                Eligible students, applications, and attendance and clearance in each round through
+                to the final offer.
+              </p>
+
+              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="drive-name-filter"
+                    className="mb-1 block text-sm font-medium text-ink-700"
+                  >
+                    Drive name
+                  </label>
+                  <input
+                    id="drive-name-filter"
+                    value={driveQuery}
+                    onChange={(e) => setDriveQuery(e.target.value)}
+                    placeholder="All drives"
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="drive-college-filter"
+                    className="mb-1 block text-sm font-medium text-ink-700"
+                  >
+                    College name
+                  </label>
+                  <select
+                    id="drive-college-filter"
+                    value={collegeFilter}
+                    onChange={(e) => setCollegeFilter(e.target.value)}
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  >
+                    <option value="">All colleges</option>
+                    {colleges.map((college) => (
+                      <option key={college} value={college}>
+                        {college}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {drives.length === 0 ? (
+                <p className="text-sm text-ink-700">
+                  No drives match these filters yet. Published drives appear here as students become
+                  eligible for them.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  {drives.map((drive) => (
+                    <div key={drive.driveId} className="rounded-lg border border-line p-4">
+                      <p className="font-semibold text-ink-900">{drive.driveName}</p>
+                      <p className="text-xs text-ink-500">
+                        {drive.campusNames.length === 0
+                          ? "Open to every campus"
+                          : drive.campusNames.join(" · ")}
+                      </p>
+
+                      <ol className="mt-3 space-y-2">
+                        {drive.funnel.stages.map((stage) => {
+                          const round = drive.funnel.rounds.find((r) => r.roundId === stage.key);
+                          return (
+                            <li key={stage.key}>
+                              <div className="flex items-baseline justify-between gap-3 text-sm">
+                                <span className="text-ink-700">{stage.label}</span>
+                                <span className="font-semibold text-ink-900">{stage.count}</span>
+                              </div>
+                              {round !== undefined && (
+                                <p className="mt-0.5 text-xs text-ink-500">
+                                  <span>
+                                    {round.present} of {round.scheduled} attended
+                                  </span>{" "}
+                                  · <span>{round.cleared} cleared</span> ·{" "}
+                                  <span>{round.clearanceRate}% clearance</span>
+                                  {round.unconfirmed > 0 && (
+                                    <span> · {round.unconfirmed} unconfirmed</span>
+                                  )}
+                                </p>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
               )}
             </section>
           </Card>

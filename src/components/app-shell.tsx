@@ -27,7 +27,12 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/student", label: "My dashboard" },
     { to: "/student/drives", label: "Open drives" },
     { to: "/srf", label: "My registration form" },
-    { to: "/student/participation", label: "My participation" },
+    // F2 (UAT 2026-08-06): two unrelated decisions, two entries. Opting out is
+    // irreversible and removes the student from everything; recording an
+    // off-campus offer changes nothing about their eligibility. One bucket
+    // called "My participation" invited them into the wrong one.
+    { to: "/student/opt-out", label: "Opting out" },
+    { to: "/student/off-campus", label: "Off-campus offer" },
   ],
   // The coordinators who do the work had no overview at all until 2026-08-05:
   // their own queues, and nothing about how the cohort was doing. RLS scopes
@@ -36,7 +41,8 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/dashboard", label: "Campus overview" },
     { to: "/cpc/verification", label: "Verification queue" },
     { to: "/cpc/attendance", label: "Attendance" },
-    { to: "/cpc/participation", label: "Opt-outs & offers" },
+    { to: "/cpc/opt-outs", label: "Opt-out requests" },
+    { to: "/cpc/off-campus", label: "Off-campus offers" },
   ],
   // The AE follows the drives they raised; RLS scopes the cockpit to those.
   account_executive: [
@@ -62,7 +68,8 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/central/publish", label: "Publish and target" },
     { to: "/central/shortlisting", label: "Shortlisting" },
     { to: "/cpc/attendance", label: "Attendance" },
-    { to: "/cpc/participation", label: "Opt-outs & offers" },
+    { to: "/cpc/opt-outs", label: "Opt-out requests" },
+    { to: "/cpc/off-campus", label: "Off-campus offers" },
     { to: "/central/results", label: "Round results" },
     { to: "/central/offers", label: "Final selection" },
   ],
@@ -70,7 +77,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/dashboard", label: "Placement overview" },
     { to: "/admin/campuses", label: "Campuses" },
     { to: "/admin/staff", label: "Staff" },
-    { to: "/admin/programmes", label: "Degrees & branches" },
+    // F6 (UAT 2026-08-06): degrees and branches are not a page of their own.
+    // They are always a college's, for a passing year, and are maintained
+    // under Campuses.
     { to: "/admin/roster", label: "Import roster" },
   ],
 };

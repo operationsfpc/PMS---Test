@@ -247,21 +247,73 @@ describe("approving an opt-out", () => {
   });
 });
 
-describe("rejecting an opt-out", () => {
-  it("records the rejection against the coordinator who made it", async () => {
+/**
+ * F1 (UAT 2026-08-06): "decline button with reason. The status of approval or
+ * rejection should go to student."
+ */
+describe("declining an opt-out", () => {
+  it("records the decline against the coordinator who made it", async () => {
     const writes = stub();
 
-    await view().rejectOptOut("req-1");
+    await view().declineOptOut("req-1", "Your declaration was not signed.");
 
     expect(writes[0]?.body).toMatchObject({ status: "rejected", decided_by: "cpc-1" });
+  });
+
+  /** The reason is the message to the student, so it must survive the trip. */
+  it("stores the reason the student will be shown", async () => {
+    const writes = stub();
+
+    await view().declineOptOut("req-1", "Your declaration was not signed.");
+
+    expect(writes[0]?.body).toMatchObject({
+      decision_reason: "Your declaration was not signed.",
+    });
+  });
+
+  it("refuses to decline with no reason, before touching the database", async () => {
+    const writes = stub();
+
+    await expect(view().declineOptOut("req-1", "   ")).rejects.toThrow(/reason/i);
+    expect(writes).toHaveLength(0);
+  });
+
+  it("refuses anyone who is not a placement coordinator", async () => {
+    stub();
+
+    await expect(view("student").declineOptOut("req-1", "Not enough evidence")).rejects.toThrow(
+      /coordinator/i,
+    );
   });
 
   it("leaves the student untouched", async () => {
     const writes = stub();
 
-    await view().rejectOptOut("req-1");
+    await view().declineOptOut("req-1", "Your declaration was not signed.");
 
     expect(writes.some((w) => w.table === "students")).toBe(false);
+  });
+});
+
+describe("declining an off-campus offer", () => {
+  it("records the decline and the reason, and creates no offer", async () => {
+    const writes = stub();
+
+    await view().declineSelfPlacement("sp-1", "The letter has no CTC on it.");
+
+    expect(writes[0]?.body).toMatchObject({
+      status: "rejected",
+      decided_by: "cpc-1",
+      decision_reason: "The letter has no CTC on it.",
+    });
+    expect(writes.some((w) => w.table === "offers")).toBe(false);
+  });
+
+  it("refuses to decline with no reason", async () => {
+    const writes = stub();
+
+    await expect(view().declineSelfPlacement("sp-1", "no")).rejects.toThrow(/reason/i);
+    expect(writes).toHaveLength(0);
   });
 });
 
