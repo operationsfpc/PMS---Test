@@ -1,13 +1,13 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `d0c1e2f`. **1547 tests passing across 107 files**, plus
+Last updated at commit `a4f1c9e`. **1556 tests passing across 107 files**, plus
 **1 Playwright journey** — run, not remembered.
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-06:** <https://fpc-pms.faceprep.workers.dev>
-(version `5f8eb5ce-1123-427d-92ee-d7e29c442e38`) · database on Supabase
-ap-south-1 · migrations `0001`–`0025`, **local == remote** (`supabase migration
+(version `040eb121-2bdb-46b3-952f-77010d0614d0`) · database on Supabase
+ap-south-1 · migrations `0001`–`0026`, **local == remote** (`supabase migration
 list --linked`).
 
 Verified after shipping 2026-08-06, not assumed:
@@ -114,6 +114,54 @@ Everything built in this session is **shipped**. In order:
 4. **Playwright journeys for the other roles.** The student journey is the only
    one, and it is the only thing that proves the wiring.
 5. **Result corrections** (A15) and the notifications UI (blocked on P1).
+
+---
+
+## 2w. One marks scale per degree; optional diploma/UG evidence (`0026`, shipped)
+
+Asked for 2026-08-06. Five changes; two of them reverse earlier rules.
+
+| Change | Note |
+|---|---|
+| **One scale for the whole degree**, chosen right after the UG/PG question | "The metric will not change semester to semester" |
+| **Scale before marks** (diploma and UG) | The scale tells the student what the box below expects |
+| "Diploma/UG result" → **"Diploma/UG marks"** | |
+| **Diploma + consolidated UG marksheets are now OPTIONAL** | Reverses part of A31 |
+| Percentage option reads **"Cumulative percentage (%)"** | |
+
+### Why (1) was worth more than a click saved
+
+Asking per semester gave eight chances to answer inconsistently, and
+eligibility would then compare figures **that were never on the same scale** —
+semester 3 read as a CGPA and semester 4 as a percentage, with nothing to flag
+it. `student_semesters.marks_scale` is still written on every row, so a stored
+figure always says what it means; the form simply cannot produce a mixture.
+
+### Why relaxing the evidence rule is safe
+
+**Neither relaxed figure feeds an eligibility cutoff.** R5 reads the latest
+*verified semester*, and `student_semesters.marksheet_id` is **still NOT
+NULL** — the evidence that decides who may apply to a drive is untouched.
+`0026` still requires the pair that makes a diploma number readable: a figure
+with no scale is meaningless, because 78.5 is a fine percentage and an
+impossible CGPA.
+
+⚠️ **The trade-off a coordinator inherits:** a diploma mark or a PG student's
+UG aggregate may now arrive with nothing to check it against. Both are shown
+in the verification queue as declared; neither can be *verified*.
+
+### A real bug fell out of this, caught by an existing test
+
+`storeMarksheets` iterated `requiredMarksheets`. The moment those two slots
+stopped being required, a diploma or UG marksheet the student **had** uploaded
+would have been silently discarded — precisely the defect this whole area was
+built to fix. It now iterates every offered slot: `marksheetSlots()` returns
+them all with a `required` flag and `requiredMarksheets()` is that list
+filtered, so the two cannot drift.
+
+**Label collisions keep biting.** "UG marks" is a substring of "Consolidated UG
+marksheet"; the test uses a negative lookahead `/ug marks(?!heet)/i`. Earlier
+the same trap hit "Semester 1 marks" vs "Semester 1 marksheet".
 
 ---
 
@@ -539,7 +587,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1547 passing across 107 files
+pnpm test:run        # expect 1556 passing across 107 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -548,4 +596,4 @@ Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session and both succeeded; **neither is automatic** — committing does
 not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 91 commits, working tree clean.
+Git is **local only**, no remote. 93 commits, working tree clean.
