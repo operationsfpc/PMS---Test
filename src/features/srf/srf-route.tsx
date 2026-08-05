@@ -83,6 +83,8 @@ export function SrfRoute() {
       status={profile?.srfStatus ?? "registered"}
       rejectionReason={profile?.rejectionReason ?? null}
       addSemester={addSemester}
+      // F6: degree+branch is one choice, and it is their college's to offer.
+      programmes={profile?.programmes ?? []}
     />
   );
 }

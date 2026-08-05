@@ -1,3 +1,4 @@
+import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repository";
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
@@ -272,7 +273,10 @@ describe("every hand-written select matches the schema", () => {
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
     ["staff profiles", "profiles", "email, is_active"],
     ["programmes degrees", "degrees", "id, name"],
-    ["programmes branches", "branches", "id, degree_id, name, is_active"],
+    ["programmes branches", "branches", "id, degree_id, name"],
+    // F6: what a college runs, for a passing year.
+    ["campus programmes", "campus_programmes", CAMPUS_PROGRAMME_COLUMNS],
+    ["student's own programme options", "campus_programmes", "degrees(name), branches(name)"],
     // F3: the student reads their own decided requests back, with the reason.
     [
       "student participation",

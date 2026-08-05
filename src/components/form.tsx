@@ -6,7 +6,7 @@ import { useId } from "react";
  * Every control is label-associated — tests query by accessible name only.
  */
 
-const controlClass =
+export const controlClass =
   "w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-[15px] " +
   "text-ink-900 placeholder:text-ink-300 transition-colors " +
   "hover:border-brand-300 focus:border-brand-500 focus:outline-none " +

@@ -119,6 +119,21 @@ export interface CampusDegreesRow {
 
 export type CampusDegreesInsert = Pick<CampusDegreesRow, "campus_id" | "degree_id">;
 
+export interface CampusProgrammesRow {
+  id: string;
+  campus_id: string;
+  degree_id: string;
+  branch_id: string | null;
+  passing_year: number;
+  created_at: string;
+}
+
+export type CampusProgrammesInsert = Pick<
+  CampusProgrammesRow,
+  "campus_id" | "degree_id" | "passing_year"
+> &
+  Partial<Pick<CampusProgrammesRow, "id" | "branch_id" | "created_at">>;
+
 export interface CampusesRow {
   id: string;
   name: string;

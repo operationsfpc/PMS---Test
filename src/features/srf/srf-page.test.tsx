@@ -469,3 +469,48 @@ describe("SrfPage — certificates", () => {
     expect(screen.getByText(/each one is uploaded/i)).toBeDefined();
   });
 });
+
+/**
+ * F6 (UAT 2026-08-06): "Degree+Branch is one field ... Students can just
+ * select this from a drop down while filling the form."
+ *
+ * The form had two hardcoded lists — eight degrees and seven branches — so a
+ * student could pair any degree with any branch, including pairs their college
+ * has never run. Every eligibility rule then reads that pair.
+ */
+describe("SrfPage — degree and branch are one choice", () => {
+  const programmes = [
+    { degree: "B.E", branch: "CSE" },
+    { degree: "B.E", branch: "ECE" },
+    { degree: "MBA", branch: "" },
+  ];
+
+  it("offers one field, listing what the college runs", async () => {
+    render(<SrfPage programmes={programmes} />);
+
+    const field = screen.getByLabelText(/degree and branch/i);
+    expect(within(field).getByRole("option", { name: "B.E — CSE" })).toBeDefined();
+    expect(within(field).getByRole("option", { name: "B.E — ECE" })).toBeDefined();
+  });
+
+  it("does not leave a dangling separator on a degree with no branch", () => {
+    render(<SrfPage programmes={programmes} />);
+
+    const field = screen.getByLabelText(/degree and branch/i);
+    expect(within(field).getByRole("option", { name: "MBA" })).toBeDefined();
+  });
+
+  it("no longer offers a free pairing of any degree with any branch", () => {
+    render(<SrfPage programmes={programmes} />);
+
+    expect(screen.queryByLabelText(/^degree$/i)).toBeNull();
+    expect(screen.queryByLabelText(/branch \/ specialisation/i)).toBeNull();
+  });
+
+  /** Nothing mapped is a setup problem, and saying so beats an empty dropdown. */
+  it("says so when the college has no programmes mapped yet", () => {
+    render(<SrfPage programmes={[]} />);
+
+    expect(screen.getByText(/no programmes.*coordinator/i)).toBeDefined();
+  });
+});

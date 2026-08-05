@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { CampusProgrammes, type CampusProgrammesView } from "./campus-programmes";
 import type { CampusListItem, CampusRepository, NewCampus } from "./campus-repository";
 
 // Order is the reading order of the form: identity, then place, then who to
@@ -36,7 +37,21 @@ const EMPTY: Record<FieldName, string> = {
  * form validates before writing so the admin sees "required", not a raw
  * constraint name.
  */
-export function CampusPage({ repository }: { repository: CampusRepository }) {
+export function CampusPage({
+  repository,
+  /**
+   * F6: degrees and branches are no longer a page of their own. They are the
+   * college's, for a passing year, and are maintained here. Optional so the
+   * screen still renders where there is no backend to read them from.
+   */
+  programmes,
+}: {
+  repository: CampusRepository;
+  programmes?: CampusProgrammesView;
+}) {
+  // Kept closed by default: a list of ten colleges, each with its programmes
+  // expanded, is not a list of colleges any more.
+  const [openProgrammes, setOpenProgrammes] = useState<string | null>(null);
   const [campuses, setCampuses] = useState<readonly CampusListItem[] | null>(null);
   const [values, setValues] = useState<Record<FieldName, string>>(EMPTY);
   const [missing, setMissing] = useState<readonly FieldName[]>([]);
@@ -141,18 +156,48 @@ export function CampusPage({ repository }: { repository: CampusRepository }) {
       ) : (
         <Card className="divide-y divide-neutral-200">
           {campuses.map((campus) => (
-            <div key={campus.id} className="flex items-center justify-between gap-4 p-4">
-              <div className="min-w-0">
-                <p className="font-medium text-ink-900">{campus.name}</p>
-                <p className="text-sm text-ink-500">
-                  {campus.code} · {campus.cityName}, {campus.state}
-                  {campus.isActive ? "" : " · Inactive"}
-                </p>
+            <div key={campus.id} className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="font-medium text-ink-900">{campus.name}</p>
+                  <p className="text-sm text-ink-500">
+                    {campus.code} · {campus.cityName}, {campus.state}
+                    {campus.isActive ? "" : " · Inactive"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {programmes !== undefined && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={openProgrammes === campus.id}
+                      onClick={() =>
+                        setOpenProgrammes(openProgrammes === campus.id ? null : campus.id)
+                      }
+                    >
+                      Programmes at {campus.name}
+                    </Button>
+                  )}
+                  {campus.isActive && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void deactivate(campus.id)}
+                    >
+                      Deactivate
+                    </Button>
+                  )}
+                </div>
               </div>
-              {campus.isActive && (
-                <Button variant="secondary" size="sm" onClick={() => void deactivate(campus.id)}>
-                  Deactivate
-                </Button>
+
+              {programmes !== undefined && openProgrammes === campus.id && (
+                <div className="mt-4">
+                  <CampusProgrammes
+                    campusId={campus.id}
+                    campusName={campus.name}
+                    view={programmes}
+                  />
+                </div>
               )}
             </div>
           ))}

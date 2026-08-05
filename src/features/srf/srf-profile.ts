@@ -56,6 +56,12 @@ export interface SrfProfile {
   /** F13: decides how many semesters there are to add, and on what scale. */
   readonly programmeLevel?: ProgrammeLevel;
   readonly marksScale?: MarksScale;
+  /**
+   * F6: what this student's college runs for their passing year. Both facts
+   * come from the roster, so the list is theirs and nobody has to filter it on
+   * screen.
+   */
+  readonly programmes?: readonly { readonly degree: string; readonly branch: string }[];
   /** Where the form is in its life. Decides whether it is a form at all. */
   readonly srfStatus?: SrfStatus;
   /** Why a coordinator sent it back. Null unless they did. */
@@ -70,7 +76,7 @@ export interface SrfProfile {
  * `srf_status` is what decides which of those two it is.
  */
 export const SRF_PROFILE_COLUMNS = `
-  full_name, roll_number, email, passing_year, srf_draft,
+  full_name, roll_number, email, passing_year, campus_id, srf_draft,
   srf_status, srf_rejection_reason,
   mobile, whatsapp, alternate_contact,
   tenth_institution, tenth_percentage, twelfth_institution, twelfth_percentage,
@@ -118,7 +124,28 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
     const num = (value: unknown): number | null =>
       value === null || value === undefined ? null : Number(value);
 
+    // F6: scoped by college AND passing year, which is the whole point - the
+    // list a student sees is what their college actually runs for their
+    // cohort, not a global catalogue.
+    const campusId = (row.campus_id as string | null) ?? null;
+    const passingYear = (row.passing_year as number | null) ?? null;
+
+    const { data: offered } =
+      campusId === null || passingYear === null
+        ? { data: [] }
+        : await client
+            .from("campus_programmes")
+            .select("degrees(name), branches(name)")
+            .eq("campus_id", campusId)
+            .eq("passing_year", passingYear);
+
+    const programmes = ((offered ?? []) as Array<Record<string, unknown>>)
+      .map((p) => ({ degree: name(p.degrees), branch: name(p.branches) }))
+      .filter((p) => p.degree !== "")
+      .sort((a, b) => a.degree.localeCompare(b.degree) || a.branch.localeCompare(b.branch));
+
     return {
+      programmes,
       fullName: (row.full_name as string | null) ?? "",
       rollNumber: (row.roll_number as string | null) ?? "",
       email: (row.email as string | null) ?? "",

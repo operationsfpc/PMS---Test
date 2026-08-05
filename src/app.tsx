@@ -1,6 +1,5 @@
 import { AppShell } from "@components/app-shell";
 import { AdminCampusRoute } from "@features/admin/campus-route";
-import { AdminProgrammesRoute } from "@features/admin/programmes-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
 import { LoginPage } from "@features/auth/login-page";
@@ -52,7 +51,8 @@ export function App() {
                 <Route path="/dashboard" element={<DashboardRoute />} />
                 <Route path="/admin/campuses" element={<AdminCampusRoute />} />
                 <Route path="/admin/staff" element={<AdminStaffRoute />} />
-                <Route path="/admin/programmes" element={<AdminProgrammesRoute />} />
+                {/* F6: degrees and branches are no longer a page. They belong
+                    to a college, for a passing year, under /admin/campuses. */}
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
                 <Route path="/student" element={<StudentDashboardRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />

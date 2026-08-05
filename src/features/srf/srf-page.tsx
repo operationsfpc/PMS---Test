@@ -1,7 +1,8 @@
-import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
+import { CheckboxField, controlClass, Field, FileField, TextField } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
 import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
 import { MAX_OTHER_PROFILES } from "@domain/profile-links";
+import { programmeKey, programmeLabel, splitProgrammeKey } from "@domain/programmes";
 import { srfAccess } from "@domain/srf-access";
 import { mergeSrfDraft } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
@@ -158,6 +159,11 @@ export function SrfPage({
   saveDraft = (values: unknown) => saveSrfDraft(values),
   /** F13: adding a semester that finished after the form was approved. */
   addSemester,
+  /**
+   * F6: what this student's college runs for their passing year. One entry per
+   * choice, because degree+branch IS one choice.
+   */
+  programmes = [],
 }: {
   profile?: SrfProfile | null;
   draft?: unknown;
@@ -165,6 +171,7 @@ export function SrfPage({
   rejectionReason?: string | null;
   saveDraft?: (values: unknown) => Promise<boolean>;
   addSemester?: AddSemesterView;
+  programmes?: readonly { readonly degree: string; readonly branch: string }[];
 }) {
   const { signOut } = useAuthActions();
   /**
@@ -204,6 +211,11 @@ export function SrfPage({
   const programmeLevel = watch("programmeLevel");
   const semesters = watch("semesters");
   const diplomaMarks = watch("diplomaMarks");
+  // F6: one control, two stored fields. Students still carry a degree and a
+  // branch - every eligibility rule and every drive targeting table reads
+  // them - so the single choice is split back apart on selection.
+  const degreeValue = watch("degree");
+  const branchValue = watch("branch");
   /**
    * Stable row identity, so removing the second profile does not leave React
    * carrying its input state over to the third. An array index as a key does
@@ -818,40 +830,46 @@ export function SrfPage({
                     studying now
                   </p>
                   <div className={grid}>
+                    {/*
+                     * F6: ONE field. It used to be two hardcoded lists - eight
+                     * degrees and seven branches - so a student could pair any
+                     * degree with any branch, including pairs their college has
+                     * never run. Every eligibility rule then reads that pair.
+                     */}
                     <div>
-                      <SelectField
-                        label="Degree"
-                        required
-                        options={[
-                          "B.E",
-                          "B.Tech",
-                          "BCA",
-                          "B.Sc CS",
-                          "MCA",
-                          "M.Sc CS",
-                          "B.Com",
-                          "BBA",
-                        ]}
-                        {...register("degree")}
-                      />
-                      <ErrorText>{errors.degree?.message}</ErrorText>
-                    </div>
-                    <div>
-                      <SelectField
-                        label="Branch / specialisation"
-                        required
-                        options={[
-                          "CSE",
-                          "IT",
-                          "ECE",
-                          "EEE",
-                          "Mechanical",
-                          "Civil",
-                          "Not applicable",
-                        ]}
-                        {...register("branch")}
-                      />
-                      <ErrorText>{errors.branch?.message}</ErrorText>
+                      <Field label="Degree and branch" required>
+                        {(id) => (
+                          <select
+                            id={id}
+                            className={controlClass}
+                            value={programmeKey(degreeValue, branchValue)}
+                            onChange={(e) => {
+                              const chosen = splitProgrammeKey(e.target.value);
+                              setValue("degree", chosen.degree, { shouldValidate: true });
+                              setValue("branch", chosen.branch, { shouldValidate: true });
+                            }}
+                          >
+                            <option value={programmeKey("", "")} disabled>
+                              Select…
+                            </option>
+                            {programmes.map((p) => (
+                              <option
+                                key={programmeKey(p.degree, p.branch)}
+                                value={programmeKey(p.degree, p.branch)}
+                              >
+                                {programmeLabel(p.degree, p.branch)}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </Field>
+                      {programmes.length === 0 && (
+                        <p className="mt-1 text-xs text-destructive">
+                          No programmes have been mapped to your college yet. Ask your placement
+                          coordinator \u2014 you cannot complete this section until they are.
+                        </p>
+                      )}
+                      <ErrorText>{errors.degree?.message ?? errors.branch?.message}</ErrorText>
                     </div>
                     <div>
                       <TextField

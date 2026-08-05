@@ -2,7 +2,7 @@ import { validateSemesters } from "@domain/academics";
 import { usableCertificates, validateCertificates } from "@domain/certificates";
 import { isValidForScale, MARKS_SCALES, normaliseToCgpa } from "@domain/marks";
 import { missingMarksheets } from "@domain/marksheets";
-import { normaliseProfileLinks, validateProfileLinks } from "@domain/profile-links";
+import { validateProfileLinks } from "@domain/profile-links";
 import {
   isValidIndianMobile,
   isValidPassingYear,
