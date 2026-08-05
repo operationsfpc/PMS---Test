@@ -1,9 +1,93 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `60a3f2d`. **1579 tests passing across 109 files**, plus
+Last updated at commit `3e037c3`. **1680 tests passing across 112 files**, plus
 **1 Playwright journey** — re-run at the start of the next session, not
 remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
+
+---
+
+## ✅ END-TO-END, PROVEN AGAINST LIVE DATA 2026-08-05
+
+The full chain finally ran in production, on real students, without help:
+re-submit → queue → verify → approved. Three students (`Test`,
+`Thanush Krishna`, `Shashwathi Test`) are `srf_approved`, decided by the
+Central CPC at 09:33 UTC.
+
+**Shashwathi's stale-evidence problem resolved itself the right way.** Her
+semester lines had pointed at her first attempt's files (two copies of a
+generic `images (1).pdf`); after the re-submission fix shipped she re-submitted
+and the atomic RPC replaced them with the correctly named marksheets. No
+manual data repair was done, and none was needed — which is why it was left to
+her rather than edited on her behalf.
+
+---
+
+## 🔴 SHIPPED 2026-08-05 — two screens were 400ing in production
+
+Reported: "campus placement coordinator in the verification queue sidebar is
+just getting an error msg that could not load verification queue."
+
+**`PGRST201` — ambiguous embed.** Neither select had changed. The SCHEMA moved
+underneath them: `0023` added `students.ug_marksheet_id` and `0024` added
+`students.diploma_marksheet_id`, both referencing `student_documents`. Three
+keys now join those two tables, which is two more than PostgREST will resolve,
+so it refused the query outright. **The student drives list was broken exactly
+the same way and nobody had reported it.**
+
+Both now name the key: `student_documents!student_documents_student_id_fkey`.
+
+⚠️ **The lesson generalises: a migration can break a query it never mentions.**
+`query-contract.test.ts` checked that every column in a select exists — which
+both selects passed. A select can name every column correctly and still fail
+outright on the embed. It now also resolves each embed against `pg_constraint`
+and fails when more than one key joins the tables without the select naming
+one. **The verification queue's select was not registered there at all**, which
+is the only reason that file stayed green while the queue 400'd for everyone.
+**If you add a hand-written select, register it.**
+
+---
+
+## Campus mapping — a coordinator is ONE campus (2026-08-05)
+
+The only CPC in production was mapped to **no campus**. `my_student_ids()`
+derives their entire authority from that mapping, so they saw nobody, and the
+screen said nothing. It could not be fixed from the app either — campuses were
+chosen only at INVITE time, so the mapping was write-once at account creation.
+
+- `campusScopeFor` / `validateCampusSelection` own the rule: **coordinator =
+  exactly one campus**; campus managers and KAMs keep the list.
+- `setCampuses` re-maps existing staff, applied against the profile once they
+  have signed in and staged against the invited email until then — both halves
+  are now READ back too, so an invited coordinator no longer looks unmapped.
+- The staff row and the shell both say **"No campus mapped"** outright.
+- `0029` enforces it in the database. Moving a coordinator works; adding a
+  second campus does not.
+- `AuthState.campuses` is **required**, not optional — making it so surfaced
+  eleven call sites at compile time.
+
+📝 Roles were reshuffled by the Admin mid-session: there is currently **no
+`campus_placement_coordinator` at all**. "Ashok" is now Central CPC, which is
+org-wide and needs no campus — which is why verification worked without one.
+**The first real CPC created must be mapped to a campus, and the UI now says so
+if they are not.**
+
+---
+
+## The registration form has three lives (2026-08-05)
+
+It used to be editable at every status. Not cosmetic: §7.2 judges eligibility
+on VERIFIED data, so a student editing an approved record silently invalidates
+every shortlist it has already been measured for.
+
+`srfAccess` (domain) decides: not sent → **edit** · submitted → **view**
+("Awaiting verification", no submit, no draft, no link) · sent back → **edit**
+with the coordinator's reason at the top · approved → **view** ("Verified")
+plus a link to what is still theirs.
+
+`/student/profile` is that link's destination, bounded by R10: skills,
+interests, projects, certifications, achievements, four profile links. **No
+marks, no arrears, no semester lines** — a test asserts their absence by label.
 
 📌 **THE FIRST REAL SUBMISSION LANDED IN PRODUCTION.** See §1b. The evidence
 chain that every session since 2026-08-04 has been asking someone to prove is
