@@ -1,13 +1,13 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `5be9700`. **1464 tests passing across 104 files**, plus
+Last updated at commit `1150c2d`. **1522 tests passing across 106 files**, plus
 **1 Playwright journey** — run, not remembered.
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-06:** <https://fpc-pms.faceprep.workers.dev>
-(version `67dfa94e-6811-44a2-9051-78ed0cc75fe5`) · database on Supabase
-ap-south-1 · migrations `0001`–`0023`, **local == remote** (`supabase migration
+(version `6b2e75a2-9c45-47ea-a871-8b26da17c35b`) · database on Supabase
+ap-south-1 · migrations `0001`–`0024`, **local == remote** (`supabase migration
 list --linked`).
 
 Verified after shipping 2026-08-06, not assumed:
@@ -90,6 +90,9 @@ are the student's to correct; after `srf_approved` they are the coordinator's.
 
 Everything built in this session is **shipped**. In order:
 
+0. **The SRF academic section changed shape entirely (2026-08-06).** Nobody
+   has filled the new one in against live data. All 4 live students are
+   `invited`/`registered`, so all 4 land straight on it.
 1. **Get one student through SRF → CPC verification → apply on live data.**
    Still the single most valuable thing, and now the only way to prove the
    evidence chain end to end: a real file reaching the `marksheets` bucket, a
@@ -111,6 +114,52 @@ Everything built in this session is **shipped**. In order:
 4. **Playwright journeys for the other roles.** The student journey is the only
    one, and it is the only thing that proves the wiring.
 5. **Result corrections** (A15) and the notifications UI (blocked on P1).
+
+---
+
+## 2y. The SRF academic section, rebuilt (`1150c2d`, shipped)
+
+Asked for over two messages on 2026-08-06. Five changes, one section.
+
+| # | Change | Why it mattered |
+|---|---|---|
+| 1 | **Uploads sit beside the figure they evidence**; seven sections are now six | A student entered a mark in one section and hunted for its document in another. That is also how a marksheet ends up filed against the wrong semester |
+| 2 | **The school that issued each figure** | A coordinator verifying a marksheet had no institution name to check the letterhead against |
+| 3 | **Diploma** — optional to declare, all-or-nothing once begun | It did not exist at all, and it is the route most polytechnic students take into an engineering degree |
+| 4 | **The UG/PG fork moves up**, and a PG student records the degree they finished (degree, college, branch, result, marksheet) | Everything below the fork means something different depending on the answer. The old bare aggregate CGPA told a recruiter nothing about where it was earned or in what |
+| 5 | **CGPA *or* percentage**, chosen per figure | Not cosmetic — see below |
+
+### (5) is the one to understand
+
+78 is a fine percentage and a nonsense CGPA. A student at a percentage-scale
+college had two options: mistype it as 7.8 — wrong by a fifth of a grade, and
+**it decides eligibility** — or be refused outright by the 0..10 check.
+
+**Both figures are stored, deliberately:**
+
+- `cgpa` — normalised to 10 points. The only thing a cutoff can be compared
+  against, and what every existing reader already assumes.
+- `declared_marks` + `marks_scale` — what the student typed. What a coordinator
+  finds on the marksheet, because a converted CGPA is **not printed on it**.
+
+The conversion is **one constant** in `src/domain/marks.ts` and nowhere else,
+because it decides who may apply to a drive. ⚠️ **A33: the divisor 9.5 is an
+ASSUMPTION.** Other universities use `(CGPA − 0.75) × 10`; 80% is 8.42 under
+one and 8.75 under the other, and at a cutoff of 8.5 the same student lands on
+opposite sides. **Confirm this with the client.** Changing it is one constant
+plus a backfill of `cgpa` from `declared_marks`.
+
+### Traps hit while building this
+
+- **A label containing another label breaks `getByLabelText`.** "Semester 1
+  marks" is a substring of "Semester 1 marksheet", and "Semester 1 marks scale"
+  contains both. The field is now "Semester 1 result", which also reads
+  correctly for either scale.
+- **`Field` appends `*` and `(required)` to the accessible name**, so a
+  `$`-anchored label regex can never match a required field. Do not anchor.
+- **Never use `perl -0pi -e` with `$/` in the replacement.** It interpolates as
+  the input record separator and silently writes NUL bytes into the file; the
+  only symptom is grep reporting "binary file matches".
 
 ---
 
@@ -456,7 +505,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1464 passing across 104 files
+pnpm test:run        # expect 1522 passing across 106 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -465,4 +514,4 @@ Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session and both succeeded; **neither is automatic** — committing does
 not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 87 commits, working tree clean.
+Git is **local only**, no remote. 89 commits, working tree clean.
