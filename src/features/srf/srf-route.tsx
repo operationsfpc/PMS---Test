@@ -45,5 +45,15 @@ export function SrfRoute() {
     );
   }
 
-  return <SrfPage profile={profile} draft={profile?.draft ?? null} />;
+  return (
+    <SrfPage
+      profile={profile}
+      draft={profile?.draft ?? null}
+      // Decides whether this is a form or a record. A student whose roster row
+      // could not be read falls back to an editable form: losing the prefill
+      // is a nuisance, but locking someone out of registering is the end of it.
+      status={profile?.srfStatus ?? "registered"}
+      rejectionReason={profile?.rejectionReason ?? null}
+    />
+  );
 }

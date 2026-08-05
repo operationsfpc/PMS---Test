@@ -2,8 +2,10 @@ import { CheckboxField, FileField, SelectField, TextField } from "@components/fo
 import { MAX_SEMESTERS } from "@domain/academics";
 import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
 import { MAX_OTHER_PROFILES } from "@domain/profile-links";
+import { srfAccess } from "@domain/srf-access";
 import { mergeSrfDraft } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
+import type { SrfStatus } from "@domain/types";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
@@ -21,6 +23,7 @@ import { Link } from "react-router";
 import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
 import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
+import { SrfSummary } from "./srf-summary";
 
 /** Student Registration Form — PRD §4.1. */
 
@@ -142,14 +145,29 @@ export function SrfPage({
   profile,
   /** The student's unsent form, if they have one. */
   draft,
+  /**
+   * Where the form is in its life. Decides whether this is a form at all:
+   * once submitted it is evidence a coordinator is checking, and after
+   * approval §7.2 has already judged eligibility against it.
+   */
+  status = "registered",
+  /** Why a coordinator sent it back, so the student knows what to correct. */
+  rejectionReason,
   /** Injected so the page can be tested without a database. */
   saveDraft = (values: unknown) => saveSrfDraft(values),
 }: {
   profile?: SrfProfile | null;
   draft?: unknown;
+  status?: SrfStatus;
+  rejectionReason?: string | null;
   saveDraft?: (values: unknown) => Promise<boolean>;
 }) {
   const { signOut } = useAuthActions();
+  /**
+   * What this student may do with this form right now. The rule is the
+   * domain's; this screen only obeys it.
+   */
+  const access = srfAccess(status);
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
@@ -420,590 +438,639 @@ export function SrfPage({
       <main className="mx-auto max-w-3xl px-4 py-6 sm:py-8">
         <div className="mb-6">
           <h1 className="text-2xl text-ink-900 sm:text-3xl">Student Registration Form</h1>
-          <p className="mt-2 text-sm leading-relaxed text-ink-500">
-            Complete every section carefully. Your entries will be{" "}
-            <strong className="font-semibold text-ink-700">
-              verified by your Campus Placement Coordinator
-            </strong>{" "}
-            against your uploaded marksheets. You can only receive and apply to drives once your
-            form is approved.
-          </p>
+          {access.mode === "edit" && (
+            <p className="mt-2 text-sm leading-relaxed text-ink-500">
+              Complete every section carefully. Your entries will be{" "}
+              <strong className="font-semibold text-ink-700">
+                verified by your Campus Placement Coordinator
+              </strong>{" "}
+              against your uploaded marksheets. You can only receive and apply to drives once your
+              form is approved.
+            </p>
+          )}
         </div>
 
-        {/* Was hardcoded: step 1 lit on load, the other six never. It now
+        {/*
+         * A submitted form is not a form. The coordinator is comparing it to a
+         * marksheet line by line, and after approval §7.2 has already judged
+         * eligibility against it - so it is shown back as text, with no way to
+         * change it from here.
+         */}
+        {access.mode === "view" && profile != null && (
+          <SrfSummary profile={profile} access={access} />
+        )}
+
+        {/*
+         * Sent back. The reason is shown at the top of the form, because it is
+         * the only thing that tells the student what to actually change.
+         */}
+        {access.mode === "edit" && rejectionReason != null && rejectionReason.trim() !== "" && (
+          <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
+            <p className="font-semibold text-sm text-destructive">{access.headline}</p>
+            <p className="mt-1 text-sm text-ink-700">{rejectionReason}</p>
+          </div>
+        )}
+
+        {access.mode === "edit" && (
+          <>
+            {/* Was hardcoded: step 1 lit on load, the other six never. It now
             reads the domain rule, and every pill is a link back to its
             section - the student had no way to review what they had entered. */}
-        <nav aria-label="Form progress" className="mb-6">
-          <ol className="flex flex-wrap gap-1.5">
-            {progress.map((s) => (
-              <li key={s.id} className="min-w-9 flex-1">
-                <a
-                  href={`#${s.id}`}
-                  aria-current={s.complete && !s.optional ? "step" : undefined}
-                  aria-label={`${s.title}${s.complete && !s.optional ? " — done" : ""}`}
-                  title={s.title}
-                  className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
-                    s.complete && !s.optional
-                      ? "bg-brand-500 text-white"
-                      : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
-                  }`}
-                >
-                  {s.complete && !s.optional ? "\u2713" : s.step}
-                </a>
-              </li>
-            ))}
-          </ol>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-ink-500">
-              <span className="font-semibold text-ink-700">{completion}% complete</span> — your
-              entries are saved as you go.
-            </p>
+            <nav aria-label="Form progress" className="mb-6">
+              <ol className="flex flex-wrap gap-1.5">
+                {progress.map((s) => (
+                  <li key={s.id} className="min-w-9 flex-1">
+                    <a
+                      href={`#${s.id}`}
+                      aria-current={s.complete && !s.optional ? "step" : undefined}
+                      aria-label={`${s.title}${s.complete && !s.optional ? " — done" : ""}`}
+                      title={s.title}
+                      className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
+                        s.complete && !s.optional
+                          ? "bg-brand-500 text-white"
+                          : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
+                      }`}
+                    >
+                      {s.complete && !s.optional ? "\u2713" : s.step}
+                    </a>
+                  </li>
+                ))}
+              </ol>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-ink-500">
+                  <span className="font-semibold text-ink-700">{completion}% complete</span> — your
+                  entries are saved as you go.
+                </p>
 
-            {/* Said out loud, because "saved as you go" is a promise, and a
+                {/* Said out loud, because "saved as you go" is a promise, and a
                 student who has just typed for ten minutes deserves to see it
                 kept - or to be told plainly that it was not. */}
-            <span role="status" className="text-xs text-ink-500">
-              {draftState === "saving" && "Saving…"}
-              {draftState === "saved" &&
-                draftSavedAt !== null &&
-                `Draft saved at ${draftSavedAt.toLocaleTimeString("en-IN", {
-                  timeZone: "Asia/Kolkata",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}`}
-              {draftState === "failed" && (
-                <span className="text-danger-700">
-                  Your draft could not be saved. Check your connection.
+                <span role="status" className="text-xs text-ink-500">
+                  {draftState === "saving" && "Saving…"}
+                  {draftState === "saved" &&
+                    draftSavedAt !== null &&
+                    `Draft saved at ${draftSavedAt.toLocaleTimeString("en-IN", {
+                      timeZone: "Asia/Kolkata",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`}
+                  {draftState === "failed" && (
+                    <span className="text-danger-700">
+                      Your draft could not be saved. Check your connection.
+                    </span>
+                  )}
                 </span>
-              )}
-            </span>
-          </div>
-        </nav>
+              </div>
+            </nav>
 
-        <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
-          <Section
-            id="personal"
-            title="Personal details"
-            step={1}
-            description="How we and recruiters reach you."
-          >
-            <div className={grid}>
-              <div>
-                <TextField label="Full name" required {...register("fullName")} />
-                <ErrorText>{errors.fullName?.message}</ErrorText>
-              </div>
-              <div>
-                <TextField label="Roll number" required disabled {...register("rollNumber")} />
-              </div>
-              <div>
-                <TextField label="Email ID" type="email" required {...register("email")} />
-                <ErrorText>{errors.email?.message}</ErrorText>
-              </div>
-              <div>
-                <TextField
-                  label="Mobile number"
-                  type="tel"
-                  required
-                  placeholder="10-digit mobile"
-                  {...register("mobile")}
-                />
-                <ErrorText>{errors.mobile?.message}</ErrorText>
-              </div>
-              <div>
-                <TextField
-                  label="WhatsApp number"
-                  type="tel"
-                  placeholder="If different"
-                  {...register("whatsapp")}
-                />
-                <ErrorText>{errors.whatsapp?.message}</ErrorText>
-              </div>
-              <div>
-                <TextField
-                  label="Alternate contact number"
-                  type="tel"
-                  required
-                  hint="A number that reaches you if your main one does not."
-                  {...register("alternateContact")}
-                />
-                <ErrorText>{errors.alternateContact?.message}</ErrorText>
-              </div>
-            </div>
-          </Section>
+            <form className="flex flex-col gap-5" onSubmit={onSubmit} noValidate>
+              <Section
+                id="personal"
+                title="Personal details"
+                step={1}
+                description="How we and recruiters reach you."
+              >
+                <div className={grid}>
+                  <div>
+                    <TextField label="Full name" required {...register("fullName")} />
+                    <ErrorText>{errors.fullName?.message}</ErrorText>
+                  </div>
+                  <div>
+                    <TextField label="Roll number" required disabled {...register("rollNumber")} />
+                  </div>
+                  <div>
+                    <TextField label="Email ID" type="email" required {...register("email")} />
+                    <ErrorText>{errors.email?.message}</ErrorText>
+                  </div>
+                  <div>
+                    <TextField
+                      label="Mobile number"
+                      type="tel"
+                      required
+                      placeholder="10-digit mobile"
+                      {...register("mobile")}
+                    />
+                    <ErrorText>{errors.mobile?.message}</ErrorText>
+                  </div>
+                  <div>
+                    <TextField
+                      label="WhatsApp number"
+                      type="tel"
+                      placeholder="If different"
+                      {...register("whatsapp")}
+                    />
+                    <ErrorText>{errors.whatsapp?.message}</ErrorText>
+                  </div>
+                  <div>
+                    <TextField
+                      label="Alternate contact number"
+                      type="tel"
+                      required
+                      hint="A number that reaches you if your main one does not."
+                      {...register("alternateContact")}
+                    />
+                    <ErrorText>{errors.alternateContact?.message}</ErrorText>
+                  </div>
+                </div>
+              </Section>
 
-          <Section
-            id="academic"
-            title="Academic record"
-            step={2}
-            description="Every figure here is verified against the document beside it, so upload each one as you go."
-          >
-            {/* SCHOOL. The institution comes before the marks it issued, and
+              <Section
+                id="academic"
+                title="Academic record"
+                step={2}
+                description="Every figure here is verified against the document beside it, so upload each one as you go."
+              >
+                {/* SCHOOL. The institution comes before the marks it issued, and
                 the marksheet sits with them - not in a separate section the
                 student had to match up from memory. */}
-            <fieldset className="rounded-lg border border-line p-4">
-              <legend className="px-1 text-sm font-semibold text-ink-700">Class 10</legend>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <TextField
-                    label="10th school name"
-                    required
-                    placeholder="School you did your 10th at"
-                    {...register("tenthInstitution")}
-                  />
-                  <ErrorText>{errors.tenthInstitution?.message}</ErrorText>
-                </div>
-                <div>
-                  <TextField
-                    label="10th marks (%)"
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="e.g. 91.4"
-                    {...num("tenthPercentage")}
-                  />
-                  <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
-                </div>
-                <FileField
-                  label="10th marksheet"
-                  required
-                  error={marksheetError("tenth")}
-                  onChange={(e) => chooseMarksheet("tenth", e.target.files?.[0])}
-                />
-              </div>
-            </fieldset>
+                <fieldset className="rounded-lg border border-line p-4">
+                  <legend className="px-1 text-sm font-semibold text-ink-700">Class 10</legend>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div>
+                      <TextField
+                        label="10th school name"
+                        required
+                        placeholder="School you did your 10th at"
+                        {...register("tenthInstitution")}
+                      />
+                      <ErrorText>{errors.tenthInstitution?.message}</ErrorText>
+                    </div>
+                    <div>
+                      <TextField
+                        label="10th marks (%)"
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="e.g. 91.4"
+                        {...num("tenthPercentage")}
+                      />
+                      <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
+                    </div>
+                    <FileField
+                      label="10th marksheet"
+                      required
+                      error={marksheetError("tenth")}
+                      onChange={(e) => chooseMarksheet("tenth", e.target.files?.[0])}
+                    />
+                  </div>
+                </fieldset>
 
-            <fieldset className="mt-4 rounded-lg border border-line p-4">
-              <legend className="px-1 text-sm font-semibold text-ink-700">Class 12</legend>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <TextField
-                    label="12th school name"
-                    required
-                    placeholder="School you did your 12th at"
-                    {...register("twelfthInstitution")}
-                  />
-                  <ErrorText>{errors.twelfthInstitution?.message}</ErrorText>
-                </div>
-                <div>
-                  <TextField
-                    label="12th marks (%)"
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="e.g. 88.0"
-                    {...num("twelfthPercentage")}
-                  />
-                  <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
-                </div>
-                <FileField
-                  label="12th marksheet"
-                  required
-                  error={marksheetError("twelfth")}
-                  onChange={(e) => chooseMarksheet("twelfth", e.target.files?.[0])}
-                />
-              </div>
-            </fieldset>
+                <fieldset className="mt-4 rounded-lg border border-line p-4">
+                  <legend className="px-1 text-sm font-semibold text-ink-700">Class 12</legend>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div>
+                      <TextField
+                        label="12th school name"
+                        required
+                        placeholder="School you did your 12th at"
+                        {...register("twelfthInstitution")}
+                      />
+                      <ErrorText>{errors.twelfthInstitution?.message}</ErrorText>
+                    </div>
+                    <div>
+                      <TextField
+                        label="12th marks (%)"
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="e.g. 88.0"
+                        {...num("twelfthPercentage")}
+                      />
+                      <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
+                    </div>
+                    <FileField
+                      label="12th marksheet"
+                      required
+                      error={marksheetError("twelfth")}
+                      onChange={(e) => chooseMarksheet("twelfth", e.target.files?.[0])}
+                    />
+                  </div>
+                </fieldset>
 
-            {/* DIPLOMA. Optional to declare - many students have none - but
+                {/* DIPLOMA. Optional to declare - many students have none - but
                 all-or-nothing once begun: a figure with no college and no
                 marksheet is a mark nobody can verify. */}
-            <fieldset className="mt-4 rounded-lg border border-dashed border-line p-4">
-              <legend className="px-1 text-sm font-semibold text-ink-700">
-                Diploma <span className="font-normal text-ink-500">(optional)</span>
-              </legend>
-              <p className="mb-3 text-xs text-ink-500">
-                Leave blank if you did not do one. If you did, we need the college, the result and
-                the marksheet.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <TextField
-                    label="Diploma college"
-                    placeholder="College that issued it"
-                    {...register("diplomaInstitution")}
-                  />
-                  <ErrorText>{errors.diplomaInstitution?.message}</ErrorText>
-                </div>
-                {/* Scale before marks: the scale tells the student what the
+                <fieldset className="mt-4 rounded-lg border border-dashed border-line p-4">
+                  <legend className="px-1 text-sm font-semibold text-ink-700">
+                    Diploma <span className="font-normal text-ink-500">(optional)</span>
+                  </legend>
+                  <p className="mb-3 text-xs text-ink-500">
+                    Leave blank if you did not do one. If you did, we need the college, the result
+                    and the marksheet.
+                  </p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <TextField
+                        label="Diploma college"
+                        placeholder="College that issued it"
+                        {...register("diplomaInstitution")}
+                      />
+                      <ErrorText>{errors.diplomaInstitution?.message}</ErrorText>
+                    </div>
+                    {/* Scale before marks: the scale tells the student what the
                     box below expects, so asking for the figure first invites
                     them to type it on the wrong one. */}
-                <div className="grid grid-cols-2 gap-2">
-                  <ScaleSelect label="Diploma scale" {...register("diplomaMarksScale")} />
-                  <TextField
-                    label="Diploma marks"
-                    type="number"
-                    step="0.01"
-                    {...nullableNum("diplomaMarks")}
-                  />
-                </div>
-                <ErrorText>{errors.diplomaMarks?.message}</ErrorText>
-                {/* Offered, not demanded (2026-08-06). No diploma figure feeds
+                    <div className="grid grid-cols-2 gap-2">
+                      <ScaleSelect label="Diploma scale" {...register("diplomaMarksScale")} />
+                      <TextField
+                        label="Diploma marks"
+                        type="number"
+                        step="0.01"
+                        {...nullableNum("diplomaMarks")}
+                      />
+                    </div>
+                    <ErrorText>{errors.diplomaMarks?.message}</ErrorText>
+                    {/* Offered, not demanded (2026-08-06). No diploma figure feeds
                     an eligibility cutoff. */}
-                <FileField
-                  label="Diploma marksheet"
-                  hint="Optional."
-                  onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
-                />
-              </div>
-            </fieldset>
+                    <FileField
+                      label="Diploma marksheet"
+                      hint="Optional."
+                      onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
+                    />
+                  </div>
+                </fieldset>
 
-            {/* THE FORK. Asked for 2026-08-06: this question comes immediately
+                {/* THE FORK. Asked for 2026-08-06: this question comes immediately
                 after school and diploma, because everything below it means
                 something different depending on the answer. */}
-            <fieldset className="mt-6">
-              <legend className="mb-2 text-sm font-medium text-ink-700">
-                Which are you pursuing?
-                <span className="ml-0.5 text-danger-500" aria-hidden="true">
-                  *
-                </span>
-                <span className="sr-only"> (required)</span>
-              </legend>
-              <div className="flex flex-wrap gap-4">
-                {(
-                  [
-                    ["ug", "Undergraduate (UG)"],
-                    ["pg", "Postgraduate (PG)"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <label key={value} className="flex items-center gap-2 text-sm text-ink-700">
-                    <input
-                      type="radio"
-                      value={value}
-                      checked={programmeLevel === value}
-                      onChange={() => {
-                        setValue("programmeLevel", value, { shouldValidate: true });
-                        // Coming back from PG to UG must not leave a 5th line
-                        // behind that the cap would then reject on submit.
-                        setValue("semesters", semesters.slice(0, MAX_SEMESTERS[value]));
-                      }}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <ErrorText>{errors.programmeLevel?.message}</ErrorText>
+                <fieldset className="mt-6">
+                  <legend className="mb-2 text-sm font-medium text-ink-700">
+                    Which are you pursuing?
+                    <span className="ml-0.5 text-danger-500" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only"> (required)</span>
+                  </legend>
+                  <div className="flex flex-wrap gap-4">
+                    {(
+                      [
+                        ["ug", "Undergraduate (UG)"],
+                        ["pg", "Postgraduate (PG)"],
+                      ] as const
+                    ).map(([value, label]) => (
+                      <label key={value} className="flex items-center gap-2 text-sm text-ink-700">
+                        <input
+                          type="radio"
+                          value={value}
+                          checked={programmeLevel === value}
+                          onChange={() => {
+                            setValue("programmeLevel", value, { shouldValidate: true });
+                            // Coming back from PG to UG must not leave a 5th line
+                            // behind that the cap would then reject on submit.
+                            setValue("semesters", semesters.slice(0, MAX_SEMESTERS[value]));
+                          }}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                  <ErrorText>{errors.programmeLevel?.message}</ErrorText>
 
-              {/* ONE selection for the whole degree (2026-08-06): "the metric
+                  {/* ONE selection for the whole degree (2026-08-06): "the metric
                   will not change semester to semester. It will be the same
                   throughout the UG/PG." Asking per semester invited eight
                   chances to answer inconsistently, and left eligibility
                   comparing figures that were never on the same scale. */}
-              <div className="mt-4 max-w-xs">
-                <ScaleSelect
-                  label="How your college reports marks"
-                  {...register("collegeMarksScale")}
-                />
-                <p className="mt-1 text-xs text-ink-500">Applies to every semester below.</p>
-              </div>
-            </fieldset>
+                  <div className="mt-4 max-w-xs">
+                    <ScaleSelect
+                      label="How your college reports marks"
+                      {...register("collegeMarksScale")}
+                    />
+                    <p className="mt-1 text-xs text-ink-500">Applies to every semester below.</p>
+                  </div>
+                </fieldset>
 
-            {/* A postgraduate has a whole finished degree behind them. The form
+                {/* A postgraduate has a whole finished degree behind them. The form
                 used to ask only for its CGPA, which tells a recruiter nothing
                 about where it was earned or in what. */}
-            {programmeLevel === "pg" && (
-              <fieldset className="mt-4 rounded-lg border border-line bg-surface-muted p-4">
-                <legend className="px-1 text-sm font-semibold text-ink-700">
-                  Your completed undergraduate degree
-                </legend>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <TextField
-                      label="UG degree"
-                      required
-                      placeholder="e.g. B.Sc Computer Science"
-                      {...register("ugDegree")}
-                    />
-                    <ErrorText>{errors.ugDegree?.message}</ErrorText>
-                  </div>
-                  <div>
-                    <TextField
-                      label="UG college"
-                      required
-                      placeholder="College you graduated from"
-                      {...register("ugCollege")}
-                    />
-                    <ErrorText>{errors.ugCollege?.message}</ErrorText>
-                  </div>
-                  <div>
-                    <TextField
-                      label="UG branch"
-                      required
-                      placeholder="e.g. Computer Science"
-                      {...register("ugBranch")}
-                    />
-                    <ErrorText>{errors.ugBranch?.message}</ErrorText>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <ScaleSelect label="UG scale" {...register("ugAggregateScale")} />
-                    <TextField
-                      label="UG marks"
-                      type="number"
-                      step="0.01"
-                      required
-                      {...nullableNum("ugAggregate")}
-                    />
-                  </div>
-                  <ErrorText>{errors.ugAggregate?.message}</ErrorText>
-                  <FileField
-                    label="Consolidated UG marksheet"
-                    hint="Optional."
-                    onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
-                  />
-                </div>
-              </fieldset>
-            )}
+                {programmeLevel === "pg" && (
+                  <fieldset className="mt-4 rounded-lg border border-line bg-surface-muted p-4">
+                    <legend className="px-1 text-sm font-semibold text-ink-700">
+                      Your completed undergraduate degree
+                    </legend>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <TextField
+                          label="UG degree"
+                          required
+                          placeholder="e.g. B.Sc Computer Science"
+                          {...register("ugDegree")}
+                        />
+                        <ErrorText>{errors.ugDegree?.message}</ErrorText>
+                      </div>
+                      <div>
+                        <TextField
+                          label="UG college"
+                          required
+                          placeholder="College you graduated from"
+                          {...register("ugCollege")}
+                        />
+                        <ErrorText>{errors.ugCollege?.message}</ErrorText>
+                      </div>
+                      <div>
+                        <TextField
+                          label="UG branch"
+                          required
+                          placeholder="e.g. Computer Science"
+                          {...register("ugBranch")}
+                        />
+                        <ErrorText>{errors.ugBranch?.message}</ErrorText>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <ScaleSelect label="UG scale" {...register("ugAggregateScale")} />
+                        <TextField
+                          label="UG marks"
+                          type="number"
+                          step="0.01"
+                          required
+                          {...nullableNum("ugAggregate")}
+                        />
+                      </div>
+                      <ErrorText>{errors.ugAggregate?.message}</ErrorText>
+                      <FileField
+                        label="Consolidated UG marksheet"
+                        hint="Optional."
+                        onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
+                      />
+                    </div>
+                  </fieldset>
+                )}
 
-            {/* THE PROGRAMME THEY ARE ON NOW. Below the fork, because for a PG
+                {/* THE PROGRAMME THEY ARE ON NOW. Below the fork, because for a PG
                 student this is their PG and not the degree above. */}
-            <div className="mt-6">
-              <p className="mb-3 text-sm font-semibold text-ink-700">
-                The {programmeLevel === "pg" ? "postgraduate" : "undergraduate"} degree you are
-                studying now
-              </p>
-              <div className={grid}>
-                <div>
-                  <SelectField
-                    label="Degree"
-                    required
-                    options={["B.E", "B.Tech", "BCA", "B.Sc CS", "MCA", "M.Sc CS", "B.Com", "BBA"]}
-                    {...register("degree")}
-                  />
-                  <ErrorText>{errors.degree?.message}</ErrorText>
-                </div>
-                <div>
-                  <SelectField
-                    label="Branch / specialisation"
-                    required
-                    options={["CSE", "IT", "ECE", "EEE", "Mechanical", "Civil", "Not applicable"]}
-                    {...register("branch")}
-                  />
-                  <ErrorText>{errors.branch?.message}</ErrorText>
-                </div>
-                <div>
-                  <TextField
-                    label="Passing year"
-                    type="number"
-                    required
-                    placeholder="e.g. 2026"
-                    {...num("passingYear")}
-                  />
-                  <ErrorText>{errors.passingYear?.message}</ErrorText>
-                </div>
-              </div>
-            </div>
-
-            {/* SEMESTER-WISE. Eligibility reads the latest VERIFIED line, so
-                each one is entered, evidenced and checked separately. */}
-            <div className="mt-6">
-              <p className="mb-2 text-sm font-medium text-ink-700">
-                Semester results
-                <span className="ml-0.5 text-danger-500" aria-hidden="true">
-                  *
-                </span>
-                <span className="sr-only"> (required)</span>
-              </p>
-              <p className="mb-3 text-xs text-ink-500">
-                Cumulative to the end of each semester. Choose the scale your college reports on —
-                CGPA out of 10, or a percentage. At most {maxSemesters} for a{" "}
-                {programmeLevel === "pg" ? "postgraduate" : "undergraduate"}.
-              </p>
-
-              <div className="flex flex-col gap-3">
-                {semesters.map((semester, index) => (
-                  <div
-                    key={semester.semesterNumber}
-                    className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2"
-                  >
-                    <TextField
-                      label={`Semester ${semester.semesterNumber} result`}
-                      type="number"
-                      step="0.01"
-                      required
-                      hint={collegeMarksScale === "percentage" ? "Cumulative %" : "CGPA out of 10"}
-                      {...num(`semesters.${index}.marks`)}
-                    />
-                    <FileField
-                      label={`Semester ${semester.semesterNumber} marksheet`}
-                      required
-                      error={marksheetError(`semester-${semester.semesterNumber}`)}
-                      onChange={(e) =>
-                        chooseMarksheet(`semester-${semester.semesterNumber}`, e.target.files?.[0])
-                      }
-                    />
-                    <TextField
-                      label={`Semester ${semester.semesterNumber} standing arrears`}
-                      type="number"
-                      required
-                      {...num(`semesters.${index}.currentArrears`)}
-                    />
-                    <TextField
-                      label={`Semester ${semester.semesterNumber} arrear history`}
-                      type="number"
-                      required
-                      hint="Including cleared ones."
-                      {...num(`semesters.${index}.historyOfArrears`)}
-                    />
-                    <ErrorText>{errors.semesters?.[index]?.marks?.message}</ErrorText>
-                    {semesters.length > 1 && (
-                      <button
-                        type="button"
-                        aria-label={`Remove semester ${semester.semesterNumber}`}
-                        onClick={() =>
-                          setValue(
-                            "semesters",
-                            semesters
-                              .filter((_, i) => i !== index)
-                              // Numbers are positional, so close the gap.
-                              .map((s, i) => ({ ...s, semesterNumber: i + 1 })),
-                            { shouldValidate: true },
-                          )
-                        }
-                        className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                      >
-                        Remove
-                      </button>
-                    )}
+                <div className="mt-6">
+                  <p className="mb-3 text-sm font-semibold text-ink-700">
+                    The {programmeLevel === "pg" ? "postgraduate" : "undergraduate"} degree you are
+                    studying now
+                  </p>
+                  <div className={grid}>
+                    <div>
+                      <SelectField
+                        label="Degree"
+                        required
+                        options={[
+                          "B.E",
+                          "B.Tech",
+                          "BCA",
+                          "B.Sc CS",
+                          "MCA",
+                          "M.Sc CS",
+                          "B.Com",
+                          "BBA",
+                        ]}
+                        {...register("degree")}
+                      />
+                      <ErrorText>{errors.degree?.message}</ErrorText>
+                    </div>
+                    <div>
+                      <SelectField
+                        label="Branch / specialisation"
+                        required
+                        options={[
+                          "CSE",
+                          "IT",
+                          "ECE",
+                          "EEE",
+                          "Mechanical",
+                          "Civil",
+                          "Not applicable",
+                        ]}
+                        {...register("branch")}
+                      />
+                      <ErrorText>{errors.branch?.message}</ErrorText>
+                    </div>
+                    <div>
+                      <TextField
+                        label="Passing year"
+                        type="number"
+                        required
+                        placeholder="e.g. 2026"
+                        {...num("passingYear")}
+                      />
+                      <ErrorText>{errors.passingYear?.message}</ErrorText>
+                    </div>
                   </div>
-                ))}
-              </div>
-
-              <ErrorText>{errors.semesters?.message ?? errors.semesters?.root?.message}</ErrorText>
-
-              {semesters.length < maxSemesters && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setValue("semesters", [
-                      ...semesters,
-                      {
-                        semesterNumber: semesters.length + 1,
-                        marks: Number.NaN,
-                        currentArrears: 0,
-                        historyOfArrears: 0,
-                      },
-                    ])
-                  }
-                  className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
-                >
-                  Add semester
-                </button>
-              )}
-            </div>
-
-            <ErrorText>
-              {errors.marksheets === undefined
-                ? undefined
-                : `Upload your ${missingMarksheets(
-                    { programmeLevel, semesters: semesters ?? [], hasDiplomaMarks },
-                    Object.keys(marksheets),
-                  )
-                    .map((s) => s.label)
-                    .join(", ")}.`}
-            </ErrorText>
-          </Section>
-
-          <Section
-            id="preferences"
-            title="Placement preferences"
-            step={3}
-            description="Choose every role type you want to be considered for, then upload a tailored resume for each."
-          >
-            <Controller
-              control={control}
-              name="roleCategories"
-              render={({ field }) => (
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {ROLE_CATEGORIES.map((category) => (
-                    <CheckboxField
-                      key={category}
-                      label={ROLE_CATEGORY_LABELS[category]}
-                      checked={field.value.includes(category)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...field.value, category]
-                          : field.value.filter((c) => c !== category);
-                        field.onChange(next);
-                        // Dropping a category must drop its resume too, or the
-                        // cross-field rule would silently pass on stale data.
-                        setValue(
-                          "resumeCategories",
-                          resumeCategories.filter((c) => next.includes(c)),
-                          { shouldValidate: true },
-                        );
-                      }}
-                    />
-                  ))}
                 </div>
-              )}
-            />
-            <ErrorText>{errors.roleCategories?.message}</ErrorText>
 
-            {selectedCategories.length > 0 && (
-              <div className="mt-5 rounded-lg bg-surface-muted p-4">
-                <p className="mb-3 text-sm font-semibold text-ink-700">
-                  Resume per selected category
-                </p>
-                <div className={grid}>
-                  {selectedCategories.map((category) => (
-                    <FileField
-                      key={category}
-                      label={`${ROLE_CATEGORY_LABELS[category]} resume`}
-                      required
-                      // The group message cannot say WHICH upload is missing
-                      // when several are on screen, so the reason goes on the
-                      // field that is actually empty.
-                      error={
-                        errors.resumeCategories !== undefined &&
-                        !resumeCategories.includes(category)
-                          ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
-                          : undefined
+                {/* SEMESTER-WISE. Eligibility reads the latest VERIFIED line, so
+                each one is entered, evidenced and checked separately. */}
+                <div className="mt-6">
+                  <p className="mb-2 text-sm font-medium text-ink-700">
+                    Semester results
+                    <span className="ml-0.5 text-danger-500" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only"> (required)</span>
+                  </p>
+                  <p className="mb-3 text-xs text-ink-500">
+                    Cumulative to the end of each semester. Choose the scale your college reports on
+                    — CGPA out of 10, or a percentage. At most {maxSemesters} for a{" "}
+                    {programmeLevel === "pg" ? "postgraduate" : "undergraduate"}.
+                  </p>
+
+                  <div className="flex flex-col gap-3">
+                    {semesters.map((semester, index) => (
+                      <div
+                        key={semester.semesterNumber}
+                        className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2"
+                      >
+                        <TextField
+                          label={`Semester ${semester.semesterNumber} result`}
+                          type="number"
+                          step="0.01"
+                          required
+                          hint={
+                            collegeMarksScale === "percentage" ? "Cumulative %" : "CGPA out of 10"
+                          }
+                          {...num(`semesters.${index}.marks`)}
+                        />
+                        <FileField
+                          label={`Semester ${semester.semesterNumber} marksheet`}
+                          required
+                          error={marksheetError(`semester-${semester.semesterNumber}`)}
+                          onChange={(e) =>
+                            chooseMarksheet(
+                              `semester-${semester.semesterNumber}`,
+                              e.target.files?.[0],
+                            )
+                          }
+                        />
+                        <TextField
+                          label={`Semester ${semester.semesterNumber} standing arrears`}
+                          type="number"
+                          required
+                          {...num(`semesters.${index}.currentArrears`)}
+                        />
+                        <TextField
+                          label={`Semester ${semester.semesterNumber} arrear history`}
+                          type="number"
+                          required
+                          hint="Including cleared ones."
+                          {...num(`semesters.${index}.historyOfArrears`)}
+                        />
+                        <ErrorText>{errors.semesters?.[index]?.marks?.message}</ErrorText>
+                        {semesters.length > 1 && (
+                          <button
+                            type="button"
+                            aria-label={`Remove semester ${semester.semesterNumber}`}
+                            onClick={() =>
+                              setValue(
+                                "semesters",
+                                semesters
+                                  .filter((_, i) => i !== index)
+                                  // Numbers are positional, so close the gap.
+                                  .map((s, i) => ({ ...s, semesterNumber: i + 1 })),
+                                { shouldValidate: true },
+                              )
+                            }
+                            className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <ErrorText>
+                    {errors.semesters?.message ?? errors.semesters?.root?.message}
+                  </ErrorText>
+
+                  {semesters.length < maxSemesters && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setValue("semesters", [
+                          ...semesters,
+                          {
+                            semesterNumber: semesters.length + 1,
+                            marks: Number.NaN,
+                            currentArrears: 0,
+                            historyOfArrears: 0,
+                          },
+                        ])
                       }
-                      onChange={(e) => {
-                        const has = e.target.value !== "";
-                        setValue(
-                          "resumeCategories",
-                          has
-                            ? [...new Set([...resumeCategories, category])]
-                            : resumeCategories.filter((c) => c !== category),
-                          { shouldValidate: true },
-                        );
-                      }}
-                    />
+                      className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+                    >
+                      Add semester
+                    </button>
+                  )}
+                </div>
+
+                <ErrorText>
+                  {errors.marksheets === undefined
+                    ? undefined
+                    : `Upload your ${missingMarksheets(
+                        { programmeLevel, semesters: semesters ?? [], hasDiplomaMarks },
+                        Object.keys(marksheets),
+                      )
+                        .map((s) => s.label)
+                        .join(", ")}.`}
+                </ErrorText>
+              </Section>
+
+              <Section
+                id="preferences"
+                title="Placement preferences"
+                step={3}
+                description="Choose every role type you want to be considered for, then upload a tailored resume for each."
+              >
+                <Controller
+                  control={control}
+                  name="roleCategories"
+                  render={({ field }) => (
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      {ROLE_CATEGORIES.map((category) => (
+                        <CheckboxField
+                          key={category}
+                          label={ROLE_CATEGORY_LABELS[category]}
+                          checked={field.value.includes(category)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...field.value, category]
+                              : field.value.filter((c) => c !== category);
+                            field.onChange(next);
+                            // Dropping a category must drop its resume too, or the
+                            // cross-field rule would silently pass on stale data.
+                            setValue(
+                              "resumeCategories",
+                              resumeCategories.filter((c) => next.includes(c)),
+                              { shouldValidate: true },
+                            );
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                />
+                <ErrorText>{errors.roleCategories?.message}</ErrorText>
+
+                {selectedCategories.length > 0 && (
+                  <div className="mt-5 rounded-lg bg-surface-muted p-4">
+                    <p className="mb-3 text-sm font-semibold text-ink-700">
+                      Resume per selected category
+                    </p>
+                    <div className={grid}>
+                      {selectedCategories.map((category) => (
+                        <FileField
+                          key={category}
+                          label={`${ROLE_CATEGORY_LABELS[category]} resume`}
+                          required
+                          // The group message cannot say WHICH upload is missing
+                          // when several are on screen, so the reason goes on the
+                          // field that is actually empty.
+                          error={
+                            errors.resumeCategories !== undefined &&
+                            !resumeCategories.includes(category)
+                              ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
+                              : undefined
+                          }
+                          onChange={(e) => {
+                            const has = e.target.value !== "";
+                            setValue(
+                              "resumeCategories",
+                              has
+                                ? [...new Set([...resumeCategories, category])]
+                                : resumeCategories.filter((c) => c !== category),
+                              { shouldValidate: true },
+                            );
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <ErrorText>{errors.resumeCategories?.message}</ErrorText>
+                  </div>
+                )}
+              </Section>
+
+              <Section
+                id="profiles"
+                title="Professional profiles"
+                step={4}
+                description="Optional, but they matter."
+              >
+                <div className={grid}>
+                  {(
+                    [
+                      ["linkedin", "LinkedIn", "linkedin.com/in/…"],
+                      ["github", "GitHub", "github.com/…"],
+                      ["leetcode", "LeetCode", ""],
+                      ["hackerrank", "HackerRank", ""],
+                    ] as const
+                  ).map(([name, label, placeholder]) => (
+                    <div key={name}>
+                      <TextField
+                        label={label}
+                        type="url"
+                        placeholder={placeholder}
+                        {...register(name)}
+                      />
+                      <ErrorText>{errors[name]?.message}</ErrorText>
+                    </div>
                   ))}
                 </div>
-                <ErrorText>{errors.resumeCategories?.message}</ErrorText>
-              </div>
-            )}
-          </Section>
 
-          <Section
-            id="profiles"
-            title="Professional profiles"
-            step={4}
-            description="Optional, but they matter."
-          >
-            <div className={grid}>
-              {(
-                [
-                  ["linkedin", "LinkedIn", "linkedin.com/in/…"],
-                  ["github", "GitHub", "github.com/…"],
-                  ["leetcode", "LeetCode", ""],
-                  ["hackerrank", "HackerRank", ""],
-                ] as const
-              ).map(([name, label, placeholder]) => (
-                <div key={name}>
-                  <TextField
-                    label={label}
-                    type="url"
-                    placeholder={placeholder}
-                    {...register(name)}
-                  />
-                  <ErrorText>{errors[name]?.message}</ErrorText>
-                </div>
-              ))}
-            </div>
-
-            {/* Anything the four above do not cover (2026-08-06). A student
+                {/* Anything the four above do not cover (2026-08-06). A student
                 with a Kaggle profile, a Behance portfolio, a Codeforces handle
                 or their own site had nowhere to put it - and for many students
                 that is the strongest evidence they have.
@@ -1011,132 +1078,134 @@ export function SrfPage({
                 The value is a plain text field, not a url input: the request
                 was "the url/user name", and a Codeforces handle is not a URL.
                 Demanding one would refuse the very entries this is for. */}
-            <div className="mt-6">
-              <p className="mb-1 text-sm font-medium text-ink-700">Other profiles</p>
-              <p className="mb-3 text-xs text-ink-500">
-                Anything else worth showing a recruiter — Kaggle, Codeforces, Behance, your own
-                site. Give it a name, then paste the link or your username.
-              </p>
+                <div className="mt-6">
+                  <p className="mb-1 text-sm font-medium text-ink-700">Other profiles</p>
+                  <p className="mb-3 text-xs text-ink-500">
+                    Anything else worth showing a recruiter — Kaggle, Codeforces, Behance, your own
+                    site. Give it a name, then paste the link or your username.
+                  </p>
 
-              {otherProfiles.fields.length > 0 && (
-                <div className="flex flex-col gap-3">
-                  {otherProfiles.fields.map((field, index) => (
-                    <div
-                      key={field.id}
-                      className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.5fr_auto]"
-                    >
-                      <TextField
-                        label={`Profile ${index + 1} name`}
-                        placeholder="e.g. Kaggle"
-                        {...register(`otherProfiles.${index}.label`)}
-                      />
-                      <TextField
-                        label={`Profile ${index + 1} link or username`}
-                        placeholder="kaggle.com/asha  — or just asha_r"
-                        {...register(`otherProfiles.${index}.value`)}
-                      />
-                      <button
-                        type="button"
-                        aria-label={`Remove profile ${index + 1}`}
-                        onClick={() => otherProfiles.remove(index)}
-                        className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                      >
-                        Remove
-                      </button>
+                  {otherProfiles.fields.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      {otherProfiles.fields.map((field, index) => (
+                        <div
+                          key={field.id}
+                          className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.5fr_auto]"
+                        >
+                          <TextField
+                            label={`Profile ${index + 1} name`}
+                            placeholder="e.g. Kaggle"
+                            {...register(`otherProfiles.${index}.label`)}
+                          />
+                          <TextField
+                            label={`Profile ${index + 1} link or username`}
+                            placeholder="kaggle.com/asha  — or just asha_r"
+                            {...register(`otherProfiles.${index}.value`)}
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Remove profile ${index + 1}`}
+                            onClick={() => otherProfiles.remove(index)}
+                            className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
 
-              {/* An issue raised against an ARRAY lands on `.root`, not on
+                  {/* An issue raised against an ARRAY lands on `.root`, not on
                   `.message` - the same shape the semester list needs. */}
-              <ErrorText>
-                {errors.otherProfiles?.message ?? errors.otherProfiles?.root?.message}
-              </ErrorText>
+                  <ErrorText>
+                    {errors.otherProfiles?.message ?? errors.otherProfiles?.root?.message}
+                  </ErrorText>
 
-              {otherProfiles.fields.length < MAX_OTHER_PROFILES && (
-                <button
-                  type="button"
-                  onClick={() => otherProfiles.append({ label: "", value: "" })}
-                  className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
-                >
-                  Add another profile
-                </button>
-              )}
-            </div>
-          </Section>
+                  {otherProfiles.fields.length < MAX_OTHER_PROFILES && (
+                    <button
+                      type="button"
+                      onClick={() => otherProfiles.append({ label: "", value: "" })}
+                      className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+                    >
+                      Add another profile
+                    </button>
+                  )}
+                </div>
+              </Section>
 
-          <Section
-            id="additional"
-            title="Skills and achievements"
-            step={5}
-            description="Be specific — this feeds shortlisting."
-          >
-            <div className="flex flex-col gap-4">
-              <TextField
-                label="Technical skills"
-                placeholder="React, Python, SQL…"
-                {...register("technicalSkills")}
-              />
-              <TextField
-                label="Areas of interest"
-                placeholder="Backend engineering, data…"
-                {...register("areasOfInterest")}
-              />
-              <TextField
-                label="Areas of expertise"
-                placeholder="Where you are genuinely strong"
-                {...register("areasOfExpertise")}
-              />
-              <TextField
-                label="Projects"
-                placeholder="Title, stack, and what you built"
-                {...register("projects")}
-              />
-              <TextField label="Certifications" {...register("certifications")} />
-              <TextField label="Achievements" {...register("achievements")} />
-            </div>
-          </Section>
-
-          <Section id="consent" title="Consent and submission" step={6}>
-            <CheckboxField
-              required
-              label="I consent to sharing my profile and resumes with recruiting companies"
-              description="Your profile, academic record and the relevant resume are shared with companies whose drives you apply to. Every share is logged."
-              {...register("consent")}
-            />
-            <ErrorText>{errors.consent?.message}</ErrorText>
-
-            {serverError !== null && (
-              <p
-                role="alert"
-                className="mt-4 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+              <Section
+                id="additional"
+                title="Skills and achievements"
+                step={5}
+                description="Be specific — this feeds shortlisting."
               >
-                {serverError}
-              </p>
-            )}
+                <div className="flex flex-col gap-4">
+                  <TextField
+                    label="Technical skills"
+                    placeholder="React, Python, SQL…"
+                    {...register("technicalSkills")}
+                  />
+                  <TextField
+                    label="Areas of interest"
+                    placeholder="Backend engineering, data…"
+                    {...register("areasOfInterest")}
+                  />
+                  <TextField
+                    label="Areas of expertise"
+                    placeholder="Where you are genuinely strong"
+                    {...register("areasOfExpertise")}
+                  />
+                  <TextField
+                    label="Projects"
+                    placeholder="Title, stack, and what you built"
+                    {...register("projects")}
+                  />
+                  <TextField label="Certifications" {...register("certifications")} />
+                  <TextField label="Achievements" {...register("achievements")} />
+                </div>
+              </Section>
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 disabled:opacity-60 sm:px-6"
-              >
-                {isSubmitting ? "Submitting…" : "Submit for verification"}
-              </button>
-              {/* This button existed and did NOTHING - the form advertised
+              <Section id="consent" title="Consent and submission" step={6}>
+                <CheckboxField
+                  required
+                  label="I consent to sharing my profile and resumes with recruiting companies"
+                  description="Your profile, academic record and the relevant resume are shared with companies whose drives you apply to. Every share is logged."
+                  {...register("consent")}
+                />
+                <ErrorText>{errors.consent?.message}</ErrorText>
+
+                {serverError !== null && (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+                  >
+                    {serverError}
+                  </p>
+                )}
+
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 disabled:opacity-60 sm:px-6"
+                  >
+                    {isSubmitting ? "Submitting…" : "Submit for verification"}
+                  </button>
+                  {/* This button existed and did NOTHING - the form advertised
                   draft saving it had never implemented. */}
-              <button
-                type="button"
-                onClick={() => void saveNow()}
-                disabled={draftState === "saving"}
-                className="rounded-lg border border-line bg-surface px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:border-brand-300 disabled:opacity-60"
-              >
-                {draftState === "saving" ? "Saving…" : "Save draft"}
-              </button>
-            </div>
-          </Section>
-        </form>
+                  <button
+                    type="button"
+                    onClick={() => void saveNow()}
+                    disabled={draftState === "saving"}
+                    className="rounded-lg border border-line bg-surface px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:border-brand-300 disabled:opacity-60"
+                  >
+                    {draftState === "saving" ? "Saving…" : "Save draft"}
+                  </button>
+                </div>
+              </Section>
+            </form>
+          </>
+        )}
       </main>
     </div>
   );

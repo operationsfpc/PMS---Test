@@ -21,6 +21,7 @@ import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
 import { ParticipationRoute } from "@features/student/participation-route";
+import { StudentProfileRoute } from "@features/student/profile-route";
 import { StudentDashboardRoute } from "@features/student/student-dashboard-route";
 import { Route, Routes } from "react-router";
 
@@ -56,6 +57,7 @@ export function App() {
                 <Route path="/student" element={<StudentDashboardRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
                 <Route path="/student/participation" element={<ParticipationRoute />} />
+                <Route path="/student/profile" element={<StudentProfileRoute />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
                 <Route path="/cpc/attendance" element={<AttendanceRoute />} />
                 <Route path="/cpc/participation" element={<ParticipationQueueRoute />} />

@@ -338,3 +338,82 @@ describe("SrfPage — saving a draft", () => {
     expect(saveDraft).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The form has three lives, reworked 2026-08-05.
+ *
+ * "in his my registration form tab, it should say that awaiting verification.
+ * at that time, no edit of forms should be possible. he should just be able to
+ * see what he has submitted. if it is rejected, he should be able to edit and
+ * resubmit. after approval, he should be able to see the details he has
+ * entered. from there, there should be a place to go and edit it, by clicking
+ * a link."
+ *
+ * It used to be editable at every status. That is not cosmetic: §7.2 requires
+ * eligibility to be judged against VERIFIED data, so a student editing an
+ * approved record silently invalidates every shortlist it has already been
+ * measured for.
+ */
+describe("SrfPage — after it has been submitted", () => {
+  const SUBMITTED = {
+    ...ROSTER,
+    mobile: "9876543210",
+    tenthPercentage: 91.4,
+    twelfthPercentage: 88.2,
+    semesters: [{ semesterNumber: 1, marks: 8.5, currentArrears: 0, historyOfArrears: 0 }],
+  };
+
+  it("says it is awaiting verification", () => {
+    render(<SrfPage profile={SUBMITTED} status="srf_submitted" />);
+
+    expect(screen.getByText(/awaiting verification/i)).toBeDefined();
+  });
+
+  it("offers no way to change anything while it is being checked", () => {
+    render(<SrfPage profile={SUBMITTED} status="srf_submitted" />);
+
+    expect(screen.queryByRole("button", { name: /submit for verification/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /save draft/i })).toBeNull();
+  });
+
+  it("shows the student what they actually submitted", () => {
+    render(<SrfPage profile={SUBMITTED} status="srf_submitted" />);
+
+    expect(screen.getByText("9876543210")).toBeDefined();
+    expect(screen.getByText(/91.4/)).toBeDefined();
+  });
+
+  it("gives a verified student their record and a way to edit what is still theirs", () => {
+    render(<SrfPage profile={SUBMITTED} status="srf_approved" />);
+
+    expect(screen.getByRole("heading", { name: /verified/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /update my skills|edit/i })).toBeDefined();
+  });
+
+  it("does not offer an edit link while verification is still in progress", () => {
+    render(<SrfPage profile={SUBMITTED} status="srf_submitted" />);
+
+    expect(screen.queryByRole("link", { name: /update my skills|edit/i })).toBeNull();
+  });
+
+  /** A1: rejection is not terminal. Correcting it IS the next step. */
+  it("reopens the form when a coordinator sends it back, with their reason", () => {
+    render(
+      <SrfPage
+        profile={SUBMITTED}
+        status="srf_rejected"
+        rejectionReason="Your 12th percentage does not match the marksheet."
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /submit for verification/i })).toBeDefined();
+    expect(screen.getByText(/does not match the marksheet/i)).toBeDefined();
+  });
+
+  it("is an ordinary editable form for someone who has not submitted yet", () => {
+    render(<SrfPage profile={ROSTER} status="registered" />);
+
+    expect(screen.getByRole("button", { name: /submit for verification/i })).toBeDefined();
+    expect(screen.queryByText(/awaiting verification/i)).toBeNull();
+  });
+});
