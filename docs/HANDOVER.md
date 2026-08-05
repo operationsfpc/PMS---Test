@@ -3,8 +3,9 @@
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
 **2036 tests passing across 126 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Working tree clean. The hash is written LAST, after the commit exists;
-verify it with `git merge-base --is-ancestor <hash> HEAD`.
+gate. Working tree clean. Last updated at commit `6ea5297` — written after that
+commit existed, and never amended since. Verify with
+`git merge-base --is-ancestor 6ea5297 HEAD`, not with `git cat-file`.
 
 ---
 
