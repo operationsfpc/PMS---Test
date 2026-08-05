@@ -1,8 +1,9 @@
 import { Button, Card, PageHeader } from "@components/ui";
+import { MARKS_SCALES } from "@domain/marks";
 import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ReactNode, useId, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { PIF_DEFAULTS, type PifFormValues, pifDraftSchema, pifSubmitSchema } from "./pif-schema";
 
 /** Sections 1-4 are the AE's. Section 5 belongs to Delivery. */
@@ -41,6 +42,12 @@ const ARREAR_LABELS: Record<string, string> = {
 };
 
 const PASSING_YEARS = [2026, 2027, 2028] as const;
+
+/** F12: recruiters state the bar the way their own HR does. */
+const SCALE_LABELS: Record<string, string> = {
+  cgpa: "CGPA (out of 10)",
+  percentage: "Percentage (out of 100)",
+};
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -102,6 +109,7 @@ export function PifForm({
 
   const {
     register,
+    control: formControl,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<PifFormValues>({
@@ -114,8 +122,23 @@ export function PifForm({
       ),
   });
 
-  const run = (mode: "draft" | "submit") => {
+  /**
+   * The mode is set when the BUTTON IS PRESSED, not when it is rendered.
+   *
+   * This used to be `run(mode)` called during render, setting `intent.current`
+   * as a side effect — so whichever button rendered last won, and that was
+   * "Save draft". Every "Submit for approval" was therefore validated against
+   * `pifDraftSchema`, which asks for a company name and nothing else. An AE
+   * could hand the Delivery Head a PIF with no role, no CTC, no eligibility
+   * and no passing years, and the only symptom was an approval queue full of
+   * empty forms.
+   */
+  const run = (mode: "draft" | "submit") => async () => {
     intent.current = mode;
+    await submitWith(mode)();
+  };
+
+  const submitWith = (mode: "draft" | "submit") => {
     return handleSubmit(async (values) => {
       setFailure(null);
       try {
@@ -133,7 +156,30 @@ export function PifForm({
     });
   };
 
-  const numeric = { setValueAs: (v: string) => (v === "" ? null : Number(v)) };
+  /**
+   * F7: one interview process, several job titles, ONE PIF. Rows are added by
+   * the AE and blank ones are dropped by the schema - an untouched row is not
+   * a mistake worth an error message.
+   */
+  const designations = useFieldArray({
+    control: formControl,
+    // `additionalDesignations` is a string array, which useFieldArray cannot
+    // key on directly; RHF handles the primitive case through the same API.
+    name: "additionalDesignations" as never,
+  });
+
+  /**
+   * An untouched optional number is NOT zero.
+   *
+   * This read `v === "" ? null : Number(v)`, and RHF hands `setValueAs` the
+   * DEFAULT value - `null` - for a field nobody typed in. `Number(null)` is 0,
+   * so every blank optional number was submitted as a real zero: a maximum CTC
+   * of 0 (which then failed "cannot be below the minimum"), and a CGPA cutoff
+   * of 0 stored as a cutoff rather than as "none set".
+   */
+  const numeric = {
+    setValueAs: (v: unknown) => (v === "" || v === null || v === undefined ? null : Number(v)),
+  };
   const err = (k: keyof PifFormValues) => errors[k]?.message as string | undefined;
 
   return (
@@ -180,6 +226,60 @@ export function PifForm({
           <Labelled label="Role title" error={err("roleTitle")}>
             {(id) => <input id={id} className={control} {...register("roleTitle")} />}
           </Labelled>
+          <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
+            <p className="text-sm font-medium text-ink-900">
+              One interview process, however many designations \u2014 one PIF.
+            </p>
+            <p className="mt-1 text-xs text-ink-700">
+              If the recruiter runs a separate interview process for another designation, raise a
+              separate PIF for it. Two PIFs for one process would double the drive, the shortlist
+              and the audience count.
+            </p>
+
+            {designations.fields.map((field, index) => (
+              <div key={field.id} className="mt-3 flex flex-wrap items-end gap-2">
+                <div className="min-w-48 flex-1">
+                  <label
+                    htmlFor={`designation-${index}`}
+                    className="mb-1 block text-xs font-medium text-ink-700"
+                  >
+                    Designation {index + 1}
+                  </label>
+                  <input
+                    id={`designation-${index}`}
+                    className={control}
+                    {...register(`additionalDesignations.${index}` as never)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Remove designation ${index + 1}`}
+                  onClick={() => designations.remove(index)}
+                >
+                  Remove
+                </Button>
+              </div>
+            ))}
+
+            {err("additionalDesignations") !== undefined && (
+              <p className="mt-1 text-xs text-[#DD4820]" role="status">
+                {err("additionalDesignations")}
+              </p>
+            )}
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              onClick={() => designations.append("" as never)}
+            >
+              Add another designation
+            </Button>
+          </div>
+
           <Labelled label="Role category" error={err("roleCategory")}>
             {(id) => (
               <select id={id} className={control} {...register("roleCategory")}>
@@ -239,7 +339,21 @@ export function PifForm({
         </Section>
 
         <Section title="Eligibility criteria">
-          <Labelled label="Minimum overall CGPA" error={err("minOverallCgpa")}>
+          {/* F12: the figure and the scale it was stated on. The normalised
+              CGPA every drive is filtered on is derived once, in the
+              repository, via @domain/marks. */}
+          <Labelled label="Cutoff scale" error={err("minOverallCgpaScale")}>
+            {(id) => (
+              <select id={id} className={control} {...register("minOverallCgpaScale")}>
+                {MARKS_SCALES.map((scale) => (
+                  <option key={scale} value={scale}>
+                    {SCALE_LABELS[scale]}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Labelled>
+          <Labelled label="Minimum overall marks" error={err("minOverallCgpa")}>
             {(id) => (
               <input
                 id={id}
@@ -336,6 +450,18 @@ export function PifForm({
                   </option>
                 ))}
               </select>
+            )}
+          </Labelled>
+          {/* F11: the Central CPC was typing the round list from an email. */}
+          <Labelled label="Number of rounds" error={err("roundCount")}>
+            {(id) => (
+              <input
+                id={id}
+                type="number"
+                min="1"
+                className={control}
+                {...register("roundCount", numeric)}
+              />
             )}
           </Labelled>
           <Labelled label="Tentative drive date" error={err("tentativeDate")}>

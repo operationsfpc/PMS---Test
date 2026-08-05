@@ -20,6 +20,8 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
+  // F11: the number of rounds is now part of a complete PIF.
+  await user.type(screen.getByLabelText(/number of rounds/i), "3");
   await user.click(screen.getByRole("checkbox", { name: /2027/ }));
 }
 
@@ -120,5 +122,206 @@ describe("PifForm", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("You do not have permission to raise a PIF.");
     expect(alert.textContent).toContain("Your entries are still here");
+  });
+});
+
+/**
+ * F7, F11 and F12 (UAT 2026-08-06) — three things the PIF was not collecting.
+ */
+describe("PifForm — what the recruiter actually said", () => {
+  const show = () => render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+  /**
+   * F12: "Under eligibility criteria the Minimum overall CGPA must be
+   * acceptable of both percentage and GPA."
+   */
+  it("lets the cutoff be stated as a percentage or a CGPA", () => {
+    show();
+
+    const scale = screen.getByLabelText(/cutoff scale/i) as HTMLSelectElement;
+    expect(scale.value).toBe("cgpa");
+    expect(screen.getByRole("option", { name: /percentage/i })).toBeDefined();
+  });
+
+  it("submits the cutoff on the scale the AE chose", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.selectOptions(screen.getByLabelText(/cutoff scale/i), "percentage");
+    await user.type(screen.getByLabelText(/minimum overall/i), "65");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      minOverallCgpa: 65,
+      minOverallCgpaScale: "percentage",
+    });
+  });
+
+  it("refuses a CGPA of 65, which is the mistake the scale exists to catch", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.type(screen.getByLabelText(/minimum overall/i), "65");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(await screen.findByText(/10-point scale/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  /** F11: the Central CPC was typing the round list from an email. */
+  it("collects the number of rounds and sends it", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ roundCount: 3 });
+  });
+
+  /**
+   * F7: "If its one interview process, multiple designations only one PIF is
+   * required, if multiple interview process for multiple designations then
+   * multiple PIF is required."
+   */
+  it("says when a second PIF is needed and when it is not", () => {
+    show();
+
+    expect(screen.getByText(/one interview process/i)).toBeDefined();
+    expect(screen.getByText(/raise a separate pif/i)).toBeDefined();
+  });
+
+  it("collects further designations covered by the same interview process", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add another designation/i }));
+    await user.type(screen.getByLabelText("Designation 1"), "Associate Engineer");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      additionalDesignations: ["Associate Engineer"],
+    });
+  });
+
+  it("drops a designation row the AE added and left blank", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add another designation/i }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ additionalDesignations: [] });
+  });
+
+  it("removes a designation row", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await user.click(screen.getByRole("button", { name: /add another designation/i }));
+    await user.click(screen.getByRole("button", { name: /remove designation 1/i }));
+
+    expect(screen.queryByLabelText("Designation 1")).toBeNull();
+  });
+});
+
+/**
+ * A defect found on 2026-08-06 while adding F12's cutoff scale.
+ *
+ * `onClick={run("submit")}` CALLS `run` during render. `run` set
+ * `intent.current` as a side effect, so whichever button rendered last won -
+ * and that was "Save draft". Every press of "Submit for approval" was
+ * therefore validated against `pifDraftSchema`, which requires a company name
+ * and nothing else.
+ *
+ * The consequence was silent: an AE could hand the Delivery Head a PIF with no
+ * role, no CTC, no eligibility and no passing years, and the only sign was an
+ * approval queue full of empty forms.
+ */
+describe("PifForm \u2014 submit validates as a submission, not as a draft", () => {
+  it("refuses to submit a PIF that only has a company name", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(await screen.findByText(/role title is required/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("still saves that same PIF as a draft", async () => {
+    const onSaveDraft = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(screen.getByRole("button", { name: /save draft/i }));
+
+    await waitFor(() => expect(onSaveDraft).toHaveBeenCalled());
+  });
+
+  /** Submitting after a draft save must not inherit the draft's leniency. */
+  it("does not let a draft save loosen the next submit", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(screen.getByRole("button", { name: /save draft/i }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(await screen.findByText(/role title is required/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A second defect, found the moment the first one stopped hiding it.
+ *
+ * `setValueAs` is handed the DEFAULT value - `null` - for a field nobody typed
+ * in, and `Number(null)` is 0. So every blank optional number was submitted as
+ * a real zero: a maximum CTC of 0, which then failed "cannot be below the
+ * minimum" on an otherwise complete PIF, and a CGPA cutoff of 0 recorded as a
+ * cutoff rather than as "none set".
+ */
+describe("PifForm \u2014 a blank number is not a zero", () => {
+  it("sends no maximum CTC when the AE left it blank", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]?.ctcMaxLpa).toBeNull();
+  });
+
+  it("sends no CGPA cutoff when the AE set none", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]?.minOverallCgpa).toBeNull();
+    expect(onSubmit.mock.calls[0]?.[0]?.minTenthPercentage).toBeNull();
   });
 });
