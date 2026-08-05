@@ -33,20 +33,35 @@ export class SrfSubmitError extends Error {}
 /** Private since 0010. Nothing here is ever served publicly. */
 const MARKSHEET_BUCKET = "marksheets";
 
+/** One uploaded marksheet, as the transaction needs to hear about it. */
+interface MarksheetUpload {
+  /** The form's own key ("tenth", "semester-3"), used to link declarations. */
+  readonly slot: string;
+  readonly kind: MarksheetKind;
+  readonly storage_path: string;
+  readonly size_bytes: number;
+}
+
 /**
- * Stores the marksheets and records each one against the student.
+ * Puts every marksheet in storage and describes what landed there.
  *
- * Returns document ids keyed by marksheet slot, so the caller can point each
- * declared figure at the document that evidences it. This is what was missing
- * entirely: the form collected these files and dropped them on the floor, so
- * `student_semesters.marksheet_id` was never written and the coordinator's
- * queue had nothing to check a declared CGPA against.
+ * It no longer INSERTS the document rows. It used to, purely to learn their
+ * ids so the semester lines could point at them - and that is why a failed
+ * submission left rows behind for files nobody would ever verify: 34 orphans
+ * for one student on 2026-08-05. The rows are now written inside `submit_srf`,
+ * in the same transaction as the marks they evidence, and the slot key is what
+ * ties a declaration to its document until the ids exist.
+ *
+ * The upload itself cannot join that transaction - storage is not the database
+ * - so it happens FIRST. An object with no row is invisible and costs a few
+ * kilobytes; a row with no object would ask a coordinator to verify a figure
+ * against a document that is not there.
  */
-async function storeMarksheets(
+async function uploadMarksheets(
   client: SupabaseClient,
   studentId: string,
   values: SrfSubmission,
-): Promise<ReadonlyMap<string, string>> {
+): Promise<MarksheetUpload[]> {
   /**
    * EVERY slot the form offers, not just the required ones.
    *
@@ -64,14 +79,7 @@ async function storeMarksheets(
     return file === undefined ? [] : [{ slot, file }];
   });
 
-  if (files.length === 0) return new Map();
-
-  const rows: Array<{
-    student_id: string;
-    kind: MarksheetKind;
-    storage_path: string;
-    size_bytes: number;
-  }> = [];
+  const uploads: MarksheetUpload[] = [];
 
   for (const { slot, file } of files) {
     // Namespaced by student id because that is exactly what the storage policy
@@ -91,21 +99,15 @@ async function storeMarksheets(
       );
     }
 
-    rows.push({
-      student_id: studentId,
+    uploads.push({
+      slot: slot.key,
       kind: slot.kind,
       storage_path: path,
       size_bytes: file.size,
     });
   }
 
-  const { data, error } = await client.from("student_documents").insert(rows).select("id");
-
-  if (error !== null || data === null) {
-    throw new SrfSubmitError("Could not save your marksheets. Please try again.");
-  }
-
-  return new Map(files.map(({ slot }, index) => [slot.key, data[index]?.id as string]));
+  return uploads;
 }
 
 /** Resolves the signed-in user. Injected so the dependency is explicit and testable. */
@@ -146,10 +148,8 @@ export function createSupabaseSrfRepository(
       }
 
       /**
-       * The id is resolved BEFORE anything is written, because the evidence
-       * has to reach storage before the form reaches the queue. Submitting
-       * first and uploading second would ask a coordinator to verify figures
-       * against documents that do not exist.
+       * The student's own id, resolved before anything is written, because the
+       * storage policy (0022) requires every object to sit under it.
        */
       const { data: own, error: ownError } = await client
         .from("students")
@@ -161,12 +161,23 @@ export function createSupabaseSrfRepository(
         throw new SrfSubmitError(translate(ownError?.code, ownError?.message ?? ""));
       }
 
-      const studentId = own.id as string;
-      const documentIds = await storeMarksheets(client, studentId, values);
+      const uploads = await uploadMarksheets(client, own.id as string, values);
 
-      const { data, error } = await client
-        .from("students")
-        .update({
+      /**
+       * ONE call, one transaction (0028).
+       *
+       * This was four requests - insert the documents, update the student,
+       * delete the semester lines, insert the new ones - and PostgREST gives
+       * each its own transaction. A failure at the third committed the first
+       * two, which is how the live database came to hold a student row saying
+       * `srf_submitted` while the student was correctly being told that
+       * submission had failed. All of it lands now, or none of it does.
+       *
+       * Nothing here names the student. `submit_srf` reads that from the
+       * session, so the payload has no identity to tamper with.
+       */
+      const { data, error } = await client.rpc("submit_srf", {
+        p_student: {
           full_name: values.fullName,
           mobile: values.mobile,
           whatsapp: values.whatsapp === "" ? null : values.whatsapp,
@@ -183,7 +194,7 @@ export function createSupabaseSrfRepository(
               : values.diplomaInstitution,
           diploma_marks: values.diplomaMarks,
           diploma_marks_scale: values.diplomaMarks === null ? null : values.diplomaMarksScale,
-          diploma_marksheet_id: documentIds.get("diploma") ?? null,
+          diploma_marksheet_slot: "diploma",
           passing_year: values.passingYear,
           programme_level: values.programmeLevel,
           // A postgraduate's finished degree: where, in what, and how well.
@@ -197,6 +208,9 @@ export function createSupabaseSrfRepository(
             values.ugAggregate === null
               ? null
               : normaliseToCgpa(values.ugAggregate, values.ugAggregateScale),
+          // A postgraduate's UG aggregate stands in for an entire degree, so
+          // it is evidenced like any other declared mark (A31).
+          ug_marksheet_slot: "ug_consolidated",
           technical_skills: values.technicalSkills,
           areas_of_interest: values.areasOfInterest,
           areas_of_expertise: values.areasOfExpertise,
@@ -211,85 +225,41 @@ export function createSupabaseSrfRepository(
           // domain owns that rule so the stored list matches what validation
           // judged, rather than what the form happened to be holding.
           other_profiles: normaliseProfileLinks(values.otherProfiles),
-          // A postgraduate's UG aggregate stands in for an entire degree, so
-          // it is evidenced like any other declared mark (A31).
-          ug_marksheet_id: documentIds.get("ug_consolidated") ?? null,
-          consent_given_at: new Date().toISOString(),
-          srf_status: "srf_submitted" satisfies Enums["srf_status"],
-          srf_submitted_at: new Date().toISOString(),
-          // The draft has served its purpose. Left behind, the next visit
-          // would restore a copy of a form already submitted and the student
-          // would edit something that no longer means anything.
-          srf_draft: null,
-          srf_draft_saved_at: null,
-        })
-        .eq("auth_user_id", userId)
-        .select("id, srf_status")
-        .single();
+        },
+        p_semesters: values.semesters.map((s) => ({
+          semester_number: s.semesterNumber,
+          // Both, deliberately: `cgpa` is the only figure a cutoff can be
+          // compared against, `declared_marks` is what the student typed and
+          // what the coordinator finds on the marksheet.
+          cgpa: normaliseToCgpa(s.marks, values.collegeMarksScale),
+          declared_marks: s.marks,
+          // One scale for the whole degree (2026-08-06), still recorded on
+          // every row so a stored figure always says what it means.
+          marks_scale: values.collegeMarksScale,
+          current_arrears: s.currentArrears,
+          history_of_arrears: s.historyOfArrears,
+          // The point of the whole exercise: this line and the document that
+          // proves it, so the coordinator verifies one against the other.
+          marksheet_slot: marksheetSlotKey({
+            kind: "semester_marksheet",
+            semesterNumber: s.semesterNumber,
+          }),
+        })),
+        p_documents: uploads,
+      });
 
       if (error !== null) {
         throw new SrfSubmitError(translate(error.code, error.message));
       }
 
-      /**
-       * Semester lines live in their own table, and are replaced wholesale
-       * rather than merged: the form shows the student's whole academic
-       * record, so what is on screen must be what ends up stored. Merging
-       * would silently keep a line the student deleted.
-       *
-       * Written AFTER the student row, because the per-level cap trigger reads
-       * programme_level from it - inserting first would size a postgraduate's
-       * record against the undergraduate limit.
-       */
-      const { error: clearError } = await client
-        .from("student_semesters")
-        .delete()
-        .eq("student_id", studentId);
+      // `returns table (...)` comes back as a one-row array unless PostgREST is
+      // told otherwise; supabase-js hands back whichever it received.
+      const row = (Array.isArray(data) ? data[0] : data) as {
+        student_id: string;
+        srf_status: Enums["srf_status"];
+      };
 
-      /**
-       * Checked, not assumed. Throwing this result away is exactly how the
-       * re-submission bug shipped: with no DELETE policy (fixed in 0027) RLS
-       * filtered the delete to nothing, PostgREST answered a perfectly
-       * ordinary 204, and the insert below walked into a unique-key collision
-       * it could never win. A clear-out that did not clear must stop here.
-       */
-      if (clearError !== null) {
-        throw new SrfSubmitError(translate(clearError.code, clearError.message));
-      }
-
-      if (values.semesters.length > 0) {
-        const { error: semesterError } = await client.from("student_semesters").insert(
-          values.semesters.map((s) => ({
-            student_id: studentId,
-            semester_number: s.semesterNumber,
-            // Both, deliberately: `cgpa` is the only figure a cutoff can be
-            // compared against, `declared_marks` is what the student typed and
-            // what the coordinator finds on the marksheet.
-            cgpa: normaliseToCgpa(s.marks, values.collegeMarksScale),
-            declared_marks: s.marks,
-            // One scale for the whole degree (2026-08-06), still recorded on
-            // every row so a stored figure always says what it means.
-            marks_scale: values.collegeMarksScale,
-            current_arrears: s.currentArrears,
-            history_of_arrears: s.historyOfArrears,
-            // The point of the whole exercise: this line and the document that
-            // proves it, so the coordinator verifies one against the other.
-            marksheet_id:
-              documentIds.get(
-                marksheetSlotKey({
-                  kind: "semester_marksheet",
-                  semesterNumber: s.semesterNumber,
-                }),
-              ) ?? null,
-          })),
-        );
-
-        if (semesterError !== null) {
-          throw new SrfSubmitError(translate(semesterError.code, semesterError.message));
-        }
-      }
-
-      return { id: studentId, status: data.srf_status as Enums["srf_status"] };
+      return { id: row.student_id, status: row.srf_status };
     },
 
     /**
@@ -335,7 +305,9 @@ function translate(code: string | undefined, message: string): string {
   if (code === "42501" || /placement coordinator/.test(message)) {
     return "Verified academic data can only be changed by your placement coordinator.";
   }
-  if (code === "PGRST116") {
+  // PGRST116: PostgREST found no row. P0002: `submit_srf` refused for the same
+  // reason - a session with no student record behind it. One cause, one answer.
+  if (code === "PGRST116" || code === "P0002") {
     return "We could not find your student record. Contact your placement coordinator.";
   }
   /**

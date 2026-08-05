@@ -46,22 +46,17 @@ function signedIn() {
 }
 
 /**
- * Submitting writes the student row AND their semester lines (2026-08-04), so
- * tests asserting the student row still have to let the semester writes
- * through, or MSW fails them for a request unrelated to what they assert.
+ * Submitting is ONE call to `submit_srf` (0028) - the student row, the
+ * semester lines and the marksheet rows in a single transaction. It used to be
+ * four separate writes, each in its own transaction, which is how a failure
+ * part-way through left a form half-submitted.
  */
 const studentsPatch = (respond: () => Response | Promise<Response>) =>
   server.use(
-    // Submitting resolves the student's own id first, so the evidence reaches
-    // storage before the form reaches the verification queue.
+    // Submitting resolves the student's own id first: the storage policy
+    // requires every object to sit under it.
     http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
-    http.patch(`${BASE}/rest/v1/students`, respond),
-    http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-      const rows = (await request.json()) as Array<Record<string, unknown>>;
-      return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-    }),
+    http.post(`${BASE}/rest/v1/rpc/submit_srf`, respond),
   );
 
 /** Behaviour of the real SRF: validation, dynamic fields, submission. */
@@ -535,15 +530,10 @@ describe("other professional profiles", () => {
     let body: Record<string, unknown> = {};
     server.use(
       http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        body = (await request.clone().json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
-      }),
-      http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-        const rows = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, async ({ request }) => {
+        const payload = (await request.clone().json()) as { p_student: Record<string, unknown> };
+        body = payload.p_student;
+        return HttpResponse.json({ student_id: "s1", srf_status: "srf_submitted" });
       }),
     );
     signedIn();
@@ -564,15 +554,9 @@ describe("other professional profiles", () => {
   it("does not hold up a student who added a row and left it blank", async () => {
     server.use(
       http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
-      http.patch(`${BASE}/rest/v1/students`, () =>
-        HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }),
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, () =>
+        HttpResponse.json({ student_id: "s1", srf_status: "srf_submitted" }),
       ),
-      http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-        const rows = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-      }),
     );
     signedIn();
 

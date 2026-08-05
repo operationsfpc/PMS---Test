@@ -66,47 +66,39 @@ const values = {
 } as SrfSubmission;
 
 /**
- * Submitting writes the student row AND their semester lines (2026-08-04), so
- * every test here has to let the semester writes through even when it is only
- * asserting the student row.
+ * Submitting is ONE call to `submit_srf` (0028): the student row, the semester
+ * lines and the marksheet rows in a single transaction. Resolving the
+ * student's own id first still happens, because the storage policy requires
+ * every uploaded object to sit under it.
  */
 beforeEach(() => {
-  server.use(
-    http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
-    http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-      const rows = (await request.json()) as Array<Record<string, unknown>>;
-      return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-    }),
-  );
+  server.use(http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })));
 });
 
 afterEach(() => setSupabaseClient(undefined));
 
 describe("submitSrf", () => {
-  it("writes the student's own row in Supabase, not to a mock endpoint", async () => {
+  it("submits through the real database function, not a mock endpoint", async () => {
     let seen: { method?: string; url?: string } = {};
 
     server.use(
-      http.patch(`${BASE}/rest/v1/students`, ({ request }) => {
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, ({ request }) => {
         seen = { method: request.method, url: request.url };
-        // .single() asks PostgREST for an object, not an array.
-        return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
+        return HttpResponse.json({ student_id: "s1", srf_status: "srf_submitted" });
       }),
     );
     signedInClient();
 
     const result = await submitSrf(values);
 
-    expect(seen.method).toBe("PATCH");
-    expect(seen.url).toContain("auth_user_id=eq.");
+    expect(seen.method).toBe("POST");
+    expect(seen.url).toContain("/rest/v1/rpc/submit_srf");
     expect(result).toEqual({ id: "s1", status: "srf_submitted" });
   });
 
   it("turns a permission refusal into words a student can act on", async () => {
     server.use(
-      http.patch(`${BASE}/rest/v1/students`, () =>
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, () =>
         HttpResponse.json(
           { code: "42501", message: "permission denied", details: null, hint: null },
           { status: 403 },

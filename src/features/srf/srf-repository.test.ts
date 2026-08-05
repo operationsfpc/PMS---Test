@@ -8,33 +8,57 @@ import { SRF_DEFAULTS, type SrfSubmission } from "./srf-schema";
 /**
  * Verifies the request the adapter actually sends to PostgREST, and how it
  * translates database errors into something a student can act on.
+ *
+ * Submitting is now ONE call to `submit_srf` (0028), not four writes. It used
+ * to insert the marksheet rows, update the student, delete the semester lines
+ * and insert the new ones as four separate requests - and PostgREST gives each
+ * its own transaction, so a failure part-way through committed the earlier
+ * ones. The live database was found holding a student row that said
+ * `srf_submitted` while the student was being told submission had failed.
+ *
+ * So the assertions here changed shape: what used to be checked as "the body
+ * of the PATCH" is now checked as "the payload of the call", and the writes
+ * that used to be ordered by this code are ordered inside the function. The
+ * transaction itself is tested where it lives, in
+ * `src/db/srf-atomic-submission.test.ts`.
  */
 
 const BASE = "https://project.supabase.co";
 const USER = "40000000-0000-0000-0000-000000000001";
+const RPC = `${BASE}/rest/v1/rpc/submit_srf`;
 
-/**
- * Submitting writes the student row AND their semester lines. Tests that care
- * about the student row still have to let the semester writes through, or MSW
- * fails them for an unhandled request that has nothing to do with what they
- * are asserting.
- */
+interface SubmitPayload {
+  p_student: Record<string, unknown>;
+  p_semesters: Array<Record<string, unknown>>;
+  p_documents: Array<Record<string, unknown>>;
+}
+
 beforeEach(() => {
   server.use(
-    // Submitting now resolves the student's own id BEFORE it writes anything,
-    // so that evidence can be stored before the form enters the queue.
+    // Submitting resolves the student's own id BEFORE it writes anything: the
+    // storage policy checks that the first path segment is that id.
     http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "student-1" })),
-    http.patch(`${BASE}/rest/v1/students`, () =>
-      HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" }),
+    http.patch(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "student-1" })),
+    http.post(RPC, () =>
+      HttpResponse.json({ student_id: "student-1", srf_status: "srf_submitted" }),
     ),
-    http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-      const rows = (await request.json()) as Array<Record<string, unknown>>;
-      return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-    }),
   );
 });
+
+/** Records the single payload the submission sends. */
+function captureSubmit(
+  respond: () => Response = () =>
+    HttpResponse.json({ student_id: "student-1", srf_status: "srf_submitted" }),
+) {
+  const calls: SubmitPayload[] = [];
+  server.use(
+    http.post(RPC, async ({ request }) => {
+      calls.push((await request.json()) as SubmitPayload);
+      return respond();
+    }),
+  );
+  return calls;
+}
 
 /**
  * Storage is stubbed at the client, not over HTTP: supabase-js signs and
@@ -143,66 +167,44 @@ describe("marksheet evidence", () => {
     expect(new Set(uploads.map((u) => u.path)).size).toBe(4);
   });
 
-  it("records each upload against the student with its kind", async () => {
-    let rows: Array<Record<string, unknown>> = [];
-    server.use(
-      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-        rows = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-      }),
-    );
+  it("declares each upload with its kind and its size", async () => {
+    const calls = captureSubmit();
 
     await repo().submit(values);
 
-    expect(rows.map((r) => r.kind)).toEqual([
+    expect(calls[0]?.p_documents.map((d) => d.kind)).toEqual([
       "tenth_marksheet",
       "twelfth_marksheet",
       "semester_marksheet",
       "semester_marksheet",
     ]);
-    expect(rows.every((r) => r.student_id === "student-1")).toBe(true);
-    expect(rows.every((r) => (r.size_bytes as number) > 0)).toBe(true);
+    expect(calls[0]?.p_documents.every((d) => (d.size_bytes as number) > 0)).toBe(true);
   });
 
-  /** The whole point: each declared line points at the document proving it. */
-  it("links each semester row to the marksheet that evidences it", async () => {
-    let inserted: Array<Record<string, unknown>> = [];
-    server.use(
-      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-        const rows = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(
-          rows.map((row) => ({
-            ...row,
-            id: `doc-for-${String(row.storage_path).split("-").pop()}`,
-          })),
-        );
-      }),
-      http.post(`${BASE}/rest/v1/student_semesters`, async ({ request }) => {
-        inserted = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(inserted);
-      }),
-    );
+  /**
+   * The document rows do not exist yet when this payload is built - they are
+   * inserted inside the transaction - so the semester lines point at their
+   * SLOT, and the function resolves it. Previously the client inserted the
+   * documents itself just to learn their ids, which is precisely why a failed
+   * submission left orphaned rows behind: 34 of them for one student.
+   */
+  it("links each semester line to the marksheet that evidences it", async () => {
+    const calls = captureSubmit();
 
     await repo().submit(values);
 
-    expect(inserted[0]?.marksheet_id).toBe("doc-for-sem1.pdf");
-    expect(inserted[1]?.marksheet_id).toBe("doc-for-sem2.pdf");
+    expect(calls[0]?.p_documents.map((d) => d.slot)).toEqual([
+      "tenth",
+      "twelfth",
+      "semester-1",
+      "semester-2",
+    ]);
+    expect(calls[0]?.p_semesters[0]?.marksheet_slot).toBe("semester-1");
+    expect(calls[0]?.p_semesters[1]?.marksheet_slot).toBe("semester-2");
   });
 
   it("records a postgraduate's consolidated UG marksheet on the student", async () => {
-    let kinds: unknown[] = [];
-    let body: Record<string, unknown> = {};
-    server.use(
-      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-        const rows = (await request.json()) as Array<Record<string, unknown>>;
-        kinds = rows.map((r) => r.kind);
-        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-      }),
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
-      }),
-    );
+    const calls = captureSubmit();
 
     await repo().submit({
       ...values,
@@ -217,8 +219,8 @@ describe("marksheet evidence", () => {
       },
     });
 
-    expect(kinds).toContain("ug_consolidated_marksheet");
-    expect(body.ug_marksheet_id).toEqual(expect.any(String));
+    expect(calls[0]?.p_documents.map((d) => d.kind)).toContain("ug_consolidated_marksheet");
+    expect(calls[0]?.p_student.ug_marksheet_slot).toBe("ug_consolidated");
   });
 
   /**
@@ -228,36 +230,33 @@ describe("marksheet evidence", () => {
    */
   it("stores the evidence before the form enters the verification queue", async () => {
     const order: string[] = [];
+    const { client } = storageStub();
+    const upload = client.storage.from;
+    client.storage.from = ((bucket: string) => {
+      order.push("upload");
+      return upload(bucket);
+    }) as unknown as typeof client.storage.from;
     server.use(
-      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
-        order.push("documents");
-        const rows = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
-      }),
-      http.patch(`${BASE}/rest/v1/students`, () => {
+      http.post(RPC, () => {
         order.push("submit");
-        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
+        return HttpResponse.json({ student_id: "student-1", srf_status: "srf_submitted" });
       }),
     );
 
-    await repo().submit(values);
+    await createSupabaseSrfRepository(client, async () => USER).submit(values);
 
-    expect(order).toEqual(["documents", "submit"]);
+    expect(order.at(-1)).toBe("submit");
+    expect(order.filter((o) => o === "upload")).toHaveLength(4);
   });
 
   it("leaves the form unsubmitted when an upload fails", async () => {
-    let submitted = false;
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, () => {
-        submitted = true;
-        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
-      }),
-    );
+    const calls = captureSubmit();
 
     await expect(repo(USER, { uploadFails: true }).submit(values)).rejects.toThrow(
       /could not upload/i,
     );
-    expect(submitted).toBe(false);
+
+    expect(calls).toHaveLength(0);
   });
 
   it("refuses to submit a form that is missing evidence for a declared figure", async () => {
@@ -268,33 +267,19 @@ describe("marksheet evidence", () => {
 });
 
 /**
- * Semester lines are their own table, so submitting the SRF writes twice.
- * They are replaced wholesale rather than merged: the form shows the student's
- * whole record, so what is on screen must be what ends up stored.
+ * Semester lines live in their own table, and are replaced wholesale rather
+ * than merged: the form shows the student's whole record, so what is on screen
+ * must be what ends up stored. Merging would silently keep a line the student
+ * deleted.
  */
 describe("semester-wise academics", () => {
-  it("replaces the student's semester rows with what was submitted", async () => {
-    let deleted = false;
-    let inserted: Array<Record<string, unknown>> = [];
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, () =>
-        HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }),
-      ),
-      http.delete(`${BASE}/rest/v1/student_semesters`, () => {
-        deleted = true;
-        return HttpResponse.json([]);
-      }),
-      http.post(`${BASE}/rest/v1/student_semesters`, async ({ request }) => {
-        inserted = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(inserted);
-      }),
-    );
+  it("sends the whole record, so what is stored is what is on screen", async () => {
+    const calls = captureSubmit();
 
     await repo().submit(values);
 
-    expect(deleted).toBe(true);
-    expect(inserted).toHaveLength(2);
-    expect(inserted[1]).toMatchObject({
+    expect(calls[0]?.p_semesters).toHaveLength(2);
+    expect(calls[0]?.p_semesters[1]).toMatchObject({
       semester_number: 2,
       cgpa: 8.24,
       current_arrears: 1,
@@ -303,65 +288,41 @@ describe("semester-wise academics", () => {
   });
 
   /**
-   * The live failure, UAT 2026-08-05. Eight submissions in a row died on a
-   * 409 from `POST /rest/v1/student_semesters` and the student was told
-   * "Could not submit your form. Please try again." eight times. Trying again
-   * was the one thing that could never work.
-   *
-   * 0027 gives the delete a policy, so the ordinary re-submit now clears the
-   * old lines first. What can still collide is a line a COORDINATOR has
-   * verified, which the student is deliberately not allowed to remove - and
-   * that has an answer the student can act on, so say it.
+   * The heart of 0028. Four requests meant four transactions, and the third
+   * one failing left the first two committed - a student row saying
+   * `srf_submitted` with no semester lines under it, which a coordinator
+   * cannot tell apart from a complete form.
    */
-  it("explains a semester line the student is no longer allowed to replace", async () => {
+  it("submits in a single call, so a failure can leave nothing behind", async () => {
+    const calls = captureSubmit();
+    const writes: string[] = [];
     server.use(
-      http.post(`${BASE}/rest/v1/student_semesters`, () =>
-        HttpResponse.json(
-          {
-            code: "23505",
-            message:
-              'duplicate key value violates unique constraint "student_semesters_student_id_semester_number_key"',
-          },
-          { status: 409 },
-        ),
-      ),
-    );
-
-    await expect(repo().submit(values)).rejects.toThrow(/placement coordinator/i);
-  });
-
-  /**
-   * The delete's result was thrown away entirely. That is precisely how this
-   * shipped: RLS filtered it to nothing, PostgREST answered 204, and the code
-   * walked into an insert that could not succeed. A clear-out that did not
-   * clear anything must stop the submission, not feed it.
-   */
-  it("stops when the old lines could not be cleared, rather than colliding with them", async () => {
-    let inserted = false;
-    server.use(
-      http.delete(`${BASE}/rest/v1/student_semesters`, () =>
-        HttpResponse.json({ code: "42501", message: "permission denied" }, { status: 403 }),
-      ),
+      http.patch(`${BASE}/rest/v1/students`, () => {
+        writes.push("patch students");
+        return HttpResponse.json({ id: "student-1" });
+      }),
+      http.delete(`${BASE}/rest/v1/student_semesters`, () => {
+        writes.push("delete semesters");
+        return HttpResponse.json([]);
+      }),
       http.post(`${BASE}/rest/v1/student_semesters`, () => {
-        inserted = true;
+        writes.push("insert semesters");
+        return HttpResponse.json([]);
+      }),
+      http.post(`${BASE}/rest/v1/student_documents`, () => {
+        writes.push("insert documents");
         return HttpResponse.json([]);
       }),
     );
 
-    await expect(repo().submit(values)).rejects.toThrow(/placement coordinator/i);
-    expect(inserted).toBe(false);
+    await repo().submit(values);
+
+    expect(calls).toHaveLength(1);
+    expect(writes).toEqual([]);
   });
 
   it("records a postgraduate's completed UG aggregate on the student", async () => {
-    let body: Record<string, unknown> = {};
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
-      }),
-      http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
-    );
+    const calls = captureSubmit();
 
     await repo().submit({
       ...values,
@@ -377,80 +338,79 @@ describe("semester-wise academics", () => {
       },
     });
 
-    expect(body.programme_level).toBe("pg");
-    expect(body.ug_aggregate_cgpa).toBe(7.85);
+    expect(calls[0]?.p_student.programme_level).toBe("pg");
+    expect(calls[0]?.p_student.ug_aggregate_cgpa).toBe(7.85);
+  });
+
+  /**
+   * The live failure, UAT 2026-08-05. Eight submissions in a row died on a 409
+   * from the semester insert and the student was told "Could not submit your
+   * form. Please try again." eight times. Trying again was the one thing that
+   * could never work.
+   *
+   * 0027 gives the delete a policy, so the ordinary re-submit now clears the
+   * old lines first. What can still collide is a line a COORDINATOR has
+   * verified, which the student is deliberately not allowed to remove - and
+   * that has an answer the student can act on, so say it.
+   */
+  it("explains a semester line the student is no longer allowed to replace", async () => {
+    captureSubmit(() =>
+      HttpResponse.json(
+        {
+          code: "23505",
+          message:
+            'duplicate key value violates unique constraint "student_semesters_student_id_semester_number_key"',
+        },
+        { status: 409 },
+      ),
+    );
+
+    await expect(repo().submit(values)).rejects.toThrow(/placement coordinator/i);
   });
 });
 
 describe("createSupabaseSrfRepository", () => {
-  it("updates the student's own pre-loaded row rather than inserting one", async () => {
-    let method: string | undefined;
-    let query: string | undefined;
-    let body: Record<string, unknown> | undefined;
-
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        method = request.method;
-        query = new URL(request.url).search;
-        body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "student-1", srf_status: "srf_submitted" });
-      }),
-    );
-
+  it("returns the id and status the database settled on", async () => {
     const result = await repo().submit(values);
 
-    expect(method).toBe("PATCH");
-    // Scoped to the signed-in user, so it can never touch another student.
-    expect(query).toContain(`auth_user_id=eq.${USER}`);
     expect(result).toEqual({ id: "student-1", status: "srf_submitted" });
-    expect(body?.srf_status).toBe("srf_submitted");
   });
 
-  it("records consent at submission (PRD §4.1)", async () => {
-    let body: Record<string, unknown> | undefined;
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "s", srf_status: "srf_submitted" });
-      }),
-    );
+  /**
+   * Stronger than the scoping it replaces. The call used to carry
+   * `auth_user_id=eq.<uuid>` and trust PostgREST to filter; now it carries no
+   * identity at all and the function reads it from the session, so a tampered
+   * payload has nothing to tamper with.
+   */
+  it("names no student in the payload - the session decides whose form this is", async () => {
+    const calls = captureSubmit();
 
     await repo().submit(values);
 
-    expect(body?.consent_given_at).toEqual(expect.any(String));
+    for (const forbidden of ["id", "student_id", "auth_user_id"]) {
+      expect(calls[0]?.p_student[forbidden]).toBeUndefined();
+    }
+    expect(calls[0]?.p_documents.every((d) => d.student_id === undefined)).toBe(true);
   });
 
   it("stores blank optional fields as null, not empty strings", async () => {
-    let body: Record<string, unknown> | undefined;
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "s", srf_status: "srf_submitted" });
-      }),
-    );
+    const calls = captureSubmit();
 
     await repo().submit(values);
 
-    expect(body?.whatsapp).toBeNull();
-    expect(body?.github).toBeUndefined();
-    expect(body?.github_url).toBeNull();
+    expect(calls[0]?.p_student.whatsapp).toBeNull();
   });
 
-  it("never sends fields the student is forbidden to change", async () => {
-    let body: Record<string, unknown> = {};
-    server.use(
-      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
-        body = (await request.json()) as Record<string, unknown>;
-        return HttpResponse.json({ id: "s", srf_status: "srf_submitted" });
-      }),
-    );
+  it("never sends a field the student does not own", async () => {
+    const calls = captureSubmit();
 
     await repo().submit(values);
 
-    // The DB guard would reject these anyway; not sending them means the
-    // student never sees a confusing permission error.
-    for (const forbidden of ["roll_number", "campus_id", "participation_status", "auth_user_id"]) {
-      expect(body[forbidden]).toBeUndefined();
+    // The function names the columns it writes and the DB guard backs it up;
+    // not sending these means the student never sees a confusing permission
+    // error either.
+    for (const forbidden of ["roll_number", "campus_id", "participation_status", "overall_cgpa"]) {
+      expect(calls[0]?.p_student[forbidden]).toBeUndefined();
     }
   });
 
@@ -460,9 +420,7 @@ describe("createSupabaseSrfRepository", () => {
 
   describe("translates database errors into student-readable prose", () => {
     const failWith = (status: number, payload: Record<string, string>) =>
-      server.use(
-        http.patch(`${BASE}/rest/v1/students`, () => HttpResponse.json(payload, { status })),
-      );
+      server.use(http.post(RPC, () => HttpResponse.json(payload, { status })));
 
     it("explains an arrear-consistency violation", async () => {
       failWith(400, {
@@ -482,6 +440,12 @@ describe("createSupabaseSrfRepository", () => {
 
     it("explains a missing student record", async () => {
       failWith(406, { code: "PGRST116", message: "0 rows" });
+      await expect(repo().submit(values)).rejects.toThrow(/could not find your student record/i);
+    });
+
+    /** The function raises this itself when the session has no student row. */
+    it("explains the same when the function refuses for want of a student", async () => {
+      failWith(400, { code: "P0002", message: "We could not find your student record." });
       await expect(repo().submit(values)).rejects.toThrow(/could not find your student record/i);
     });
 
@@ -507,20 +471,12 @@ describe("createSupabaseSrfRepository", () => {
  * A draft is a convenience: it must never move the form forward, never touch
  * a verified column, and never fail loudly enough to interrupt someone who is
  * mid-sentence. All three are asserted here.
+ *
+ * Clearing the draft on submission is now the function's job, inside the same
+ * transaction - see `src/db/srf-atomic-submission.test.ts`. Doing it from here
+ * was a fifth write that could succeed while the submission failed.
  */
 describe("saving a draft", () => {
-  /**
-   * Otherwise the next visit restores a draft of a form already submitted,
-   * and the student edits a copy that no longer means anything.
-   */
-  it("is cleared when the form is finally submitted", async () => {
-    const writes = captureDraftWrites();
-
-    await repo().submit(values);
-
-    expect(writes[0]?.body).toMatchObject({ srf_draft: null, srf_draft_saved_at: null });
-  });
-
   it("writes the values against the signed-in student, with the time", async () => {
     const writes = captureDraftWrites();
 
