@@ -8,7 +8,42 @@ verify it with `git merge-base --is-ancestor <hash> HEAD`.
 
 ---
 
-## 🔴 THE CURRENT WORK — UAT "Copy of Testing", 2026-08-06
+## ✅ SHIPPED 2026-08-06 — the whole UAT round is live
+
+**Migrations `0032`–`0036` are applied to Mumbai.** `supabase migration list`
+shows local and remote level at `0036`.
+
+**Cloudflare version `219d3bd8-48b0-4e96-acac-4ed8467c2aca`**,
+`https://fpc-pms.faceprep.workers.dev`. The live `index.html` references the
+same asset hashes as the local `dist/`, and the deployed bundle contains F14's
+confirmation copy — checked, not assumed.
+
+Verified against LIVE rows immediately after the push:
+
+| Check | Result |
+|---|---|
+| `campus_programmes` backfilled | **2** |
+| Students on the roster | 5 |
+| **Students left with no programme mapped** | **0** |
+| `submit_srf` arity | 4 |
+| `opt_out_requests.decision_reason` | present |
+| `student_certificates` | present |
+| `student_documents.drive_id` | present |
+| `drives.round_count` | present |
+
+New routes all resolve through the SPA fallback: `/student/opt-out`,
+`/student/off-campus`, `/cpc/opt-outs`, `/cpc/off-campus`, `/my-drives`.
+
+🔴 **The backfill was the whole risk, and it was caught while preparing the
+push, not by a failing test.** `campus_programmes` starts empty and the
+registration form now offers only what it contains — so 0036 without a
+backfill would have blocked every student on the roster from selecting a degree
+the moment it landed. The "0 students left with no programme mapped" row above
+is the proof it did not.
+
+---
+
+## 🔴 THE WORK — UAT "Copy of Testing", 2026-08-06
 
 Seventeen items, extracted verbatim into **`docs/UAT-2026-08-06-feedback.md`**
 (F1–F17). **All seventeen are shipped in code**; two carry a manual follow-up,
