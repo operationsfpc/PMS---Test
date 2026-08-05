@@ -23,3 +23,40 @@ only you can supply. Everything else proceeds on assumptions (`ASSUMPTIONS.md`).
 
 - **Coverage gate.** `pnpm check` is red and **was red before this session's work** (proved against a clean `HEAD`): `src/domain` sits at 97.51% against the 100% rule, global branches 76.85% against 80%. Being brought back up.
 - **Playwright E2E.** Configured in plan, no specs written. One journey per role is the stated target.
+
+---
+
+## UAT 2026-08-06 (F9) — delete the test certificates already in the database
+
+**Requested:** "Also, please delete the previously uploaded test certificates
+from the database."
+
+**Not doable from here.** This is a production data operation against the
+Mumbai project, and there is no way to tell a real certificate from a test one
+from the schema alone — only whoever uploaded them knows.
+
+Two things to do, in this order:
+
+1. **The old free-text column.** `students.certifications` is superseded by
+   `student_certificates` (0034) and is no longer written by `submit_srf`
+   (0035). It is deliberately NOT dropped: dropping a column that holds real
+   data is a separate decision and is not reversible. Read it, decide what is
+   worth keeping, then drop it in its own migration.
+
+2. **The test uploads.** Certificates now live in two places — a row in
+   `student_certificates` and an object in the `marksheets` bucket. Deleting
+   the row cascades nothing in storage, so both have to go:
+
+```sql
+-- Inspect first. Never run the delete blind.
+select c.id, s.full_name, s.roll_number, c.name, d.storage_path, c.created_at
+  from student_certificates c
+  join students s on s.id = c.student_id
+  join student_documents d on d.id = c.document_id
+ order by c.created_at;
+```
+
+Then delete the chosen rows and remove the matching objects from the
+`marksheets` bucket. `student_certificates.document_id` cascades from
+`student_documents`, so deleting the document row removes the certificate row
+with it.

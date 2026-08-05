@@ -207,6 +207,12 @@ export function SrfPage({
    */
   const collegeMarksScale = watch("collegeMarksScale");
   const otherProfiles = useFieldArray({ control, name: "otherProfiles" });
+  /**
+   * F17: a certificate is a NAME and a FILE. The free-text "Certifications"
+   * box it replaces was both failures at once - nothing in it could be
+   * verified, and nothing in it was unique, which is what F9 reported.
+   */
+  const certificates = useFieldArray({ control, name: "certificates" });
   const maxSemesters = MAX_SEMESTERS[programmeLevel];
   const hasDiplomaMarks = diplomaMarks !== null && !Number.isNaN(diplomaMarks);
 
@@ -1160,8 +1166,75 @@ export function SrfPage({
                     placeholder="Title, stack, and what you built"
                     {...register("projects")}
                   />
-                  <TextField label="Certifications" {...register("certifications")} />
                   <TextField label="Achievements" {...register("achievements")} />
+                </div>
+
+                <div className="mt-6">
+                  <p className="mb-1 text-sm font-medium text-ink-700">Certificates</p>
+                  <p className="mb-3 text-xs text-ink-500">
+                    Name each certificate and upload it. Each one is uploaded <strong>once</strong>{" "}
+                    — to replace one, remove it and add it again. A name with no document cannot be
+                    verified by your coordinator.
+                  </p>
+
+                  {certificates.fields.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      {certificates.fields.map((field, index) => (
+                        <div
+                          key={field.id}
+                          className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.5fr_auto]"
+                        >
+                          <TextField
+                            label={`Certificate ${index + 1} name`}
+                            placeholder="e.g. AWS Cloud Practitioner"
+                            {...register(`certificates.${index}.name`)}
+                          />
+                          <Controller
+                            control={control}
+                            name={`certificates.${index}.file`}
+                            render={({ field: file }) => (
+                              <div>
+                                <label
+                                  htmlFor={`certificate-file-${index}`}
+                                  className="mb-1 block text-sm font-medium text-ink-700"
+                                >
+                                  Upload certificate {index + 1}
+                                </label>
+                                <input
+                                  id={`certificate-file-${index}`}
+                                  type="file"
+                                  accept="application/pdf,image/*"
+                                  onChange={(e) => file.onChange(e.target.files?.[0] ?? null)}
+                                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                                />
+                              </div>
+                            )}
+                          />
+                          <button
+                            type="button"
+                            aria-label={`Remove certificate ${index + 1}`}
+                            onClick={() => certificates.remove(index)}
+                            className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* An issue raised against an ARRAY lands on `.root`. */}
+                  <ErrorText>
+                    {errors.certificates?.message ?? errors.certificates?.root?.message}
+                  </ErrorText>
+
+                  <button
+                    type="button"
+                    onClick={() => certificates.append({ name: "", file: null })}
+                    className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+                  >
+                    Add a certificate
+                  </button>
                 </div>
               </Section>
 

@@ -1,4 +1,5 @@
 import { validateSemesters } from "@domain/academics";
+import { usableCertificates, validateCertificates } from "@domain/certificates";
 import { isValidForScale, MARKS_SCALES, normaliseToCgpa } from "@domain/marks";
 import { missingMarksheets } from "@domain/marksheets";
 import { normaliseProfileLinks, validateProfileLinks } from "@domain/profile-links";
@@ -135,7 +136,27 @@ export const srfSchema = z
     areasOfInterest: z.string(),
     areasOfExpertise: z.string(),
     projects: z.string(),
-    certifications: z.string(),
+    /**
+     * A certificate is a NAME and a FILE (F17, UAT 2026-08-06). Rows the
+     * student added and left blank are dropped rather than refused - the form
+     * offers an empty row to type into, and an untouched one is not a mistake.
+     *
+     * `certifications` (free text) is gone: nothing in it could be verified,
+     * and nothing in it was unique, which is what F9 was reported about.
+     */
+    certificates: z
+      .array(
+        z.object({
+          name: z.string().max(160),
+          file: z.instanceof(File).nullable().default(null),
+        }),
+      )
+      .default([])
+      .transform((rows) =>
+        rows
+          .map((row) => ({ ...row, name: row.name.trim() }))
+          .filter((row) => row.name !== "" || row.file !== null),
+      ),
     achievements: z.string(),
 
     consent: z.literal(true, { error: "You must consent before submitting" }),
@@ -175,6 +196,20 @@ export const srfSchema = z
 
     if (problems.length > 0) {
       ctx.addIssue({ code: "custom", path: ["semesters"], message: problems.join(" ") });
+    }
+
+    // One certificate, one upload - and both halves present. The rule is the
+    // domain's, so the form and the database refuse for the same reason.
+    const certificateProblems = validateCertificates(
+      usableCertificates(d.certificates.map((c) => ({ name: c.name, hasFile: c.file !== null }))),
+    );
+
+    if (certificateProblems.length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["certificates"],
+        message: certificateProblems.join(" "),
+      });
     }
 
     // Named profiles are the student's own words, so the rules are the
@@ -322,7 +357,7 @@ export const SRF_DEFAULTS: SrfFormValues = {
   areasOfInterest: "",
   areasOfExpertise: "",
   projects: "",
-  certifications: "",
+  certificates: [],
   achievements: "",
   consent: false as unknown as true,
 };

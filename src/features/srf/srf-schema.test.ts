@@ -392,3 +392,68 @@ describe("srfSchema", () => {
     });
   });
 });
+
+/**
+ * F17 (UAT 2026-08-06): "The student registration form should also contain an
+ * upload button for students to upload the certificates. Name of certificate +
+ * upload certificate."
+ *
+ * F9: "students can upload certificates multiple times, which should be
+ * restricted to a single upload."
+ *
+ * The rules are the domain's (`@domain/certificates`); Zod owns only the shape.
+ */
+describe("srfSchema — certificates", () => {
+  const certificate = (name: string) => ({
+    name,
+    file: new File(["cert"], `${name}.pdf`, { type: "application/pdf" }),
+  });
+
+  it("accepts a named certificate with its file", () => {
+    const result = srfSchema.safeParse({
+      ...valid,
+      certificates: [certificate("AWS Cloud Practitioner")],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a form with no certificates — they are not compulsory", () => {
+    expect(srfSchema.safeParse({ ...valid, certificates: [] }).success).toBe(true);
+  });
+
+  it("refuses a certificate with no name", () => {
+    const result = srfSchema.safeParse({
+      ...valid,
+      certificates: [{ name: "  ", file: new File(["c"], "c.pdf") }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("refuses a name with no file behind it", () => {
+    const result = srfSchema.safeParse({ ...valid, certificates: [{ name: "AWS", file: null }] });
+
+    expect(result.success).toBe(false);
+  });
+
+  /** F9: the duplicate is the bug that was reported. */
+  it("refuses the same certificate twice", () => {
+    const result = srfSchema.safeParse({
+      ...valid,
+      certificates: [certificate("AWS Cloud Practitioner"), certificate("aws cloud practitioner")],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("drops a row the student added and never filled in", () => {
+    const result = srfSchema.safeParse({
+      ...valid,
+      certificates: [certificate("AWS"), { name: "", file: null }],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.certificates).toHaveLength(1);
+  });
+});

@@ -28,7 +28,8 @@ export interface Enums {
     | "offer_letter"
     | "opt_out_declaration"
     | "ug_consolidated_marksheet"
-    | "diploma_marksheet";
+    | "diploma_marksheet"
+    | "certificate";
   drive_mode: "on_campus" | "physical_outside_campus" | "virtual" | "pooled";
   drive_status:
     | "draft"
@@ -579,6 +580,20 @@ export interface StaffInvitationsRow {
 
 export type StaffInvitationsInsert = Pick<StaffInvitationsRow, "email" | "full_name" | "role"> &
   Partial<Pick<StaffInvitationsRow, "invited_by" | "created_at" | "accepted_at">>;
+
+export interface StudentCertificatesRow {
+  id: string;
+  student_id: string;
+  name: string;
+  document_id: string;
+  created_at: string;
+}
+
+export type StudentCertificatesInsert = Pick<
+  StudentCertificatesRow,
+  "student_id" | "name" | "document_id"
+> &
+  Partial<Pick<StudentCertificatesRow, "id" | "created_at">>;
 
 export interface StudentDocumentsRow {
   id: string;

@@ -100,6 +100,7 @@ const submit = (
     student?: Record<string, unknown>;
     semesters?: Record<string, unknown>[];
     documents?: Record<string, unknown>[];
+    certificates?: Record<string, unknown>[];
   } = {},
 ) => {
   attempt += 1;
@@ -108,10 +109,11 @@ const submit = (
     storage_path: `${d.storage_path}-${attempt}`,
   }));
 
-  return t.asUser(user, `select * from submit_srf($1::jsonb, $2::jsonb, $3::jsonb)`, [
+  return t.asUser(user, `select * from submit_srf($1::jsonb, $2::jsonb, $3::jsonb, $4::jsonb)`, [
     JSON.stringify({ ...STUDENT, ...overrides.student }),
     JSON.stringify(overrides.semesters ?? [SEMESTER]),
     JSON.stringify(documents),
+    JSON.stringify(overrides.certificates ?? []),
   ]);
 };
 
@@ -295,5 +297,91 @@ describe("submit_srf grants no new power", () => {
 
     expect(await countOf("student_documents", ids.priya)).toBe(0);
     expect(await countOf("student_documents", ids.arjun)).toBe(3);
+  });
+});
+
+/**
+ * F17 (UAT 2026-08-06): certificates travel with the form, in the same
+ * transaction as everything else it declares.
+ *
+ * They cannot be a second round trip. The whole reason `submit_srf` exists is
+ * that a partial submission is worse than a failed one: a coordinator opening
+ * the queue cannot see what is missing, so they verify what is in front of
+ * them.
+ */
+describe("submit_srf — certificates", () => {
+  it("stores each certificate against the document that evidences it", async () => {
+    await submit(ids.priyaUser, {
+      documents: [
+        ...DOCUMENTS,
+        { slot: "cert-0", kind: "certificate", storage_path: "p/aws.pdf", size_bytes: 100 },
+      ],
+      certificates: [{ name: "AWS Cloud Practitioner", document_slot: "cert-0" }],
+    });
+
+    const rows = await t.sql(
+      `select c.name, d.storage_path
+         from student_certificates c
+         join student_documents d on d.id = c.document_id
+        where c.student_id = $1`,
+      [ids.priya],
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.name).toBe("AWS Cloud Practitioner");
+    // The helper stamps each attempt's paths, as the repository does.
+    expect(rows[0]?.storage_path).toMatch(/^p\/aws\.pdf/);
+  });
+
+  /**
+   * Re-submitting shows the student's whole record, so what is on screen must
+   * be what ends up stored — the same rule the semester lines follow.
+   */
+  it("replaces the certificate list wholesale on a re-submission", async () => {
+    await submit(ids.priyaUser, {
+      documents: [
+        ...DOCUMENTS,
+        { slot: "cert-0", kind: "certificate", storage_path: "p/azure.pdf", size_bytes: 100 },
+      ],
+      certificates: [{ name: "Azure Fundamentals", document_slot: "cert-0" }],
+    });
+
+    const rows = await t.sql(`select name from student_certificates where student_id = $1`, [
+      ids.priya,
+    ]);
+
+    expect(rows.map((r) => r.name)).toEqual(["Azure Fundamentals"]);
+  });
+
+  it("accepts a form with no certificates at all", async () => {
+    await submit(ids.priyaUser, {
+      documents: DOCUMENTS,
+      certificates: [],
+    });
+
+    const [row] = await t.sql(
+      `select count(*) as n from student_certificates where student_id = $1`,
+      [ids.priya],
+    );
+    expect(Number(row?.n)).toBe(0);
+  });
+
+  /** F9, enforced where no screen can forget it. */
+  it("refuses a submission naming the same certificate twice", async () => {
+    await t.expectRejection(
+      () =>
+        submit(ids.priyaUser, {
+          documents: [
+            ...DOCUMENTS,
+            { slot: "cert-0", kind: "certificate", storage_path: "p/a.pdf", size_bytes: 100 },
+            { slot: "cert-1", kind: "certificate", storage_path: "p/b.pdf", size_bytes: 100 },
+          ],
+          certificates: [
+            { name: "AWS Cloud Practitioner", document_slot: "cert-0" },
+            { name: "aws cloud practitioner", document_slot: "cert-1" },
+          ],
+        }),
+      /one_certificate_per_name|duplicate key/i,
+    );
   });
 });

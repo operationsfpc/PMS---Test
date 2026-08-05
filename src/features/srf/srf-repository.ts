@@ -33,11 +33,19 @@ export class SrfSubmitError extends Error {}
 /** Private since 0010. Nothing here is ever served publicly. */
 const MARKSHEET_BUCKET = "marksheets";
 
+/**
+ * Certificates share the marksheet bucket: same owner, same privacy, same
+ * `<student>/...` path rule the storage policy checks (0022). A second bucket
+ * would be a second policy to get wrong.
+ */
+const CERTIFICATE_SLOT = (index: number) => `certificate-${index}`;
+
 /** One uploaded marksheet, as the transaction needs to hear about it. */
 interface MarksheetUpload {
   /** The form's own key ("tenth", "semester-3"), used to link declarations. */
   readonly slot: string;
-  readonly kind: MarksheetKind;
+  /** A marksheet kind, or "certificate" — both are evidence the form carries. */
+  readonly kind: MarksheetKind | "certificate";
   readonly storage_path: string;
   readonly size_bytes: number;
 }
@@ -104,6 +112,33 @@ async function uploadMarksheets(
       kind: slot.kind,
       storage_path: path,
       size_bytes: file.size,
+    });
+  }
+
+  // F17: the certificates the student named, each with its own document. They
+  // ride in `p_documents` like every other piece of evidence, so `submit_srf`
+  // can marry them to their certificate rows inside the one transaction.
+  for (const [index, certificate] of values.certificates.entries()) {
+    if (certificate.file === null) continue;
+
+    const slot = CERTIFICATE_SLOT(index);
+    const path = `${studentId}/${slot}-${Date.now()}-${certificate.file.name}`;
+
+    const { error } = await client.storage
+      .from(MARKSHEET_BUCKET)
+      .upload(path, certificate.file, { contentType: certificate.file.type });
+
+    if (error !== null) {
+      throw new SrfSubmitError(
+        `Could not upload your ${certificate.name} certificate. Check your connection and try again.`,
+      );
+    }
+
+    uploads.push({
+      slot,
+      kind: "certificate",
+      storage_path: path,
+      size_bytes: certificate.file.size,
     });
   }
 
@@ -215,7 +250,6 @@ export function createSupabaseSrfRepository(
           areas_of_interest: values.areasOfInterest,
           areas_of_expertise: values.areasOfExpertise,
           projects: values.projects,
-          certifications: values.certifications,
           achievements: values.achievements,
           linkedin_url: values.linkedin === "" ? null : values.linkedin,
           github_url: values.github === "" ? null : values.github,
@@ -246,6 +280,14 @@ export function createSupabaseSrfRepository(
           }),
         })),
         p_documents: uploads,
+        // Named here, uploaded above. A certificate with no file was already
+        // refused by the schema, so anything reaching this point has one.
+        p_certificates: values.certificates
+          .map((certificate, index) => ({
+            name: certificate.name,
+            document_slot: CERTIFICATE_SLOT(index),
+          }))
+          .filter((_, index) => values.certificates[index]?.file !== null),
       });
 
       if (error !== null) {

@@ -417,3 +417,55 @@ describe("SrfPage — after it has been submitted", () => {
     expect(screen.queryByText(/awaiting verification/i)).toBeNull();
   });
 });
+
+/**
+ * F17 (UAT 2026-08-06): "The student registration form should also contain an
+ * upload button for students to upload the certificates. Name of certificate +
+ * upload certificate."
+ *
+ * F9: "students can upload certificates multiple times, which should be
+ * restricted to a single upload."
+ */
+describe("SrfPage — certificates", () => {
+  it("no longer asks for certifications as free text", () => {
+    render(<SrfPage />);
+
+    expect(screen.queryByLabelText(/^certifications$/i)).toBeNull();
+  });
+
+  it("offers a way to add a certificate", () => {
+    render(<SrfPage />);
+
+    expect(screen.getByRole("button", { name: /add a certificate/i })).toBeDefined();
+  });
+
+  it("asks for a name and a file, because either alone is useless", async () => {
+    const user = userEvent.setup();
+    render(<SrfPage />);
+
+    await user.click(screen.getByRole("button", { name: /add a certificate/i }));
+
+    expect(screen.getByLabelText(/certificate 1 name/i)).toBeDefined();
+    expect(screen.getByLabelText(/upload certificate 1/i)).toBeDefined();
+  });
+
+  it("removes a certificate, which is how one is replaced", async () => {
+    const user = userEvent.setup();
+    render(<SrfPage />);
+
+    await user.click(screen.getByRole("button", { name: /add a certificate/i }));
+    await user.click(screen.getByRole("button", { name: /remove certificate 1/i }));
+
+    expect(screen.queryByLabelText(/certificate 1 name/i)).toBeNull();
+  });
+
+  /** F9, said on the screen rather than discovered by uploading twice. */
+  it("says that each certificate is uploaded once", async () => {
+    const user = userEvent.setup();
+    render(<SrfPage />);
+
+    await user.click(screen.getByRole("button", { name: /add a certificate/i }));
+
+    expect(screen.getByText(/each one is uploaded/i)).toBeDefined();
+  });
+});

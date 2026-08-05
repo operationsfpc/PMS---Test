@@ -31,6 +31,7 @@ interface SubmitPayload {
   p_student: Record<string, unknown>;
   p_semesters: Array<Record<string, unknown>>;
   p_documents: Array<Record<string, unknown>>;
+  p_certificates: Array<Record<string, unknown>>;
 }
 
 beforeEach(() => {
@@ -521,5 +522,54 @@ describe("saving a draft", () => {
 
     await expect(anonymous.saveDraft({ mobile: "9876543210" })).resolves.toBe(false);
     expect(writes).toHaveLength(0);
+  });
+});
+
+/**
+ * F17 (UAT 2026-08-06): "Name of certificate + upload certificate."
+ *
+ * The document goes to storage; the certificate travels in the SAME rpc call
+ * as everything else the form declares. A form claiming a certificate it has
+ * no document for is exactly the half-submission `submit_srf` exists to
+ * prevent.
+ */
+describe("createSupabaseSrfRepository \u2014 certificates", () => {
+  const withCertificates = (): SrfSubmission => ({
+    ...values,
+    certificates: [{ name: "AWS Cloud Practitioner", file: sheet("aws.pdf") }],
+  });
+
+  it("uploads the certificate and names it in the submission", async () => {
+    const calls = captureSubmit();
+    const { client, uploads } = storageStub();
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(withCertificates());
+
+    expect(uploads.some((u) => u.path.includes("aws.pdf"))).toBe(true);
+
+    const payload = calls[0] as SubmitPayload;
+    expect(payload.p_certificates).toEqual([
+      { name: "AWS Cloud Practitioner", document_slot: "certificate-0" },
+    ]);
+    expect(
+      payload.p_documents.some((d) => d.slot === "certificate-0" && d.kind === "certificate"),
+    ).toBe(true);
+  });
+
+  it("sends an empty list when the student has none", async () => {
+    const calls = captureSubmit();
+
+    await repo().submit({ ...values, certificates: [] });
+
+    expect((calls[0] as SubmitPayload).p_certificates).toEqual([]);
+  });
+
+  /** A certificate row pointing at a document that is not there helps nobody. */
+  it("submits nothing when a certificate cannot be uploaded", async () => {
+    const calls = captureSubmit();
+
+    await expect(repo(USER, { uploadFails: true }).submit(withCertificates())).rejects.toThrow();
+
+    expect(calls).toHaveLength(0);
   });
 });
