@@ -217,3 +217,62 @@ describe("a postgraduate's completed UG degree", () => {
     expect(rows[0]?.ug_aggregate_scale).toBe("percentage");
   });
 });
+
+/**
+ * Profiles beyond the four the form names (2026-08-06).
+ *
+ * A jsonb list rather than a child table: these are display-only links owned
+ * entirely by the student row, and every new table is another chance to get
+ * RLS wrong on a system whose hard rule is "students can only ever see their
+ * own data". The shape is owned by src/domain/profile-links.ts.
+ */
+describe("other professional profiles", () => {
+  it("starts empty rather than null, so readers never branch on absence", async () => {
+    const rows = await t.sql(`select other_profiles from students where id = $1`, [ids.priya]);
+    expect(rows[0]?.other_profiles).toEqual([]);
+  });
+
+  it("stores a named link or username, in the order given", async () => {
+    await t.sql(`update students set other_profiles = $1::jsonb where id = $2`, [
+      JSON.stringify([
+        { label: "Kaggle", value: "kaggle.com/asha" },
+        { label: "Codeforces", value: "asha_r" },
+      ]),
+      ids.priya,
+    ]);
+
+    const rows = await t.sql(`select other_profiles from students where id = $1`, [ids.priya]);
+    const stored = rows[0]?.other_profiles as Array<Record<string, string>>;
+
+    expect(stored).toHaveLength(2);
+    expect(stored[0]).toEqual({ label: "Kaggle", value: "kaggle.com/asha" });
+    // A username, not a URL - which is the whole point of the request.
+    expect(stored[1]?.value).toBe("asha_r");
+  });
+
+  it("refuses anything that is not a list", async () => {
+    // An object here would break every reader that maps over it.
+    await t.expectRejection(
+      () =>
+        t.sql(`update students set other_profiles = $1::jsonb where id = $2`, [
+          JSON.stringify({ label: "Kaggle" }),
+          ids.priya,
+        ]),
+      /other_profiles|array|list/i,
+    );
+  });
+
+  it("lets a student write their own", async () => {
+    await t.sql(`insert into auth.users (id, email) values ($1,'priya@gmail.com')`, [
+      ids.priyaUser,
+    ]);
+
+    await t.asUser(ids.priyaUser, `update students set other_profiles = $1::jsonb where id = $2`, [
+      JSON.stringify([{ label: "Portfolio", value: "https://asha.dev" }]),
+      ids.priya,
+    ]);
+
+    const rows = await t.sql(`select other_profiles from students where id = $1`, [ids.priya]);
+    expect(rows[0]?.other_profiles).toHaveLength(1);
+  });
+});

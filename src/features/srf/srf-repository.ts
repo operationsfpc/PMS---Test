@@ -5,6 +5,7 @@ import {
   missingMarksheets,
   requiredMarksheets,
 } from "@domain/marksheets";
+import { normaliseProfileLinks } from "@domain/profile-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Enums } from "../../db/database.types";
 import type { SrfSubmission } from "./srf-schema";
@@ -199,6 +200,10 @@ export function createSupabaseSrfRepository(
           github_url: values.github === "" ? null : values.github,
           leetcode_url: values.leetcode === "" ? null : values.leetcode,
           hackerrank_url: values.hackerrank === "" ? null : values.hackerrank,
+          // Trimmed, with rows the student added and abandoned dropped. The
+          // domain owns that rule so the stored list matches what validation
+          // judged, rather than what the form happened to be holding.
+          other_profiles: normaliseProfileLinks(values.otherProfiles),
           // A postgraduate's UG aggregate stands in for an entire degree, so
           // it is evidenced like any other declared mark (A31).
           ug_marksheet_id: documentIds.get("ug_consolidated") ?? null,

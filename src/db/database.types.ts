@@ -677,6 +677,7 @@ export interface StudentsRow {
   ug_branch: string | null;
   ug_aggregate_declared: number | null;
   ug_aggregate_scale: Enums["marks_scale"] | null;
+  other_profiles: Json;
 }
 
 export type StudentsInsert = Pick<
@@ -732,5 +733,6 @@ export type StudentsInsert = Pick<
       | "ug_branch"
       | "ug_aggregate_declared"
       | "ug_aggregate_scale"
+      | "other_profiles"
     >
   >;

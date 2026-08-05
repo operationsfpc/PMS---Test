@@ -491,3 +491,112 @@ describe("SRF submission", () => {
     });
   });
 });
+
+/**
+ * Profiles beyond the four the form names.
+ *
+ * Asked for 2026-08-06: "in professional profiles, have field to enter others
+ * also. they can add fields, give a name and mention the url/user name."
+ *
+ * A student with a Kaggle profile, a Behance portfolio, a Codeforces handle or
+ * their own site had nowhere to put it, and for many students that is the
+ * strongest evidence they have.
+ */
+describe("other professional profiles", () => {
+  afterEach(() => setSupabaseClient(undefined));
+
+  it("starts with none, and adds a named field on demand", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+
+    expect(screen.queryByLabelText(/profile 1 name/i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /add another profile/i }));
+
+    expect(screen.getByLabelText(/profile 1 name/i)).toBeDefined();
+    expect(screen.getByLabelText(/profile 1 link or username/i)).toBeDefined();
+  });
+
+  it("removes one the student changed their mind about", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+
+    await user.click(screen.getByRole("button", { name: /add another profile/i }));
+    await user.click(screen.getByRole("button", { name: /remove profile 1/i }));
+
+    expect(screen.queryByLabelText(/profile 1 name/i)).toBeNull();
+  });
+
+  /**
+   * The point of the request. A Codeforces handle is not a URL; requiring one
+   * would refuse exactly the entries this exists to capture.
+   */
+  it("accepts a bare username, not just a URL", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
+      http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
+        body = (await request.clone().json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
+      }),
+      http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        const rows = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+      }),
+    );
+    signedIn();
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    await user.click(screen.getByRole("button", { name: /add another profile/i }));
+    await user.type(screen.getByLabelText(/profile 1 name/i), "Codeforces");
+    await user.type(screen.getByLabelText(/profile 1 link or username/i), "asha_r");
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
+    expect(body.other_profiles).toEqual([{ label: "Codeforces", value: "asha_r" }]);
+  });
+
+  it("does not hold up a student who added a row and left it blank", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
+      http.patch(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }),
+      ),
+      http.delete(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/student_semesters`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        const rows = (await request.json()) as Array<Record<string, unknown>>;
+        return HttpResponse.json(rows.map((row, i) => ({ ...row, id: `doc-${i + 1}` })));
+      }),
+    );
+    signedIn();
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    await user.click(screen.getByRole("button", { name: /add another profile/i }));
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
+  });
+
+  it("asks for the missing half when only one is filled in", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    await user.click(screen.getByRole("button", { name: /add another profile/i }));
+    await user.type(screen.getByLabelText(/profile 1 name/i), "Kaggle");
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.some((a) => /kaggle/i.test(a.textContent ?? ""))).toBe(true);
+    expect(screen.queryByText(/submitted for verification/i)).toBeNull();
+  });
+});

@@ -1,6 +1,7 @@
 import { validateSemesters } from "@domain/academics";
 import { isValidForScale, MARKS_SCALES, normaliseToCgpa } from "@domain/marks";
 import { missingMarksheets } from "@domain/marksheets";
+import { normaliseProfileLinks, validateProfileLinks } from "@domain/profile-links";
 import {
   isValidIndianMobile,
   isValidPassingYear,
@@ -107,6 +108,16 @@ export const srfSchema = z
     resumeCategories: z.array(z.enum(ROLE_CATEGORIES)),
 
     // Profiles
+    /**
+     * Anything beyond the four named below (2026-08-06). The VALUE is not
+     * validated as a URL: the request was "the url/user name", and a
+     * Codeforces handle is not a URL. Demanding one would refuse exactly the
+     * entries this exists to capture.
+     */
+    otherProfiles: z
+      .array(z.object({ label: z.string().max(60), value: z.string().max(300) }))
+      .default([]),
+
     linkedin: z.union([z.literal(""), z.url("Enter a valid URL")]),
     github: z.union([z.literal(""), z.url("Enter a valid URL")]),
     leetcode: z.union([z.literal(""), z.url("Enter a valid URL")]),
@@ -157,6 +168,19 @@ export const srfSchema = z
 
     if (problems.length > 0) {
       ctx.addIssue({ code: "custom", path: ["semesters"], message: problems.join(" ") });
+    }
+
+    // Named profiles are the student's own words, so the rules are the
+    // domain's: an entry needs both halves, names cannot repeat, and a row
+    // left blank is dropped rather than held against them.
+    const profileProblems = validateProfileLinks(d.otherProfiles);
+
+    if (profileProblems.length > 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["otherProfiles"],
+        message: profileProblems.join(" "),
+      });
     }
 
     // Optional to declare, all-or-nothing once begun. The marksheet itself is
@@ -282,6 +306,7 @@ export const SRF_DEFAULTS: SrfFormValues = {
   marksheets: {},
   roleCategories: [],
   resumeCategories: [],
+  otherProfiles: [],
   linkedin: "",
   github: "",
   leetcode: "",

@@ -92,3 +92,15 @@ Both figures are stored so this stays reversible: `declared_marks` +
 `marks_scale` (what the student typed, what the coordinator verifies) and
 `cgpa` (normalised, what cutoffs compare). Changing the constant and
 recomputing `cgpa` is a one-column backfill.
+
+## A34 — up to eight "other" profiles
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** `MAX_OTHER_PROFILES = 8` in
+`src/domain/profile-links.ts`. Past that a recruiter stops reading and it
+starts to look like padding. Nothing depends on the exact number; it is one
+constant.
+
+Related decision, not an assumption: the **value is not validated as a URL**.
+The request was "mention the url/user name" (2026-08-06), and a Codeforces
+handle is not a URL — demanding one would refuse exactly the entries the field
+exists to capture.

@@ -1,6 +1,7 @@
 import { CheckboxField, FileField, SelectField, TextField } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
 import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
+import { MAX_OTHER_PROFILES } from "@domain/profile-links";
 import { mergeSrfDraft } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
@@ -15,7 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { Link } from "react-router";
 import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
@@ -181,6 +182,12 @@ export function SrfPage({
   const programmeLevel = watch("programmeLevel");
   const semesters = watch("semesters");
   const diplomaMarks = watch("diplomaMarks");
+  /**
+   * Stable row identity, so removing the second profile does not leave React
+   * carrying its input state over to the third. An array index as a key does
+   * exactly that.
+   */
+  const otherProfiles = useFieldArray({ control, name: "otherProfiles" });
   const maxSemesters = MAX_SEMESTERS[programmeLevel];
   const hasDiplomaMarks = diplomaMarks !== null && !Number.isNaN(diplomaMarks);
 
@@ -965,6 +972,68 @@ export function SrfPage({
                   <ErrorText>{errors[name]?.message}</ErrorText>
                 </div>
               ))}
+            </div>
+
+            {/* Anything the four above do not cover (2026-08-06). A student
+                with a Kaggle profile, a Behance portfolio, a Codeforces handle
+                or their own site had nowhere to put it - and for many students
+                that is the strongest evidence they have.
+
+                The value is a plain text field, not a url input: the request
+                was "the url/user name", and a Codeforces handle is not a URL.
+                Demanding one would refuse the very entries this is for. */}
+            <div className="mt-6">
+              <p className="mb-1 text-sm font-medium text-ink-700">Other profiles</p>
+              <p className="mb-3 text-xs text-ink-500">
+                Anything else worth showing a recruiter — Kaggle, Codeforces, Behance, your own
+                site. Give it a name, then paste the link or your username.
+              </p>
+
+              {otherProfiles.fields.length > 0 && (
+                <div className="flex flex-col gap-3">
+                  {otherProfiles.fields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.5fr_auto]"
+                    >
+                      <TextField
+                        label={`Profile ${index + 1} name`}
+                        placeholder="e.g. Kaggle"
+                        {...register(`otherProfiles.${index}.label`)}
+                      />
+                      <TextField
+                        label={`Profile ${index + 1} link or username`}
+                        placeholder="kaggle.com/asha  — or just asha_r"
+                        {...register(`otherProfiles.${index}.value`)}
+                      />
+                      <button
+                        type="button"
+                        aria-label={`Remove profile ${index + 1}`}
+                        onClick={() => otherProfiles.remove(index)}
+                        className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* An issue raised against an ARRAY lands on `.root`, not on
+                  `.message` - the same shape the semester list needs. */}
+              <ErrorText>
+                {errors.otherProfiles?.message ?? errors.otherProfiles?.root?.message}
+              </ErrorText>
+
+              {otherProfiles.fields.length < MAX_OTHER_PROFILES && (
+                <button
+                  type="button"
+                  onClick={() => otherProfiles.append({ label: "", value: "" })}
+                  className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2.5 text-sm font-semibold text-brand-500 transition-colors hover:bg-brand-50"
+                >
+                  Add another profile
+                </button>
+              )}
             </div>
           </Section>
 
