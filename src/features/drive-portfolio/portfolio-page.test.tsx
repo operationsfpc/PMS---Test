@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
+
+import type { AppRole } from "@domain/types";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { DrivePortfolioPage, type PortfolioDrive, type PortfolioView } from "./portfolio-page";
 
@@ -92,17 +95,21 @@ const show = (
     view?: PortfolioView;
     profileId?: string;
     title?: string;
+    role?: AppRole;
     /** The clock is injected so "4 days left" is exact, not relative to today. */
     now?: string;
   } = {},
 ) =>
   render(
-    <DrivePortfolioPage
-      view={overrides.view ?? view()}
-      profileId={overrides.profileId ?? "ae-1"}
-      title={overrides.title ?? "My drives"}
-      now={new Date(overrides.now ?? "2026-09-05T10:00:00.000Z")}
-    />,
+    <MemoryRouter>
+      <DrivePortfolioPage
+        view={overrides.view ?? view()}
+        profileId={overrides.profileId ?? "ae-1"}
+        title={overrides.title ?? "My drives"}
+        role={overrides.role ?? "account_executive"}
+        now={new Date(overrides.now ?? "2026-09-05T10:00:00.000Z")}
+      />
+    </MemoryRouter>,
   );
 
 describe("DrivePortfolioPage", () => {
@@ -272,5 +279,37 @@ describe("the application window", () => {
 
     const drive = await screen.findByRole("region", { name: "Freshworks" });
     expect(within(drive).getByText(/no application window set/i)).toBeDefined();
+  });
+});
+
+/**
+ * F15 (UAT 2026-08-06): "The drive module of view present for the account
+ * executive must be the present for Central Placement Coordinator with
+ * shortlisting access."
+ *
+ * Same screen, one extra power - and only for the role the domain allows it
+ * for. Whether the link is offered is `canShortlistFromPortfolio`'s decision,
+ * not this component's.
+ */
+describe("DrivePortfolioPage \u2014 shortlisting access", () => {
+  it("offers the Central Placement Coordinator a way into shortlisting", async () => {
+    show({ role: "central_placement_coordinator", title: "All drives" });
+
+    const link = await screen.findByRole("link", { name: /shortlist applicants/i });
+    expect(link.getAttribute("href")).toContain("/central/shortlisting?drive=");
+  });
+
+  it("does not offer it to the Account Executive who raised the drive", async () => {
+    show({ role: "account_executive" });
+
+    await screen.findByText("Zoho Corporation");
+    expect(screen.queryByRole("link", { name: /shortlist applicants/i })).toBeNull();
+  });
+
+  it("does not offer it to the Delivery Head", async () => {
+    show({ role: "delivery_head" });
+
+    await screen.findByText("Zoho Corporation");
+    expect(screen.queryByRole("link", { name: /shortlist applicants/i })).toBeNull();
   });
 });

@@ -78,10 +78,15 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     }
   }
 
-  async function deactivate(target: string) {
+  /**
+   * F8 (UAT 2026-08-06): deactivating used to be a one-way door on this
+   * screen. The only route back was the database, so a misclick cost somebody
+   * their login until an engineer intervened.
+   */
+  async function setActive(target: string, isActive: boolean) {
     setError(null);
     try {
-      await repository.setActive(target, false);
+      await repository.setActive(target, isActive);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not update that staff member.");
@@ -329,13 +334,23 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                     ))}
                   </select>
 
-                  {member.isActive && (
+                  {member.isActive ? (
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => void deactivate(member.email)}
+                      onClick={() => void setActive(member.email, false)}
                     >
                       Deactivate
+                    </Button>
+                  ) : (
+                    // Named, because a queue of deactivated staff needs the
+                    // buttons told apart by a screen reader as well as by eye.
+                    <Button
+                      size="sm"
+                      aria-label={`Activate ${member.fullName}`}
+                      onClick={() => void setActive(member.email, true)}
+                    >
+                      Activate
                     </Button>
                   )}
 

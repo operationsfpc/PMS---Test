@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   type ApplicantFacts,
+  canShortlistFromPortfolio,
   driveProgress,
   involvementIn,
   summariseFunnel,
 } from "./drive-portfolio";
 import type { ApplicantRound } from "./student-progress";
+import { APP_ROLES } from "./types";
 
 /**
  * A drive seen by the people who own it: the Account Executive who raised it
@@ -184,5 +186,46 @@ describe("summariseFunnel", () => {
       offers: 0,
       notSelected: 0,
     });
+  });
+});
+
+/**
+ * F15 (UAT 2026-08-06): "The drive module of view present for the account
+ * executive must be the present for Central Placement Coordinator with
+ * shortlisting access."
+ *
+ * The same screen, for both — but only one of them may act on it. Shortlisting
+ * decides who a recruiter ever sees, so who may do it is a rule, not a prop
+ * somebody remembers to pass.
+ */
+describe("canShortlistFromPortfolio", () => {
+  it("lets the Central Placement Coordinator shortlist", () => {
+    expect(canShortlistFromPortfolio("central_placement_coordinator")).toBe(true);
+  });
+
+  /**
+   * The AE raised the drive and may watch it. They must not choose who the
+   * recruiter sees: PRD §13.1 makes that the coordinator's decision, and the
+   * AE is the recruiter's own contact.
+   */
+  it("does not let the Account Executive who raised the drive shortlist", () => {
+    expect(canShortlistFromPortfolio("account_executive")).toBe(false);
+  });
+
+  it("does not let the Delivery Head shortlist either", () => {
+    expect(canShortlistFromPortfolio("delivery_head")).toBe(false);
+  });
+
+  it("lets nobody else near it", () => {
+    for (const role of APP_ROLES.filter(
+      (r) => r !== "central_placement_coordinator" && r !== "campus_placement_coordinator",
+    )) {
+      expect(canShortlistFromPortfolio(role)).toBe(false);
+    }
+  });
+
+  /** The campus coordinator shortlists their own campus's applicants (§13.1). */
+  it("lets the campus coordinator shortlist", () => {
+    expect(canShortlistFromPortfolio("campus_placement_coordinator")).toBe(true);
   });
 });

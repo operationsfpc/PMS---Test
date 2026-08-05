@@ -16,7 +16,9 @@ import { createSupabasePortfolioView } from "./portfolio-view";
 const TITLES: Partial<Record<AppRole, string>> = {
   account_executive: "My drives",
   delivery_head: "Drives I approved",
-  central_placement_coordinator: "My drives",
+  // F15: the Central CPC sees every drive, not a set they raised, so calling
+  // it "my drives" for them would be a lie the sidebar tells.
+  central_placement_coordinator: "All drives",
 };
 
 export function DrivePortfolioRoute() {
@@ -56,6 +58,8 @@ export function DrivePortfolioRoute() {
     <DrivePortfolioPage
       view={view}
       profileId={profileId}
+      // F15: shortlisting access is decided from the role, by the domain.
+      role={role ?? "account_executive"}
       title={(role === null ? undefined : TITLES[role]) ?? "My drives"}
     />
   );

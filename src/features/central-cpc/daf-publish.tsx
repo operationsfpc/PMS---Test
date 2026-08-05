@@ -54,6 +54,12 @@ export interface PublishDrive {
   readonly applicationEnd: Date | null;
   readonly onHold: boolean;
   readonly rounds: readonly DriveRound[];
+  /**
+   * How many rounds the AE said the recruiter runs (F11, UAT 2026-08-06).
+   * Null when they never said. It seeds the list below and is then compared
+   * against it — it is information, not a constraint.
+   */
+  readonly declaredRoundCount: number | null;
 }
 
 export interface PublishInput {
@@ -172,7 +178,20 @@ export function DafPublish({ view }: { view: PublishView }) {
       // window or round list is edited rather than silently replaced.
       setWindowStart(toLocalInput(next.drive.applicationStart));
       setWindowEnd(toLocalInput(next.drive.applicationEnd));
-      setRounds(next.drive.rounds);
+      /**
+       * F11: seeded from what the AE declared, but ONLY when the coordinator
+       * has named none themselves. Their names are the real work here; a
+       * fetched count must never wipe them.
+       */
+      const declared = next.drive.declaredRoundCount;
+      setRounds(
+        next.drive.rounds.length > 0 || declared === null || declared <= 0
+          ? next.drive.rounds
+          : Array.from({ length: declared }, (_, index) => ({
+              sequence: index + 1,
+              name: `Round ${index + 1}`,
+            })),
+      );
       setLoadError(null);
     } catch {
       setLoadError("Could not load this drive. Please try again.");
@@ -469,6 +488,24 @@ export function DafPublish({ view }: { view: PublishView }) {
 
             <div className="mt-5">
               <p className="mb-1.5 text-sm font-medium text-ink-700">Rounds</p>
+
+              {/* F11: the AE already knew. Reported here rather than left in
+                  an email the coordinator has to go and find. */}
+              {loadedDrive.declaredRoundCount !== null && (
+                <>
+                  <p className="mb-1 text-xs font-medium text-ink-700">
+                    The Account Executive declared {loadedDrive.declaredRoundCount} rounds for this
+                    drive.
+                  </p>
+                  {rounds.length !== loadedDrive.declaredRoundCount && (
+                    <p className="mb-2 text-xs font-medium text-gold-700">
+                      They declared {loadedDrive.declaredRoundCount} rounds, but {rounds.length}{" "}
+                      {rounds.length === 1 ? "is" : "are"} configured — check which is out of date.
+                    </p>
+                  )}
+                </>
+              )}
+
               {rounds.length === 0 ? (
                 <p className="mb-2 text-xs text-ink-300">
                   No rounds yet. A drive cannot go live without at least one.
@@ -486,7 +523,7 @@ export function DafPublish({ view }: { view: PublishView }) {
                       <Button
                         variant="ghost"
                         size="sm"
-                        aria-label={`Remove ${round.name}`}
+                        aria-label={`Remove round ${round.sequence}: ${round.name}`}
                         onClick={() =>
                           setRounds((current) =>
                             current

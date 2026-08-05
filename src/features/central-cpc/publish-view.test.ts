@@ -407,3 +407,46 @@ describe("publishing", () => {
     expect(calls.filter((c) => c.method === "PATCH" && c.table === "drives")).toHaveLength(1);
   });
 });
+
+/**
+ * F11 (UAT 2026-08-06): "Account Executive we should collect the number of
+ * rounds for the drive and should reflect in the Central placement coordinator
+ * login where they are trying to publish the drive, it should be automatically
+ * fetched."
+ *
+ * The Central CPC was typing the round list from an email. The AE already knew
+ * the number.
+ */
+describe("createSupabasePublishView — the rounds the AE declared", () => {
+  it("reports the number of rounds the AE said the recruiter runs", async () => {
+    stub({ drive: { id: "d1", company_name: "Zoho", round_count: 4, drive_rounds: [] } });
+
+    expect((await view().load()).drive.declaredRoundCount).toBe(4);
+  });
+
+  it("says nothing when the AE never said, rather than guessing at one", async () => {
+    stub({ drive: { id: "d1", company_name: "Zoho", drive_rounds: [] } });
+
+    expect((await view().load()).drive.declaredRoundCount).toBeNull();
+  });
+
+  /**
+   * Named rounds already configured are the coordinator's own work. Fetching
+   * the count must never overwrite them.
+   */
+  it("keeps rounds that already exist, whatever the declared count says", async () => {
+    stub({
+      drive: {
+        id: "d1",
+        company_name: "Zoho",
+        round_count: 4,
+        drive_rounds: [{ id: "r1", sequence: 1, name: "Aptitude" }],
+      },
+    });
+
+    const { drive } = await view().load();
+
+    expect(drive.rounds).toEqual([{ sequence: 1, name: "Aptitude" }]);
+    expect(drive.declaredRoundCount).toBe(4);
+  });
+});

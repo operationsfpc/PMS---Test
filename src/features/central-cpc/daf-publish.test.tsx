@@ -63,6 +63,7 @@ const DRIVE = {
   applicationEnd: new Date("2026-08-14T00:00:00Z"),
   onHold: false,
   rounds: [{ sequence: 1, name: "Aptitude test" }],
+  declaredRoundCount: null as number | null,
 };
 
 /** A drive in the state the TCS drive was actually in: approved, but bare. */
@@ -189,7 +190,7 @@ describe("DafPublish — window and rounds", () => {
     routed(view());
     await screen.findByText(/1\. Aptitude test/i);
 
-    await userEvent.click(screen.getByRole("button", { name: /remove aptitude test/i }));
+    await userEvent.click(screen.getByRole("button", { name: /remove round 1: aptitude test/i }));
 
     await waitFor(() => expect(screen.queryByText(/1\. Aptitude test/i)).toBeNull());
   });
@@ -282,5 +283,62 @@ describe("DafPublish — publishing", () => {
     await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/on hold/i);
+  });
+});
+
+/**
+ * F11 (UAT 2026-08-06): "Account Executive we should collect the number of
+ * rounds for the drive and should reflect in the Central placement coordinator
+ * login where they are trying to publish the drive, it should be automatically
+ * fetched."
+ */
+describe("DafPublish \u2014 the rounds the AE declared", () => {
+  const withCount = (declaredRoundCount: number | null, rounds = BARE_DRIVE.rounds) =>
+    view({
+      load: async () => ({
+        drive: { ...BARE_DRIVE, rounds, declaredRoundCount },
+        options: {
+          cities: ["Chennai"],
+          campuses: ["Alliance University"],
+          degrees: ["B.E"],
+          branches: ["CSE"],
+        },
+        cohort: [candidate("s1", "Sai Naveen")],
+      }),
+    });
+
+  it("says how many rounds the AE declared", async () => {
+    render(<DafPublish view={withCount(3)} />);
+
+    expect(await screen.findByText(/account executive.*3 rounds/i)).toBeDefined();
+  });
+
+  it("seeds that many rounds to be named, so nothing is typed from memory", async () => {
+    render(<DafPublish view={withCount(3)} />);
+
+    await screen.findByText(/account executive.*3 rounds/i);
+    expect(screen.getAllByRole("button", { name: /^remove round/i })).toHaveLength(3);
+  });
+
+  it("leaves the round list alone when the AE never said", async () => {
+    render(<DafPublish view={withCount(null)} />);
+
+    await screen.findByText(/no rounds yet/i);
+    expect(screen.queryByText(/account executive/i)).toBeNull();
+  });
+
+  /** Named rounds are the coordinator's own work and must survive the fetch. */
+  it("never overwrites rounds that already exist", async () => {
+    render(<DafPublish view={withCount(3, [{ sequence: 1, name: "Aptitude test" }])} />);
+
+    expect(await screen.findByText(/1\. Aptitude test/)).toBeDefined();
+    expect(screen.getAllByRole("button", { name: /^remove/i })).toHaveLength(1);
+  });
+
+  /** A disagreement is worth saying out loud: one of the two is out of date. */
+  it("says so when the configured rounds do not match what the AE declared", async () => {
+    render(<DafPublish view={withCount(3, [{ sequence: 1, name: "Aptitude test" }])} />);
+
+    expect(await screen.findByText(/declared 3 rounds.*1 is configured/i)).toBeDefined();
   });
 });

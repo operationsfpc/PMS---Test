@@ -22,7 +22,8 @@ export const PUBLISH_DRIVE_COLUMNS = `
   id, company_name, role_title, role_category, job_description, work_locations,
   status, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa,
   application_start, application_end, on_hold,
-  min_overall_cgpa, arrears_policy,
+  min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
+  arrears_policy, round_count,
   drive_rounds(id, sequence, name)
 `;
 
@@ -172,6 +173,13 @@ export function createSupabasePublishView(
         applicationEnd:
           row.application_end === null ? null : new Date(row.application_end as string),
         onHold: Boolean(row.on_hold),
+        // F11: the AE already told us. Reported, never imposed - the named
+        // rounds below are the coordinator's own work and must not be
+        // overwritten by a count.
+        declaredRoundCount:
+          row.round_count === null || row.round_count === undefined
+            ? null
+            : Number(row.round_count),
         rounds: roundRows
           .map((r) => ({ sequence: Number(r.sequence), name: r.name as string }))
           .sort((a, b) => a.sequence - b.sequence),

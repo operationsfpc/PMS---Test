@@ -352,3 +352,74 @@ describe("mapping an existing staff member to a campus", () => {
     expect(screen.queryByRole("combobox", { name: /campus for the ceo/i })).toBeNull();
   });
 });
+
+/**
+ * F8 (UAT 2026-08-06): "In Admin- Staff page - if a role is added and
+ * deactivated, we should also have activate button for the same role /
+ * profile."
+ *
+ * Deactivating was a one-way door on the screen. The only route back was the
+ * database, which meant a misclick cost somebody their login until an engineer
+ * intervened.
+ */
+describe("reactivating a deactivated staff member", () => {
+  const deactivated = (over: Record<string, unknown> = {}) => ({
+    fullName: "Meera Iyer",
+    email: "meera@faceprep.in",
+    role: "campus_placement_coordinator" as const,
+    campuses: [{ id: "c1", name: "Alliance University" }],
+    acceptedAt: "2026-08-01T00:00:00Z",
+    isActive: false,
+    ...over,
+  });
+
+  it("offers an Activate button for a deactivated staff member", async () => {
+    render(<StaffPage repository={repo({ list: async () => [deactivated()] })} />);
+
+    expect(await screen.findByRole("button", { name: /activate meera iyer/i })).toBeDefined();
+  });
+
+  it("does not offer to deactivate somebody who already is", async () => {
+    render(<StaffPage repository={repo({ list: async () => [deactivated()] })} />);
+
+    await screen.findByRole("button", { name: /activate meera iyer/i });
+    expect(screen.queryByRole("button", { name: /^deactivate$/i })).toBeNull();
+  });
+
+  it("restores the login when used", async () => {
+    const setActive = vi.fn();
+    const user = userEvent.setup();
+    render(<StaffPage repository={repo({ list: async () => [deactivated()], setActive })} />);
+
+    await user.click(await screen.findByRole("button", { name: /activate meera iyer/i }));
+
+    await waitFor(() => expect(setActive).toHaveBeenCalledWith("meera@faceprep.in", true));
+  });
+
+  it("offers no Activate button for somebody who is already active", async () => {
+    render(
+      <StaffPage repository={repo({ list: async () => [deactivated({ isActive: true })] })} />,
+    );
+
+    await screen.findByRole("button", { name: /^deactivate$/i });
+    expect(screen.queryByRole("button", { name: /activate meera iyer/i })).toBeNull();
+  });
+
+  it("says why nothing happened when the restore fails", async () => {
+    const user = userEvent.setup();
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => [deactivated()],
+          setActive: async () => {
+            throw new Error("Could not update that staff member.");
+          },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /activate meera iyer/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not update/i);
+  });
+});

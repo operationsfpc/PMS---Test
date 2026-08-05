@@ -65,6 +65,8 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
   central_placement_coordinator: [
     { to: "/dashboard", label: "Placement overview" },
     { to: "/central/drives", label: "Drive cockpit" },
+    // F15: the AE's drive module, with shortlisting access.
+    { to: "/my-drives", label: "All drives" },
     { to: "/central/publish", label: "Publish and target" },
     { to: "/central/shortlisting", label: "Shortlisting" },
     { to: "/cpc/attendance", label: "Attendance" },

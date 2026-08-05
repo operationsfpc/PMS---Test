@@ -1,4 +1,4 @@
-import { Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
 import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -58,6 +58,13 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  /**
+   * F16 (UAT 2026-08-06): "After shortlisting the candidates, the screen stays
+   * the same, this needs to be fixed." It saved, re-read, and came back pixel
+   * for pixel identical — so a save that worked was indistinguishable from one
+   * that silently did not, and the button got pressed again.
+   */
+  const [savedCount, setSavedCount] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     const [loadedDrive, loadedApplicants] = await Promise.all([
@@ -96,6 +103,9 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
   );
 
   function toggle(applicationId: string) {
+    // Any change makes the confirmation stale: what is on screen is no longer
+    // what was saved, and leaving it up would say otherwise.
+    setSavedCount(null);
     setSelected((current) =>
       current.includes(applicationId)
         ? current.filter((id) => id !== applicationId)
@@ -105,6 +115,7 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
 
   async function save() {
     setError(null);
+    setSavedCount(null);
     setSaving(true);
     try {
       await view.saveShortlist(
@@ -117,6 +128,10 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
           rationale: candidate.reasons.join(" "),
         })),
       );
+      // Counted from what was SENT, not from what comes back: a view that
+      // returns stale rows must not be able to report a success it did not
+      // have. A failure throws before this line.
+      setSavedCount(selected.length);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save the shortlist.");
@@ -151,6 +166,17 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
         </div>
       )}
 
+      {savedCount !== null && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
+        >
+          Shortlist saved — <strong>{savedCount}</strong>{" "}
+          {savedCount === 1 ? "student is" : "students are"} on it. The recruiter export reads this
+          list.
+        </div>
+      )}
+
       {applicants === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading applicants…
@@ -174,9 +200,13 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
                     className="mt-1"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-ink-900">
-                      <span className="text-ink-400">{index + 1}.</span>{" "}
+                    <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
+                      <span className="text-ink-400">{index + 1}.</span>
                       <span>{candidate.studentName}</span>
+                      {/* F16: what is ON the shortlist, as opposed to what is
+                          merely ticked, is the difference the screen used to
+                          refuse to show. */}
+                      {applicant?.shortlisted === true && <Badge tone="success">Shortlisted</Badge>}
                     </p>
                     <p className="text-sm text-ink-500">
                       {applicant?.rollNumber} · CGPA {applicant?.overallCgpa}

@@ -1,14 +1,16 @@
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { applicationWindow } from "@domain/drive-analytics";
 import {
+  canShortlistFromPortfolio,
   type DriveRole,
   driveProgress,
   involvementIn,
   summariseFunnel,
 } from "@domain/drive-portfolio";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
-import type { DriveStatus } from "@domain/types";
+import type { AppRole, DriveStatus } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 
 export interface PortfolioApplicant {
   readonly applicationId: string;
@@ -77,14 +79,21 @@ export function DrivePortfolioPage({
   view,
   profileId,
   title,
+  role,
   /** Passed in, never read from the browser — see src/domain/drive-analytics. */
   now = new Date(),
 }: {
   view: PortfolioView;
   profileId: string;
   title: string;
+  /** Decides shortlisting access, and nothing else (F15). */
+  role: AppRole;
   now?: Date;
 }) {
+  // F15: the Central CPC gets the AE's screen "with shortlisting access". Who
+  // that is, is the domain's answer - an AE must not choose which candidates
+  // their own recruiter sees.
+  const mayShortlist = canShortlistFromPortfolio(role);
   const [drives, setDrives] = useState<readonly PortfolioDrive[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
@@ -260,14 +269,25 @@ export function DrivePortfolioPage({
                           <StatCard label="Not selected" value={funnel.notSelected} />
                         </section>
 
-                        <button
-                          type="button"
-                          aria-expanded={open}
-                          onClick={() => setExpanded(open ? null : drive.driveId)}
-                          className="mt-4 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
-                        >
-                          {open ? "Hide" : "Show"} applicants to {drive.companyName}
-                        </button>
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <button
+                            type="button"
+                            aria-expanded={open}
+                            onClick={() => setExpanded(open ? null : drive.driveId)}
+                            className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
+                          >
+                            {open ? "Hide" : "Show"} applicants to {drive.companyName}
+                          </button>
+
+                          {mayShortlist && funnel.applied > 0 && (
+                            <Link
+                              to={`/central/shortlisting?drive=${drive.driveId}`}
+                              className="text-xs font-semibold text-brand-600 hover:underline"
+                            >
+                              Shortlist applicants
+                            </Link>
+                          )}
+                        </div>
                       </section>
 
                       {open && (

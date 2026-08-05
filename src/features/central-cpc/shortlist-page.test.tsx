@@ -156,3 +156,88 @@ describe("ShortlistPage", () => {
     expect(alert.textContent).toMatch(/central placement coordinator/i);
   });
 });
+
+/**
+ * F16 (UAT 2026-08-06): "After shortlisting the candidates, the screen stays
+ * the same, this needs to be fixed."
+ *
+ * Pressing "Shortlist 1" saved and re-read, and every pixel came back
+ * identical - same checkboxes, same button, same count. There was no way to
+ * tell a save that worked from one that silently did nothing, so coordinators
+ * pressed it again.
+ */
+describe("ShortlistPage \u2014 after saving", () => {
+  /** A view that actually remembers what was saved, as the database would. */
+  function persistingView(saveShortlist?: ShortlistView["saveShortlist"]): ShortlistView {
+    let saved: readonly string[] = [];
+
+    return {
+      drive: async () => DRIVE,
+      applicants: async () =>
+        APPLICANTS.map((a) => ({ ...a, shortlisted: saved.includes(a.applicationId) })),
+      saveShortlist: async (driveId, decisions) => {
+        if (saveShortlist !== undefined) await saveShortlist(driveId, decisions);
+        saved = decisions.filter((d) => d.included).map((d) => d.applicationId);
+      },
+    };
+  }
+
+  const shortlistOne = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+  };
+
+  it("confirms the shortlist was saved, and says how many are on it", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={persistingView()} />);
+
+    await shortlistOne(user);
+
+    const saved = await screen.findByRole("status");
+    expect(saved.textContent).toMatch(/1 student/i);
+    expect(saved.textContent).toMatch(/shortlist/i);
+  });
+
+  it("marks the students who are on it, so the list is not just checkboxes again", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={persistingView()} />);
+
+    await shortlistOne(user);
+    await screen.findByRole("status");
+
+    const row = screen.getByText("Strong Candidate").closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByText(/shortlisted/i)).toBeDefined();
+  });
+
+  it("clears the confirmation as soon as the selection changes again", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={persistingView()} />);
+
+    await shortlistOne(user);
+    await screen.findByRole("status");
+
+    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("does not claim success when the save failed", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={persistingView(async () => {
+          throw new Error("Could not save the shortlist.");
+        })}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("button", { name: /shortlist 0/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not save/i);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
