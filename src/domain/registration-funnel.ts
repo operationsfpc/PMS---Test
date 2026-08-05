@@ -20,7 +20,7 @@ export interface FunnelStudent {
 }
 
 export interface FunnelStage {
-  readonly key: "on_roster" | "submitted" | "verified" | "applied" | "placed";
+  readonly key: "on_roster" | "submitted" | "verified" | "placed";
   readonly label: string;
   readonly count: number;
   readonly percentOfRoster: number;
@@ -42,14 +42,20 @@ const SUBMITTED: readonly SrfStatus[] = ["srf_submitted", "srf_approved", "srf_r
  * participate, but they are still on the roster and their form was still
  * verified — dropping them here would make this disagree with the roster count
  * printed beside it.
+ *
+ * "Applied to a drive" is NOT a stage here (F5, UAT 2026-08-06). Every other
+ * stage is a fact about the student and is measured against the roster;
+ * applying is a fact about one drive and is measured against that drive's
+ * audience. Mixing the two gave a percentage whose denominator was wrong for
+ * one of the five rows. It lives in `driveFunnel` instead.
  */
 export function registrationFunnel(students: readonly FunnelStudent[]): readonly FunnelStage[] {
   const roster = students.length;
 
   const placed = students.filter((s) => s.hasOnCampusPlacement).length;
 
-  const applied = students.filter((s) => s.hasApplied || s.hasOnCampusPlacement).length;
-
+  // Applying is no longer reported, but it is still EVIDENCE: a student who
+  // applied was necessarily verified, whatever their status column now says.
   const verified = students.filter(
     (s) => s.srfStatus === "srf_approved" || s.hasApplied || s.hasOnCampusPlacement,
   ).length;
@@ -62,7 +68,6 @@ export function registrationFunnel(students: readonly FunnelStudent[]): readonly
     { key: "on_roster", label: "On the roster", count: roster },
     { key: "submitted", label: "Registration form submitted", count: submitted },
     { key: "verified", label: "Verified by a coordinator", count: verified },
-    { key: "applied", label: "Applied to a drive", count: applied },
     { key: "placed", label: "Placed", count: placed },
   ];
 

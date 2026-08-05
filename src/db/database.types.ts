@@ -260,6 +260,10 @@ export interface DrivesRow {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  additional_designations: string[];
+  round_count: number | null;
+  min_overall_marks: number | null;
+  min_overall_cgpa_scale: Enums["marks_scale"];
 }
 
 export type DrivesInsert = Pick<DrivesRow, "company_name"> &
@@ -309,6 +313,10 @@ export type DrivesInsert = Pick<DrivesRow, "company_name"> &
       | "published_at"
       | "created_at"
       | "updated_at"
+      | "additional_designations"
+      | "round_count"
+      | "min_overall_marks"
+      | "min_overall_cgpa_scale"
     >
   >;
 
@@ -389,13 +397,20 @@ export interface OptOutRequestsRow {
   decided_at: string | null;
   created_at: string;
   declaration_id: string | null;
+  decision_reason: string | null;
 }
 
 export type OptOutRequestsInsert = Pick<OptOutRequestsRow, "student_id" | "reason"> &
   Partial<
     Pick<
       OptOutRequestsRow,
-      "id" | "status" | "decided_by" | "decided_at" | "created_at" | "declaration_id"
+      | "id"
+      | "status"
+      | "decided_by"
+      | "decided_at"
+      | "created_at"
+      | "declaration_id"
+      | "decision_reason"
     >
   >;
 
@@ -474,6 +489,7 @@ export interface SelfPlacementRequestsRow {
   decided_by: string | null;
   decided_at: string | null;
   created_at: string;
+  decision_reason: string | null;
 }
 
 export type SelfPlacementRequestsInsert = Pick<
@@ -490,6 +506,7 @@ export type SelfPlacementRequestsInsert = Pick<
       | "decided_by"
       | "decided_at"
       | "created_at"
+      | "decision_reason"
     >
   >;
 

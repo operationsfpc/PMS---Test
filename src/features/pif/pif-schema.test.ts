@@ -30,6 +30,7 @@ const complete = {
   arrearsPolicy: "no_standing",
   eligiblePassingYears: [2027],
   driveMode: "on_campus",
+  roundCount: 3,
 };
 
 describe("pifDraftSchema", () => {
@@ -103,6 +104,125 @@ describe("pifSubmitSchema", () => {
   it("keeps a CGPA cutoff on the 10-point scale", () => {
     expect(pifSubmitSchema.safeParse({ ...complete, minOverallCgpa: 11 }).success).toBe(false);
     expect(pifSubmitSchema.safeParse({ ...complete, minOverallCgpa: 7.5 }).success).toBe(true);
+  });
+
+  /**
+   * F12 (UAT 2026-08-06): "Under eligibility criteria the Minimum overall CGPA
+   * must be acceptable of both percentage and GPA."
+   *
+   * Recruiters state the bar the way their own HR does. Forcing 65% to be
+   * typed as 6.84 makes the AE do the conversion, in their head, on the number
+   * that decides who may apply.
+   */
+  it("accepts the cutoff as a percentage when the recruiter states one", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      minOverallCgpa: 65,
+      minOverallCgpaScale: "percentage",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("still refuses a percentage above 100", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      minOverallCgpa: 101,
+      minOverallCgpaScale: "percentage",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("refuses a figure that is only valid on the other scale", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      minOverallCgpa: 65,
+      minOverallCgpaScale: "cgpa",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("defaults to CGPA, so an unanswered scale cannot silently mean percentage", () => {
+    expect(pifSubmitSchema.parse(complete).minOverallCgpaScale).toBe("cgpa");
+  });
+
+  it("allows no cutoff at all, on either scale", () => {
+    expect(
+      pifSubmitSchema.safeParse({
+        ...complete,
+        minOverallCgpa: null,
+        minOverallCgpaScale: "percentage",
+      }).success,
+    ).toBe(true);
+  });
+
+  /**
+   * F11 (UAT 2026-08-06): "Account Executive we should collect the number of
+   * rounds for the drive and should reflect in the Central placement
+   * coordinator login where they are trying to publish the drive."
+   *
+   * The Central CPC was typing the round list from memory, or from an email.
+   */
+  it("requires the number of rounds before the PIF may be submitted", () => {
+    expect(pifSubmitSchema.safeParse({ ...complete, roundCount: null }).success).toBe(false);
+  });
+
+  it("refuses a selection process with no rounds in it", () => {
+    expect(pifSubmitSchema.safeParse({ ...complete, roundCount: 0 }).success).toBe(false);
+  });
+
+  it("lets a draft be saved before the rounds are known", () => {
+    expect(
+      pifDraftSchema.safeParse({ ...PIF_DEFAULTS, companyName: "Zoho", roundCount: null }).success,
+    ).toBe(true);
+  });
+
+  /**
+   * F7 (UAT 2026-08-06): "If its one interview process, multiple designations
+   * only one PIF is required, if multiple interview process for multiple
+   * designations then multiple PIF is required."
+   *
+   * So the PIF must be able to name more than one designation. Raising a
+   * second PIF for a second job title on the same interview day would double
+   * the drive, the shortlist and the audience count.
+   */
+  it("accepts further designations covered by the same interview process", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      additionalDesignations: ["Associate Engineer", "Trainee Engineer"],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.additionalDesignations).toEqual([
+        "Associate Engineer",
+        "Trainee Engineer",
+      ]);
+    }
+  });
+
+  it("drops blank designation rows rather than storing empty job titles", () => {
+    const result = pifSubmitSchema.parse({
+      ...complete,
+      additionalDesignations: ["Associate Engineer", "  ", ""],
+    });
+
+    expect(result.additionalDesignations).toEqual(["Associate Engineer"]);
+  });
+
+  it("refuses a designation that merely repeats the role title", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      additionalDesignations: ["Member Technical Staff"],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("names no extra designations by default", () => {
+    expect(pifSubmitSchema.parse(complete).additionalDesignations).toEqual([]);
   });
 
   it("leaves offer category out entirely - it is the Delivery Head's, not the AE's", () => {

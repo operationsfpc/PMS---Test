@@ -79,14 +79,84 @@ export function canRecordSelfPlacement(context: {
   return { allowed: true };
 }
 
+/** The two roles that decide either request. Approving and declining are one authority. */
+const APPROVERS: readonly AppRole[] = [
+  "campus_placement_coordinator",
+  "central_placement_coordinator",
+];
+
 /** Both opt-out and self-placement are approved by a coordinator, never the student. */
 export function canApproveParticipationChange(actor: AppRole): Decision {
-  const approvers: readonly AppRole[] = [
-    "campus_placement_coordinator",
-    "central_placement_coordinator",
-  ];
-  if (!approvers.includes(actor)) {
+  if (!APPROVERS.includes(actor)) {
     return { allowed: false, reason: "Only a placement coordinator may approve this." };
   }
   return { allowed: true };
+}
+
+/**
+ * Shorter than this is not an explanation ("no", "na", "-"). Deliberately low:
+ * the bar is "a sentence fragment a student can act on", not an essay.
+ */
+const MIN_DECLINE_REASON = 5;
+
+/**
+ * Declining an opt-out or an off-campus offer. F1 (UAT 2026-08-06).
+ *
+ * The reason is REQUIRED because it is the only thing the student is told. A
+ * blank decline is indistinguishable, from their side, from the request never
+ * having been looked at — and the request cost them a scanned letter.
+ */
+export function canDeclineParticipationRequest(actor: AppRole, reason: string): Decision {
+  if (!APPROVERS.includes(actor)) {
+    return { allowed: false, reason: "Only a placement coordinator may decline this." };
+  }
+  if (reason.trim().length < MIN_DECLINE_REASON) {
+    return {
+      allowed: false,
+      reason: "Give a reason for declining. The student is shown it, and it is all they get.",
+    };
+  }
+  return { allowed: true };
+}
+
+/** How a decided request reads on the student's own screen. */
+export type ParticipationOutcomeTone = "waiting" | "approved" | "declined";
+
+export interface ParticipationOutcome {
+  readonly tone: ParticipationOutcomeTone;
+  readonly label: string;
+  /** The coordinator's words on a decline; null when there is nothing to add. */
+  readonly detail: string | null;
+}
+
+/**
+ * What the student sees after they have asked. F3 (UAT 2026-08-06).
+ *
+ * The screen used to drop the request the moment it was decided, so a student
+ * who uploaded an offer letter could never confirm it had been accepted. The
+ * submission and its outcome both stay.
+ */
+export function participationOutcome(request: {
+  readonly status: "pending" | "verified" | "rejected";
+  readonly reason: string | null;
+}): ParticipationOutcome {
+  if (request.status === "pending") {
+    return {
+      tone: "waiting",
+      label: "Waiting for your placement coordinator",
+      detail: null,
+    };
+  }
+
+  if (request.status === "verified") {
+    return { tone: "approved", label: "Approved", detail: null };
+  }
+
+  const reason = (request.reason ?? "").trim();
+  return {
+    tone: "declined",
+    label: "Declined",
+    // Never blank: silence here reads as "no reason was needed".
+    detail: reason === "" ? "No reason was recorded. Ask your placement coordinator." : reason,
+  };
 }

@@ -59,13 +59,29 @@ describe("registrationFunnel", () => {
     expect(funnel.find((s) => s.key === "verified")?.count).toBe(0);
   });
 
-  it("counts who has applied to at least one drive", () => {
+  /**
+   * F5 (UAT 2026-08-06): "4 should not be in that flow. Applied to a drive is
+   * drive specific data. The other 4 are not drive specific."
+   *
+   * Applying is measured against ONE drive's audience, not against the roster,
+   * so a cohort-wide percentage of it is a number with no denominator anyone
+   * can name. It moved to `driveFunnel`.
+   */
+  it("does not carry the drive-specific applied stage", () => {
     const funnel = registrationFunnel([
       student({ srfStatus: "srf_approved", hasApplied: true }),
       student({ srfStatus: "srf_approved" }),
     ]);
 
-    expect(funnel.find((s) => s.key === "applied")?.count).toBe(1);
+    expect(funnel.find((s) => s.key === "applied")).toBeUndefined();
+  });
+
+  /** Applying still proves the stages above it were reached. */
+  it("counts an applicant as submitted and verified even if their status lags", () => {
+    const funnel = registrationFunnel([student({ srfStatus: "invited", hasApplied: true })]);
+
+    expect(funnel.find((s) => s.key === "submitted")?.count).toBe(1);
+    expect(funnel.find((s) => s.key === "verified")?.count).toBe(1);
   });
 
   it("counts who ended up placed on campus", () => {
@@ -111,7 +127,6 @@ describe("registrationFunnel", () => {
       "On the roster",
       "Registration form submitted",
       "Verified by a coordinator",
-      "Applied to a drive",
       "Placed",
     ]);
   });

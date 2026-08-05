@@ -159,3 +159,82 @@ describe("createSupabasePifRepository", () => {
     });
   });
 });
+
+/**
+ * F11 and F12 (UAT 2026-08-06).
+ *
+ * The AE declares the cutoff on the recruiter's own scale and says how many
+ * rounds there are. Both have to survive the trip to the database, and the
+ * cutoff has to arrive on the ONE scale every eligibility rule compares
+ * against.
+ */
+describe("createSupabasePifRepository — eligibility scale and rounds", () => {
+  const capture = async (input: PifFormValues) => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "d1", status: "submitted" });
+      }),
+    );
+    await repo().submit(input);
+    return body;
+  };
+
+  it("stores a CGPA cutoff untouched", async () => {
+    const body = await capture({ ...values, minOverallCgpa: 7.5, minOverallCgpaScale: "cgpa" });
+
+    expect(body.min_overall_cgpa).toBe(7.5);
+    expect(body.min_overall_cgpa_scale).toBe("cgpa");
+    expect(body.min_overall_marks).toBe(7.5);
+  });
+
+  /**
+   * `min_overall_cgpa` is what R5 filters on, and it is a 10-point column with
+   * a check constraint. Sending 65 into it would either be refused or, worse,
+   * silently exclude the whole cohort.
+   */
+  it("normalises a percentage cutoff to the scale every drive is filtered on", async () => {
+    const body = await capture({
+      ...values,
+      minOverallCgpa: 65,
+      minOverallCgpaScale: "percentage",
+    });
+
+    expect(body.min_overall_cgpa).toBe(6.84);
+  });
+
+  /** The AE typed 65%. A coordinator checking the PIF must see 65%, not 6.84. */
+  it("keeps what the AE actually typed, beside the converted figure", async () => {
+    const body = await capture({
+      ...values,
+      minOverallCgpa: 65,
+      minOverallCgpaScale: "percentage",
+    });
+
+    expect(body.min_overall_marks).toBe(65);
+    expect(body.min_overall_cgpa_scale).toBe("percentage");
+  });
+
+  it("sends no cutoff at all when the recruiter set none", async () => {
+    const body = await capture({ ...values, minOverallCgpa: null });
+
+    expect(body.min_overall_cgpa).toBeNull();
+    expect(body.min_overall_marks).toBeNull();
+  });
+
+  it("carries the number of rounds through to the drive", async () => {
+    const body = await capture({ ...values, roundCount: 4 });
+
+    expect(body.round_count).toBe(4);
+  });
+
+  it("carries the other designations this one interview process covers", async () => {
+    const body = await capture({
+      ...values,
+      additionalDesignations: ["Associate Engineer", "Trainee Engineer"],
+    });
+
+    expect(body.additional_designations).toEqual(["Associate Engineer", "Trainee Engineer"]);
+  });
+});

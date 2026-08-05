@@ -1,3 +1,4 @@
+import { normaliseToCgpa } from "@domain/marks";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PifFormValues } from "./pif-schema";
 
@@ -42,7 +43,16 @@ function toRow(values: PifFormValues, actorId: string, status: "draft" | "submit
     shift_type: nullIfBlank(values.shiftType),
     bond_details: nullIfBlank(values.bondDetails),
 
-    min_overall_cgpa: values.minOverallCgpa ?? null,
+    // F12: two columns, deliberately. `min_overall_marks` + its scale are what
+    // the AE typed and what a coordinator checks against the recruiter's mail;
+    // `min_overall_cgpa` is the ONE scale R5 compares students against, so the
+    // conversion happens once, here, rather than at every filter.
+    min_overall_marks: values.minOverallCgpa ?? null,
+    min_overall_cgpa_scale: values.minOverallCgpaScale ?? "cgpa",
+    min_overall_cgpa:
+      values.minOverallCgpa === null || values.minOverallCgpa === undefined
+        ? null
+        : normaliseToCgpa(values.minOverallCgpa, values.minOverallCgpaScale ?? "cgpa"),
     min_tenth_percentage: values.minTenthPercentage ?? null,
     min_twelfth_percentage: values.minTwelfthPercentage ?? null,
     arrears_policy: values.arrearsPolicy,
@@ -53,6 +63,12 @@ function toRow(values: PifFormValues, actorId: string, status: "draft" | "submit
     tentative_date: nullIfBlank(values.tentativeDate),
     timeline_notes: nullIfBlank(values.timelineNotes),
     drive_type: nullIfBlank(values.driveType),
+
+    // F7: one interview process, several job titles, ONE PIF.
+    additional_designations: values.additionalDesignations ?? [],
+    // F11: read back by the Central CPC's publish screen, which used to ask
+    // them to remember the round list.
+    round_count: values.roundCount ?? null,
 
     status,
     created_by: actorId,

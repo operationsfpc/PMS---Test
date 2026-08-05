@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   canApproveParticipationChange,
+  canDeclineParticipationRequest,
   canRecordSelfPlacement,
   canRequestOptOut,
+  participationOutcome,
 } from "./participation";
 import { APP_ROLES } from "./types";
 
@@ -170,5 +172,102 @@ describe("evidence for a participation decision", () => {
     });
 
     if (!decision.allowed) expect(decision.reason).toMatch(/disbarred/i);
+  });
+});
+
+/**
+ * F1 (UAT 2026-08-06): "central placement coordinator should have - decline
+ * button with reason. The status of approval or rejection should go to
+ * student."
+ */
+describe("canDeclineParticipationRequest", () => {
+  it("refuses anyone who is not a placement coordinator", () => {
+    const decision = canDeclineParticipationRequest("student", "Not enough evidence");
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/coordinator/i);
+  });
+
+  /**
+   * The reason is the whole point. A decline the student cannot understand is
+   * indistinguishable from the request never having been read, and this is the
+   * only message they will get.
+   */
+  it("refuses a decline with no reason", () => {
+    const decision = canDeclineParticipationRequest("central_placement_coordinator", "   ");
+
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/reason/i);
+  });
+
+  it("refuses a reason too short to mean anything", () => {
+    const decision = canDeclineParticipationRequest("central_placement_coordinator", "no");
+
+    expect(decision.allowed).toBe(false);
+  });
+
+  it("allows a coordinator who has said why", () => {
+    expect(
+      canDeclineParticipationRequest(
+        "central_placement_coordinator",
+        "The uploaded letter is unreadable.",
+      ).allowed,
+    ).toBe(true);
+  });
+
+  it("allows the campus coordinator too — they approve, so they may decline", () => {
+    expect(
+      canDeclineParticipationRequest(
+        "campus_placement_coordinator",
+        "The uploaded letter is unreadable.",
+      ).allowed,
+    ).toBe(true);
+  });
+});
+
+/**
+ * F3 (UAT 2026-08-06): "After the approval of the Self offer letter, the
+ * student is not able to go back to check the submission and approval status
+ * of it. It should be shown."
+ */
+describe("participationOutcome", () => {
+  it("says a request is still waiting", () => {
+    const outcome = participationOutcome({ status: "pending", reason: null });
+
+    expect(outcome.tone).toBe("waiting");
+    expect(outcome.label).toMatch(/waiting/i);
+  });
+
+  it("says a request was approved", () => {
+    const outcome = participationOutcome({ status: "verified", reason: null });
+
+    expect(outcome.tone).toBe("approved");
+    expect(outcome.label).toMatch(/approved/i);
+  });
+
+  /** The coordinator's words, verbatim — nothing else explains the decision. */
+  it("carries the coordinator's reason back to the student on a decline", () => {
+    const outcome = participationOutcome({
+      status: "rejected",
+      reason: "The uploaded letter is unreadable.",
+    });
+
+    expect(outcome.tone).toBe("declined");
+    expect(outcome.label).toMatch(/declined/i);
+    expect(outcome.detail).toBe("The uploaded letter is unreadable.");
+  });
+
+  /**
+   * A decline with no reason should be impossible — but old rows exist, and a
+   * blank explanation must not read as "no reason was needed".
+   */
+  it("says so plainly when a decline carries no reason at all", () => {
+    const outcome = participationOutcome({ status: "rejected", reason: null });
+
+    expect(outcome.detail).toMatch(/no reason/i);
+  });
+
+  it("has no detail to add when a request was approved", () => {
+    expect(participationOutcome({ status: "verified", reason: null }).detail).toBeNull();
   });
 });
