@@ -1,13 +1,13 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `1150c2d`. **1522 tests passing across 106 files**, plus
+Last updated at commit `d0c1e2f`. **1547 tests passing across 107 files**, plus
 **1 Playwright journey** — run, not remembered.
 **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 **Live and shipped 2026-08-06:** <https://fpc-pms.faceprep.workers.dev>
-(version `6b2e75a2-9c45-47ea-a871-8b26da17c35b`) · database on Supabase
-ap-south-1 · migrations `0001`–`0024`, **local == remote** (`supabase migration
+(version `5f8eb5ce-1123-427d-92ee-d7e29c442e38`) · database on Supabase
+ap-south-1 · migrations `0001`–`0025`, **local == remote** (`supabase migration
 list --linked`).
 
 Verified after shipping 2026-08-06, not assumed:
@@ -114,6 +114,40 @@ Everything built in this session is **shipped**. In order:
 4. **Playwright journeys for the other roles.** The student journey is the only
    one, and it is the only thing that proves the wiring.
 5. **Result corrections** (A15) and the notifications UI (blocked on P1).
+
+---
+
+## 2x. Other professional profiles (`0025`, shipped)
+
+"In professional profiles, have field to enter others also. they can add
+fields, give a name and mention the url/user name" (2026-08-06).
+
+The form hard-coded LinkedIn, GitHub, LeetCode and HackerRank. A Kaggle
+profile, a Behance portfolio, a Codeforces handle or a personal site had
+nowhere to go — often the strongest evidence a student has.
+
+**The value is deliberately NOT validated as a URL.** "url/user name" is the
+load-bearing half of that sentence: a Codeforces handle is not a URL, and
+demanding one would refuse exactly the entries the field exists to capture.
+
+Rules in `src/domain/profile-links.ts` — they are about what makes a profile
+useful to the person reading it, not form plumbing:
+
+- both halves or neither, with the error naming the **entry** ("Add the link or
+  username for Kaggle"), not the row number
+- a row added and left blank is **dropped**, never held against the student;
+  a **half**-filled row is kept so validation can point at it
+- duplicate names refused case-insensitively — two "Portfolio" entries are
+  indistinguishable to a recruiter
+- capped at 8 (A34)
+
+Stored as `students.other_profiles` jsonb, not a child table: display-only
+links with no independent lifecycle, and every new table is another chance to
+get RLS wrong. Existing student policies cover it; the audit trigger already
+records before/after. Postgres guarantees only that it is a list.
+
+Uses `useFieldArray`, not an array index as the React key — removing the second
+profile would otherwise carry its input state onto the third.
 
 ---
 
@@ -505,7 +539,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1522 passing across 106 files
+pnpm test:run        # expect 1547 passing across 107 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -514,4 +548,4 @@ Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session and both succeeded; **neither is automatic** — committing does
 not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 89 commits, working tree clean.
+Git is **local only**, no remote. 91 commits, working tree clean.
