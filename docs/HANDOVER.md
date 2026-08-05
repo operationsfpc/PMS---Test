@@ -1,10 +1,75 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `66efb39`. **1695 tests passing across 114 files**, plus
-**1 Playwright journey** — re-verified at the start of the 2026-08-05 evening
-session, not remembered. **`pnpm check` exits 0** — lint, typecheck and every
-coverage gate. 106 commits, working tree clean.
+**2036 tests passing across 126 files**, plus **1 Playwright journey** — run,
+not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
+gate. Working tree clean. The hash is written LAST, after the commit exists;
+verify it with `git merge-base --is-ancestor <hash> HEAD`.
+
+---
+
+## 🔴 THE CURRENT WORK — UAT "Copy of Testing", 2026-08-06
+
+Seventeen items, extracted verbatim into **`docs/UAT-2026-08-06-feedback.md`**
+(F1–F17). **All seventeen are shipped in code**; two carry a manual follow-up,
+recorded in `docs/PENDING-USER-ACTION.md`.
+
+Six migrations: `0032`–`0036` plus the `submit_srf` replacement.
+
+| # | What changed |
+|---|---|
+| F1 | A participation request may be **declined with a reason**, and the reason is required — `0032` enforces it, so no screen can forget. It is the only thing the student is told. |
+| F2 | Opt-out and off-campus offers were one nav entry, one page and one queue. Now separate heads for the student and both coordinators. |
+| F3 | Every request the student raised stays on their screen with its outcome. It used to vanish the moment a coordinator touched it. |
+| F4 | Campus dropdown on the dashboard, all campuses by default. Filters the cohort **once**, feeding both the overview and the placement figures. |
+| F5 | "Registration funnel" → **"Students overview"**, four stages. The fifth moved into a **drive-progress box** with drive/college filters. |
+| F6 | A programme is college + degree + branch + year (`0036`). `/admin/programmes` is gone; the student gets one dropdown. |
+| F7 | One interview process covering several designations is ONE PIF. |
+| F8 | **Activate** beside Deactivate on the staff page. |
+| F9 · F17 | A certificate is a **name and a document**, uploaded once (`0034`, `0035`). |
+| F10 | Re-verified: `student-sees-drives.test.ts` proves it against real RLS. |
+| F11 | The AE states the number of rounds; the publish screen fetches it. |
+| F12 | The CGPA cutoff may be stated as a **percentage**. |
+| F13 | A **"+"** for the semester that finished after registration. Lands `pending`. |
+| F14 | **View more**, an **apply confirmation**, and a **drive-specific resume** (`0033`). |
+| F15 | The AE's drive module is the Central CPC's too, with shortlisting access. |
+| F16 | The shortlist screen now changes after saving. |
+
+### 🔴 Two live defects found on the way, both now fixed with regression tests
+
+Neither was reported, and neither would have been found by looking.
+
+**1. Every PIF submission was validated as a DRAFT.** `onClick={run("submit")}`
+CALLS `run` during render, and `run` set `intent.current` as a side effect —
+so whichever button rendered last won, and that was "Save draft". An AE could
+hand the Delivery Head a PIF with no role, no CTC, no eligibility and no
+passing years. **The only symptom was an approval queue full of empty forms**,
+which is exactly why nobody filed it as a bug.
+
+**2. A blank optional number was submitted as a real zero.** Found the instant
+(1) stopped hiding it: a COMPLETE PIF then failed on "Maximum CTC cannot be
+below the minimum". RHF hands `setValueAs` the DEFAULT value — `null` — for a
+field nobody typed in, and `Number(null)` is `0`. So every blank optional
+number arrived as zero: a maximum CTC of 0, and **a CGPA cutoff of 0 recorded
+as a cutoff rather than as "none set"**.
+
+### ⚠️ Still to do by hand
+
+- **F9's second half** — deleting the previously uploaded test certificates is
+  a production data operation, and nothing in the schema distinguishes a test
+  certificate from a real one. The inspection query is in
+  `docs/PENDING-USER-ACTION.md`. A certificate lives in **two** places now, so
+  both the row and the storage object have to go.
+- **`students.certifications`** is superseded and no longer written. It is
+  deliberately NOT dropped: dropping a column holding real data is a separate,
+  irreversible decision.
+- **None of `0032`–`0036` has been pushed to Mumbai.** `pnpm db:push` has still
+  never been run from here.
+
+### 📌 Assumptions added
+
+- **A34** — the plausible range for a year of passing (2015–2100), in
+  `src/domain/programmes.ts` and `0036`, mirrored so they cannot drift.
 
 ⚠️ **The header of this file has now been wrong three times, the same way.**
 It cited `a4f1c9e`, `d0c1e2f` and `3e037c3`; the first two never existed and

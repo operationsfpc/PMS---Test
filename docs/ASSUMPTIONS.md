@@ -104,3 +104,16 @@ Related decision, not an assumption: the **value is not validated as a URL**.
 The request was "mention the url/user name" (2026-08-06), and a Codeforces
 handle is not a URL — demanding one would refuse exactly the entries the field
 exists to capture.
+
+## A34 — the plausible range for a year of passing (UAT 2026-08-06, F6)
+
+`campus_programmes.passing_year` must be between **2015 and 2100**.
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** Nothing in the PRD or the PIF states a bound.
+The range is wide enough for a cohort that graduated five years ago and one
+starting next year, and narrow enough to refuse a typo like `2072` reaching a
+student's dropdown.
+
+Stated twice on purpose — `src/domain/programmes.ts` and
+`supabase/migrations/0036_campus_programmes.sql` — because the screen and the
+database must refuse the same values. **Change both, or neither.**

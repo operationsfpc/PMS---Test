@@ -75,6 +75,20 @@ test.describe("student journey", () => {
 
     await page.getByRole("button", { name: "Apply to Zoho" }).click();
 
+    // F14 (UAT 2026-08-06): applying is a promise to attend every round and to
+    // accept a final offer, and it cannot be withdrawn. The student is told
+    // that BEFORE it happens, not after.
+    await expect(page.getByText(/are you sure/i)).toBeVisible();
+    await expect(page.getByText(/attend all the rounds/i)).toBeVisible();
+
+    // F14: and the recruiter reads the CV chosen for THIS drive.
+    await page.getByLabel(/resume for this drive/i).setInputFiles({
+      name: "zoho-resume.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("%PDF-1.4 resume"),
+    });
+    await page.getByRole("button", { name: "Yes, apply" }).click();
+
     // The application is now irreversible, and the UI must say so.
     await expect(page.getByText("Applied")).toBeVisible();
     await expect(page.getByRole("button", { name: "Apply to Zoho" })).toHaveCount(0);
@@ -86,8 +100,11 @@ test.describe("student journey", () => {
     expect(application?.drive_id).toBe("drive-open");
     expect(application?.profile_snapshot).toMatchObject({
       profile: { fullName: "Anitha Raman", rollNumber: "TEC001" },
-      resumeId: "resume-tech",
+      // F14: the resume the recruiter reads is the one chosen for this drive,
+      // not the generic one on the profile.
+      resumeId: "drive-resume-1",
     });
+    expect(application?.resume_id).toBe("drive-resume-1");
 
     expect(supabase.unhandled()).toEqual([]);
   });

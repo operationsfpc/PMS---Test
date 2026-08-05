@@ -118,6 +118,21 @@ export async function stubSupabase(page: Page, options: StubOptions): Promise<Su
     const json = (body: unknown, status = 200) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
+    /**
+     * F14: the drive-specific resume is uploaded before the application is
+     * written. Storage is not under /rest/v1, so it is matched on the path.
+     */
+    if (url.pathname.startsWith("/storage/v1/object/")) {
+      record("storage", { path: url.pathname });
+      return json({ Key: url.pathname.replace("/storage/v1/object/", "") }, 200);
+    }
+
+    if (route.request().method() === "POST" && table === "student_documents") {
+      const row = route.request().postDataJSON() as Record<string, unknown>;
+      record("student_documents", row);
+      return json({ id: "drive-resume-1" }, 201);
+    }
+
     if (route.request().method() === "POST" && table === "applications") {
       const row = route.request().postDataJSON() as Record<string, unknown>;
       record("applications", row);
