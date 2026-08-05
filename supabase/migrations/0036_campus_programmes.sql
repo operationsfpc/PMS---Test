@@ -94,5 +94,50 @@ create policy admin_removes_campus_programmes
 
 grant select, insert, update, delete on campus_programmes to authenticated;
 
+/**
+ * The backfill. WITHOUT THIS, 0036 IS AN OUTAGE.
+ *
+ * `campus_programmes` starts empty, and the registration form now offers only
+ * what it contains. So the moment this migration lands, every student already
+ * on the roster opens their form and finds no degree to select - blocked, on a
+ * form they may be halfway through, because a table that did not exist until
+ * now has nothing in it.
+ *
+ * Their college has been running their programme for years. Every distinct
+ * (campus, degree, branch, passing year) on the roster IS, by definition,
+ * something that college runs, so that is where the seed comes from.
+ *
+ * A FUNCTION rather than a bare INSERT, for two reasons: it is testable
+ * against a seeded database (a bare statement in a migration runs once, on an
+ * empty schema, and proves nothing), and it is idempotent, so an Admin can run
+ * it again after importing a new roster without creating duplicates.
+ */
+create or replace function backfill_campus_programmes() returns integer
+language plpgsql security definer set search_path = public as $$
+declare
+  v_added integer;
+begin
+  insert into campus_programmes (campus_id, degree_id, branch_id, passing_year)
+  select distinct s.campus_id, s.degree_id, s.branch_id, s.passing_year
+    from students s
+   where s.campus_id is not null
+     and s.degree_id is not null
+     -- The plausible range is the table's own (A34); a roster row outside it
+     -- is bad data, and importing it here would just move the problem.
+     and s.passing_year between 2015 and 2100
+  on conflict do nothing;
+
+  get diagnostics v_added = row_count;
+  return v_added;
+end;
+$$;
+
+-- Run once, now, as part of the same migration. A backfill that only a human
+-- remembers to run is not a backfill.
+select backfill_campus_programmes();
+
+comment on function backfill_campus_programmes is
+  'F6: seeds campus_programmes from the roster. Idempotent - safe after any roster import.';
+
 comment on table campus_programmes is
   'F6: degree+branch is one choice, and it belongs to a college for a passing year.';
