@@ -45,11 +45,37 @@ export interface ApplicationSnapshot {
 export function buildApplicationSnapshot(
   student: SnapshotStudent,
   roleCategory: RoleCategory,
+  /**
+   * The resume the student attached to THIS application (F14). It wins over
+   * the one on file: asking for it and then sending the generic one would be
+   * worse than not asking, because everybody would believe the recruiter got
+   * the tailored CV.
+   */
+  driveResumeId?: string | null,
 ): ApplicationSnapshot {
   const { resumes, ...profile } = student;
 
   return {
     profile: { ...profile },
-    resumeId: resumes.find((r) => r.roleCategory === roleCategory)?.id ?? null,
+    resumeId: driveResumeId ?? resumes.find((r) => r.roleCategory === roleCategory)?.id ?? null,
   };
+}
+
+/**
+ * What an application must carry before it may be submitted. F14.
+ *
+ * "Ask for a drive specific resume to be uploaded at the time of applying."
+ * The per-category resume from the SRF is generic and often months old; the
+ * recruiter reads whatever arrives with the application, so the student
+ * chooses it per drive.
+ *
+ * Returned as a LIST so the screen can name every missing thing at once - a
+ * student fixing one item per submit gives up.
+ */
+export function applicationEvidenceProblems(evidence: {
+  readonly hasDriveResume: boolean;
+}): readonly string[] {
+  return evidence.hasDriveResume
+    ? []
+    : ["Upload the resume you want this recruiter to read. It is sent with your application."];
 }

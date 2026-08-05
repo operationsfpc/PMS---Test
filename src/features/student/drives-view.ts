@@ -5,6 +5,7 @@ import { canApply } from "@domain/visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ApplyDrive,
+  type ApplyRepository,
   type ApplyStudent,
   createSupabaseApplyRepository,
 } from "./apply-repository";
@@ -19,6 +20,9 @@ function one<T>(value: unknown): T | null {
   if (Array.isArray(value)) return (value[0] as T | undefined) ?? null;
   return (value as T | null) ?? null;
 }
+
+/** A nullable text column, as the screen wants it: "" never null. */
+const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
 const REFUSALS: Record<string, string> = {
   window_not_open: "Applications for this drive have not opened yet.",
@@ -51,9 +55,12 @@ export const DRIVE_COLUMNS = `
   open_to_all_override, status, application_start, application_end,
   ctc_min_lpa, ctc_max_lpa, min_overall_cgpa, min_tenth_percentage,
   min_twelfth_percentage, arrears_policy, eligible_passing_years,
+  job_description, work_locations, ctc_breakup, bond_details, shift_type,
+  mandatory_skills, drive_mode, openings, additional_designations,
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
-  drive_target_campuses(campuses(name, cities(name)))
+  drive_target_campuses(campuses(name, cities(name))),
+  drive_rounds(sequence, name)
 `;
 
 /** Names out of an embedded link table, e.g. drive_eligible_degrees(degrees(name)). */
@@ -96,9 +103,9 @@ export function createSupabaseDrivesView(
     return data.session?.user.id ?? null;
   },
   clock: () => Date = () => new Date(),
+  /** Injected only by tests; production always uses the real repository. */
+  applyRepo: ApplyRepository = createSupabaseApplyRepository(client),
 ): DrivesView {
-  const applyRepo = createSupabaseApplyRepository(client);
-
   async function load() {
     const userId = await getAuthUserId();
     if (userId === null) throw new Error("No session");
@@ -247,16 +254,38 @@ export function createSupabaseDrivesView(
             canApply: verdict.allowed,
             refusal: verdict.allowed ? null : (REFUSALS[verdict.reason] ?? "Not open to you."),
             applied: appliedIds.includes(drive.id),
+            // F14: everything behind "View more". A student is about to
+            // promise to attend every round of this drive and to accept an
+            // offer from it; a company name and a CTC is not enough to decide
+            // that on.
+            details: {
+              jobDescription: text(raw.job_description),
+              designations: (raw.additional_designations as string[] | null) ?? [],
+              locations: text(raw.work_locations),
+              openings: (raw.openings as number | null) ?? null,
+              ctcBreakup: text(raw.ctc_breakup),
+              bondDetails: text(raw.bond_details),
+              shiftType: text(raw.shift_type),
+              mandatorySkills: text(raw.mandatory_skills),
+              driveMode: text(raw.drive_mode),
+              applicationStart: (raw.application_start as string | null) ?? null,
+              rounds: (Array.isArray(raw.drive_rounds) ? raw.drive_rounds : [])
+                .map((r) => ({
+                  sequence: Number((r as Record<string, unknown>).sequence ?? 0),
+                  name: String((r as Record<string, unknown>).name ?? "Round"),
+                }))
+                .sort((a, b) => a.sequence - b.sequence),
+            },
           },
         ];
       });
     },
 
-    async apply(driveId) {
+    async apply(driveId, resume) {
       const { student, drives, appliedIds } = await load();
       const raw = drives.find((d) => d.id === driveId);
       if (raw === undefined) throw new Error("Drive not found");
-      await applyRepo.apply(student, toDrive(raw), appliedIds, clock());
+      await applyRepo.apply(student, toDrive(raw), appliedIds, clock(), resume);
     },
   };
 }

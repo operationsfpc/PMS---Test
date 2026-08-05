@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildApplicationSnapshot } from "./application-snapshot";
+import {
+  applicationEvidenceProblems,
+  buildApplicationSnapshot,
+  type SnapshotStudent,
+} from "./application-snapshot";
 
 /**
  * R7 - the immutability rule.
@@ -64,5 +68,60 @@ describe("buildApplicationSnapshot", () => {
     const snap = buildApplicationSnapshot(student, "software_technical");
     // Skills are shown to recruiters; they are part of the frozen record.
     expect(snap.profile.technicalSkills).toBe("TypeScript, Postgres");
+  });
+});
+
+/**
+ * F14 (UAT 2026-08-06): "Ask for a drive specific resume to be uploaded at the
+ * time of applying."
+ *
+ * The per-category resume from the SRF is generic and often months old. A
+ * recruiter reads what arrives with the application, so what arrives with the
+ * application is what the student chose for THIS drive.
+ */
+describe("applicationEvidenceProblems", () => {
+  it("refuses an application with no resume attached to it", () => {
+    const problems = applicationEvidenceProblems({ hasDriveResume: false });
+
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toMatch(/resume/i);
+  });
+
+  it("accepts one that carries a resume chosen for this drive", () => {
+    expect(applicationEvidenceProblems({ hasDriveResume: true })).toEqual([]);
+  });
+});
+
+/**
+ * The snapshot must carry the resume the student attached, not the generic one
+ * on file — otherwise asking for it changes nothing about what the recruiter
+ * reads.
+ */
+describe("buildApplicationSnapshot — the drive's own resume", () => {
+  const student: SnapshotStudent = {
+    id: "s1",
+    fullName: "Priya Ramesh",
+    rollNumber: "21CSE1042",
+    email: "priya@gmail.com",
+    degree: "B.E",
+    branch: "CSE",
+    passingYear: 2026,
+    overallCgpa: 8.2,
+    tenthPercentage: 92,
+    twelfthPercentage: 88,
+    currentArrears: 0,
+    historyOfArrears: 0,
+    technicalSkills: "TypeScript",
+    resumes: [{ id: "generic", roleCategory: "software_technical" }],
+  };
+
+  it("prefers the resume uploaded for this drive over the one on file", () => {
+    const snapshot = buildApplicationSnapshot(student, "software_technical", "for-this-drive");
+
+    expect(snapshot.resumeId).toBe("for-this-drive");
+  });
+
+  it("falls back to the role-category resume when no drive resume was given", () => {
+    expect(buildApplicationSnapshot(student, "software_technical").resumeId).toBe("generic");
   });
 });

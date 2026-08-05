@@ -21,8 +21,17 @@ export interface ApplyRepository {
     drive: ApplyDrive,
     appliedDriveIds: readonly string[],
     now: Date,
+    /**
+     * The resume the student chose for THIS drive (F14, UAT 2026-08-06).
+     * Optional so nothing that already applies without one breaks; when it is
+     * given it is what the recruiter reads.
+     */
+    driveResume?: File,
   ): Promise<void>;
 }
+
+/** Resumes are private (0010): signed URLs only, never a public path. */
+const RESUME_BUCKET = "resumes";
 
 /** R6's refusal codes are not student-facing prose. */
 const REFUSALS: Record<string, string> = {
@@ -52,7 +61,7 @@ const REFUSALS: Record<string, string> = {
  */
 export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepository {
   return {
-    async apply(student, drive, appliedDriveIds, now) {
+    async apply(student, drive, appliedDriveIds, now, driveResume) {
       const verdict = canApply(
         {
           srfStatus: student.srfStatus,
@@ -71,7 +80,52 @@ export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepo
         );
       }
 
-      const snapshot = buildApplicationSnapshot(student, drive.roleCategory);
+      /**
+       * Uploaded only AFTER R6 has allowed the application. A student refused
+       * for eligibility must not be charged an upload first, and a stored file
+       * with no application row is litter nobody will ever find.
+       */
+      let driveResumeId: string | null = null;
+      if (driveResume !== undefined) {
+        // Namespaced by student, which is exactly what the storage policy
+        // checks; timestamped so re-applying never collides with an earlier
+        // file, since storage_path is unique.
+        const path = `${student.id}/${drive.id}-${Date.now()}-${driveResume.name}`;
+
+        const { error: uploadError } = await client.storage
+          .from(RESUME_BUCKET)
+          .upload(path, driveResume, { contentType: driveResume.type });
+
+        if (uploadError !== null) {
+          throw new ApplyError(
+            "Could not upload your resume. Check your connection and try again.",
+          );
+        }
+
+        const { data: document, error: documentError } = await client
+          .from("student_documents")
+          .insert({
+            student_id: student.id,
+            kind: "resume",
+            role_category: drive.roleCategory,
+            // 0033: what keeps this off the student's PROFILE resume slot.
+            // Without it, applying to a second drive in the same category
+            // would collide on one_resume_per_category.
+            drive_id: drive.id,
+            storage_path: `${RESUME_BUCKET}/${path}`,
+            size_bytes: driveResume.size,
+          })
+          .select("id")
+          .single();
+
+        if (documentError !== null || document === null) {
+          throw new ApplyError("Could not save your resume. Please try again.");
+        }
+
+        driveResumeId = document.id as string;
+      }
+
+      const snapshot = buildApplicationSnapshot(student, drive.roleCategory, driveResumeId);
 
       const { error } = await client
         .from("applications")

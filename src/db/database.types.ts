@@ -588,13 +588,14 @@ export interface StudentDocumentsRow {
   storage_path: string;
   size_bytes: number;
   uploaded_at: string;
+  drive_id: string | null;
 }
 
 export type StudentDocumentsInsert = Pick<
   StudentDocumentsRow,
   "student_id" | "kind" | "storage_path" | "size_bytes"
 > &
-  Partial<Pick<StudentDocumentsRow, "id" | "role_category" | "uploaded_at">>;
+  Partial<Pick<StudentDocumentsRow, "id" | "role_category" | "uploaded_at" | "drive_id">>;
 
 export interface StudentRolePreferencesRow {
   student_id: string;

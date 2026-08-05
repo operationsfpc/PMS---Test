@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { server } from "../../mocks/node";
+import type { ApplyRepository } from "./apply-repository";
 import { createSupabaseDrivesView } from "./drives-view";
 
 /**
@@ -71,12 +72,16 @@ function stub(
   );
 }
 
-const view = () =>
+const view = (over: { apply?: ApplyRepository["apply"] } = {}) =>
   createSupabaseDrivesView(
     createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } }),
     async () => "u1",
     () => new Date("2026-09-05T00:00:00Z"),
+    over.apply === undefined ? undefined : ({ apply: over.apply } as ApplyRepository),
   );
+
+/** The row as PostgREST returns it, with only what a test cares about set. */
+const liveDrive = (over: Record<string, unknown> = {}) => ({ ...driveRow, ...over });
 
 /**
  * Confirmed 2026-08-04: eligibility is judged on the LATEST VERIFIED semester,
@@ -274,5 +279,93 @@ describe("drive targeting is enforced, not just recorded", () => {
     });
 
     expect(await view().openDrives()).toHaveLength(1);
+  });
+});
+
+/**
+ * F14 (UAT 2026-08-06): "Add a view more button to view further details on the
+ * drives displayed" and "Ask for a drive specific resume to be uploaded at the
+ * time of applying."
+ *
+ * The list carried a company, a role and a CTC. A student deciding whether to
+ * commit to every round of a drive had nothing else to go on.
+ */
+describe("createSupabaseDrivesView — the detail behind View more", () => {
+  it("carries the job description, locations and package detail", async () => {
+    stub({
+      drives: [
+        liveDrive({
+          job_description: "Build and maintain backend services.",
+          work_locations: "Chennai, Tenkasi",
+          ctc_breakup: "6.5 fixed + 2.5 variable",
+          mandatory_skills: "TypeScript, SQL",
+          bond_details: "No bond",
+          shift_type: "General",
+          openings: 25,
+          drive_mode: "on_campus",
+        }),
+      ],
+    });
+
+    const [drive] = await view().openDrives();
+
+    expect(drive?.details.jobDescription).toBe("Build and maintain backend services.");
+    expect(drive?.details.locations).toBe("Chennai, Tenkasi");
+    expect(drive?.details.ctcBreakup).toBe("6.5 fixed + 2.5 variable");
+    expect(drive?.details.mandatorySkills).toBe("TypeScript, SQL");
+    expect(drive?.details.openings).toBe(25);
+  });
+
+  /** F7: one interview process may cover several designations. */
+  it("carries the other designations this one process covers", async () => {
+    stub({ drives: [liveDrive({ additional_designations: ["Associate Engineer"] })] });
+
+    expect((await view().openDrives())[0]?.details.designations).toEqual(["Associate Engineer"]);
+  });
+
+  /** Applying is a promise to attend all of them, so the student sees them. */
+  it("lists the rounds in order", async () => {
+    stub({
+      drives: [
+        liveDrive({
+          drive_rounds: [
+            { sequence: 2, name: "Technical interview" },
+            { sequence: 1, name: "Aptitude test" },
+          ],
+        }),
+      ],
+    });
+
+    expect((await view().openDrives())[0]?.details.rounds).toEqual([
+      { sequence: 1, name: "Aptitude test" },
+      { sequence: 2, name: "Technical interview" },
+    ]);
+  });
+
+  it("says nothing rather than null when the drive left a field empty", async () => {
+    stub({ drives: [liveDrive({ job_description: null, work_locations: null })] });
+
+    const [drive] = await view().openDrives();
+
+    expect(drive?.details.jobDescription).toBe("");
+    expect(drive?.details.locations).toBe("");
+    expect(drive?.details.designations).toEqual([]);
+    expect(drive?.details.rounds).toEqual([]);
+  });
+
+  it("hands the drive resume to the apply repository", async () => {
+    const apply = vi.fn();
+    stub({ drives: [liveDrive()] });
+    const resume = new File(["cv"], "zoho.pdf", { type: "application/pdf" });
+
+    await view({ apply }).apply("d1", resume);
+
+    expect(apply).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.any(Date),
+      resume,
+    );
   });
 });
