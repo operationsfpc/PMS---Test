@@ -67,8 +67,21 @@ export type GetActorId = () => Promise<string | null>;
  * round trip per row would be N+1 against exactly the screen a coordinator
  * uses to work through a backlog.
  */
-const COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path))";
+/**
+ * Exported so src/db/query-contract.test.ts can prove it against the schema.
+ *
+ * `!student_documents_student_id_fkey` names the relationship deliberately.
+ * `students` now has THREE keys joining it to `student_documents` - the
+ * student's own documents, plus `ug_marksheet_id` (0023) and
+ * `diploma_marksheet_id` (0024) - and PostgREST refuses an ambiguous embed
+ * outright with PGRST201. This query was written when there was only one, and
+ * a later migration broke it without touching it: the whole queue returned
+ * "Could not load the verification queue" for every coordinator.
+ *
+ * We want the documents BELONGING to the student, which is the first key.
+ */
+export const VERIFICATION_QUEUE_COLUMNS =
+  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path))";
 
 /**
  * Reads and decides the SRF verification queue.
@@ -162,7 +175,7 @@ export function createSupabaseVerificationRepository(
     async pending() {
       const { data, error } = await client
         .from("students")
-        .select(COLUMNS)
+        .select(VERIFICATION_QUEUE_COLUMNS)
         .eq("srf_status", "srf_submitted")
         .order("srf_submitted_at", { ascending: true });
 

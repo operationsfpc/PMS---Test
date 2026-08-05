@@ -33,7 +33,7 @@ export const STUDENT_COLUMNS = `
   twelfth_percentage, current_arrears, history_of_arrears, technical_skills,
   srf_status, participation_status,
   degrees(name), branches(name), campuses(name, cities(name)),
-  student_documents(id, kind, role_category),
+  student_documents!student_documents_student_id_fkey(id, kind, role_category),
   student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 

@@ -1,5 +1,6 @@
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
+import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
   DASHBOARD_COHORT_COLUMNS,
   DASHBOARD_LIVE_DRIVE_COLUMNS,
@@ -36,6 +37,8 @@ beforeAll(async () => {
 interface Embed {
   readonly table: string;
   readonly spec: string;
+  /** The `!constraint` hint, when the select names one. */
+  readonly hint: string | undefined;
 }
 
 /** Splits on commas that are not inside a nested embed. */
@@ -64,9 +67,10 @@ function parse(spec: string): { columns: string[]; embeds: Embed[] } {
   const embeds: Embed[] = [];
 
   for (const part of splitTopLevel(spec)) {
-    const embed = /^(\w+)\s*\(([\s\S]*)\)$/.exec(part);
-    if (embed?.[1] !== undefined && embed[2] !== undefined) {
-      embeds.push({ table: embed[1], spec: embed[2] });
+    // `table(...)` or, when the relationship needs naming, `table!fkey(...)`.
+    const embed = /^(\w+)(?:!(\w+))?\s*\(([\s\S]*)\)$/.exec(part);
+    if (embed?.[1] !== undefined && embed[3] !== undefined) {
+      embeds.push({ table: embed[1], spec: embed[3], hint: embed[2] });
     } else {
       columns.push(part);
     }
@@ -104,6 +108,56 @@ async function missingColumns(rootTable: string, spec: string): Promise<string[]
   return missing;
 }
 
+/**
+ * Every foreign key joining two tables, in either direction.
+ *
+ * PostgREST resolves `parent(child(...))` by looking for exactly one
+ * relationship. Add a second - which a single `references` column does - and
+ * it stops answering the query and returns PGRST201 instead.
+ */
+async function relationshipsBetween(parent: string, child: string): Promise<string[]> {
+  const rows = await t.sql(
+    `select con.conname
+       from pg_constraint con
+       join pg_class src on src.oid = con.conrelid
+       join pg_class tgt on tgt.oid = con.confrelid
+      where con.contype = 'f'
+        and ((src.relname = $1 and tgt.relname = $2)
+          or (src.relname = $2 and tgt.relname = $1))`,
+    [parent, child],
+  );
+  return rows.map((r) => String(r.conname));
+}
+
+/**
+ * Embeds PostgREST cannot resolve, because more than one key joins the tables
+ * and the select does not say which to use.
+ *
+ * This shipped TWICE, silently, and took out two screens in production at
+ * once: the coordinator's verification queue and the student's drives list
+ * both 400'd with PGRST201. Nothing caught it, because
+ * `students.ug_marksheet_id` (0023) and `students.diploma_marksheet_id`
+ * (0024) are perfectly good columns - they simply made a query written months
+ * earlier ambiguous. The select never changed; the schema moved underneath it.
+ *
+ * A column check cannot see this. It needs the KEYS.
+ */
+async function ambiguousEmbeds(rootTable: string, spec: string): Promise<string[]> {
+  const problems: string[] = [];
+
+  for (const embed of parse(spec).embeds) {
+    const keys = await relationshipsBetween(rootTable, embed.table);
+    if (keys.length > 1 && embed.hint === undefined) {
+      problems.push(
+        `${rootTable} -> ${embed.table} (${keys.length} relationships: ${keys.sort().join(", ")})`,
+      );
+    }
+    problems.push(...(await ambiguousEmbeds(embed.table, embed.spec)));
+  }
+
+  return problems;
+}
+
 describe("the student drives view asks only for columns that exist", () => {
   it("selects a real student shape", async () => {
     expect(await missingColumns("students", STUDENT_COLUMNS)).toEqual([]);
@@ -111,6 +165,15 @@ describe("the student drives view asks only for columns that exist", () => {
 
   it("selects a real drive shape", async () => {
     expect(await missingColumns("drives", DRIVE_COLUMNS)).toEqual([]);
+  });
+
+  /** This one 400'd in production: every student's drives list, for everyone. */
+  it("resolves the student's embeds to exactly one relationship", async () => {
+    expect(await ambiguousEmbeds("students", STUDENT_COLUMNS)).toEqual([]);
+  });
+
+  it("resolves the drive's embeds to exactly one relationship", async () => {
+    expect(await ambiguousEmbeds("drives", DRIVE_COLUMNS)).toEqual([]);
   });
 });
 
@@ -208,9 +271,27 @@ describe("every hand-written select matches the schema", () => {
       "self_placement_requests",
       "id, company_name, ctc_lpa, students(full_name, roll_number), student_documents(storage_path)",
     ],
+    // The screen a coordinator does their actual job on, and the one that was
+    // reported broken. It was never registered here, which is the only reason
+    // this file stayed green while the queue returned PGRST201 in production.
+    ["coordinator verification queue", "students", VERIFICATION_QUEUE_COLUMNS],
   ];
 
   it.each(SELECTS)("%s", async (_name, table, spec) => {
     expect(await missingColumns(table, spec)).toEqual([]);
   });
+
+  /**
+   * The same registry, checked for the other way a select can be wrong.
+   *
+   * A select that names every column correctly still fails outright if the
+   * embed is ambiguous, and it fails at RUNTIME, for everyone, the moment an
+   * unrelated migration adds a second key between the two tables.
+   */
+  it.each(SELECTS)(
+    "%s resolves each embed to exactly one relationship",
+    async (_n, table, spec) => {
+      expect(await ambiguousEmbeds(table, spec)).toEqual([]);
+    },
+  );
 });
