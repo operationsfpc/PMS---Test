@@ -70,3 +70,25 @@ get a prompt with a direct link.
 
 Reverse by returning `/srf` for `srf_rejected` in `studentLandingRoute`
 (`src/domain/auth-routing.ts`) — one line, one test.
+
+## A33 — percentage → CGPA uses a divisor of 9.5
+
+⚠️ **ASSUMPTION — UNCONFIRMED, AND IT DECIDES ELIGIBILITY.**
+
+"Some colleges have CGPA and some have % in college marks" (2026-08-06). Every
+cutoff in this system is a CGPA on the 10-point scale
+(`drives.min_overall_cgpa`), so a declared percentage must be converted before
+it can be compared to anything.
+
+`PERCENTAGE_TO_CGPA_DIVISOR = 9.5` in `src/domain/marks.ts` — the common Indian
+convention (CBSE and most affiliating universities).
+
+**Other universities use `(CGPA − 0.75) × 10`, which disagrees materially.**
+80% is 8.42 under 9.5 and 8.75 under the other. At a cutoff of 8.5 those two
+answers put the same student on opposite sides of eligibility. Confirm the
+formula the client's colleges use.
+
+Both figures are stored so this stays reversible: `declared_marks` +
+`marks_scale` (what the student typed, what the coordinator verifies) and
+`cgpa` (normalised, what cutoffs compare). Changing the constant and
+recomputing `cgpa` is a one-column backfill.

@@ -1,3 +1,4 @@
+import { normaliseToCgpa } from "@domain/marks";
 import {
   type MarksheetKind,
   marksheetSlotKey,
@@ -45,7 +46,10 @@ async function storeMarksheets(
   studentId: string,
   values: SrfSubmission,
 ): Promise<ReadonlyMap<string, string>> {
-  const slots = requiredMarksheets(values);
+  const slots = requiredMarksheets({
+    ...values,
+    hasDiplomaMarks: values.diplomaMarks !== null,
+  });
 
   const files = slots.flatMap((slot) => {
     const file = values.marksheets[slot.key];
@@ -123,7 +127,10 @@ export function createSupabaseSrfRepository(
        * verification queue, which is the defect this whole change exists to
        * close.
        */
-      const missing = missingMarksheets(values, Object.keys(values.marksheets));
+      const missing = missingMarksheets(
+        { ...values, hasDiplomaMarks: values.diplomaMarks !== null },
+        Object.keys(values.marksheets),
+      );
       if (missing.length > 0) {
         throw new SrfSubmitError(
           `Upload your ${missing.map((s) => s.label).join(", ")} before submitting.`,
@@ -156,11 +163,32 @@ export function createSupabaseSrfRepository(
           mobile: values.mobile,
           whatsapp: values.whatsapp === "" ? null : values.whatsapp,
           alternate_contact: values.alternateContact === "" ? null : values.alternateContact,
+          tenth_institution: values.tenthInstitution,
           tenth_percentage: values.tenthPercentage,
+          twelfth_institution: values.twelfthInstitution,
           twelfth_percentage: values.twelfthPercentage,
+          // All-or-nothing, enforced by the DB too (0024): a declared figure
+          // with no college and no marksheet is a mark nobody can verify.
+          diploma_institution:
+            values.diplomaMarks === null || values.diplomaInstitution === ""
+              ? null
+              : values.diplomaInstitution,
+          diploma_marks: values.diplomaMarks,
+          diploma_marks_scale: values.diplomaMarks === null ? null : values.diplomaMarksScale,
+          diploma_marksheet_id: documentIds.get("diploma") ?? null,
           passing_year: values.passingYear,
           programme_level: values.programmeLevel,
-          ug_aggregate_cgpa: values.ugAggregateCgpa,
+          // A postgraduate's finished degree: where, in what, and how well.
+          ug_degree: values.programmeLevel === "pg" ? values.ugDegree : null,
+          ug_college: values.programmeLevel === "pg" ? values.ugCollege : null,
+          ug_branch: values.programmeLevel === "pg" ? values.ugBranch : null,
+          // Declared as typed; normalised for every cutoff comparison (A33).
+          ug_aggregate_declared: values.ugAggregate,
+          ug_aggregate_scale: values.ugAggregate === null ? null : values.ugAggregateScale,
+          ug_aggregate_cgpa:
+            values.ugAggregate === null
+              ? null
+              : normaliseToCgpa(values.ugAggregate, values.ugAggregateScale),
           technical_skills: values.technicalSkills,
           areas_of_interest: values.areasOfInterest,
           areas_of_expertise: values.areasOfExpertise,
@@ -208,7 +236,12 @@ export function createSupabaseSrfRepository(
           values.semesters.map((s) => ({
             student_id: studentId,
             semester_number: s.semesterNumber,
-            cgpa: s.cgpa,
+            // Both, deliberately: `cgpa` is the only figure a cutoff can be
+            // compared against, `declared_marks` is what the student typed and
+            // what the coordinator finds on the marksheet.
+            cgpa: normaliseToCgpa(s.marks, s.marksScale),
+            declared_marks: s.marks,
+            marks_scale: s.marksScale,
             current_arrears: s.currentArrears,
             history_of_arrears: s.historyOfArrears,
             // The point of the whole exercise: this line and the document that

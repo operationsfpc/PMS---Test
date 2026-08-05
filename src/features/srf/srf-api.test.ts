@@ -38,12 +38,22 @@ const scan = (name: string) => new File(["scan"], name, { type: "application/pdf
 const values = {
   ...SRF_DEFAULTS,
   mobile: "9876543210",
+  tenthInstitution: "St Xavier's, Chennai",
   tenthPercentage: 91.4,
+  twelfthInstitution: "St Xavier's, Chennai",
   twelfthPercentage: 88,
   passingYear: 2026,
   programmeLevel: "ug",
-  ugAggregateCgpa: null,
-  semesters: [{ semesterNumber: 1, cgpa: 8.24, currentArrears: 0, historyOfArrears: 0 }],
+  ugAggregate: null,
+  semesters: [
+    {
+      semesterNumber: 1,
+      marks: 8.24,
+      marksScale: "cgpa" as const,
+      currentArrears: 0,
+      historyOfArrears: 0,
+    },
+  ],
   // Every declared figure needs the document that proves it.
   marksheets: {
     tenth: scan("10th.pdf"),

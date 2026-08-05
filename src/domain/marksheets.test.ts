@@ -142,3 +142,66 @@ describe("keys", () => {
     );
   });
 });
+
+/**
+ * Diploma, added 2026-08-06: "after 10th and 12th marks, there should be an
+ * option to add diploma marks … diploma marks and college name is optional.
+ * marks + marksheet upload field (both optional)".
+ *
+ * Optional to DECLARE, not optional to evidence. The moment a student puts a
+ * diploma figure on the form it is a mark a coordinator has to verify, and an
+ * unverifiable mark is the exact defect this whole area exists to prevent.
+ */
+describe("diploma marks", () => {
+  const ug = { programmeLevel: "ug" as const, semesters: [{ semesterNumber: 1 }] };
+
+  it("asks for no diploma marksheet when no diploma marks were declared", () => {
+    const slots = requiredMarksheets({ ...ug, hasDiplomaMarks: false });
+
+    expect(slots.some((s) => s.key === "diploma")).toBe(false);
+  });
+
+  it("requires the marksheet once diploma marks are declared", () => {
+    const slots = requiredMarksheets({ ...ug, hasDiplomaMarks: true });
+
+    expect(slots.map((s) => s.key)).toEqual(["tenth", "twelfth", "diploma", "semester-1"]);
+    expect(slots.find((s) => s.key === "diploma")).toEqual({
+      key: "diploma",
+      kind: "diploma_marksheet",
+      label: "Diploma marksheet",
+      semesterNumber: null,
+    });
+  });
+
+  it("places the diploma after school and before the degree, as the form does", () => {
+    const slots = requiredMarksheets({
+      programmeLevel: "pg",
+      semesters: [{ semesterNumber: 1 }],
+      hasDiplomaMarks: true,
+    });
+
+    expect(slots.map((s) => s.key)).toEqual([
+      "tenth",
+      "twelfth",
+      "diploma",
+      "ug_consolidated",
+      "semester-1",
+    ]);
+  });
+
+  it("treats an absent flag as no diploma, so existing callers are unaffected", () => {
+    expect(requiredMarksheets(ug).some((s) => s.key === "diploma")).toBe(false);
+  });
+
+  it("reports a missing diploma marksheet by name", () => {
+    expect(
+      missingMarksheets({ ...ug, hasDiplomaMarks: true }, ["tenth", "twelfth", "semester-1"]).map(
+        (s) => s.label,
+      ),
+    ).toEqual(["Diploma marksheet"]);
+  });
+
+  it("keys it the same way whichever route built it", () => {
+    expect(marksheetSlotKey({ kind: "diploma_marksheet", semesterNumber: null })).toBe("diploma");
+  });
+});

@@ -27,7 +27,8 @@ export interface Enums {
     | "resume"
     | "offer_letter"
     | "opt_out_declaration"
-    | "ug_consolidated_marksheet";
+    | "ug_consolidated_marksheet"
+    | "diploma_marksheet";
   drive_mode: "on_campus" | "physical_outside_campus" | "virtual" | "pooled";
   drive_status:
     | "draft"
@@ -39,6 +40,7 @@ export interface Enums {
     | "completed"
     | "rejected";
   drive_type: "placement" | "internship_convertible" | "internship";
+  marks_scale: "cgpa" | "percentage";
   offer_category: "regular" | "dream" | "super_dream";
   offer_source: "on_campus" | "self_placed";
   participation_status: "active" | "opted_out" | "disbarred";
@@ -599,6 +601,8 @@ export interface StudentSemestersRow {
   verified_by: string | null;
   verified_at: string | null;
   created_at: string;
+  declared_marks: number | null;
+  marks_scale: Enums["marks_scale"];
 }
 
 export type StudentSemestersInsert = Pick<
@@ -615,6 +619,8 @@ export type StudentSemestersInsert = Pick<
       | "verified_by"
       | "verified_at"
       | "created_at"
+      | "declared_marks"
+      | "marks_scale"
     >
   >;
 
@@ -660,6 +666,17 @@ export interface StudentsRow {
   srf_draft: Json | null;
   srf_draft_saved_at: string | null;
   ug_marksheet_id: string | null;
+  tenth_institution: string | null;
+  twelfth_institution: string | null;
+  diploma_institution: string | null;
+  diploma_marks: number | null;
+  diploma_marks_scale: Enums["marks_scale"] | null;
+  diploma_marksheet_id: string | null;
+  ug_degree: string | null;
+  ug_college: string | null;
+  ug_branch: string | null;
+  ug_aggregate_declared: number | null;
+  ug_aggregate_scale: Enums["marks_scale"] | null;
 }
 
 export type StudentsInsert = Pick<
@@ -704,5 +721,16 @@ export type StudentsInsert = Pick<
       | "srf_draft"
       | "srf_draft_saved_at"
       | "ug_marksheet_id"
+      | "tenth_institution"
+      | "twelfth_institution"
+      | "diploma_institution"
+      | "diploma_marks"
+      | "diploma_marks_scale"
+      | "diploma_marksheet_id"
+      | "ug_degree"
+      | "ug_college"
+      | "ug_branch"
+      | "ug_aggregate_declared"
+      | "ug_aggregate_scale"
     >
   >;

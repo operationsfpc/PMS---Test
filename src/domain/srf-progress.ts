@@ -20,8 +20,13 @@ import type { RoleCategory } from "./types";
 export interface SrfProgressInput {
   readonly mobile: string;
   readonly alternateContact: string;
+  /** The school each school figure came from; asked before the marks. */
+  readonly tenthInstitution: string;
   readonly tenthPercentage: number;
+  readonly twelfthInstitution: string;
   readonly twelfthPercentage: number;
+  /** Optional to declare; once declared it must be evidenced like any mark. */
+  readonly hasDiplomaMarks: boolean;
   readonly programmeLevel: "ug" | "pg";
   readonly ugAggregateCgpa: number | null;
   readonly semesters: readonly {
@@ -63,11 +68,24 @@ export function srfSectionProgress(input: SrfProgressInput): readonly SrfSection
   const semestersEntered =
     input.semesters.length > 0 && input.semesters.every((s) => given(s.cgpa));
 
+  /**
+   * Academics and the documents that prove them are ONE section since
+   * 2026-08-06: "do not keep marksheet upload as a separate section 3. upload
+   * near relevant fields in section 2 itself."
+   *
+   * A student used to enter a mark in one section and find its document in
+   * another, matching them up from memory - which is also how a marksheet
+   * ended up filed against the wrong semester. So this section is not done
+   * until every figure on it carries its evidence.
+   */
   const academic =
+    filled(input.tenthInstitution) &&
     given(input.tenthPercentage) &&
+    filled(input.twelfthInstitution) &&
     given(input.twelfthPercentage) &&
     semestersEntered &&
-    (input.programmeLevel === "ug" || input.ugAggregateCgpa !== null);
+    (input.programmeLevel === "ug" || input.ugAggregateCgpa !== null) &&
+    missingMarksheets(input, input.marksheets).length === 0;
 
   // R7 sends ONE resume per role category to the recruiter, so a preference
   // without its resume is not a finished choice.
@@ -79,36 +97,26 @@ export function srfSectionProgress(input: SrfProgressInput): readonly SrfSection
     { id: "personal", title: "Personal details", step: 1, optional: false, complete: personal },
     { id: "academic", title: "Academic record", step: 2, optional: false, complete: academic },
     {
-      id: "marksheets",
-      title: "Marksheet uploads",
-      step: 3,
-      optional: false,
-      // Every declared figure needs the document that proves it, so declaring
-      // another semester re-opens this section - which is correct: there is
-      // now a mark on the form that no coordinator can check.
-      complete: missingMarksheets(input, input.marksheets).length === 0,
-    },
-    {
       id: "preferences",
       title: "Placement preferences",
-      step: 4,
+      step: 3,
       optional: false,
       complete: preferences,
     },
     // Nothing in these two is required by the schema. Marking them incomplete
-    // would strand a student with no GitHub at 5 of 7 for ever.
-    { id: "profiles", title: "Professional profiles", step: 5, optional: true, complete: true },
+    // would strand a student with no GitHub at 4 of 6 for ever.
+    { id: "profiles", title: "Professional profiles", step: 4, optional: true, complete: true },
     {
       id: "additional",
       title: "Skills and achievements",
-      step: 6,
+      step: 5,
       optional: true,
       complete: true,
     },
     {
       id: "consent",
       title: "Consent and submission",
-      step: 7,
+      step: 6,
       optional: false,
       complete: input.consent,
     },

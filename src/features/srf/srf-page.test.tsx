@@ -88,7 +88,7 @@ describe("SrfPage", () => {
      */
     it("captures CGPA per semester, which is what eligibility tests against", () => {
       render(<SrfPage />);
-      expect(screen.getByLabelText(/semester 1 cgpa/i)).toBeDefined();
+      expect(screen.getByLabelText(/semester 1 result/i)).toBeDefined();
     });
 
     it("captures current arrears and arrear history separately, per semester", () => {
@@ -187,7 +187,9 @@ describe("SrfPage — progress and navigation", () => {
     await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
     await user.type(screen.getByLabelText(/alternate contact number/i), "9876500000");
 
-    expect(screen.getByText(/20% complete/i)).toBeDefined();
+    // Four required sections since the marksheet step was folded into
+    // academics (2026-08-06), so personal alone is a quarter of the way.
+    expect(screen.getByText(/25% complete/i)).toBeDefined();
   });
 
   it("lets the student jump back to any section from the tracker", async () => {
@@ -318,9 +320,13 @@ describe("SrfPage — saving a draft", () => {
       />,
     );
 
-    // Nothing is evidenced, so the tracker must not report the section done.
-    expect(screen.queryByRole("link", { name: /marksheet uploads — done/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /^marksheet uploads$/i })).toBeDefined();
+    // The file inputs are empty: a draft cannot carry a File, so the student
+    // re-picks them. Restoring `{}` as though it were a document would let an
+    // unevidenced form through.
+    expect((screen.getByLabelText(/10th marksheet/i) as HTMLInputElement).files).toHaveLength(0);
+    expect((screen.getByLabelText(/12th marksheet/i) as HTMLInputElement).files).toHaveLength(0);
+    // And the tracker does not claim the academic section is finished.
+    expect(screen.queryByRole("link", { name: /academic record — done/i })).toBeNull();
   });
 
   it("does not nag a student who has typed nothing", async () => {

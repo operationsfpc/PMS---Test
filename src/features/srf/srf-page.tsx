@@ -6,7 +6,15 @@ import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import {
+  forwardRef,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Link } from "react-router";
 import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
@@ -15,14 +23,19 @@ import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from 
 
 /** Student Registration Form — PRD §4.1. */
 
+/**
+ * Six, not seven. "Do not keep marksheet upload as a separate section 3.
+ * upload near relevant fields in section 2 itself" (2026-08-06) - a student
+ * had to enter a mark in one section and find its document in another,
+ * matching them up from memory.
+ */
 export const SRF_SECTIONS = [
   { id: "personal", title: "Personal details", step: 1 },
   { id: "academic", title: "Academic record", step: 2 },
-  { id: "marksheets", title: "Marksheet uploads", step: 3 },
-  { id: "preferences", title: "Placement preferences", step: 4 },
-  { id: "profiles", title: "Professional profiles", step: 5 },
-  { id: "additional", title: "Skills and achievements", step: 6 },
-  { id: "consent", title: "Consent and submission", step: 7 },
+  { id: "preferences", title: "Placement preferences", step: 3 },
+  { id: "profiles", title: "Professional profiles", step: 4 },
+  { id: "additional", title: "Skills and achievements", step: 5 },
+  { id: "consent", title: "Consent and submission", step: 6 },
 ] as const;
 
 export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
@@ -75,6 +88,38 @@ function Section({
     </section>
   );
 }
+
+/**
+ * Which scale a college reports on. Asked for 2026-08-06: "some colleges have
+ * CGPA and some have % in college marks. have an option for students to select
+ * relevant field and enter that."
+ *
+ * Its own control rather than a guess from the magnitude of the number: 8 is a
+ * plausible CGPA and an implausible percentage, but 65 is ambiguous the other
+ * way round, and guessing wrong changes who is eligible for a drive.
+ */
+const ScaleSelect = forwardRef<
+  HTMLSelectElement,
+  { label: string } & SelectHTMLAttributes<HTMLSelectElement>
+>(function ScaleSelect({ label, ...props }, ref) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink-700">
+        {label}
+      </label>
+      <select
+        id={id}
+        ref={ref}
+        className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink-900"
+        {...props}
+      >
+        <option value="cgpa">CGPA (out of 10)</option>
+        <option value="percentage">Percentage (%)</option>
+      </select>
+    </div>
+  );
+});
 
 function ErrorText({ children }: { children?: string | undefined }) {
   if (children === undefined) return null;
@@ -135,7 +180,9 @@ export function SrfPage({
   const resumeCategories = watch("resumeCategories");
   const programmeLevel = watch("programmeLevel");
   const semesters = watch("semesters");
+  const diplomaMarks = watch("diplomaMarks");
   const maxSemesters = MAX_SEMESTERS[programmeLevel];
+  const hasDiplomaMarks = diplomaMarks !== null && !Number.isNaN(diplomaMarks);
 
   /**
    * The marksheets the student has chosen, held in FORM state.
@@ -162,7 +209,24 @@ export function SrfPage({
   const requiredSheets = requiredMarksheets({
     programmeLevel,
     semesters: semesters ?? [],
+    hasDiplomaMarks,
   });
+
+  /**
+   * Each upload now sits beside the figure it evidences (2026-08-06): "do not
+   * keep marksheet upload as a separate section 3. upload near relevant fields
+   * in section 2 itself."
+   *
+   * A student used to enter a mark in one section and hunt for its document in
+   * another, matching them up from memory - which is also how a marksheet ends
+   * up filed against the wrong semester.
+   */
+  const slotFor = (key: string) => requiredSheets.find((s) => s.key === key);
+
+  const marksheetError = (key: string) =>
+    errors.marksheets !== undefined && marksheets[key] === undefined
+      ? `${slotFor(key)?.label ?? "This marksheet"} is required.`
+      : undefined;
 
   const chooseMarksheet = (key: string, file: File | undefined) => {
     const next = { ...marksheets };
@@ -182,10 +246,13 @@ export function SrfPage({
     programmeLevel,
     // The field is optional in the form's input type, but "not yet entered"
     // and "deliberately none" are the same thing to the tracker.
-    ugAggregateCgpa: watch("ugAggregateCgpa") ?? null,
+    tenthInstitution: watch("tenthInstitution"),
+    twelfthInstitution: watch("twelfthInstitution"),
+    hasDiplomaMarks,
+    ugAggregateCgpa: watch("ugAggregate") ?? null,
     semesters: (semesters ?? []).map((s) => ({
       semesterNumber: s.semesterNumber,
-      cgpa: s.cgpa,
+      cgpa: s.marks,
     })),
     marksheets: Object.keys(marksheets),
     roleCategories: selectedCategories,
@@ -266,6 +333,14 @@ export function SrfPage({
 
   const num = (name: Parameters<typeof register>[0]) =>
     register(name, { setValueAs: (v) => (v === "" ? Number.NaN : Number(v)) });
+
+  /**
+   * For the two figures a student may legitimately not have: an empty box is
+   * NULL, not NaN. "They have no diploma" and "they typed something
+   * unreadable" are different answers and must not collapse into one.
+   */
+  const nullableNum = (name: Parameters<typeof register>[0]) =>
+    register(name, { setValueAs: (v) => (v === "" || v === null ? null : Number(v)) });
 
   if (submitted) {
     return (
@@ -432,63 +507,119 @@ export function SrfPage({
             id="academic"
             title="Academic record"
             step={2}
-            description="Eligibility is checked against these figures once verified."
+            description="Every figure here is verified against the document beside it, so upload each one as you go."
           >
-            <div className={grid}>
-              <div>
-                <TextField
-                  label="10th marks (%)"
-                  type="number"
-                  step="0.01"
+            {/* SCHOOL. The institution comes before the marks it issued, and
+                the marksheet sits with them - not in a separate section the
+                student had to match up from memory. */}
+            <fieldset className="rounded-lg border border-line p-4">
+              <legend className="px-1 text-sm font-semibold text-ink-700">Class 10</legend>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <TextField
+                    label="10th school name"
+                    required
+                    placeholder="School you did your 10th at"
+                    {...register("tenthInstitution")}
+                  />
+                  <ErrorText>{errors.tenthInstitution?.message}</ErrorText>
+                </div>
+                <div>
+                  <TextField
+                    label="10th marks (%)"
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="e.g. 91.4"
+                    {...num("tenthPercentage")}
+                  />
+                  <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
+                </div>
+                <FileField
+                  label="10th marksheet"
                   required
-                  placeholder="e.g. 91.4"
-                  {...num("tenthPercentage")}
+                  error={marksheetError("tenth")}
+                  onChange={(e) => chooseMarksheet("tenth", e.target.files?.[0])}
                 />
-                <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
               </div>
-              <div>
-                <TextField
-                  label="12th marks (%)"
-                  type="number"
-                  step="0.01"
-                  required
-                  placeholder="e.g. 88.0"
-                  {...num("twelfthPercentage")}
-                />
-                <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
-              </div>
-              <div>
-                <SelectField
-                  label="Degree"
-                  required
-                  options={["B.E", "B.Tech", "BCA", "B.Sc CS", "MCA", "M.Sc CS", "B.Com", "BBA"]}
-                  {...register("degree")}
-                />
-                <ErrorText>{errors.degree?.message}</ErrorText>
-              </div>
-              <div>
-                <SelectField
-                  label="Branch / specialisation"
-                  required
-                  options={["CSE", "IT", "ECE", "EEE", "Mechanical", "Civil", "Not applicable"]}
-                  {...register("branch")}
-                />
-                <ErrorText>{errors.branch?.message}</ErrorText>
-              </div>
-              <div>
-                <TextField
-                  label="Passing year"
-                  type="number"
-                  required
-                  placeholder="e.g. 2026"
-                  {...num("passingYear")}
-                />
-                <ErrorText>{errors.passingYear?.message}</ErrorText>
-              </div>
-            </div>
+            </fieldset>
 
-            {/* Semester-wise since 2026-08-04. Eligibility reads the latest
-                VERIFIED line, so each one is entered and checked separately. */}
+            <fieldset className="mt-4 rounded-lg border border-line p-4">
+              <legend className="px-1 text-sm font-semibold text-ink-700">Class 12</legend>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <TextField
+                    label="12th school name"
+                    required
+                    placeholder="School you did your 12th at"
+                    {...register("twelfthInstitution")}
+                  />
+                  <ErrorText>{errors.twelfthInstitution?.message}</ErrorText>
+                </div>
+                <div>
+                  <TextField
+                    label="12th marks (%)"
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="e.g. 88.0"
+                    {...num("twelfthPercentage")}
+                  />
+                  <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
+                </div>
+                <FileField
+                  label="12th marksheet"
+                  required
+                  error={marksheetError("twelfth")}
+                  onChange={(e) => chooseMarksheet("twelfth", e.target.files?.[0])}
+                />
+              </div>
+            </fieldset>
+
+            {/* DIPLOMA. Optional to declare - many students have none - but
+                all-or-nothing once begun: a figure with no college and no
+                marksheet is a mark nobody can verify. */}
+            <fieldset className="mt-4 rounded-lg border border-dashed border-line p-4">
+              <legend className="px-1 text-sm font-semibold text-ink-700">
+                Diploma <span className="font-normal text-ink-500">(optional)</span>
+              </legend>
+              <p className="mb-3 text-xs text-ink-500">
+                Leave blank if you did not do one. If you did, we need the college, the result and
+                the marksheet.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <TextField
+                    label="Diploma college"
+                    placeholder="College that issued it"
+                    {...register("diplomaInstitution")}
+                  />
+                  <ErrorText>{errors.diplomaInstitution?.message}</ErrorText>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <TextField
+                    label="Diploma result"
+                    type="number"
+                    step="0.01"
+                    {...nullableNum("diplomaMarks")}
+                  />
+                  <ScaleSelect label="Diploma scale" {...register("diplomaMarksScale")} />
+                </div>
+                <ErrorText>{errors.diplomaMarks?.message}</ErrorText>
+                {hasDiplomaMarks && (
+                  <FileField
+                    label="Diploma marksheet"
+                    required
+                    error={marksheetError("diploma")}
+                    onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
+                  />
+                )}
+              </div>
+            </fieldset>
+
+            {/* THE FORK. Asked for 2026-08-06: this question comes immediately
+                after school and diploma, because everything below it means
+                something different depending on the answer. */}
             <fieldset className="mt-6">
               <legend className="mb-2 text-sm font-medium text-ink-700">
                 Which are you pursuing?
@@ -523,20 +654,104 @@ export function SrfPage({
               <ErrorText>{errors.programmeLevel?.message}</ErrorText>
             </fieldset>
 
+            {/* A postgraduate has a whole finished degree behind them. The form
+                used to ask only for its CGPA, which tells a recruiter nothing
+                about where it was earned or in what. */}
             {programmeLevel === "pg" && (
-              <div className="mt-4 max-w-xs">
-                <TextField
-                  label="Undergraduate CGPA"
-                  type="number"
-                  step="0.01"
-                  required
-                  hint="One figure for the degree you have already completed."
-                  error={errors.ugAggregateCgpa?.message}
-                  {...num("ugAggregateCgpa")}
-                />
-              </div>
+              <fieldset className="mt-4 rounded-lg border border-line bg-surface-muted p-4">
+                <legend className="px-1 text-sm font-semibold text-ink-700">
+                  Your completed undergraduate degree
+                </legend>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <TextField
+                      label="UG degree"
+                      required
+                      placeholder="e.g. B.Sc Computer Science"
+                      {...register("ugDegree")}
+                    />
+                    <ErrorText>{errors.ugDegree?.message}</ErrorText>
+                  </div>
+                  <div>
+                    <TextField
+                      label="UG college"
+                      required
+                      placeholder="College you graduated from"
+                      {...register("ugCollege")}
+                    />
+                    <ErrorText>{errors.ugCollege?.message}</ErrorText>
+                  </div>
+                  <div>
+                    <TextField
+                      label="UG branch"
+                      required
+                      placeholder="e.g. Computer Science"
+                      {...register("ugBranch")}
+                    />
+                    <ErrorText>{errors.ugBranch?.message}</ErrorText>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <TextField
+                      label="UG result"
+                      type="number"
+                      step="0.01"
+                      required
+                      {...nullableNum("ugAggregate")}
+                    />
+                    <ScaleSelect label="UG scale" {...register("ugAggregateScale")} />
+                  </div>
+                  <ErrorText>{errors.ugAggregate?.message}</ErrorText>
+                  <FileField
+                    label="Consolidated UG marksheet"
+                    required
+                    error={marksheetError("ug_consolidated")}
+                    onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
+                  />
+                </div>
+              </fieldset>
             )}
 
+            {/* THE PROGRAMME THEY ARE ON NOW. Below the fork, because for a PG
+                student this is their PG and not the degree above. */}
+            <div className="mt-6">
+              <p className="mb-3 text-sm font-semibold text-ink-700">
+                The {programmeLevel === "pg" ? "postgraduate" : "undergraduate"} degree you are
+                studying now
+              </p>
+              <div className={grid}>
+                <div>
+                  <SelectField
+                    label="Degree"
+                    required
+                    options={["B.E", "B.Tech", "BCA", "B.Sc CS", "MCA", "M.Sc CS", "B.Com", "BBA"]}
+                    {...register("degree")}
+                  />
+                  <ErrorText>{errors.degree?.message}</ErrorText>
+                </div>
+                <div>
+                  <SelectField
+                    label="Branch / specialisation"
+                    required
+                    options={["CSE", "IT", "ECE", "EEE", "Mechanical", "Civil", "Not applicable"]}
+                    {...register("branch")}
+                  />
+                  <ErrorText>{errors.branch?.message}</ErrorText>
+                </div>
+                <div>
+                  <TextField
+                    label="Passing year"
+                    type="number"
+                    required
+                    placeholder="e.g. 2026"
+                    {...num("passingYear")}
+                  />
+                  <ErrorText>{errors.passingYear?.message}</ErrorText>
+                </div>
+              </div>
+            </div>
+
+            {/* SEMESTER-WISE. Eligibility reads the latest VERIFIED line, so
+                each one is entered, evidenced and checked separately. */}
             <div className="mt-6">
               <p className="mb-2 text-sm font-medium text-ink-700">
                 Semester results
@@ -546,22 +761,37 @@ export function SrfPage({
                 <span className="sr-only"> (required)</span>
               </p>
               <p className="mb-3 text-xs text-ink-500">
-                CGPA, not GPA: cumulative to the end of each semester, on a 10-point scale. At most{" "}
-                {maxSemesters} for a {programmeLevel === "pg" ? "postgraduate" : "undergraduate"}.
+                Cumulative to the end of each semester. Choose the scale your college reports on —
+                CGPA out of 10, or a percentage. At most {maxSemesters} for a{" "}
+                {programmeLevel === "pg" ? "postgraduate" : "undergraduate"}.
               </p>
 
               <div className="flex flex-col gap-3">
                 {semesters.map((semester, index) => (
                   <div
                     key={semester.semesterNumber}
-                    className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
+                    className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2"
                   >
-                    <TextField
-                      label={`Semester ${semester.semesterNumber} CGPA`}
-                      type="number"
-                      step="0.01"
+                    <div className="grid grid-cols-2 gap-2">
+                      <TextField
+                        label={`Semester ${semester.semesterNumber} result`}
+                        type="number"
+                        step="0.01"
+                        required
+                        {...num(`semesters.${index}.marks`)}
+                      />
+                      <ScaleSelect
+                        label={`Semester ${semester.semesterNumber} scale`}
+                        {...register(`semesters.${index}.marksScale`)}
+                      />
+                    </div>
+                    <FileField
+                      label={`Semester ${semester.semesterNumber} marksheet`}
                       required
-                      {...num(`semesters.${index}.cgpa`)}
+                      error={marksheetError(`semester-${semester.semesterNumber}`)}
+                      onChange={(e) =>
+                        chooseMarksheet(`semester-${semester.semesterNumber}`, e.target.files?.[0])
+                      }
                     />
                     <TextField
                       label={`Semester ${semester.semesterNumber} standing arrears`}
@@ -576,6 +806,7 @@ export function SrfPage({
                       hint="Including cleared ones."
                       {...num(`semesters.${index}.historyOfArrears`)}
                     />
+                    <ErrorText>{errors.semesters?.[index]?.marks?.message}</ErrorText>
                     {semesters.length > 1 && (
                       <button
                         type="button"
@@ -609,7 +840,8 @@ export function SrfPage({
                       ...semesters,
                       {
                         semesterNumber: semesters.length + 1,
-                        cgpa: Number.NaN,
+                        marks: Number.NaN,
+                        marksScale: "cgpa",
                         currentArrears: 0,
                         historyOfArrears: 0,
                       },
@@ -621,41 +853,12 @@ export function SrfPage({
                 </button>
               )}
             </div>
-          </Section>
 
-          <Section
-            id="marksheets"
-            title="Marksheet uploads"
-            step={3}
-            description="Your Coordinator verifies every figure above against these documents."
-          >
-            <p className="mb-4 text-xs text-ink-500">
-              One per figure you entered above. Adding a semester adds its marksheet — a mark nobody
-              can check against a document cannot be verified.
-            </p>
-            <div className={grid}>
-              {requiredSheets.map((slot) => (
-                <FileField
-                  key={slot.key}
-                  label={slot.label}
-                  required
-                  // The group message cannot say WHICH upload is missing when
-                  // several are on screen, so the reason goes on the field
-                  // that is actually empty (requested 2026-08-04).
-                  error={
-                    errors.marksheets !== undefined && marksheets[slot.key] === undefined
-                      ? `Your ${slot.label} is required.`
-                      : undefined
-                  }
-                  onChange={(e) => chooseMarksheet(slot.key, e.target.files?.[0])}
-                />
-              ))}
-            </div>
             <ErrorText>
               {errors.marksheets === undefined
                 ? undefined
                 : `Upload your ${missingMarksheets(
-                    { programmeLevel, semesters: semesters ?? [] },
+                    { programmeLevel, semesters: semesters ?? [], hasDiplomaMarks },
                     Object.keys(marksheets),
                   )
                     .map((s) => s.label)
@@ -666,7 +869,7 @@ export function SrfPage({
           <Section
             id="preferences"
             title="Placement preferences"
-            step={4}
+            step={3}
             description="Choose every role type you want to be considered for, then upload a tailored resume for each."
           >
             <Controller
@@ -740,7 +943,7 @@ export function SrfPage({
           <Section
             id="profiles"
             title="Professional profiles"
-            step={5}
+            step={4}
             description="Optional, but they matter."
           >
             <div className={grid}>
@@ -768,7 +971,7 @@ export function SrfPage({
           <Section
             id="additional"
             title="Skills and achievements"
-            step={6}
+            step={5}
             description="Be specific — this feeds shortlisting."
           >
             <div className="flex flex-col gap-4">
@@ -797,7 +1000,7 @@ export function SrfPage({
             </div>
           </Section>
 
-          <Section id="consent" title="Consent and submission" step={7}>
+          <Section id="consent" title="Consent and submission" step={6}>
             <CheckboxField
               required
               label="I consent to sharing my profile and resumes with recruiting companies"

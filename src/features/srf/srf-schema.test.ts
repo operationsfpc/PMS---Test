@@ -12,15 +12,29 @@ const valid: SrfFormValues = {
   mobile: "9876543210",
   // Mandatory since 2026-08-04.
   alternateContact: "9876500000",
+  tenthInstitution: "St Xavier's, Chennai",
   tenthPercentage: 91.4,
+  twelfthInstitution: "St Xavier's, Chennai",
   twelfthPercentage: 88,
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
   programmeLevel: "ug",
   semesters: [
-    { semesterNumber: 1, cgpa: 8.1, currentArrears: 0, historyOfArrears: 0 },
-    { semesterNumber: 2, cgpa: 8.24, currentArrears: 0, historyOfArrears: 0 },
+    {
+      semesterNumber: 1,
+      marks: 8.1,
+      marksScale: "cgpa" as const,
+      currentArrears: 0,
+      historyOfArrears: 0,
+    },
+    {
+      semesterNumber: 2,
+      marks: 8.24,
+      marksScale: "cgpa" as const,
+      currentArrears: 0,
+      historyOfArrears: 0,
+    },
   ],
   // Every declared figure needs the document that proves it. Before this the
   // form validated - and submitted - with no evidence whatsoever.
@@ -71,7 +85,15 @@ describe("srfSchema", () => {
   it("accepts cleared backlogs — history above current", () => {
     expect(
       errorsFor({
-        semesters: [{ semesterNumber: 1, cgpa: 8, currentArrears: 0, historyOfArrears: 4 }],
+        semesters: [
+          {
+            semesterNumber: 1,
+            marks: 8,
+            marksScale: "cgpa" as const,
+            currentArrears: 0,
+            historyOfArrears: 4,
+          },
+        ],
         marksheets: {
           tenth: file("10th.pdf"),
           twelfth: file("12th.pdf"),
@@ -114,7 +136,7 @@ describe("srfSchema", () => {
     });
 
     it("requires a postgraduate's consolidated UG marksheet", () => {
-      expect(errorsFor({ programmeLevel: "pg", ugAggregateCgpa: 7.4 }).marksheets).toMatch(
+      expect(errorsFor({ programmeLevel: "pg", ugAggregate: 7.4 }).marksheets).toMatch(
         /consolidated ug marksheet/i,
       );
     });
@@ -148,7 +170,8 @@ describe("srfSchema", () => {
     it("refuses an eleventh undergraduate semester", () => {
       const eleven = Array.from({ length: 11 }, (_, i) => ({
         semesterNumber: i + 1,
-        cgpa: 8,
+        marks: 8,
+        marksScale: "cgpa" as const,
         currentArrears: 0,
         historyOfArrears: 0,
       }));
@@ -158,19 +181,28 @@ describe("srfSchema", () => {
     it("refuses a fifth postgraduate semester", () => {
       const five = Array.from({ length: 5 }, (_, i) => ({
         semesterNumber: i + 1,
-        cgpa: 8,
+        marks: 8,
+        marksScale: "cgpa" as const,
         currentArrears: 0,
         historyOfArrears: 0,
       }));
       expect(
-        errorsFor({ programmeLevel: "pg", ugAggregateCgpa: 7.4, semesters: five }).semesters,
+        errorsFor({ programmeLevel: "pg", ugAggregate: 7.4, semesters: five }).semesters,
       ).toMatch(/at most 4 semesters/i);
     });
 
     it("refuses a CGPA off the 10-point scale, because it is a CGPA not a GPA", () => {
       expect(
         errorsFor({
-          semesters: [{ semesterNumber: 1, cgpa: 78, currentArrears: 0, historyOfArrears: 0 }],
+          semesters: [
+            {
+              semesterNumber: 1,
+              marks: 78,
+              marksScale: "cgpa" as const,
+              currentArrears: 0,
+              historyOfArrears: 0,
+            },
+          ],
         }).semesters,
       ).toMatch(/10-point scale/i);
     });
@@ -178,19 +210,27 @@ describe("srfSchema", () => {
     it("refuses a history of arrears below the standing count", () => {
       expect(
         errorsFor({
-          semesters: [{ semesterNumber: 1, cgpa: 8, currentArrears: 3, historyOfArrears: 1 }],
+          semesters: [
+            {
+              semesterNumber: 1,
+              marks: 8,
+              marksScale: "cgpa" as const,
+              currentArrears: 3,
+              historyOfArrears: 1,
+            },
+          ],
         }).semesters,
       ).toMatch(/history of arrears/i);
     });
 
     it("requires a postgraduate to give their completed UG result", () => {
-      expect(errorsFor({ programmeLevel: "pg", ugAggregateCgpa: null }).ugAggregateCgpa).toMatch(
+      expect(errorsFor({ programmeLevel: "pg", ugAggregate: null }).ugAggregate).toMatch(
         /undergraduate/i,
       );
     });
 
     it("does not ask an undergraduate for one", () => {
-      expect(errorsFor({ programmeLevel: "ug", ugAggregateCgpa: null })).toEqual({});
+      expect(errorsFor({ programmeLevel: "ug", ugAggregate: null })).toEqual({});
     });
   });
 
@@ -231,11 +271,122 @@ describe("srfSchema", () => {
   it("reports every problem at once so the student fixes them in one pass", () => {
     const errors = errorsFor({
       mobile: "abc",
-      semesters: [{ semesterNumber: 1, cgpa: 99, currentArrears: 0, historyOfArrears: 0 }],
+      semesters: [
+        {
+          semesterNumber: 1,
+          marks: 99,
+          marksScale: "cgpa" as const,
+          currentArrears: 0,
+          historyOfArrears: 0,
+        },
+      ],
       degree: "",
       roleCategories: [],
       resumeCategories: [],
     });
-    expect(Object.keys(errors).sort()).toEqual(["degree", "mobile", "roleCategories", "semesters"]);
+    // `semesters.0.marks` as well as the group message: a bad figure is now
+    // reported ON the field the student has to fix, which is what was asked
+    // for on 2026-08-04. The group message still names the rule.
+    expect(Object.keys(errors).sort()).toEqual([
+      "degree",
+      "mobile",
+      "roleCategories",
+      "semesters",
+      "semesters.0.marks",
+    ]);
+  });
+
+  /**
+   * "Some colleges have CGPA and some have % in college marks" (2026-08-06).
+   * 78 is a fine percentage and a nonsense CGPA — the old schema could only
+   * ever say the latter, so a percentage-scale student could not register.
+   */
+  describe("marks on either scale", () => {
+    const semester = (marks: number, marksScale: "cgpa" | "percentage") => ({
+      semesters: [{ semesterNumber: 1, marks, marksScale, currentArrears: 0, historyOfArrears: 0 }],
+      marksheets: {
+        tenth: file("10th.pdf"),
+        twelfth: file("12th.pdf"),
+        "semester-1": file("s1.pdf"),
+      },
+    });
+
+    it("accepts a percentage a CGPA scale would have refused", () => {
+      expect(errorsFor(semester(78, "percentage"))).toEqual({});
+    });
+
+    it("still refuses an impossible percentage", () => {
+      expect(errorsFor(semester(105, "percentage"))["semesters.0.marks"]).toMatch(/0 and 100/i);
+    });
+
+    it("still holds a CGPA to ten", () => {
+      expect(errorsFor(semester(78, "cgpa"))["semesters.0.marks"]).toMatch(/10-point/i);
+    });
+  });
+
+  /**
+   * Diploma: optional to declare, all-or-nothing once begun (2026-08-06).
+   */
+  describe("diploma", () => {
+    it("accepts a student who did not do one", () => {
+      expect(errorsFor({ diplomaMarks: null, diplomaInstitution: "" })).toEqual({});
+    });
+
+    it("asks for the college once a figure is entered", () => {
+      expect(
+        errorsFor({ diplomaMarks: 78, diplomaMarksScale: "percentage" }).diplomaInstitution,
+      ).toMatch(/college/i);
+    });
+
+    it("asks for the marksheet once a figure is entered", () => {
+      expect(
+        errorsFor({
+          diplomaMarks: 78,
+          diplomaMarksScale: "percentage",
+          diplomaInstitution: "Government Polytechnic",
+        }).marksheets,
+      ).toMatch(/diploma marksheet/i);
+    });
+  });
+
+  /**
+   * A postgraduate's finished degree. The form used to ask for its CGPA alone,
+   * which told a recruiter nothing about where it was earned or in what.
+   */
+  describe("a postgraduate's completed UG degree", () => {
+    const pg = {
+      programmeLevel: "pg" as const,
+      ugAggregate: 7.4,
+      marksheets: {
+        tenth: file("10th.pdf"),
+        twelfth: file("12th.pdf"),
+        ug_consolidated: file("ug.pdf"),
+        "semester-1": file("s1.pdf"),
+        "semester-2": file("s2.pdf"),
+      },
+    };
+
+    it("asks where the degree was earned and in what", () => {
+      const errors = errorsFor(pg);
+
+      expect(errors.ugDegree).toMatch(/degree/i);
+      expect(errors.ugCollege).toMatch(/college/i);
+      expect(errors.ugBranch).toMatch(/branch/i);
+    });
+
+    it("accepts a complete one", () => {
+      expect(
+        errorsFor({
+          ...pg,
+          ugDegree: "B.Sc Computer Science",
+          ugCollege: "Loyola College",
+          ugBranch: "Computer Science",
+        }),
+      ).toEqual({});
+    });
+
+    it("asks none of it of an undergraduate", () => {
+      expect(errorsFor({ programmeLevel: "ug", ugAggregate: null })).toEqual({});
+    });
   });
 });

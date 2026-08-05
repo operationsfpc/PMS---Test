@@ -98,9 +98,11 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^mobile number/i), "9876543210");
   // Mandatory since 2026-08-04.
   await user.type(screen.getByLabelText(/alternate contact number/i), "9876500000");
+  await user.type(screen.getByLabelText(/10th school name/i), "St Xavier's");
   await user.type(screen.getByLabelText(/10th marks \(%\)/i), "91.4");
+  await user.type(screen.getByLabelText(/12th school name/i), "St Xavier's");
   await user.type(screen.getByLabelText(/12th marks \(%\)/i), "88");
-  await user.type(screen.getByLabelText(/semester 1 cgpa/i), "8.24");
+  await user.type(screen.getByLabelText(/semester 1 result/i), "8.24");
   // Evidence for every declared figure. A form without it is no longer valid:
   // the coordinator would have nothing to verify the marks against.
   await user.upload(screen.getByLabelText(/^10th marksheet/i), scan("10th.pdf"));
@@ -131,7 +133,7 @@ describe("SRF validation", () => {
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
-    const cgpa = screen.getByLabelText(/semester 1 cgpa/i);
+    const cgpa = screen.getByLabelText(/semester 1 result/i);
     await user.clear(cgpa);
     await user.type(cgpa, "82.4");
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
@@ -172,7 +174,7 @@ describe("SRF validation", () => {
       render(<SrfPage profile={ROSTER} />);
 
       expect(screen.getByRole("radio", { name: /undergraduate/i })).toBeDefined();
-      expect(screen.getByLabelText(/semester 1 cgpa/i)).toBeDefined();
+      expect(screen.getByLabelText(/semester 1 result/i)).toBeDefined();
     });
 
     it("adds the next semester, numbering it automatically", async () => {
@@ -181,7 +183,7 @@ describe("SRF validation", () => {
 
       await user.click(screen.getByRole("button", { name: /add semester/i }));
 
-      expect(screen.getByLabelText(/semester 2 cgpa/i)).toBeDefined();
+      expect(screen.getByLabelText(/semester 2 result/i)).toBeDefined();
     });
 
     it("stops an undergraduate at ten semesters", async () => {
@@ -194,8 +196,8 @@ describe("SRF validation", () => {
         await user.click(add);
       }
 
-      expect(screen.getByLabelText(/semester 10 cgpa/i)).toBeDefined();
-      expect(screen.queryByLabelText(/semester 11 cgpa/i)).toBeNull();
+      expect(screen.getByLabelText(/semester 10 result/i)).toBeDefined();
+      expect(screen.queryByLabelText(/semester 11 result/i)).toBeNull();
       expect(screen.queryByRole("button", { name: /add semester/i })).toBeNull();
     });
 
@@ -205,7 +207,7 @@ describe("SRF validation", () => {
 
       await user.click(screen.getByRole("radio", { name: /postgraduate/i }));
 
-      expect(screen.getByLabelText(/undergraduate cgpa/i)).toBeDefined();
+      expect(screen.getByLabelText(/ug result/i)).toBeDefined();
 
       for (let i = 0; i < 6; i += 1) {
         const add = screen.queryByRole("button", { name: /add semester/i });
@@ -213,14 +215,14 @@ describe("SRF validation", () => {
         await user.click(add);
       }
 
-      expect(screen.getByLabelText(/semester 4 cgpa/i)).toBeDefined();
-      expect(screen.queryByLabelText(/semester 5 cgpa/i)).toBeNull();
+      expect(screen.getByLabelText(/semester 4 result/i)).toBeDefined();
+      expect(screen.queryByLabelText(/semester 5 result/i)).toBeNull();
     });
 
     it("does not ask an undergraduate for a separate UG aggregate", () => {
       render(<SrfPage profile={ROSTER} />);
 
-      expect(screen.queryByLabelText(/undergraduate cgpa/i)).toBeNull();
+      expect(screen.queryByLabelText(/ug result/i)).toBeNull();
     });
 
     it("removes a semester the student added by mistake", async () => {
@@ -230,7 +232,7 @@ describe("SRF validation", () => {
       await user.click(screen.getByRole("button", { name: /add semester/i }));
       await user.click(screen.getByRole("button", { name: /remove semester 2/i }));
 
-      expect(screen.queryByLabelText(/semester 2 cgpa/i)).toBeNull();
+      expect(screen.queryByLabelText(/semester 2 result/i)).toBeNull();
     });
 
     it("collects arrears per semester, not once for the whole degree", () => {
@@ -378,7 +380,7 @@ describe("SRF marksheet evidence", () => {
 
     // A second semester declared, with no marksheet behind it.
     await user.click(screen.getByRole("button", { name: /add semester/i }));
-    await user.type(screen.getByLabelText(/semester 2 cgpa/i), "8.4");
+    await user.type(screen.getByLabelText(/semester 2 result/i), "8.4");
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
     // Scoped to the alert: the field's own LABEL says "Semester 2 marksheet"
@@ -395,7 +397,7 @@ describe("SRF marksheet evidence", () => {
     await fillValidForm(user);
 
     await user.click(screen.getByRole("button", { name: /add semester/i }));
-    await user.type(screen.getByLabelText(/semester 2 cgpa/i), "8.4");
+    await user.type(screen.getByLabelText(/semester 2 result/i), "8.4");
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
     await waitFor(() => {
@@ -457,7 +459,7 @@ describe("SRF submission", () => {
       await screen.findByText(/can only be changed by your placement coordinator/i),
     ).toBeDefined();
     // The form is still there, still filled in.
-    expect((screen.getByLabelText(/semester 1 cgpa/i) as HTMLInputElement).value).toBe("8.24");
+    expect((screen.getByLabelText(/semester 1 result/i) as HTMLInputElement).value).toBe("8.24");
   });
 
   it("falls back to a generic message when the server fails opaquely", async () => {

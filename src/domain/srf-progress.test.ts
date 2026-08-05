@@ -16,8 +16,11 @@ import { type SrfProgressInput, srfCompletion, srfSectionProgress } from "./srf-
 const EMPTY: SrfProgressInput = {
   mobile: "",
   alternateContact: "",
+  tenthInstitution: "",
   tenthPercentage: Number.NaN,
+  twelfthInstitution: "",
   twelfthPercentage: Number.NaN,
+  hasDiplomaMarks: false,
   programmeLevel: "ug",
   ugAggregateCgpa: null,
   semesters: [],
@@ -30,8 +33,11 @@ const EMPTY: SrfProgressInput = {
 const FILLED: SrfProgressInput = {
   mobile: "9876543210",
   alternateContact: "9876500000",
+  tenthInstitution: "St Xavier's, Chennai",
   tenthPercentage: 91.4,
+  twelfthInstitution: "St Xavier's, Chennai",
   twelfthPercentage: 88,
+  hasDiplomaMarks: false,
   programmeLevel: "ug",
   ugAggregateCgpa: null,
   semesters: [{ semesterNumber: 1, cgpa: 8.24 }],
@@ -45,11 +51,22 @@ const section = (input: SrfProgressInput, id: string) =>
   srfSectionProgress(input).find((s) => s.id === id);
 
 describe("srfSectionProgress", () => {
-  it("reports all seven steps, in order", () => {
+  /**
+   * SPEC CHANGE 2026-08-06: "do not keep marksheet upload as a separate
+   * section 3. upload near relevant fields in section 2 itself." A student had
+   * to enter a mark in one section and then find its document in another,
+   * matching them up by memory - which is also how a marksheet ended up
+   * against the wrong semester.
+   */
+  it("reports all six steps, in order", () => {
     const sections = srfSectionProgress(EMPTY);
 
-    expect(sections).toHaveLength(7);
-    expect(sections.map((s) => s.step)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(sections).toHaveLength(6);
+    expect(sections.map((s) => s.step)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it("has no separate marksheet section at all", () => {
+    expect(srfSectionProgress(EMPTY).some((s) => s.id === "marksheets")).toBe(false);
   });
 
   /**
@@ -59,7 +76,7 @@ describe("srfSectionProgress", () => {
   it("lights no required step until the student has done something", () => {
     const required = srfSectionProgress(EMPTY).filter((s) => !s.optional);
 
-    expect(required).toHaveLength(5);
+    expect(required).toHaveLength(4);
     expect(required.every((s) => !s.complete)).toBe(true);
   });
 
@@ -84,28 +101,33 @@ describe("srfSectionProgress", () => {
 
   /** A postgraduate has a whole completed degree the form must still capture. */
   it("asks a postgraduate for their UG aggregate before academics count", () => {
-    const pg = { ...FILLED, programmeLevel: "pg" as const, ugAggregateCgpa: null };
+    const pg = {
+      ...FILLED,
+      programmeLevel: "pg" as const,
+      ugAggregateCgpa: null,
+      marksheets: [...FILLED.marksheets, "ug_consolidated"],
+    };
 
     expect(section(pg, "academic")?.complete).toBe(false);
     expect(section({ ...pg, ugAggregateCgpa: 7.8 }, "academic")?.complete).toBe(true);
   });
 
   /**
-   * SPEC CHANGE. This used to read "completes marksheets once anything is
-   * uploaded" — one file, any file, and the section went green. Combined with
-   * the uploads being discarded entirely, a student could be shown a finished
-   * form having evidenced nothing. Every declared figure needs its document.
+   * SPEC CHANGE. This used to be its own section that went green once ANY
+   * single file was picked. The uploads were also being discarded entirely, so
+   * a student could be shown a finished form having evidenced nothing. The
+   * marks and their documents are now one section, and it is not done until
+   * every declared figure carries its evidence.
    */
-  it("completes marksheets only when every required one is provided", () => {
-    expect(section(EMPTY, "marksheets")?.complete).toBe(false);
-    expect(section({ ...FILLED, marksheets: ["tenth"] }, "marksheets")?.complete).toBe(false);
-    expect(section({ ...FILLED, marksheets: ["tenth", "twelfth"] }, "marksheets")?.complete).toBe(
+  it("is not done until every declared figure is evidenced", () => {
+    expect(section({ ...FILLED, marksheets: ["tenth"] }, "academic")?.complete).toBe(false);
+    expect(section({ ...FILLED, marksheets: ["tenth", "twelfth"] }, "academic")?.complete).toBe(
       false,
     );
-    expect(section(FILLED, "marksheets")?.complete).toBe(true);
+    expect(section(FILLED, "academic")?.complete).toBe(true);
   });
 
-  it("re-opens the marksheet section when a new semester is declared", () => {
+  it("re-opens academics when a new semester is declared but not evidenced", () => {
     const two = {
       ...FILLED,
       semesters: [
@@ -114,19 +136,36 @@ describe("srfSectionProgress", () => {
       ],
     };
 
-    expect(section(two, "marksheets")?.complete).toBe(false);
+    expect(section(two, "academic")?.complete).toBe(false);
     expect(
-      section({ ...two, marksheets: [...two.marksheets, "semester-2"] }, "marksheets")?.complete,
+      section({ ...two, marksheets: [...two.marksheets, "semester-2"] }, "academic")?.complete,
     ).toBe(true);
   });
 
   it("asks a postgraduate for their consolidated UG marksheet too", () => {
     const pg = { ...FILLED, programmeLevel: "pg" as const, ugAggregateCgpa: 7.8 };
 
-    expect(section(pg, "marksheets")?.complete).toBe(false);
+    expect(section(pg, "academic")?.complete).toBe(false);
     expect(
-      section({ ...pg, marksheets: [...pg.marksheets, "ug_consolidated"] }, "marksheets")?.complete,
+      section({ ...pg, marksheets: [...pg.marksheets, "ug_consolidated"] }, "academic")?.complete,
     ).toBe(true);
+  });
+
+  /** Optional to declare; once declared, it must be evidenced like any mark. */
+  it("requires a diploma marksheet only once diploma marks are declared", () => {
+    expect(section({ ...FILLED, hasDiplomaMarks: true }, "academic")?.complete).toBe(false);
+    expect(
+      section(
+        { ...FILLED, hasDiplomaMarks: true, marksheets: [...FILLED.marksheets, "diploma"] },
+        "academic",
+      )?.complete,
+    ).toBe(true);
+  });
+
+  /** The school name sits before the marks it belongs to (2026-08-06). */
+  it("needs the school each figure came from", () => {
+    expect(section({ ...FILLED, tenthInstitution: "" }, "academic")?.complete).toBe(false);
+    expect(section({ ...FILLED, twelfthInstitution: "  " }, "academic")?.complete).toBe(false);
   });
 
   it("needs a resume for every category chosen before preferences count", () => {
@@ -160,7 +199,6 @@ describe("srfSectionProgress", () => {
     expect(srfSectionProgress(EMPTY).map((s) => s.title)).toEqual([
       "Personal details",
       "Academic record",
-      "Marksheet uploads",
       "Placement preferences",
       "Professional profiles",
       "Skills and achievements",
@@ -181,9 +219,9 @@ describe("srfCompletion", () => {
   });
 
   it("counts only the required sections, so the optional ones cannot flatter it", () => {
-    // 5 required sections; personal alone is 20%.
+    // 4 required sections; personal alone is 25%.
     expect(srfCompletion({ ...EMPTY, mobile: "9876543210", alternateContact: "9876500000" })).toBe(
-      20,
+      25,
     );
   });
 });

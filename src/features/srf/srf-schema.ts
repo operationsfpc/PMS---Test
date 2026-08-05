@@ -1,4 +1,5 @@
 import { validateSemesters } from "@domain/academics";
+import { isValidForScale, MARKS_SCALES, normaliseToCgpa } from "@domain/marks";
 import { missingMarksheets } from "@domain/marksheets";
 import {
   isValidIndianMobile,
@@ -39,9 +40,22 @@ export const srfSchema = z
       .min(1, "An alternate contact number is required.")
       .refine(isValidIndianMobile, "Enter a valid 10-digit mobile number"),
 
-    // Academic
+    // ------------------------------------------------------------- school
+    // The institution comes BEFORE the marks it issued (2026-08-06): a figure
+    // with no school against it cannot be checked by anyone.
+    tenthInstitution: z.string().min(1, "Enter the school you did your 10th at").max(160),
     tenthPercentage: percentage,
+    twelfthInstitution: z.string().min(1, "Enter the school you did your 12th at").max(160),
     twelfthPercentage: percentage,
+
+    // ------------------------------------------------------------ diploma
+    // Optional in full - many students have none - but all-or-nothing: a
+    // figure with no college and no marksheet is a mark nobody can verify.
+    diplomaInstitution: z.string().max(160),
+    diplomaMarks: z.number().nullable().default(null),
+    diplomaMarksScale: z.enum(MARKS_SCALES).default("cgpa"),
+
+    // --------------------------------------------- the programme they are on
     degree: z.string().min(1, "Select your degree"),
     branch: z.string().min(1, "Select your branch"),
     passingYear: z
@@ -50,13 +64,27 @@ export const srfSchema = z
     // Semester-wise since 2026-08-04. The single cumulative CGPA is gone:
     // eligibility reads the latest VERIFIED semester (src/domain/academics.ts).
     programmeLevel: z.enum(["ug", "pg"], { error: "Say whether you are pursuing UG or PG" }),
-    /** Postgraduates only: the one aggregate standing in for a whole degree. */
-    ugAggregateCgpa: z.number().nullable().default(null),
+
+    /**
+     * Postgraduates only: the degree they have already finished. The form used
+     * to ask for an aggregate CGPA alone, which told a recruiter nothing about
+     * where it was earned or in what.
+     */
+    ugDegree: z.string().max(120),
+    ugCollege: z.string().max(160),
+    ugBranch: z.string().max(120),
+    ugAggregate: z.number().nullable().default(null),
+    ugAggregateScale: z.enum(MARKS_SCALES).default("cgpa"),
+
     semesters: z
       .array(
         z.object({
           semesterNumber: z.number().int(),
-          cgpa: z.number({ error: "Enter the CGPA for this semester" }),
+          // "Some colleges have CGPA and some have % in college marks"
+          // (2026-08-06). What the student declares is kept as declared; the
+          // comparable CGPA is derived from it in one place, `marks.ts`.
+          marks: z.number({ error: "Enter the marks for this semester" }),
+          marksScale: z.enum(MARKS_SCALES).default("cgpa"),
           currentArrears: z.number().int("Whole numbers only"),
           historyOfArrears: z.number().int("Whole numbers only"),
         }),
@@ -100,19 +128,66 @@ export const srfSchema = z
    * time, resubmitting between each, gives up.
    */
   .superRefine((d, ctx) => {
+    // Each figure is judged on the scale it was declared on: 78 is a fine
+    // percentage and a nonsense CGPA, and the old schema could only say the
+    // latter.
+    d.semesters.forEach((s, index) => {
+      if (!isValidForScale(s.marks, s.marksScale)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["semesters", index, "marks"],
+          message:
+            s.marksScale === "percentage"
+              ? "A percentage is between 0 and 100."
+              : "A CGPA is on the 10-point scale.",
+        });
+      }
+    });
+
+    // The domain rules run on the NORMALISED figure, so one set of rules
+    // covers both scales and eligibility can never see a percentage.
     const problems = validateSemesters(
       d.programmeLevel,
-      d.semesters.map((s) => ({ ...s, verified: false })),
+      d.semesters.map((s) => ({
+        ...s,
+        cgpa: normaliseToCgpa(s.marks, s.marksScale),
+        verified: false,
+      })),
     );
 
     if (problems.length > 0) {
       ctx.addIssue({ code: "custom", path: ["semesters"], message: problems.join(" ") });
     }
 
+    // Optional to declare, all-or-nothing once begun. The marksheet itself is
+    // required by the evidence rule below, which sees the figure.
+    if (d.diplomaMarks !== null) {
+      if (!isValidForScale(d.diplomaMarks, d.diplomaMarksScale)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["diplomaMarks"],
+          message:
+            d.diplomaMarksScale === "percentage"
+              ? "A percentage is between 0 and 100."
+              : "A CGPA is on the 10-point scale.",
+        });
+      }
+      if (d.diplomaInstitution.trim() === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["diplomaInstitution"],
+          message: "Enter the college that issued your diploma.",
+        });
+      }
+    }
+
     // Which documents are required is derived from what the student declared,
     // so adding a semester adds its marksheet. The message names each missing
     // one: "uploads are required" against six file inputs helps nobody.
-    const missing = missingMarksheets(d, Object.keys(d.marksheets));
+    const missing = missingMarksheets(
+      { ...d, hasDiplomaMarks: d.diplomaMarks !== null },
+      Object.keys(d.marksheets),
+    );
 
     if (missing.length > 0) {
       ctx.addIssue({
@@ -124,12 +199,37 @@ export const srfSchema = z
 
     // A postgraduate has a completed degree behind them; a recruiter filtering
     // on UG performance has nothing to read without it.
-    if (d.programmeLevel === "pg" && d.ugAggregateCgpa === null) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["ugAggregateCgpa"],
-        message: "Enter your undergraduate CGPA.",
-      });
+    if (d.programmeLevel === "pg") {
+      if (d.ugAggregate === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ugAggregate"],
+          message: "Enter your undergraduate result.",
+        });
+      } else if (!isValidForScale(d.ugAggregate, d.ugAggregateScale)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ugAggregate"],
+          message:
+            d.ugAggregateScale === "percentage"
+              ? "A percentage is between 0 and 100."
+              : "A CGPA is on the 10-point scale.",
+        });
+      }
+
+      for (const [field, label] of [
+        ["ugDegree", "degree"],
+        ["ugCollege", "college"],
+        ["ugBranch", "branch"],
+      ] as const) {
+        if ((d[field] as string).trim() === "") {
+          ctx.addIssue({
+            code: "custom",
+            path: [field],
+            message: `Enter your undergraduate ${label}.`,
+          });
+        }
+      }
     }
   })
   .refine((d) => missingResumesFor(d.roleCategories, d.resumeCategories).length === 0, {
@@ -154,14 +254,31 @@ export const SRF_DEFAULTS: SrfFormValues = {
   mobile: "",
   whatsapp: "",
   alternateContact: "",
+  tenthInstitution: "",
   tenthPercentage: Number.NaN,
+  twelfthInstitution: "",
   twelfthPercentage: Number.NaN,
+  diplomaInstitution: "",
+  diplomaMarks: null,
+  diplomaMarksScale: "cgpa",
   degree: "",
   branch: "",
   passingYear: Number.NaN,
   programmeLevel: "ug",
-  ugAggregateCgpa: null,
-  semesters: [{ semesterNumber: 1, cgpa: Number.NaN, currentArrears: 0, historyOfArrears: 0 }],
+  ugDegree: "",
+  ugCollege: "",
+  ugBranch: "",
+  ugAggregate: null,
+  ugAggregateScale: "cgpa",
+  semesters: [
+    {
+      semesterNumber: 1,
+      marks: Number.NaN,
+      marksScale: "cgpa",
+      currentArrears: 0,
+      historyOfArrears: 0,
+    },
+  ],
   marksheets: {},
   roleCategories: [],
   resumeCategories: [],

@@ -17,6 +17,7 @@ import type { ProgrammeLevel } from "./academics";
 export type MarksheetKind =
   | "tenth_marksheet"
   | "twelfth_marksheet"
+  | "diploma_marksheet"
   | "ug_consolidated_marksheet"
   | "semester_marksheet";
 
@@ -33,11 +34,17 @@ export interface MarksheetSlot {
 export interface DeclaredAcademics {
   readonly programmeLevel: ProgrammeLevel;
   readonly semesters: readonly { readonly semesterNumber: number }[];
+  /**
+   * Optional to DECLARE, not optional to evidence (2026-08-06). The moment a
+   * diploma figure is on the form it is a mark a coordinator must verify.
+   */
+  readonly hasDiplomaMarks?: boolean;
 }
 
 const FIXED_KEYS: Readonly<Record<Exclude<MarksheetKind, "semester_marksheet">, string>> = {
   tenth_marksheet: "tenth",
   twelfth_marksheet: "twelfth",
+  diploma_marksheet: "diploma",
   ug_consolidated_marksheet: "ug_consolidated",
 };
 
@@ -73,6 +80,16 @@ export function requiredMarksheets(academics: DeclaredAcademics): readonly Marks
     { key: "tenth", kind: "tenth_marksheet", label: "10th marksheet", semesterNumber: null },
     { key: "twelfth", kind: "twelfth_marksheet", label: "12th marksheet", semesterNumber: null },
   ];
+
+  // Between school and the degree, which is where the form asks for it.
+  if (academics.hasDiplomaMarks === true) {
+    slots.push({
+      key: "diploma",
+      kind: "diploma_marksheet",
+      label: "Diploma marksheet",
+      semesterNumber: null,
+    });
+  }
 
   // ⚠️ ASSUMPTION — UNCONFIRMED (A31). A postgraduate declares one aggregate
   // CGPA standing in for an entire completed degree (0017). Unevidenced it is

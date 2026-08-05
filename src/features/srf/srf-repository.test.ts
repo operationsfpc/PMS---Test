@@ -80,16 +80,30 @@ const values: SrfSubmission = {
   ...SRF_DEFAULTS,
   mobile: "9876543210",
   whatsapp: "",
+  tenthInstitution: "St Xavier's, Chennai",
   tenthPercentage: 91.4,
+  twelfthInstitution: "St Xavier's, Chennai",
   twelfthPercentage: 88,
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
   programmeLevel: "ug",
-  ugAggregateCgpa: null,
+  ugAggregate: null,
   semesters: [
-    { semesterNumber: 1, cgpa: 8.1, currentArrears: 0, historyOfArrears: 0 },
-    { semesterNumber: 2, cgpa: 8.24, currentArrears: 1, historyOfArrears: 2 },
+    {
+      semesterNumber: 1,
+      marks: 8.1,
+      marksScale: "cgpa" as const,
+      currentArrears: 0,
+      historyOfArrears: 0,
+    },
+    {
+      semesterNumber: 2,
+      marks: 8.24,
+      marksScale: "cgpa" as const,
+      currentArrears: 1,
+      historyOfArrears: 2,
+    },
   ],
   marksheets: {
     tenth: sheet("10th.pdf"),
@@ -195,7 +209,7 @@ describe("marksheet evidence", () => {
     await repo().submit({
       ...values,
       programmeLevel: "pg",
-      ugAggregateCgpa: 7.85,
+      ugAggregate: 7.85,
       semesters: [values.semesters[0] as (typeof values.semesters)[number]],
       marksheets: {
         tenth: sheet("10th.pdf"),
@@ -304,7 +318,7 @@ describe("semester-wise academics", () => {
     await repo().submit({
       ...values,
       programmeLevel: "pg",
-      ugAggregateCgpa: 7.85,
+      ugAggregate: 7.85,
       semesters: [values.semesters[0] as (typeof values.semesters)[number]],
       // A postgraduate must evidence the degree behind them too (A31).
       marksheets: {
