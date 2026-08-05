@@ -99,8 +99,13 @@ as a cutoff rather than as "none set"**.
 - **`students.certifications`** is superseded and no longer written. It is
   deliberately NOT dropped: dropping a column holding real data is a separate,
   irreversible decision.
-- **None of `0032`–`0036` has been pushed to Mumbai.** `pnpm db:push` has still
-  never been run from here.
+- ⚠️ **The same marksheet has two different upload rules.** A semester
+  marksheet added through F13's "+" accepts `application/pdf,image/*`
+  (`add-semester.tsx`); the SAME marksheet on the SRF itself accepts PDF only
+  (`UPLOAD_ACCEPT`, `form.tsx`). So a student can photograph semester 5 and
+  could not have photographed semesters 1–4. Introduced by F13 and shipped.
+  See §1 item 2 — it is the same open question, now with a live inconsistency
+  sitting on top of it.
 
 ### 📌 Assumptions added
 

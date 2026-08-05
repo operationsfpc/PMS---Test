@@ -176,7 +176,7 @@ pnpm test:cov       # Coverage, enforces gates
 pnpm check          # Biome + tsc + full coverage suite
 pnpm db:types       # Regenerate src/db/database.types.ts from migrations
 pnpm supabase ...   # Supabase CLI (project-local dev dependency)
-pnpm db:push        # supabase db push  — NOT YET RUN against Mumbai
+pnpm db:push        # supabase db push  — live; remote is at 0036
 ```
 
 **Read `docs/HANDOVER.md` first.** It holds current state, every confirmed
