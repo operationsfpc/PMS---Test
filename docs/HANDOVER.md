@@ -7,6 +7,69 @@ remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage gate
 
 ---
 
+## 🔴 SHIPPED 2026-08-05 — students could never see ANY drive
+
+Reported: "even after drives are published by Central PC, they are not shown to
+eligible students" — TCS and Cognizant, for all three approved students.
+
+They were eligible on every count: both drives `live`, inside their window,
+targeted at exactly their campus, degree and branch, cutoffs cleared. **They
+could not see the row.** `0008` gave `drives` five policies and not one admits
+a student — the comment says why:
+
+```sql
+-- Students never read the drives table directly; they read a filtered view.
+create policy drives_staff_read on drives for select using (is_org_reader());
+```
+
+**The filtered view was never built.** The screen queries `drives` directly,
+RLS filtered it to nothing, and the page rendered a healthy-looking "no drives
+open to you right now". **Every student has seen that since the day it
+shipped.** MSW has no row-level security, so the component tests passed against
+data the real database would never return.
+
+`0030` adds `drives_student_read`: published statuses, targeted at their campus
+or targeted at nobody. Deliberately coarser than R5/R6, which stay in
+`src/domain/visibility.ts` and decide who may APPLY, with reasons.
+
+⚠️ **It also closed a hole.** `drive_target_campuses`,
+`drive_eligible_degrees`, `drive_eligible_branches` and `drive_rounds` had RLS
+**switched off entirely** while `0008` grants insert/update on every table to
+`authenticated`. Any signed-in student could add their own branch to a drive
+they were not eligible for. Now readable by all (a student is entitled to know
+why they do not qualify), writable only by the drive's owners.
+
+💡 **The write policies are three commands, not one `for all`.** A `for all`
+policy also covers SELECT; these conditions read `drives`, whose student policy
+reads these tables back, and Postgres refuses the whole query with **"infinite
+recursion detected in policy"**. Keeping the read path free of any reference to
+`drives` is what breaks the cycle.
+
+---
+
+## 🔴 SHIPPED 2026-08-05 — approval did not verify the semesters
+
+Found while fixing the above. Every approved student carried
+`student_semesters.status = 'pending'`: `decide()` updates the students row and
+nothing else.
+
+`academicStandingFrom` counts only VERIFIED semesters (§7.2). With none
+verified it returns null, the drives view falls back to
+`students.overall_cgpa` — which the SRF deliberately never writes, because an
+overall CGPA is not the student's to declare — so **every approved student was
+being judged at a CGPA of zero.**
+
+Nothing was broken yet: neither live drive sets a CGPA cutoff. **The next drive
+that sets one would have silently excluded the entire cohort, and it would have
+looked identical to the bug above.**
+
+`0031` makes approval do what it claims: the queue puts each declared figure
+beside its marksheet and asks the coordinator to compare them, so pressing
+approve records `verified` on those rows. Backfilled for the three already
+approved, scoped to forms that are approved AND name a decider.
+
+---
+
 ## ✅ END-TO-END, PROVEN AGAINST LIVE DATA 2026-08-05
 
 The full chain finally ran in production, on real students, without help:
