@@ -1,13 +1,79 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `7fc594e`. **1556 tests passing across 107 files**, plus
+Last updated at commit `60a3f2d`. **1579 tests passing across 109 files**, plus
 **1 Playwright journey** — re-run at the start of the next session, not
 remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
 
 📌 **THE FIRST REAL SUBMISSION LANDED IN PRODUCTION.** See §1b. The evidence
 chain that every session since 2026-08-04 has been asking someone to prove is
 now proven against live data, not against MSW.
+
+---
+
+## 🔴 SHIPPED 2026-08-05 — the SRF could only ever be submitted ONCE
+
+UAT: "Shashwathi Test is not able to submit the student registration form."
+**Not user error.** Three defects, all live, all now fixed and deployed
+(version `0a06b41c-0c78-4141-9292-b28aa446cc55`, migrations `0027`+`0028`,
+local == remote).
+
+**1. Re-submission was impossible (the blocker).** Submitting replaces the
+semester lines wholesale — delete, then insert. `0008` granted students
+`select, insert` on `student_semesters` and **no delete**, so the delete
+matched nothing; RLS is a filter, not a guard, so it raised no error and
+PostgREST answered `204`. The insert then hit the unique key. Live edge logs:
+**eight `POST /rest/v1/student_semesters`, eight `409`s**, eight identical
+"Could not submit your form. Please try again." The FIRST submit always
+worked and every later one was unreachable.
+→ `0027` adds `semesters_delete_self`, scoped to the student's own **pending**
+rows, and grants the delete. Note `0008` grants `delete` on **nothing**, so
+`semesters_write_staff` (`for all`) had been quietly unusable for deletes on
+any database built from these migrations — production only worked because a
+Supabase project ships with `grant all`. **That drift is why local schema
+tests could not reproduce a live failure.** Check grants when they diverge.
+
+**2. Submission was not atomic.** Four round trips = four transactions, so a
+failure at the third committed the first two. The live database held a student
+row saying `srf_submitted` while the student was correctly being told it had
+failed.
+→ `0028` adds `submit_srf(p_student, p_semesters, p_documents)` — one
+statement, one transaction. **`security invoker`**, verified on the remote
+(`prosecdef = false`): RLS, `protect_verified_academics` and every marksheet
+trigger still judge the caller. The payload names no student; identity comes
+from `current_student_id()`. Document rows are written inside the transaction,
+so a failed submit no longer orphans them; storage uploads still happen first
+and on purpose (an object with no row is invisible, a row with no object asks
+a coordinator to verify against a document that is not there).
+
+**3. Runaway auto-save.** `saveDraft` is a **default parameter** of `SrfPage`,
+so it was a new function identity every render, and it sat in the auto-save
+effect's dependency array: save → `setState` → re-render → new identity →
+save again, once a second, for as long as the tab was open. One student wrote
+**1,816 audit rows in 35 minutes**. Auditing is append-only, so every one is
+permanent. Now held by ref. The existing page tests could never catch it —
+they all inject `saveDraft` as a stable `vi.fn()`, the one case where the
+identity does not change. `src/features/srf/srf-autosave.test.tsx` drives the
+real default path.
+
+⚠️ **Outstanding, needs a decision — Shashwathi's record
+(`1cf17525-59b5-42f3-9f41-f671d017f7e5`) is in the queue but its evidence is
+wrong.** Its semester lines still point at her FIRST attempt's files (two
+copies of a generic `images (1).pdf`); the correctly-named marksheets she
+uploaded at 07:57 are among **34 orphaned document rows**. A coordinator
+verifying her now would check marks against the wrong scans. **Nothing was
+edited** — repointing a student's academic evidence on their behalf is exactly
+what `protect_verified_academics` exists to prevent. The clean repair is for
+her to re-submit, which now works and is atomic. **Tell the CPC not to verify
+her until she has.**
+
+💡 **How this was diagnosed, because it generalises:** the Supabase Management
+API (`POST /v1/projects/{ref}/database/query`, token in the macOS keychain
+under `Supabase CLI`) and the log endpoint
+(`analytics/endpoints/logs.all`, with `iso_timestamp_start`/`_end` — the
+default window is short). `edge_logs` filtered to `status_code >= 400` named
+the failure in one query after the code review had not. Reach for the logs
+before the source.
 
 ⚠️ **Two corrections to earlier entries in this file.**
 1. Commits `a4f1c9e` and `d0c1e2f`, cited in previous headers, **do not
