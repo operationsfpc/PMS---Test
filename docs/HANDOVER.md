@@ -1,9 +1,24 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-Last updated at commit `3e037c3`. **1680 tests passing across 112 files**, plus
-**1 Playwright journey** — re-run at the start of the next session, not
-remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage gate.
+Last updated at commit `66efb39`. **1695 tests passing across 114 files**, plus
+**1 Playwright journey** — re-verified at the start of the 2026-08-05 evening
+session, not remembered. **`pnpm check` exits 0** — lint, typecheck and every
+coverage gate. 106 commits, working tree clean.
+
+⚠️ **The header of this file has now been wrong three times, the same way.**
+It cited `a4f1c9e`, `d0c1e2f` and `3e037c3`; the first two never existed and
+`3e037c3` was **orphaned by a `git commit --amend`** made after the hash was
+written into the doc. Verify with `git merge-base --is-ancestor <hash> HEAD`,
+not with `git cat-file` — an amended-away commit is still a valid object and
+will happily answer "commit". **Write the hash last, after the commit exists,
+and never amend afterwards.**
+
+📌 **THE WHOLE CHAIN IS PROVEN IN PRODUCTION** (verified 2026-08-05 10:05 UTC,
+against live rows, not MSW): publish → visible to the targeted students →
+**apply** → profile snapshot taken. **Five real applications** exist across
+three students and both drives, every one carrying a `profile_snapshot`. That
+is the first time anything past "approved" has run on real data.
 
 ---
 
@@ -352,12 +367,11 @@ against real data.
 Everything built in this session is **shipped**. In order:
 
 0. ~~Get a student through the rebuilt SRF~~ **DONE 2026-08-05, see §1b.**
-   The submission half of the chain is proven live.
-1. **Verify that submission as the campus CPC.** `/cpc/verification` now has a
-   real row in it for the first time: two semesters, each with a signed
-   marksheet link. Open it, follow a link, approve. Then the student becomes
-   `srf_approved` and R5 has a **verified** semester to read — which is the
-   first time eligibility will run on anything other than the A28 fallback.
+1. ~~Verify that submission as the campus CPC~~ **DONE 2026-08-05 09:33 UTC.**
+   All three students are `srf_approved`, and since `0031` their semesters are
+   `verified` with the decider named — so R5 now reads a real verified CGPA
+   rather than the A28 fallback. They have since **applied**: five
+   applications, both drives, snapshots taken.
 2. ⚠️ **Marksheet uploads are PDF-only** (`UPLOAD_ACCEPT` in
    `src/components/form.tsx`), and the `marksheets` bucket accepts
    pdf/jpeg/png. PRD §21.2 says students are primarily on **phones**, where a
@@ -849,13 +863,38 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1556 passing across 107 files
+pnpm test:run        # expect 1695 passing across 114 files
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
+
+💡 **Verifying production is cheap and has caught four bugs the tests could
+not.** The Supabase Management API takes SQL directly — token in the macOS
+keychain under `Supabase CLI`:
+
+```bash
+curl -s -X POST "https://api.supabase.com/v1/projects/poscikalmgfpvbjfytgw/database/query" \
+  -H "Authorization: Bearer $(security find-generic-password -s 'Supabase CLI' -w)" \
+  -H "Content-Type: application/json" --data "$(jq -Rn --arg q "$(cat)" '{query:$q}')"
+```
+
+To see what a **student** sees — which is how the invisible-drives bug was
+found — wrap the query so RLS actually applies:
+
+```sql
+begin;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '<auth_user_id>', true);
+select ...;      -- now filtered exactly as it is for that person
+rollback;
+```
+
+`analytics/endpoints/logs.all` takes `iso_timestamp_start`/`_end` (the default
+window is short). `edge_logs` filtered to `status_code >= 400` named the
+PGRST201 outage in one query after a code review had missed it.
 
 Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
 run this session and both succeeded; **neither is automatic** — committing does
 not deploy. `pnpm supabase migration list --linked` is how you check.
 
-Git is **local only**, no remote. 93 commits, working tree clean.
+Git is **local only**, no remote. 106 commits, working tree clean.
