@@ -12,16 +12,28 @@ clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
-## 🔴 BUILT, NOT YET DEPLOYED — UAT round 2 (F18–F21)
+## ✅ SHIPPED 2026-08-06 — UAT round 2 (F18–F21)
 
 Four items, from three screenshots and one sentence. Extracted into
 `docs/UAT-2026-08-06-feedback.md` under "Round 2". **`pnpm check` exits 0.**
 
-⚠️ **Nothing here is live.** No migration is needed — every column and table
-already exists (`other_profiles` 0025, `student_certificates` and
-`document_kind 'certificate'` 0034) — so this is a front-end release:
-`pnpm deploy`, then verify against the live `index.html` asset name, not a
-remembered one.
+**Cloudflare version `df9a53a8-bbc8-4542-83f6-e555c2e80658`**,
+<https://fpc-pms.faceprep.workers.dev>. **No migration** — every column and
+table already existed (`other_profiles` 0025, `student_certificates` and
+`document_kind 'certificate'` 0034), and `supabase migration list --linked`
+still shows local == remote at `0036`. A front-end release, nothing else.
+
+Verified against the LIVE bundle immediately after the push, not assumed:
+
+| Check | Result |
+|---|---|
+| Live `index.html` names the asset the local `dist/` built | `index-BdgZlbE4.js` |
+| Live JS is byte-identical to the local build | 811 138 bytes, sha256 `03e4a5bb…` |
+| `One interview process, however many designations — one PIF.` | present, real em dash |
+| The literal `\u2014`, anywhere in the bundle | **0** |
+| `My skills, certificates and links` · `Add certificate` · `No certificates uploaded` · `Remove semester` | all present |
+| The retired `My skills and links` title | gone |
+| `/student/profile`, `/srf`, `/ae/pif` through the SPA fallback | 200 |
 
 | # | What changed |
 |---|---|
