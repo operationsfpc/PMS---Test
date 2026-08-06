@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   academicStandingFrom,
+  addableSemesters,
   canAddLaterSemester,
   latestVerifiedSemester,
   MAX_SEMESTERS,
@@ -298,5 +299,40 @@ describe("canAddLaterSemester", () => {
 
   it("counts from the highest declared, not from how many there are", () => {
     expect(nextSemesterFor({ programmeLevel: "ug", declaredSemesters: [1, 3] })).toBe(4);
+  });
+});
+
+/**
+ * More than one semester at a time (2026-08-06): "while adding additional
+ * semester marks, have option to upload for multiple additional semesters. up
+ * to total of 10 for UG and up to total of 4 for PG."
+ *
+ * A student who registered in their third year and comes back after two more
+ * results had to add one semester, wait, and start again. The cap is the same
+ * cap as everywhere else - 10 for an undergraduate, 4 for a postgraduate,
+ * counted as a TOTAL including what is already on the record.
+ */
+describe("addableSemesters", () => {
+  it("offers every semester left in the programme, in order", () => {
+    expect(addableSemesters({ programmeLevel: "ug", declaredSemesters: [1, 2, 3, 4] })).toEqual([
+      5, 6, 7, 8, 9, 10,
+    ]);
+  });
+
+  it("caps a postgraduate at four in total", () => {
+    expect(addableSemesters({ programmeLevel: "pg", declaredSemesters: [1, 2] })).toEqual([3, 4]);
+  });
+
+  it("offers the whole programme when nothing has been declared", () => {
+    expect(addableSemesters({ programmeLevel: "ug", declaredSemesters: [] })).toHaveLength(10);
+  });
+
+  it("offers nothing once the programme is complete", () => {
+    expect(addableSemesters({ programmeLevel: "pg", declaredSemesters: [1, 2, 3, 4] })).toEqual([]);
+  });
+
+  /** Same reason as `nextSemesterFor`: a gap is somebody's to explain. */
+  it("counts from the highest declared, so a gap is never re-offered", () => {
+    expect(addableSemesters({ programmeLevel: "pg", declaredSemesters: [1, 3] })).toEqual([4]);
   });
 });

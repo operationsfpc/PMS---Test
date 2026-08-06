@@ -1,4 +1,11 @@
-import { CheckboxField, controlClass, Field, FileField, TextField } from "@components/form";
+import {
+  CheckboxField,
+  controlClass,
+  Field,
+  FileField,
+  FormSection as Section,
+  TextField,
+} from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
 import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
 import { MAX_OTHER_PROFILES } from "@domain/profile-links";
@@ -10,15 +17,7 @@ import type { SrfStatus } from "@domain/types";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
-import {
-  forwardRef,
-  type ReactNode,
-  type SelectHTMLAttributes,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { Link } from "react-router";
 import type { AddSemesterView } from "./add-semester";
@@ -51,49 +50,6 @@ export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
   sales: "Sales",
   operations_business: "Operations and Business Roles",
 };
-
-function Section({
-  id,
-  title,
-  step,
-  description,
-  children,
-}: {
-  /** Anchor target, so the progress tracker can jump back to it. */
-  id: string;
-  title: string;
-  step: number;
-  description?: string;
-  children: ReactNode;
-}) {
-  const headingId = useId();
-  return (
-    <section
-      id={id}
-      // Without this the sticky header covers the heading being jumped to.
-      className="scroll-mt-24 rounded-card border border-line bg-surface p-5 shadow-sm sm:p-6"
-      aria-labelledby={headingId}
-    >
-      <div className="mb-5 flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
-        >
-          {step}
-        </span>
-        <div className="min-w-0">
-          <h2 id={headingId} className="text-lg text-ink-900">
-            {title}
-          </h2>
-          {description !== undefined && (
-            <p className="mt-0.5 text-sm text-ink-500">{description}</p>
-          )}
-        </div>
-      </div>
-      {children}
-    </section>
-  );
-}
 
 /**
  * Which scale a college reports on. Asked for 2026-08-06: "some colleges have
@@ -866,7 +822,7 @@ export function SrfPage({
                       {programmes.length === 0 && (
                         <p className="mt-1 text-xs text-destructive">
                           No programmes have been mapped to your college yet. Ask your placement
-                          coordinator \u2014 you cannot complete this section until they are.
+                          coordinator — you cannot complete this section until they are.
                         </p>
                       )}
                       <ErrorText>{errors.degree?.message ?? errors.branch?.message}</ErrorText>

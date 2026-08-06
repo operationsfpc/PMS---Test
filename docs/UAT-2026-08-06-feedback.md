@@ -23,6 +23,31 @@ Extracted verbatim; each item is numbered so commits can cite it.
 | F16 | 13 | Central PC | After shortlisting, the screen does not change. Fix it. |
 | F17 | 14 | Student | The registration form needs a certificate upload: **name of certificate + upload certificate**. |
 
+## Round 2 — four more, same day (three screenshots + one line of text)
+
+Source: `~/Desktop/Screenshot 2026-08-06 at 9.39.21/9.39.35/9.40.37 AM.png`,
+taken against the live app, plus one sentence about the PIF.
+
+| # | Area | Request | Where it landed |
+|---|---|---|---|
+| F18 | Student · SRF record | "while adding additional semester marks, have option to upload for multiple additional semesters. up to total of 10 for UG and up to total of 4 for PG." | `addableSemesters` (domain) + `add-semester.tsx`: one fieldset per semester, each with its own marksheet |
+| F19 | Student · `/student/profile` | "skills and achievements editing page, want it to have similar look and feel to the original student registration form. already submitted details should be fetched and shown and they should be able to edit it." | `FormSection` lifted out of the SRF into `@components/form`; the page is now three numbered sections, and it reads back `other_profiles`, which nothing outside the SRF had ever shown |
+| F20 | Student · certificates | "i am not able to add certifications. need provision for students to add details of certificates they have and must be able to upload them. need this in student registration form also." | The SRF has had it since F17. The screen the student was on had the SUPERSEDED free-text box; it now lists what is on file, links to each document, and adds one at a time (F9's rule, enforced by 0034) |
+| F21 | AE · PIF | "the text part here which has a description has the word `\u2014`, this should be removed." | Two JSX text nodes carried the escape sequence verbatim. `src/copy.test.ts` now fails on any of them |
+
+**No migration.** Every column and table this needed already exists —
+`other_profiles` (0025), `student_certificates` and `document_kind`
+`'certificate'` (0034). It is a front-end release.
+
+### F21 is worth understanding, because it will happen again
+
+`"\u2014"` inside a JavaScript string is an em dash. The SAME six characters
+as **JSX text** are six characters, and React prints them. Nothing catches it:
+it compiles, it type-checks, and the only place it appears is on the screen of
+whoever is using the form. `src/copy.test.ts` strips string literals from every
+`.tsx` line and fails on what is left — which found a second one, in the SRF's
+"no programmes mapped" warning, that nobody had reported.
+
 ## Not doable from here
 
 - **F9, second half** — deleting the previously uploaded test certificates is a

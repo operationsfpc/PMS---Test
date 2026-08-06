@@ -69,6 +69,58 @@ export function Field({
   );
 }
 
+/**
+ * One numbered step of a long form.
+ *
+ * Lifted out of the SRF (2026-08-06) rather than copied: "skills and
+ * achievements editing page, want it to have similar look and feel to the
+ * original student registration form." Two copies of this markup would drift
+ * apart the first time either screen was touched, and the student would be the
+ * one to notice.
+ */
+export function FormSection({
+  id,
+  title,
+  step,
+  description,
+  children,
+}: {
+  /** Anchor target, so a progress tracker can jump back to it. */
+  id?: string | undefined;
+  title: string;
+  step: number;
+  description?: string | undefined;
+  children: ReactNode;
+}) {
+  const headingId = useId();
+  return (
+    <section
+      id={id}
+      // Without this the sticky header covers the heading being jumped to.
+      className="scroll-mt-24 rounded-card border border-line bg-surface p-5 shadow-sm sm:p-6"
+      aria-labelledby={headingId}
+    >
+      <div className="mb-5 flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
+        >
+          {step}
+        </span>
+        <div className="min-w-0">
+          <h2 id={headingId} className="text-lg text-ink-900">
+            {title}
+          </h2>
+          {description !== undefined && (
+            <p className="mt-0.5 text-sm text-ink-500">{description}</p>
+          )}
+        </div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function TextField({
   label,
   hint,

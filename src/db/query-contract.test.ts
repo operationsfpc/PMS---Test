@@ -10,7 +10,10 @@ import {
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
 import { DRIVE_COLUMNS, STUDENT_COLUMNS } from "@features/student/drives-view";
-import { STUDENT_PROFILE_COLUMNS } from "@features/student/profile-repository";
+import {
+  STUDENT_CERTIFICATE_COLUMNS,
+  STUDENT_PROFILE_COLUMNS,
+} from "@features/student/profile-repository";
 import {
   DASHBOARD_APPLICATION_COLUMNS,
   DASHBOARD_STUDENT_COLUMNS,
@@ -228,6 +231,10 @@ describe("every hand-written select matches the schema", () => {
     ["srf prefill", "students", SRF_PROFILE_COLUMNS],
     // What a verified student may still edit themselves (R10).
     ["student profile edit", "students", STUDENT_PROFILE_COLUMNS],
+    // Certificates added after approval (2026-08-06). Registered because it
+    // embeds the document behind the name, which is the exact shape that has
+    // 400'd in production before.
+    ["student certificates", "student_certificates", STUDENT_CERTIFICATE_COLUMNS],
     // Decides where a student lands after signing in, so a drift here would
     // strand every student on a fallback route rather than their form.
     ["student landing standing", "students", STUDENT_STANDING_COLUMNS],

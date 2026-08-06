@@ -43,6 +43,7 @@ export function SrfSummary({
   addSemester?: AddSemesterView;
 }) {
   const semesters = profile.semesters ?? [];
+  const certificates = profile.certificates ?? [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,9 +136,28 @@ export function SrfSummary({
           <Row label="Areas of interest" value={shown(profile.areasOfInterest)} />
           <Row label="Areas of expertise" value={shown(profile.areasOfExpertise)} />
           <Row label="Projects" value={shown(profile.projects)} />
-          <Row label="Certifications" value={shown(profile.certifications)} />
           <Row label="Achievements" value={shown(profile.achievements)} />
         </dl>
+
+        {/*
+         * F17: a certificate is a NAME and a DOCUMENT, so there is a LIST of
+         * them rather than one line of free text. Reading the superseded
+         * `certifications` column here would show a student who uploaded three
+         * certificates a dash where they should be - nothing has written it
+         * since 0035.
+         */}
+        <h4 className="mt-5 text-sm font-semibold text-ink-900">Certificates</h4>
+        {certificates.length === 0 ? (
+          <p className="mt-1 text-sm text-ink-500">No certificates uploaded.</p>
+        ) : (
+          <ul className="mt-1 divide-y divide-neutral-200">
+            {certificates.map((certificate) => (
+              <li key={certificate.name} className="py-2 text-sm font-medium text-ink-900">
+                {certificate.name}
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );

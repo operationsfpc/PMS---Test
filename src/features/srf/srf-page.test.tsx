@@ -416,6 +416,29 @@ describe("SrfPage — after it has been submitted", () => {
     expect(screen.getByRole("button", { name: /submit for verification/i })).toBeDefined();
     expect(screen.queryByText(/awaiting verification/i)).toBeNull();
   });
+
+  /**
+   * The record shows what was SUBMITTED, and since 0035 certificates are rows
+   * with documents behind them rather than a free-text box. Reading the
+   * superseded column here would show a student who uploaded three
+   * certificates a dash where they should be.
+   */
+  it("names the certificates the student uploaded with the form", () => {
+    render(
+      <SrfPage
+        profile={{ ...SUBMITTED, certificates: [{ name: "AWS Cloud Practitioner" }] }}
+        status="srf_approved"
+      />,
+    );
+
+    expect(screen.getByText(/aws cloud practitioner/i)).toBeDefined();
+  });
+
+  it("says so plainly when there are none, rather than showing a dash", () => {
+    render(<SrfPage profile={{ ...SUBMITTED, certificates: [] }} status="srf_approved" />);
+
+    expect(screen.getByText(/no certificates uploaded/i)).toBeDefined();
+  });
 });
 
 /**

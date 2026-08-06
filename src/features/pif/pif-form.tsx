@@ -228,7 +228,7 @@ export function PifForm({
           </Labelled>
           <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
             <p className="text-sm font-medium text-ink-900">
-              One interview process, however many designations \u2014 one PIF.
+              One interview process, however many designations — one PIF.
             </p>
             <p className="mt-1 text-xs text-ink-700">
               If the recruiter runs a separate interview process for another designation, raise a

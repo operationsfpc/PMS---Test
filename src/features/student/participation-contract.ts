@@ -34,7 +34,7 @@ export interface SelfPlacementView {
 export interface ParticipationStatusView {
   readonly participationStatus: ParticipationStatus;
   /**
-   * Every opt-out request the student has ever raised, newest first \u2014 not just
+   * Every opt-out request the student has ever raised, newest first — not just
    * the undecided one. F3: "the student is not able to go back to check the
    * submission and approval status of it. It should be shown."
    */

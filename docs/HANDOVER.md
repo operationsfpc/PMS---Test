@@ -1,15 +1,59 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2041 tests passing across 126 files**, plus **1 Playwright journey** — run,
+**2177 tests passing across 128 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Working tree clean. Last updated at commit `33d266f` — written after that commit
-existed, and never amended since. Verify with
-`git merge-base --is-ancestor 33d266f HEAD`, not with `git cat-file`.
+gate. Hash deliberately not quoted here: it has been wrong three times, always
+because it was written before the commit existed. Use `git log --oneline -5`.
 
 **Re-verified at the start of the 2026-08-06 session, not remembered:**
-`pnpm check` exits 0 (2041 tests, 126 files), the Playwright journey passes,
-the working tree is clean, and `supabase migration list` shows remote at `0036`.
+`pnpm check` exits 0, the Playwright journey passes, the working tree is
+clean, and `supabase migration list` shows remote at `0036`.
+
+---
+
+## 🔴 BUILT, NOT YET DEPLOYED — UAT round 2 (F18–F21)
+
+Four items, from three screenshots and one sentence. Extracted into
+`docs/UAT-2026-08-06-feedback.md` under "Round 2". **`pnpm check` exits 0.**
+
+⚠️ **Nothing here is live.** No migration is needed — every column and table
+already exists (`other_profiles` 0025, `student_certificates` and
+`document_kind 'certificate'` 0034) — so this is a front-end release:
+`pnpm deploy`, then verify against the live `index.html` asset name, not a
+remembered one.
+
+| # | What changed |
+|---|---|
+| F18 | **Several semesters at once**, capped at 10 UG / 4 PG as a TOTAL. `addableSemesters` (domain) counts what is already on the record against the cap; each row is a `<fieldset>` with its own marksheet, so two scans cannot be swapped |
+| F19 | `/student/profile` **looks like the registration form**: three numbered sections built from `FormSection`, which was lifted out of `srf-page.tsx` into `@components/form` rather than copied |
+| F20 | **Certificates on that page** — what is on file, a signed link to each document, add one, remove one. F9's "once" is `canUploadCertificate` on screen and `one_certificate_per_name` (0034) underneath |
+| F21 | Two JSX text nodes printed `\u2014` verbatim. `src/copy.test.ts` fails on any of them |
+
+### Three things fell out of it that were nobody's report
+
+1. **`students.certifications` was still being written.** `submit_srf` stopped
+   writing it in 0035 because free text can be neither verified nor
+   de-duplicated (F9/F17) — but `/student/profile` kept a box called
+   "Certifications" wired straight to the column. A student typing into it was
+   writing to a field nothing reads. That box is gone, and the read-only SRF
+   record now lists the certificate ROWS instead of the dead column.
+2. **`other_profiles` was write-only.** The SRF has collected Kaggle,
+   Codeforces and portfolio links since 0025, and no screen anywhere read them
+   back. A student who added three could see none of them and edit none of
+   them. They are on the profile page now, with the domain's both-halves rule.
+3. **A second `\u2014`**, in the SRF's "no programmes mapped to your college"
+   warning — the one message a blocked student is guaranteed to read.
+
+### What the tests are worth
+
+- F18 and F19/F20 were driven red-first: 8 failing component tests for the
+  multi-semester panel, 13 for the profile page, then the code.
+- `profile-repository.test.ts` was written **after** the repository, so every
+  test in it was **mutation-checked** — 11 deliberate breakages (wrong document
+  kind, untrimmed name, upload outside the student's folder, unscoped delete,
+  unsigned URL, swallowed upload failure, dropped `Array.isArray` guard,
+  un-normalised links, `orNull` returning the raw string...), every one caught.
 
 ---
 

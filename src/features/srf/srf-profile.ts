@@ -50,9 +50,15 @@ export interface SrfProfile {
   readonly areasOfInterest?: string | null;
   readonly areasOfExpertise?: string | null;
   readonly projects?: string | null;
+  /**
+   * SUPERSEDED by `certificates`. Kept on the type only because the column
+   * still holds what students typed before 0034; nothing writes it now.
+   */
   readonly certifications?: string | null;
   readonly achievements?: string | null;
   readonly semesters?: readonly SubmittedSemester[];
+  /** F17: a certificate is a name and a document. Read back by name. */
+  readonly certificates?: readonly { readonly name: string }[];
   /** F13: decides how many semesters there are to add, and on what scale. */
   readonly programmeLevel?: ProgrammeLevel;
   readonly marksScale?: MarksScale;
@@ -84,6 +90,7 @@ export const SRF_PROFILE_COLUMNS = `
   projects, certifications, achievements,
   programme_level,
   degrees(name), branches(name),
+  student_certificates(name),
   student_semesters(semester_number, declared_marks, marks_scale, current_arrears, history_of_arrears)
 `;
 
@@ -144,7 +151,13 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
       .filter((p) => p.degree !== "")
       .sort((a, b) => a.degree.localeCompare(b.degree) || a.branch.localeCompare(b.branch));
 
+    const certificates = ((row.student_certificates ?? []) as Array<Record<string, unknown>>)
+      .map((c) => ({ name: (c.name as string | null) ?? "" }))
+      .filter((c) => c.name !== "")
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     return {
+      certificates,
       programmes,
       fullName: (row.full_name as string | null) ?? "",
       rollNumber: (row.roll_number as string | null) ?? "",

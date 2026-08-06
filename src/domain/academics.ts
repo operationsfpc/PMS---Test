@@ -172,6 +172,33 @@ export function nextSemesterFor(context: {
   return next > maxSemestersFor(context.programmeLevel) ? null : next;
 }
 
+/**
+ * Every semester the student could still add, in the order results arrive.
+ *
+ * Asked for 2026-08-06: "while adding additional semester marks, have option
+ * to upload for multiple additional semesters. up to total of 10 for UG and up
+ * to total of 4 for PG." A student who registered in their third year and
+ * comes back with two more results had to add one, wait for it to land, and
+ * start again.
+ *
+ * The ceiling is a TOTAL, not an allowance per visit: what is already on the
+ * record counts against it, which is why this is derived from
+ * `declaredSemesters` rather than from a number the screen keeps.
+ */
+export function addableSemesters(context: {
+  readonly programmeLevel: ProgrammeLevel;
+  readonly declaredSemesters: readonly number[];
+}): readonly number[] {
+  const next = nextSemesterFor(context);
+  if (next === null) return [];
+
+  const limit = maxSemestersFor(context.programmeLevel);
+  const remaining: number[] = [];
+  for (let n = next; n <= limit; n += 1) remaining.push(n);
+
+  return remaining;
+}
+
 export function canAddLaterSemester(context: SemesterAdditionContext): SemesterAdditionDecision {
   if (context.srfStatus !== "srf_approved") {
     return {
