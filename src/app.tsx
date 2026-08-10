@@ -10,6 +10,7 @@ import { OfferRoute } from "@features/central-cpc/offer-route";
 import { PublishRoute } from "@features/central-cpc/publish-route";
 import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
+import { SkillsRoute } from "@features/central-cpc/skills-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { OffCampusQueueRoute, OptOutQueueRoute } from "@features/cpc/participation-queue-routes";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
@@ -68,6 +69,8 @@ export function App() {
                 <Route path="/my-drives" element={<DrivePortfolioRoute />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
                 <Route path="/central/shortlisting" element={<ShortlistRoute />} />
+                {/* PRD §5: the Central Student Skill Repository. */}
+                <Route path="/central/skills" element={<SkillsRoute />} />
                 <Route path="/central/drives" element={<CockpitRoute />} />
                 <Route path="/central/publish" element={<PublishRoute />} />
                 <Route path="/central/results" element={<ResultsRoute />} />

@@ -59,7 +59,7 @@ function stub(
     http.get(`${BASE}/rest/v1/applications`, () =>
       HttpResponse.json(opts.applications ?? [APPLICATION]),
     ),
-    http.get(`${BASE}/rest/v1/skill_scores`, () => {
+    http.get(`${BASE}/rest/v1/student_skill_scores`, () => {
       skillsQueried = true;
       return HttpResponse.json(opts.skills ?? []);
     }),
@@ -174,24 +174,27 @@ describe("the applicants (R7 — from the snapshot)", () => {
   });
 
   /**
-   * A12: skill_scores carries its own max_score, so a 45/50 is 90 - not 45.
-   * R11 weights the skill match against a 0-100 scale, and feeding it a raw
-   * score silently under-ranks every student assessed out of anything else.
+   * 2026-08-06: the invented `skill_scores` table (A12) is retired. Skills
+   * now come from the Central Student Skill Repository (0037), where a score
+   * is already on the 0-100 scale R11 expects (A35) and is NAMED by its
+   * skill-area row rather than a free-text metric.
    */
-  it("normalises a skill score against its own maximum", async () => {
-    stub({ skills: [{ student_id: "s1", metric: "Java", score: 45, max_score: 50 }] });
+  it("reads institutional scores from the skill repository, named by their area", async () => {
+    stub({ skills: [{ student_id: "s1", score: 72.5, skill_areas: { name: "AI skills" } }] });
 
-    expect((await view().applicants("d1"))[0]?.skillScores).toEqual([{ skill: "Java", score: 90 }]);
+    expect((await view().applicants("d1"))[0]?.skillScores).toEqual([
+      { skill: "AI skills", score: 72.5 },
+    ]);
   });
 
-  it("scores zero rather than dividing by a zero maximum", async () => {
-    stub({ skills: [{ student_id: "s1", metric: "Java", score: 45, max_score: 0 }] });
+  it("drops a score whose area row is missing rather than inventing a name", async () => {
+    stub({ skills: [{ student_id: "s1", score: 50, skill_areas: null }] });
 
-    expect((await view().applicants("d1"))[0]?.skillScores).toEqual([{ skill: "Java", score: 0 }]);
+    expect((await view().applicants("d1"))[0]?.skillScores).toEqual([]);
   });
 
   it("never attributes one student's skill scores to another", async () => {
-    stub({ skills: [{ student_id: "someone-else", metric: "Java", score: 50, max_score: 100 }] });
+    stub({ skills: [{ student_id: "someone-else", score: 50, skill_areas: { name: "Java" } }] });
 
     expect((await view().applicants("d1"))[0]?.skillScores).toEqual([]);
   });

@@ -69,6 +69,8 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/my-drives", label: "All drives" },
     { to: "/central/publish", label: "Publish and target" },
     { to: "/central/shortlisting", label: "Shortlisting" },
+    // PRD §5: the institutional skill profile per student, feeding R11.
+    { to: "/central/skills", label: "Skill repository" },
     { to: "/cpc/attendance", label: "Attendance" },
     { to: "/cpc/opt-outs", label: "Opt-out requests" },
     { to: "/cpc/off-campus", label: "Off-campus offers" },

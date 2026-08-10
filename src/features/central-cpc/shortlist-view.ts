@@ -52,24 +52,25 @@ export function createSupabaseShortlistView(
         .eq("drive_id", driveId);
 
       const studentIds = (applications ?? []).map((a) => a.student_id as string);
+      // The Central Student Skill Repository (0037). Scores are already on
+      // the 0-100 scale R11 expects (A35), and each is named by its
+      // skill-area row - the same names a drive's mandatory skills refer to.
       const { data: skills } =
         studentIds.length === 0
           ? { data: [] }
           : await client
-              .from("skill_scores")
-              .select("student_id, metric, score, max_score")
+              .from("student_skill_scores")
+              .select("student_id, score, skill_areas(name)")
               .in("student_id", studentIds);
 
-      // skill_scores carries its own max_score, so normalise to the 0-100 that
-      // R11 expects rather than assuming a percentage.
       const skillsByStudent = new Map<string, { skill: string; score: number }[]>();
       for (const row of skills ?? []) {
-        const max = Number(row.max_score);
+        const area = one<{ name?: string }>(row.skill_areas);
+        // No area row, no name - an unnameable score cannot be matched
+        // against a drive's required skills, so it is dropped, not invented.
+        if (area?.name === undefined) continue;
         const list = skillsByStudent.get(row.student_id as string) ?? [];
-        list.push({
-          skill: row.metric as string,
-          score: max > 0 ? (Number(row.score) / max) * 100 : 0,
-        });
+        list.push({ skill: area.name, score: Number(row.score) });
         skillsByStudent.set(row.student_id as string, list);
       }
 

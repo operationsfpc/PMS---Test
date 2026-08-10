@@ -554,18 +554,14 @@ export type ShortlistEntriesInsert = Pick<ShortlistEntriesRow, "application_id">
     >
   >;
 
-export interface SkillScoresRow {
+export interface SkillAreasRow {
   id: string;
-  student_id: string;
-  metric: string;
-  score: number;
-  max_score: number;
-  source: string;
-  recorded_at: string;
+  name: string;
+  created_at: string;
 }
 
-export type SkillScoresInsert = Pick<SkillScoresRow, "student_id" | "metric" | "score"> &
-  Partial<Pick<SkillScoresRow, "id" | "max_score" | "source" | "recorded_at">>;
+export type SkillAreasInsert = Pick<SkillAreasRow, "name"> &
+  Partial<Pick<SkillAreasRow, "id" | "created_at">>;
 
 export interface StaffCampusAssignmentsRow {
   profile_id: string;
@@ -671,6 +667,21 @@ export type StudentSemestersInsert = Pick<
       | "marks_scale"
     >
   >;
+
+export interface StudentSkillScoresRow {
+  id: string;
+  student_id: string;
+  skill_area_id: string;
+  score: number;
+  recorded_by: string | null;
+  recorded_at: string;
+}
+
+export type StudentSkillScoresInsert = Pick<
+  StudentSkillScoresRow,
+  "student_id" | "skill_area_id" | "score"
+> &
+  Partial<Pick<StudentSkillScoresRow, "id" | "recorded_by" | "recorded_at">>;
 
 export interface StudentsRow {
   id: string;

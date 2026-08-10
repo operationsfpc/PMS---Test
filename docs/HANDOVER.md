@@ -12,6 +12,36 @@ clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
+## ✅ BUILT 2026-08-06 — the Central Student Skill Repository (PRD §5)
+
+Asked for: skillsets per student (Aptitude, Communication skills,
+Fundamentals of Programming, Data Structures and Algorithms, GitHub strength,
+Programming skills, AI skills, AI-assisted Full Stack Development — "more can
+be added"), maintained by the Central CPC, with bulk add and edit, to be
+mapped to job roles for shortlisting later. **This partially answers P3** —
+the open question R11's ranking was waiting on.
+
+**`pnpm check` exits 0 — 2269 tests across 132 files.**
+⚠️ **NOT yet pushed or deployed**: migration `0037` is local-only (remote is
+at `0036`) and the app is not redeployed. `pnpm db:push` then `pnpm deploy`
+when ready — 0037 also **drops the empty `skill_scores` placeholder** (0003),
+so push it before anything ever writes that table.
+
+| Layer | What |
+|---|---|
+| 0 | `src/domain/skills.ts` (100%): the eight seed areas; `validateSkillAreaName` (case/space-insensitive uniqueness); `parseSkillScore` (0–100, ≤2 decimals — A35); `parseSkillSheet` — the CSV bulk template (`roll_number` + one column per area), row-level rejections, blank cell = SKIPPED never zero (which is what makes it the bulk EDIT), unknown column = fatal so a misspelt column cannot silently discard an assessment |
+| 1 | `/central/skills` (Central CPC nav: "Skill repository"): add areas, inline per-student edit, bulk apply-to-selected, CSV import with per-row errors + template download prefilled with roll numbers. Clearing a score DELETES it — unmeasured must not read as zero |
+| 1 | `skills-view.ts` — upsert on `(student_id, skill_area_id)`, every row names `recorded_by`; select registered in `query-contract.test.ts` |
+| 2 | `0037`: `skill_areas` (seeded, unique on the normalised name — mirrors `skillAreaKey`), `student_skill_scores` (one per student×area, `score_within_scale` 0–100, audit-triggered). RLS: staff read (campus-scoped via `my_student_ids()` for campus roles), writes `is_operator()` only, **students read nothing (A36)** |
+| R11 | `shortlist-view` now reads the REAL repository (`student_skill_scores` + area names) — the invented `skill_scores` table (A12) is **dropped by 0037**, so skills recorded on this screen flow straight into `rankApplicants`'s mandatory-skill match |
+
+Still assumptions, cheap to reverse (see `docs/ASSUMPTIONS.md`): **A35** the
+0–100 scale · **A36** students cannot see their scores · A12's ranking
+weights. The job-role mapping itself is already live: a drive's
+`mandatory_skills` are matched against these scores by name in R11.
+
+---
+
 ## ✅ SHIPPED 2026-08-06 — UAT round 2 (F18–F21)
 
 Four items, from three screenshots and one sentence. Extracted into

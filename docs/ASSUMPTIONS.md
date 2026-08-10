@@ -117,3 +117,27 @@ student's dropdown.
 Stated twice on purpose — `src/domain/programmes.ts` and
 `supabase/migrations/0036_campus_programmes.sql` — because the screen and the
 database must refuse the same values. **Change both, or neither.**
+
+## A35 — a skill-repository score is 0–100, at most two decimals (refines A12)
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** The client named the skill AREAS on
+2026-08-06 (Aptitude, Communication skills, Fundamentals of Programming, Data
+Structures and Algorithms, GitHub strength, Programming skills, AI skills,
+AI-assisted Full Stack Development — "more can be added") but not the SCALE.
+0–100 was chosen because R11 already normalises to it and a percentage-like
+scale needs no explanation on a screen.
+
+Stated twice on purpose — `parseSkillScore` in `src/domain/skills.ts` and
+`score_within_scale` in `supabase/migrations/0037_skill_repository.sql`.
+Changing the scale is one constant, one check constraint and a backfill.
+
+The invented `skill_scores` table (A12) is **dropped** by 0037: this request
+was the real schema arriving. Shortlisting (R11) now reads the repository.
+
+## A36 — students do not see their institutional skill scores
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** No RLS read policy on
+`student_skill_scores` admits a student. PRD §5 calls the repository
+institutional and internal-only, and its scores feed a shortlist whose status
+is "never visible to students" — a visible "GitHub strength 34" would leak
+the evaluation the shortlist is built on. Cheap to reverse: one read policy.

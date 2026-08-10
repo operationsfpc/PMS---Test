@@ -1,6 +1,7 @@
 import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repository";
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
+import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
   DASHBOARD_COHORT_COLUMNS,
@@ -198,7 +199,10 @@ describe("every hand-written select matches the schema", () => {
       "applications",
       "id, student_id, profile_snapshot, students(full_name, roll_number), shortlist_entries(included)",
     ],
-    ["shortlisting skills", "skill_scores", "student_id, metric, score, max_score"],
+    // 0037: the skill repository replaced 0003's placeholder table.
+    ["shortlisting skills", "student_skill_scores", "student_id, score, skill_areas(name)"],
+    ["skill repository areas", "skill_areas", "id, name"],
+    ["skill repository students", "students", SKILL_STUDENT_COLUMNS],
     [
       "shortlisting drive",
       "drives",

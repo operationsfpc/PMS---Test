@@ -163,6 +163,16 @@ describe("AppShell navigation", () => {
     expect(screen.queryByRole("link", { name: /my registration form/i })).toBeNull();
   });
 
+  it("gives the central coordinator the skill repository, and nobody else's nav shows it", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
+  });
+
+  it("keeps the skill repository out of the student's nav", () => {
+    shellFor(signedIn("student"));
+    expect(screen.queryByRole("link", { name: /skill repository/i })).toBeNull();
+  });
+
   it("offers the AE the PIF", () => {
     shellFor(signedIn("account_executive"));
     expect(screen.getByRole("link", { name: /position information form/i })).toBeDefined();
