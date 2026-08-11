@@ -1,9 +1,10 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2177 tests passing across 128 files**, plus **1 Playwright journey** — run,
+**2269 tests passing across 132 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Hash deliberately not quoted here: it has been wrong three times, always
+gate. Remote is at **`0037`**; live Cloudflare version
+`32348e97-401f-4a93-9aa3-9ac9b5b10688`. Hash deliberately not quoted here: it has been wrong three times, always
 because it was written before the commit existed. Use `git log --oneline -5`.
 
 **Re-verified at the start of the 2026-08-06 session, not remembered:**
@@ -12,7 +13,7 @@ clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
-## ✅ BUILT 2026-08-06 — the Central Student Skill Repository (PRD §5)
+## ✅ SHIPPED 2026-08-06 — the Central Student Skill Repository (PRD §5)
 
 Asked for: skillsets per student (Aptitude, Communication skills,
 Fundamentals of Programming, Data Structures and Algorithms, GitHub strength,
@@ -22,10 +23,44 @@ mapped to job roles for shortlisting later. **This partially answers P3** —
 the open question R11's ranking was waiting on.
 
 **`pnpm check` exits 0 — 2269 tests across 132 files.**
-⚠️ **NOT yet pushed or deployed**: migration `0037` is local-only (remote is
-at `0036`) and the app is not redeployed. `pnpm db:push` then `pnpm deploy`
-when ready — 0037 also **drops the empty `skill_scores` placeholder** (0003),
-so push it before anything ever writes that table.
+
+**LIVE.** Migration `0037` applied to Mumbai (`supabase migration list
+--linked` shows local == remote at `0037`); Cloudflare version
+**`32348e97-401f-4a93-9aa3-9ac9b5b10688`**, <https://fpc-pms.faceprep.workers.dev>.
+
+🔴 **The irreversible half was checked BEFORE the push, not after.** 0037
+**drops** 0003's `skill_scores` placeholder. Live count before pushing:
+**0 rows** — so the drop destroyed nothing. Had it been non-zero the migration
+would have needed a migrate-then-drop instead. Check the row count before
+any future `drop table`; the schema cannot tell you what is in it.
+
+Verified against LIVE rows and the LIVE bundle immediately after the push:
+
+| Check | Result |
+|---|---|
+| `supabase migration list --linked` | local == remote at **`0037`** |
+| `skill_areas` seeded | **8**, exactly the areas asked for |
+| `skill_scores` (0003 placeholder) still present | **0** — dropped |
+| Policies on `student_skill_scores` / `skill_areas` | 4 and 4; RLS enabled **and forced** |
+| `audit_skill_scores` trigger | present |
+| **A36, as a REAL student** — score seeded in-transaction, then read as its own student | **0 rows visible** |
+| **Central CPC writes**, as the real live Central CPC through RLS | inserted and read back `GitHub strength 82.50` |
+| Rows left in production by those two proofs | **0** — both ran in a transaction and rolled back |
+| FKs `student_skill_scores`→`skill_areas` / →`students` | **1 and 1** — embeds unambiguous, no PGRST201 |
+| Live JS byte-identical to local `dist/` | 824 988 bytes, sha256 `1575165e…` |
+| `Skill repository` · `Add skill area` · `skill-scores-template.csv` in the live bundle | all present |
+| `from("skill_scores")` anywhere in the live bundle | **0** — shortlisting reads the real repository |
+| `/central/skills` through the SPA fallback | 200 |
+
+⚠️ **Pre-existing finding, NOT introduced here, needs a decision.**
+`authenticated` holds `TRUNCATE, REFERENCES, TRIGGER` on the new tables — and
+on `students`, `offers` and every other table, because a Supabase project
+ships `grant all` on the public schema. **TRUNCATE is not subject to RLS**, so
+in principle any signed-in user could truncate a table. The explicit `grant
+select, insert, update, delete` in our migrations is a no-op on top of it.
+This is the same grant drift §1 already warns about (it is why a local schema
+test could not reproduce a live failure). Fixing it is one project-wide
+`revoke`, deliberately not done at ship time.
 
 | Layer | What |
 |---|---|
