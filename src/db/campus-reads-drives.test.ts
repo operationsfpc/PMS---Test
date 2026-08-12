@@ -28,9 +28,8 @@ beforeAll(async () => {
 
 describe("campus staff read their students' shortlist standing (0045)", () => {
   it("shows the campus coordinator their own student's entry, and only theirs", async () => {
-    const drive = (
-      await t.sql(`select id from drives where company_name = 'Zoho'`)
-    )[0]?.id as string;
+    const drive = (await t.sql(`select id from drives where company_name = 'Zoho'`))[0]
+      ?.id as string;
 
     // One application per campus: Priya is the coordinator's, Arjun is not.
     for (const student of [ids.priya, ids.arjun]) {
