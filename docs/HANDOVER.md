@@ -52,6 +52,28 @@ Live JS byte-identical to local (832 686 bytes, sha256 `808ddbe2…`);
 `Approving will also verify` present in the deployed bundle; 0 rows left
 behind.
 
+### ✅ P8 RESOLVED by the client, same day — re-proved live
+
+`sainaveen@faceprep.in` was **removed from staff**, keeping only their student
+row. Verified live, not assumed: no profile row at all (not merely
+deactivated), **no orphaned invitation**, and `students_who_are_also_staff` is
+now **0**. Re-proved end to end on that same account in a rolled-back
+transaction — form `srf_approved`, its certificate `verified` and stamped with
+the approving coordinator.
+
+💡 **A second guard fired during that proof and was NOT a defect:**
+`approved_requires_consent`. Sai Naveen had never actually submitted a form,
+so `consent_given_at` was null and approval was refused — correctly. The
+artificial setup was mine; a real submission records consent. Worth knowing
+before mistaking it for a bug.
+
+⚠️ **Consequence, not a fault: there are now 0 active campus placement
+coordinators** and 2 Central CPCs. Nothing is broken — a Central CPC is
+org-wide and runs both queues. **The first real campus CPC appointed must be
+mapped to a campus and must NOT also be on the student roster**, or P8 returns.
+
+The original report, kept because the trap is general:
+
 ### 🔴 A live blocker found while proving it — P8, and NOT caused by this work
 
 **The only campus placement coordinator cannot approve ANY registration
