@@ -197,7 +197,16 @@ export function createSupabaseParticipationQueueView(
       if (error !== null) throw new ParticipationQueueError("Could not decline the offer.");
     },
 
-    async approveSelfPlacement(requestId) {
+    async approveSelfPlacement(requestId, classification) {
+      // D6: a job offer with no rung would climb the ladder and block nothing.
+      // Refused before anything is written, so a half-approved request cannot
+      // exist.
+      if (classification.driveType === "placement" && classification.offerCategory === null) {
+        throw new ParticipationQueueError(
+          "Select the offer category before approving — it decides which drives stay open to this student.",
+        );
+      }
+
       const actorId = await approver();
       const now = new Date().toISOString();
 
@@ -220,8 +229,9 @@ export function createSupabaseParticipationQueueView(
           source: "self_placed",
           company_name: data.company_name as string,
           role_title: (data.role_title as string | null) ?? null,
-          drive_type: "placement",
-          offer_category: null,
+          drive_type: classification.driveType,
+          offer_category:
+            classification.driveType === "internship" ? null : classification.offerCategory,
           ctc_lpa: data.ctc_lpa as number,
           declared_by: actorId,
           approved_by: actorId,

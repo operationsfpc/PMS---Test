@@ -11,7 +11,11 @@ import {
 } from "@features/dashboard/dashboard-view";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
-import { DRIVE_COLUMNS, STUDENT_COLUMNS } from "@features/student/drives-view";
+import {
+  DRIVE_COLUMNS,
+  OFFER_LADDER_COLUMNS,
+  STUDENT_COLUMNS,
+} from "@features/student/drives-view";
 import {
   STUDENT_CERTIFICATE_COLUMNS,
   STUDENT_PROFILE_COLUMNS,
@@ -265,6 +269,10 @@ describe("every hand-written select matches the schema", () => {
     ["student dashboard attendance", "attendance", "round_id, application_id, status"],
     ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
     ["drive portfolio offers", "offers", "drive_id, student_id"],
+    // The ladder's evidence. Unregistered until 2026-08-12, which is how a
+    // select naming a non-existent column (`status`) 400'd in silence and
+    // let every placed student see every drive.
+    ["student apply ladder offers", "offers", OFFER_LADDER_COLUMNS],
     ["dashboard students", "students", DASHBOARD_COHORT_COLUMNS],
     ["dashboard live drives", "drives", DASHBOARD_LIVE_DRIVE_COLUMNS],
     [

@@ -50,10 +50,24 @@ describe("highestOfferCategory", () => {
     ).toBeNull();
   });
 
-  it("ignores self-placed offers entirely (PRD §16.2)", () => {
+  it("counts an approved self-placed offer with a category (D5, 2026-08-12 — reverses PRD §16.2's ladder half)", () => {
     expect(
       highestOfferCategory([
         offer({ id: "a", source: "self_placed", offerCategory: "super_dream" }),
+      ]),
+    ).toBe("super_dream");
+  });
+
+  it("a self-placed dream offer blocks regular exactly as an on-campus one would", () => {
+    expect(
+      highestOfferCategory([offer({ id: "a", source: "self_placed", offerCategory: "dream" })]),
+    ).toBe("dream");
+  });
+
+  it("ignores a self-placed internship on the ladder — internships are never ladder offers", () => {
+    expect(
+      highestOfferCategory([
+        offer({ id: "a", source: "self_placed", driveType: "internship", offerCategory: null }),
       ]),
     ).toBeNull();
   });
@@ -83,10 +97,17 @@ describe("isInternshipCapConsumed", () => {
     expect(isInternshipCapConsumed([offer({ id: "a", driveType: "placement" })])).toBe(false);
   });
 
-  it("is not consumed by a self-placed internship (PRD §16.2)", () => {
-    // Self-placed offers must not affect on-campus eligibility in any way.
+  it("IS consumed by a self-placed internship (D5 correction, 2026-08-12)", () => {
+    // "Self internships will lead to exclusion from internships similar to
+    // placements" — confirmed at spec approval.
     expect(
       isInternshipCapConsumed([offer({ id: "a", driveType: "internship", source: "self_placed" })]),
+    ).toBe(true);
+  });
+
+  it("is not consumed by a self-placed job offer", () => {
+    expect(
+      isInternshipCapConsumed([offer({ id: "a", driveType: "placement", source: "self_placed" })]),
     ).toBe(false);
   });
 });
@@ -130,7 +151,7 @@ describe("resolvePlacementRecord", () => {
     expect(record?.id).toBe("a");
   });
 
-  it("excludes self-placed offers — they are a separate statistic line", () => {
+  it("STILL excludes self-placed offers — the reporting line stays separate (D5 reverses only the ladder)", () => {
     const record = resolvePlacementRecord([
       offer({ id: "a", ctcLpa: 5 }),
       offer({ id: "b", source: "self_placed", ctcLpa: 40 }),

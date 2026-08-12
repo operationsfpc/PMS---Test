@@ -74,12 +74,26 @@ describe("self-placement requests", () => {
 });
 
 describe("approved self-placed offers", () => {
-  it("no longer need an offer category, which only a drive can supply", async () => {
+  // D6 (2026-08-12) reversed 0014 here: self-placed offers climb the ladder
+  // now, so an unclassified one would hold no rung and block nothing. The
+  // approving coordinator MUST classify it (0041).
+  it("require the category the approving coordinator selected (D6, 0041)", async () => {
+    await t.expectRejection(
+      () =>
+        t.sql(
+          `insert into offers (student_id, source, company_name, drive_type, ctc_lpa,
+                               approved_by, approved_at)
+           values ($1, 'self_placed', 'Freshworks', 'placement', 12.0, $2, now())`,
+          [ids.priya, ids.cpcUser],
+        ),
+      /ladder_offer_has_category/i,
+    );
+
     await expect(
       t.sql(
-        `insert into offers (student_id, source, company_name, drive_type, ctc_lpa,
+        `insert into offers (student_id, source, company_name, drive_type, offer_category, ctc_lpa,
                              approved_by, approved_at)
-         values ($1, 'self_placed', 'Freshworks', 'placement', 12.0, $2, now())`,
+         values ($1, 'self_placed', 'Freshworks', 'placement', 'super_dream', 12.0, $2, now())`,
         [ids.priya, ids.cpcUser],
       ),
     ).resolves.toBeDefined();
@@ -89,8 +103,8 @@ describe("approved self-placed offers", () => {
     await t.expectRejection(
       () =>
         t.sql(
-          `insert into offers (student_id, source, company_name, drive_type, ctc_lpa)
-           values ($1, 'self_placed', 'Unapproved Co', 'placement', 9.0)`,
+          `insert into offers (student_id, source, company_name, drive_type, offer_category, ctc_lpa)
+           values ($1, 'self_placed', 'Unapproved Co', 'placement', 'dream', 9.0)`,
           [ids.arjun],
         ),
       /self_placed_needs_approval/i,

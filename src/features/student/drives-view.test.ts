@@ -181,6 +181,56 @@ describe("which CGPA eligibility is judged on", () => {
   });
 });
 
+/**
+ * The category ladder must see the offers PostgREST actually returns.
+ *
+ * Found live 2026-08-12: the select named a column `offers` does not have
+ * (`status`), so the whole query 400'd, the error was swallowed, and every
+ * student was judged as never placed — the ladder blocked nothing. Even with
+ * the select fixed, the raw snake_case rows were cast straight to the domain's
+ * camelCase Offer, so `driveType`/`offerCategory`/`source` were undefined and
+ * the ladder STILL saw nothing. These tests pin both halves.
+ */
+describe("the category ladder runs on real offer rows", () => {
+  const dreamOffer = {
+    id: "o1",
+    drive_id: "d0",
+    drive_type: "placement",
+    offer_category: "dream",
+    ctc_lpa: 8,
+    declared_at: "2026-08-01T00:00:00Z",
+    source: "on_campus",
+  };
+
+  it("hides an equal-category drive from a student placed on campus", async () => {
+    stub({ offers: [dreamOffer] });
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  it("hides an equal-category drive from a SELF-placed student (D5, 2026-08-12)", async () => {
+    stub({ offers: [{ ...dreamOffer, source: "self_placed" }] });
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
+  it("keeps a higher-category drive visible to a placed student", async () => {
+    stub({
+      offers: [{ ...dreamOffer, offer_category: "regular" }],
+      drives: [{ ...driveRow, offer_category: "dream" }],
+    });
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+
+  it("hides internship drives once a self-placed internship consumed the cap", async () => {
+    stub({
+      offers: [
+        { ...dreamOffer, drive_type: "internship", offer_category: null, source: "self_placed" },
+      ],
+      drives: [{ ...driveRow, drive_type: "internship", offer_category: null }],
+    });
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+});
+
 describe("createSupabaseDrivesView", () => {
   it("lists a live drive the student is eligible for, and offers to apply", async () => {
     stub();

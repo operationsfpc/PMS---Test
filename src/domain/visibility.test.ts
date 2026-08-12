@@ -144,11 +144,33 @@ describe("isDriveVisibleToStudent", () => {
       ).toBe(false);
     });
 
-    it("ignores a self-placed offer when applying the ladder (PRD §16.2)", () => {
+    it("a self-placed offer climbs the ladder exactly like an on-campus one (D5, 2026-08-12)", () => {
       const selfPlaced = student({
-        offers: [offer({ id: "sp", source: "self_placed", offerCategory: "super_dream" })],
+        offers: [offer({ id: "sp", source: "self_placed", offerCategory: "dream" })],
       });
-      expect(isDriveVisibleToStudent(selfPlaced, drive({ offerCategory: "regular" })).visible).toBe(
+      expect(isDriveVisibleToStudent(selfPlaced, drive({ offerCategory: "regular" })).reason).toBe(
+        "placed_at_equal_or_higher",
+      );
+      expect(isDriveVisibleToStudent(selfPlaced, drive({ offerCategory: "dream" })).visible).toBe(
+        false,
+      );
+      // Higher rungs stay open — the ladder, not a blanket ban.
+      expect(
+        isDriveVisibleToStudent(selfPlaced, drive({ offerCategory: "super_dream" })).visible,
+      ).toBe(true);
+    });
+
+    it("a self-placed internship consumes the cap and blocks internship drives (D5 correction)", () => {
+      const selfInterned = student({
+        offers: [
+          offer({ id: "sp", source: "self_placed", driveType: "internship", offerCategory: null }),
+        ],
+      });
+      expect(isDriveVisibleToStudent(selfInterned, drive({ driveType: "internship" })).reason).toBe(
+        "internship_cap_consumed",
+      );
+      // But a plain placement stays open — the cap is about internships only.
+      expect(isDriveVisibleToStudent(selfInterned, drive({ driveType: "placement" })).visible).toBe(
         true,
       );
     });

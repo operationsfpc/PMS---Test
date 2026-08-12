@@ -1,6 +1,6 @@
 # Spec — Workflow simplification: grouped navigation + full post-shortlist cycle
 
-**Date:** 2026-08-12 · **Status: AWAITING APPROVAL**
+**Date:** 2026-08-12 · **Status: ✅ APPROVED 2026-08-12 ("mock up is fine. build all 4 stages and ship") with two corrections, folded in below**
 **Source:** Karthik's message of 2026-08-12 + screenshot
 (`docs/inbox/Screenshot 2026-08-12 at 6.32.54 PM.png`) + ten answered questions.
 **Mockup:** `docs/specs/2026-08-12-sidebar-mockup.html` — approve before build.
@@ -130,8 +130,10 @@ first:
   - R9 placement record and placement statistics stay **on-campus only** —
     self-placed remains a separate reporting line (PRD §16.2's reporting half
     is NOT reversed).
-  - Internship cap: a self-placed offer does **not** consume it.
-    ⚠️ ASSUMPTION — flag in `docs/ASSUMPTIONS.md`, cheap to reverse.
+  - Internship cap: **a self-placed internship consumes it** (corrected by
+    Karthik at approval: "self internships will lead to exclusion from
+    internships similar to placements"). The approving coordinator therefore
+    also records whether the self-placed offer is a **job or an internship**.
 - **Schema** (migration): restore `offer_category not null` for self-placed
   ladder offers (tightening what 0014 relaxed). Live `offers` count is 0
   (checked before writing this spec) — no backfill.
@@ -184,10 +186,10 @@ real:
 audit): shortlist inclusion, round result `selected`, offer insert. Trigger
 skips opted-out students (WS5).
 
-⚠️ ASSUMPTION (cheap to add): a **rejected** round result produces no
-notification; the student sees the outcome on their dashboard. Only
-progressing students are actively notified ("progressing students know the
-results").
+**Rejected round results are also communicated by notification** (corrected by
+Karthik at approval: "can be communicated through notification").
+Waitlisted/on-hold are interim states: dashboard only, no notification —
+⚠️ minor assumption, one trigger branch to add.
 
 **"Data not reflecting" root cause** to verify during build: nothing ever
 created `attendance`/`round_participants` rows after shortlisting, so the

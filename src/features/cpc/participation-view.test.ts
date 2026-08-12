@@ -321,14 +321,16 @@ describe("approving a self-placement", () => {
   /**
    * A18: the offer row is created HERE, on approval, and never when the
    * student raises the request - there is no drive to corroborate an
-   * off-campus offer. It is written as `self_placed` so R3, R4 and R9 continue
-   * to ignore it: a self-placed student is still eligible for every on-campus
-   * drive (PRD §16.2).
+   * off-campus offer.
+   *
+   * D5/D6 (2026-08-12): a self-placed offer now climbs the ladder, so the
+   * approving coordinator MUST classify it — job or internship, and for a job
+   * which category rung it occupies.
    */
-  it("creates the offer only on approval, as a self-placed one with no category", async () => {
+  it("creates the offer only on approval, carrying the coordinator's classification", async () => {
     const writes = stub();
 
-    await view().approveSelfPlacement("sp-1");
+    await view().approveSelfPlacement("sp-1", { driveType: "placement", offerCategory: "dream" });
 
     expect(writes.map((w) => w.table)).toEqual(["self_placement_requests", "offers"]);
     expect(writes[1]?.body).toMatchObject({
@@ -337,10 +339,28 @@ describe("approving a self-placement", () => {
       source: "self_placed",
       company_name: "Family Business",
       role_title: "Analyst",
-      offer_category: null,
+      drive_type: "placement",
+      offer_category: "dream",
       ctc_lpa: 4.5,
       approved_by: "cpc-1",
     });
+  });
+
+  it("records a self-placed internship with no category — internships are never classified", async () => {
+    const writes = stub();
+
+    await view().approveSelfPlacement("sp-1", { driveType: "internship", offerCategory: null });
+
+    expect(writes[1]?.body).toMatchObject({ drive_type: "internship", offer_category: null });
+  });
+
+  it("refuses a job offer with no category before anything is written (D6)", async () => {
+    const writes = stub();
+
+    await expect(
+      view().approveSelfPlacement("sp-1", { driveType: "placement", offerCategory: null }),
+    ).rejects.toThrow(/category/i);
+    expect(writes).toHaveLength(0);
   });
 
   it("records a missing role title as null rather than the string 'null'", async () => {
@@ -353,7 +373,7 @@ describe("approving a self-placement", () => {
       },
     });
 
-    await view().approveSelfPlacement("sp-1");
+    await view().approveSelfPlacement("sp-1", { driveType: "placement", offerCategory: "regular" });
 
     expect(writes[1]?.body).toMatchObject({ role_title: null });
   });
@@ -361,21 +381,28 @@ describe("approving a self-placement", () => {
   it("says so when the offer was not recorded, so it is never silently lost", async () => {
     stub({ offerInsertFails: true });
 
-    await expect(view().approveSelfPlacement("sp-1")).rejects.toThrow(/not recorded/i);
+    await expect(
+      view().approveSelfPlacement("sp-1", { driveType: "placement", offerCategory: "regular" }),
+    ).rejects.toThrow(/not recorded/i);
   });
 
   it("does not write an offer when the approval itself failed", async () => {
     const writes = stub({ placementUpdateFails: true });
 
-    await expect(view().approveSelfPlacement("sp-1")).rejects.toThrow(/could not approve/i);
+    await expect(
+      view().approveSelfPlacement("sp-1", { driveType: "placement", offerCategory: "regular" }),
+    ).rejects.toThrow(/could not approve/i);
     expect(writes.some((w) => w.table === "offers")).toBe(false);
   });
 
   it("refuses a role that may not approve", async () => {
     stub();
 
-    await expect(view("account_executive").approveSelfPlacement("sp-1")).rejects.toThrow(
-      /coordinator/i,
-    );
+    await expect(
+      view("account_executive").approveSelfPlacement("sp-1", {
+        driveType: "placement",
+        offerCategory: "regular",
+      }),
+    ).rejects.toThrow(/coordinator/i);
   });
 });

@@ -30,11 +30,22 @@ export interface PendingParticipation {
   readonly selfPlacements: readonly PendingSelfPlacement[];
 }
 
+/**
+ * D5/D6 (2026-08-12): an approved self-placed offer climbs the category
+ * ladder and a self-placed internship consumes the internship cap, so the
+ * approving coordinator must classify what they are approving. A job needs
+ * its rung; an internship is never classified.
+ */
+export interface SelfPlacementClassification {
+  readonly driveType: "placement" | "internship";
+  readonly offerCategory: "regular" | "dream" | "super_dream" | null;
+}
+
 export interface ParticipationQueueView {
   pending(): Promise<PendingParticipation>;
   approveOptOut(requestId: string): Promise<void>;
   /** F1: the reason is required, and it is what the student is shown. */
   declineOptOut(requestId: string, reason: string): Promise<void>;
-  approveSelfPlacement(offerId: string): Promise<void>;
+  approveSelfPlacement(offerId: string, classification: SelfPlacementClassification): Promise<void>;
   declineSelfPlacement(offerId: string, reason: string): Promise<void>;
 }

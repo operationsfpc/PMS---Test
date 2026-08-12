@@ -27,8 +27,12 @@ const LADDER_DRIVE_TYPES: readonly DriveType[] = ["placement", "internship_conve
 const INTERNSHIP_DRIVE_TYPES: readonly DriveType[] = ["internship", "internship_convertible"];
 
 /**
- * Self-placed offers are reported as a separate statistic and must never affect
- * on-campus eligibility, the ladder, or the cap (PRD §16.2).
+ * Self-placed offers are reported as a separate statistic (PRD §16.2) — R9
+ * and every placement figure exclude them. But since 2026-08-12 (D5,
+ * client-confirmed reversal of §16.2's eligibility half) they DO climb the
+ * ladder and consume the internship cap, exactly like on-campus offers: a
+ * student self-placed at Dream may only pursue Super Dream, and a
+ * self-placed internship exhausts the one-internship allowance.
  */
 const isOnCampus = (offer: Offer): boolean => offer.source === "on_campus";
 
@@ -37,11 +41,16 @@ export function placementOffers(offers: readonly Offer[]): readonly Offer[] {
   return offers.filter((o) => isOnCampus(o) && LADDER_DRIVE_TYPES.includes(o.driveType));
 }
 
+/** Offers that occupy a rung on the Regular → Dream → Super Dream ladder. */
+function ladderOffers(offers: readonly Offer[]): readonly Offer[] {
+  return offers.filter((o) => LADDER_DRIVE_TYPES.includes(o.driveType));
+}
+
 /** R3 — the highest ladder position the student currently holds. */
 export function highestOfferCategory(offers: readonly Offer[]): OfferCategory | null {
   let highest: OfferCategory | null = null;
 
-  for (const offer of placementOffers(offers)) {
+  for (const offer of ladderOffers(offers)) {
     const category = offer.offerCategory;
     if (category === null) continue;
     if (highest === null || offerCategoryRank(category) > offerCategoryRank(highest)) {
@@ -54,7 +63,7 @@ export function highestOfferCategory(offers: readonly Offer[]): OfferCategory | 
 
 /** R4 — the cap is one internship per student, for their entire tenure. */
 export function isInternshipCapConsumed(offers: readonly Offer[]): boolean {
-  return offers.some((o) => isOnCampus(o) && INTERNSHIP_DRIVE_TYPES.includes(o.driveType));
+  return offers.some((o) => INTERNSHIP_DRIVE_TYPES.includes(o.driveType));
 }
 
 /**

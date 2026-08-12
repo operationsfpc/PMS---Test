@@ -31,6 +31,16 @@ const REFUSALS: Record<string, string> = {
   drive_not_live: "This drive is not open.",
 };
 
+/**
+ * Exported so src/db/query-contract.test.ts can prove it against the real
+ * schema. The previous select named a column offers does not have (`status`),
+ * so PostgREST refused the WHOLE query, the error was swallowed, and the
+ * category ladder judged every student as never placed — which is exactly the
+ * "students can apply to any category" blocker reported on 2026-08-12.
+ */
+export const OFFER_LADDER_COLUMNS =
+  "id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source";
+
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const STUDENT_COLUMNS = `
   id, full_name, roll_number, email, passing_year, overall_cgpa, tenth_percentage,
@@ -121,7 +131,7 @@ export function createSupabaseDrivesView(
     const [{ data: drives }, { data: applications }, { data: offers }] = await Promise.all([
       client.from("drives").select(DRIVE_COLUMNS).eq("status", "live"),
       client.from("applications").select("drive_id").eq("student_id", row.id),
-      client.from("offers").select("drive_type, offer_category, status").eq("student_id", row.id),
+      client.from("offers").select(OFFER_LADDER_COLUMNS).eq("student_id", row.id),
     ]);
 
     /**
@@ -183,7 +193,20 @@ export function createSupabaseDrivesView(
       srfStatus: row.srf_status as ApplyStudent["srfStatus"],
       participationStatus: row.participation_status as ApplyStudent["participationStatus"],
       academics,
-      offers: (offers ?? []) as unknown as readonly Offer[],
+      // Mapped field by field: PostgREST rows are snake_case and the domain
+      // is camelCase. The old blanket cast left driveType/source undefined,
+      // so even a correct select fed the ladder nothing.
+      offers: ((offers ?? []) as Array<Record<string, unknown>>).map(
+        (o): Offer => ({
+          id: o.id as string,
+          driveId: (o.drive_id as string | null) ?? "",
+          driveType: o.drive_type as Offer["driveType"],
+          offerCategory: (o.offer_category as Offer["offerCategory"]) ?? null,
+          ctcLpa: Number(o.ctc_lpa),
+          declaredAt: new Date(o.declared_at as string),
+          source: o.source as Offer["source"],
+        }),
+      ),
     };
 
     const appliedIds = ((applications ?? []) as Array<{ drive_id: string }>).map((a) => a.drive_id);

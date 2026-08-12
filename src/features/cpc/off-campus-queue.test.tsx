@@ -65,14 +65,60 @@ describe("OffCampusQueue", () => {
     expect(await screen.findByText(/no offer letter/i)).toBeDefined();
   });
 
-  it("approves the offer the coordinator pressed", async () => {
+  /**
+   * D5/D6 (2026-08-12): an approved self-placed offer climbs the category
+   * ladder, so the coordinator must say WHAT it is before approving — job or
+   * internship, and which rung a job occupies. No classification, no approval.
+   */
+  it("refuses to approve until the coordinator classifies the offer", async () => {
     const approveSelfPlacement = vi.fn();
     const user = userEvent.setup();
     render(<OffCampusQueue view={view({ approveSelfPlacement })} />);
 
-    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    const approve = await screen.findByRole("button", { name: /approve/i });
+    await user.click(approve);
 
-    await waitFor(() => expect(approveSelfPlacement).toHaveBeenCalledWith("sp1"));
+    expect(approveSelfPlacement).not.toHaveBeenCalled();
+  });
+
+  it("approves a job offer with the category the coordinator chose", async () => {
+    const approveSelfPlacement = vi.fn();
+    const user = userEvent.setup();
+    render(<OffCampusQueue view={view({ approveSelfPlacement })} />);
+
+    await user.selectOptions(await screen.findByLabelText(/offer type/i), "placement");
+    await user.selectOptions(screen.getByLabelText(/category/i), "dream");
+    await user.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() =>
+      expect(approveSelfPlacement).toHaveBeenCalledWith("sp1", {
+        driveType: "placement",
+        offerCategory: "dream",
+      }),
+    );
+  });
+
+  it("an internship needs no category and is recorded as one", async () => {
+    const approveSelfPlacement = vi.fn();
+    const user = userEvent.setup();
+    render(<OffCampusQueue view={view({ approveSelfPlacement })} />);
+
+    await user.selectOptions(await screen.findByLabelText(/offer type/i), "internship");
+    await user.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() =>
+      expect(approveSelfPlacement).toHaveBeenCalledWith("sp1", {
+        driveType: "internship",
+        offerCategory: null,
+      }),
+    );
+  });
+
+  it("tells the coordinator the approval now affects on-campus eligibility", async () => {
+    render(<OffCampusQueue view={view()} />);
+
+    expect(await screen.findByText(/category ladder/i)).toBeDefined();
+    expect(screen.queryByText(/never affects on-campus eligibility/i)).toBeNull();
   });
 
   it("says nothing is waiting rather than showing an empty list", async () => {
@@ -122,7 +168,11 @@ describe("OffCampusQueue", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    // D6: Approve is disabled until the offer is classified, so the failure
+    // path starts the same way a real approval does.
+    await user.selectOptions(await screen.findByLabelText(/offer type/i), "placement");
+    await user.selectOptions(screen.getByLabelText(/category/i), "dream");
+    await user.click(screen.getByRole("button", { name: /approve/i }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/not recorded/i);
   });
