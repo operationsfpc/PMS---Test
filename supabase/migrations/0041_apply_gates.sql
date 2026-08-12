@@ -13,7 +13,21 @@
 -- relaxed this so a self-placed offer could arrive without a category; now
 -- that self-placed offers climb the ladder (D5), an unclassified one would
 -- hold no rung and block nothing. Restores 0006's original rule.
--- Checked live before writing: offers has 0 rows, so nothing can violate it.
+--
+-- One live row predates this rule (checked at push time, 2026-08-12, the
+-- hard way: the constraint refused it): a self-placed offer at Rs 3.50 LPA
+-- with no category. Backfilled from the default bands (R1,
+-- src/domain/offer-category.ts): <=5 regular, <=10 dream, else super_dream.
+-- Rs 3.50 is unambiguously regular. Flagged for coordinator review in
+-- docs/PENDING-USER-ACTION.md - changing it is one UPDATE.
+update offers
+   set offer_category = case
+         when ctc_lpa <= 5 then 'regular'
+         when ctc_lpa <= 10 then 'dream'
+         else 'super_dream'
+       end::offer_category
+ where drive_type <> 'internship' and offer_category is null;
+
 alter table offers drop constraint ladder_offer_has_category;
 
 alter table offers add constraint ladder_offer_has_category

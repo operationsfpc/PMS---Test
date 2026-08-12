@@ -37,6 +37,13 @@ roster.**
 
 ## Not blocking, but worth your attention
 
+- **0041 backfilled one live offer's category.** Thanush Krishna's self-placed
+  offer (FACE Prep Campus, ₹3.50 LPA) predated D6 and carried no category; the
+  new constraint requires one. It was set to **regular** from the default
+  bands (≤ ₹5 LPA). D6 says the approving coordinator chooses — if regular is
+  wrong, it is one UPDATE to change. Under D5 this offer now blocks him from
+  further regular-category drives.
+
 - **Coverage gate.** `pnpm check` is red and **was red before this session's work** (proved against a clean `HEAD`): `src/domain` sits at 97.51% against the 100% rule, global branches 76.85% against 80%. Being brought back up.
 - **Playwright E2E.** Configured in plan, no specs written. One journey per role is the stated target.
 
