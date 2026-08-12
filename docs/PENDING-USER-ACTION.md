@@ -10,7 +10,7 @@ only you can supply. Everything else proceeds on assumptions (`ASSUMPTIONS.md`).
 | **P3** | R11 shortlist ranking quality | **Partially answered 2026-08-06**: the skill AREAS and who writes them (Central CPC) are confirmed; the repository is built (`/central/skills`, migration 0037). Still needed: **confirm the 0–100 scale (A35)**, whether students may see their own scores (A36), and the R11 ranking weights | Scale and weights remain assumptions; ranking is consistent but unconfirmed |
 | **P4** | Compliance module (Phase 2) | NIRF / NAAC / NBA / AICTE report formats | Never supplied. Out of MVP scope anyway |
 | **P5** | Roster template fidelity | One **real college roster file** | A5 made our template canonical. If a real file differs, the importer changes |
-| **P6** | Staff onboarding | Real staff names, emails and roles to invite | Only `karthikraja@faceprep.in` exists. The Invite staff screen is built; the list of people is yours |
+| **P6** | Staff onboarding | **A campus placement coordinator.** There are currently **0** | 6 staff exist (3 admins, 2 Central CPCs, 1 AE). The campus CPC role has no holder since `sainaveen` was removed, so nobody is campus-scoped. Nothing is broken — a Central CPC is org-wide and runs both queues — but the first campus CPC appointed **must be mapped to a campus** (or every queue they open is silently empty) and **must not also be on the student roster** (0040 now refuses that outright) |
 | **P7** | Go-live | Google OAuth consent screen verification, if you expect >100 users | Unverified apps hit a user cap |
 
 ## Answered

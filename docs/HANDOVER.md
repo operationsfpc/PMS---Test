@@ -7,9 +7,11 @@ gate. Remote is at **`0040`**; live Cloudflare version
 `213aa2de-6acf-4589-990b-a60163be05c8`. Hash deliberately not quoted here: it has been wrong three times, always
 because it was written before the commit existed. Use `git log --oneline -5`.
 
-**Re-verified at the start of the 2026-08-06 session, not remembered:**
-`pnpm check` exits 0, the Playwright journey passes, the working tree is
-clean, and `supabase migration list` shows remote at `0036`.
+**Re-verified at the END of the 2026-08-06 session, not remembered:**
+`pnpm check` exits 0 (2377 tests / 138 files), the Playwright journey passes,
+the working tree is clean, `supabase migration list --linked` shows local ==
+remote at **`0040`**, and <https://fpc-pms.faceprep.workers.dev> answers 200.
+(That session began at `0036`; it shipped `0037`–`0040`.)
 
 ---
 
