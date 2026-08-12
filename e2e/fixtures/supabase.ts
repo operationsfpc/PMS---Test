@@ -165,6 +165,12 @@ export async function stubSupabase(page: Page, options: StubOptions): Promise<Su
       return json(options.offers ?? []);
     }
 
+    // D8/D9 (2026-08-12): the dashboard's notifications panel. The journey
+    // starts with none; the panel stays out of the way.
+    if (table === "notifications") {
+      return json([]);
+    }
+
     unrecognised.push(`${route.request().method()} ${url.pathname}${url.search}`);
     return json({ message: "not stubbed" }, 501);
   });
