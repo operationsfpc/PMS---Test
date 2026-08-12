@@ -26,6 +26,15 @@ const row = {
     { kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" },
     { kind: "twelfth_marksheet", label: "12th marksheet", url: "https://signed/12" },
   ],
+  certificates: [
+    {
+      id: "c1",
+      name: "AWS Cloud Practitioner",
+      url: "https://signed/aws",
+      status: "pending" as const,
+    },
+    { id: "c2", name: "NPTEL Data Structures", url: null, status: "pending" as const },
+  ],
   semesters: [
     {
       semesterNumber: 1,
@@ -192,5 +201,95 @@ describe("checking a declared CGPA against the marksheet that proves it", () => 
     );
 
     expect(await screen.findByText(/no semesters declared/i)).toBeDefined();
+  });
+});
+
+/**
+ * Approving the form also confirms the certificates that came with it
+ * (0039, asked for 2026-08-06). That click may only mean anything if the
+ * coordinator was shown the documents first - the same reason semester
+ * marksheets are on this screen. A verify button with nothing to open is a
+ * signature on the student's own typing.
+ */
+describe("SrfVerificationQueue — certificates", () => {
+  it("lists each certificate with a link to the document it claims", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    expect(await screen.findByText("AWS Cloud Practitioner")).toBeDefined();
+    const link = screen.getByRole<HTMLAnchorElement>("link", {
+      name: /open aws cloud practitioner/i,
+    });
+    expect(link.href).toContain("https://signed/aws");
+  });
+
+  /** A coordinator must never believe they checked something they could not open. */
+  it("says when a certificate has no document, rather than offering a dead link", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    await screen.findByText("NPTEL Data Structures");
+    expect(screen.queryByRole("link", { name: /open nptel data structures/i })).toBeNull();
+    expect(screen.getByText(/no document/i)).toBeDefined();
+  });
+
+  /** The coordinator is told what approving will commit them to. */
+  it("says that approving will verify the certificates too", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    expect(await screen.findByText(/approving.*also verif\w*.*2 certificates/i)).toBeDefined();
+  });
+
+  it("counts one certificate in the singular", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...row,
+              certificates: [
+                { id: "c1", name: "AWS Cloud Practitioner", url: null, status: "pending" as const },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/also verify 1 certificate\b/i)).toBeDefined();
+  });
+
+  it("says so plainly when there are none to check", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({ pending: async () => [{ ...row, certificates: [] }] })}
+      />,
+    );
+
+    expect(await screen.findByText(/no certificates uploaded/i)).toBeDefined();
+  });
+
+  /** One already decided is shown as decided, not offered again. */
+  it("shows a certificate that was already verified as verified", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...row,
+              certificates: [
+                {
+                  id: "c1",
+                  name: "AWS Cloud Practitioner",
+                  url: null,
+                  status: "verified" as const,
+                },
+              ],
+            },
+          ],
+        })}
+      />,
+    );
+
+    await screen.findByText("AWS Cloud Practitioner");
+    expect(screen.getByText(/^verified$/i)).toBeDefined();
   });
 });

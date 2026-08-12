@@ -134,9 +134,32 @@ Changing the scale is one constant, one check constraint and a backfill.
 The invented `skill_scores` table (A12) is **dropped** by 0037: this request
 was the real schema arriving. Shortlisting (R11) now reads the repository.
 
-## A37 — a certificate is verified on its own, not at registration-form approval
+## A37 — ✅ ANSWERED 2026-08-06: BOTH, and the evidence moved with it
 
-⚠️ **ASSUMPTION — UNCONFIRMED.** The request (2026-08-06) was "skill
+**The client chose the bundled behaviour:** *"make approving the registration
+form also confirm the certificates that came with it, and keep the standing
+queue for later uploads."*
+
+So it is now both, and the reading below is superseded:
+
+- **Approving the form verifies the certificates submitted with it** —
+  `0039`, modelled on `0031`'s semester trigger. Already-rejected and
+  already-verified certificates are left alone; nobody else's are touched.
+- **Anything uploaded afterwards stays `pending`** and goes to
+  `/cpc/certificates`, which is what makes a certificate earned in the final
+  semester verifiable at all.
+
+🔴 **The condition that made this safe to build.** Bundling was pushed back on
+first, because the verification queue did not show certificate documents — one
+click would have certified files the coordinator was never shown, which is
+exactly the hole that made semester verification meaningless before `0023`.
+The screen change shipped **with** `0039`, not after it: each certificate now
+sits beside a signed link to its document, and the approve button states how
+many certificates it is about to verify.
+
+The original reading, kept because it explains why the queue exists at all:
+
+⚠️ **ASSUMPTION — SUPERSEDED.** The request (2026-08-06) was "skill
  certifications uploaded by students will also need verification of campus
 placement coordinator **similar to CGPA approval**. This is applicable for
 first upload as well as subsequent additions."

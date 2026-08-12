@@ -73,6 +73,16 @@ describe("SrfVerificationQueue", () => {
         documents: [{ kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" }],
         // Each declared semester beside the marksheet that evidences it - the
         // uploads used to be discarded, so this column had nothing in it.
+        // 0039: approving the form confirms these too, so they are shown
+        // beside their documents before the button that commits to them.
+        certificates: [
+          {
+            id: "c1",
+            name: "AWS Cloud Practitioner",
+            url: "https://signed/aws",
+            status: "pending" as const,
+          },
+        ],
         semesters: [
           {
             semesterNumber: 1,

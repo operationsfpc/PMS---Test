@@ -13,6 +13,33 @@ clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
+## ✅ SHIPPED 2026-08-06 — approving the form confirms its certificates (`0039`)
+
+The client's answer to A37: *"make approving the registration form also
+confirm the certificates that came with it, and keep the standing queue for
+later uploads."* So it is **both**, and A37 is answered rather than assumed.
+
+**`pnpm check` exits 0 — 2345 tests across 136 files**, plus the Playwright
+journey.
+
+| | |
+|---|---|
+| `0039` | An SRF approval verifies that student's **pending** certificates, stamped with `srf_decided_by`. Modelled on `0031`. Already-rejected ones are left alone — a coordinator refused those, and an approval elsewhere must not reverse it. Already-verified ones are not re-stamped. Nobody else's are touched |
+| Later uploads | Still land `pending` → `/cpc/certificates`. That is what makes a certificate earned in the final semester verifiable at all |
+| **The screen change that makes it honest** | The verification queue now shows each certificate **beside a signed link to its document**, and the approve button says *"Approving will also verify N certificates"* |
+
+🔴 **Bundling was pushed back on before it was built, and only shipped with
+the evidence attached.** The queue did not show certificate documents, so one
+click would have certified files the coordinator was never shown — precisely
+the hole that made semester verification meaningless before `0023`. `0039` and
+the screen change are one commit for that reason. **If you ever move a
+verification onto an existing button, move the evidence with it.**
+
+No backfill: production holds zero certificates, and retro-verifying one would
+assert a coordinator had checked a document they were never shown.
+
+---
+
 ## ✅ SHIPPED 2026-08-06 — certificates are verified, like a CGPA
 
 Asked for: "skill certifications uploaded by students will also need

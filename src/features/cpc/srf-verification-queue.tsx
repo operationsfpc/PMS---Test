@@ -108,6 +108,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                 "Arrear history",
                 "School marksheets",
                 "Declared semesters",
+                "Certificates",
                 "Decision",
               ]}
             >
@@ -190,7 +191,58 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                       </ul>
                     )}
                   </td>
+                  {/* 0039: approving the form verifies these too, so the
+                      document behind each one is on screen BEFORE the button
+                      that commits to it. Without that, one click would
+                      certify files the coordinator was never shown. */}
+                  <td className="px-3 py-2 text-sm">
+                    {student.certificates.length === 0 ? (
+                      <span className="text-ink-500">No certificates uploaded</span>
+                    ) : (
+                      <ul className="flex flex-col gap-1">
+                        {student.certificates.map((certificate) => (
+                          <li
+                            key={certificate.id}
+                            className="flex flex-wrap items-baseline gap-x-2"
+                          >
+                            <span className="font-medium">{certificate.name}</span>
+                            {certificate.status === "pending" ? (
+                              certificate.url === null ? (
+                                <span className="text-xs text-[#DD4820]">No document</span>
+                              ) : (
+                                <a
+                                  href={certificate.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  aria-label={`Open ${certificate.name} for ${student.fullName}`}
+                                  className="text-xs text-[#3D3777] underline"
+                                >
+                                  Open
+                                </a>
+                              )
+                            ) : (
+                              <span className="text-xs text-ink-500">
+                                {certificate.status === "verified" ? "Verified" : "Not accepted"}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
+                    {/* Says what the button commits them to, because it now
+                        commits them to more than the marks. */}
+                    {student.certificates.some((c) => c.status === "pending") && (
+                      <p className="mb-1 text-xs text-ink-500">
+                        {(() => {
+                          const n = student.certificates.filter(
+                            (c) => c.status === "pending",
+                          ).length;
+                          return `Approving will also verify ${n} certificate${n === 1 ? "" : "s"}.`;
+                        })()}
+                      </p>
+                    )}
                     <Button
                       size="sm"
                       disabled={busyId === student.id}

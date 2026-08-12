@@ -1,5 +1,5 @@
 import { decideSrf, type SrfDecision } from "@domain/srf-decision";
-import type { SrfStatus } from "@domain/types";
+import type { SrfStatus, VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class VerificationError extends Error {}
@@ -30,6 +30,21 @@ export interface DeclaredSemester {
   readonly marksheetUrl: string | null;
 }
 
+/**
+ * A certificate submitted with the form, beside the document it claims.
+ *
+ * On this screen because approving the form now verifies these too (0039).
+ * That click may only mean anything if the coordinator was shown the document
+ * first - the same reason the semester marksheets are here.
+ */
+export interface DeclaredCertificate {
+  readonly id: string;
+  readonly name: string;
+  /** Null when nothing could be signed. Never a dead link. */
+  readonly url: string | null;
+  readonly status: VerificationStatus;
+}
+
 export interface PendingSrf {
   readonly id: string;
   readonly fullName: string;
@@ -43,6 +58,8 @@ export interface PendingSrf {
   /** The school marksheets, which belong to no single semester. */
   readonly documents: readonly StudentDocument[];
   readonly semesters: readonly DeclaredSemester[];
+  /** 0039: approving the form confirms these. */
+  readonly certificates: readonly DeclaredCertificate[];
 }
 
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
@@ -81,7 +98,7 @@ export type GetActorId = () => Promise<string | null>;
  * We want the documents BELONGING to the student, which is the first key.
  */
 export const VERIFICATION_QUEUE_COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path))";
+  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
 
 /**
  * Reads and decides the SRF verification queue.
@@ -139,6 +156,40 @@ async function signSemesters(
     // A path we cannot sign reads as no evidence rather than a dead link: a
     // coordinator must never think they have checked something they have not.
     marksheetUrl: paths[index] === undefined ? null : (signed[next++] ?? null),
+  }));
+}
+
+/**
+ * The certificates, each with its own signed document.
+ *
+ * Sorted here rather than trusted from the query: PostgREST promises no order
+ * on an embedded resource, and a coordinator works down a stable list.
+ */
+async function signCertificates(
+  client: SupabaseClient,
+  rows: Array<Record<string, unknown>>,
+): Promise<readonly DeclaredCertificate[]> {
+  const ordered = [...rows].sort((a, b) =>
+    String(a.name ?? "").localeCompare(String(b.name ?? "")),
+  );
+
+  const paths = ordered.map((row) => {
+    const doc = row.student_documents as { storage_path?: string } | null | undefined;
+    return doc?.storage_path;
+  });
+
+  const signed = await sign(
+    client,
+    paths.filter((path): path is string => path !== undefined),
+  );
+
+  let next = 0;
+  return ordered.map((row, index) => ({
+    id: row.id as string,
+    name: (row.name as string | null) ?? "",
+    // A path we cannot sign reads as no evidence rather than a dead link.
+    url: paths[index] === undefined ? null : (signed[next++] ?? null),
+    status: ((row.status as string | null) ?? "pending") as VerificationStatus,
   }));
 }
 
@@ -201,6 +252,10 @@ export function createSupabaseVerificationRepository(
           semesters: await signSemesters(
             client,
             (row.student_semesters ?? []) as Array<Record<string, unknown>>,
+          ),
+          certificates: await signCertificates(
+            client,
+            (row.student_certificates ?? []) as Array<Record<string, unknown>>,
           ),
         })),
       );
