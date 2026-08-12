@@ -26,6 +26,42 @@ beforeAll(async () => {
   );
 });
 
+describe("campus staff read their students' shortlist standing (0045)", () => {
+  it("shows the campus coordinator their own student's entry, and only theirs", async () => {
+    const drive = (
+      await t.sql(`select id from drives where company_name = 'Zoho'`)
+    )[0]?.id as string;
+
+    // One application per campus: Priya is the coordinator's, Arjun is not.
+    for (const student of [ids.priya, ids.arjun]) {
+      const app = (
+        await t.sql(
+          `insert into applications (drive_id, student_id, profile_snapshot)
+           values ($1, $2, '{}'::jsonb) returning id`,
+          [drive, student],
+        )
+      )[0]?.id as string;
+      await t.sql(
+        `insert into shortlist_entries (application_id, included, decided_by)
+         values ($1, true, $2)`,
+        [app, ids.centralUser],
+      );
+    }
+
+    const rows = await t.asUser(
+      ids.cpcUser,
+      `select a.student_id from shortlist_entries se join applications a on a.id = se.application_id`,
+    );
+    expect(rows.map((r) => r.student_id)).toEqual([ids.priya]);
+  });
+
+  it("still lets them decide nothing \u2014 an update is silently filtered", async () => {
+    await t.asUser(ids.cpcUser, `update shortlist_entries set included = false`);
+    const rows = await t.sql(`select included from shortlist_entries`);
+    expect(rows.every((r) => r.included === true)).toBe(true);
+  });
+});
+
 describe("campus staff read drives (0044)", () => {
   it("lets the campus coordinator read a drive", async () => {
     const rows = await t.asUser(ids.cpcUser, `select company_name from drives`);
