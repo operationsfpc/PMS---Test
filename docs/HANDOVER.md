@@ -1,15 +1,73 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2269 tests passing across 132 files**, plus **1 Playwright journey** — run,
+**2377 tests passing across 138 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0037`**; live Cloudflare version
-`32348e97-401f-4a93-9aa3-9ac9b5b10688`. Hash deliberately not quoted here: it has been wrong three times, always
+gate. Remote is at **`0040`**; live Cloudflare version
+`213aa2de-6acf-4589-990b-a60163be05c8`. Hash deliberately not quoted here: it has been wrong three times, always
 because it was written before the commit existed. Use `git log --oneline -5`.
 
 **Re-verified at the start of the 2026-08-06 session, not remembered:**
 `pnpm check` exits 0, the Playwright journey passes, the working tree is
 clean, and `supabase migration list` shows remote at `0036`.
+
+---
+
+## ✅ SHIPPED 2026-08-06 — one email identifies one person (`0040`)
+
+Asked for after P8: *"can you block an email id from being entered twice?
+student + student as well as student+staff"*. **This closes P8's root cause**,
+not its symptom.
+
+**`pnpm check` exits 0 — 2377 tests across 138 files.** `0040` live, local ==
+remote; Cloudflare **`213aa2de-6acf-4589-990b-a60163be05c8`**.
+
+**Two gaps existed, and only one was the obvious one.**
+
+1. **student-vs-student was already `unique` (0003) — but CASE-SENSITIVE.** So
+   `Priya@gmail.com` and `priya@gmail.com` were two people to Postgres and one
+   person to Google. The roster importer happens to lowercase, which is the
+   only reason this never bit.
+2. **student-vs-staff was not checked anywhere at all.**
+
+| | |
+|---|---|
+| Canonical on write | `normalise_email` trims + lowercases on all three tables, so the row read back is the row matched |
+| Case-insensitive uniqueness | `one_person_per_email_*` on `students`, `profiles`, `staff_invitations`. The original `unique` columns stay — dropping one to swap in an index is how a window gets left open mid-migration |
+| Cross-table | Triggers both ways, against staff **profiles AND unaccepted invitations** — somebody invited but not yet signed in holds their address just as firmly. Raised as `unique_violation` so callers treat it like any other duplicate |
+| Layer 0 | `src/domain/email-identity.ts` owns the rule and its wording; the roster preview names the offending **row** rather than failing a file of hundreds with one unattributable error |
+
+🔴 **A staff INVITATION and the PROFILE it becomes are ONE person.** All six
+staff in production have both rows — it is the normal state, not a duplicate.
+The cross-check therefore compares students against staff and **never staff
+against staff**. Getting that wrong would have blocked every staff member from
+ever signing in.
+
+Checked against production BEFORE writing it: 0 non-canonical addresses, 0
+case-duplicates anywhere, 0 student/staff overlap — so no backfill, and no
+existing row these constraints break.
+
+Proved against production afterwards, all rolled back:
+
+| Attempt | Result |
+|---|---|
+| Same student address twice | refused |
+| Same address differing only by case | refused (normalised first, then caught) |
+| Student on a **staff** address | refused, naming it |
+| Staff invited on a **student** address | refused, naming it |
+| Same, with odd casing and whitespace | refused |
+| **Invitation → profile still materialises** | ✅ role intact |
+| **A genuinely new student still imports** | ✅ stored canonically |
+
+Live JS byte-identical (833 776 bytes, sha256 `ae14f21c…`); 6 new triggers, 3
+new indexes, 0 non-canonical rows; counts unchanged (5 students, 6 profiles).
+
+💡 **An existing test failed for the right reason and was NOT just widened.**
+`org-hierarchy`'s "stops a student writing themselves a profile" expected an
+RLS refusal; 0040 now refuses it one step earlier, on identity. The matcher
+was widened **and a second test added** using an address 0040 has no opinion
+about — otherwise that file would have quietly stopped proving `profiles` is
+protected by RLS at all.
 
 ---
 
