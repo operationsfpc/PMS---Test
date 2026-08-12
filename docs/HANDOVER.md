@@ -1,17 +1,156 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2377 tests passing across 138 files**, plus **1 Playwright journey** — run,
+**2494 tests passing across 144 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0040`**; live Cloudflare version
-`213aa2de-6acf-4589-990b-a60163be05c8`. Hash deliberately not quoted here: it has been wrong three times, always
-because it was written before the commit existed. Use `git log --oneline -5`.
+gate. Remote is at **`0045`**; live Cloudflare version
+`15ac4303-b346-4184-a0be-658cfb5d3802`. Commit hash deliberately not quoted
+here: it has been wrong three times, always because it was written before the
+commit existed. Use `git log --oneline -5`.
 
-**Re-verified at the END of the 2026-08-06 session, not remembered:**
-`pnpm check` exits 0 (2377 tests / 138 files), the Playwright journey passes,
-the working tree is clean, `supabase migration list --linked` shows local ==
-remote at **`0040`**, and <https://fpc-pms.faceprep.workers.dev> answers 200.
-(That session began at `0036`; it shipped `0037`–`0040`.)
+**Re-verified at the END of the 2026-08-12 session, not remembered:**
+`pnpm check` exits 0 (2494 tests / 144 files), the Playwright journey passes,
+`supabase migration list --linked` shows local == remote at **`0045`**, the
+live JS is byte-identical to the local `dist/`, and
+<https://fpc-pms.faceprep.workers.dev> answers 200.
+(That session began at `0040`; it shipped `0041`–`0045`.)
+
+---
+
+## ✅ SHIPPED 2026-08-12 — the workflow simplification, all four stages
+
+Spec: `docs/specs/2026-08-12-workflow-simplification.md` (✅ APPROVED, D1–D10
+recorded verbatim; mockup `2026-08-12-sidebar-mockup.html` approved as-is,
+two assumptions corrected at approval and folded in). Interview → spec →
+mockup → build, in that order.
+
+### Stage 1 — the ladder blocker (`0041`)
+
+**"Students should only be able to apply to the offer category they're
+eligible under" was flagged as a blocker, and it was three defects deep:**
+
+1. `drives-view.ts` selected a **non-existent column** (`offers.status`) —
+   PostgREST refused the whole query, the error was swallowed, the ladder
+   judged every student never-placed.
+2. Even fixed, the raw snake_case rows were blanket-cast to the domain's
+   camelCase `Offer` — `driveType`/`source` were `undefined`, so the ladder
+   STILL saw nothing. Mapped field by field now, select registered in
+   `query-contract.test.ts`.
+3. **No server-side gate at all** (`applications_insert_self` checked only
+   "own student id"). `0041` adds `enforce_application_gates`: live+window,
+   `srf_approved`, active participation, campus targeting, internship cap,
+   category ladder; R5a override bypasses ladder+cap only. Proved as a real
+   student through RLS — 14 db tests — and against PRODUCTION in rolled-back
+   transactions (window refused · draft refused · equal category refused ·
+   higher rung ACCEPTED).
+
+**D5 (client-confirmed reversal of PRD §16.2's eligibility half):** a
+self-placed offer now climbs the ladder; a self-placed **internship consumes
+the cap** (his correction at approval). Reporting stays separate — R9 and the
+statistics still exclude self-placed. **D6:** the approving coordinator must
+classify a self-placed offer (job/internship + rung); the off-campus queues
+gained mandatory selectors; `ladder_offer_has_category` restored to 0006's rule.
+
+🔴 **The push refused the constraint: `offers` was NOT empty.** The spec said
+0 rows — read from the Aug-6 handover, not re-checked. UAT had created one
+(Thanush, self-placed, ₹3.50 LPA, no category). Backfilled from the R1 bands
+(→ `regular`), flagged in `docs/PENDING-USER-ACTION.md` for coordinator
+review. **Under D5 that offer now blocks him from regular drives — proved
+live.** Re-read production before every irreversible claim; the handover's §5
+counts are a snapshot, not a fact.
+
+### Stage 2 — grouped sidebars · publish split · verification narrowed (`0042`)
+
+- **`ROLE_NAVS` is now heads + sub-heads for every role** (D1). `NavGroup`
+  rendered as an accessible heading per group.
+- **Central CPC's cockpit absorbed** into *Yet to publish* (draft/submitted/
+  approved — rejected is nobody's queue) and *Published* (live and later) —
+  D2, approved assumption 3. `/central/drives` still answers for old links.
+- **D3: verification is the campus CPC's alone.** `0042` refuses SRF
+  decisions (trigger, names the rule) and certificate decisions (policy —
+  RLS filters silently) for everyone else, admin included. Nav entries gone
+  from the Central CPC; `/cpc/verification` and `/cpc/certificates` refuse
+  other roles at the door. **Proved live as the real central CPC (refused)
+  and the real campus CPC (accepted), rolled back.**
+  ⚠️ Accepted consequence: an empty campus-CPC seat halts verification.
+  Client keeps the seat filled (currently `ashokkumar091293@gmail.com`,
+  campus-mapped, not on the roster — verified live).
+
+### Stage 3 — the shortlist reaches the student (`0043`)
+
+**"Data not reflecting in panel / to student" root cause: nothing connected
+the shortlist to Round 1**, so the results screen (reads `attendance`) and
+the student dashboard read empty tables.
+
+🔴 **And the round tables had NO RLS AT ALL** — `round_participants`,
+`round_results`, `attendance`, `recruiter_exports`, `email_deliveries`,
+while 0008 grants insert/update to `authenticated`: any student could write
+themselves a `selected` result. Same class as 0030's invisible-drives hole.
+`0043` locks them: students read their own, staff by scope, the drive's AE
+reads theirs (0019's argument), operators write, campus CPC also writes
+attendance.
+
+The cycle, all by `security definer` triggers (postgres has `rolbypassrls`,
+same mechanism as the audit trigger):
+
+| Event | What happens |
+|---|---|
+| shortlist `included` → true | Round 1 scheduled (`round_participants` + `attendance`), notification "You are shortlisted for {company}" |
+| → false | untouched Round-1 slot taken back; anything marked or decided stays; the notification stays (it WAS sent) |
+| result `selected` / `rejected` | notification, naming the round — **rejected notifies too** (client's correction). Waitlisted/on-hold: quiet (A38) |
+| offer insert (on-campus) | notification. Self-placed is the student's own news |
+| opted-out student | **never notified**, and cannot be `included` without an override reason (D7) — column + trigger |
+
+UI: shortlist page shows the opt-out alert + per-student override with a
+reason (carried to the row); the save button says it notifies and schedules;
+**`DriveRoundsPage`** — numbered round tabs, add-a-round (unique key on
+(drive_id, sequence) settles races), explicit **"Advance N selected to Round
+N+1"**; student dashboard gained the notifications panel (unread count,
+mark-read).
+
+**Proved on LIVE data, rolled back:** flipping Shashwathi's real Cognizant
+entry false→true scheduled her into Round 1 and she read "You are shortlisted
+for Cognizant" through RLS as herself; recording `selected` on Thanush's real
+Accenture application produced "You cleared Round 1 of Accenture", read as
+him. Re-saving an already-included entry did nothing — correctly (that is why
+the first live attempt looked inert: UAT had already shortlisted him).
+
+💡 **A proof trap worth keeping: UNION ALL branches share one snapshot.** The
+first live proof read "0 scheduled" because every check subquery ran in the
+SAME statement as the trigger-firing insert. Sequential statements writing to
+a temp `proof` table (grant it to `authenticated` first) is the pattern that
+works.
+
+### Stage 4 — CSV export · campus CPC full-cycle visibility (`0044`, `0045`)
+
+- **Export shortlist (CSV)** on the shortlisting screen (D4: "csv that excel
+  opens"): `serialiseCsv` (domain, RFC 4180, round-trips through `parseCsv`),
+  BOM-prefixed at the download, built from **snapshots** (R7), included
+  students only, missing resumes named, and **logged to `recruiter_exports`**
+  (PRD §13.2) — first writes that table has ever had.
+- **`/cpc/drives` — Drive progress** (D10): every drive touching the
+  coordinator's students; per student the shortlist standing, each round's
+  attendance/result, the offer. Strictly read-only — a test asserts no
+  controls exist. `0044` lets campus readers read `drives`.
+- 🔴 **`0045` was found by the live proof, not a test:** the campus CPC read
+  6 drives, 6 applications and **0 shortlist entries** — `shortlist_staff_only`
+  is org-readers-only, so the screen would have said "not shortlisted" about
+  everyone. Campus-scoped select-only policy added; **re-proved live: 6.**
+  PRD §13.1 is about students, not staff.
+
+### Also in this session
+
+- Mutation checks where tests were written close to code: drive-progress page
+  (2 mutations) and view (result-swap, offer-swap) — all caught.
+- e2e fake backend now answers `notifications` (the journey's strict
+  unhandled-request guard caught the new read — working as designed).
+- `docs/domain-model.md` §7 and Q2/Q9 updated for D5/D8; **A38** added
+  (waitlisted/on-hold do not notify — one trigger branch if reversed).
+
+⚠️ **Machine note:** another project's vitest was running concurrently and
+two of my timed-out runs left zombie WASM-Postgres workers; the suite then
+"failed" with 220-second timeouts. `pkill -9 -f vitest`, wait, run once.
+Check `ps aux | grep vitest` before believing a slow red suite.
 
 ---
 

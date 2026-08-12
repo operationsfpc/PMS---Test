@@ -209,7 +209,9 @@ Rationale: the override exists to widen access for exceptional opportunities, no
 Confirmed decisions:
 - Once the internship cap is consumed, the student is blocked from **both** `internship` **and** `internship_convertible` drives — even higher-category ones. The cap check precedes the ladder check. **Unless R5a applies.**
 - A placed student who has **not** consumed the cap still sees plain internship drives.
-- A self-placed student's off-campus offer does **not** affect this ladder at all.
+- ~~A self-placed student's off-campus offer does **not** affect this ladder at all.~~
+  ⟳ **REVERSED 2026-08-12 (D5, client-confirmed):** it does — same ladder, same
+  cap. Only the reporting stays separate.
 
 ### R6 · `canApply(student, drive, offers, now) → { allowed, reason? }`
 `isDriveVisibleToStudent` **AND** `now` within `[application_start, application_end]` **AND** not already applied.
@@ -271,7 +273,7 @@ For rounds 2+, only students with a `selected` result in the previous round are 
 
 | | Rule |
 |---|---|
-| **Self-placed** | Student records off-campus offer + letter; CPC approves. Counts as a **separate statistic line**. Does **not** affect on-campus eligibility or the category ladder (confirmed). |
+| **Self-placed** | Student records off-campus offer + letter; CPC approves, and **must classify it** — job or internship, and the category rung for a job (D6, 2026-08-12). ⟳ **REVERSED 2026-08-12 (D5):** an approved self-placed offer now **climbs the category ladder** exactly like an on-campus one, and a self-placed internship **consumes the internship cap**. The **reporting** half is unchanged: still a separate statistic line, never the placement record (R9). |
 | **Opt-out** | Student-initiated **only** — never triggered by CGPA or any system rule. CPC approves. **Irreversible.** Excluded from all targeting and from the placement-percentage denominator; reported as a separate line. In-process drives continue. |
 
 ---
@@ -313,7 +315,7 @@ Covers: SRF approvals, semester verifications, PIF create/approve/reject, drive 
 | Q6 | Arrear policy `no_history` is **stricter** than `no_standing` — it implies zero standing arrears *and* zero history. |
 | Q7 | `cgpa_cutoff` tests against **overall CGPA**, not latest semester. |
 | Q8 | 10th/12th stored as **percentage**, normalised at SRF entry. |
-| Q9 | Round-1 participants are chosen by the **recruiter** from the exported applicant list. Non-shortlisted students can never accrue absences. |
+| Q9 ⟳ | ~~Round-1 participants are chosen by the **recruiter**~~ **Superseded 2026-08-12 (D8): recruiters are not users.** The Central CPC enters every recruiter decision; saving the shortlist schedules Round 1 and notifies the students. Non-shortlisted students still can never accrue absences. |
 | Q10 | Only `selected` advances to the next round. `waitlisted` / `on_hold` are not scheduled until promoted. |
 | Q11 | ⏸️ Skill-repository score schema **pending** — R11 `rankApplicants` is deferred until provided. |
 

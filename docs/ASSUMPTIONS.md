@@ -184,3 +184,13 @@ Reversible: verifying at approval as well would be a trigger like 0031's.
 institutional and internal-only, and its scores feed a shortlist whose status
 is "never visible to students" — a visible "GitHub strength 34" would leak
 the evaluation the shortlist is built on. Cheap to reverse: one read policy.
+
+## A38 — waitlisted and on-hold round results do not notify
+
+⚠️ ASSUMPTION — UNCONFIRMED (2026-08-12). The client asked that cleared AND
+rejected round results reach the student ("can be communicated through
+notification"). Waitlisted/on-hold are interim states — notifying "you are
+waitlisted" and then "you are selected" reads as two decisions where there was
+one. The dashboard shows the interim state; only outcomes notify.
+
+One trigger branch to add (`round_result_reaches_student`, 0043) if reversed.

@@ -1,6 +1,9 @@
 # Spec — Workflow simplification: grouped navigation + full post-shortlist cycle
 
-**Date:** 2026-08-12 · **Status: ✅ APPROVED 2026-08-12 ("mock up is fine. build all 4 stages and ship") with two corrections, folded in below**
+**Date:** 2026-08-12 · **Status: ✅ SHIPPED 2026-08-12** — all four stages
+live (`0041`–`0045`), each proved against production. Approved same day
+("mock up is fine. build all 4 stages and ship") with two corrections, folded
+in below.
 **Source:** Karthik's message of 2026-08-12 + screenshot
 (`docs/inbox/Screenshot 2026-08-12 at 6.32.54 PM.png`) + ten answered questions.
 **Mockup:** `docs/specs/2026-08-12-sidebar-mockup.html` — approve before build.
