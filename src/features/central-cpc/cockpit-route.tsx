@@ -1,10 +1,10 @@
 import { supabase } from "@lib/supabase";
 import { useState } from "react";
-import { CockpitPage } from "./cockpit-page";
+import { type CockpitFilter, CockpitPage } from "./cockpit-page";
 import { createSupabaseCockpitView } from "./cockpit-view";
 
 /** Route wrapper: builds the live cockpit view. */
-export function CockpitRoute() {
+export function CockpitRoute({ filter }: { filter?: CockpitFilter } = {}) {
   const [view] = useState(() => createSupabaseCockpitView(supabase()));
-  return <CockpitPage view={view} />;
+  return <CockpitPage view={view} filter={filter} />;
 }

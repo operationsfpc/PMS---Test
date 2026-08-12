@@ -46,24 +46,65 @@ const STATUS_TONE: Record<DriveStatus, "neutral" | "brand" | "warning" | "succes
 const label = (value: string) => value.replaceAll("_", " ");
 
 /**
+ * D2 (2026-08-12): the Central CPC sees what awaits publishing and what is
+ * already out, separately. A rejected drive appears in neither — it is
+ * terminal, and it is the Delivery Head's record, not this queue's.
+ */
+export type CockpitFilter = "yet-to-publish" | "published";
+
+const FILTERS: Record<
+  CockpitFilter,
+  { title: string; subtitle: string; empty: string; statuses: readonly DriveStatus[] }
+> = {
+  "yet-to-publish": {
+    title: "Yet to publish",
+    subtitle:
+      "Approved by the Delivery Head — or still on their desk. Complete and publish from here.",
+    empty: "Nothing is waiting to be published.",
+    statuses: ["draft", "submitted", "approved"],
+  },
+  published: {
+    title: "Published",
+    subtitle: "Live and beyond — the drives students can see or have been through.",
+    empty: "Nothing has been published yet.",
+    statuses: ["live", "applications_closed", "in_rounds", "completed"],
+  },
+};
+
+/**
  * The Central CPC's cockpit.
  *
  * A work queue, not an inventory: each drive shows the one thing it is waiting
  * for. It is also the only place that supplies the drive and round ids the
  * other Central CPC screens need, so every action links from here.
  */
-export function CockpitPage({ view }: { view: CockpitView }) {
-  const [drives, setDrives] = useState<readonly DriveSummary[] | null>(null);
+export function CockpitPage({
+  view,
+  filter,
+}: {
+  view: CockpitView;
+  filter?: CockpitFilter | undefined;
+}) {
+  const [loaded, setLoaded] = useState<readonly DriveSummary[] | null>(null);
   const [reviews, setReviews] = useState<readonly DisbarmentReview[]>([]);
 
   useEffect(() => {
-    void view.drives().then(setDrives);
+    void view.drives().then(setLoaded);
     void view.reviews().then(setReviews);
   }, [view]);
 
+  const scope = filter === undefined ? null : FILTERS[filter];
+  const drives =
+    loaded === null || scope === null
+      ? loaded
+      : loaded.filter((d) => scope.statuses.includes(d.status));
+
   return (
     <div>
-      <PageHeader title="Drive cockpit" subtitle="Every drive, and what it is waiting for." />
+      <PageHeader
+        title={scope?.title ?? "Drive cockpit"}
+        subtitle={scope?.subtitle ?? "Every drive, and what it is waiting for."}
+      />
 
       {reviews.length > 0 && (
         <Card className="mb-6 p-5">
@@ -95,7 +136,8 @@ export function CockpitPage({ view }: { view: CockpitView }) {
       ) : drives.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">
-            No drives yet. An Account Executive raises one, and the Delivery Head approves it.
+            {scope?.empty ??
+              "No drives yet. An Account Executive raises one, and the Delivery Head approves it."}
           </p>
         </Card>
       ) : (

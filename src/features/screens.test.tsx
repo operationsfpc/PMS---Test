@@ -207,6 +207,33 @@ describe("mobile navigation", () => {
   });
 });
 
+/**
+ * D3 (2026-08-12): verification is the campus placement coordinator's alone.
+ * The database refuses everyone else's decisions (0042); these tests pin the
+ * screen saying so up front instead of rendering a queue whose buttons fail.
+ */
+describe("the verification queues refuse other roles at the door", () => {
+  const at = (path: string, role: AppRole) =>
+    render(
+      <AuthContext.Provider value={signedIn(role)}>
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+
+  it("tells the central coordinator the SRF queue is not theirs", async () => {
+    at("/cpc/verification", "central_placement_coordinator");
+    expect(await screen.findByText(/belongs to the campus placement coordinator/i)).toBeDefined();
+    expect(screen.queryByRole("heading", { name: /verification queue/i })).toBeNull();
+  });
+
+  it("tells the central coordinator the certificate queue is not theirs", async () => {
+    at("/cpc/certificates", "central_placement_coordinator");
+    expect(await screen.findByText(/belongs to the campus placement coordinator/i)).toBeDefined();
+  });
+});
+
 describe("App routing", () => {
   it("sends a signed-out visitor to the login screen instead of any dashboard", () => {
     render(

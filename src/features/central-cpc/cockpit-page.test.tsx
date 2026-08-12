@@ -52,9 +52,54 @@ const routed = (view: CockpitView) =>
     </MemoryRouter>,
   );
 
+const routed2 = (view: CockpitView, filter: "yet-to-publish" | "published") =>
+  render(
+    <MemoryRouter>
+      <CockpitPage view={view} filter={filter} />
+    </MemoryRouter>,
+  );
+
 const view = (drives: readonly DriveSummary[]): CockpitView => ({
   drives: async () => drives,
   reviews: async () => [],
+});
+
+/**
+ * D2 (2026-08-12): the Central CPC sees yet-to-publish and published drives
+ * SEPARATELY. The cockpit takes a filter; each nav entry is one of them.
+ */
+describe("the pipeline split", () => {
+  const REJECTED: DriveSummary = {
+    ...APPROVED,
+    driveId: "d9",
+    companyName: "Rejected Co",
+    status: "rejected",
+  };
+
+  it("yet-to-publish shows what awaits the coordinator, not what already ran", async () => {
+    routed2(view([APPROVED, LIVE, IN_ROUNDS, REJECTED]), "yet-to-publish");
+
+    expect(screen.getByRole("heading", { name: /yet to publish/i })).toBeDefined();
+    expect(await screen.findByText("Zoho")).toBeDefined();
+    expect(screen.queryByText("Freshworks")).toBeNull();
+    expect(screen.queryByText("Zoho Two")).toBeNull();
+    // A rejected drive is nobody's work queue: it is terminal.
+    expect(screen.queryByText("Rejected Co")).toBeNull();
+  });
+
+  it("published shows live and later, not the queue", async () => {
+    routed2(view([APPROVED, LIVE, IN_ROUNDS, REJECTED]), "published");
+
+    expect(screen.getByRole("heading", { name: /published/i })).toBeDefined();
+    expect(await screen.findByText("Freshworks")).toBeDefined();
+    expect(screen.getByText("Zoho Two")).toBeDefined();
+    expect(screen.queryByText("Zoho")).toBeNull();
+  });
+
+  it("says which half is empty rather than looking like no drives exist", async () => {
+    routed2(view([LIVE]), "yet-to-publish");
+    expect(await screen.findByText(/nothing is waiting to be published/i)).toBeDefined();
+  });
 });
 
 describe("CockpitPage", () => {

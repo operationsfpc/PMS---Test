@@ -16,81 +16,158 @@ export interface NavItem {
   readonly label: string;
 }
 
-export interface RoleNav {
-  readonly role: string;
-  readonly label: string;
+/**
+ * 2026-08-12: the sidebar is grouped into logical heads for EVERY role
+ * (approved spec, docs/specs/2026-08-12-workflow-simplification.md). The
+ * heading is rendered, so it is part of the screen's accessible structure.
+ */
+export interface NavGroup {
+  readonly heading: string;
   readonly items: readonly NavItem[];
 }
 
-export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
+export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   student: [
-    { to: "/student", label: "My dashboard" },
-    { to: "/student/drives", label: "Open drives" },
-    { to: "/srf", label: "My registration form" },
+    { heading: "Home", items: [{ to: "/student", label: "My dashboard" }] },
+    { heading: "Drives", items: [{ to: "/student/drives", label: "Open drives" }] },
+    {
+      heading: "My record",
+      items: [
+        { to: "/srf", label: "My registration form" },
+        { to: "/student/profile", label: "My profile" },
+      ],
+    },
     // F2 (UAT 2026-08-06): two unrelated decisions, two entries. Opting out is
-    // irreversible and removes the student from everything; recording an
-    // off-campus offer changes nothing about their eligibility. One bucket
-    // called "My participation" invited them into the wrong one.
-    { to: "/student/opt-out", label: "Opting out" },
-    { to: "/student/off-campus", label: "Off-campus offer" },
+    // irreversible; an off-campus offer is a record. One bucket called "My
+    // participation" invited them into the wrong one.
+    {
+      heading: "Requests",
+      items: [
+        { to: "/student/opt-out", label: "Opting out" },
+        { to: "/student/off-campus", label: "Off-campus offer" },
+      ],
+    },
   ],
-  // The coordinators who do the work had no overview at all until 2026-08-05:
-  // their own queues, and nothing about how the cohort was doing. RLS scopes
-  // the campus CPC to their campus and the Central CPC to the organisation.
+  // D3 (2026-08-12): verification — the registration form AND certificates —
+  // is the campus placement coordinator's alone. RLS scopes them to their
+  // campus.
   campus_placement_coordinator: [
-    { to: "/dashboard", label: "Campus overview" },
-    { to: "/cpc/verification", label: "Verification queue" },
-    // 2026-08-06: a certificate is checked like a CGPA, first upload and
-    // every later one.
-    { to: "/cpc/certificates", label: "Certificate verification" },
-    { to: "/cpc/attendance", label: "Attendance" },
-    { to: "/cpc/opt-outs", label: "Opt-out requests" },
-    { to: "/cpc/off-campus", label: "Off-campus offers" },
+    {
+      heading: "Verification",
+      items: [
+        { to: "/cpc/verification", label: "Student verification" },
+        { to: "/cpc/certificates", label: "Certificate verification" },
+      ],
+    },
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/attendance", label: "Attendance" }],
+    },
+    {
+      heading: "Requests",
+      items: [
+        { to: "/cpc/opt-outs", label: "Opt-out requests" },
+        { to: "/cpc/off-campus", label: "Off-campus offers" },
+      ],
+    },
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
   ],
   // The AE follows the drives they raised; RLS scopes the cockpit to those.
   account_executive: [
-    { to: "/ae/pif", label: "Position information form" },
-    { to: "/my-drives", label: "My drives" },
-    { to: "/central/drives", label: "Drive cockpit" },
+    {
+      heading: "Drive initiation",
+      items: [{ to: "/ae/pif", label: "Position information form" }],
+    },
+    {
+      heading: "My drives",
+      items: [
+        { to: "/my-drives", label: "My drives" },
+        { to: "/central/drives", label: "Drive cockpit" },
+      ],
+    },
   ],
-  campus_manager: [{ to: "/dashboard", label: "Campus overview" }],
-  key_account_manager: [{ to: "/dashboard", label: "Account overview" }],
-  enterprise_relations: [{ to: "/dashboard", label: "Overview" }],
-  er_head: [{ to: "/dashboard", label: "Overview" }],
-  ceo: [{ to: "/dashboard", label: "Executive overview" }],
+  campus_manager: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
+  ],
+  key_account_manager: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Account overview" }] },
+  ],
+  enterprise_relations: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] }],
+  er_head: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] }],
+  ceo: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Executive overview" }] }],
   // Approving a PIF used to be the end of the Delivery Head's visibility.
   delivery_head: [
-    { to: "/delivery-head/pif-approvals", label: "PIF approvals" },
-    { to: "/my-drives", label: "My drives" },
-    { to: "/central/drives", label: "Drive cockpit" },
-    { to: "/dashboard", label: "Placement overview" },
+    {
+      heading: "Drive approval",
+      items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
+    },
+    {
+      heading: "Drives",
+      items: [
+        { to: "/my-drives", label: "My drives" },
+        { to: "/central/drives", label: "Drive cockpit" },
+      ],
+    },
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
   ],
   central_placement_coordinator: [
-    { to: "/dashboard", label: "Placement overview" },
-    { to: "/central/drives", label: "Drive cockpit" },
-    // F15: the AE's drive module, with shortlisting access.
-    { to: "/my-drives", label: "All drives" },
-    { to: "/central/publish", label: "Publish and target" },
-    { to: "/central/shortlisting", label: "Shortlisting" },
-    // PRD §5: the institutional skill profile per student, feeding R11.
-    { to: "/central/skills", label: "Skill repository" },
-    { to: "/cpc/certificates", label: "Certificate verification" },
-    { to: "/cpc/attendance", label: "Attendance" },
-    { to: "/cpc/opt-outs", label: "Opt-out requests" },
-    { to: "/cpc/off-campus", label: "Off-campus offers" },
-    { to: "/central/results", label: "Round results" },
-    { to: "/central/offers", label: "Final selection" },
+    // D2: approval stays with the Delivery Head; the Central CPC sees what is
+    // waiting to be published and what already is, separately. The old
+    // cockpit is absorbed into those two views.
+    {
+      heading: "Drives",
+      items: [
+        { to: "/central/drives/yet-to-publish", label: "Yet to publish" },
+        { to: "/central/drives/published", label: "Published" },
+        // F15: the AE's drive module, with shortlisting access.
+        { to: "/my-drives", label: "All drives" },
+      ],
+    },
+    {
+      heading: "Publish a drive",
+      items: [
+        { to: "/central/publish", label: "Publish and target" },
+        // PRD §5: view-only reference while publishing; feeds R11.
+        { to: "/central/skills", label: "Skill repository" },
+      ],
+    },
+    {
+      heading: "Drives in progress",
+      items: [
+        { to: "/central/shortlisting", label: "Shortlisting" },
+        { to: "/central/results", label: "Rounds & results" },
+        { to: "/cpc/attendance", label: "Attendance" },
+        { to: "/central/offers", label: "Final selection" },
+      ],
+    },
+    // D3: no verification queues here — they are the campus CPC's alone.
+    {
+      heading: "Requests",
+      items: [
+        { to: "/cpc/opt-outs", label: "Opt-out requests" },
+        { to: "/cpc/off-campus", label: "Off-campus offers" },
+      ],
+    },
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
   ],
   admin: [
-    { to: "/dashboard", label: "Placement overview" },
-    { to: "/admin/campuses", label: "Campuses" },
-    { to: "/admin/staff", label: "Staff" },
-    // F6 (UAT 2026-08-06): degrees and branches are not a page of their own.
-    // They are always a college's, for a passing year, and are maintained
-    // under Campuses.
-    { to: "/admin/roster", label: "Import roster" },
+    {
+      heading: "Organisation",
+      items: [
+        { to: "/admin/campuses", label: "Campuses" },
+        { to: "/admin/staff", label: "Staff" },
+        // F6: degrees and branches belong to a college, under Campuses.
+        { to: "/admin/roster", label: "Import roster" },
+      ],
+    },
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
   ],
 };
+
+/** Every route a role's sidebar links to, group structure flattened away. */
+export function navItemsFor(role: AppRole): readonly NavItem[] {
+  return (ROLE_NAVS[role] ?? []).flatMap((group) => group.items);
+}
 
 /** Labels for the development-only preview switcher. */
 const PREVIEW_ROLES: readonly AppRole[] = [
@@ -131,7 +208,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const role = previewable && preview !== null ? preview : signedInRole;
-  const items = ROLE_NAVS[role] ?? [];
+  const groups = ROLE_NAVS[role] ?? [];
 
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
     `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -225,15 +302,22 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
             ))}
           <div className="mb-2" />
-          <ul className="flex flex-col gap-1">
-            {items.map((item) => (
-              <li key={item.to}>
-                <NavLink to={item.to} className={linkClass} onClick={() => setMenuOpen(false)}>
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+          {groups.map((group) => (
+            <section key={group.heading} className="mb-4">
+              <h2 className="px-3 pb-1 font-heading text-[11px] font-semibold uppercase tracking-widest text-accent">
+                {group.heading}
+              </h2>
+              <ul className="flex flex-col gap-1">
+                {group.items.map((item) => (
+                  <li key={item.to}>
+                    <NavLink to={item.to} className={linkClass} onClick={() => setMenuOpen(false)}>
+                      {item.label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
         </nav>
 
         <main className={`min-w-0 flex-1 ${menuOpen ? "hidden lg:block" : "block"}`}>

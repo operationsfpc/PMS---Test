@@ -148,6 +148,46 @@ describe("the drive portfolio", () => {
   });
 });
 
+/**
+ * 2026-08-12: the sidebar is grouped into logical heads for every role
+ * (approved spec, docs/specs/2026-08-12-workflow-simplification.md).
+ */
+describe("the grouped sidebar", () => {
+  it("groups the central coordinator's links under the approved heads", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+
+    for (const heading of [
+      /^drives$/i,
+      /publish a drive/i,
+      /drives in progress/i,
+      /requests/i,
+      /^overview$/i,
+    ]) {
+      expect(screen.getByRole("heading", { name: heading })).toBeDefined();
+    }
+  });
+
+  it("splits the central coordinator's pipeline into yet-to-publish and published (D2)", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+
+    expect(screen.getByRole("link", { name: /yet to publish/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^published$/i })).toBeDefined();
+    // The cockpit is absorbed into those two views, not a third entry.
+    expect(screen.queryByRole("link", { name: /drive cockpit/i })).toBeNull();
+  });
+
+  it("gives the student a My profile entry — it was reachable only from the dashboard", () => {
+    shellFor(signedIn("student"));
+    expect(screen.getByRole("link", { name: /my profile/i })).toBeDefined();
+  });
+
+  it("calls the campus coordinator's queue Student verification", () => {
+    shellFor(signedIn("campus_placement_coordinator"));
+    expect(screen.getByRole("link", { name: /student verification/i })).toBeDefined();
+    expect(screen.queryByRole("link", { name: /verification queue/i })).toBeNull();
+  });
+});
+
 describe("AppShell navigation", () => {
   it("shows a student their own links", () => {
     shellFor(signedIn("student"));
@@ -159,7 +199,7 @@ describe("AppShell navigation", () => {
   it("shows the central coordinator their own links, and not the student's", () => {
     shellFor(signedIn("central_placement_coordinator"));
 
-    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /yet to publish/i })).toBeDefined();
     expect(screen.queryByRole("link", { name: /my registration form/i })).toBeNull();
   });
 
@@ -168,9 +208,15 @@ describe("AppShell navigation", () => {
     expect(screen.getByRole("link", { name: /certificate verification/i })).toBeDefined();
   });
 
-  it("gives the central coordinator the certificate queue too", () => {
+  /**
+   * D3 (2026-08-12): verification belongs to the campus placement
+   * coordinator ALONE. The Central CPC ran both queues while the seat was
+   * empty; the seat is filled now and the client keeps it that way.
+   */
+  it("keeps BOTH verification queues out of the central coordinator's nav (D3)", () => {
     shellFor(signedIn("central_placement_coordinator"));
-    expect(screen.getByRole("link", { name: /certificate verification/i })).toBeDefined();
+    expect(screen.queryByRole("link", { name: /certificate verification/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /student verification/i })).toBeNull();
   });
 
   it("keeps the certificate queue out of the student's nav", () => {
@@ -324,10 +370,16 @@ describe("degrees and branches are not their own page", () => {
  * shortlisting access."
  */
 describe("the Central Placement Coordinator's drive module", () => {
-  it("offers the same drive cockpit the AE has", () => {
+  /**
+   * 2026-08-12 (approved assumption 3): the cockpit is absorbed into the two
+   * pipeline views rather than kept as a third entry. The module is still
+   * theirs — it is just split by what they were asked to see separately (D2).
+   */
+  it("offers the drive module as the two pipeline views", () => {
     shellFor(signedIn("central_placement_coordinator"));
 
-    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /yet to publish/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^published$/i })).toBeDefined();
   });
 
   it("keeps the shortlisting entry the AE does not have", () => {

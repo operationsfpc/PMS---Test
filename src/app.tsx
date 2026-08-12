@@ -24,7 +24,30 @@ import { StudentDrivesPage } from "@features/student/drives-page";
 import { StudentOffCampusRoute, StudentOptOutRoute } from "@features/student/participation-routes";
 import { StudentProfileRoute } from "@features/student/profile-route";
 import { StudentDashboardRoute } from "@features/student/student-dashboard-route";
+import { useAuth } from "@lib/auth-context";
+import type { ReactNode } from "react";
 import { Route, Routes } from "react-router";
+
+/**
+ * D3 (2026-08-12): verification is the campus placement coordinator's alone.
+ * The database refuses everyone else's decisions (0042); this refuses them at
+ * the door instead of rendering a queue whose buttons fail.
+ */
+function CampusCpcOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && role !== "campus_placement_coordinator") {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        This queue belongs to the campus placement coordinator. Registration forms and certificates
+        are verified at the campus, not centrally.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 export function App() {
   return (
@@ -62,10 +85,24 @@ export function App() {
                 <Route path="/student/opt-out" element={<StudentOptOutRoute />} />
                 <Route path="/student/off-campus" element={<StudentOffCampusRoute />} />
                 <Route path="/student/profile" element={<StudentProfileRoute />} />
-                <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
+                <Route
+                  path="/cpc/verification"
+                  element={
+                    <CampusCpcOnly>
+                      <SrfVerificationQueue />
+                    </CampusCpcOnly>
+                  }
+                />
                 <Route path="/cpc/attendance" element={<AttendanceRoute />} />
                 {/* 2026-08-06: certificates are verified like a CGPA. */}
-                <Route path="/cpc/certificates" element={<CertificateQueue />} />
+                <Route
+                  path="/cpc/certificates"
+                  element={
+                    <CampusCpcOnly>
+                      <CertificateQueue />
+                    </CampusCpcOnly>
+                  }
+                />
                 <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
                 <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
                 <Route path="/ae/pif" element={<PifPage />} />
@@ -75,6 +112,15 @@ export function App() {
                 {/* PRD §5: the Central Student Skill Repository. */}
                 <Route path="/central/skills" element={<SkillsRoute />} />
                 <Route path="/central/drives" element={<CockpitRoute />} />
+                {/* D2: the Central CPC's pipeline, split. */}
+                <Route
+                  path="/central/drives/yet-to-publish"
+                  element={<CockpitRoute filter="yet-to-publish" />}
+                />
+                <Route
+                  path="/central/drives/published"
+                  element={<CockpitRoute filter="published" />}
+                />
                 <Route path="/central/publish" element={<PublishRoute />} />
                 <Route path="/central/results" element={<ResultsRoute />} />
                 <Route path="/central/offers" element={<OfferRoute />} />
