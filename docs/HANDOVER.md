@@ -13,7 +13,7 @@ clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
-## ✅ BUILT 2026-08-06 — certificates are verified, like a CGPA
+## ✅ SHIPPED 2026-08-06 — certificates are verified, like a CGPA
 
 Asked for: "skill certifications uploaded by students will also need
 verification of campus placement coordinator similar to CGPA approval. This is
@@ -21,6 +21,40 @@ applicable for first upload as well as subsequent additions."
 
 **`pnpm check` exits 0 — 2331 tests across 135 files**, plus the Playwright
 journey.
+
+**LIVE.** Migration `0038` applied to Mumbai (local == remote at `0038`);
+Cloudflare version **`a63ceefb-2f7d-41dd-8e89-3aacd3ff0bcf`**.
+
+Verified against LIVE rows and the LIVE bundle:
+
+| Check | Result |
+|---|---|
+| Certificates in production before the change | **0** — the `pending` backfill touched nothing |
+| New columns · both constraints · UPDATE policy · UPDATE grant · audit trigger | 4 · 2 · 1 · 1 · 1 |
+| Student delete rule, read back from `pg_policy` | `student_id = current_student_id() AND status <> 'verified'` |
+| **The campus CPC verifies**, as the real live coordinator through RLS | `verified`, `verified_by` = that CPC |
+| **The student cannot verify** their own | stayed `pending` |
+| **The student cannot delete a verified one** | row survives, still `verified` |
+| The decision is audited | 1 audit entry |
+| Rows left by those proofs | **0** — all rolled back |
+| Live JS byte-identical to local `dist/` | 831 203 bytes, sha256 `cf9bb1ab…` |
+| `Certificate verification` · `Open certificate` · `Awaiting verification` · `No document uploaded` | all present |
+| `/cpc/certificates` | 200 |
+
+⚠️ **The staff roles were reshuffled mid-session, and it invalidated an
+actor mid-proof.** `ashokkumar091293@gmail.com` was Central CPC when the skill
+repository shipped an hour earlier and is **`delivery_head`** now; the first
+verify-as-coordinator attempt therefore did nothing, and looked exactly like a
+broken policy. It was not — `is_operator()` was correctly false for a Delivery
+Head. **Re-read `profiles` immediately before using somebody as a test actor.**
+Current holders: **`radhika@faceprep.in`** Central CPC, **`sainaveen@faceprep.in`**
+campus CPC (the FIRST real one — §1 item 3's "no CPC exists" is now stale),
+both re-proved above and the skill repository re-proved as radhika.
+
+⚠️ **`sainaveen@faceprep.in` is BOTH a staff profile and a student row**, on
+the same auth user. `current_app_role()` and `current_student_id()` therefore
+both resolve for them, which no policy was designed for. Test data today; it
+would let one person verify their own certificate. Worth a decision.
 
 0034 stored a name and a document and stopped there. **Nothing recorded
 whether anybody had ever opened the file**, and there was no screen on which
