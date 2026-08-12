@@ -334,3 +334,54 @@ describe("saving the shortlist", () => {
     await expect(view().saveShortlist("d1", [decision])).rejects.toThrow(/could not save/i);
   });
 });
+
+/** WS8 (2026-08-12): the export reads snapshots and logs the sharing event. */
+describe("exporting", () => {
+  it("returns saved entries with their frozen snapshots", async () => {
+    stub({
+      applications: [
+        {
+          ...APPLICATION,
+          profile_snapshot: { profile: { rollNumber: "R1", fullName: "Priya" }, resumeId: "res-1" },
+          shortlist_entries: [{ included: true }],
+        },
+      ],
+    });
+
+    const entries = await view().exportEntries("d1");
+    expect(entries).toEqual([
+      {
+        applicationId: "app-1",
+        included: true,
+        snapshot: { profile: { rollNumber: "R1", fullName: "Priya" }, resumeId: "res-1" },
+      },
+    ]);
+  });
+
+  it("treats an application never decided as not included", async () => {
+    stub({ applications: [{ ...APPLICATION, shortlist_entries: [] }] });
+
+    const entries = await view().exportEntries("d1");
+    expect(entries[0]?.included).toBe(false);
+  });
+
+  it("logs who exported what, for how many students (PRD 13.2)", async () => {
+    const writes: unknown[] = [];
+    stub();
+    server.use(
+      http.post(`${BASE}/rest/v1/recruiter_exports`, async ({ request }) => {
+        writes.push(await request.clone().json());
+        return HttpResponse.json([{ id: "re-1" }]);
+      }),
+    );
+
+    await view().logExport("d1", ["Roll number", "Name"], 3);
+
+    expect(writes[0]).toMatchObject({
+      drive_id: "d1",
+      exported_by: "cpc-1",
+      columns: ["Roll number", "Name"],
+      student_count: 3,
+    });
+  });
+});

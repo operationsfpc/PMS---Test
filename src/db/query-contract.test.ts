@@ -3,6 +3,7 @@ import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
 import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
 import { CERTIFICATE_QUEUE_COLUMNS } from "@features/cpc/certificate-queue-repository";
+import { PROGRESS_APPLICATION_COLUMNS } from "@features/cpc/drive-progress-view";
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
   DASHBOARD_COHORT_COLUMNS,
@@ -293,6 +294,11 @@ describe("every hand-written select matches the schema", () => {
     ["dashboard round attendance", "attendance", "round_id, application_id, status"],
     ["dashboard round results", "round_results", "round_id, application_id, result"],
     ["dashboard shortlist entries", "shortlist_entries", "application_id, included"],
+    // WS8: the export reads snapshots with the inclusion flag embedded.
+    ["shortlist export", "applications", "id, profile_snapshot, shortlist_entries(included)"],
+    // D10: the campus coordinator's full-cycle screen.
+    ["drive progress applications", "applications", PROGRESS_APPLICATION_COLUMNS],
+    ["drive progress offers", "offers", "student_id, drive_id, ctc_lpa, offer_category"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
     ["staff profiles", "profiles", "email, is_active"],
     ["programmes degrees", "degrees", "id, name"],

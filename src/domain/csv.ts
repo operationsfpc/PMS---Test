@@ -61,3 +61,30 @@ export function parseCsv(text: string): string[][] {
 
   return rows;
 }
+
+/**
+ * The writing half of the reader above (WS8, 2026-08-12): the shortlist
+ * export is a CSV Excel opens. RFC 4180: CRLF line ends, quotes doubled,
+ * fields quoted when they contain a comma, a quote or a newline. A missing
+ * value is a blank field — never the string "undefined".
+ *
+ * The BOM Excel needs to read UTF-8 is the DOWNLOAD's concern, not the
+ * serialiser's: prefixing it here would break round-tripping through
+ * `parseCsv` and corrupt any consumer that concatenates files.
+ */
+export function serialiseCsv(
+  columns: readonly string[],
+  rows: readonly Readonly<Record<string, string | number | undefined>>[],
+): string {
+  const field = (value: string | number | undefined): string => {
+    if (value === undefined) return "";
+    const text = String(value);
+    return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  };
+
+  const lines = [
+    columns.map(field).join(","),
+    ...rows.map((row) => columns.map((column) => field(row[column])).join(",")),
+  ];
+  return lines.join("\r\n");
+}

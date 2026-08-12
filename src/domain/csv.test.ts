@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCsv } from "./csv";
+import { parseCsv, serialiseCsv } from "./csv";
 
 /**
  * A small RFC 4180 reader, so importing a roster needs no dependency.
@@ -57,5 +57,37 @@ describe("parseCsv", () => {
   it("returns nothing for an empty file", () => {
     expect(parseCsv("")).toEqual([]);
     expect(parseCsv("   ")).toEqual([]);
+  });
+});
+
+/** WS8 (2026-08-12): the shortlist leaves the building as a CSV Excel opens. */
+describe("serialiseCsv", () => {
+  it("writes a header row and one line per record", () => {
+    expect(
+      serialiseCsv(
+        ["Name", "CGPA"],
+        [
+          { Name: "Priya", CGPA: 8.4 },
+          { Name: "Arjun", CGPA: 7.1 },
+        ],
+      ),
+    ).toBe("Name,CGPA\r\nPriya,8.4\r\nArjun,7.1");
+  });
+
+  it("quotes fields containing commas, quotes or newlines", () => {
+    expect(serialiseCsv(["A"], [{ A: 'say "hi", twice' }])).toBe('A\r\n"say ""hi"", twice"');
+    expect(serialiseCsv(["A"], [{ A: "two\nlines" }])).toBe('A\r\n"two\nlines"');
+  });
+
+  it("writes a blank for a missing value, never the string undefined", () => {
+    expect(serialiseCsv(["A", "B"], [{ A: "x" }])).toBe("A,B\r\nx,");
+  });
+
+  it("round-trips through our own parser", () => {
+    const csv = serialiseCsv(["A", "B"], [{ A: 'quote " comma ,', B: "plain" }]);
+    expect(parseCsv(csv)).toEqual([
+      ["A", "B"],
+      ['quote " comma ,', "plain"],
+    ]);
   });
 });

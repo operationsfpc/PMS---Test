@@ -1,5 +1,11 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { serialiseCsv } from "@domain/csv";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
+import {
+  buildRecruiterExport,
+  EXPORT_COLUMNS,
+  type ShortlistEntry,
+} from "@domain/recruiter-export";
 import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -45,6 +51,20 @@ export interface ShortlistView {
   drive(driveId: string): Promise<ShortlistDrive>;
   applicants(driveId: string): Promise<readonly ShortlistApplicant[]>;
   saveShortlist(driveId: string, decisions: readonly ShortlistDecision[]): Promise<void>;
+  /** WS8: the saved entries with their frozen snapshots, for the export. */
+  exportEntries(driveId: string): Promise<readonly ShortlistEntry[]>;
+  /** PRD §13.2: every export is a data-sharing event and is logged. */
+  logExport(driveId: string, columns: readonly string[], studentCount: number): Promise<void>;
+}
+
+/** Real downloads go through a Blob; tests hand in a spy. */
+function browserDownload(filename: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 /**
@@ -56,7 +76,15 @@ export interface ShortlistView {
  *
  * Nothing here is ever shown to a student.
  */
-export function ShortlistPage({ driveId, view }: { driveId: string; view: ShortlistView }) {
+export function ShortlistPage({
+  driveId,
+  view,
+  download = browserDownload,
+}: {
+  driveId: string;
+  view: ShortlistView;
+  download?: (filename: string, text: string) => void;
+}) {
   const [drive, setDrive] = useState<ShortlistDrive | null>(null);
   const [applicants, setApplicants] = useState<readonly ShortlistApplicant[] | null>(null);
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -69,6 +97,7 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
    * that silently did not, and the button got pressed again.
    */
   const [savedCount, setSavedCount] = useState<number | null>(null);
+  const [missingResumes, setMissingResumes] = useState<readonly string[]>([]);
   /**
    * D7: an opted-out applicant is excluded until the coordinator overrides
    * with a reason. Keyed by application; the reason travels with the save.
@@ -124,6 +153,26 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
     );
   }
 
+  /**
+   * WS8 (D4): a CSV Excel opens — BOM-prefixed so it reads UTF-8 — built from
+   * the SNAPSHOTS (R7), included students only. Logged before it is called
+   * done: an unlogged export is a data-sharing event that never happened.
+   */
+  async function exportShortlist() {
+    setError(null);
+    try {
+      const entries = await view.exportEntries(driveId);
+      const pack = buildRecruiterExport(entries);
+      const csv = `\uFEFF${serialiseCsv(EXPORT_COLUMNS, pack.rows)}`;
+      const company = (drive?.companyName ?? "drive").toLowerCase().replaceAll(/\s+/g, "-");
+      download(`shortlist-${company}.csv`, csv);
+      await view.logExport(driveId, EXPORT_COLUMNS, pack.rows.length);
+      setMissingResumes(pack.missingResumes);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
+    }
+  }
+
   async function save() {
     setError(null);
     setSavedCount(null);
@@ -158,9 +207,14 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
         title={drive === null ? "Shortlisting" : `Shortlisting — ${drive.companyName}`}
         {...(drive?.roleTitle == null ? {} : { subtitle: drive.roleTitle })}
         actions={
-          <Button onClick={() => void save()} disabled={saving}>
-            {saving ? "Saving…" : `Shortlist ${selected.length}`}
-          </Button>
+          <span className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => void exportShortlist()}>
+              Export shortlist (CSV)
+            </Button>
+            <Button onClick={() => void save()} disabled={saving}>
+              {saving ? "Saving…" : `Shortlist ${selected.length}`}
+            </Button>
+          </span>
         }
       />
 
@@ -192,6 +246,16 @@ export function ShortlistPage({ driveId, view }: { driveId: string; view: Shortl
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           {error}
+        </div>
+      )}
+
+      {missingResumes.length > 0 && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-ink-900"
+        >
+          Exported without a resume on file: {missingResumes.join(", ")}. The recruiter pack is
+          incomplete for them.
         </div>
       )}
 

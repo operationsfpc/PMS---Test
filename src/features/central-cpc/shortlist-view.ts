@@ -1,3 +1,4 @@
+import type { ShortlistEntry } from "@domain/recruiter-export";
 import type { AppRole, RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortlistApplicant, ShortlistDrive, ShortlistView } from "./shortlist-page";
@@ -138,6 +139,45 @@ export function createSupabaseShortlistView(
         .select("id");
 
       if (error !== null) throw new ShortlistError("Could not save the shortlist.");
+    },
+
+    /**
+     * WS8: what leaves the building. Snapshots (R7), never live rows — the
+     * recruiter must receive what the shortlist was decided on.
+     */
+    async exportEntries(driveId) {
+      const { data, error } = await client
+        .from("applications")
+        .select("id, profile_snapshot, shortlist_entries(included)")
+        .eq("drive_id", driveId);
+
+      if (error !== null) throw new ShortlistError("Could not read the shortlist for export.");
+
+      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        applicationId: row.id as string,
+        included: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
+        snapshot: row.profile_snapshot as ShortlistEntry["snapshot"],
+      }));
+    },
+
+    /** PRD §13.2: the data-sharing log. An unlogged export never happened. */
+    async logExport(driveId, columns, studentCount) {
+      const actorId = await getActorId();
+      if (actorId === null) {
+        throw new ShortlistError("Your session has expired. Please sign in again.");
+      }
+
+      const { error } = await client
+        .from("recruiter_exports")
+        .insert({
+          drive_id: driveId,
+          exported_by: actorId,
+          columns: [...columns],
+          student_count: studentCount,
+        })
+        .select("id");
+
+      if (error !== null) throw new ShortlistError("The export could not be logged.");
     },
   };
 }

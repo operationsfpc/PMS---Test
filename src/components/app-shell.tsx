@@ -61,7 +61,11 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     },
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/attendance", label: "Attendance" }],
+      items: [
+        // D10: shortlist, every round, the offer — read-only, campus-scoped.
+        { to: "/cpc/drives", label: "Drive progress" },
+        { to: "/cpc/attendance", label: "Attendance" },
+      ],
     },
     {
       heading: "Requests",

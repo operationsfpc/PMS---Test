@@ -13,6 +13,7 @@ import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
 import { SkillsRoute } from "@features/central-cpc/skills-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { CertificateQueue } from "@features/cpc/certificate-queue";
+import { DriveProgressRoute } from "@features/cpc/drive-progress-route";
 import { OffCampusQueueRoute, OptOutQueueRoute } from "@features/cpc/participation-queue-routes";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
@@ -94,6 +95,8 @@ export function App() {
                   }
                 />
                 <Route path="/cpc/attendance" element={<AttendanceRoute />} />
+                {/* D10: the campus CPC follows the whole cycle, read-only. */}
+                <Route path="/cpc/drives" element={<DriveProgressRoute />} />
                 {/* 2026-08-06: certificates are verified like a CGPA. */}
                 <Route
                   path="/cpc/certificates"

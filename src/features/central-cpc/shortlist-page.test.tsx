@@ -58,6 +58,8 @@ function view(overrides: Partial<ShortlistView> = {}): ShortlistView {
     drive: async () => DRIVE,
     applicants: async () => APPLICANTS,
     saveShortlist: async () => undefined,
+    exportEntries: async () => [],
+    logExport: async () => undefined,
     ...overrides,
   };
 }
@@ -254,6 +256,8 @@ describe("ShortlistPage \u2014 after saving", () => {
       drive: async () => DRIVE,
       applicants: async () =>
         APPLICANTS.map((a) => ({ ...a, shortlisted: saved.includes(a.applicationId) })),
+      exportEntries: async () => [],
+      logExport: async () => undefined,
       saveShortlist: async (driveId, decisions) => {
         if (saveShortlist !== undefined) await saveShortlist(driveId, decisions);
         saved = decisions.filter((d) => d.included).map((d) => d.applicationId);
@@ -318,5 +322,83 @@ describe("ShortlistPage \u2014 after saving", () => {
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not save/i);
     expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+/** WS8 (2026-08-12): "Export using excel of all shortlisted students." */
+describe("ShortlistPage \u2014 exporting the shortlist", () => {
+  const snapshot = (roll: string, name: string) => ({
+    profile: {
+      id: `student-${roll}`,
+      rollNumber: roll,
+      fullName: name,
+      email: `${roll}@x.in`,
+      degree: "B.E",
+      branch: "CSE",
+      passingYear: 2026,
+      overallCgpa: 8,
+      tenthPercentage: 90,
+      twelfthPercentage: 91,
+      currentArrears: 0,
+      historyOfArrears: 0,
+      technicalSkills: "TS",
+    },
+    resumeId: "resume-1",
+  });
+
+  it("downloads a CSV Excel opens \u2014 BOM first, snapshot data, included only \u2014 and logs it", async () => {
+    const download = vi.fn();
+    const logExport = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          exportEntries: async () => [
+            { applicationId: "a1", included: true, snapshot: snapshot("R1", "Priya") },
+            { applicationId: "a2", included: false, snapshot: snapshot("R2", "Left Out") },
+          ],
+          logExport,
+        })}
+        download={download}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const [filename, text] = download.mock.calls[0] as [string, string];
+    expect(filename).toMatch(/zoho.*\.csv$/i);
+    expect(text.startsWith("\uFEFF")).toBe(true);
+    expect(text).toContain("Roll number");
+    expect(text).toContain("Priya");
+    expect(text).not.toContain("Left Out");
+    expect(logExport).toHaveBeenCalledWith("d1", expect.any(Array), 1);
+  });
+
+  it("names the shortlisted candidates who have no resume on file", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          exportEntries: async () => [
+            {
+              applicationId: "a1",
+              included: true,
+              snapshot: { ...snapshot("R9", "No Resume"), resumeId: null },
+            },
+          ],
+          logExport: async () => undefined,
+        })}
+        download={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/R9/);
   });
 });

@@ -1,0 +1,125 @@
+import { Badge, Card, PageHeader } from "@components/ui";
+import type { AttendanceStatus, RoundResult } from "@domain/types";
+import { useEffect, useState } from "react";
+
+/**
+ * D10 (2026-08-12): the campus placement coordinator follows their students
+ * through the ENTIRE cycle — shortlist, every round, the offer.
+ *
+ * Strictly read-only. Recording results is the Central CPC's (D8); attendance
+ * has its own screen. RLS scopes everything here to the coordinator's campus,
+ * so an empty screen means "no drives touch my students", not "no access".
+ */
+
+export interface StudentRoundProgress {
+  readonly sequence: number;
+  readonly name: string;
+  readonly attendance: AttendanceStatus;
+  readonly result: RoundResult | null;
+}
+
+export interface DriveProgressStudent {
+  readonly applicationId: string;
+  readonly studentName: string;
+  readonly rollNumber: string;
+  readonly shortlisted: boolean;
+  readonly rounds: readonly StudentRoundProgress[];
+  readonly offer: { readonly ctcLpa: number; readonly offerCategory: string | null } | null;
+}
+
+export interface DriveProgressEntry {
+  readonly driveId: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly status: string;
+  readonly students: readonly DriveProgressStudent[];
+}
+
+export interface DriveProgressView {
+  drives(): Promise<readonly DriveProgressEntry[]>;
+}
+
+const label = (value: string) => value.replaceAll("_", " ");
+
+const RESULT_TONE = (result: RoundResult | null, attendance: AttendanceStatus) => {
+  if (result === "selected") return "success" as const;
+  if (result === "rejected") return "danger" as const;
+  if (attendance === "absent") return "danger" as const;
+  return "neutral" as const;
+};
+
+export function DriveProgressPage({ view }: { view: DriveProgressView }) {
+  const [drives, setDrives] = useState<readonly DriveProgressEntry[] | null>(null);
+
+  useEffect(() => {
+    void view.drives().then(setDrives);
+  }, [view]);
+
+  return (
+    <div>
+      <PageHeader
+        title="Drive progress"
+        subtitle="Your students, through every round to the offer. Read-only — results are recorded centrally."
+      />
+
+      {drives === null ? (
+        <p role="status" className="text-sm text-ink-500">
+          Loading drives…
+        </p>
+      ) : drives.length === 0 ? (
+        <Card className="p-6">
+          <p className="text-sm text-ink-700">No drives involve your students yet.</p>
+        </Card>
+      ) : (
+        drives.map((drive) => (
+          <Card key={drive.driveId} className="mb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
+              <div className="min-w-0">
+                <p className="font-heading text-lg font-bold text-ink-900">{drive.companyName}</p>
+                <p className="text-sm text-ink-500">{drive.roleTitle ?? "Role not set"}</p>
+              </div>
+              <Badge tone="brand">{label(drive.status)}</Badge>
+            </div>
+            <ul className="divide-y divide-neutral-200">
+              {drive.students.map((student) => (
+                <li key={student.applicationId} className="flex flex-wrap items-start gap-4 p-4">
+                  <div className="min-w-40">
+                    <p className="font-medium text-ink-900">{student.studentName}</p>
+                    <p className="text-sm text-ink-500">{student.rollNumber}</p>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    {student.shortlisted ? (
+                      student.rounds.length === 0 ? (
+                        <Badge tone="neutral">Shortlisted — no round yet</Badge>
+                      ) : (
+                        student.rounds.map((round) => (
+                          <Badge
+                            key={round.sequence}
+                            tone={RESULT_TONE(round.result, round.attendance)}
+                          >
+                            Round {round.sequence} ·{" "}
+                            {round.result !== null ? label(round.result) : label(round.attendance)}
+                          </Badge>
+                        ))
+                      )
+                    ) : (
+                      <Badge tone="neutral">Applied — not shortlisted</Badge>
+                    )}
+                    {student.offer !== null && (
+                      <Badge tone="success">
+                        Offer · ₹{student.offer.ctcLpa} LPA
+                        {student.offer.offerCategory !== null
+                          ? ` · ${label(student.offer.offerCategory)}`
+                          : ""}
+                      </Badge>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ))
+      )}
+    </div>
+  );
+}
