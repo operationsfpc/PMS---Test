@@ -38,6 +38,39 @@ verification onto an existing button, move the evidence with it.**
 No backfill: production holds zero certificates, and retro-verifying one would
 assert a coordinator had checked a document they were never shown.
 
+**LIVE.** `0039` applied (local == remote at `0039`); Cloudflare version
+**`e20d2ef3-815d-4569-b404-4149aa85f4bc`**. Proved against production in one
+rolled-back transaction, as the real Central CPC:
+
+| Certificate | After approving the form |
+|---|---|
+| pending | **`verified`**, stamped with the approving coordinator |
+| already rejected | **still `rejected`**, reason intact |
+| another student's | **untouched**, still `pending` |
+
+Live JS byte-identical to local (832 686 bytes, sha256 `808ddbe2…`);
+`Approving will also verify` present in the deployed bundle; 0 rows left
+behind.
+
+### 🔴 A live blocker found while proving it — P8, and NOT caused by this work
+
+**The only campus placement coordinator cannot approve ANY registration
+form.** The first approval attempt failed with *"Verified academic data can
+only be changed by a placement coordinator"*, raised by
+`protect_verified_academics` (**0009**, so this has been true since long
+before today).
+
+`sainaveen@faceprep.in` is **both a staff profile and a student row** on one
+Google account. That guard identifies students *positively* by
+`auth_user_id` — deliberately, so it fails closed — and therefore sees the
+coordinator as a student and refuses the `srf_status` write. The Central CPC
+is unaffected, which is why nobody has hit it yet.
+
+The fix is a **data** decision, not a code one, and is in
+`docs/PENDING-USER-ACTION.md` as **P8**. Relaxing the guard for anyone holding
+a staff profile was deliberately NOT done: it would also let that same person
+edit their own verified marks.
+
 ---
 
 ## ✅ SHIPPED 2026-08-06 — certificates are verified, like a CGPA
