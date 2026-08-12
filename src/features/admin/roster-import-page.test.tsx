@@ -95,3 +95,31 @@ describe("RosterImportPage", () => {
     expect(screen.getByText(/not set up/i)).toBeDefined();
   });
 });
+
+/**
+ * 0040: one email identifies one person.
+ *
+ * The preview is where a clash must surface. The database refuses the whole
+ * batch, so an administrator who only finds out on import gets one failure for
+ * a file of hundreds and no idea which row caused it.
+ */
+describe("addresses already claimed", () => {
+  it("rejects a row whose address belongs to a staff account, before importing", async () => {
+    const user = userEvent.setup();
+    render(
+      <RosterImportPage
+        repository={repo()}
+        campuses={campuses}
+        taken={new Map([["sainaveen@faceprep.in", "staff"]])}
+      />,
+    );
+
+    await upload(
+      user,
+      "roll_number,name,email,degree,branch,passing_year\nR1,Sai,sainaveen@faceprep.in,B.E,CSE,2027\n",
+    );
+
+    expect(await screen.findByText(/already a staff account/i)).toBeDefined();
+    expect(screen.getByText(/1 row cannot be imported/i)).toBeDefined();
+  });
+});

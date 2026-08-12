@@ -162,6 +162,31 @@ describe("createSupabaseStaffRepository", () => {
     await expect(repo().invite(INVITATION)).rejects.toThrow(/already been invited/i);
   });
 
+  /**
+   * 0040: one email identifies one person. Inviting somebody on an address
+   * already on the student roster is refused by the database, which names it.
+   * "Already invited" would be a lie - nobody invited them - and would send an
+   * administrator hunting through the staff list for a row that is not there.
+   */
+  it("distinguishes an address held by a STUDENT from a duplicate invitation", async () => {
+    server.use(
+      http.post(`${BASE}/rest/v1/staff_invitations`, () =>
+        HttpResponse.json(
+          {
+            code: "23505",
+            message:
+              "sainaveen@faceprep.in is already on the student roster. One person is either a student or staff, never both.",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(repo().invite(INVITATION)).rejects.toThrow(
+      /sainaveen@faceprep\.in.*student roster.*student or staff/is,
+    );
+  });
+
   it("says so when the invitation lands but the campus assignment does not", async () => {
     server.use(
       http.post(`${BASE}/rest/v1/staff_invitations`, () => HttpResponse.json({ email: "x" })),

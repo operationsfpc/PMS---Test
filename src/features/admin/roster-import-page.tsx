@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { parseCsv } from "@domain/csv";
+import type { EmailHolder } from "@domain/email-identity";
 import { parseRoster, ROSTER_COLUMNS, type RosterParseResult } from "@domain/roster-import";
 import { supabase } from "@lib/supabase";
 import { useId, useState } from "react";
@@ -29,9 +30,16 @@ export interface CampusOption {
 export function RosterImportPage({
   repository,
   campuses,
+  taken = new Map(),
 }: {
   repository?: RosterRepository;
   campuses: readonly CampusOption[];
+  /**
+   * Addresses already claimed by a student or staff member (0040), keyed by
+   * the normalised address. Surfaces a clash HERE, per row, rather than as one
+   * batch failure the administrator cannot locate in a file of hundreds.
+   */
+  taken?: ReadonlyMap<string, EmailHolder>;
 }) {
   const [repo] = useState<RosterRepository>(
     () => repository ?? createSupabaseRosterRepository(supabase()),
@@ -51,7 +59,7 @@ export function RosterImportPage({
     setParsed(null);
     if (file === undefined) return;
 
-    const result = parseRoster(parseCsv(await file.text()));
+    const result = parseRoster(parseCsv(await file.text()), taken);
     if (result.fatal !== null) {
       setError(result.fatal);
       return;

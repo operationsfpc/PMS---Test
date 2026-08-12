@@ -10,6 +10,8 @@
  * rejection is reported with its spreadsheet row number and a reason a
  * coordinator can act on.
  */
+import { type EmailHolder, emailClash } from "./email-identity";
+
 export const ROSTER_COLUMNS = [
   "roll_number",
   "name",
@@ -45,7 +47,16 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const cell = (row: readonly string[], index: number) => (row[index] ?? "").trim();
 
-export function parseRoster(rows: readonly (readonly string[])[]): RosterParseResult {
+/**
+ * @param taken Addresses already claimed, keyed by NORMALISED address (0040).
+ *   One email identifies one person, so a roster row naming a colleague's
+ *   staff address is refused here rather than failing the whole batch at the
+ *   database. Defaults to empty: the parser is still usable on shape alone.
+ */
+export function parseRoster(
+  rows: readonly (readonly string[])[],
+  taken: ReadonlyMap<string, EmailHolder> = new Map(),
+): RosterParseResult {
   const empty = { accepted: [], rejected: [] };
 
   const header = rows[0];
@@ -118,6 +129,14 @@ export function parseRoster(rows: readonly (readonly string[])[]): RosterParseRe
     }
     if (seenRolls.has(rollNumber)) {
       reject(`Duplicate roll number "${rollNumber}" — an earlier row already claims it.`);
+      continue;
+    }
+
+    // 0040: one address is one person. Checked after the within-file rules so
+    // the more specific "an earlier row already claims it" still wins.
+    const clash = emailClash(email, taken, "student");
+    if (clash !== null) {
+      reject(clash);
       continue;
     }
 

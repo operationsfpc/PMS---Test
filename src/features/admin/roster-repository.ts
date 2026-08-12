@@ -91,6 +91,14 @@ export function createSupabaseRosterRepository(client: SupabaseClient): RosterRe
         .select("id");
 
       if (error !== null) {
+        // 0040 refuses an address that already belongs to a staff account, and
+        // names it in the message. The whole batch fails, so passing that
+        // through is the difference between a fixable file and an
+        // administrator re-uploading the same one into the same silence.
+        if (error.code === "23505" && /student or staff/i.test(error.message)) {
+          throw new RosterError(error.message);
+        }
+
         throw new RosterError(
           error.code === "42501"
             ? "You do not have permission to import a roster for this campus."

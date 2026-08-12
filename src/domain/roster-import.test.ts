@@ -166,3 +166,61 @@ describe("ragged files", () => {
     expect(result.accepted).toEqual([]);
   });
 });
+
+/**
+ * 0040: one email identifies one person.
+ *
+ * A file of 200 students that clashes on one row must say WHICH row. The
+ * database refuses the whole batch, so without this the administrator gets a
+ * single failure for a file they cannot see the fault in - and the fault is
+ * usually a colleague who is also on the roster, which is what caused P8.
+ */
+describe("addresses already claimed elsewhere", () => {
+  const header = ROSTER_COLUMNS.join(",");
+  const row = (email: string) => `R1,Asha,${email},B.E,CSE,2027`;
+
+  it("rejects a student whose address belongs to a staff account, naming it", () => {
+    const result = parseRoster(
+      [ROSTER_COLUMNS as unknown as string[], row("sainaveen@faceprep.in").split(",")],
+      new Map([["sainaveen@faceprep.in", "staff"]]),
+    );
+
+    expect(result.rejected).toEqual([
+      {
+        row: 2,
+        reason:
+          "sainaveen@faceprep.in is already a staff account. One person is either a student or staff, never both — use a different address.",
+      },
+    ]);
+    expect(result.accepted).toEqual([]);
+  });
+
+  it("rejects a student already on the roster", () => {
+    const result = parseRoster(
+      [ROSTER_COLUMNS as unknown as string[], row("priya@gmail.com").split(",")],
+      new Map([["priya@gmail.com", "student"]]),
+    );
+
+    expect(result.rejected[0]?.reason).toBe("priya@gmail.com is already on the student roster.");
+  });
+
+  it("catches a clash that differs only by case", () => {
+    const result = parseRoster(
+      [ROSTER_COLUMNS as unknown as string[], row("SaiNaveen@FacePrep.in").split(",")],
+      new Map([["sainaveen@faceprep.in", "staff"]]),
+    );
+
+    expect(result.rejected[0]?.reason).toContain("already a staff account");
+  });
+
+  it("accepts everyone when nothing is claimed, and needs no map at all", () => {
+    expect(header).toContain("roll_number");
+    const result = parseRoster([
+      ROSTER_COLUMNS as unknown as string[],
+      row("brand.new@gmail.com").split(","),
+    ]);
+
+    expect(result.rejected).toEqual([]);
+    expect(result.accepted).toHaveLength(1);
+  });
+});

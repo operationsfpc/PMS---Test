@@ -135,6 +135,24 @@ describe("reference and identity tables reject student writes", () => {
    * reports success. Asserting the exception would be asserting the mechanism;
    * what actually protects the student is that the number stays 3.
    */
+  /**
+   * The same attack on an address 0040 has no opinion about, so RLS is the
+   * only thing that can refuse it. Without this, widening the matcher above
+   * would have quietly stopped proving that profiles are protected at all.
+   */
+  it("stops a student writing themselves a profile under an unused address", async () => {
+    await t.expectRejection(
+      () =>
+        t.asUser(
+          ids.priyaUser,
+          `insert into profiles (id, email, full_name, role)
+           values ($1, 'not-a-student@faceprep.in', 'Priya Ramesh', 'admin')`,
+          [ids.priyaUser],
+        ),
+      /permission denied|row-level security|violates/i,
+    );
+  });
+
   it("stops a student relaxing the absence limit", async () => {
     await t.asUser(ids.priyaUser, `update settings set value = '99' where key = 'absence_limit'`);
 
@@ -157,7 +175,11 @@ describe("reference and identity tables reject student writes", () => {
            values ($1, 'priya@gmail.com', 'Priya Ramesh', 'admin')`,
           [ids.priyaUser],
         ),
-      /permission denied|row-level security|violates/i,
+      // 0040 now refuses this one step EARLIER, on identity: that address is
+      // already a student's, and one person is not both. RLS is proved to
+      // refuse it independently by the test below - which is why that test
+      // exists rather than this matcher simply being widened.
+      /permission denied|row-level security|violates|student roster/i,
     );
   });
 

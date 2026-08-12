@@ -235,6 +235,14 @@ export function createSupabaseStaffRepository(
         .single();
 
       if (error !== null) {
+        // 0040 refuses an address already on the student roster, and names it.
+        // Reporting that as "already been invited" would be a lie - nobody
+        // invited them - and would send an administrator hunting through the
+        // staff list for a row that is not there.
+        if (error.code === "23505" && /student or staff/i.test(error.message)) {
+          throw new StaffError(error.message);
+        }
+
         throw new StaffError(
           error.code === "23505"
             ? "That email has already been invited."

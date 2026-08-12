@@ -135,3 +135,43 @@ describe("unknown branches", () => {
     expect(result.imported).toBe(1);
   });
 });
+
+/**
+ * 0040: one email identifies one person.
+ *
+ * A roster row whose address already belongs to a staff account is refused by
+ * the database. The whole batch fails, so the administrator must be told
+ * WHICH address - "could not import the roster" would leave them re-uploading
+ * the same file and getting the same silence.
+ */
+describe("an address that already belongs to staff", () => {
+  it("reports the address and why, not a generic failure", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/degrees`, () => HttpResponse.json([{ id: "d1", name: "B.E" }])),
+      http.get(`${BASE}/rest/v1/branches`, () => HttpResponse.json([{ id: "b1", name: "CSE" }])),
+      http.post(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json(
+          {
+            code: "23505",
+            message:
+              "sainaveen@faceprep.in is already a staff account. One person is either a student or staff, never both.",
+          },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(
+      repo().importStudents(CAMPUS, [
+        {
+          rollNumber: "R1",
+          fullName: "Sai Naveen",
+          email: "sainaveen@faceprep.in",
+          degree: "B.E",
+          branch: "CSE",
+          passingYear: 2027,
+        },
+      ]),
+    ).rejects.toThrow(/sainaveen@faceprep\.in.*student or staff/is);
+  });
+});
