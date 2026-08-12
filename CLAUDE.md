@@ -14,7 +14,7 @@ Project instructions. Read this file completely at the start of every session.
 6. **Secrets never in chat.** Keys/tokens go into git-ignored `.env` (Karthik pastes them there himself). Never print secrets; never make passwords viewable in the app.
 7. **Numbered outputs.** Options, questions, and open items always carry serial numbers so Karthik can reply "1, 3, 5".
 8. **Batch feedback.** Karthik sends one numbered list per tested page; respond item-by-item with per-item status (done / blocked / question).
-9. **Session close-out.** Update this file (handoff, gotchas, open items) at session end. Next session starts with "Read CLAUDE.md" — no chat-pasted handovers.
+9. **Session close-out.** Update this file (handoff, gotchas, open items) at session end. Next session starts with "Read CLAUDE.md" — no chat-pasted handovers. When Karthik ends a session, the reply's very last line states — in bold — that **the window can be closed**.
 10. **Push back like a co-founder.** Challenge weak reasoning and flag security/compliance risks. See `~/standards.md` for the full playbook and reusable patterns.
 
 ---
