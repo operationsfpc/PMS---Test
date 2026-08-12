@@ -1,4 +1,5 @@
 import { Card } from "@components/ui";
+import { certificateStanding } from "@domain/certificates";
 import type { SrfAccess } from "@domain/srf-access";
 import { Link } from "react-router";
 import { AddSemester, type AddSemesterView } from "./add-semester";
@@ -151,11 +152,30 @@ export function SrfSummary({
           <p className="mt-1 text-sm text-ink-500">No certificates uploaded.</p>
         ) : (
           <ul className="mt-1 divide-y divide-neutral-200">
-            {certificates.map((certificate) => (
-              <li key={certificate.name} className="py-2 text-sm font-medium text-ink-900">
-                {certificate.name}
-              </li>
-            ))}
+            {certificates.map((certificate) => {
+              const standing = certificateStanding(certificate.status, certificate.rejectionReason);
+              return (
+                <li key={certificate.name} className="py-2">
+                  <p className="text-sm font-medium text-ink-900">{certificate.name}</p>
+                  {/* A certificate is a claim until a coordinator has checked
+                      it (0038), so the record says which have been. */}
+                  <p
+                    className={`text-xs ${
+                      certificate.status === "verified"
+                        ? "text-brand-600"
+                        : certificate.status === "rejected"
+                          ? "text-danger-700"
+                          : "text-ink-500"
+                    }`}
+                  >
+                    {standing.label}
+                  </p>
+                  {standing.reason !== null && (
+                    <p className="text-xs text-ink-700">{standing.reason}</p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

@@ -40,8 +40,20 @@ const CURRENT = {
 };
 
 const ON_FILE = [
-  { id: "cert-1", name: "AWS Cloud Practitioner", url: "https://signed/aws.pdf" },
-  { id: "cert-2", name: "NPTEL Data Structures", url: null },
+  {
+    id: "cert-1",
+    name: "AWS Cloud Practitioner",
+    url: "https://signed/aws.pdf",
+    status: "pending" as const,
+    rejectionReason: null,
+  },
+  {
+    id: "cert-2",
+    name: "NPTEL Data Structures",
+    url: null,
+    status: "pending" as const,
+    rejectionReason: null,
+  },
 ];
 
 function repo(overrides: Partial<StudentProfileRepository> = {}): StudentProfileRepository {
@@ -249,7 +261,16 @@ describe("ProfileEditPage — certificates", () => {
     const list = vi
       .fn()
       .mockResolvedValueOnce(ON_FILE)
-      .mockResolvedValue([...ON_FILE, { id: "cert-3", name: "Azure Fundamentals", url: null }]);
+      .mockResolvedValue([
+        ...ON_FILE,
+        {
+          id: "cert-3",
+          name: "Azure Fundamentals",
+          url: null,
+          status: "pending" as const,
+          rejectionReason: null,
+        },
+      ]);
     const user = userEvent.setup();
     renderPage(repo(), certs({ add, list }));
 
@@ -325,5 +346,60 @@ describe("ProfileEditPage — certificates", () => {
 
     const item = within(await screen.findByRole("listitem", { name: /nptel data structures/i }));
     expect(item.getByRole("button", { name: /remove nptel data structures/i })).toBeDefined();
+  });
+});
+
+/**
+ * Verification, from the student's side (asked for 2026-08-06).
+ *
+ * A certificate is a claim until a coordinator has checked it. The student
+ * must be able to see which of theirs have been, and what to do about one
+ * that was not - a rejection whose reason they never read is not a decision
+ * they can act on.
+ */
+describe("certificate verification", () => {
+  const withStatus = (
+    status: "pending" | "verified" | "rejected",
+    rejectionReason: string | null = null,
+  ) => [{ id: "cert-1", name: "AWS Cloud Practitioner", url: null, status, rejectionReason }];
+
+  it("says a new certificate is waiting to be checked", async () => {
+    renderPage(repo(), certs({ list: async () => withStatus("pending") }));
+
+    const row = await screen.findByLabelText("AWS Cloud Practitioner");
+    expect(within(row).getByText(/awaiting verification/i)).toBeDefined();
+  });
+
+  it("says when one has been verified", async () => {
+    renderPage(repo(), certs({ list: async () => withStatus("verified") }));
+
+    const row = await screen.findByLabelText("AWS Cloud Practitioner");
+    expect(within(row).getByText(/^verified$/i)).toBeDefined();
+  });
+
+  it("gives a rejected certificate its reason, which is the point of rejecting it", async () => {
+    renderPage(
+      repo(),
+      certs({ list: async () => withStatus("rejected", "The document is a screenshot") }),
+    );
+
+    const row = await screen.findByLabelText("AWS Cloud Practitioner");
+    expect(within(row).getByText(/not accepted/i)).toBeDefined();
+    expect(within(row).getByText(/the document is a screenshot/i)).toBeDefined();
+  });
+
+  /** Q4: verified data is no longer the student's to change. */
+  it("offers no Remove on a verified certificate", async () => {
+    renderPage(repo(), certs({ list: async () => withStatus("verified") }));
+
+    const row = await screen.findByLabelText("AWS Cloud Practitioner");
+    expect(within(row).queryByRole("button", { name: /remove/i })).toBeNull();
+  });
+
+  it("still lets them remove a rejected one, which is how they replace it", async () => {
+    renderPage(repo(), certs({ list: async () => withStatus("rejected", "Illegible") }));
+
+    const row = await screen.findByLabelText("AWS Cloud Practitioner");
+    expect(within(row).getByRole("button", { name: /remove/i })).toBeDefined();
   });
 });

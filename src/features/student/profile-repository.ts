@@ -1,4 +1,5 @@
 import { normaliseProfileLinks, type ProfileLink } from "@domain/profile-links";
+import type { VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -47,6 +48,14 @@ export interface StudentCertificate {
   readonly name: string;
   /** A signed, expiring link. Null when one could not be produced. */
   readonly url: string | null;
+  /**
+   * Checked by the coordinator, or not yet (0038). A certificate is a claim
+   * until someone has opened the document and agreed it says what the name
+   * says - the same standing as a declared CGPA.
+   */
+  readonly status: VerificationStatus;
+  /** Only a rejection carries one, and it is what the student must act on. */
+  readonly rejectionReason: string | null;
 }
 
 export interface StudentCertificatesRepository {
@@ -66,7 +75,7 @@ export const STUDENT_PROFILE_COLUMNS = `
 
 /** The same, for the certificates and the documents behind them. */
 export const STUDENT_CERTIFICATE_COLUMNS = `
-  id, name, student_documents(storage_path)
+  id, name, status, rejection_reason, student_documents(storage_path)
 `;
 
 /**
@@ -232,6 +241,10 @@ export function createSupabaseStudentCertificates(
             id: text(row.id),
             name: text(row.name),
             url: signed?.data?.signedUrl ?? null,
+            // Anything unrecognised reads as pending: a certificate must
+            // never look checked because a column arrived unexpectedly.
+            status: ((row.status as string | null) ?? "pending") as VerificationStatus,
+            rejectionReason: orNull(text(row.rejection_reason)),
           };
         }),
       );

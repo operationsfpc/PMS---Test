@@ -12,6 +12,7 @@ import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
 import { SkillsRoute } from "@features/central-cpc/skills-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
+import { CertificateQueue } from "@features/cpc/certificate-queue";
 import { OffCampusQueueRoute, OptOutQueueRoute } from "@features/cpc/participation-queue-routes";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
@@ -63,6 +64,8 @@ export function App() {
                 <Route path="/student/profile" element={<StudentProfileRoute />} />
                 <Route path="/cpc/verification" element={<SrfVerificationQueue />} />
                 <Route path="/cpc/attendance" element={<AttendanceRoute />} />
+                {/* 2026-08-06: certificates are verified like a CGPA. */}
+                <Route path="/cpc/certificates" element={<CertificateQueue />} />
                 <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
                 <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
                 <Route path="/ae/pif" element={<PifPage />} />

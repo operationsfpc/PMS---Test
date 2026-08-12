@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   type CertificateEntry,
+  canRemoveCertificate,
   canUploadCertificate,
+  certificateStanding,
+  decideCertificate,
   usableCertificates,
   validateCertificates,
 } from "./certificates";
@@ -138,5 +141,109 @@ describe("usableCertificates", () => {
 
   it("trims the name it keeps", () => {
     expect(usableCertificates([entry({ name: "  AWS  " })])[0]?.name).toBe("AWS");
+  });
+});
+
+/**
+ * Verification (asked for 2026-08-06).
+ *
+ * "skill certifications uploaded by students will also need verification of
+ * campus placement coordinator similar to CGPA approval. This is applicable
+ * for first upload as well as subsequent additions."
+ *
+ * A certificate is a claim until a coordinator has opened the document and
+ * agreed it says what the name says. Same standing as a declared CGPA: the
+ * student states it, the coordinator confirms it against the evidence.
+ *
+ * Unlike a CGPA, a certificate can arrive at ANY time - the profile page
+ * accepts one the day after approval - so this is decided per certificate
+ * rather than bundled into the registration form's approval. One mechanism
+ * covers the first upload and every later one, which is what was asked for.
+ */
+describe("decideCertificate", () => {
+  it("verifies a pending certificate", () => {
+    expect(decideCertificate("pending", { decision: "verify" })).toEqual({
+      ok: true,
+      next: "verified",
+    });
+  });
+
+  it("rejects a pending certificate with a reason", () => {
+    expect(decideCertificate("pending", { decision: "reject", reason: "Not legible" })).toEqual({
+      ok: true,
+      next: "rejected",
+    });
+  });
+
+  /** F1's rule, and for the same reason: it is all the student is told. */
+  it("refuses a rejection with no reason", () => {
+    expect(decideCertificate("pending", { decision: "reject", reason: "   " })).toEqual({
+      ok: false,
+      error: "A rejection needs a reason, so the student knows what to correct.",
+    });
+  });
+
+  it("refuses to re-decide a certificate that was already verified", () => {
+    expect(
+      decideCertificate("verified", { decision: "reject", reason: "Changed my mind" }),
+    ).toEqual({
+      ok: false,
+      error: "This certificate has already been decided.",
+    });
+  });
+
+  it("refuses to re-decide a certificate that was already rejected", () => {
+    expect(decideCertificate("rejected", { decision: "verify" })).toEqual({
+      ok: false,
+      error: "This certificate has already been decided.",
+    });
+  });
+});
+
+describe("canRemoveCertificate", () => {
+  it("lets a student remove one that is still pending", () => {
+    expect(canRemoveCertificate("pending")).toEqual({ allowed: true });
+  });
+
+  /** How a student replaces a certificate the coordinator would not accept. */
+  it("lets a student remove one that was rejected", () => {
+    expect(canRemoveCertificate("rejected")).toEqual({ allowed: true });
+  });
+
+  /**
+   * Q4, applied to certificates: verified data is no longer the student's to
+   * change. Removing one would also destroy the coordinator's own record of
+   * having checked it.
+   */
+  it("refuses to let a student remove a verified certificate", () => {
+    expect(canRemoveCertificate("verified")).toEqual({
+      allowed: false,
+      reason:
+        "This certificate has been verified. Ask your placement coordinator if it needs to change.",
+    });
+  });
+});
+
+describe("certificateStanding", () => {
+  it("tells a student their certificate is waiting to be checked", () => {
+    expect(certificateStanding("pending", null)).toEqual({
+      label: "Awaiting verification",
+      reason: null,
+    });
+  });
+
+  it("tells a student their certificate was verified", () => {
+    expect(certificateStanding("verified", null)).toEqual({ label: "Verified", reason: null });
+  });
+
+  it("gives a rejected certificate its reason, which is the point of rejecting it", () => {
+    expect(certificateStanding("rejected", "The name does not match the document")).toEqual({
+      label: "Not accepted",
+      reason: "The name does not match the document",
+    });
+  });
+
+  it("still reads as not accepted when the reason was lost", () => {
+    expect(certificateStanding("rejected", null)).toEqual({ label: "Not accepted", reason: null });
   });
 });

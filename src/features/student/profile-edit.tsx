@@ -1,6 +1,11 @@
 import { FormSection, TextField } from "@components/form";
 import { Button, PageHeader } from "@components/ui";
-import { canUploadCertificate, validateCertificates } from "@domain/certificates";
+import {
+  canRemoveCertificate,
+  canUploadCertificate,
+  certificateStanding,
+  validateCertificates,
+} from "@domain/certificates";
 import {
   MAX_OTHER_PROFILES,
   normaliseProfileLinks,
@@ -292,7 +297,34 @@ export function ProfileEditPage({
                   aria-label={certificate.name}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3"
                 >
-                  <span className="text-sm font-medium text-ink-900">{certificate.name}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-ink-900">
+                      {certificate.name}
+                    </span>
+                    {/* A certificate is a claim until a coordinator has
+                        checked it, so the student is told which of theirs
+                        have been - and what to fix on one that was not. */}
+                    <span
+                      className={`block text-xs ${
+                        certificate.status === "verified"
+                          ? "text-brand-600"
+                          : certificate.status === "rejected"
+                            ? "text-danger-700"
+                            : "text-ink-500"
+                      }`}
+                    >
+                      {certificateStanding(certificate.status, certificate.rejectionReason).label}
+                    </span>
+                    {certificateStanding(certificate.status, certificate.rejectionReason).reason !==
+                      null && (
+                      <span className="block text-xs text-ink-700">
+                        {
+                          certificateStanding(certificate.status, certificate.rejectionReason)
+                            .reason
+                        }
+                      </span>
+                    )}
+                  </span>
                   <span className="flex items-center gap-3">
                     {certificate.url !== null && (
                       <a
@@ -305,14 +337,20 @@ export function ProfileEditPage({
                         View
                       </a>
                     )}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${certificate.name}`}
-                      onClick={() => void removeCertificate(certificate.id)}
-                      className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                    >
-                      Remove
-                    </button>
+                    {/* Q4: verified data is no longer the student's to
+                        change, and removing it would destroy the
+                        coordinator's record of having checked it. Enforced
+                        by RLS in 0038; hidden here so it is not offered. */}
+                    {canRemoveCertificate(certificate.status).allowed && (
+                      <button
+                        type="button"
+                        aria-label={`Remove ${certificate.name}`}
+                        onClick={() => void removeCertificate(certificate.id)}
+                        className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}

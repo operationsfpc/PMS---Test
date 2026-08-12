@@ -13,6 +13,47 @@ clean, and `supabase migration list` shows remote at `0036`.
 
 ---
 
+## ✅ BUILT 2026-08-06 — certificates are verified, like a CGPA
+
+Asked for: "skill certifications uploaded by students will also need
+verification of campus placement coordinator similar to CGPA approval. This is
+applicable for first upload as well as subsequent additions."
+
+**`pnpm check` exits 0 — 2331 tests across 135 files**, plus the Playwright
+journey.
+
+0034 stored a name and a document and stopped there. **Nothing recorded
+whether anybody had ever opened the file**, and there was no screen on which
+to do it — so a recruiter reading a profile could not tell a checked
+certificate from a claim typed a minute earlier.
+
+| Layer | What |
+|---|---|
+| 0 | `decideCertificate` (pending → verified \| rejected, rejection needs a reason), `canRemoveCertificate` (Q4: a verified one is no longer the student's), `certificateStanding` (what the student is told). `VERIFICATION_STATUSES` is now a real domain enum, registered in the drift guard |
+| 1 | **`/cpc/certificates`** — campus CPC *and* Central CPC. Certificate name beside a signed link to the document, verify or reject with a reason. "No document uploaded" rather than a dead link |
+| 1 | The student sees the outcome in **both** places their certificates appear: `/student/profile` and the read-only SRF record. A rejection shows its reason; a verified one offers no Remove |
+| 2 | `0038` — `status`/`verified_by`/`verified_at`/`rejection_reason`, `certificate_verified_has_verifier`, `certificate_rejected_has_reason`, an UPDATE policy for campus staff (0034 had none, **and no update grant**), the student's delete narrowed to non-verified, and the audit trigger 0034 never had |
+
+🔴 **The dangerous half was `submit_srf`, and it is the exact bug that made
+the SRF unsubmittable for every student before 0027.** 0035 replaced the
+certificate list wholesale: delete all, insert the payload. Once a certificate
+can be verified, the delete is filtered by RLS to *nothing* for that row —
+RLS is a filter, not an error — and the insert then re-declares it and hits
+`one_certificate_per_name`, raising 23505 and failing the **whole**
+submission. 0038 deletes only what is undecided and inserts only what is not
+already on file, compared exactly the way the unique index compares it. Three
+regression tests cover it, including re-declaring under different spacing.
+
+This deliberately differs from the semester lines, where the collision IS the
+answer: a semester is only verified at approval, after which the form is
+read-only, so a verified line and a re-submission cannot co-occur. A
+certificate is verified on its own schedule, so they co-occur constantly.
+
+📌 **A37** records the interpretation: "similar to CGPA approval" is read as
+the same *standing*, not the same *moment* — see `docs/ASSUMPTIONS.md`.
+
+---
+
 ## ✅ SHIPPED 2026-08-06 — the Central Student Skill Repository (PRD §5)
 
 Asked for: skillsets per student (Aptitude, Communication skills,

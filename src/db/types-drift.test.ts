@@ -11,6 +11,7 @@ import {
   ROLE_CATEGORIES,
   ROUND_RESULTS,
   SRF_STATUSES,
+  VERIFICATION_STATUSES,
 } from "@domain/types";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "./harness";
@@ -36,6 +37,9 @@ describe("Postgres enums match the domain vocabularies", () => {
     ["attendance_status", ATTENDANCE_STATUSES],
     ["offer_source", OFFER_SOURCES],
     ["app_role", APP_ROLES],
+    // Raw strings in TypeScript until certificates (0038) made it a decision
+    // the UI has to render.
+    ["verification_status", VERIFICATION_STATUSES],
   ];
 
   it.each(cases)(

@@ -598,13 +598,22 @@ export interface StudentCertificatesRow {
   name: string;
   document_id: string;
   created_at: string;
+  status: Enums["verification_status"];
+  verified_by: string | null;
+  verified_at: string | null;
+  rejection_reason: string | null;
 }
 
 export type StudentCertificatesInsert = Pick<
   StudentCertificatesRow,
   "student_id" | "name" | "document_id"
 > &
-  Partial<Pick<StudentCertificatesRow, "id" | "created_at">>;
+  Partial<
+    Pick<
+      StudentCertificatesRow,
+      "id" | "created_at" | "status" | "verified_by" | "verified_at" | "rejection_reason"
+    >
+  >;
 
 export interface StudentDocumentsRow {
   id: string;

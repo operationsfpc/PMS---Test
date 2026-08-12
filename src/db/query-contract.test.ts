@@ -2,6 +2,7 @@ import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repo
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
 import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
+import { CERTIFICATE_QUEUE_COLUMNS } from "@features/cpc/certificate-queue-repository";
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
   DASHBOARD_COHORT_COLUMNS,
@@ -313,6 +314,9 @@ describe("every hand-written select matches the schema", () => {
     // reported broken. It was never registered here, which is the only reason
     // this file stayed green while the queue returned PGRST201 in production.
     ["coordinator verification queue", "students", VERIFICATION_QUEUE_COLUMNS],
+    // 0038: certificates are verified like a CGPA. Registered because it
+    // embeds both the student and the document behind the name.
+    ["coordinator certificate queue", "student_certificates", CERTIFICATE_QUEUE_COLUMNS],
   ];
 
   it.each(SELECTS)("%s", async (_name, table, spec) => {

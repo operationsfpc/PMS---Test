@@ -78,6 +78,16 @@ export const APP_ROLES = [
 ] as const;
 export type AppRole = (typeof APP_ROLES)[number];
 
+/**
+ * Evidence a coordinator has, or has not, checked against its document.
+ *
+ * Used by `student_semesters.status` since 0003 and by
+ * `student_certificates.status` since 0038. It was a raw string in TypeScript
+ * until certificates made it a decision the UI has to render.
+ */
+export const VERIFICATION_STATUSES = ["pending", "verified", "rejected"] as const;
+export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
+
 /** Verified academic data. The only data eligibility may be evaluated against. */
 export interface AcademicProfile {
   readonly degree: string;

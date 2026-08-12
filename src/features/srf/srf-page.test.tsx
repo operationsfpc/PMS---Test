@@ -426,7 +426,12 @@ describe("SrfPage — after it has been submitted", () => {
   it("names the certificates the student uploaded with the form", () => {
     render(
       <SrfPage
-        profile={{ ...SUBMITTED, certificates: [{ name: "AWS Cloud Practitioner" }] }}
+        profile={{
+          ...SUBMITTED,
+          certificates: [
+            { name: "AWS Cloud Practitioner", status: "pending", rejectionReason: null },
+          ],
+        }}
         status="srf_approved"
       />,
     );
@@ -438,6 +443,55 @@ describe("SrfPage — after it has been submitted", () => {
     render(<SrfPage profile={{ ...SUBMITTED, certificates: [] }} status="srf_approved" />);
 
     expect(screen.getByText(/no certificates uploaded/i)).toBeDefined();
+  });
+
+  /**
+   * 2026-08-06: a certificate is verified by the coordinator like a CGPA. The
+   * record of the submission must say which have been checked, or a student
+   * reads an unverified claim as an accepted one.
+   */
+  it("says whether each certificate has been verified", () => {
+    render(
+      <SrfPage
+        profile={{
+          ...SUBMITTED,
+          certificates: [
+            { name: "AWS Cloud Practitioner", status: "verified", rejectionReason: null },
+            { name: "NPTEL Data Structures", status: "pending", rejectionReason: null },
+          ],
+        }}
+        status="srf_approved"
+      />,
+    );
+
+    // Scoped to the row: an approved form's own headline is "Verified" too.
+    const aws = screen.getByText("AWS Cloud Practitioner").closest("li");
+    const nptel = screen.getByText("NPTEL Data Structures").closest("li");
+    if (aws === null || nptel === null) throw new Error("certificate rows not found");
+
+    expect(within(aws).getByText(/^verified$/i)).toBeDefined();
+    expect(within(nptel).getByText(/awaiting verification/i)).toBeDefined();
+  });
+
+  it("gives a rejected certificate its reason on the record too", () => {
+    render(
+      <SrfPage
+        profile={{
+          ...SUBMITTED,
+          certificates: [
+            {
+              name: "AWS Cloud Practitioner",
+              status: "rejected",
+              rejectionReason: "The document is a screenshot",
+            },
+          ],
+        }}
+        status="srf_approved"
+      />,
+    );
+
+    expect(screen.getByText(/not accepted/i)).toBeDefined();
+    expect(screen.getByText(/the document is a screenshot/i)).toBeDefined();
   });
 });
 

@@ -1,6 +1,6 @@
 import type { ProgrammeLevel } from "@domain/academics";
 import type { MarksScale } from "@domain/marks";
-import type { SrfStatus } from "@domain/types";
+import type { SrfStatus, VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -57,8 +57,16 @@ export interface SrfProfile {
   readonly certifications?: string | null;
   readonly achievements?: string | null;
   readonly semesters?: readonly SubmittedSemester[];
-  /** F17: a certificate is a name and a document. Read back by name. */
-  readonly certificates?: readonly { readonly name: string }[];
+  /**
+   * F17: a certificate is a name and a document. Read back with the
+   * coordinator's decision (0038), so the record cannot show an unverified
+   * claim as an accepted one.
+   */
+  readonly certificates?: readonly {
+    readonly name: string;
+    readonly status: VerificationStatus;
+    readonly rejectionReason: string | null;
+  }[];
   /** F13: decides how many semesters there are to add, and on what scale. */
   readonly programmeLevel?: ProgrammeLevel;
   readonly marksScale?: MarksScale;
@@ -90,7 +98,7 @@ export const SRF_PROFILE_COLUMNS = `
   projects, certifications, achievements,
   programme_level,
   degrees(name), branches(name),
-  student_certificates(name),
+  student_certificates(name, status, rejection_reason),
   student_semesters(semester_number, declared_marks, marks_scale, current_arrears, history_of_arrears)
 `;
 
@@ -152,7 +160,13 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
       .sort((a, b) => a.degree.localeCompare(b.degree) || a.branch.localeCompare(b.branch));
 
     const certificates = ((row.student_certificates ?? []) as Array<Record<string, unknown>>)
-      .map((c) => ({ name: (c.name as string | null) ?? "" }))
+      .map((c) => ({
+        name: (c.name as string | null) ?? "",
+        // Anything unrecognised reads as pending: a certificate must never
+        // look checked because a column arrived unexpectedly.
+        status: ((c.status as string | null) ?? "pending") as VerificationStatus,
+        rejectionReason: (c.rejection_reason as string | null) ?? null,
+      }))
       .filter((c) => c.name !== "")
       .sort((a, b) => a.name.localeCompare(b.name));
 

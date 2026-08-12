@@ -134,6 +134,26 @@ Changing the scale is one constant, one check constraint and a backfill.
 The invented `skill_scores` table (A12) is **dropped** by 0037: this request
 was the real schema arriving. Shortlisting (R11) now reads the repository.
 
+## A37 — a certificate is verified on its own, not at registration-form approval
+
+⚠️ **ASSUMPTION — UNCONFIRMED.** The request (2026-08-06) was "skill
+ certifications uploaded by students will also need verification of campus
+placement coordinator **similar to CGPA approval**. This is applicable for
+first upload as well as subsequent additions."
+
+"Similar to CGPA approval" is read as **the same standing** — a coordinator
+checks the claim against the document — and NOT as *at the same moment*. A
+CGPA is verified when the form is approved (0031); a certificate is verified
+on its own, in `/cpc/certificates`.
+
+The second sentence forces it. The profile page has accepted certificates
+since F20, including long after approval, so bundling verification into the
+form's approval would leave every later upload with no path at all — and
+"subsequent additions" is half the request. One mechanism covers both, which
+is also why a student's certificate list is not gated on their SRF status.
+
+Reversible: verifying at approval as well would be a trigger like 0031's.
+
 ## A36 — students do not see their institutional skill scores
 
 ⚠️ **ASSUMPTION — UNCONFIRMED.** No RLS read policy on

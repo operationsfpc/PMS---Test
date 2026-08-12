@@ -163,6 +163,21 @@ describe("AppShell navigation", () => {
     expect(screen.queryByRole("link", { name: /my registration form/i })).toBeNull();
   });
 
+  it("gives the campus coordinator the certificate queue", () => {
+    shellFor(signedIn("campus_placement_coordinator"));
+    expect(screen.getByRole("link", { name: /certificate verification/i })).toBeDefined();
+  });
+
+  it("gives the central coordinator the certificate queue too", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    expect(screen.getByRole("link", { name: /certificate verification/i })).toBeDefined();
+  });
+
+  it("keeps the certificate queue out of the student's nav", () => {
+    shellFor(signedIn("student"));
+    expect(screen.queryByRole("link", { name: /certificate verification/i })).toBeNull();
+  });
+
   it("gives the central coordinator the skill repository, and nobody else's nav shows it", () => {
     shellFor(signedIn("central_placement_coordinator"));
     expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();

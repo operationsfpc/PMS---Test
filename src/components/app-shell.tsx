@@ -40,6 +40,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
   campus_placement_coordinator: [
     { to: "/dashboard", label: "Campus overview" },
     { to: "/cpc/verification", label: "Verification queue" },
+    // 2026-08-06: a certificate is checked like a CGPA, first upload and
+    // every later one.
+    { to: "/cpc/certificates", label: "Certificate verification" },
     { to: "/cpc/attendance", label: "Attendance" },
     { to: "/cpc/opt-outs", label: "Opt-out requests" },
     { to: "/cpc/off-campus", label: "Off-campus offers" },
@@ -71,6 +74,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavItem[]>> = {
     { to: "/central/shortlisting", label: "Shortlisting" },
     // PRD §5: the institutional skill profile per student, feeding R11.
     { to: "/central/skills", label: "Skill repository" },
+    { to: "/cpc/certificates", label: "Certificate verification" },
     { to: "/cpc/attendance", label: "Attendance" },
     { to: "/cpc/opt-outs", label: "Opt-out requests" },
     { to: "/cpc/off-campus", label: "Off-campus offers" },

@@ -4,6 +4,21 @@ Project instructions. Read this file completely at the start of every session.
 
 ---
 
+## 🧭 Karthik's standing collaboration rules (read before anything else)
+
+1. **Interview → Spec → Build.** For any new feature/module: ask numbered clarifying questions, write the agreed spec to a file, get explicit approval — only then build.
+2. **UI work: mockup first.** Show an HTML mockup or layout description and get approval before implementing any new screen or layout change.
+3. **Run to finish.** Once a task list is approved, work until complete. Never pause to ask "shall I continue?" — stop only for blocking questions or credentials.
+4. **Ship and verify.** After every change: deploy, verify the live URL serves it, and end the report with `SHIPPED: yes/no — <what> — <how verified>`. Karthik should never have to ask "is everything shipped?".
+5. **Files by exact name.** When Karthik says "latest download/screenshot", confirm the exact filename and copy the file into `docs/inbox/` so it is never lost.
+6. **Secrets never in chat.** Keys/tokens go into git-ignored `.env` (Karthik pastes them there himself). Never print secrets; never make passwords viewable in the app.
+7. **Numbered outputs.** Options, questions, and open items always carry serial numbers so Karthik can reply "1, 3, 5".
+8. **Batch feedback.** Karthik sends one numbered list per tested page; respond item-by-item with per-item status (done / blocked / question).
+9. **Session close-out.** Update this file (handoff, gotchas, open items) at session end. Next session starts with "Read CLAUDE.md" — no chat-pasted handovers.
+10. **Push back like a co-founder.** Challenge weak reasoning and flag security/compliance risks. See `~/standards.md` for the full playbook and reusable patterns.
+
+---
+
 ## 🔴 THE STANDING RULE — TEST-DRIVEN DEVELOPMENT IS MANDATORY
 
 **No production code is written before a failing test exists for it. No exceptions.**
