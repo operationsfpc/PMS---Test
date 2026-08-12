@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   StudentDashboard,
   type StudentDashboardSnapshot,
@@ -71,8 +72,14 @@ const SNAPSHOT: StudentDashboardSnapshot = {
   attendance: [],
 };
 
-const view = (overrides: Partial<StudentDashboardSnapshot> = {}): StudentDashboardView => ({
+const view = (
+  overrides: Partial<StudentDashboardSnapshot> = {},
+  extra: Partial<StudentDashboardView> = {},
+): StudentDashboardView => ({
   snapshot: async () => ({ ...SNAPSHOT, ...overrides }),
+  notifications: async () => [],
+  markRead: async () => undefined,
+  ...extra,
 });
 
 const show = (v: StudentDashboardView) =>
@@ -250,18 +257,81 @@ describe("StudentDashboard", () => {
   });
 
   it("announces that it is loading rather than flashing an empty dashboard", () => {
-    show({ snapshot: () => new Promise(() => {}) });
+    show(view({}, { snapshot: () => new Promise(() => {}) }));
 
     expect(screen.getByRole("status")).toBeDefined();
   });
 
   it("says something useful when the record cannot be loaded", async () => {
-    show({
-      snapshot: async () => {
-        throw new Error("network");
-      },
-    });
+    show(
+      view(
+        {},
+        {
+          snapshot: async () => {
+            throw new Error("network");
+          },
+        },
+      ),
+    );
 
     expect(await screen.findByRole("alert")).toBeDefined();
+  });
+});
+
+/**
+ * D8/D9 (2026-08-12): the Central CPC's entries trigger in-app notifications
+ * — shortlisted, round cleared, round not selected, offer. This panel is
+ * where they land; email comes later (P1).
+ */
+describe("StudentDashboard — notifications", () => {
+  const NOTES = [
+    {
+      id: "n2",
+      kind: "round_cleared",
+      title: "You cleared Round 1 of Zoho",
+      body: "Well done — you advance from Round 1 of Zoho.",
+      createdAt: "2026-08-12T10:00:00Z",
+      read: false,
+    },
+    {
+      id: "n1",
+      kind: "shortlisted",
+      title: "You are shortlisted for Zoho",
+      body: "Round 1 is next.",
+      createdAt: "2026-08-10T10:00:00Z",
+      read: true,
+    },
+  ];
+
+  it("shows them with an unread count", async () => {
+    show(view({}, { notifications: async () => NOTES }));
+
+    expect(await screen.findByText(/1 unread/i)).toBeDefined();
+    expect(screen.getByText("You cleared Round 1 of Zoho")).toBeDefined();
+    expect(screen.getByText("You are shortlisted for Zoho")).toBeDefined();
+  });
+
+  it("marks one read on request", async () => {
+    const markRead = vi.fn();
+    const user = userEvent.setup();
+    show(view({}, { notifications: async () => NOTES, markRead }));
+
+    await user.click(await screen.findByRole("button", { name: /mark read/i }));
+
+    await waitFor(() => expect(markRead).toHaveBeenCalledWith("n2"));
+  });
+
+  it("offers no mark-read on something already read", async () => {
+    show(view({}, { notifications: async () => [NOTES[1] as (typeof NOTES)[1]] }));
+
+    await screen.findByText("You are shortlisted for Zoho");
+    expect(screen.queryByRole("button", { name: /mark read/i })).toBeNull();
+  });
+
+  it("stays out of the way when there are none", async () => {
+    show(view());
+
+    await screen.findByText(/21CSE1042/);
+    expect(screen.queryByText(/unread/i)).toBeNull();
   });
 });

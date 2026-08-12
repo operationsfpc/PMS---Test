@@ -128,11 +128,12 @@ describe("CockpitPage", () => {
     expect(link.getAttribute("href")).toBe("/central/shortlisting?drive=d2");
   });
 
-  it("links each round to its results, carrying the round id", async () => {
+  /** WS6 (2026-08-12): rounds open on the tabbed screen, which carries them all. */
+  it("links each round to the drive's rounds screen", async () => {
     routed(view([IN_ROUNDS]));
 
     const link = await screen.findByRole("link", { name: /technical/i });
-    expect(link.getAttribute("href")).toBe("/central/results?round=r2");
+    expect(link.getAttribute("href")).toBe("/central/results?drive=d3");
   });
 
   it("links a drive in rounds to final selection", async () => {

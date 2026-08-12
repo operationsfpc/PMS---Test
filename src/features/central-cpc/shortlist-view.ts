@@ -47,7 +47,7 @@ export function createSupabaseShortlistView(
       const { data: applications } = await client
         .from("applications")
         .select(
-          "id, student_id, profile_snapshot, students(full_name, roll_number), shortlist_entries(included)",
+          "id, student_id, profile_snapshot, students(full_name, roll_number, participation_status), shortlist_entries(included)",
         )
         .eq("drive_id", driveId);
 
@@ -77,7 +77,11 @@ export function createSupabaseShortlistView(
       return (applications ?? []).map((row): ShortlistApplicant => {
         // R7: the snapshot is the truth for everything downstream.
         const snapshot = (row.profile_snapshot ?? {}) as Record<string, unknown>;
-        const student = one<{ full_name?: string; roll_number?: string }>(row.students);
+        const student = one<{
+          full_name?: string;
+          roll_number?: string;
+          participation_status?: string;
+        }>(row.students);
         const academics = (snapshot.academics ?? snapshot) as Record<string, unknown>;
 
         return {
@@ -93,6 +97,9 @@ export function createSupabaseShortlistView(
             ? (snapshot.preferredRoleCategories as RoleCategory[])
             : [],
           shortlisted: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
+          // D7: read LIVE, not from the snapshot — the whole point is that
+          // the student opted out AFTER the snapshot was taken.
+          optedOut: student?.participation_status === "opted_out",
         };
       });
     },
@@ -122,6 +129,9 @@ export function createSupabaseShortlistView(
             score: decision.score,
             rationale: decision.rationale,
             decided_by: actorId,
+            // D7: null for everyone active; the trigger refuses an opted-out
+            // inclusion without it.
+            opt_out_override_reason: decision.optOutOverrideReason,
           })),
           { onConflict: "application_id" },
         )

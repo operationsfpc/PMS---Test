@@ -1,7 +1,8 @@
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { advancingParticipants } from "@domain/rounds";
 import type { AttendanceStatus, RoundResult } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 
 export interface RoundParticipant {
   readonly applicationId: string;
@@ -14,6 +15,24 @@ export interface RoundParticipant {
 export interface ResultsView {
   participants(roundId: string): Promise<readonly RoundParticipant[]>;
   record(roundId: string, applicationId: string, result: RoundResult): Promise<void>;
+}
+
+export interface DriveRoundInfo {
+  readonly roundId: string;
+  readonly sequence: number;
+  readonly name: string;
+}
+
+/**
+ * 2026-08-12 (approved spec, WS6): the whole drive's rounds on one screen.
+ * The Central CPC records on behalf of the recruiter (D8); advancement is an
+ * explicit act, never a side effect of the last result typed.
+ */
+export interface DriveRoundsView extends ResultsView {
+  rounds(driveId: string): Promise<readonly DriveRoundInfo[]>;
+  /** Schedules the current round's `selected` into the next. Returns how many. */
+  advance(fromRoundId: string, toRoundId: string): Promise<number>;
+  addRound(driveId: string, name: string): Promise<void>;
 }
 
 const RESULTS: readonly RoundResult[] = ["selected", "rejected", "waitlisted", "on_hold"];
@@ -50,14 +69,7 @@ export function ResultsPage({ roundId, view }: { roundId: string; view: ResultsV
     }
   }
 
-  const advancing =
-    participants === null
-      ? 0
-      : advancingParticipants(
-          participants
-            .filter((p) => p.result !== null)
-            .map((p) => ({ studentId: p.applicationId, result: p.result as RoundResult })),
-        ).length;
+  const advancing = countAdvancing(participants);
 
   const hasHeld =
     participants?.some((p) => p.result === "waitlisted" || p.result === "on_hold") ?? false;
@@ -139,6 +151,177 @@ export function ResultsPage({ roundId, view }: { roundId: string; view: ResultsV
             ))}
           </ul>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function countAdvancing(participants: readonly RoundParticipant[] | null): number {
+  if (participants === null) return 0;
+  return advancingParticipants(
+    participants
+      .filter((p) => p.result !== null)
+      .map((p) => ({ studentId: p.applicationId, result: p.result as RoundResult })),
+  ).length;
+}
+
+/**
+ * The drive's rounds as numbered tabs. Each round is the existing ResultsPage
+ * section; what this adds is the SHAPE the client asked for on 2026-08-12:
+ * numbered rounds, adding one, and pushing the selected into the next —
+ * explicitly, so who advanced is a decision with an author, not a residue.
+ */
+export function DriveRoundsPage({ driveId, view }: { driveId: string; view: DriveRoundsView }) {
+  const [rounds, setRounds] = useState<readonly DriveRoundInfo[] | null>(null);
+  const [active, setActive] = useState<string | null>(null);
+  const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [roundName, setRoundName] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadRounds = useCallback(async () => {
+    const loaded = await view.rounds(driveId);
+    setRounds(loaded);
+    setActive((current) => current ?? loaded[0]?.roundId ?? null);
+  }, [view, driveId]);
+
+  useEffect(() => {
+    void loadRounds();
+  }, [loadRounds]);
+
+  useEffect(() => {
+    if (active === null) return;
+    setParticipants(null);
+    void view.participants(active).then(setParticipants);
+  }, [view, active]);
+
+  const activeRound = (rounds ?? []).find((r) => r.roundId === active) ?? null;
+  const nextRound =
+    activeRound === null
+      ? null
+      : ((rounds ?? []).find((r) => r.sequence === activeRound.sequence + 1) ?? null);
+  const advancing = countAdvancing(participants);
+
+  async function advance() {
+    if (activeRound === null || nextRound === null) return;
+    setError(null);
+    try {
+      const moved = await view.advance(activeRound.roundId, nextRound.roundId);
+      setNotice(
+        `${moved} ${moved === 1 ? "student" : "students"} scheduled for Round ${nextRound.sequence} (${nextRound.name}).`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not advance the students.");
+    }
+  }
+
+  async function createRound() {
+    const name = roundName.trim();
+    if (name === "") return;
+    setError(null);
+    try {
+      await view.addRound(driveId, name);
+      setAdding(false);
+      setRoundName("");
+      await loadRounds();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not add the round.");
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Rounds & results"
+        subtitle="You are recording on behalf of the recruiter. Every result you record is told to the student; advancing schedules them for the next round."
+      />
+
+      {error !== null && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      )}
+      {notice !== null && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
+        >
+          {notice}
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {(rounds ?? []).map((round) => (
+          <button
+            key={round.roundId}
+            type="button"
+            onClick={() => {
+              setNotice(null);
+              setActive(round.roundId);
+            }}
+            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+              round.roundId === active
+                ? "border-brand-500 bg-brand-500 text-white"
+                : "border-line bg-surface text-ink-700 hover:bg-surface-muted"
+            }`}
+          >
+            Round {round.sequence} · {round.name}
+          </button>
+        ))}
+        {adding ? (
+          <span className="flex items-end gap-2">
+            <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+              Round name
+              <input
+                type="text"
+                value={roundName}
+                onChange={(e) => setRoundName(e.target.value)}
+                className="rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
+              />
+            </label>
+            <Button size="sm" onClick={() => void createRound()}>
+              Create Round {(rounds?.length ?? 0) + 1}
+            </Button>
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-lg border border-dashed border-line px-3 py-2 text-sm font-medium text-ink-500 hover:bg-surface-muted"
+          >
+            + Add round
+          </button>
+        )}
+      </div>
+
+      {active !== null && (
+        <>
+          <ResultsPage roundId={active} view={view} />
+          <div className="mt-4">
+            {nextRound !== null ? (
+              advancing > 0 && (
+                <Button onClick={() => void advance()}>
+                  Advance {advancing} selected to Round {nextRound.sequence} — schedules them
+                </Button>
+              )
+            ) : (
+              <p className="text-sm text-ink-700">
+                This is the final round. Declare offers on{" "}
+                <Link
+                  to={`/central/offers?drive=${driveId}`}
+                  className="font-medium text-brand-600 hover:underline"
+                >
+                  Final selection
+                </Link>
+                .
+              </p>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

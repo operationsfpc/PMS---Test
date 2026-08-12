@@ -54,8 +54,20 @@ export interface StudentDashboardSnapshot {
   readonly attendance: readonly AttendanceRecord[];
 }
 
+/** D8/D9 (2026-08-12): what the Central CPC's entries told this student. */
+export interface StudentNotificationRow {
+  readonly id: string;
+  readonly kind: string;
+  readonly title: string;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly read: boolean;
+}
+
 export interface StudentDashboardView {
   snapshot(): Promise<StudentDashboardSnapshot>;
+  notifications(): Promise<readonly StudentNotificationRow[]>;
+  markRead(notificationId: string): Promise<void>;
 }
 
 const humanise = (value: string) => value.replaceAll("_", " ");
@@ -97,6 +109,7 @@ const ROUND_TONE = (round: ApplicantRound) => {
 export function StudentDashboard({ view }: { view: StudentDashboardView }) {
   const [snapshot, setSnapshot] = useState<StudentDashboardSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  const [notes, setNotes] = useState<readonly StudentNotificationRow[]>([]);
 
   useEffect(() => {
     let live = true;
@@ -108,10 +121,22 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
       .catch(() => {
         if (live) setFailed(true);
       });
+    // Notifications failing must never take the dashboard down with them.
+    view
+      .notifications()
+      .then((next) => {
+        if (live) setNotes(next);
+      })
+      .catch(() => {});
     return () => {
       live = false;
     };
   }, [view]);
+
+  async function markRead(id: string) {
+    await view.markRead(id);
+    setNotes(await view.notifications());
+  }
 
   if (failed) {
     return (
@@ -154,6 +179,46 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
         title={snapshot.fullName}
         subtitle={`${snapshot.rollNumber} · ${snapshot.degree} ${snapshot.branch} · Batch of ${snapshot.passingYear} · ${snapshot.campus}`}
       />
+
+      {notes.length > 0 && (
+        <section aria-label="Notifications" className="mb-6">
+          <Card className="p-5">
+            <p className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900">
+              Notifications
+              {notes.some((n) => !n.read) && (
+                <Badge tone="warning">{notes.filter((n) => !n.read).length} unread</Badge>
+              )}
+            </p>
+            <ul className="mt-3 space-y-2">
+              {notes.map((note) => (
+                <li
+                  key={note.id}
+                  className={`rounded-lg border p-3 ${
+                    note.read ? "border-line" : "border-warning/50 bg-warning/5"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink-900">{note.title}</p>
+                      <p className="mt-0.5 text-sm text-ink-700">{note.body}</p>
+                      <p className="mt-1 text-xs text-ink-500">{onDate(note.createdAt)}</p>
+                    </div>
+                    {!note.read && (
+                      <button
+                        type="button"
+                        onClick={() => void markRead(note.id)}
+                        className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
+      )}
 
       <section aria-label="What to do next" className="mb-6">
         <Card className="overflow-hidden">

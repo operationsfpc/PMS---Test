@@ -208,5 +208,37 @@ export function createSupabaseStudentDashboardView(
         attendance: attendanceRecords,
       };
     },
+
+    /**
+     * D8/D9 (2026-08-12): written by the database's triggers when the Central
+     * CPC shortlists, records a result or declares an offer. RLS scopes the
+     * read to the student's own rows.
+     */
+    async notifications() {
+      const { data } = await client
+        .from("notifications")
+        .select(NOTIFICATION_COLUMNS)
+        .order("created_at", { ascending: false });
+
+      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        id: row.id as string,
+        kind: row.kind as string,
+        title: row.title as string,
+        body: row.body as string,
+        createdAt: row.created_at as string,
+        read: row.read_at !== null,
+      }));
+    },
+
+    async markRead(notificationId) {
+      await client
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", notificationId)
+        .select("id");
+    },
   };
 }
+
+/** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
+export const NOTIFICATION_COLUMNS = "id, kind, title, body, created_at, read_at";

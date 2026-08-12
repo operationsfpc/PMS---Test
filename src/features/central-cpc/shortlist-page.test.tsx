@@ -35,6 +35,7 @@ const WEAK: ShortlistApplicant = {
   skillScores: [],
   preferredRoleCategories: [],
   shortlisted: false,
+  optedOut: false,
 };
 
 const STRONG: ShortlistApplicant = {
@@ -47,6 +48,7 @@ const STRONG: ShortlistApplicant = {
   skillScores: [{ skill: "TypeScript", score: 95 }],
   preferredRoleCategories: ["software_technical"],
   shortlisted: false,
+  optedOut: false,
 };
 
 const APPLICANTS: readonly ShortlistApplicant[] = [WEAK, STRONG];
@@ -166,6 +168,83 @@ describe("ShortlistPage", () => {
  * tell a save that worked from one that silently did nothing, so coordinators
  * pressed it again.
  */
+/**
+ * D7 (2026-08-12): "applied but not yet shortlisted should not be
+ * shortlisted. This is an alert. Central PC can override."
+ */
+describe("ShortlistPage \u2014 an opted-out applicant", () => {
+  const OPTED: ShortlistApplicant = {
+    ...WEAK,
+    applicationId: "app-opted",
+    studentName: "Opted Out Candidate",
+    rollNumber: "21CSE0003",
+    optedOut: true,
+  };
+
+  it("is flagged with an alert and offered no checkbox", async () => {
+    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [OPTED, STRONG] })} />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/opted out/i);
+    expect(alert.textContent).toMatch(/Opted Out Candidate/);
+
+    const row = screen.getByText("Opted Out Candidate").closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+  });
+
+  it("can be overridden with a reason, which the save carries", async () => {
+    const saveShortlist = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({ applicants: async () => [OPTED, STRONG], saveShortlist })}
+      />,
+    );
+
+    const row = (await screen.findByText("Opted Out Candidate")).closest("li");
+    if (row === null) throw new Error("row not found");
+
+    await user.click(within(row).getByRole("button", { name: /override/i }));
+    await user.type(within(row).getByLabelText(/reason/i), "Recruiter asked for her by name");
+    await user.click(within(row).getByRole("button", { name: /confirm/i }));
+
+    // Overriding makes them selectable; it does not select them by stealth.
+    await user.click(within(row).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+
+    await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
+    const [, decisions] = saveShortlist.mock.calls[0] as [string, ShortlistDecision[]];
+    const opted = decisions.find((d) => d.applicationId === "app-opted");
+    expect(opted?.included).toBe(true);
+    expect(opted?.optOutOverrideReason).toBe("Recruiter asked for her by name");
+  });
+
+  it("refuses to confirm an override with no reason", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [OPTED] })} />);
+
+    const row = (await screen.findByText("Opted Out Candidate")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await user.click(within(row).getByRole("button", { name: /override/i }));
+    await user.click(within(row).getByRole("button", { name: /confirm/i }));
+
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+  });
+});
+
+/** D8/D9: saving IS the communication, and the screen says so. */
+describe("ShortlistPage \u2014 what saving means", () => {
+  it("says the save notifies the students and schedules Round 1", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    await screen.findByText("Strong Candidate");
+    expect(screen.getByText(/notifies the shortlisted students/i)).toBeDefined();
+    expect(screen.getByText(/schedules them for round 1/i)).toBeDefined();
+  });
+});
+
 describe("ShortlistPage \u2014 after saving", () => {
   /** A view that actually remembers what was saved, as the database would. */
   function persistingView(saveShortlist?: ShortlistView["saveShortlist"]): ShortlistView {

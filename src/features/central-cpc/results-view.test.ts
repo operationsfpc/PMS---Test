@@ -139,3 +139,100 @@ describe("recording a result", () => {
     ).rejects.toThrow(/session/i);
   });
 });
+
+/** 2026-08-12 (WS6): the tabbed rounds screen and explicit advancement. */
+describe("the drive's rounds", () => {
+  it("lists them in sequence order", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
+        HttpResponse.json([
+          { id: "r1", sequence: 1, name: "Aptitude" },
+          { id: "r2", sequence: 2, name: "Technical" },
+        ]),
+      ),
+    );
+
+    const rounds = await view().rounds("d1");
+    expect(rounds).toEqual([
+      { roundId: "r1", sequence: 1, name: "Aptitude" },
+      { roundId: "r2", sequence: 2, name: "Technical" },
+    ]);
+  });
+
+  it("adds the next round with the next sequence number", async () => {
+    const writes: unknown[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
+        HttpResponse.json([{ id: "r1", sequence: 1, name: "Aptitude" }]),
+      ),
+      http.post(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
+        writes.push(await request.clone().json());
+        return HttpResponse.json({ id: "r2" });
+      }),
+    );
+
+    await view().addRound("d1", "HR");
+
+    expect(writes[0]).toMatchObject({ drive_id: "d1", sequence: 2, name: "HR" });
+  });
+
+  it("advances exactly the selected, and says how many", async () => {
+    const scheduled: unknown[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/round_results`, () =>
+        HttpResponse.json([
+          { application_id: "a1", result: "selected" },
+          { application_id: "a2", result: "rejected" },
+          { application_id: "a3", result: "waitlisted" },
+        ]),
+      ),
+      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        scheduled.push(await request.clone().json());
+        return HttpResponse.json([{ id: "rp-1" }]);
+      }),
+      http.post(`${BASE}/rest/v1/attendance`, async ({ request }) => {
+        scheduled.push(await request.clone().json());
+        return HttpResponse.json([{ id: "at-1" }]);
+      }),
+    );
+
+    const moved = await view().advance("r1", "r2");
+
+    expect(moved).toBe(1);
+    const participants = scheduled[0] as Array<Record<string, unknown>>;
+    expect(participants).toHaveLength(1);
+    expect(participants[0]).toMatchObject({ round_id: "r2", application_id: "a1" });
+  });
+
+  it("advances nobody when nobody was selected, without writing", async () => {
+    const scheduled: unknown[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/round_results`, () =>
+        HttpResponse.json([{ application_id: "a2", result: "rejected" }]),
+      ),
+      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        scheduled.push(await request.clone().json());
+        return HttpResponse.json([{ id: "rp-1" }]);
+      }),
+    );
+
+    expect(await view().advance("r1", "r2")).toBe(0);
+    expect(scheduled).toHaveLength(0);
+  });
+});
+
+describe("the drives a round can belong to", () => {
+  it("lists drives that are past publishing, for the picker", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([
+          { id: "d1", company_name: "Zoho", status: "in_rounds" },
+          { id: "d2", company_name: "TCS", status: "live" },
+        ]),
+      ),
+    );
+
+    const drives = await view().drivesInProgress();
+    expect(drives.map((d) => d.companyName)).toEqual(["Zoho", "TCS"]);
+  });
+});

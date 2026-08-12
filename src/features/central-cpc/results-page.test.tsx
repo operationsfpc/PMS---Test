@@ -1,8 +1,15 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { ResultsPage, type ResultsView, type RoundParticipant } from "./results-page";
+import {
+  DriveRoundsPage,
+  type DriveRoundsView,
+  ResultsPage,
+  type ResultsView,
+  type RoundParticipant,
+} from "./results-page";
 
 /**
  * Recording a round's results.
@@ -114,5 +121,82 @@ describe("ResultsPage", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/central placement coordinator/i);
+  });
+});
+
+/**
+ * 2026-08-12 (approved spec, WS6): the drive's rounds as numbered tabs, with
+ * explicit advancement. "Multiple rounds can be created and added. each round
+ * is numbered. in each round, students progress or fail."
+ */
+describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
+  const ROUNDS = [
+    { roundId: "r1", sequence: 1, name: "Aptitude" },
+    { roundId: "r2", sequence: 2, name: "Technical" },
+  ];
+
+  function driveView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
+    return {
+      ...view(),
+      rounds: async () => ROUNDS,
+      advance: async () => 1,
+      addRound: async () => undefined,
+      ...overrides,
+    };
+  }
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
+  it("numbers each round as a tab", async () => {
+    routed(<DriveRoundsPage driveId="d1" view={driveView()} />);
+
+    expect(await screen.findByRole("button", { name: /round 1 · aptitude/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /round 2 · technical/i })).toBeDefined();
+  });
+
+  it("advances the selected into the next round, saying how many", async () => {
+    const advance = vi.fn().mockResolvedValue(1);
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({
+          advance,
+          participants: async () => [{ ...PRIYA, result: "selected" }, ARJUN],
+        })}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: /advance 1 selected to round 2/i });
+    await user.click(button);
+
+    await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2"));
+  });
+
+  it("offers no advancement from the last round — final selection lives there", async () => {
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({ participants: async () => [{ ...PRIYA, result: "selected" }] })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /round 2 · technical/i }));
+
+    expect(screen.queryByRole("button", { name: /advance/i })).toBeNull();
+    expect(await screen.findByRole("link", { name: /final selection/i })).toBeDefined();
+  });
+
+  it("adds a numbered round on request", async () => {
+    const addRound = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={driveView({ addRound })} />);
+
+    await user.click(await screen.findByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round name/i), "HR");
+    await user.click(screen.getByRole("button", { name: /create round 3/i }));
+
+    await waitFor(() => expect(addRound).toHaveBeenCalledWith("d1", "HR"));
   });
 });

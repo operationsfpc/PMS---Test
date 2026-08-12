@@ -182,7 +182,7 @@ export function CockpitPage({
                   {drive.rounds.map((round) => (
                     <Link
                       key={round.roundId}
-                      to={`/central/results?round=${round.roundId}`}
+                      to={`/central/results?drive=${drive.driveId}`}
                       className="font-medium text-brand-600 hover:underline"
                     >
                       {round.sequence}. {round.name}

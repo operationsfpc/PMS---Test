@@ -235,6 +235,33 @@ describe("the applicants (R7 — from the snapshot)", () => {
   });
 });
 
+describe("the opt-out flag (D7)", () => {
+  it("marks an applicant whose student row says opted_out", async () => {
+    stub({
+      applications: [
+        {
+          ...APPLICATION,
+          students: { ...APPLICATION.students, participation_status: "opted_out" },
+        },
+      ],
+    });
+
+    const rows = await view().applicants("d1");
+    expect(rows[0]?.optedOut).toBe(true);
+  });
+
+  it("leaves an active applicant unmarked", async () => {
+    stub({
+      applications: [
+        { ...APPLICATION, students: { ...APPLICATION.students, participation_status: "active" } },
+      ],
+    });
+
+    const rows = await view().applicants("d1");
+    expect(rows[0]?.optedOut).toBe(false);
+  });
+});
+
 describe("saving the shortlist", () => {
   const decision = {
     applicationId: "app-1",
@@ -242,7 +269,19 @@ describe("saving the shortlist", () => {
     rank: 1,
     score: 91.5,
     rationale: "Top coding score",
+    optOutOverrideReason: null,
   };
+
+  it("carries the opt-out override reason to the row (D7)", async () => {
+    const { writes } = stub();
+
+    await view().saveShortlist("d1", [
+      { ...decision, optOutOverrideReason: "Recruiter asked for her by name" },
+    ]);
+
+    const written = (writes[0] as Array<Record<string, unknown>>)[0];
+    expect(written?.opt_out_override_reason).toBe("Recruiter asked for her by name");
+  });
 
   /** PRD §13.1: the recommendation is logged ALONGSIDE the human decision. */
   it("writes the rank, score and rationale next to the decision, attributed", async () => {
@@ -258,6 +297,7 @@ describe("saving the shortlist", () => {
         score: 91.5,
         rationale: "Top coding score",
         decided_by: "cpc-1",
+        opt_out_override_reason: null,
       },
     ]);
   });

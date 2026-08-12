@@ -23,6 +23,7 @@ import {
 import {
   DASHBOARD_APPLICATION_COLUMNS,
   DASHBOARD_STUDENT_COLUMNS,
+  NOTIFICATION_COLUMNS,
 } from "@features/student/student-dashboard-view";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./harness";
@@ -267,6 +268,8 @@ describe("every hand-written select matches the schema", () => {
     ["student dashboard rounds", "round_participants", "round_id, application_id"],
     ["student dashboard results", "round_results", "round_id, application_id, result"],
     ["student dashboard attendance", "attendance", "round_id, application_id, status"],
+    // D8/D9: the notifications panel.
+    ["student notifications", "notifications", NOTIFICATION_COLUMNS],
     ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
     ["drive portfolio offers", "offers", "drive_id, student_id"],
     // The ladder's evidence. Unregistered until 2026-08-12, which is how a

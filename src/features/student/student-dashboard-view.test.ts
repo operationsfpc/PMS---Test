@@ -289,3 +289,69 @@ describe("createSupabaseStudentDashboardView", () => {
     await expect(view().snapshot()).rejects.toThrow(/student record/i);
   });
 });
+
+/** D8/D9 (2026-08-12): the dashboard's notifications panel. */
+describe("notifications", () => {
+  it("maps rows, newest first as the database returns them", async () => {
+    stub();
+    server.use(
+      http.get(`${BASE}/rest/v1/notifications`, () =>
+        HttpResponse.json([
+          {
+            id: "n1",
+            kind: "shortlisted",
+            title: "You are shortlisted for Zoho",
+            body: "Round 1 is next.",
+            created_at: "2026-08-12T10:00:00Z",
+            read_at: null,
+          },
+          {
+            id: "n2",
+            kind: "offer",
+            title: "Offer from Zoho",
+            body: "Congratulations.",
+            created_at: "2026-08-11T10:00:00Z",
+            read_at: "2026-08-11T11:00:00Z",
+          },
+        ]),
+      ),
+    );
+
+    const notes = await view().notifications();
+    expect(notes).toEqual([
+      {
+        id: "n1",
+        kind: "shortlisted",
+        title: "You are shortlisted for Zoho",
+        body: "Round 1 is next.",
+        createdAt: "2026-08-12T10:00:00Z",
+        read: false,
+      },
+      {
+        id: "n2",
+        kind: "offer",
+        title: "Offer from Zoho",
+        body: "Congratulations.",
+        createdAt: "2026-08-11T10:00:00Z",
+        read: true,
+      },
+    ]);
+  });
+
+  it("marks one read by stamping read_at on that row alone", async () => {
+    stub();
+    const patches: Array<{ url: string; body: unknown }> = [];
+    server.use(
+      http.patch(`${BASE}/rest/v1/notifications`, async ({ request }) => {
+        patches.push({ url: request.url, body: await request.clone().json() });
+        return HttpResponse.json([{ id: "n1" }]);
+      }),
+    );
+
+    await view().markRead("n1");
+
+    expect(patches).toHaveLength(1);
+    expect(patches[0]?.url).toContain("id=eq.n1");
+    expect((patches[0]?.body as Record<string, unknown> | undefined)?.read_at).toBeTruthy();
+  });
+});
