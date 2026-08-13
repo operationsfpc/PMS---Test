@@ -1,12 +1,85 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2494 tests passing across 144 files**, plus **1 Playwright journey** — run,
+**2511 tests passing across 144 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0045`**; live Cloudflare version
-`15ac4303-b346-4184-a0be-658cfb5d3802`. Commit hash deliberately not quoted
-here: it has been wrong three times, always because it was written before the
-commit existed. Use `git log --oneline -5`.
+gate. Remote is at **`0045`** (no migration this session); live Cloudflare
+version `a8ef055b-ac0c-4a47-8e5f-ca88ec210b3b`. Commit hash deliberately not
+quoted here: it has been wrong three times, always because it was written
+before the commit existed. Use `git log --oneline -5`.
+
+---
+
+## ✅ SHIPPED 2026-08-13 — publishing targeted 0 students; it targets 2 now
+
+Reported: *"publishing a drive from the Delivery Head login targets 0 eligible
+students, even when students fully meet all configured eligibility criteria."*
+**Front end only — no migration.** Live version
+`a8ef055b-ac0c-4a47-8e5f-ca88ec210b3b`, JS byte-identical to the local `dist/`
+(854 404 bytes, sha256 `7634237f…`), `/central/publish` 200.
+
+### The root cause is one this file already describes — on the other screen
+
+The publish screen judged the cohort on **`students.overall_cgpa`, a column the
+registration form deliberately never writes** (an overall CGPA is not the
+student's to declare). `?? 0` turned that null into a CGPA of **zero**, so any
+cutoff at all excluded the whole roster and the coordinator was told "nobody
+matches this targeting yet" about students who plainly qualified.
+
+This is exactly the failure of *"approval did not verify the semesters"*
+(0031), which predicted it in as many words: *"the next drive that sets a CGPA
+cutoff would silently exclude the entire cohort."* 0031 fixed the student's own
+drive list and **nobody carried the same mapping across to the publish screen**.
+Both now read the latest VERIFIED semester (§7.2) — the same rule the apply
+gate enforces, so the audience number is a promise the gate will keep.
+
+**Proved live as a real `delivery_head` through RLS, rolled back** (no such
+profile exists today — an existing admin was promoted inside the transaction):
+
+| HCL Technologies, cutoff 7.89 | |
+|---|---|
+| Targeted **before** | **0** ← the report |
+| Targeted **after** | **2** — Shashwathi Test 8.50, Test 9.05 |
+| Thanush Krishna 7.50 | correctly still excluded |
+| Readable as that delivery head | students 5 · semesters 5 (4 verified) · all three link tables |
+| Rows left behind | 0 — role restored to `admin`, re-read after |
+
+The unit test reproduces it: putting the old mapping back yields
+`expected [] to deeply equal [ 'Shashwathi Test', 'Test' ]`.
+
+### Found on the way — the screen published criteria nobody approved
+
+Same screen, same write. The cutoff, the arrear policy and the targeting were
+all **fetched and thrown away**: the form opened on a hardcoded `7.0`, "no
+standing arrears" and every chip clear, and publishing wrote that invention
+over the drive. Two consequences, one already in production:
+
+1. **Two live drives lost their declared 7.50** (`min_overall_marks` survives
+   beside a null `min_overall_cgpa` — that pair is the fingerprint). Recorded
+   as **P9**, not repaired: changing eligibility on an open drive is the
+   client's call, and Accenture already has an application against it.
+2. 🔴 **Re-publishing a live drive DELETED its link rows** — and an empty link
+   table means "any", so the drive silently opened to the whole roster. Nobody
+   had done it yet. The chips are seeded now, and a test asserts the seeded
+   targeting is what gets published.
+
+The box is left **empty** when a drive declares no cutoff. Inventing one is
+what made this recoverable-looking: clearing the box was the only way anyone
+ever got a non-zero audience, which is why all four published drives have null
+cutoffs.
+
+⚠️ **The reported role does not exist in production.** There is no
+`delivery_head` profile at all — 3 admins, 2 Central CPCs, 1 AE, 1 campus CPC
+(`ashokkumar091293@gmail.com`, who WAS the delivery head two sessions ago).
+The defect is role-independent, so the report stands either way, but
+**re-read `profiles` before naming an actor** — this is the third session in
+which a role moved underneath a proof.
+
+💡 **The trap that hid this for so long: the test fixture was healthier than
+production.** `publish-view.test.ts`'s student carried `overall_cgpa: 8.4`, a
+value no real student has ever had. The new tests are shaped like the live
+rows — null roster CGPA, verified semesters — and that is the only reason they
+fail against the old code.
 
 **Re-verified at the END of the 2026-08-12 session, not remembered:**
 `pnpm check` exits 0 (2494 tests / 144 files), the Playwright journey passes,
