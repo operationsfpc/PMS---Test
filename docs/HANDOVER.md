@@ -81,12 +81,16 @@ value no real student has ever had. The new tests are shaped like the live
 rows — null roster CGPA, verified semesters — and that is the only reason they
 fail against the old code.
 
-**Re-verified at the END of the 2026-08-12 session, not remembered:**
-`pnpm check` exits 0 (2494 tests / 144 files), the Playwright journey passes,
-`supabase migration list --linked` shows local == remote at **`0045`**, the
-live JS is byte-identical to the local `dist/`, and
-<https://fpc-pms.faceprep.workers.dev> answers 200.
-(That session began at `0040`; it shipped `0041`–`0045`.)
+**Re-verified at the END of the 2026-08-13 session, not remembered:**
+`pnpm check` exits 0 (**2511 tests / 144 files**), the Playwright journey
+passes, the remote is at **`0045`** (read from
+`supabase_migrations.schema_migrations`, unchanged — that session shipped no
+migration), the live JS is byte-identical to the local `dist/` (854 404 bytes,
+sha256 `7634237f…`), <https://fpc-pms.faceprep.workers.dev> answers 200, and
+the working tree is clean at `db7fff0`.
+
+The 2026-08-12 session verified the same way at 2494 tests; it began at `0040`
+and shipped `0041`–`0045`.
 
 ---
 
