@@ -1,3 +1,4 @@
+import { isDriveVisibleToStudent } from "@domain/visibility";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -286,6 +287,241 @@ describe("loading the publish screen", () => {
     stub({ driveFails: true });
 
     await expect(view().load()).rejects.toThrow(/could not load this drive/i);
+  });
+});
+
+/**
+ * Judging the cohort's academics — the defect that showed as "0 targeted".
+ *
+ * `students.overall_cgpa` is a column the registration form DELIBERATELY never
+ * writes: an overall CGPA is not the student's to declare. Every real student
+ * on the live roster therefore carries null there, this view read it as 0, and
+ * so ANY cutoff excluded the entire roster. The coordinator was told "nobody
+ * matches this targeting yet" about students who plainly qualified.
+ *
+ * Eligibility is judged on the LATEST VERIFIED SEMESTER (§7.2, confirmed
+ * 2026-08-04) and the student's own drive list has done exactly that since
+ * 0031. The audience count MUST be the same rule, or the number on this screen
+ * is a promise the apply gate will not keep.
+ */
+describe("the cohort's academic standing", () => {
+  const semester = (over: Record<string, unknown> = {}) => ({
+    semester_number: 1,
+    cgpa: "8.50",
+    current_arrears: 0,
+    history_of_arrears: 0,
+    status: "verified",
+    ...over,
+  });
+
+  /** Shaped like a real approved student: no roster CGPA, verified semesters. */
+  const REAL = {
+    ...STUDENT,
+    overall_cgpa: null,
+    current_arrears: null,
+    history_of_arrears: null,
+  };
+
+  it("reads the CGPA off the latest verified semester, not the roster column", async () => {
+    stub({
+      students: [
+        {
+          ...REAL,
+          student_semesters: [semester({ semester_number: 5, cgpa: "8.50" })],
+        },
+      ],
+    });
+
+    const [candidate] = (await view().load()).cohort;
+
+    expect(candidate?.academics.overallCgpa).toBe(8.5);
+  });
+
+  it("takes the latest by semester NUMBER, not by the order the rows arrive", async () => {
+    stub({
+      students: [
+        {
+          ...REAL,
+          student_semesters: [
+            semester({ semester_number: 5, cgpa: "8.50" }),
+            semester({ semester_number: 2, cgpa: "6.10" }),
+          ],
+        },
+      ],
+    });
+
+    const [candidate] = (await view().load()).cohort;
+
+    expect(candidate?.academics.overallCgpa).toBe(8.5);
+  });
+
+  it("ignores a semester line no coordinator has verified", async () => {
+    stub({
+      students: [
+        {
+          ...STUDENT,
+          overall_cgpa: 6,
+          student_semesters: [semester({ semester_number: 6, cgpa: "9.90", status: "pending" })],
+        },
+      ],
+    });
+
+    const [candidate] = (await view().load()).cohort;
+
+    // Students type their own marks. An unverified 9.9 must not target anyone.
+    expect(candidate?.academics.overallCgpa).toBe(6);
+  });
+
+  it("takes standing arrears from that same verified semester", async () => {
+    stub({
+      students: [
+        {
+          ...REAL,
+          student_semesters: [
+            semester({ semester_number: 4, current_arrears: 2, history_of_arrears: 3 }),
+          ],
+        },
+      ],
+    });
+
+    const [candidate] = (await view().load()).cohort;
+
+    expect(candidate?.academics.currentArrears).toBe(2);
+    expect(candidate?.academics.historyOfArrears).toBe(3);
+  });
+
+  it("falls back to the roster figures rather than locking out an unverified cohort", async () => {
+    stub({ students: [{ ...STUDENT, student_semesters: [] }] });
+
+    const [candidate] = (await view().load()).cohort;
+
+    expect(candidate?.academics.overallCgpa).toBe(8.4);
+  });
+});
+
+/**
+ * What the drive already says about itself.
+ *
+ * The AE states the cutoff and the arrear policy on the PIF and the Delivery
+ * Head approves THAT. This screen fetched both and threw them away, seeding a
+ * hardcoded 7.0 and "no standing arrears" instead — then wrote the invention
+ * back over the approved figures on publish. Four live drives lost their
+ * declared cutoff that way (min_overall_marks 7.50 survives beside a null
+ * min_overall_cgpa, which is the fingerprint).
+ */
+describe("the criteria the drive already carries", () => {
+  it("reads the cutoff the AE declared, so the screen need not invent one", async () => {
+    stub({ drive: { ...DRIVE, min_overall_cgpa: "7.89" } });
+
+    expect((await view().load()).drive.minOverallCgpa).toBe(7.89);
+  });
+
+  it("reports no declared cutoff as none, not as zero", async () => {
+    stub({ drive: { ...DRIVE, min_overall_cgpa: null } });
+
+    expect((await view().load()).drive.minOverallCgpa).toBeNull();
+  });
+
+  it("reads the arrear policy the PIF was approved with", async () => {
+    stub({ drive: { ...DRIVE, arrears_policy: "flexible" } });
+
+    expect((await view().load()).drive.arrearPolicy).toBe("flexible");
+  });
+
+  it("reads the targeting the drive already has, so re-publishing cannot silently widen it", async () => {
+    stub({
+      drive: {
+        ...DRIVE,
+        drive_target_campuses: [
+          { campuses: { name: "Alliance University", cities: { name: "Chennai" } } },
+        ],
+        drive_eligible_degrees: [{ degrees: { name: "B.E" } }],
+        drive_eligible_branches: [{ branches: { name: "CSE" } }],
+      },
+    });
+
+    const { drive } = await view().load();
+
+    expect(drive.targeting.campuses).toEqual(["Alliance University"]);
+    expect(drive.targeting.cities).toEqual(["Chennai"]);
+    expect(drive.targeting.degrees).toEqual(["B.E"]);
+    expect(drive.targeting.branches).toEqual(["CSE"]);
+  });
+
+  it("reports an untargeted drive as targeting nobody in particular", async () => {
+    stub();
+    const { drive } = await view().load();
+
+    expect(drive.targeting).toEqual({ cities: [], campuses: [], degrees: [], branches: [] });
+  });
+});
+
+/**
+ * The reported defect, end to end, against the shape production actually holds.
+ *
+ * Reported from the Delivery Head's login: publishing an approved drive
+ * targeted 0 students "even when students fully meet all configured
+ * eligibility criteria". The live roster at the time: three approved students,
+ * every one with overall_cgpa NULL and verified semesters of 8.50, 9.05 and
+ * 7.50, against a drive declaring a 7.89 cutoff.
+ *
+ * Both halves have to hold together, which is why this runs the loader AND the
+ * real R5 rule rather than either alone: the cohort must carry its verified
+ * standing, and the drive must carry its declared cutoff.
+ */
+describe("the live roster, judged against the live cutoff", () => {
+  const approved = (id: string, fullName: string, cgpa: string) => ({
+    ...STUDENT,
+    id,
+    full_name: fullName,
+    overall_cgpa: null,
+    student_semesters: [
+      { semester_number: 5, cgpa, current_arrears: 0, history_of_arrears: 0, status: "verified" },
+    ],
+  });
+
+  it("targets the students who clear the cutoff, and only them", async () => {
+    stub({
+      drive: {
+        ...DRIVE,
+        min_overall_cgpa: "7.89",
+        arrears_policy: "flexible",
+        offer_category: null,
+      },
+      students: [
+        approved("s1", "Shashwathi Test", "8.50"),
+        approved("s2", "Test", "9.05"),
+        approved("s3", "Thanush Krishna", "7.50"),
+      ],
+    });
+
+    const { drive, cohort } = await view().load();
+
+    const targeted = cohort.filter(
+      (student) =>
+        isDriveVisibleToStudent(student, {
+          id: drive.id,
+          status: drive.status,
+          driveType: drive.driveType ?? "placement",
+          offerCategory: drive.offerCategory,
+          openToAllOverride: false,
+          applicationStart: new Date(0),
+          applicationEnd: new Date(8.64e15),
+          criteria: {
+            eligibleDegrees: [],
+            eligibleBranches: [],
+            eligiblePassingYears: [],
+            minOverallCgpa: drive.minOverallCgpa,
+            minTenthPercentage: null,
+            minTwelfthPercentage: null,
+            arrearPolicy: drive.arrearPolicy,
+            targetCities: drive.targeting.cities,
+            targetCampuses: drive.targeting.campuses,
+          },
+        }).visible,
+    );
+
+    expect(targeted.map((s) => s.name)).toEqual(["Shashwathi Test", "Test"]);
   });
 });
 

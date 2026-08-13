@@ -1,4 +1,6 @@
+import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import type { DriveReadiness } from "@domain/drive-lifecycle";
+import type { EligibilityCriteria } from "@domain/eligibility";
 import type { Offer } from "@domain/offers";
 import type { AcademicProfile, DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -24,7 +26,10 @@ export const PUBLISH_DRIVE_COLUMNS = `
   application_start, application_end, on_hold,
   min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
   arrears_policy, round_count,
-  drive_rounds(id, sequence, name)
+  drive_rounds(id, sequence, name),
+  drive_eligible_degrees(degrees(name)),
+  drive_eligible_branches(branches(name)),
+  drive_target_campuses(campuses(name, cities(name)))
 `;
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
@@ -33,8 +38,34 @@ export const PUBLISH_COHORT_COLUMNS = `
   overall_cgpa, tenth_percentage, twelfth_percentage,
   current_arrears, history_of_arrears,
   degrees(name), branches(name), campuses(name, cities(name)),
-  offers(id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source)
+  offers(id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source),
+  student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
+
+/** Names out of an embedded link table, e.g. drive_eligible_degrees(degrees(name)). */
+function linkedNames(rows: unknown, key: string): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => one<{ name?: string }>((row as Record<string, unknown>)[key])?.name)
+    .filter((value): value is string => typeof value === "string" && value !== "");
+}
+
+/** A targeted campus carries its city, which is how R2 matches cities. */
+function targetedCities(rows: unknown): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  return [
+    ...new Set(
+      rows
+        .map(
+          (row) =>
+            one<{ name?: string }>(
+              one<{ cities?: unknown }>((row as Record<string, unknown>).campuses)?.cities,
+            )?.name,
+        )
+        .filter((value): value is string => typeof value === "string" && value !== ""),
+    ),
+  ];
+}
 
 function ctcLabel(min: number | null, max: number | null): string | null {
   if (min === null && max === null) return null;
@@ -54,15 +85,40 @@ function subtitleFor(row: Record<string, unknown>): string {
 }
 
 function toCandidate(row: Record<string, unknown>): PublishCandidate {
+  /**
+   * §7.2: eligibility is judged on the LATEST VERIFIED SEMESTER, and the
+   * student's own drive list has judged it that way since 0031. This screen
+   * read `students.overall_cgpa` instead - a column the registration form
+   * DELIBERATELY never writes, because an overall CGPA is not the student's to
+   * declare. It is null for every real student, `?? 0` made that a CGPA of
+   * zero, and so every cutoff excluded the entire roster: the coordinator was
+   * told nobody matched, about students who plainly qualified.
+   *
+   * The roster figures stay as the fallback, exactly as in the student's view:
+   * locking out a cohort nobody has verified yet is a worse answer than the
+   * number the coordinator imported.
+   */
+  const semesters = ((row.student_semesters ?? []) as Array<Record<string, unknown>>).map(
+    (s): SemesterRecord => ({
+      semesterNumber: Number(s.semester_number),
+      cgpa: Number(s.cgpa),
+      currentArrears: Number(s.current_arrears ?? 0),
+      historyOfArrears: Number(s.history_of_arrears ?? 0),
+      verified: s.status === "verified",
+    }),
+  );
+
+  const standing = academicStandingFrom(semesters);
+
   const academics: AcademicProfile = {
     degree: name(row.degrees),
     branch: name(row.branches),
     passingYear: (row.passing_year as number | null) ?? 0,
-    overallCgpa: (row.overall_cgpa as number | null) ?? 0,
+    overallCgpa: standing?.cgpa ?? Number(row.overall_cgpa ?? 0),
     tenthPercentage: (row.tenth_percentage as number | null) ?? 0,
     twelfthPercentage: (row.twelfth_percentage as number | null) ?? 0,
-    currentArrears: (row.current_arrears as number | null) ?? 0,
-    historyOfArrears: (row.history_of_arrears as number | null) ?? 0,
+    currentArrears: standing?.currentArrears ?? Number(row.current_arrears ?? 0),
+    historyOfArrears: standing?.historyOfArrears ?? Number(row.history_of_arrears ?? 0),
     city: name(one<{ cities: unknown }>(row.campuses)?.cities),
     campus: name(row.campuses),
   };
@@ -173,6 +229,20 @@ export function createSupabasePublishView(
         applicationEnd:
           row.application_end === null ? null : new Date(row.application_end as string),
         onHold: Boolean(row.on_hold),
+        // What the PIF declared and the Delivery Head approved. Fetched since
+        // the select was written; thrown away by the screen until now.
+        minOverallCgpa:
+          row.min_overall_cgpa === null || row.min_overall_cgpa === undefined
+            ? null
+            : Number(row.min_overall_cgpa),
+        arrearPolicy:
+          (row.arrears_policy as EligibilityCriteria["arrearPolicy"] | null) ?? "flexible",
+        targeting: {
+          cities: targetedCities(row.drive_target_campuses),
+          campuses: linkedNames(row.drive_target_campuses, "campuses"),
+          degrees: linkedNames(row.drive_eligible_degrees, "degrees"),
+          branches: linkedNames(row.drive_eligible_branches, "branches"),
+        },
         // F11: the AE already told us. Reported, never imposed - the named
         // rounds below are the coordinator's own work and must not be
         // overwritten by a count.

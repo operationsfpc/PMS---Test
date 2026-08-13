@@ -12,6 +12,7 @@ only you can supply. Everything else proceeds on assumptions (`ASSUMPTIONS.md`).
 | **P5** | Roster template fidelity | One **real college roster file** | A5 made our template canonical. If a real file differs, the importer changes |
 | **P6** | Staff onboarding | **A campus placement coordinator.** There are currently **0** | 6 staff exist (3 admins, 2 Central CPCs, 1 AE). The campus CPC role has no holder since `sainaveen` was removed, so nobody is campus-scoped. Nothing is broken — a Central CPC is org-wide and runs both queues — but the first campus CPC appointed **must be mapped to a campus** (or every queue they open is silently empty) and **must not also be on the student roster** (0040 now refuses that outright) |
 | **P7** | Go-live | Google OAuth consent screen verification, if you expect >100 users | Unverified apps hit a user cap |
+| **P9** | Two LIVE drives lost the CGPA cutoff their PIF declared | **Decide whether Wipro and Accenture (both live) should have 7.50 restored** — see below | Setting a cutoff on an open drive removes students who can see it today, retroactively. That is yours, not mine |
 
 ## Answered
 
@@ -46,6 +47,54 @@ roster.**
 
 - **Coverage gate.** `pnpm check` is red and **was red before this session's work** (proved against a clean `HEAD`): `src/domain` sits at 97.51% against the 100% rule, global branches 76.85% against 80%. Being brought back up.
 - **Playwright E2E.** Configured in plan, no specs written. One journey per role is the stated target.
+
+---
+
+## P9 — the publish screen overwrote four live drives' declared CGPA cutoff
+
+Found 2026-08-13 while fixing the "0 targeted students" report. **Fixed in code
+and shipped; the four rows it already changed are a data decision.**
+
+The publish screen fetched the cutoff the AE declared and then ignored it,
+opening on a hardcoded 7.0 — and publishing wrote that invented figure back
+over `drives.min_overall_cgpa`. Because every real student was being judged at
+a CGPA of zero (the defect being fixed), the only way anyone could publish at
+all was to clear that box, which stored **null**: no cutoff.
+
+The fingerprint is still in the data — a declared figure with nothing beside it:
+
+```sql
+select company_name, status, min_overall_marks, min_overall_cgpa_scale, min_overall_cgpa
+  from drives
+ where min_overall_marks is not null
+   and min_overall_cgpa is null;
+```
+
+Read live 2026-08-13, not remembered:
+
+| Drive | Status | Declared | Stored cutoff | Applications |
+|---|---|---|---|---|
+| Wipro | live | 7.50 | **null** | 0 |
+| Accenture | live | 7.50 | **null** | 1 |
+| TCS · Cognizant | live | none | null | 3 · 2 |
+| Wipro · Accenture (drafts) | draft | 7.50 | 7.50 — intact | 0 |
+| HCL Technologies | approved | 75.00 % | 7.89 — intact | 0 |
+
+TCS and Cognizant declared no cutoff on either column, so nothing was lost
+there — they predate F12. The drafts and HCL are untouched because nobody has
+published them yet, which is the whole point.
+
+**The decision is yours because it is not reversible in spirit.** Options:
+
+1. Leave both open — their application windows closed on 2026-08-12 anyway.
+2. Restore 7.50 (`update drives set min_overall_cgpa = min_overall_marks where
+   min_overall_marks is not null and min_overall_cgpa is null`). Accenture has
+   one application already in flight; restoring a cutoff does not withdraw it
+   (there is no withdrawal, PRD §7.4) but it does change who may still apply.
+
+No new drive can lose its cutoff this way again: the screen now opens on the
+cutoff the drive was approved with, and leaves the box **empty** when the drive
+declares none rather than inventing one.
 
 ---
 

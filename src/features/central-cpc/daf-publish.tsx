@@ -33,6 +33,9 @@ export interface TargetingOptions {
   readonly branches: readonly string[];
 }
 
+/** Whom the drive is already targeted at. Empty everywhere means "not yet". */
+export type DriveTargeting = TargetingOptions;
+
 export interface DriveRound {
   readonly sequence: number;
   readonly name: string;
@@ -54,6 +57,16 @@ export interface PublishDrive {
   readonly applicationEnd: Date | null;
   readonly onHold: boolean;
   readonly rounds: readonly DriveRound[];
+  /**
+   * The eligibility the AE declared and the Delivery Head approved. This
+   * screen used to seed a hardcoded 7.0 and "no standing arrears" over the top
+   * of both and then publish the invention, so what went live was never what
+   * was approved. Null means the drive declares no cutoff - which is not the
+   * same as a cutoff of zero.
+   */
+  readonly minOverallCgpa: number | null;
+  readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
+  readonly targeting: DriveTargeting;
   /**
    * How many rounds the AE said the recruiter runs (F11, UAT 2026-08-06).
    * Null when they never said. It seeds the list below and is then compared
@@ -160,9 +173,10 @@ export function DafPublish({ view }: { view: PublishView }) {
   const [campuses, setCampuses] = useState<readonly string[]>([]);
   const [degrees, setDegrees] = useState<readonly string[]>([]);
   const [branches, setBranches] = useState<readonly string[]>([]);
-  const [minCgpa, setMinCgpa] = useState("7");
-  const [arrearPolicy, setArrearPolicy] =
-    useState<EligibilityCriteria["arrearPolicy"]>("no_standing");
+  // Seeded from the drive in `load()`. There is no sensible default for either:
+  // a hardcoded cutoff is a rule nobody approved, and it used to be published.
+  const [minCgpa, setMinCgpa] = useState("");
+  const [arrearPolicy, setArrearPolicy] = useState<EligibilityCriteria["arrearPolicy"]>("flexible");
   const [openToAll, setOpenToAll] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [windowStart, setWindowStart] = useState("");
@@ -178,6 +192,20 @@ export function DafPublish({ view }: { view: PublishView }) {
       // window or round list is edited rather than silently replaced.
       setWindowStart(toLocalInput(next.drive.applicationStart));
       setWindowEnd(toLocalInput(next.drive.applicationEnd));
+      /**
+       * The same argument, for the eligibility the Delivery Head approved and
+       * the targeting the drive already carries. Both were fetched and
+       * discarded: the screen opened on an invented 7.0 cutoff with every chip
+       * clear, and publishing wrote that over the approved criteria and
+       * DELETED the link rows. An empty link table means "any", so re-
+       * publishing a live drive silently opened it to the whole roster.
+       */
+      setMinCgpa(next.drive.minOverallCgpa === null ? "" : String(next.drive.minOverallCgpa));
+      setArrearPolicy(next.drive.arrearPolicy);
+      setCities([...next.drive.targeting.cities]);
+      setCampuses([...next.drive.targeting.campuses]);
+      setDegrees([...next.drive.targeting.degrees]);
+      setBranches([...next.drive.targeting.branches]);
       /**
        * F11: seeded from what the AE declared, but ONLY when the coordinator
        * has named none themselves. Their names are the real work here; a

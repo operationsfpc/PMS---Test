@@ -4,7 +4,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { DafPublish, type PublishCandidate, type PublishView } from "./daf-publish";
+import {
+  DafPublish,
+  type PublishCandidate,
+  type PublishDrive,
+  type PublishView,
+} from "./daf-publish";
 
 /**
  * Publishing a drive.
@@ -47,15 +52,15 @@ const candidate = (
   ...over,
 });
 
-const DRIVE = {
+const DRIVE: PublishDrive = {
   id: "drive-1",
   companyName: "Zoho",
   roleTitle: "Member Technical Staff",
   subtitle: "Member Technical Staff · Dream · ₹6–8 LPA · Placement",
-  status: "approved" as const,
-  driveType: "placement" as const,
-  offerCategory: "dream" as const,
-  roleCategory: "software_technical" as const,
+  status: "approved",
+  driveType: "placement",
+  offerCategory: "dream",
+  roleCategory: "software_technical",
   jobDescription: "Build things.",
   locations: ["Chennai"],
   ctcMinLpa: 6,
@@ -63,15 +68,19 @@ const DRIVE = {
   applicationEnd: new Date("2026-08-14T00:00:00Z"),
   onHold: false,
   rounds: [{ sequence: 1, name: "Aptitude test" }],
-  declaredRoundCount: null as number | null,
+  declaredRoundCount: null,
+  // A drive that declares nothing: every test that cares states its own.
+  minOverallCgpa: null,
+  arrearPolicy: "flexible",
+  targeting: { cities: [], campuses: [], degrees: [], branches: [] },
 };
 
 /** A drive in the state the TCS drive was actually in: approved, but bare. */
-const BARE_DRIVE = {
+const BARE_DRIVE: PublishDrive = {
   ...DRIVE,
   applicationStart: null,
   applicationEnd: null,
-  rounds: [] as ReadonlyArray<{ sequence: number; name: string }>,
+  rounds: [],
 };
 
 function view(over: Partial<PublishView> = {}, cohort?: readonly PublishCandidate[]): PublishView {
@@ -154,6 +163,102 @@ describe("DafPublish — live audience", () => {
 });
 
 /**
+ * The screen must start from what the drive already says.
+ *
+ * The AE declares the cutoff and the arrear policy on the PIF; the Delivery
+ * Head approves THAT drive. This screen used to seed a hardcoded 7.0 and "no
+ * standing arrears" over the top of both, and then publish the invention — so
+ * the criteria that went live were never the criteria anybody approved.
+ */
+describe("DafPublish — starts from the approved criteria", () => {
+  const withDrive = (over: Partial<typeof DRIVE>) =>
+    view({ load: async () => ({ ...(await view().load()), drive: { ...DRIVE, ...over } }) });
+
+  const cgpaBox = async () =>
+    (await screen.findByLabelText(/minimum overall cgpa/i)) as HTMLInputElement;
+
+  it("seeds the cutoff the drive was approved with, not a hardcoded 7", async () => {
+    routed(withDrive({ minOverallCgpa: 7.89 }));
+
+    expect((await cgpaBox()).value).toBe("7.89");
+  });
+
+  it("leaves the cutoff empty when the drive declares none, rather than inventing one", async () => {
+    routed(withDrive({ minOverallCgpa: null }));
+
+    expect((await cgpaBox()).value).toBe("");
+  });
+
+  it("seeds the arrear policy the drive was approved with", async () => {
+    routed(withDrive({ arrearPolicy: "no_history" }));
+
+    expect(((await screen.findByLabelText(/arrear policy/i)) as HTMLSelectElement).value).toBe(
+      "no_history",
+    );
+  });
+
+  it("seeds the targeting the drive already has", async () => {
+    routed(
+      withDrive({
+        targeting: {
+          cities: ["Chennai"],
+          campuses: ["Alliance University"],
+          degrees: ["BCA"],
+          branches: ["AI and DS"],
+        },
+      }),
+    );
+
+    expect(await screen.findByRole("checkbox", { name: "BCA", checked: true })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "AI and DS", checked: true })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "Chennai", checked: true })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "CSE", checked: false })).toBeDefined();
+  });
+
+  /**
+   * A live drive re-opened on this screen used to arrive with every chip
+   * cleared, and publishing again DELETED its link rows — and an empty list
+   * means "any", so the drive silently opened to the whole roster.
+   */
+  it("re-publishes the targeting it arrived with instead of widening the drive", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    const seeded = withDrive({
+      targeting: {
+        cities: [],
+        campuses: ["Alliance University"],
+        degrees: ["BCA"],
+        branches: ["AI and DS"],
+      },
+    });
+    routed(view({ ...seeded, publish }));
+    // Two, not three: the seeded targeting is doing its job - the CSE student
+    // is outside a drive targeted at AI and DS.
+    await waitFor(() => expect(count()).toBe(2));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({
+      campuses: ["Alliance University"],
+      degrees: ["BCA"],
+      branches: ["AI and DS"],
+    });
+  });
+
+  it("publishes the cutoff it was seeded with, unchanged", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    const seeded = withDrive({ minOverallCgpa: 7.89 });
+    routed(view({ ...seeded, publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({ minOverallCgpa: 7.89 });
+  });
+});
+
+/**
  * The window and the rounds are set here, at publish time (A24).
  *
  * Neither had any input anywhere in the application. The mock drew green ticks
@@ -209,7 +314,7 @@ describe("DafPublish — window and rounds", () => {
     // browser's zone (Asia/Kolkata in production). Asserting a literal string
     // would just pin the test machine's offset; what matters is that the
     // instant survives the round trip without drifting.
-    expect(new Date(sent.applicationStart).getTime()).toBe(DRIVE.applicationStart.getTime());
+    expect(new Date(sent.applicationStart).getTime()).toBe(DRIVE.applicationStart?.getTime());
     expect(sent.rounds).toEqual([{ sequence: 1, name: "Aptitude test" }]);
   });
 
