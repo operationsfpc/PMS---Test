@@ -18,43 +18,68 @@ describe("landingRouteForRole", () => {
     expect(landingRouteForRole("student")).toBe("/student");
   });
 
-  it("sends a campus placement coordinator to the SRF verification queue", () => {
-    expect(landingRouteForRole("campus_placement_coordinator")).toBe("/cpc/verification");
-  });
-
-  it("sends the delivery head to the PIF approval queue", () => {
-    expect(landingRouteForRole("delivery_head")).toBe("/delivery-head/pif-approvals");
-  });
-
-  it("sends the central placement coordinator to the drive cockpit", () => {
-    expect(landingRouteForRole("central_placement_coordinator")).toBe("/central/drives");
-  });
-
-  it("sends an account executive to the PIF they raise drives with", () => {
-    expect(landingRouteForRole("account_executive")).toBe("/ae/pif");
-  });
-
   /**
-   * Campuses, not roster import. A roster cannot be imported until a campus
-   * exists, so landing on the importer was landing on a dead end - which is
-   * exactly what a new deployment hit in practice.
-   */
-  it("sends an admin to campuses, the first thing a new deployment needs", () => {
-    expect(landingRouteForRole("admin")).toBe("/admin/campuses");
-  });
-
-  /**
-   * These five are read-only reporting roles. They now share one dashboard:
-   * building five would be five chances to compute "placed" differently.
+   * SPEC CHANGE 2026-08-17 (Karthik): "Overview can be the top item and
+   * Placement Overview can be the standard landing page. Only exception is
+   * students logging in for the first time."
+   *
+   * Every staff role used to land on its own work queue, which answered "what
+   * is waiting for me?" before anyone had asked "how are we doing?". The
+   * overview is now the front door, and the queue is one click inside it.
    */
   it.each([
+    "campus_placement_coordinator",
+    "delivery_head",
+    "central_placement_coordinator",
+    "admin",
     "campus_manager",
     "key_account_manager",
     "enterprise_relations",
     "er_head",
     "ceo",
-  ] as const)("lands %s on the shared dashboard", (role) => {
+  ] as const)("lands %s on the overview", (role) => {
     expect(landingRouteForRole(role)).toBe("/dashboard");
+  });
+
+  /**
+   * The one staff exception, and it is not a preference. The AE has no read
+   * policy on students, so the placement overview renders zeroes for them and
+   * reads as a broken account - which is why they have no Overview entry in
+   * the sidebar either. Their drives ARE their overview.
+   */
+  it("lands an account executive on their drives, not on an overview of zeroes", () => {
+    expect(landingRouteForRole("account_executive")).toBe("/my-drives");
+  });
+
+  /**
+   * SPEC CHANGE 2026-08-17: the admin joins everyone else on the overview.
+   *
+   * This supersedes "sends an admin to campuses, the first thing a new
+   * deployment needs". The lesson that produced that test still stands and is
+   * kept below: the admin must never land on the ROSTER IMPORTER, which is a
+   * dead end until a campus exists - a real new deployment hit exactly that.
+   * The overview is not a dead end; it is read-only, honest about being empty,
+   * and Campuses is the first entry under Organisation.
+   */
+  it("lands an admin on the overview, never on the roster importer", () => {
+    expect(landingRouteForRole("admin")).toBe("/dashboard");
+    expect(landingRouteForRole("admin")).not.toBe("/admin/roster");
+  });
+
+  /** The student keeps their own dashboard: a placement overview is not their screen. */
+  it("leaves the student on their own dashboard", () => {
+    expect(landingRouteForRole("student")).toBe("/student");
+  });
+
+  /**
+   * The rule stated as a rule, so a role added later cannot quietly opt out of
+   * it. Only the two roles with a documented reason may land anywhere else.
+   */
+  it("lands every role on the overview except the student and the AE", () => {
+    for (const role of APP_ROLES) {
+      if (role === "student" || role === "account_executive") continue;
+      expect(landingRouteForRole(role)).toBe("/dashboard");
+    }
   });
 
   it("gives every role in the system a real route", () => {

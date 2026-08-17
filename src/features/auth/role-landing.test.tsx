@@ -48,14 +48,20 @@ describe("RoleLanding", () => {
     expect(await screen.findByText("Student dashboard")).toBeDefined();
   });
 
-  it("drops the central coordinator on the drive cockpit", () => {
+  /**
+   * SPEC CHANGE 2026-08-17 (Karthik): "Placement Overview can be the standard
+   * landing page." This used to assert the drive cockpit — the coordinator's
+   * work queue. The overview is the front door now; the queue is a click in.
+   */
+  it("drops the central coordinator on the overview, not their work queue", () => {
     renderLanding({
       status: "signed-in",
       role: "central_placement_coordinator",
       email: "c@example.com",
       campuses: [],
     });
-    expect(screen.getByText("Drive cockpit")).toBeDefined();
+    expect(screen.getByText("Dashboard")).toBeDefined();
+    expect(screen.queryByText("Drive cockpit")).toBeNull();
   });
 
   it("drops a CEO on the shared dashboard", () => {

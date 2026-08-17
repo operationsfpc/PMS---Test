@@ -5,17 +5,34 @@ import type { AppRole, ParticipationStatus, SrfStatus } from "./types";
  *
  * One login screen serves everybody; this rule decides where they go next.
  *
- * The five read-only reporting roles share ONE dashboard. RLS already scopes
- * what each can read, so a Campus Manager simply sees fewer rows than a CEO.
- * Five separate screens would be five chances to compute "placed" differently.
+ * SPEC CHANGE 2026-08-17 (Karthik): "Overview can be the top item and Placement
+ * Overview can be the standard landing page. Only exception is students logging
+ * in for the first time."
+ *
+ * Every staff role used to land on its own work queue, so the app opened on
+ * "what is waiting for me?" before anyone could ask "how are we doing?". The
+ * overview is now the front door and the queue is one click inside it. One
+ * dashboard serves them all - RLS scopes what each can read, so a Campus
+ * Manager sees fewer rows than a CEO, and building one screen per role would
+ * be one more chance to compute "placed" differently.
+ *
+ * Two roles are exceptions, both for a reason rather than a preference:
+ *
+ *  - `student` keeps their own dashboard. A placement overview is not their
+ *    screen, and a first-time student goes to the registration form instead -
+ *    see `studentLandingRoute`, which their role alone cannot answer.
+ *  - `account_executive` has NO read policy on students, so the placement
+ *    overview renders zeroes for them and reads as a broken account. That is
+ *    also why they have no Overview entry in the sidebar. Their drives are
+ *    their overview.
  */
 const LANDING_ROUTES: Record<AppRole, string> = {
-  admin: "/admin/campuses",
+  admin: "/dashboard",
   student: "/student",
-  campus_placement_coordinator: "/cpc/verification",
-  account_executive: "/ae/pif",
-  delivery_head: "/delivery-head/pif-approvals",
-  central_placement_coordinator: "/central/drives",
+  campus_placement_coordinator: "/dashboard",
+  account_executive: "/my-drives",
+  delivery_head: "/dashboard",
+  central_placement_coordinator: "/dashboard",
   campus_manager: "/dashboard",
   key_account_manager: "/dashboard",
   enterprise_relations: "/dashboard",

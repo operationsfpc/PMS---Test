@@ -26,8 +26,17 @@ describe("AppShell", () => {
     expect(screen.getByAltText(/face prep campus/i)).toBeDefined();
   });
 
+  /**
+   * Since 2026-08-17 the sidebar collapses every group but the one in use, and
+   * these render at "/" which is inside none of them. The group is opened
+   * first so the test still asks its own question - which role's links are
+   * offered - rather than accidentally testing the collapse.
+   */
+  const openGroup = async (name: RegExp) => userEvent.click(screen.getByRole("button", { name }));
+
   it("switches navigation when previewing a different role", async () => {
     routed(<AppShell>content</AppShell>);
+    await openGroup(/^home$/i);
     expect(screen.getByRole("link", { name: /my dashboard/i })).toBeDefined();
 
     await userEvent.selectOptions(
@@ -35,6 +44,7 @@ describe("AppShell", () => {
       screen.getByRole("option", { name: /delivery head/i }),
     );
 
+    await openGroup(/^drive approval$/i);
     expect(screen.getByRole("link", { name: /pif approvals/i })).toBeDefined();
     expect(screen.queryByRole("link", { name: /my dashboard/i })).toBeNull();
   });
@@ -290,6 +300,8 @@ describe("mobile navigation", () => {
   it("closes the menu after a destination is chosen", async () => {
     routed(<AppShell>content</AppShell>);
     await userEvent.click(screen.getByRole("button", { name: /open navigation/i }));
+    // The group has to be opened before there is a destination to choose.
+    await userEvent.click(screen.getByRole("button", { name: /^home$/i }));
     await userEvent.click(screen.getByRole("link", { name: /my dashboard/i }));
     expect(screen.getByRole("button", { name: /open navigation/i })).toBeDefined();
   });

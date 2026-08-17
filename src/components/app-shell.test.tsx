@@ -2,7 +2,7 @@
 import type { AppRole } from "@domain/types";
 import { AuthContext, type AuthState } from "@features/auth/require-auth";
 import { AuthActionsContext } from "@lib/auth-context";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -16,16 +16,54 @@ import { AppShell } from "./app-shell";
  * role's screens: RLS would return nothing, but offering the route at all is
  * misleading and invites support tickets about "broken" pages.
  */
-function shellFor(auth: AuthState, signOut: () => Promise<void> = async () => {}) {
+/**
+ * Renders the shell exactly as a user first sees it, with groups collapsed.
+ * Used by the tests that are ABOUT collapsing.
+ */
+function shellCollapsed(
+  auth: AuthState,
+  signOut: () => Promise<void> = async () => {},
+  path = "/dashboard",
+) {
   return render(
     <AuthActionsContext.Provider value={{ signOut }}>
       <AuthContext.Provider value={auth}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
           <AppShell>content</AppShell>
         </MemoryRouter>
       </AuthContext.Provider>
     </AuthActionsContext.Provider>,
   );
+}
+
+/**
+ * Renders the shell with every group opened.
+ *
+ * Since 2026-08-17 the sidebar collapses every group except the one in use, so
+ * a link can now be missing for two very different reasons: the role does not
+ * have it, or its heading is simply shut. Most tests here ask the FIRST
+ * question - "is this destination offered to this role?" - and opening every
+ * group is what keeps them asking it. The collapsing itself is pinned
+ * separately, in "the sidebar groups collapse to the one in use".
+ */
+function shellFor(
+  auth: AuthState,
+  signOut: () => Promise<void> = async () => {},
+  path = "/dashboard",
+) {
+  const result = shellCollapsed(auth, signOut, path);
+
+  // Scoped to THIS render's container, not the document. The queries on a
+  // render result are bound to document.body, and some tests render the shell
+  // twice without unmounting - a document-wide query finds both navs and throws.
+  const nav = within(result.container).queryByRole("navigation", { name: /main/i });
+  if (nav !== null) {
+    for (const button of within(nav).getAllByRole("button")) {
+      if (button.getAttribute("aria-expanded") === "false") fireEvent.click(button);
+    }
+  }
+
+  return result;
 }
 
 const signedIn = (role: AppRole, campuses: readonly string[] = []): AuthState => ({
@@ -408,5 +446,99 @@ describe("the Central Placement Coordinator's drive module", () => {
     shellFor(signedIn("central_placement_coordinator"));
 
     expect(screen.getByRole("link", { name: /shortlisting/i })).toBeDefined();
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik), three asks about the sidebar:
+ *
+ *  1. "The size of heading is smaller than the lines below them. Headings are
+ *     not prominent."
+ *  2. "Collapse the sub headings that are not in use. Only the sub heading of
+ *     the headings in use has to be expanded."
+ *  3. "Overview can be the top item."
+ *
+ * The Central CPC saw eleven links under six headings, all open, with the
+ * headings set smaller than the links they governed - so the one piece of
+ * text that could have organised the list was the easiest to miss.
+ */
+describe("the sidebar groups collapse to the one in use", () => {
+  /** The heading buttons, in the order they appear in the sidebar. */
+  const groupHeadings = () =>
+    within(screen.getByRole("navigation", { name: /main/i }))
+      .getAllByRole("button")
+      .map((button) => button.textContent?.trim());
+
+  it.each([
+    ["central_placement_coordinator"],
+    ["delivery_head"],
+    ["admin"],
+    ["campus_placement_coordinator"],
+    ["ceo"],
+  ] as const)("puts Overview first in the %s sidebar", (role) => {
+    shellCollapsed(signedIn(role));
+    expect(groupHeadings()[0]).toMatch(/overview/i);
+  });
+
+  /** The AE has no overview to promote, and must not grow one by accident. */
+  it("gives the Account Executive no Overview group to put first", () => {
+    shellCollapsed(signedIn("account_executive"), async () => {}, "/my-drives");
+    expect(groupHeadings()).not.toContain("Overview");
+  });
+
+  /** The heading is a real control, so the reader can open a collapsed group. */
+  it("makes each group heading a button that reports whether it is open", () => {
+    shellCollapsed(signedIn("central_placement_coordinator"));
+    expect(screen.getByRole("button", { name: /overview/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /overview/i }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  });
+
+  it("collapses the groups the reader is not in", () => {
+    shellCollapsed(signedIn("central_placement_coordinator"));
+    expect(
+      screen.getByRole("button", { name: /publish a drive/i }).getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(screen.queryByRole("link", { name: /skill repository/i })).toBeNull();
+  });
+
+  it("expands the group holding the current page instead", () => {
+    shellCollapsed(signedIn("central_placement_coordinator"), async () => {}, "/central/skills");
+
+    expect(
+      screen.getByRole("button", { name: /publish a drive/i }).getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^overview/i }).getAttribute("aria-expanded")).toBe(
+      "false",
+    );
+  });
+
+  it("opens a collapsed group when its heading is used", async () => {
+    const user = userEvent.setup();
+    shellCollapsed(signedIn("central_placement_coordinator"));
+
+    expect(screen.queryByRole("link", { name: /skill repository/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /publish a drive/i }));
+    expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
+  });
+
+  /** Collapsing must never make a destination unreachable. */
+  it("keeps every heading on screen even when its links are hidden", () => {
+    shellCollapsed(signedIn("central_placement_coordinator"));
+    // Exact names: "Drives" and "Drives in progress" are different headings,
+    // and a loose match here would pass while the sidebar was wrong.
+    for (const heading of [
+      "Overview",
+      "Drives",
+      "Publish a drive",
+      "Drives in progress",
+      "Requests",
+    ]) {
+      // A plain string is an exact match for an accessible name, so "Drives"
+      // does not also match "Drives in progress".
+      expect(screen.getByRole("button", { name: heading })).toBeDefined();
+    }
   });
 });

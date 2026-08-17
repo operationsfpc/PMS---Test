@@ -1,8 +1,9 @@
+import { openGroupHeadings } from "@domain/navigation";
 import { campusScopeFor } from "@domain/staff";
 import type { AppRole } from "@domain/types";
 import { useAuth, useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useState } from "react";
-import { NavLink } from "react-router";
+import { NavLink, useLocation } from "react-router";
 
 /**
  * Application shell: brand header, role-scoped navigation.
@@ -52,6 +53,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   // is the campus placement coordinator's alone. RLS scopes them to their
   // campus.
   campus_placement_coordinator: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
     {
       heading: "Verification",
       items: [
@@ -74,7 +76,6 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/cpc/off-campus", label: "Off-campus offers" },
       ],
     },
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
   ],
   /**
    * The AE raises drives and then watches them. 2026-08-17 (Karthik): "the AE
@@ -108,6 +109,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   ceo: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Executive overview" }] }],
   // Approving a PIF used to be the end of the Delivery Head's visibility.
   delivery_head: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
     {
       heading: "Drive approval",
       items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
@@ -119,9 +121,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/central/drives", label: "Drive cockpit" },
       ],
     },
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
   ],
   central_placement_coordinator: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
     // D2: approval stays with the Delivery Head; the Central CPC sees what is
     // waiting to be published and what already is, separately. The old
     // cockpit is absorbed into those two views.
@@ -159,9 +161,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/cpc/off-campus", label: "Off-campus offers" },
       ],
     },
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
   ],
   admin: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
     {
       heading: "Organisation",
       items: [
@@ -171,7 +173,6 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/admin/roster", label: "Import roster" },
       ],
     },
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
   ],
 };
 
@@ -220,6 +221,34 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const role = previewable && preview !== null ? preview : signedInRole;
   const groups = ROLE_NAVS[role] ?? [];
+
+  /**
+   * 2026-08-17 (Karthik): "Collapse the sub headings that are not in use. Only
+   * the sub heading of the headings in use has to be expanded."
+   *
+   * Which group that is, is `openGroupHeadings`' decision.
+   *
+   * The reader's own clicks are held as OVERRIDES on top of that answer, not
+   * as the state itself. State seeded once from the first path would freeze on
+   * wherever they happened to land, and the open group has to follow them as
+   * they navigate. Overrides are stamped with the path they were made on, so
+   * navigating away drops them and the location decides again.
+   *
+   * Several groups may be open at once. This is not an accordion: shutting a
+   * group the reader deliberately opened, because they opened another one, is
+   * the sort of helpfulness that loses people their place.
+   */
+  const { pathname } = useLocation();
+  const [overrides, setOverrides] = useState<{
+    path: string;
+    open: Record<string, boolean>;
+  }>({ path: pathname, open: {} });
+
+  const active = openGroupHeadings(groups, pathname);
+  const effective = overrides.path === pathname ? overrides.open : {};
+  const isOpen = (heading: string) => effective[heading] ?? active.includes(heading);
+  const toggleGroup = (heading: string) =>
+    setOverrides({ path: pathname, open: { ...effective, [heading]: !isOpen(heading) } });
 
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
     `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -313,22 +342,53 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
             ))}
           <div className="mb-2" />
-          {groups.map((group) => (
-            <section key={group.heading} className="mb-4">
-              <h2 className="px-3 pb-1 font-heading text-[11px] font-semibold uppercase tracking-widest text-accent">
-                {group.heading}
-              </h2>
-              <ul className="flex flex-col gap-1">
-                {group.items.map((item) => (
-                  <li key={item.to}>
-                    <NavLink to={item.to} className={linkClass} onClick={() => setMenuOpen(false)}>
-                      {item.label}
-                    </NavLink>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+          {groups.map((group) => {
+            const open = isOpen(group.heading);
+            return (
+              <section key={group.heading} className="mb-1">
+                {/*
+                 * The heading is now the control, and it is BIGGER and darker
+                 * than the links it governs (Karthik, 2026-08-17: "the size of
+                 * heading is smaller than the lines below them. Headings are
+                 * not prominent."). It was 11px uppercase accent over 14px
+                 * links - the one piece of text that organised the list was
+                 * the easiest thing in it to miss.
+                 */}
+                <h2 className="font-heading">
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => toggleGroup(group.heading)}
+                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-base font-bold text-ink-900 transition-colors hover:bg-brand-50"
+                  >
+                    <span>{group.heading}</span>
+                    <span
+                      aria-hidden="true"
+                      className={`text-xs text-ink-400 transition-transform ${open ? "rotate-90" : ""}`}
+                    >
+                      ›
+                    </span>
+                  </button>
+                </h2>
+
+                {open && (
+                  <ul className="mb-3 flex flex-col gap-1 border-l-2 border-line pl-2">
+                    {group.items.map((item) => (
+                      <li key={item.to}>
+                        <NavLink
+                          to={item.to}
+                          className={linkClass}
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          {item.label}
+                        </NavLink>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
         </nav>
 
         <main className={`min-w-0 flex-1 ${menuOpen ? "hidden lg:block" : "block"}`}>
