@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 import { type CampusOption, RosterImportPage } from "./roster-import-page";
 
 /**
- * Route wrapper: loads the campuses an administrator may import into.
+ * Route wrapper: loads the campuses an administrator may add students into.
  *
- * With no campuses there is nothing to import against, so that case is stated
+ * With no campuses there is nothing to add against, so that case is stated
  * plainly rather than rendering a form with an empty dropdown.
  */
 export function AdminRosterPage() {
@@ -77,8 +77,8 @@ export function AdminRosterPage() {
     return (
       <Card className="p-6">
         <p className="text-sm text-ink-700">
-          No campuses have been set up yet. A campus must exist before a roster can be imported
-          against it.
+          No campuses have been set up yet. A campus must exist before students can be added against
+          it.
         </p>
       </Card>
     );

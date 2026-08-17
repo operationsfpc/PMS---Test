@@ -61,9 +61,6 @@ const PLACEMENT_TYPES: readonly DriveType[] = ["placement", "internship_converti
 
 const isPlacementType = (type: DriveType) => PLACEMENT_TYPES.includes(type);
 
-/** Every SRF status that means the form has actually been sent in. */
-const SUBMITTED: readonly SrfStatus[] = ["srf_submitted", "srf_approved", "srf_rejected"];
-
 /**
  * The percentage bar, and the CGPA that stands in for it.
  *
@@ -126,7 +123,15 @@ export function summariseStudentMetrics(
   const internships = onCampus.filter((o) => o.driveType === "internship");
 
   return {
-    registered: students.filter((s) => SUBMITTED.includes(s.srfStatus)).length,
+    /**
+     * CONFIRMED 2026-08-17 (Karthik): "they are students whose addition to the
+     * portal has been approved." Not the registration FORM - a student counts
+     * from the moment an administrator adds them through Add students, because
+     * only an Admin can make that addition and the addition IS the approval.
+     * How far they have got with their own form is the Students overview's
+     * question, and it is answered there.
+     */
+    registered: students.length,
     eligible: students.filter(meetsSixtyPercentBar).length,
     placedStudents: new Set(placements.map((o) => o.studentId)).size,
     placementOffers: placements.length,

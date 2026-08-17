@@ -182,7 +182,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/admin/campuses", label: "Campuses" },
         { to: "/admin/staff", label: "Staff" },
         // F6: degrees and branches belong to a college, under Campuses.
-        { to: "/admin/roster", label: "Import roster" },
+        // Renamed 2026-08-17: the page is named for what it does, not for
+        // the file it happens to eat.
+        { to: "/admin/roster", label: "Add students" },
       ],
     },
   ],

@@ -122,7 +122,16 @@ describe("summariseStudentMetrics", () => {
     ug({ studentId: "s3", tenthPercentage: 40 }),
   ];
 
-  it("counts registered students by a submitted form, not by the roster", () => {
+  /**
+   * CONFIRMED 2026-08-17 (Karthik), asked and answered: "[registered students]
+   * are students whose addition to the portal has been approved."
+   *
+   * So this is NOT the registration FORM. A student is registered the moment
+   * an administrator adds them through Add students - the addition is the
+   * approval, because only an Admin can make one. Where they have got to with
+   * their own form is the Students overview's question, not this box's.
+   */
+  it("counts every student on the portal, whatever their form says", () => {
     const rows = [
       ug({ studentId: "a", srfStatus: "invited" }),
       ug({ studentId: "b", srfStatus: "registered" }),
@@ -130,7 +139,7 @@ describe("summariseStudentMetrics", () => {
       ug({ studentId: "d", srfStatus: "srf_approved" }),
       ug({ studentId: "e", srfStatus: "srf_rejected" }),
     ];
-    expect(summariseStudentMetrics(rows, []).registered).toBe(3);
+    expect(summariseStudentMetrics(rows, []).registered).toBe(5);
   });
 
   it("counts eligible students against the 60% bar", () => {

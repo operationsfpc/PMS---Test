@@ -27,13 +27,25 @@ export interface CampusOption {
  * library, and adding a dependency is a decision to take deliberately rather
  * than in passing. "Save as CSV" is one step in Excel.
  */
+/** Real downloads go through a Blob; tests hand in a spy. */
+function browserDownload(filename: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function RosterImportPage({
   repository,
   campuses,
   taken = new Map(),
+  download = browserDownload,
 }: {
   repository?: RosterRepository;
   campuses: readonly CampusOption[];
+  download?: (filename: string, text: string) => void;
   /**
    * Addresses already claimed by a student or staff member (0040), keyed by
    * the normalised address. Surfaces a clash HERE, per row, rather than as one
@@ -85,8 +97,8 @@ export function RosterImportPage({
   return (
     <>
       <PageHeader
-        title="Import student roster"
-        subtitle="Students can only sign in if they are on the roster."
+        title="Add students"
+        subtitle="Students can only sign in once they have been added here."
       />
 
       {error !== null && (
@@ -139,6 +151,26 @@ export function RosterImportPage({
             />
             <p className="mt-1 text-xs text-ink-500">
               Columns, in order: {ROSTER_COLUMNS.join(", ")}
+            </p>
+            {/*
+             * 2026-08-17 (Karthik): "put a sample CSV file there with just the
+             * first row (headings) filled... this is more for reference."
+             *
+             * The import refuses a file whose columns are not in this exact
+             * order, so retyping the header by hand is a failed import waiting
+             * to happen with no obvious cause. Built FROM `ROSTER_COLUMNS`, so
+             * a column added later cannot leave the template handing out a
+             * header that looks official and no longer works.
+             */}
+            <button
+              type="button"
+              onClick={() => download("add-students-template.csv", `${ROSTER_COLUMNS.join(",")}\n`)}
+              className="mt-2 text-xs font-semibold text-brand-600 hover:underline"
+            >
+              Download sample CSV
+            </button>
+            <p className="mt-1 text-xs text-ink-500">
+              Headings only — fill in one student per row underneath.
             </p>
           </div>
         </div>
