@@ -27,7 +27,8 @@ const num = (value: unknown): number => Number(value ?? 0);
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const DASHBOARD_STUDENT_COLUMNS = `
-  id, full_name, roll_number, passing_year, srf_status, participation_status,
+  id, full_name, roll_number, passing_year, srf_status, srf_rejection_reason,
+  participation_status,
   degrees(name), branches(name), campuses(name),
   student_semesters(semester_number, cgpa, status)
 `;
@@ -185,6 +186,7 @@ export function createSupabaseStudentDashboardView(
         passingYear: Number(student.passing_year),
         campus: one<{ name: string }>(student.campuses)?.name ?? "",
         srfStatus: student.srf_status as StudentDashboardSnapshot["srfStatus"],
+        srfRejectionReason: (student.srf_rejection_reason as string | null) ?? null,
         participationStatus:
           student.participation_status as StudentDashboardSnapshot["participationStatus"],
         openDrives: openDrives.filter((drive) => drive.canApply).length,

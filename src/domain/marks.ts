@@ -18,6 +18,7 @@
  * comparison re-derive a number it could get wrong.
  */
 
+import type { ProgrammeLevel } from "./academics";
 import { roundTo } from "./math";
 
 export const MARKS_SCALES = ["cgpa", "percentage"] as const;
@@ -58,6 +59,31 @@ export function normaliseToCgpa(value: number, scale: MarksScale): number {
   // clear every cutoff ever set, including ones the student does not meet.
   return Math.min(10, roundTo(value / PERCENTAGE_TO_CGPA_DIVISOR, 2));
 }
+
+/**
+ * WHICH COLLEGE the scale question is about (2026-08-18, answer 6a).
+ *
+ * One question governs every semester line, and for a postgraduate those lines
+ * are their PG semesters - the finished UG degree carries its own figure on its
+ * own scale. Asking a PG student "how does your UG college report marks" above
+ * their PG semesters would collect the wrong answer, and a percentage stored as
+ * a CGPA decides who is eligible for a drive.
+ *
+ * Here rather than in JSX so `src/copy.test.ts` can hold the wording, and so
+ * the two questions cannot drift into saying the same thing.
+ */
+export function marksScaleQuestion(level: ProgrammeLevel): string {
+  return level === "pg"
+    ? "How does your PG college report marks?"
+    : "How does your college report marks?";
+}
+
+/**
+ * The completed undergraduate degree's own scale. It used to be labelled "UG
+ * scale", which is a column heading, not a question - and it sat under a
+ * question about a different college.
+ */
+export const UG_COLLEGE_MARKS_SCALE_QUESTION = "How does your UG college report marks?";
 
 /**
  * How the figure is shown to a human.

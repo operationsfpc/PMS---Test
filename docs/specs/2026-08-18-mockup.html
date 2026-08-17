@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mockup — boards, reject with comments, Drives nav (2026-08-18)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Geist:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --primary: #3d3777; --secondary: #ffb800; --accent: #a46afc;
+        --warning: #ff7200; --danger: #dd4820; --danger-bg: #fff0ec;
+        --line: #dadada; --muted: #f5f5f5; --ink: #1c1b2e; --ink-500: #6b6980;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: Geist, system-ui, sans-serif; color: var(--ink); background: #eef1f6; }
+      h1, h2, h3, legend, .h { font-family: Raleway, sans-serif; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+      .note { background: #fffbea; border: 1px solid var(--secondary); border-radius: 10px; padding: 12px 14px; font-size: 13px; margin: 12px 0 24px; }
+      .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+      fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 0 0 16px; }
+      fieldset.dashed { border-style: dashed; }
+      legend { font-size: 13px; font-weight: 600; padding: 0 6px; }
+      label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+      .req::after { content: " *"; color: var(--danger); }
+      input, select, textarea { width: 100%; font: inherit; font-size: 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+      .new { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 6px; }
+      .tag { display: inline-block; font-size: 11px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: 2px; }
+      .hint { font-size: 12px; color: var(--ink-500); margin: 4px 0 0; }
+      .btn { font: inherit; font-size: 13px; font-weight: 600; border-radius: 8px; padding: 8px 14px; border: 1px solid var(--primary); background: var(--primary); color: #fff; cursor: pointer; }
+      .btn.ghost { background: #fff; color: var(--primary); }
+      .btn.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+      .btn.danger.solid { background: var(--danger); color: #fff; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th, td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+      th { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-500); border-top: 0; }
+      .badge { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
+      .badge.warn { background: #fff6e5; color: #8a5b00; }
+      .badge.ok { background: #e7f8ef; color: #12704a; }
+      .badge.brand { background: #eeebfa; color: var(--primary); }
+      .badge.danger { background: var(--danger-bg); color: var(--danger); }
+      .shell { display: grid; grid-template-columns: 250px 1fr; gap: 20px; }
+      .nav { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px; font-size: 14px; }
+      .nav .role { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500); margin-bottom: 14px; }
+      .nav .head { font-family: Raleway; font-weight: 700; margin: 12px 0 6px; }
+      .nav a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; margin-left: 8px; }
+      .nav a.on { background: var(--primary); color: #fff; font-weight: 600; }
+      .nav s { color: var(--ink-500); }
+      .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 14px; }
+      .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+      .stat span { display: block; font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-500); }
+      .stat b { font-size: 20px; font-family: Raleway; }
+      .bar { height: 8px; background: var(--muted); border-radius: 999px; overflow: hidden; width: 190px; }
+      .bar i { display: block; height: 100%; background: var(--primary); }
+      .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+      .strike { text-decoration: line-through; opacity: .45; }
+      .err { color: var(--danger); font-size: 12px; font-weight: 500; margin-top: 4px; }
+      h2 { margin: 34px 0 10px; font-size: 20px; }
+      .sub { color: var(--ink-500); font-size: 13px; margin: 0 0 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Mockup — 2026-08-18</h1>
+      <p class="sub">Violet dashed outline = new or changed. Everything else is on screen today.</p>
+      <div class="note">
+        <strong>Four items:</strong> 1 board on 10th/12th + university on the diploma ·
+        2 the marks-scale question names its college · 3 reject with comments and a form that comes
+        back filled in · 4 Drives has two sub-headings.
+      </div>
+
+      <!-- ITEM 1 -->
+      <h2>1 · Academic record — boards and the diploma university</h2>
+      <p class="sub">Section 2 of the registration form. The board sits with the school that issued the marks, above the marksheet that proves them.</p>
+      <div class="card">
+        <fieldset>
+          <legend>Class 10</legend>
+          <div class="grid3">
+            <div><label class="req">10th school name</label><input value="Vidya Mandir Sr. Sec. School" /></div>
+            <div class="new"><label class="req">10th board <span class="tag">new</span></label>
+              <select><option>Select…</option><option selected>State Board</option><option>CBSE</option><option>ICSE (CISCE)</option><option>NIOS</option><option>International Baccalaureate (IB)</option><option>Cambridge (IGCSE / O-Level)</option><option>Other</option></select>
+            </div>
+            <div class="new"><label class="req">Which state's board? <span class="tag">only for State Board</span></label>
+              <select><option>Select…</option><option selected>Tamil Nadu</option><option>Andhra Pradesh</option><option>Karnataka</option><option>Telangana</option><option>… all 28 states + 8 UTs</option></select>
+            </div>
+            <div><label class="req">10th marks (%)</label><input type="number" value="91.4" /></div>
+            <div><label class="req">10th marksheet</label><input type="file" /></div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Class 12</legend>
+          <div class="grid3">
+            <div><label class="req">12th school name</label><input value="Sri Chaitanya Junior College" /></div>
+            <div class="new"><label class="req">12th board <span class="tag">new</span></label>
+              <select><option>State Board</option><option>CBSE</option><option selected>Other</option><option>ISC (CISCE)</option><option>NIOS</option><option>International Baccalaureate (IB)</option><option>Cambridge (IGCSE / A-Level)</option></select>
+              <p class="hint">CISCE reads <strong>ISC</strong> at class 12 and <strong>ICSE</strong> at class 10 — one stored value, the right label in each place.</p>
+            </div>
+            <div class="new"><label class="req">Name the board <span class="tag">only for Other</span></label><input placeholder="e.g. Jamia Milia Islamia board" /></div>
+            <div><label class="req">12th marks (%)</label><input type="number" value="88.0" /></div>
+            <div><label class="req">12th marksheet</label><input type="file" /></div>
+          </div>
+        </fieldset>
+
+        <fieldset class="dashed">
+          <legend>Diploma <span style="font-weight:400;color:var(--ink-500)">(optional)</span></legend>
+          <p class="hint" style="margin-bottom:12px">Leave blank if you did not do one. If you did, we need the college, the awarding university or board, the result and the marksheet.</p>
+          <div class="grid2">
+            <div><label>Diploma college</label><input placeholder="College that issued it" /></div>
+            <div class="new"><label>University / Board <span class="tag">new</span></label>
+              <input placeholder="Who awarded it — e.g. Anna University, or DOTE" />
+              <p class="hint">Required once any diploma figure is entered — same all-or-nothing rule as the college.</p>
+            </div>
+            <div class="grid2" style="gap:8px">
+              <div><label>Diploma scale</label><select><option>CGPA (out of 10)</option><option>Cumulative percentage (%)</option></select></div>
+              <div><label>Diploma marks</label><input type="number" /></div>
+            </div>
+            <div><label>Diploma marksheet</label><input type="file" /></div>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- ITEM 2 -->
+      <h2>2 · The marks-scale question names its college (PG selected)</h2>
+      <div class="card">
+        <fieldset style="border:0;padding:0">
+          <legend style="padding-left:0">Which are you pursuing? *</legend>
+          <p style="font-size:14px"><label style="display:inline;margin-right:18px"><input type="radio" style="width:auto" /> Undergraduate (UG)</label>
+            <label style="display:inline"><input type="radio" style="width:auto" checked /> Postgraduate (PG)</label></p>
+          <div class="new" style="max-width:340px;margin-top:16px">
+            <label>How does your PG college report marks? <span class="tag">was “How your college reports marks”</span></label>
+            <select><option>CGPA (out of 10)</option><option>Cumulative percentage (%)</option></select>
+            <p class="hint">Applies to every semester below — those are your PG semesters.</p>
+          </div>
+        </fieldset>
+
+        <fieldset style="margin-top:18px;background:var(--muted)">
+          <legend>Your completed undergraduate degree</legend>
+          <div class="grid2">
+            <div><label class="req">UG degree</label><input placeholder="e.g. B.Sc Computer Science" /></div>
+            <div><label class="req">UG college</label><input placeholder="College you graduated from" /></div>
+            <div><label class="req">UG branch</label><input placeholder="e.g. Computer Science" /></div>
+            <div class="new"><label>How does your UG college report marks? <span class="tag">was “UG scale”</span></label>
+              <select><option>CGPA (out of 10)</option><option>Cumulative percentage (%)</option></select></div>
+            <div><label class="req">UG marks</label><input type="number" /></div>
+            <div><label>Consolidated UG marksheet</label><input type="file" /></div>
+          </div>
+        </fieldset>
+        <div class="note" style="margin-bottom:0">On <strong>UG</strong> the fork question reads
+          “How does your college report marks?” and this whole block is not shown.</div>
+      </div>
+
+      <!-- ITEM 3a -->
+      <h2>3a · Verification queue — send it back with comments</h2>
+      <p class="sub">/cpc/verification, campus placement coordinator only. Today this column holds Approve and nothing else.</p>
+      <div class="card">
+        <table>
+          <tr><th>Student</th><th>10th</th><th>12th</th><th>Declared semesters</th><th style="width:300px">Decision</th></tr>
+          <tr>
+            <td><strong>Shashwathi R</strong><br /><span style="color:var(--ink-500)">21CSE1042</span></td>
+            <td>91.4<br /><span class="badge brand">State Board — Tamil Nadu</span></td>
+            <td>88.0<br /><span class="badge brand">CBSE</span></td>
+            <td>Sem 1 <strong>8.50</strong> · <a href="#">Marksheet</a><br />Sem 2 <strong>8.62</strong> · <a href="#">Marksheet</a></td>
+            <td>
+              <p class="hint" style="margin-top:0">Approving will also verify 2 certificates.</p>
+              <button class="btn">Approve</button>
+              <span class="new" style="display:inline-block;margin-left:6px"><button class="btn danger">Send back for changes</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Thanush Krishna</strong><br /><span style="color:var(--ink-500)">21ECE0871</span></td>
+            <td>76.0<br /><span class="badge brand">CBSE</span></td>
+            <td>71.5<br /><span class="badge brand">CBSE</span></td>
+            <td>Sem 1 <strong>7.50</strong> · <span style="color:var(--danger)">No marksheet</span></td>
+            <td class="new">
+              <label class="req" style="margin-top:0">What does this student need to correct?</label>
+              <textarea rows="3">Your semester 1 marksheet is missing, and the 12th board does not match the marksheet you uploaded.</textarea>
+              <p style="margin:8px 0 0">
+                <button class="btn danger solid">Send back</button>
+                <button class="btn ghost">Cancel</button>
+              </p>
+              <p class="err">A rejection needs a reason, so the student knows what to correct. <em>(shown if left empty — the request is never sent)</em></p>
+            </td>
+          </tr>
+          <tr>
+            <td><strong>Arun Prakash</strong><br /><span style="color:var(--ink-500)">21MEC0233</span>
+              <div class="new" style="margin-top:6px"><span class="badge warn">Resubmitted</span></div></td>
+            <td>82.0<br /><span class="badge brand">State Board — Kerala</span></td>
+            <td>79.0<br /><span class="badge brand">State Board — Kerala</span></td>
+            <td>Sem 1 <strong>7.90</strong> · <a href="#">Marksheet</a></td>
+            <td><div class="new" style="margin-bottom:8px;font-size:12px;color:var(--ink-500)">
+                <strong>You sent this back:</strong> “Semester 2 is missing.”</div>
+              <button class="btn">Approve</button>
+              <button class="btn danger">Send back for changes</button></td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- ITEM 3b -->
+      <h2>3b · What the student gets back</h2>
+      <div class="card">
+        <div style="border:1px solid var(--danger);background:var(--danger-bg);border-radius:12px;padding:14px">
+          <p style="margin:0;font-weight:600;color:var(--danger)">Sent back for changes</p>
+          <p style="margin:6px 0 0;font-size:14px">Your semester 1 marksheet is missing, and the 12th board does not match the marksheet you uploaded.</p>
+        </div>
+        <div class="new" style="margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--muted)">
+          <p style="margin:0;font-size:14px"><strong>Everything you typed is already filled in below.</strong>
+            Your marksheet uploads need attaching again — a browser cannot hold a file for you, and
+            your marks are re-checked against the documents you attach.</p>
+        </div>
+        <div style="margin-top:16px" class="grid3">
+          <div><label class="req">10th school name</label><input value="Vidya Mandir Sr. Sec. School" /><p class="hint">prefilled</p></div>
+          <div><label class="req">10th board</label><select><option selected>State Board</option></select><p class="hint">prefilled</p></div>
+          <div><label class="req">10th marksheet</label><input type="file" /><p class="hint">must be attached again</p></div>
+        </div>
+        <div class="note" style="margin-top:18px;margin-bottom:0">
+          <strong>Dashboard, same student:</strong> “Your registration form needs changes — your
+          coordinator has sent it back: <em>Your semester 1 marksheet is missing…</em>”
+          → <em>Update my registration form</em>. Plus a notification:
+          <strong>“Your registration form was sent back for changes”</strong>.
+        </div>
+      </div>
+
+      <!-- ITEM 4 -->
+      <h2>4 · Drives has two sub-headings; Published gets the All-drives design</h2>
+      <div class="shell">
+        <nav class="nav">
+          <p class="role">Central placement coordinator</p>
+          <p class="head">Overview ›</p>
+          <p class="head">Drives ⌄</p>
+          <a href="#">Yet to publish</a>
+          <a href="#" class="on">Published</a>
+          <a href="#" class="new"><s>All drives</s></a>
+          <p class="head">Student details ›</p>
+          <p class="head">Drives in progress ›</p>
+          <p class="head">Requests ›</p>
+        </nav>
+        <div>
+          <div class="card">
+            <h3 style="margin:0;font-size:22px">Published</h3>
+            <p class="sub" style="margin:6px 0 0">Live and beyond — the drives students can see or have been through.</p>
+            <div class="new" style="margin-top:14px;padding:10px 12px;font-size:13px;color:var(--ink-500)">
+              <s>All my drives</s> &nbsp; <s>Raised by me</s> &nbsp; <s>Approved by me</s>
+              &nbsp;<span class="tag">removed</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="row">
+              <div>
+                <p class="h" style="margin:0;font-size:18px;font-weight:700">HCL Technologies</p>
+                <p class="sub" style="margin:2px 0 8px">Jr. Developer</p>
+                <span class="badge warn">Applications open</span>
+                <span class="badge ok">12 days left</span>
+                <span style="font-size:12px;color:var(--ink-500)">3 of 3 rounds decided</span>
+              </div>
+              <div><div class="bar"><i style="width:50%"></i></div><p class="hint" style="text-align:right">50% through the pipeline</p></div>
+            </div>
+            <div class="stats">
+              <div class="stat"><span>Applied</span><b>1</b></div>
+              <div class="stat"><span>Shortlisted</span><b>0</b></div>
+              <div class="stat"><span>In rounds</span><b>0</b></div>
+              <div class="stat"><span>Offers</span><b style="color:#12704a">1</b></div>
+              <div class="stat"><span>Not selected</span><b>0</b></div>
+            </div>
+            <p style="margin:14px 0 0"><a href="#" style="font-size:12px;font-weight:600;color:var(--primary)">Shortlist applicants</a></p>
+          </div>
+
+          <div class="card">
+            <div class="row">
+              <div>
+                <p class="h" style="margin:0;font-size:18px;font-weight:700">Accenture</p>
+                <p class="sub" style="margin:2px 0 8px">Jr. Software engineer</p>
+                <span class="badge warn">Applications open</span>
+                <span class="badge ok">9 days left</span>
+              </div>
+              <div><div class="bar"><i style="width:50%"></i></div><p class="hint" style="text-align:right">50% through the pipeline</p></div>
+            </div>
+            <div class="stats">
+              <div class="stat"><span>Applied</span><b>2</b></div>
+              <div class="stat"><span>Shortlisted</span><b>1</b></div>
+              <div class="stat"><span>In rounds</span><b style="color:var(--warning)">1</b></div>
+              <div class="stat"><span>Offers</span><b>0</b></div>
+              <div class="stat"><span>Not selected</span><b>0</b></div>
+            </div>
+          </div>
+
+          <div class="note" style="margin:0">
+            <strong>The one judgement call:</strong> <em>LTI Mindtree</em> — “Approved — not yet
+            published” in your screenshot — is <strong>not</strong> on this page. It is under
+            <em>Yet to publish</em>, which is what that heading is for. Say the word if you want
+            Published to list every drive regardless of status.
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

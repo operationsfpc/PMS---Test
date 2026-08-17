@@ -44,6 +44,8 @@ export interface StudentDashboardSnapshot {
   readonly passingYear: number;
   readonly campus: string;
   readonly srfStatus: SrfStatus;
+  /** Why a coordinator sent the form back, so the prompt can say what to fix. */
+  readonly srfRejectionReason?: string | null;
   readonly participationStatus: ParticipationStatus;
   /** How many live drives the student is actually eligible for, after R5. */
   readonly openDrives: number;
@@ -159,6 +161,8 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
     srfStatus: snapshot.srfStatus,
     participationStatus: snapshot.participationStatus,
     openDrives: snapshot.openDrives,
+    // The coordinator's own words, on the screen the student lands on.
+    srfRejectionReason: snapshot.srfRejectionReason ?? null,
   });
 
   const progressed = snapshot.applications.map((application) => ({

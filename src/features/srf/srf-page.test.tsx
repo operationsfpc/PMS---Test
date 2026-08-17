@@ -591,3 +591,155 @@ describe("SrfPage — degree and branch are one choice", () => {
     expect(screen.getByText(/no programmes.*coordinator/i)).toBeDefined();
   });
 });
+
+/**
+ * A form sent back for changes comes back FILLED IN (2026-08-18).
+ *
+ * `submit_srf` clears the draft, so this form used to reopen BLANK: to correct
+ * one line a student re-declared thirty from memory, and a figure retyped from
+ * memory is a figure that can be mistyped - the coordinator would then be
+ * checking a NEW error instead of the one they asked about.
+ */
+describe("SrfPage — a rejected form is corrected, not retyped", () => {
+  const SENT_BACK = {
+    ...ROSTER,
+    mobile: "9876543210",
+    alternateContact: "9123456780",
+    tenthInstitution: "Vidya Mandir",
+    tenthPercentage: 91.4,
+    tenthBoard: "state_board",
+    tenthBoardState: "Tamil Nadu",
+    twelfthInstitution: "Sri Chaitanya",
+    twelfthPercentage: 88.2,
+    twelfthBoard: "cbse",
+    technicalSkills: "React, SQL",
+    marksScale: "cgpa" as const,
+    semesters: [
+      { semesterNumber: 1, marks: 8.5, currentArrears: 0, historyOfArrears: 0 },
+      { semesterNumber: 2, marks: 8.62, currentArrears: 0, historyOfArrears: 1 },
+    ],
+  };
+
+  const sentBack = () =>
+    render(
+      <SrfPage
+        profile={SENT_BACK}
+        status="srf_rejected"
+        rejectionReason="Semester 2 marksheet is missing."
+      />,
+    );
+
+  it("carries back every figure the student declared", () => {
+    sentBack();
+
+    expect((screen.getByLabelText(/^mobile number/i) as HTMLInputElement).value).toBe("9876543210");
+    expect((screen.getByLabelText(/10th school name/i) as HTMLInputElement).value).toBe(
+      "Vidya Mandir",
+    );
+    expect((screen.getByLabelText(/10th marks \(%\)/i) as HTMLInputElement).value).toBe("91.4");
+    expect((screen.getByLabelText(/technical skills/i) as HTMLInputElement).value).toBe(
+      "React, SQL",
+    );
+  });
+
+  it("carries back the board, and the state that identifies it", () => {
+    sentBack();
+
+    expect((screen.getByLabelText(/10th board/i) as HTMLSelectElement).value).toBe("state_board");
+    expect((screen.getByLabelText(/which state's board/i) as HTMLSelectElement).value).toBe(
+      "Tamil Nadu",
+    );
+    expect((screen.getByLabelText(/12th board/i) as HTMLSelectElement).value).toBe("cbse");
+  });
+
+  it("carries back every semester line, not just the first", () => {
+    sentBack();
+
+    expect((screen.getByLabelText(/semester 1 result/i) as HTMLInputElement).value).toBe("8.5");
+    expect((screen.getByLabelText(/semester 2 result/i) as HTMLInputElement).value).toBe("8.62");
+    expect((screen.getByLabelText(/semester 2 arrear history/i) as HTMLInputElement).value).toBe(
+      "1",
+    );
+  });
+
+  /**
+   * Said plainly, because it is the one thing that did NOT survive. A student
+   * who assumes their marksheets are still attached will hit a validation error
+   * they cannot explain.
+   */
+  it("says that the uploads are the one thing that must be attached again", () => {
+    sentBack();
+
+    // Scoped to the sentence, not to the words "upload" and "again": the
+    // certificates block already says "remove it and add it again", and a loose
+    // matcher passed against THAT - a green test proving nothing.
+    expect(screen.getByText(/marksheet uploads need attaching again/i)).toBeDefined();
+  });
+
+  it("says nothing of the sort to a student filling the form in for the first time", () => {
+    render(<SrfPage profile={ROSTER} status="registered" />);
+
+    expect(screen.queryByText(/marksheet uploads need attaching again/i)).toBeNull();
+  });
+
+  /** A draft is newer than the submission it followed. */
+  it("prefers a draft saved after the rejection", () => {
+    render(
+      <SrfPage
+        profile={SENT_BACK}
+        status="srf_rejected"
+        draft={{ mobile: "9000000000" }}
+        rejectionReason="Semester 2 marksheet is missing."
+      />,
+    );
+
+    expect((screen.getByLabelText(/^mobile number/i) as HTMLInputElement).value).toBe("9000000000");
+  });
+});
+
+/**
+ * The record shows the board too (2026-08-18).
+ *
+ * A submitted record is what the student sees instead of a form, and what they
+ * check when a coordinator queries a figure. A board collected and never shown
+ * back cannot be corrected by the person who typed it.
+ */
+describe("SrfPage — the submitted record names the boards", () => {
+  const RECORD = {
+    ...ROSTER,
+    mobile: "9876543210",
+    tenthPercentage: 91.4,
+    tenthBoard: "state_board",
+    tenthBoardState: "Kerala",
+    twelfthPercentage: 88.2,
+    twelfthBoard: "cisce",
+    diplomaInstitution: "Govt Polytechnic",
+    diplomaUniversity: "DOTE, Tamil Nadu",
+    diplomaMarks: 8.2,
+    semesters: [{ semesterNumber: 1, marks: 8.5, currentArrears: 0, historyOfArrears: 0 }],
+  };
+
+  it("names the state behind a state board, and reads ISC at class 12", () => {
+    render(<SrfPage profile={RECORD} status="srf_submitted" />);
+
+    expect(screen.getByText("State Board — Kerala")).toBeDefined();
+    expect(screen.getByText("ISC (CISCE)")).toBeDefined();
+  });
+
+  it("names who awarded the diploma", () => {
+    render(<SrfPage profile={RECORD} status="srf_submitted" />);
+
+    expect(screen.getByText("DOTE, Tamil Nadu")).toBeDefined();
+  });
+
+  it("says 'Not recorded' for a student who registered before boards existed", () => {
+    render(
+      <SrfPage
+        profile={{ ...RECORD, tenthBoard: null, twelfthBoard: null, tenthBoardState: null }}
+        status="srf_submitted"
+      />,
+    );
+
+    expect(screen.getAllByText(/not recorded/i).length).toBe(2);
+  });
+});

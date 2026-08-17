@@ -180,40 +180,20 @@ describe("DrivePortfolioPage", () => {
     expect(screen.queryByText("Anjali Subramanian")).toBeNull();
   });
 
-  it("filters to the drives the viewer raised", async () => {
-    const user = userEvent.setup();
-    show({ profileId: "ae-1" });
-
-    await user.click(await screen.findByRole("radio", { name: /raised by me/i }));
-
-    expect(screen.getByRole("region", { name: "Zoho Corporation" })).toBeDefined();
-    expect(screen.queryByRole("region", { name: "Freshworks" })).toBeNull();
-  });
-
-  it("filters to the drives the viewer approved", async () => {
-    const user = userEvent.setup();
-    show({ profileId: "dh-1" });
-
-    await user.click(await screen.findByRole("radio", { name: /approved by me/i }));
-
-    expect(screen.getByRole("region", { name: "Zoho Corporation" })).toBeDefined();
-    expect(screen.queryByRole("region", { name: "Freshworks" })).toBeNull();
-  });
+  /**
+   * SPEC CHANGE 2026-08-18: the three chips are gone, so the two tests that
+   * clicked them are gone with them. "just remove the three select options at
+   * the top of the page." They filtered a list to itself - every drive an AE can
+   * see is one they raised - and their replacement, a search box, is covered
+   * below. `involvementIn` is still proved by the badge test above and by its
+   * own domain tests.
+   */
 
   it("shows everything the viewer can see when no filter is applied", async () => {
     show();
 
     expect(await screen.findByRole("region", { name: "Zoho Corporation" })).toBeDefined();
     expect(screen.getByRole("region", { name: "Freshworks" })).toBeDefined();
-  });
-
-  it("says so plainly when a filter leaves nothing, rather than showing an empty page", async () => {
-    const user = userEvent.setup();
-    show({ profileId: "nobody" });
-
-    await user.click(await screen.findByRole("radio", { name: /raised by me/i }));
-
-    expect(screen.getByText(/no drives match/i)).toBeDefined();
   });
 
   it("says so when there are no drives at all", async () => {
@@ -366,5 +346,211 @@ describe("the blurb describes what the reader actually does", () => {
 
     const blurb = await screen.findByText(/every drive i raise or approve/i);
     expect(blurb.textContent).not.toMatch(/publish/i);
+  });
+});
+
+/**
+ * Held in constants, not inline: `role` is a prop here and an ARIA attribute
+ * everywhere else, and the linter cannot tell the difference from a literal.
+ */
+const CENTRAL: AppRole = "central_placement_coordinator";
+const AE: AppRole = "account_executive";
+
+/**
+ * The Drives heading has three tabs and no chips (2026-08-18).
+ *
+ * "we only need two sub heading … actually, we can have a third box, there
+ * called completed. This way we have three tabs — approved = yet to publish;
+ * published - page name can be live; completed. drafts can be removed."
+ * And: "just remove the three select options at the top of the page."
+ */
+describe("DrivePortfolioPage — one list, one status group", () => {
+  const drive = (
+    driveId: string,
+    companyName: string,
+    status: PortfolioDrive["status"],
+  ): PortfolioDrive => ({
+    driveId,
+    companyName,
+    roleTitle: "Jr. Developer",
+    status,
+    onHold: false,
+    createdBy: "p1",
+    approvedBy: null,
+    publishedBy: null,
+    totalRounds: 2,
+    roundsDecided: 0,
+    applicationStart: null,
+    applicationEnd: null,
+    applicants: [],
+  });
+
+  const view = (drives: readonly PortfolioDrive[]) => ({ drives: async () => drives });
+
+  it("no longer offers the three filters that filtered a list to itself", async () => {
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={view([drive("d1", "HCL Technologies", "live")])}
+          profileId="p1"
+          role={CENTRAL}
+          title="Live"
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("HCL Technologies");
+    expect(screen.queryByRole("radiogroup", { name: /filter drives/i })).toBeNull();
+    expect(screen.queryByText(/all my drives/i)).toBeNull();
+    expect(screen.queryByText(/raised by me/i)).toBeNull();
+    expect(screen.queryByText(/approved by me/i)).toBeNull();
+  });
+
+  it("shows only the statuses the tab is for - an approved drive is not Live", async () => {
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={view([
+            drive("d1", "HCL Technologies", "live"),
+            drive("d2", "LTI Mindtree", "approved"),
+            drive("d3", "Wipro", "draft"),
+          ])}
+          profileId="p1"
+          role={CENTRAL}
+          title="Live"
+          statuses={["live", "applications_closed", "in_rounds"]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("HCL Technologies")).toBeDefined();
+    expect(screen.queryByText("LTI Mindtree")).toBeNull();
+    expect(screen.queryByText("Wipro")).toBeNull();
+  });
+
+  it("shows everything when no status group is given, so /my-drives is unchanged", async () => {
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={view([
+            drive("d1", "HCL Technologies", "live"),
+            drive("d2", "LTI Mindtree", "approved"),
+          ])}
+          profileId="p1"
+          role={AE}
+          title="My drives"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("HCL Technologies")).toBeDefined();
+    expect(screen.getByText("LTI Mindtree")).toBeDefined();
+  });
+
+  it("says the tab is empty rather than that there are no drives at all", async () => {
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={view([drive("d2", "LTI Mindtree", "approved")])}
+          profileId="p1"
+          role={CENTRAL}
+          title="Completed"
+          statuses={["completed"]}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/no drives in this list yet/i)).toBeDefined();
+  });
+});
+
+/** "add a search button for the drive in progress/live drives page" (2026-08-18). */
+describe("DrivePortfolioPage — searching the list", () => {
+  const drive = (companyName: string, roleTitle: string): PortfolioDrive => ({
+    driveId: companyName,
+    companyName,
+    roleTitle,
+    status: "live",
+    onHold: false,
+    createdBy: "p1",
+    approvedBy: null,
+    publishedBy: null,
+    totalRounds: 2,
+    roundsDecided: 0,
+    applicationStart: null,
+    applicationEnd: null,
+    applicants: [],
+  });
+
+  const renderList = () =>
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={{
+            drives: async () => [
+              drive("HCL Technologies", "Jr. Developer"),
+              drive("Accenture", "Jr. Software engineer"),
+              drive("LTI Mindtree", "Software Engineer Trainee"),
+            ],
+          }}
+          profileId="p1"
+          role={CENTRAL}
+          title="Live"
+        />
+      </MemoryRouter>,
+    );
+
+  it("offers a search box, labelled", async () => {
+    renderList();
+    await screen.findByText("HCL Technologies");
+
+    expect(screen.getByRole("searchbox", { name: /search drives/i })).toBeDefined();
+  });
+
+  it("narrows the list to what was typed", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText("HCL Technologies");
+
+    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "mindtree");
+
+    expect(screen.getByText("LTI Mindtree")).toBeDefined();
+    expect(screen.queryByText("HCL Technologies")).toBeNull();
+    expect(screen.queryByText("Accenture")).toBeNull();
+  });
+
+  it("searches the role as well as the company", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText("HCL Technologies");
+
+    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "trainee");
+
+    expect(screen.getByText("LTI Mindtree")).toBeDefined();
+    expect(screen.queryByText("Accenture")).toBeNull();
+  });
+
+  it("says nothing matched, and what was searched for", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText("HCL Technologies");
+
+    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "infosys");
+
+    expect(screen.getByText(/no drives match .*infosys/i)).toBeDefined();
+  });
+
+  it("gives the whole list back when the box is cleared", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText("HCL Technologies");
+
+    const box = screen.getByRole("searchbox", { name: /search drives/i });
+    await user.type(box, "infosys");
+    await user.clear(box);
+
+    expect(screen.getByText("HCL Technologies")).toBeDefined();
+    expect(screen.getByText("Accenture")).toBeDefined();
+    expect(screen.getByText("LTI Mindtree")).toBeDefined();
   });
 });

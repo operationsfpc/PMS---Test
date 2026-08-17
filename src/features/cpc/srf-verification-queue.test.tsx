@@ -21,7 +21,12 @@ const row = {
   historyOfArrears: 1,
   tenthPercentage: 91.4,
   twelfthPercentage: 88,
+  // The board is verified against the same document as the marks (2026-08-18).
+  tenthBoard: { board: "state_board" as const, state: "Tamil Nadu", other: null },
+  twelfthBoard: { board: "cbse" as const, state: null, other: null },
   submittedAt: "2026-08-01T10:00:00Z",
+  /** Non-null only on a form this coordinator has already sent back once. */
+  previousRejectionReason: null,
   documents: [
     { kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" },
     { kind: "twelfth_marksheet", label: "12th marksheet", url: "https://signed/12" },
@@ -291,5 +296,140 @@ describe("SrfVerificationQueue — certificates", () => {
 
     await screen.findByText("AWS Cloud Practitioner");
     expect(screen.getByText(/^verified$/i)).toBeDefined();
+  });
+});
+
+/**
+ * Sending a form back with comments (2026-08-18).
+ *
+ * Everything behind this already existed - `decideSrf` refuses an empty reason,
+ * the repository writes it, 0020 lets the student resubmit - and yet NO
+ * coordinator could reject a form, because this screen only ever offered
+ * Approve. A rule with no control on any screen is a rule nobody can follow.
+ */
+describe("sending a form back for changes", () => {
+  it("asks for a comment before it will send anything back", async () => {
+    const decide = vi.fn();
+    const user = userEvent.setup();
+    render(<SrfVerificationQueue repository={repo({ decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /send back .*asha/i }));
+    await user.click(screen.getByRole("button", { name: /^send back$/i }));
+
+    expect(decide).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/needs a reason/i);
+  });
+
+  it("refuses a comment of nothing but spaces", async () => {
+    const decide = vi.fn();
+    const user = userEvent.setup();
+    render(<SrfVerificationQueue repository={repo({ decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /send back .*asha/i }));
+    await user.type(screen.getByLabelText(/what does this student need to correct/i), "   ");
+    await user.click(screen.getByRole("button", { name: /^send back$/i }));
+
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("sends the comment to the repository and clears the row", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<SrfVerificationQueue repository={repo({ decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /send back .*asha/i }));
+    await user.type(
+      screen.getByLabelText(/what does this student need to correct/i),
+      "Semester 2 marksheet is missing.",
+    );
+    await user.click(screen.getByRole("button", { name: /^send back$/i }));
+
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith("s1", "srf_submitted", {
+        decision: "reject",
+        reason: "Semester 2 marksheet is missing.",
+      }),
+    );
+    await waitFor(() => expect(screen.queryByText("Asha Ramanathan")).toBeNull());
+  });
+
+  it("keeps the student on screen when the write fails, with their reason intact", async () => {
+    const user = userEvent.setup();
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          decide: async () => {
+            throw new VerificationError("Could not save the decision. Please try again.");
+          },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /send back .*asha/i }));
+    await user.type(screen.getByLabelText(/what does this student need to correct/i), "Fix it");
+    await user.click(screen.getByRole("button", { name: /^send back$/i }));
+
+    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(screen.getByText("Asha Ramanathan")).toBeDefined();
+  });
+
+  it("lets the coordinator change their mind without sending anything", async () => {
+    const decide = vi.fn();
+    const user = userEvent.setup();
+    render(<SrfVerificationQueue repository={repo({ decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /send back .*asha/i }));
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+
+    expect(screen.queryByLabelText(/what does this student need to correct/i)).toBeNull();
+    expect(decide).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /approve asha/i })).toBeDefined();
+  });
+});
+
+describe("what the coordinator is shown before deciding", () => {
+  it("names the board behind each school figure, and the state that identifies it", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    expect(await screen.findByText("State Board — Tamil Nadu")).toBeDefined();
+    expect(screen.getByText("CBSE")).toBeDefined();
+  });
+
+  it("says so plainly when no board was ever recorded", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [{ ...row, tenthBoard: null, twelfthBoard: null }],
+        })}
+      />,
+    );
+
+    expect((await screen.findAllByText(/not recorded/i)).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * A resubmission is not a fresh form. Showing what was asked for last time is
+   * what stops the same defect being missed twice.
+   */
+  it("marks a resubmitted form and repeats what was asked for", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [
+            { ...row, previousRejectionReason: "Semester 2 marksheet is missing." },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/resubmitted/i)).toBeDefined();
+    expect(screen.getByText(/semester 2 marksheet is missing/i)).toBeDefined();
+  });
+
+  it("says nothing of the sort about a form submitted for the first time", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    await screen.findByText("Asha Ramanathan");
+    expect(screen.queryByText(/resubmitted/i)).toBeNull();
   });
 });

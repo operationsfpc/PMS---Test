@@ -97,6 +97,9 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/10th marks \(%\)/i), "91.4");
   await user.type(screen.getByLabelText(/12th school name/i), "St Xavier's");
   await user.type(screen.getByLabelText(/12th marks \(%\)/i), "88");
+  // Mandatory since 2026-08-18. Every student has a board; nobody has none.
+  await user.selectOptions(screen.getByLabelText(/10th board/i), "cbse");
+  await user.selectOptions(screen.getByLabelText(/12th board/i), "cbse");
   await user.type(screen.getByLabelText(/semester 1 result/i), "8.24");
   // Evidence for every declared figure. A form without it is no longer valid:
   // the coordinator would have nothing to verify the marks against.
@@ -582,5 +585,107 @@ describe("other professional profiles", () => {
     const alerts = await screen.findAllByRole("alert");
     expect(alerts.some((a) => /kaggle/i.test(a.textContent ?? ""))).toBe(true);
     expect(screen.queryByText(/submitted for verification/i)).toBeNull();
+  });
+});
+
+/**
+ * The board a school figure came from (2026-08-18).
+ *
+ * The second answer appears only for the board that needs it. Showing "which
+ * state" against CBSE invites an answer that is not true, and the database
+ * refuses that pair - so the student would be blocked by a field they were
+ * asked to fill in.
+ */
+describe("school boards", () => {
+  it("offers the boards, and asks for the state only when State Board is chosen", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+
+    expect(screen.queryByLabelText(/which state's board/i)).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText(/10th board/i), "state_board");
+
+    const state = screen.getByLabelText(/which state's board/i);
+    expect(state).toBeDefined();
+    await user.selectOptions(state, "Tamil Nadu");
+
+    // Changing the board away takes the question back with it.
+    await user.selectOptions(screen.getByLabelText(/10th board/i), "cbse");
+    expect(screen.queryByLabelText(/which state's board/i)).toBeNull();
+  });
+
+  it("asks the board to be named only when Other is chosen", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+
+    expect(screen.queryByLabelText(/name the 12th board/i)).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText(/12th board/i), "other");
+
+    expect(screen.getByLabelText(/name the 12th board/i)).toBeDefined();
+  });
+
+  it("reads ICSE at class 10 and ISC at class 12, from one stored value", () => {
+    render(<SrfPage profile={ROSTER} />);
+
+    expect(screen.getByRole("option", { name: "ICSE (CISCE)" })).toBeDefined();
+    expect(screen.getByRole("option", { name: "ISC (CISCE)" })).toBeDefined();
+  });
+
+  it("refuses to submit without a board, naming what is missing", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+    await user.selectOptions(screen.getByLabelText(/10th board/i), "");
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText(/select the board/i)).toBeDefined();
+    expect(screen.queryByText(/submitted for verification/i)).toBeNull();
+  });
+
+  it("submits the board, the state and the diploma's awarding body", async () => {
+    signedIn();
+    const sent: unknown[] = [];
+    studentsPatch(async () =>
+      HttpResponse.json([{ student_id: "s1", srf_status: "srf_submitted" }]),
+    );
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json([{ student_id: "s1", srf_status: "srf_submitted" }]);
+      }),
+    );
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+    await user.selectOptions(screen.getByLabelText(/10th board/i), "state_board");
+    await user.selectOptions(screen.getByLabelText(/which state's board/i), "Kerala");
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    const payload = (sent[0] as { p_student: Record<string, unknown> }).p_student;
+    expect(payload.tenth_board).toBe("state_board");
+    expect(payload.tenth_board_state).toBe("Kerala");
+    expect(payload.twelfth_board).toBe("cbse");
+    // Not asked, so not invented.
+    expect(payload.twelfth_board_state).toBeNull();
+  });
+});
+
+describe("the diploma's awarding university or board", () => {
+  it("is asked for, and demanded once a diploma figure is entered", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    expect(screen.getByLabelText(/university \/ board/i)).toBeDefined();
+
+    await user.type(screen.getByLabelText(/^diploma marks$/i), "8.2");
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText(/university or board that awarded your diploma/i)).toBeDefined();
   });
 });

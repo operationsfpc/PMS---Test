@@ -6,6 +6,7 @@ import {
   type DriveRole,
   driveProgress,
   involvementIn,
+  searchDrives,
   summariseFunnel,
 } from "@domain/drive-portfolio";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
@@ -43,13 +44,16 @@ export interface PortfolioView {
   drives(): Promise<readonly PortfolioDrive[]>;
 }
 
-type Filter = "all" | "raised" | "approved";
-
-const FILTERS: readonly { readonly value: Filter; readonly label: string }[] = [
-  { value: "all", label: "All my drives" },
-  { value: "raised", label: "Raised by me" },
-  { value: "approved", label: "Approved by me" },
-];
+/**
+ * The three chips - All my drives / Raised by me / Approved by me - are GONE
+ * (2026-08-18: "just remove the three select options at the top of the page").
+ *
+ * They filtered a list to itself: for an Account Executive every drive is one
+ * they raised, and for a Delivery Head every drive is one they approved. What
+ * replaced them is a search box, which answers the question a list of drives
+ * actually raises. `involvementIn` stays - it still draws the "Raised by you"
+ * badges, which say something the chips only repeated.
+ */
 
 const ROLE_LABEL: Readonly<Record<DriveRole, string>> = {
   raised: "Raised by you",
@@ -81,6 +85,7 @@ export function DrivePortfolioPage({
   profileId,
   title,
   role,
+  statuses,
   /** Passed in, never read from the browser — see src/domain/drive-analytics. */
   now = new Date(),
 }: {
@@ -89,6 +94,15 @@ export function DrivePortfolioPage({
   title: string;
   /** Decides shortlisting access, and nothing else (F15). */
   role: AppRole;
+  /**
+   * Which statuses this tab is for (2026-08-18). Absent means every drive -
+   * `/my-drives` is one person's whole portfolio and always has been.
+   *
+   * Given, it is the tab's whole meaning: a page headed "Live" must not list a
+   * drive that is approved and not yet published, because that is precisely
+   * what "Yet to publish" is for.
+   */
+  statuses?: readonly DriveStatus[];
   now?: Date;
 }) {
   // F15: the Central CPC gets the AE's screen "with shortlisting access". Who
@@ -104,7 +118,7 @@ export function DrivePortfolioPage({
   const mayViewApplicants = canViewDriveApplicants(role);
   const [drives, setDrives] = useState<readonly PortfolioDrive[] | null>(null);
   const [failed, setFailed] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
@@ -122,14 +136,20 @@ export function DrivePortfolioPage({
     };
   }, [view]);
 
-  const visible = useMemo(
+  /**
+   * The tab first, then the search. The status group is what the page IS; the
+   * search is what the reader is looking for inside it, and searching outside
+   * the tab would return a drive the heading says is not here.
+   */
+  const inScope = useMemo(
     () =>
-      (drives ?? []).filter((drive) => {
-        if (filter === "all") return true;
-        return involvementIn(drive, profileId).includes(filter);
-      }),
-    [drives, filter, profileId],
+      statuses === undefined
+        ? (drives ?? [])
+        : (drives ?? []).filter((drive) => statuses.includes(drive.status)),
+    [drives, statuses],
   );
+
+  const visible = useMemo(() => searchDrives(inScope, query), [inScope, query]);
 
   if (failed) {
     return (
@@ -157,43 +177,55 @@ export function DrivePortfolioPage({
         subtitle="Every drive I raise or approve — and what has become of it."
       />
 
-      {drives.length === 0 ? (
+      {inScope.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">
-            No drives yet. A drive appears here as soon as you raise or approve one.
+            {statuses === undefined
+              ? "No drives yet. A drive appears here as soon as you raise or approve one."
+              : "No drives in this list yet."}
           </p>
         </Card>
       ) : (
         <>
-          <fieldset className="mb-6">
-            <legend className="sr-only">Filter drives</legend>
-            <div role="radiogroup" aria-label="Filter drives" className="flex flex-wrap gap-2">
-              {FILTERS.map((option) => (
-                <label
-                  key={option.value}
-                  className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                    filter === option.value
-                      ? "border-brand-500 bg-brand-500 text-white"
-                      : "border-line bg-surface text-ink-700 hover:border-brand-300"
-                  }`}
+          {/* Asked for 2026-08-18. A list of drives with no way to find one is a
+              list you read top to bottom, and this list only grows. */}
+          {/* `<search>` rather than role="search": same semantics, one fewer
+              attribute to get wrong. The inner form exists so Enter has a
+              defined, harmless meaning. */}
+          <search className="mb-6">
+            <form onSubmit={(e) => e.preventDefault()}>
+              <label
+                htmlFor="drive-search"
+                className="mb-1.5 block text-sm font-medium text-ink-700"
+              >
+                Search drives
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  id="drive-search"
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Company or role — e.g. HCL, or trainee"
+                  className="w-full max-w-sm rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                />
+                {/* The list narrows as you type, so this submits nothing. It is
+                  here because a search box without one reads as decoration, and
+                  it gives the keyboard a place to land. */}
+                <button
+                  type="submit"
+                  className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
                 >
-                  <input
-                    type="radio"
-                    name="drive-filter"
-                    className="sr-only"
-                    checked={filter === option.value}
-                    onChange={() => setFilter(option.value)}
-                  />
-                  {option.label}
-                </label>
-              ))}
-            </div>
-          </fieldset>
+                  Search
+                </button>
+              </div>
+            </form>
+          </search>
 
           {visible.length === 0 ? (
             <Card className="p-6">
               <p className="text-sm text-ink-700">
-                No drives match this filter. Try “All my drives”.
+                No drives match “{query}”. Clear the search to see the whole list.
               </p>
             </Card>
           ) : (

@@ -123,3 +123,28 @@ export function decidePif(current: DriveStatus, decision: PifDecision): PifDecis
 
   return { ok: true, next: "rejected" };
 }
+
+/**
+ * The three lists the Central PC works from (2026-08-18, Karthik).
+ *
+ * "approved is yet to publish. these should be in yet to publish … we can have
+ * a third box, there called completed. This way we have three tabs — approved =
+ * yet to publish; published - page name can be live; completed. drafts can be
+ * removed."
+ *
+ * One vocabulary for all three tabs, because a status belonging to no tab is a
+ * drive nobody can find and a status in two is a drive counted twice.
+ *
+ * ⚠️ ASSUMPTION — UNCONFIRMED (A39). `submitted` and `rejected` appear on none
+ * of them. That follows from 0047 — raising is the Account Executive's,
+ * approving is the Delivery Head's, publishing is the Central CPC's — so a
+ * drive neither of the other two has finished with is not this coordinator's to
+ * work on. Reversing it is one entry in this object.
+ */
+export const DRIVE_TAB_STATUSES: Readonly<Record<DriveTab, readonly DriveStatus[]>> = {
+  "yet-to-publish": ["approved"],
+  live: ["live", "applications_closed", "in_rounds"],
+  completed: ["completed"],
+};
+
+export type DriveTab = "yet-to-publish" | "live" | "completed";

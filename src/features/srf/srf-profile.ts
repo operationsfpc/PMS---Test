@@ -44,8 +44,33 @@ export interface SrfProfile {
   readonly alternateContact?: string | null;
   readonly tenthInstitution?: string | null;
   readonly tenthPercentage?: number | null;
+  /** The board, and the one extra answer it needs (2026-08-18). */
+  readonly tenthBoard?: string | null;
+  readonly tenthBoardState?: string | null;
+  readonly tenthBoardOther?: string | null;
   readonly twelfthInstitution?: string | null;
   readonly twelfthPercentage?: number | null;
+  readonly twelfthBoard?: string | null;
+  readonly twelfthBoardState?: string | null;
+  readonly twelfthBoardOther?: string | null;
+  /**
+   * The diploma, and everything a REJECTED form has to hand back so the student
+   * corrects rather than retypes. Every field below is read for that reason.
+   */
+  readonly diplomaInstitution?: string | null;
+  readonly diplomaUniversity?: string | null;
+  readonly diplomaMarks?: number | null;
+  readonly diplomaMarksScale?: string | null;
+  readonly ugDegree?: string | null;
+  readonly ugCollege?: string | null;
+  readonly ugBranch?: string | null;
+  readonly ugAggregate?: number | null;
+  readonly ugAggregateScale?: string | null;
+  readonly linkedin?: string | null;
+  readonly github?: string | null;
+  readonly leetcode?: string | null;
+  readonly hackerrank?: string | null;
+  readonly otherProfiles?: readonly { readonly label: string; readonly value: string }[];
   readonly technicalSkills?: string | null;
   readonly areasOfInterest?: string | null;
   readonly areasOfExpertise?: string | null;
@@ -94,6 +119,11 @@ export const SRF_PROFILE_COLUMNS = `
   srf_status, srf_rejection_reason,
   mobile, whatsapp, alternate_contact,
   tenth_institution, tenth_percentage, twelfth_institution, twelfth_percentage,
+  tenth_board, tenth_board_state, tenth_board_other,
+  twelfth_board, twelfth_board_state, twelfth_board_other,
+  diploma_institution, diploma_university, diploma_marks, diploma_marks_scale,
+  ug_degree, ug_college, ug_branch, ug_aggregate_declared, ug_aggregate_scale,
+  linkedin_url, github_url, leetcode_url, hackerrank_url, other_profiles,
   technical_skills, areas_of_interest, areas_of_expertise,
   projects, certifications, achievements,
   programme_level,
@@ -191,8 +221,31 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
       alternateContact: text(row.alternate_contact),
       tenthInstitution: text(row.tenth_institution),
       tenthPercentage: num(row.tenth_percentage),
+      tenthBoard: text(row.tenth_board),
+      tenthBoardState: text(row.tenth_board_state),
+      tenthBoardOther: text(row.tenth_board_other),
       twelfthInstitution: text(row.twelfth_institution),
       twelfthPercentage: num(row.twelfth_percentage),
+      twelfthBoard: text(row.twelfth_board),
+      twelfthBoardState: text(row.twelfth_board_state),
+      twelfthBoardOther: text(row.twelfth_board_other),
+      diplomaInstitution: text(row.diploma_institution),
+      diplomaUniversity: text(row.diploma_university),
+      diplomaMarks: num(row.diploma_marks),
+      diplomaMarksScale: text(row.diploma_marks_scale),
+      ugDegree: text(row.ug_degree),
+      ugCollege: text(row.ug_college),
+      ugBranch: text(row.ug_branch),
+      ugAggregate: num(row.ug_aggregate_declared),
+      ugAggregateScale: text(row.ug_aggregate_scale),
+      linkedin: text(row.linkedin_url),
+      github: text(row.github_url),
+      leetcode: text(row.leetcode_url),
+      hackerrank: text(row.hackerrank_url),
+      otherProfiles: (Array.isArray(row.other_profiles) ? row.other_profiles : [])
+        .map((entry) => entry as { label?: unknown; value?: unknown })
+        .map((entry) => ({ label: String(entry.label ?? ""), value: String(entry.value ?? "") }))
+        .filter((entry) => entry.label !== "" && entry.value !== ""),
       technicalSkills: text(row.technical_skills),
       areasOfInterest: text(row.areas_of_interest),
       areasOfExpertise: text(row.areas_of_expertise),

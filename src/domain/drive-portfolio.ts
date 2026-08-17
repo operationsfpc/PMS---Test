@@ -256,3 +256,38 @@ export function summariseFunnel(applicants: readonly ApplicantFacts[]): DriveFun
 
   return { applied: applicants.length, shortlisted, inRounds, offers, notSelected };
 }
+
+/** The least a drive must have for somebody to search for it by name. */
+export interface SearchableDrive {
+  readonly companyName: string;
+  readonly roleTitle: string;
+}
+
+/**
+ * The drives matching what was typed into the search box (2026-08-18: "add a
+ * search button for the drive in progress/live drives page").
+ *
+ * A domain predicate rather than an inline `filter`, because the same words
+ * must match the same drives on every screen that lists them: a coordinator who
+ * searches "hcl" and is shown nothing concludes the drive is gone.
+ *
+ * EVERY term must match, so typing another word narrows the list. Matching any
+ * term would widen it, which is the opposite of what somebody adding a word is
+ * asking for. Both the company and the role are searched — two drives at one
+ * company differ only by the role.
+ */
+export function searchDrives<TDrive extends SearchableDrive>(
+  drives: readonly TDrive[],
+  query: string,
+): readonly TDrive[] {
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((term) => term !== "");
+  if (terms.length === 0) return drives;
+
+  return drives.filter((drive) => {
+    const haystack = `${drive.companyName} ${drive.roleTitle}`.toLowerCase();
+    return terms.every((term) => haystack.includes(term));
+  });
+}

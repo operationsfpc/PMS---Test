@@ -8,6 +8,7 @@ import {
   canViewDriveApplicants,
   driveProgress,
   involvementIn,
+  searchDrives,
   summariseFunnel,
 } from "./drive-portfolio";
 import type { ApplicantRound } from "./student-progress";
@@ -403,5 +404,65 @@ describe("one verb, one role", () => {
     expect(canRaiseDrive("admin")).toBe(false);
     expect(canApproveDrive("admin")).toBe(false);
     expect(canPublishDrive("admin")).toBe(false);
+  });
+});
+
+/**
+ * Searching the drive list (2026-08-18, Karthik: "add a search button for the
+ * drive in progress/live drives page").
+ *
+ * A predicate, not a component detail: the same words must match the same
+ * drives on every screen that lists them, and a coordinator who searches
+ * "hcl" and is shown nothing will conclude the drive is missing.
+ */
+describe("searchDrives", () => {
+  const DRIVES = [
+    { companyName: "HCL Technologies", roleTitle: "Jr. Developer" },
+    { companyName: "Accenture", roleTitle: "Jr. Software engineer" },
+    { companyName: "LTI Mindtree", roleTitle: "Software Engineer Trainee" },
+  ] as const;
+
+  it("returns everything when nothing has been typed", () => {
+    expect(searchDrives(DRIVES, "")).toEqual(DRIVES);
+    expect(searchDrives(DRIVES, "   ")).toEqual(DRIVES);
+  });
+
+  it("matches the company, whatever the case", () => {
+    expect(searchDrives(DRIVES, "hcl").map((d) => d.companyName)).toEqual(["HCL Technologies"]);
+    expect(searchDrives(DRIVES, "MINDTREE").map((d) => d.companyName)).toEqual(["LTI Mindtree"]);
+  });
+
+  it("matches the role, because two drives at one company differ only by it", () => {
+    expect(searchDrives(DRIVES, "trainee").map((d) => d.companyName)).toEqual(["LTI Mindtree"]);
+  });
+
+  it("matches part of a word, so a coordinator need not finish typing", () => {
+    expect(searchDrives(DRIVES, "accen")).toHaveLength(1);
+  });
+
+  it("ignores the spaces around what was typed", () => {
+    expect(searchDrives(DRIVES, "  hcl  ")).toHaveLength(1);
+  });
+
+  /**
+   * Every term must match something, so adding a word narrows the list. An
+   * "any term" search widens it instead, which is the opposite of what
+   * somebody typing more words is asking for.
+   */
+  it("requires every word typed to match, in any order", () => {
+    expect(searchDrives(DRIVES, "hcl developer")).toHaveLength(1);
+    expect(searchDrives(DRIVES, "developer hcl")).toHaveLength(1);
+    expect(searchDrives(DRIVES, "hcl accenture")).toHaveLength(0);
+  });
+
+  it("returns nothing when nothing matches, rather than falling back to everything", () => {
+    expect(searchDrives(DRIVES, "infosys")).toEqual([]);
+  });
+
+  it("keeps the order it was given", () => {
+    expect(searchDrives(DRIVES, "j").map((d) => d.companyName)).toEqual([
+      "HCL Technologies",
+      "Accenture",
+    ]);
   });
 });

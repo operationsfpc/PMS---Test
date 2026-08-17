@@ -1,3 +1,4 @@
+import type { BoardSelection, SchoolBoard } from "@domain/boards";
 import { decideSrf, type SrfDecision } from "@domain/srf-decision";
 import type { SrfStatus, VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -54,7 +55,20 @@ export interface PendingSrf {
   readonly historyOfArrears: number;
   readonly tenthPercentage: number | null;
   readonly twelfthPercentage: number | null;
+  /**
+   * The board behind each figure (2026-08-18). On this screen because it is
+   * verified against the same document as the marks - and null for the students
+   * who registered before boards were collected.
+   */
+  readonly tenthBoard: BoardSelection | null;
+  readonly twelfthBoard: BoardSelection | null;
   readonly submittedAt: string | null;
+  /**
+   * What this coordinator asked for last time, if they sent it back before.
+   * Shown so the same defect is not missed twice - `submit_srf` deliberately
+   * leaves the reason in place, and approval clears it.
+   */
+  readonly previousRejectionReason: string | null;
   /** The school marksheets, which belong to no single semester. */
   readonly documents: readonly StudentDocument[];
   readonly semesters: readonly DeclaredSemester[];
@@ -98,7 +112,7 @@ export type GetActorId = () => Promise<string | null>;
  * We want the documents BELONGING to the student, which is the first key.
  */
 export const VERIFICATION_QUEUE_COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
+  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, twelfth_board, twelfth_board_state, twelfth_board_other, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
 
 /**
  * Reads and decides the SRF verification queue.
@@ -193,6 +207,22 @@ async function signCertificates(
   }));
 }
 
+/**
+ * The board as the domain describes it, or null when nothing was recorded.
+ *
+ * Null rather than a half-built selection: `describeBoard` then says "Not
+ * recorded", which is a fact about the record. A blank cell would read as a
+ * claim about the student.
+ */
+function boardFrom(board: unknown, state: unknown, other: unknown): BoardSelection | null {
+  if (board === null || board === undefined || board === "") return null;
+  return {
+    board: board as SchoolBoard,
+    state: (state as string | null) ?? null,
+    other: (other as string | null) ?? null,
+  };
+}
+
 async function signDocuments(
   client: SupabaseClient,
   rows: Array<{ kind: string; storage_path: string }>,
@@ -244,7 +274,14 @@ export function createSupabaseVerificationRepository(
           historyOfArrears: (row.history_of_arrears as number | null) ?? 0,
           tenthPercentage: (row.tenth_percentage as number | null) ?? null,
           twelfthPercentage: (row.twelfth_percentage as number | null) ?? null,
+          tenthBoard: boardFrom(row.tenth_board, row.tenth_board_state, row.tenth_board_other),
+          twelfthBoard: boardFrom(
+            row.twelfth_board,
+            row.twelfth_board_state,
+            row.twelfth_board_other,
+          ),
           submittedAt: (row.srf_submitted_at as string | null) ?? null,
+          previousRejectionReason: (row.srf_rejection_reason as string | null) ?? null,
           documents: await signDocuments(
             client,
             (row.student_documents ?? []) as Array<{ kind: string; storage_path: string }>,

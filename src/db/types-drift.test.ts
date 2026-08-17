@@ -1,3 +1,4 @@
+import { SCHOOL_BOARDS } from "@domain/boards";
 import { OFFER_CATEGORIES } from "@domain/offer-category";
 import {
   APP_ROLES,
@@ -40,6 +41,10 @@ describe("Postgres enums match the domain vocabularies", () => {
     // Raw strings in TypeScript until certificates (0038) made it a decision
     // the UI has to render.
     ["verification_status", VERIFICATION_STATUSES],
+    // 2026-08-18. The one enum whose LABELS differ from its values (ICSE at
+    // class 10, ISC at class 12), which is exactly why the values must not
+    // drift: `boardLabel` is the only thing that knows the difference.
+    ["school_board", SCHOOL_BOARDS],
   ];
 
   it.each(cases)(

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canGoLive, type DriveReadiness, decidePif, missingBeforeGoLive } from "./drive-lifecycle";
+import {
+  canGoLive,
+  DRIVE_TAB_STATUSES,
+  type DriveReadiness,
+  decidePif,
+  missingBeforeGoLive,
+} from "./drive-lifecycle";
+import { DRIVE_STATUSES, type DriveStatus } from "./types";
 
 /**
  * The PIF/drive lifecycle (domain-model §3).
@@ -174,5 +181,51 @@ describe("missingBeforeGoLive names every unset field", () => {
     });
 
     expect(missing).toContain("Drive type");
+  });
+});
+
+/**
+ * The three tabs the Central CPC works from (2026-08-18, Karthik):
+ * "approved = yet to publish; published - page name can be live; completed.
+ * drafts can be removed."
+ *
+ * One vocabulary for all three, because a status that belongs to no tab is a
+ * drive nobody can find, and a status in two tabs is a drive counted twice.
+ */
+describe("DRIVE_TAB_STATUSES", () => {
+  it("puts an approved drive - and only an approved drive - in Yet to publish", () => {
+    expect(DRIVE_TAB_STATUSES["yet-to-publish"]).toEqual(["approved"]);
+  });
+
+  it("calls the published page Live, and holds every drive that is out there", () => {
+    expect(DRIVE_TAB_STATUSES.live).toEqual(["live", "applications_closed", "in_rounds"]);
+  });
+
+  it("gives completed its own tab", () => {
+    expect(DRIVE_TAB_STATUSES.completed).toEqual(["completed"]);
+  });
+
+  it("never shows the same drive under two tabs", () => {
+    const all = Object.values(DRIVE_TAB_STATUSES).flat();
+    expect(new Set(all).size).toBe(all.length);
+  });
+
+  /**
+   * ⚠️ A39. `draft` was removed as asked; `submitted` and `rejected` follow
+   * from 0047 - raising is the AE's and approving is the Delivery Head's, so a
+   * drive neither has finished with is not the Central CPC's to see. This test
+   * exists so reversing that is one deliberate edit, not an accident.
+   */
+  it("deliberately shows the Central CPC no draft, submitted or rejected drive", () => {
+    const shown = Object.values(DRIVE_TAB_STATUSES).flat();
+    expect(shown).not.toContain("draft");
+    expect(shown).not.toContain("submitted");
+    expect(shown).not.toContain("rejected");
+  });
+
+  it("accounts for every drive status exactly once, shown or deliberately not", () => {
+    const shown = Object.values(DRIVE_TAB_STATUSES).flat();
+    const hidden: readonly DriveStatus[] = ["draft", "submitted", "rejected"];
+    expect([...shown, ...hidden].sort()).toEqual([...DRIVE_STATUSES].sort());
   });
 });

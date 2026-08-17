@@ -7,11 +7,13 @@ import {
   TextField,
 } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
+import { boardLabel, INDIAN_STATES, SCHOOL_BOARDS, type SchoolLevel } from "@domain/boards";
+import { marksScaleQuestion, UG_COLLEGE_MARKS_SCALE_QUESTION } from "@domain/marks";
 import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
 import { MAX_OTHER_PROFILES } from "@domain/profile-links";
 import { programmeKey, programmeLabel, splitProgrammeKey } from "@domain/programmes";
 import { srfAccess } from "@domain/srf-access";
-import { mergeSrfDraft } from "@domain/srf-draft";
+import { mergeSrfDraft, srfValuesFromSubmitted } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import type { SrfStatus } from "@domain/types";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
@@ -83,6 +85,40 @@ const ScaleSelect = forwardRef<
   );
 });
 
+/**
+ * Which board issued a school mark (2026-08-18).
+ *
+ * A select, because free text gives `cbse`, `C.B.S.E.` and `Central Board` -
+ * four boards to Postgres, one to a human, and no report can group them. The
+ * labels come from the domain, so class 10 reads ICSE and class 12 reads ISC
+ * from the one stored value.
+ */
+const BoardSelect = forwardRef<
+  HTMLSelectElement,
+  { label: string; level: SchoolLevel } & SelectHTMLAttributes<HTMLSelectElement>
+>(function BoardSelect({ label, level, ...props }, ref) {
+  const id = useId();
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink-700">
+        {label}
+        <span className="ml-0.5 text-danger-500" aria-hidden="true">
+          *
+        </span>
+        <span className="sr-only"> (required)</span>
+      </label>
+      <select id={id} ref={ref} className={controlClass} {...props}>
+        <option value="">Select…</option>
+        {SCHOOL_BOARDS.map((board) => (
+          <option key={board} value={board}>
+            {boardLabel(board, level)}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+});
+
 function ErrorText({ children }: { children?: string | undefined }) {
   if (children === undefined) return null;
   return (
@@ -93,6 +129,16 @@ function ErrorText({ children }: { children?: string | undefined }) {
 }
 
 const grid = "grid gap-4 sm:grid-cols-2";
+
+/**
+ * An unanswered control, as the domain expects to hear about it.
+ *
+ * A `<select>` says "" and a defaulted field can be `undefined`; both mean the
+ * same thing to every rule that reads them, and collapsing them here keeps that
+ * translation in one place rather than at six call sites.
+ */
+const unanswered = (value: string | undefined): string | null =>
+  value === undefined || value.trim() === "" ? null : value;
 
 /**
  * `profile` is the student's roster record. Name, roll number and email are
@@ -154,10 +200,24 @@ export function SrfPage({
      * a draft can be weeks older than a roster correction and must never
      * quietly restore a stale roll number for verification to fail on.
      */
+    /**
+     * Roster beats draft beats WHAT WAS SUBMITTED beats defaults.
+     *
+     * The last of those is new (2026-08-18). `submit_srf` clears the draft, so a
+     * form sent back for changes used to open BLANK - the student retyped every
+     * mark, school and phone number to correct one line, and a figure retyped
+     * from memory is a figure that can be mistyped. A real draft still wins:
+     * it was saved AFTER the rejection, so it is the newer correction.
+     *
+     * ONLY on a rejected form. A first-time student has submitted nothing, and
+     * restoring "nothing" over the defaults would blank the form they are
+     * filling in.
+     */
     defaultValues: mergeSrfDraft(
       SRF_DEFAULTS as unknown as Record<string, unknown>,
       profile === null || profile === undefined ? null : { ...profile },
-      draft,
+      draft ??
+        (status === "srf_rejected" && profile != null ? srfValuesFromSubmitted(profile) : null),
     ) as unknown as SrfFormValues,
     mode: "onTouched",
   });
@@ -178,6 +238,14 @@ export function SrfPage({
    * exactly that.
    */
   const collegeMarksScale = watch("collegeMarksScale");
+  /**
+   * The second half of a board answer is only asked when the board needs one:
+   * "which state" for a State Board, "name it" for Other. Asking either of the
+   * other five invites an answer that is not true, and `0048` refuses that pair
+   * - so the student would be blocked by a field the form told them to fill in.
+   */
+  const tenthBoard = watch("tenthBoard");
+  const twelfthBoard = watch("twelfthBoard");
   const otherProfiles = useFieldArray({ control, name: "otherProfiles" });
   /**
    * F17: a certificate is a NAME and a FILE. The free-text "Certifications"
@@ -252,6 +320,13 @@ export function SrfPage({
     // and "deliberately none" are the same thing to the tracker.
     tenthInstitution: watch("tenthInstitution"),
     twelfthInstitution: watch("twelfthInstitution"),
+    // Mandatory since 2026-08-18, so the tracker must not read 100% without it.
+    tenthBoard: unanswered(tenthBoard),
+    tenthBoardState: unanswered(watch("tenthBoardState")),
+    tenthBoardOther: unanswered(watch("tenthBoardOther")),
+    twelfthBoard: unanswered(twelfthBoard),
+    twelfthBoardState: unanswered(watch("twelfthBoardState")),
+    twelfthBoardOther: unanswered(watch("twelfthBoardOther")),
     hasDiplomaMarks,
     ugAggregateCgpa: watch("ugAggregate") ?? null,
     semesters: (semesters ?? []).map((s) => ({
@@ -453,6 +528,26 @@ export function SrfPage({
           </div>
         )}
 
+        {/*
+         * The one thing that does NOT survive being sent back, said plainly.
+         *
+         * Everything the student typed is prefilled; a File cannot be handed
+         * back to a browser, and `submit_srf` rewrites the semester lines, so
+         * the old marksheet links go with them. A student who assumes their
+         * scans are still attached meets a validation error they cannot explain.
+         */}
+        {access.mode === "edit" && status === "srf_rejected" && (
+          <div className="mb-6 rounded-xl border border-line bg-surface p-4">
+            <p className="text-sm text-ink-700">
+              <strong className="font-semibold text-ink-900">
+                Everything you typed is already filled in below.
+              </strong>{" "}
+              Only your marksheet uploads need attaching again — your marks are checked against the
+              documents you attach, so they have to come with this submission.
+            </p>
+          </div>
+        )}
+
         {access.mode === "edit" && (
           <>
             {/* Was hardcoded: step 1 lit on load, the other six never. It now
@@ -577,6 +672,45 @@ export function SrfPage({
                       />
                       <ErrorText>{errors.tenthInstitution?.message}</ErrorText>
                     </div>
+                    {/* The board comes with the school that issued the marks
+                    (2026-08-18), because a coordinator verifies both against
+                    the one document. */}
+                    <div>
+                      <BoardSelect label="10th board" level="tenth" {...register("tenthBoard")} />
+                      <ErrorText>{errors.tenthBoard?.message}</ErrorText>
+                    </div>
+                    {tenthBoard === "state_board" && (
+                      <div>
+                        <Field label="Which state's board?" required>
+                          {(id) => (
+                            <select
+                              id={id}
+                              className={controlClass}
+                              {...register("tenthBoardState")}
+                            >
+                              <option value="">Select…</option>
+                              {INDIAN_STATES.map((state) => (
+                                <option key={state} value={state}>
+                                  {state}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </Field>
+                        <ErrorText>{errors.tenthBoardState?.message}</ErrorText>
+                      </div>
+                    )}
+                    {tenthBoard === "other" && (
+                      <div>
+                        <TextField
+                          label="Name the 10th board"
+                          required
+                          placeholder="As it appears on the marksheet"
+                          {...register("tenthBoardOther")}
+                        />
+                        <ErrorText>{errors.tenthBoardOther?.message}</ErrorText>
+                      </div>
+                    )}
                     <div>
                       <TextField
                         label="10th marks (%)"
@@ -610,6 +744,46 @@ export function SrfPage({
                       <ErrorText>{errors.twelfthInstitution?.message}</ErrorText>
                     </div>
                     <div>
+                      <BoardSelect
+                        label="12th board"
+                        level="twelfth"
+                        {...register("twelfthBoard")}
+                      />
+                      <ErrorText>{errors.twelfthBoard?.message}</ErrorText>
+                    </div>
+                    {twelfthBoard === "state_board" && (
+                      <div>
+                        <Field label="Which state's board?" required>
+                          {(id) => (
+                            <select
+                              id={id}
+                              className={controlClass}
+                              {...register("twelfthBoardState")}
+                            >
+                              <option value="">Select…</option>
+                              {INDIAN_STATES.map((state) => (
+                                <option key={state} value={state}>
+                                  {state}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </Field>
+                        <ErrorText>{errors.twelfthBoardState?.message}</ErrorText>
+                      </div>
+                    )}
+                    {twelfthBoard === "other" && (
+                      <div>
+                        <TextField
+                          label="Name the 12th board"
+                          required
+                          placeholder="As it appears on the marksheet"
+                          {...register("twelfthBoardOther")}
+                        />
+                        <ErrorText>{errors.twelfthBoardOther?.message}</ErrorText>
+                      </div>
+                    )}
+                    <div>
                       <TextField
                         label="12th marks (%)"
                         type="number"
@@ -637,8 +811,8 @@ export function SrfPage({
                     Diploma <span className="font-normal text-ink-500">(optional)</span>
                   </legend>
                   <p className="mb-3 text-xs text-ink-500">
-                    Leave blank if you did not do one. If you did, we need the college, the result
-                    and the marksheet.
+                    Leave blank if you did not do one. If you did, we need the college, who awarded
+                    it, the result and the marksheet.
                   </p>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
@@ -648,6 +822,18 @@ export function SrfPage({
                         {...register("diplomaInstitution")}
                       />
                       <ErrorText>{errors.diplomaInstitution?.message}</ErrorText>
+                    </div>
+                    {/* Who AWARDED it (2026-08-18). "University / Board" rather
+                    than "University": many diplomas come from a state
+                    technical-education board, and a field called University
+                    invites that student to leave it blank. */}
+                    <div>
+                      <TextField
+                        label="University / Board"
+                        placeholder="Who awarded it — e.g. Anna University, or DOTE"
+                        {...register("diplomaUniversity")}
+                      />
+                      <ErrorText>{errors.diplomaUniversity?.message}</ErrorText>
                     </div>
                     {/* Scale before marks: the scale tells the student what the
                     box below expects, so asking for the figure first invites
@@ -713,12 +899,19 @@ export function SrfPage({
                   throughout the UG/PG." Asking per semester invited eight
                   chances to answer inconsistently, and left eligibility
                   comparing figures that were never on the same scale. */}
-                  <div className="mt-4 max-w-xs">
+                  {/* WHICH college, said out loud (2026-08-18). A postgraduate
+                  has two - the PG they are on, whose semesters are below, and
+                  the finished UG degree, which has its own figure and its own
+                  scale. The old label said neither. */}
+                  <div className="mt-4 max-w-sm">
                     <ScaleSelect
-                      label="How your college reports marks"
+                      label={marksScaleQuestion(programmeLevel)}
                       {...register("collegeMarksScale")}
                     />
-                    <p className="mt-1 text-xs text-ink-500">Applies to every semester below.</p>
+                    <p className="mt-1 text-xs text-ink-500">
+                      Applies to every semester below
+                      {programmeLevel === "pg" ? " — those are your PG semesters." : "."}
+                    </p>
                   </div>
                 </fieldset>
 
@@ -759,7 +952,10 @@ export function SrfPage({
                         <ErrorText>{errors.ugBranch?.message}</ErrorText>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <ScaleSelect label="UG scale" {...register("ugAggregateScale")} />
+                        <ScaleSelect
+                          label={UG_COLLEGE_MARKS_SCALE_QUESTION}
+                          {...register("ugAggregateScale")}
+                        />
                         <TextField
                           label="UG marks"
                           type="number"

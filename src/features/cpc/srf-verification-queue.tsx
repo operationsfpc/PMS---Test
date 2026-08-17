@@ -1,4 +1,6 @@
 import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
+import { describeBoard } from "@domain/boards";
+import { decideSrf } from "@domain/srf-decision";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -22,6 +24,15 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
   const [rows, setRows] = useState<readonly PendingSrf[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /**
+   * Which student is being sent back, and what they are being told.
+   *
+   * One at a time, deliberately: a coordinator writes a comment about the form
+   * in front of them, and several open boxes is how a comment lands on the
+   * wrong student.
+   */
+  const [sendingBack, setSendingBack] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
 
   // Created once: a new client on every render would refetch endlessly.
   const [repo] = useState<VerificationRepository>(
@@ -50,6 +61,39 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
     try {
       await repo.decide(student.id, "srf_submitted", { decision: "approve" });
       setRows((current) => (current ?? []).filter((r) => r.id !== student.id));
+    } catch (caught) {
+      setError(
+        caught instanceof VerificationError ? caught.message : "Could not save the decision.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /**
+   * Sends the form back with the coordinator's comment (2026-08-18).
+   *
+   * The empty-reason rule is `decideSrf`'s, asked BEFORE the network: the
+   * student is told nothing else about why their form came back, so a blank
+   * comment would be a form returned with no instruction. The database enforces
+   * the same rule; this only stops a pointless request and shows the domain's
+   * own words.
+   */
+  async function sendBack(student: PendingSrf) {
+    const decision = { decision: "reject", reason } as const;
+    const outcome = decideSrf("srf_submitted", decision);
+    if (!outcome.ok) {
+      setError(outcome.error);
+      return;
+    }
+
+    setBusyId(student.id);
+    setError(null);
+    try {
+      await repo.decide(student.id, "srf_submitted", decision);
+      setRows((current) => (current ?? []).filter((r) => r.id !== student.id));
+      setSendingBack(null);
+      setReason("");
     } catch (caught) {
       setError(
         caught instanceof VerificationError ? caught.message : "Could not save the decision.",
@@ -114,11 +158,37 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
             >
               {rows.map((student) => (
                 <tr key={student.id} className="border-t border-neutral-200">
-                  <td className="px-3 py-2 text-sm font-medium">{student.fullName}</td>
+                  <td className="px-3 py-2 text-sm font-medium">
+                    {student.fullName}
+                    {/* A resubmission is not a fresh form. Repeating what was
+                        asked for is what stops the same defect being missed
+                        twice - and the student has already been told it. */}
+                    {student.previousRejectionReason !== null &&
+                      student.previousRejectionReason.trim() !== "" && (
+                        <span className="mt-1 block">
+                          <Badge tone="warning">Resubmitted</Badge>
+                          <span className="mt-1 block text-xs font-normal text-ink-500">
+                            You sent this back: “{student.previousRejectionReason}”
+                          </span>
+                        </span>
+                      )}
+                  </td>
                   <td className="px-3 py-2 text-sm">{student.rollNumber}</td>
                   <td className="px-3 py-2 text-sm">{student.overallCgpa ?? "—"}</td>
-                  <td className="px-3 py-2 text-sm">{student.tenthPercentage ?? "—"}</td>
-                  <td className="px-3 py-2 text-sm">{student.twelfthPercentage ?? "—"}</td>
+                  {/* The figure and the board that issued it, together: they are
+                      checked against the one document. */}
+                  <td className="px-3 py-2 text-sm">
+                    {student.tenthPercentage ?? "—"}
+                    <span className="block text-xs text-ink-500">
+                      {describeBoard(student.tenthBoard, "tenth")}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-sm">
+                    {student.twelfthPercentage ?? "—"}
+                    <span className="block text-xs text-ink-500">
+                      {describeBoard(student.twelfthBoard, "twelfth")}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-sm">{student.currentArrears}</td>
                   <td className="px-3 py-2 text-sm">
                     {student.historyOfArrears > 0 ? (
@@ -243,14 +313,70 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                         })()}
                       </p>
                     )}
-                    <Button
-                      size="sm"
-                      disabled={busyId === student.id}
-                      aria-label={`Approve ${student.fullName}`}
-                      onClick={() => void approve(student)}
-                    >
-                      {busyId === student.id ? "Saving…" : "Approve"}
-                    </Button>
+                    {sendingBack === student.id ? (
+                      <div className="flex flex-col gap-2">
+                        <label
+                          htmlFor={`reason-${student.id}`}
+                          className="text-xs font-medium text-ink-700"
+                        >
+                          What does this student need to correct?
+                        </label>
+                        <textarea
+                          id={`reason-${student.id}`}
+                          rows={3}
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          className="w-64 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                          placeholder="Name what is wrong, and what to change."
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={busyId === student.id}
+                            onClick={() => void sendBack(student)}
+                          >
+                            {busyId === student.id ? "Saving…" : "Send back"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setSendingBack(null);
+                              setReason("");
+                              setError(null);
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          disabled={busyId === student.id}
+                          aria-label={`Approve ${student.fullName}`}
+                          onClick={() => void approve(student)}
+                        >
+                          {busyId === student.id ? "Saving…" : "Approve"}
+                        </Button>
+                        {/* The other half of PRD §4.2, which no screen has ever
+                            offered: a form can be sent back, with comments. */}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          aria-label={`Send back the form from ${student.fullName}`}
+                          onClick={() => {
+                            setSendingBack(student.id);
+                            setReason("");
+                            setError(null);
+                          }}
+                        >
+                          Send back for changes
+                        </Button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

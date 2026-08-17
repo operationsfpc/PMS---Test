@@ -4,8 +4,10 @@ import {
   isValidForScale,
   MARKS_SCALES,
   type MarksScale,
+  marksScaleQuestion,
   normaliseToCgpa,
   PERCENTAGE_TO_CGPA_DIVISOR,
+  UG_COLLEGE_MARKS_SCALE_QUESTION,
 } from "./marks";
 
 /**
@@ -104,5 +106,35 @@ describe("every scale is handled", () => {
     expect(isValidForScale(5, scale)).toBe(true);
     expect(normaliseToCgpa(5, scale)).toBeGreaterThan(0);
     expect(describeMarks(5, scale)).toContain("5");
+  });
+});
+
+/**
+ * Which college the marks-scale question is about (2026-08-18, answer 6a).
+ *
+ * The question governs the semester lines, and for a postgraduate those are
+ * their PG semesters - the finished UG degree has its own figure and its own
+ * scale. Labelling the semester scale "UG" would ask a PG student about the
+ * wrong college, and a percentage entered as a CGPA changes who is eligible
+ * for a drive.
+ */
+describe("marksScaleQuestion", () => {
+  it("names the PG college for a postgraduate", () => {
+    expect(marksScaleQuestion("pg")).toBe("How does your PG college report marks?");
+  });
+
+  it("asks plainly for an undergraduate, who has only one college", () => {
+    expect(marksScaleQuestion("ug")).toBe("How does your college report marks?");
+  });
+
+  it("gives the completed UG degree a question of its own, naming UG", () => {
+    expect(UG_COLLEGE_MARKS_SCALE_QUESTION).toBe("How does your UG college report marks?");
+  });
+
+  it("never asks two questions with the same words", () => {
+    expect(
+      new Set([marksScaleQuestion("ug"), marksScaleQuestion("pg"), UG_COLLEGE_MARKS_SCALE_QUESTION])
+        .size,
+    ).toBe(3);
   });
 });

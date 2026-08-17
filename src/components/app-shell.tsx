@@ -127,13 +127,21 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     // D2: approval stays with the Delivery Head; the Central CPC sees what is
     // waiting to be published and what already is, separately. The old
     // cockpit is absorbed into those two views.
+    /**
+     * Three tabs, 2026-08-18 (Karthik): "approved is yet to publish. these
+     * should be in yet to publish … we can have a third box, there called
+     * completed. This way we have three tabs — approved = yet to publish;
+     * published - page name can be live; completed. drafts can be removed."
+     *
+     * "All drives" is gone: it was the same list a third time, and the design it
+     * carried is now what Live and Completed are built from.
+     */
     {
       heading: "Drives",
       items: [
         { to: "/central/drives/yet-to-publish", label: "Yet to publish" },
-        { to: "/central/drives/published", label: "Published" },
-        // F15: the AE's drive module, with shortlisting access.
-        { to: "/my-drives", label: "All drives" },
+        { to: "/central/drives/live", label: "Live" },
+        { to: "/central/drives/completed", label: "Completed" },
       ],
     },
     /**

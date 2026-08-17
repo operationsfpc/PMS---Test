@@ -228,13 +228,23 @@ describe("the grouped sidebar", () => {
     }
   });
 
-  it("splits the central coordinator's pipeline into yet-to-publish and published (D2)", () => {
+  /**
+   * SPEC CHANGE 2026-08-18: three tabs, not two. "approved is yet to publish …
+   * we can have a third box, there called completed. This way we have three
+   * tabs — approved = yet to publish; published - page name can be live;
+   * completed. drafts can be removed."
+   */
+  it("gives the central coordinator exactly Yet to publish, Live and Completed", () => {
     shellFor(signedIn("central_placement_coordinator"));
 
     expect(screen.getByRole("link", { name: /yet to publish/i })).toBeDefined();
-    expect(screen.getByRole("link", { name: /^published$/i })).toBeDefined();
-    // The cockpit is absorbed into those two views, not a third entry.
+    expect(screen.getByRole("link", { name: /^live$/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^completed$/i })).toBeDefined();
+    // The cockpit is absorbed into those views, and "All drives" was the same
+    // list a third time.
     expect(screen.queryByRole("link", { name: /drive cockpit/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^all drives$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^published$/i })).toBeNull();
   });
 
   it("gives the student a My profile entry — it was reachable only from the dashboard", () => {
@@ -436,11 +446,12 @@ describe("the Central Placement Coordinator's drive module", () => {
    * pipeline views rather than kept as a third entry. The module is still
    * theirs — it is just split by what they were asked to see separately (D2).
    */
-  it("offers the drive module as the two pipeline views", () => {
+  it("offers the drive module as the three pipeline views", () => {
     shellFor(signedIn("central_placement_coordinator"));
 
     expect(screen.getByRole("link", { name: /yet to publish/i })).toBeDefined();
-    expect(screen.getByRole("link", { name: /^published$/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^live$/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^completed$/i })).toBeDefined();
   });
 
   it("keeps the shortlisting entry the AE does not have", () => {

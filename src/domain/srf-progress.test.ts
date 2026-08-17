@@ -18,8 +18,14 @@ const EMPTY: SrfProgressInput = {
   alternateContact: "",
   tenthInstitution: "",
   tenthPercentage: Number.NaN,
+  tenthBoard: null,
+  tenthBoardState: null,
+  tenthBoardOther: null,
   twelfthInstitution: "",
   twelfthPercentage: Number.NaN,
+  twelfthBoard: null,
+  twelfthBoardState: null,
+  twelfthBoardOther: null,
   hasDiplomaMarks: false,
   programmeLevel: "ug",
   ugAggregateCgpa: null,
@@ -35,8 +41,14 @@ const FILLED: SrfProgressInput = {
   alternateContact: "9876500000",
   tenthInstitution: "St Xavier's, Chennai",
   tenthPercentage: 91.4,
+  tenthBoard: "cbse",
+  tenthBoardState: null,
+  tenthBoardOther: null,
   twelfthInstitution: "St Xavier's, Chennai",
   twelfthPercentage: 88,
+  twelfthBoard: "cbse",
+  twelfthBoardState: null,
+  twelfthBoardOther: null,
   hasDiplomaMarks: false,
   programmeLevel: "ug",
   ugAggregateCgpa: null,
@@ -46,6 +58,9 @@ const FILLED: SrfProgressInput = {
   resumeCategories: ["software_technical"],
   consent: true,
 };
+
+/** The same form, complete — the boards included (2026-08-18). */
+const COMPLETE: SrfProgressInput = FILLED;
 
 const section = (input: SrfProgressInput, id: string) =>
   srfSectionProgress(input).find((s) => s.id === id);
@@ -225,5 +240,59 @@ describe("srfCompletion", () => {
     expect(srfCompletion({ ...EMPTY, mobile: "9876543210", alternateContact: "9876500000" })).toBe(
       25,
     );
+  });
+});
+
+/**
+ * The boards are part of section 2 (2026-08-18).
+ *
+ * A tracker that reads 100% while a mandatory field is empty is the exact
+ * failure this file exists to prevent: the student stops, and the form sits
+ * unsubmitted until somebody chases them.
+ */
+describe("the board each school figure came from", () => {
+  it("holds section 2 back until the 10th board is answered", () => {
+    const section = srfSectionProgress({ ...COMPLETE, tenthBoard: null }).find(
+      (s) => s.id === "academic",
+    );
+    expect(section?.complete).toBe(false);
+  });
+
+  it("holds section 2 back until the 12th board is answered", () => {
+    const section = srfSectionProgress({ ...COMPLETE, twelfthBoard: null }).find(
+      (s) => s.id === "academic",
+    );
+    expect(section?.complete).toBe(false);
+  });
+
+  it("holds it back on a State Board with no state - that names 36 boards", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      tenthBoard: "state_board",
+      tenthBoardState: null,
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(false);
+  });
+
+  it("is satisfied by a State Board with its state named", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      tenthBoard: "state_board",
+      tenthBoardState: "Tamil Nadu",
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(true);
+  });
+
+  it("holds it back on Other with no name typed", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      twelfthBoard: "other",
+      twelfthBoardOther: null,
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(false);
+  });
+
+  it("does not count towards the percentage twice", () => {
+    expect(srfCompletion(COMPLETE)).toBe(100);
   });
 });

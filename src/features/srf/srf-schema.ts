@@ -1,4 +1,5 @@
 import { validateSemesters } from "@domain/academics";
+import { SCHOOL_BOARDS, type SchoolBoard, validateBoardSelection } from "@domain/boards";
 import { usableCertificates, validateCertificates } from "@domain/certificates";
 import { isValidForScale, MARKS_SCALES, normaliseToCgpa } from "@domain/marks";
 import { missingMarksheets } from "@domain/marksheets";
@@ -47,13 +48,34 @@ export const srfSchema = z
     // with no school against it cannot be checked by anyone.
     tenthInstitution: z.string().min(1, "Enter the school you did your 10th at").max(160),
     tenthPercentage: percentage,
+    /**
+     * Which board issued the figure (2026-08-18). A select, not free text: the
+     * rules that make (board, state, other) coherent are the domain's, checked
+     * in `superRefine` so BOTH boards report every problem in one pass.
+     *
+     * Empty string is the unanswered `<select>`, which is why this is a plain
+     * string rather than `z.enum` - an enum would report Zod's own "invalid
+     * value" wording and the student would never see the domain's sentence.
+     */
+    tenthBoard: z.string().default(""),
+    tenthBoardState: z.string().max(60).default(""),
+    tenthBoardOther: z.string().max(120).default(""),
     twelfthInstitution: z.string().min(1, "Enter the school you did your 12th at").max(160),
     twelfthPercentage: percentage,
+    twelfthBoard: z.string().default(""),
+    twelfthBoardState: z.string().max(60).default(""),
+    twelfthBoardOther: z.string().max(120).default(""),
 
     // ------------------------------------------------------------ diploma
     // Optional in full - many students have none - but all-or-nothing: a
     // figure with no college and no marksheet is a mark nobody can verify.
     diplomaInstitution: z.string().max(160),
+    /**
+     * Who AWARDED it (answer 4). Named "University / Board" because a diploma
+     * from a state technical-education board did not come from a university,
+     * and a field called "University" invites that student to leave it blank.
+     */
+    diplomaUniversity: z.string().max(160),
     diplomaMarks: z.number().nullable().default(null),
     diplomaMarksScale: z.enum(MARKS_SCALES).default("cgpa"),
 
@@ -245,6 +267,40 @@ export const srfSchema = z
           message: "Enter the college that issued your diploma.",
         });
       }
+      if (d.diplomaUniversity.trim() === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["diplomaUniversity"],
+          message: "Enter the university or board that awarded your diploma.",
+        });
+      }
+    }
+
+    // The boards. One rule, asked twice - and the answer lands on the field
+    // that is actually wrong, so "select a state" never appears beside a board
+    // that does not have one.
+    for (const level of ["tenth", "twelfth"] as const) {
+      const board = d[`${level}Board`];
+      const state = d[`${level}BoardState`];
+      const other = d[`${level}BoardOther`];
+
+      const problems = validateBoardSelection({
+        board:
+          board !== "" && (SCHOOL_BOARDS as readonly string[]).includes(board)
+            ? (board as SchoolBoard)
+            : null,
+        state: state === "" ? null : state,
+        other: other === "" ? null : other,
+      });
+
+      for (const problem of problems) {
+        const field = problem.includes("state")
+          ? `${level}BoardState`
+          : problem.includes("Name the board") || problem.includes("name the board")
+            ? `${level}BoardOther`
+            : `${level}Board`;
+        ctx.addIssue({ code: "custom", path: [field], message: problem });
+      }
     }
 
     // Which documents are required is derived from what the student declared,
@@ -322,9 +378,16 @@ export const SRF_DEFAULTS: SrfFormValues = {
   alternateContact: "",
   tenthInstitution: "",
   tenthPercentage: Number.NaN,
+  tenthBoard: "",
+  tenthBoardState: "",
+  tenthBoardOther: "",
   twelfthInstitution: "",
   twelfthPercentage: Number.NaN,
+  twelfthBoard: "",
+  twelfthBoardState: "",
+  twelfthBoardOther: "",
   diplomaInstitution: "",
+  diplomaUniversity: "",
   diplomaMarks: null,
   diplomaMarksScale: "cgpa",
   degree: "",

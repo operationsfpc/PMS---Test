@@ -14,8 +14,12 @@ const valid: SrfFormValues = {
   alternateContact: "9876500000",
   tenthInstitution: "St Xavier's, Chennai",
   tenthPercentage: 91.4,
+  // The board that issued them (2026-08-18). Mandatory for every student.
+  tenthBoard: "cbse",
   twelfthInstitution: "St Xavier's, Chennai",
   twelfthPercentage: 88,
+  twelfthBoard: "state_board",
+  twelfthBoardState: "Tamil Nadu",
   degree: "B.E",
   branch: "CSE",
   passingYear: 2026,
@@ -455,5 +459,103 @@ describe("srfSchema — certificates", () => {
 
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.certificates).toHaveLength(1);
+  });
+});
+
+/**
+ * The board a school figure came from (2026-08-18).
+ *
+ * The rules are `@domain/boards`'s, restated nowhere: the schema asks the
+ * domain, and `0048` asks the same question in SQL, so a pair the form accepts
+ * is a pair the database accepts.
+ */
+describe("school boards", () => {
+  it("requires the 10th board", () => {
+    expect(errorsFor({ tenthBoard: "" }).tenthBoard).toMatch(/select the board/i);
+  });
+
+  it("requires the 12th board", () => {
+    expect(errorsFor({ twelfthBoard: "" }).twelfthBoard).toMatch(/select the board/i);
+  });
+
+  it("requires the state behind a State Board - it names 36 boards otherwise", () => {
+    expect(errorsFor({ tenthBoard: "state_board", tenthBoardState: "" }).tenthBoardState).toMatch(
+      /which state/i,
+    );
+  });
+
+  it("accepts a State Board with its state named", () => {
+    expect(
+      srfSchema.safeParse({
+        ...valid,
+        tenthBoard: "state_board",
+        tenthBoardState: "Kerala",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("refuses a state that is not a real one", () => {
+    expect(
+      errorsFor({ tenthBoard: "state_board", tenthBoardState: "Tamilnadu" }).tenthBoardState,
+    ).toMatch(/which state/i);
+  });
+
+  it("requires Other to be named", () => {
+    expect(errorsFor({ twelfthBoard: "other", twelfthBoardState: "" }).twelfthBoardOther).toMatch(
+      /name the board/i,
+    );
+  });
+
+  it("refuses a state against a board that does not have one", () => {
+    expect(errorsFor({ tenthBoard: "cbse", tenthBoardState: "Kerala" }).tenthBoardState).toMatch(
+      /only select a state/i,
+    );
+  });
+
+  it("refuses a typed board name against a board that is not Other", () => {
+    expect(errorsFor({ tenthBoard: "cbse", tenthBoardOther: "CBSE" }).tenthBoardOther).toMatch(
+      /only name the board/i,
+    );
+  });
+
+  it("refuses a board that is not in the vocabulary at all", () => {
+    expect(errorsFor({ tenthBoard: "ICSE" as never }).tenthBoard).toMatch(/select the board/i);
+  });
+});
+
+/**
+ * Who awarded the diploma (2026-08-18, answer 4/5). Optional in full, but
+ * all-or-nothing once a figure is declared - the same rule the diploma college
+ * already follows, because a mark nobody can attribute is a mark nobody can
+ * verify.
+ */
+describe("diploma university or board", () => {
+  const withDiploma = {
+    diplomaInstitution: "Govt Polytechnic, Coimbatore",
+    diplomaUniversity: "DOTE, Tamil Nadu",
+    diplomaMarks: 8.2,
+    diplomaMarksScale: "cgpa",
+    marksheets: { ...valid.marksheets, diploma: file("diploma.pdf") },
+  } as const;
+
+  it("accepts a declared diploma that names who awarded it", () => {
+    expect(srfSchema.safeParse({ ...valid, ...withDiploma }).success).toBe(true);
+  });
+
+  it("requires it once a diploma figure is declared", () => {
+    expect(errorsFor({ ...withDiploma, diplomaUniversity: "" }).diplomaUniversity).toMatch(
+      /university or board/i,
+    );
+  });
+
+  it("treats whitespace as unanswered", () => {
+    expect(errorsFor({ ...withDiploma, diplomaUniversity: "   " }).diplomaUniversity).toMatch(
+      /university or board/i,
+    );
+  });
+
+  it("does not ask for it when no diploma is declared", () => {
+    expect(srfSchema.safeParse(valid).success).toBe(true);
+    expect(errorsFor({ diplomaUniversity: "" }).diplomaUniversity).toBeUndefined();
   });
 });

@@ -145,6 +145,9 @@ async function uploadMarksheets(
   return uploads;
 }
 
+/** An unanswered text box is NULL in the database, never an empty string. */
+const orNull = (value: string): string | null => (value.trim() === "" ? null : value.trim());
+
 /** Resolves the signed-in user. Injected so the dependency is explicit and testable. */
 export type GetAuthUserId = () => Promise<string | null>;
 
@@ -221,12 +224,28 @@ export function createSupabaseSrfRepository(
           tenth_percentage: values.tenthPercentage,
           twelfth_institution: values.twelfthInstitution,
           twelfth_percentage: values.twelfthPercentage,
+          /**
+           * The board, and the ONE extra answer it needs - the state for a
+           * State Board, the name for Other. Anything not asked for is sent as
+           * null rather than as an empty string: `0048` refuses a state against
+           * a board that does not have one, and "" is a value.
+           */
+          tenth_board: values.tenthBoard,
+          tenth_board_state: orNull(values.tenthBoardState),
+          tenth_board_other: orNull(values.tenthBoardOther),
+          twelfth_board: values.twelfthBoard,
+          twelfth_board_state: orNull(values.twelfthBoardState),
+          twelfth_board_other: orNull(values.twelfthBoardOther),
           // All-or-nothing, enforced by the DB too (0024): a declared figure
           // with no college and no marksheet is a mark nobody can verify.
           diploma_institution:
             values.diplomaMarks === null || values.diplomaInstitution === ""
               ? null
               : values.diplomaInstitution,
+          // Who awarded it. Kept to the same all-or-nothing rule as the
+          // college: a mark nobody can attribute is a mark nobody can verify.
+          diploma_university:
+            values.diplomaMarks === null ? null : orNull(values.diplomaUniversity),
           diploma_marks: values.diplomaMarks,
           diploma_marks_scale: values.diplomaMarks === null ? null : values.diplomaMarksScale,
           diploma_marksheet_slot: "diploma",

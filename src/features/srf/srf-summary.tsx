@@ -1,4 +1,5 @@
 import { Card } from "@components/ui";
+import { describeBoard, type SchoolBoard, type SchoolLevel } from "@domain/boards";
 import { certificateStanding } from "@domain/certificates";
 import type { SrfAccess } from "@domain/srf-access";
 import { Link } from "react-router";
@@ -26,6 +27,26 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+/**
+ * The board in one line, or "Not recorded".
+ *
+ * Never blank: five students registered before boards were collected, and an
+ * empty value reads as a claim about the student rather than a gap in the
+ * record. The wording is the domain's.
+ */
+const board = (
+  value: string | null | undefined,
+  state: string | null | undefined,
+  other: string | null | undefined,
+  level: SchoolLevel,
+): string =>
+  describeBoard(
+    value === null || value === undefined || value === ""
+      ? null
+      : { board: value as SchoolBoard, state: state ?? null, other: other ?? null },
+    level,
+  );
 
 const shown = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) return "—";
@@ -89,9 +110,39 @@ export function SrfSummary({
           <Row label="Branch" value={shown(profile.branch)} />
           <Row label="Year of passing" value={shown(profile.passingYear)} />
           <Row label="10th school" value={shown(profile.tenthInstitution)} />
+          {/* The board is shown back for the same reason it is collected: it is
+              checked against the marksheet, and a figure the student cannot see
+              is a figure they cannot correct. */}
+          <Row
+            label="10th board"
+            value={board(
+              profile.tenthBoard,
+              profile.tenthBoardState,
+              profile.tenthBoardOther,
+              "tenth",
+            )}
+          />
           <Row label="10th percentage" value={shown(profile.tenthPercentage)} />
           <Row label="12th school" value={shown(profile.twelfthInstitution)} />
+          <Row
+            label="12th board"
+            value={board(
+              profile.twelfthBoard,
+              profile.twelfthBoardState,
+              profile.twelfthBoardOther,
+              "twelfth",
+            )}
+          />
           <Row label="12th percentage" value={shown(profile.twelfthPercentage)} />
+          {/* Only when there is a diploma at all: most students have none, and
+              three dashes in a row is not information. */}
+          {profile.diplomaMarks !== null && profile.diplomaMarks !== undefined && (
+            <>
+              <Row label="Diploma college" value={shown(profile.diplomaInstitution)} />
+              <Row label="Diploma university / board" value={shown(profile.diplomaUniversity)} />
+              <Row label="Diploma marks" value={shown(profile.diplomaMarks)} />
+            </>
+          )}
         </dl>
 
         {semesters.length > 0 && (

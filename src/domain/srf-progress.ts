@@ -12,6 +12,7 @@
  * lives beside the schema's own predicates rather than in the component.
  */
 
+import { type SchoolBoard, validateBoardSelection } from "./boards";
 import { missingMarksheets } from "./marksheets";
 import { missingResumesFor } from "./srf-rules";
 import type { RoleCategory } from "./types";
@@ -23,8 +24,18 @@ export interface SrfProgressInput {
   /** The school each school figure came from; asked before the marks. */
   readonly tenthInstitution: string;
   readonly tenthPercentage: number;
+  /**
+   * And the board that issued it (2026-08-18). Mandatory for every student, so
+   * the tracker must not read 100% while it is empty.
+   */
+  readonly tenthBoard: SchoolBoard | string | null;
+  readonly tenthBoardState: string | null;
+  readonly tenthBoardOther: string | null;
   readonly twelfthInstitution: string;
   readonly twelfthPercentage: number;
+  readonly twelfthBoard: SchoolBoard | string | null;
+  readonly twelfthBoardState: string | null;
+  readonly twelfthBoardOther: string | null;
   /** Optional to declare; once declared it must be evidenced like any mark. */
   readonly hasDiplomaMarks: boolean;
   readonly programmeLevel: "ug" | "pg";
@@ -78,11 +89,29 @@ export function srfSectionProgress(input: SrfProgressInput): readonly SrfSection
    * ended up filed against the wrong semester. So this section is not done
    * until every figure on it carries its evidence.
    */
+  /**
+   * The board, judged by the same rule the form and the database use - a State
+   * Board with no state names 36 boards, and "Other" with nothing typed names
+   * none.
+   */
+  const boardAnswered = (
+    board: string | null,
+    state: string | null,
+    other: string | null,
+  ): boolean =>
+    validateBoardSelection({
+      board: board === null || board === "" ? null : (board as SchoolBoard),
+      state,
+      other,
+    }).length === 0;
+
   const academic =
     filled(input.tenthInstitution) &&
     given(input.tenthPercentage) &&
+    boardAnswered(input.tenthBoard, input.tenthBoardState, input.tenthBoardOther) &&
     filled(input.twelfthInstitution) &&
     given(input.twelfthPercentage) &&
+    boardAnswered(input.twelfthBoard, input.twelfthBoardState, input.twelfthBoardOther) &&
     semestersEntered &&
     (input.programmeLevel === "ug" || input.ugAggregateCgpa !== null) &&
     missingMarksheets(input, input.marksheets).length === 0;

@@ -79,7 +79,10 @@ describe("SrfVerificationQueue", () => {
         historyOfArrears: 1,
         tenthPercentage: 91.4,
         twelfthPercentage: 88,
+        tenthBoard: { board: "cbse" as const, state: null, other: null },
+        twelfthBoard: { board: "cbse" as const, state: null, other: null },
         submittedAt: "2026-08-01T10:00:00Z",
+        previousRejectionReason: null,
         documents: [{ kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" }],
         // Each declared semester beside the marksheet that evidences it - the
         // uploads used to be discarded, so this column had nothing in it.

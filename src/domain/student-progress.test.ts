@@ -211,3 +211,59 @@ describe("studentPrompt", () => {
     expect(prompt.action).toBeNull();
   });
 });
+
+/**
+ * The coordinator's own words reach the dashboard (2026-08-18, answer 9).
+ *
+ * "Your coordinator has sent it back" tells the student that something is
+ * wrong and nothing about what. The reason was already stored and already shown
+ * inside the form - but the dashboard is where they land, so a student who
+ * reads only that learns nothing actionable.
+ */
+describe("a form sent back for changes says what to change", () => {
+  it("carries the coordinator's comment into the prompt", () => {
+    const prompt = studentPrompt({
+      srfStatus: "srf_rejected",
+      participationStatus: "active",
+      openDrives: 0,
+      srfRejectionReason: "Your semester 2 marksheet is missing.",
+    });
+
+    expect(prompt.detail).toMatch(/semester 2 marksheet is missing/i);
+    expect(prompt.action?.href).toBe("/srf");
+  });
+
+  it("still says something useful when no reason was recorded", () => {
+    const prompt = studentPrompt({
+      srfStatus: "srf_rejected",
+      participationStatus: "active",
+      openDrives: 0,
+      srfRejectionReason: null,
+    });
+
+    expect(prompt.detail).toMatch(/sent it back/i);
+    expect(prompt.detail).not.toMatch(/null|undefined/);
+  });
+
+  it("treats a blank reason as no reason", () => {
+    const prompt = studentPrompt({
+      srfStatus: "srf_rejected",
+      participationStatus: "active",
+      openDrives: 0,
+      srfRejectionReason: "   ",
+    });
+
+    expect(prompt.detail).toMatch(/sent it back/i);
+  });
+
+  it("never repeats a reason on a form that was not sent back", () => {
+    const prompt = studentPrompt({
+      srfStatus: "srf_submitted",
+      participationStatus: "active",
+      openDrives: 0,
+      srfRejectionReason: "An old reason from last time.",
+    });
+
+    expect(prompt.detail).not.toMatch(/old reason/i);
+  });
+});

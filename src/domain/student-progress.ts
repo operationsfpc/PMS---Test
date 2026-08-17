@@ -105,6 +105,11 @@ export function studentPrompt(input: {
   readonly srfStatus: SrfStatus;
   readonly participationStatus: ParticipationStatus;
   readonly openDrives: number;
+  /**
+   * Why a coordinator sent the form back (2026-08-18). Optional because every
+   * other status has none, and null when they recorded nothing.
+   */
+  readonly srfRejectionReason?: string | null;
 }): StudentPrompt {
   if (input.participationStatus === "opted_out") {
     return {
@@ -131,9 +136,20 @@ export function studentPrompt(input: {
   }
 
   if (input.srfStatus === "srf_rejected") {
+    /**
+     * The coordinator's OWN WORDS, on the screen the student lands on.
+     *
+     * "Sent it back" says something is wrong and nothing about what, and the
+     * reason was only ever visible inside the form itself.
+     */
+    const reason = (input.srfRejectionReason ?? "").trim();
+
     return {
       headline: "Your registration form needs changes",
-      detail: "Your coordinator has sent it back. Correct it and submit it again.",
+      detail:
+        reason === ""
+          ? "Your coordinator has sent it back. Correct it and submit it again."
+          : `Your coordinator has sent it back: ${reason} Correct it and submit it again.`,
       action: { label: "Update my registration form", href: "/srf" },
     };
   }

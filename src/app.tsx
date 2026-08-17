@@ -229,15 +229,32 @@ export function App() {
                 {/* Every student in the placement process. Also the
                     destination of the Placed count on the overview. */}
                 <Route path="/central/students" element={<StudentDirectoryRoute />} />
-                <Route path="/central/drives" element={<CockpitRoute />} />
-                {/* D2: the Central CPC's pipeline, split. */}
+                {/*
+                 * Three tabs, 2026-08-18: approved = Yet to publish, Live,
+                 * Completed. Drafts are gone from this coordinator's screens.
+                 *
+                 * Yet to publish stays the COCKPIT because it carries the
+                 * publish action and the drive ids every other Central CPC
+                 * screen needs. Live and Completed are the card design, which
+                 * shows what has become of a drive rather than what it is
+                 * waiting for.
+                 */}
                 <Route
                   path="/central/drives/yet-to-publish"
                   element={<CockpitRoute filter="yet-to-publish" />}
                 />
+                <Route path="/central/drives/live" element={<DrivePortfolioRoute tab="live" />} />
+                <Route
+                  path="/central/drives/completed"
+                  element={<DrivePortfolioRoute tab="completed" />}
+                />
+                {/* Both old links still answer, pointing at what replaced them:
+                    /central/drives was the cockpit and /central/drives/published
+                    was the list that is now called Live. */}
+                <Route path="/central/drives" element={<DrivePortfolioRoute tab="live" />} />
                 <Route
                   path="/central/drives/published"
-                  element={<CockpitRoute filter="published" />}
+                  element={<DrivePortfolioRoute tab="live" />}
                 />
                 <Route
                   path="/central/publish"
