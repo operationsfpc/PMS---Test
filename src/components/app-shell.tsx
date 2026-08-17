@@ -27,6 +27,30 @@ export interface NavGroup {
   readonly items: readonly NavItem[];
 }
 
+/**
+ * ONE Drives group, for every role that is not a student (2026-08-18, Karthik):
+ * "the side bar on drives should be similar for all people viewing it (other
+ * than students). just the edit rights will be different. view on side bar
+ * heading and subheading should be the same."
+ *
+ * The rights were never in this file. `canPublishDrive`,
+ * `canShortlistFromPortfolio` and `canViewDriveApplicants` decide what each
+ * role may do, and none of them moves. What goes is a set of labels that
+ * implied a difference that did not exist: "My drives" and "Drives I approved"
+ * were the same list, narrowed by RLS either way, and the cockpit was a third
+ * name for a subset of it.
+ *
+ * The student is deliberately excluded - they get four lists of their own.
+ */
+const DRIVES: NavGroup = {
+  heading: "Drives",
+  items: [
+    { to: "/central/drives/yet-to-publish", label: "Yet to publish" },
+    { to: "/central/drives/live", label: "Live" },
+    { to: "/central/drives/completed", label: "Completed" },
+  ],
+};
+
 export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   student: [
     { heading: "Home", items: [{ to: "/student", label: "My dashboard" }] },
@@ -61,10 +85,13 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/cpc/certificates", label: "Certificate verification" },
       ],
     },
+    DRIVES,
     {
       heading: "Drives in progress",
       items: [
         // D10: shortlist, every round, the offer — read-only, campus-scoped.
+        // It stays: it answers "how are MY students doing", which is a
+        // different question from "what is happening to this drive".
         { to: "/cpc/drives", label: "Drive progress" },
         { to: "/cpc/attendance", label: "Attendance" },
       ],
@@ -93,10 +120,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       heading: "Drive initiation",
       items: [{ to: "/ae/pif", label: "Position information form" }],
     },
-    {
-      heading: "My drives",
-      items: [{ to: "/my-drives", label: "My drives" }],
-    },
+    DRIVES,
   ],
   campus_manager: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
@@ -114,13 +138,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       heading: "Drive approval",
       items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
     },
-    {
-      heading: "Drives",
-      items: [
-        { to: "/my-drives", label: "My drives" },
-        { to: "/central/drives", label: "Drive cockpit" },
-      ],
-    },
+    DRIVES,
   ],
   central_placement_coordinator: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
@@ -136,14 +154,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
      * "All drives" is gone: it was the same list a third time, and the design it
      * carried is now what Live and Completed are built from.
      */
-    {
-      heading: "Drives",
-      items: [
-        { to: "/central/drives/yet-to-publish", label: "Yet to publish" },
-        { to: "/central/drives/live", label: "Live" },
-        { to: "/central/drives/completed", label: "Completed" },
-      ],
-    },
+    DRIVES,
     /**
      * 2026-08-17 (Karthik): "publish a drive heading and its subheading publish
      * and target is not required. We can instead create a heading student
@@ -184,6 +195,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   ],
   admin: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
+    DRIVES,
     {
       heading: "Organisation",
       items: [

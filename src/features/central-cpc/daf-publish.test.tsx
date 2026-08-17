@@ -447,3 +447,100 @@ describe("DafPublish \u2014 the rounds the AE declared", () => {
     expect(await screen.findByText(/declared 3 rounds.*1 is configured/i)).toBeDefined();
   });
 });
+
+/**
+ * "in application window while making a live open. there should also be a now
+ * click box." (2026-08-18)
+ *
+ * Typing today's date and time into a `datetime-local` to mean "now" is four
+ * fields of arithmetic to express the most common intent there is - and getting
+ * the minute wrong means a drive that is announced but not yet open, which
+ * students read as a broken page.
+ */
+describe("DafPublish — opening the applications now", () => {
+  it("offers a box for it", async () => {
+    routed(view());
+
+    expect(await screen.findByRole("checkbox", { name: /open now/i })).toBeDefined();
+  });
+
+  it("takes the start over, and stops asking for a date", async () => {
+    routed(view());
+
+    await userEvent.click(await screen.findByRole("checkbox", { name: /open now/i }));
+
+    expect((screen.getByLabelText(/applications open/i) as HTMLInputElement).disabled).toBe(true);
+  });
+
+  /** A window that closes before it opens is refused - see the last test here. */
+  const openEnded = async () => ({
+    ...(await view().load()),
+    drive: { ...DRIVE, applicationEnd: new Date(Date.now() + 7 * 24 * 3600 * 1000) },
+  });
+
+  it("publishes the moment of publishing, not the moment the box was ticked", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish, load: openEnded }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /open now/i }));
+    const before = Date.now();
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    const sent = publish.mock.calls[0]?.[0] as { applicationStart: string };
+    const stamped = new Date(sent.applicationStart).getTime();
+    /**
+     * To the MINUTE, which is the precision the window is expressed in - so it
+     * can sit up to 59 seconds in the past. That direction is deliberate: a
+     * window that opened a moment ago is open, and one rounded a moment into
+     * the future would announce a drive nobody can apply to yet.
+     */
+    expect(stamped).toBeGreaterThanOrEqual(before - 60_000);
+    expect(stamped).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("gives the coordinator their own date back when they untick it", async () => {
+    routed(view());
+    const box = await screen.findByRole("checkbox", { name: /open now/i });
+
+    await userEvent.click(box);
+    await userEvent.click(box);
+
+    const start = screen.getByLabelText(/applications open/i) as HTMLInputElement;
+    expect(start.disabled).toBe(false);
+    expect(start.value).toContain("2026-08-01");
+  });
+
+  it("satisfies the missing-start rule that would otherwise block publishing", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish, load: openEnded }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /open now/i }));
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * Found by writing these tests: ticking "Open now" on a drive whose close
+   * date has already passed makes a window that ends before it starts. The
+   * domain rule for that already existed (`missingBeforeGoLive`); what mattered
+   * was that "now" is expressed in the SAME wall-clock format as the input it
+   * replaces. As an ISO-Z stamp it was being compared as a string against a
+   * local `datetime-local` value, which is right by luck in the morning and
+   * wrong by five and a half hours in the evening.
+   */
+  it("refuses to open now on a drive that has already closed, and says why", async () => {
+    const publish = vi.fn();
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: /open now/i }));
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    expect(publish).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/ends before it starts/i);
+  });
+});

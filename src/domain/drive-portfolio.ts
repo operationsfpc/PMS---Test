@@ -260,7 +260,8 @@ export function summariseFunnel(applicants: readonly ApplicantFacts[]): DriveFun
 /** The least a drive must have for somebody to search for it by name. */
 export interface SearchableDrive {
   readonly companyName: string;
-  readonly roleTitle: string;
+  /** Null on a drive whose role was never filled in - still searchable by company. */
+  readonly roleTitle: string | null;
 }
 
 /**
@@ -287,7 +288,7 @@ export function searchDrives<TDrive extends SearchableDrive>(
   if (terms.length === 0) return drives;
 
   return drives.filter((drive) => {
-    const haystack = `${drive.companyName} ${drive.roleTitle}`.toLowerCase();
+    const haystack = `${drive.companyName} ${drive.roleTitle ?? ""}`.toLowerCase();
     return terms.every((term) => haystack.includes(term));
   });
 }

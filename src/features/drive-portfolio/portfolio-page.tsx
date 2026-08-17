@@ -1,3 +1,4 @@
+import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { applicationWindow } from "@domain/drive-analytics";
 import {
@@ -187,46 +188,11 @@ export function DrivePortfolioPage({
         </Card>
       ) : (
         <>
-          {/* Asked for 2026-08-18. A list of drives with no way to find one is a
-              list you read top to bottom, and this list only grows. */}
-          {/* `<search>` rather than role="search": same semantics, one fewer
-              attribute to get wrong. The inner form exists so Enter has a
-              defined, harmless meaning. */}
-          <search className="mb-6">
-            <form onSubmit={(e) => e.preventDefault()}>
-              <label
-                htmlFor="drive-search"
-                className="mb-1.5 block text-sm font-medium text-ink-700"
-              >
-                Search drives
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  id="drive-search"
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Company or role — e.g. HCL, or trainee"
-                  className="w-full max-w-sm rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                />
-                {/* The list narrows as you type, so this submits nothing. It is
-                  here because a search box without one reads as decoration, and
-                  it gives the keyboard a place to land. */}
-                <button
-                  type="submit"
-                  className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
-                >
-                  Search
-                </button>
-              </div>
-            </form>
-          </search>
+          <DriveSearch value={query} onChange={setQuery} />
 
           {visible.length === 0 ? (
             <Card className="p-6">
-              <p className="text-sm text-ink-700">
-                No drives match “{query}”. Clear the search to see the whole list.
-              </p>
+              <NoDriveMatches query={query} />
             </Card>
           ) : (
             <ul className="flex flex-col gap-4">

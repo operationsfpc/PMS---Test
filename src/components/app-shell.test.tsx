@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import type { AppRole } from "@domain/types";
 import { AuthContext, type AuthState } from "@features/auth/require-auth";
 import { AuthActionsContext } from "@lib/auth-context";
@@ -112,9 +113,17 @@ describe("signing out", () => {
  * permission.
  */
 describe("the drive cockpit", () => {
-  it("is offered to the Delivery Head, who approves the drives", () => {
+  /**
+   * SPEC CHANGE 2026-08-18: the cockpit is no longer a named entry for anyone.
+   * Every staff role reaches the same three lists, and "Yet to publish" IS the
+   * cockpit - it keeps the publish action, which is gated by the domain rather
+   * than by whose sidebar it appears in.
+   */
+  it("is reached by the Delivery Head through the shared Yet to publish list", () => {
     shellFor(signedIn("delivery_head"));
-    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^yet to publish$/i }).getAttribute("href")).toBe(
+      "/central/drives/yet-to-publish",
+    );
   });
 
   /**
@@ -131,16 +140,22 @@ describe("the drive cockpit", () => {
     expect(screen.queryByRole("link", { name: /drive cockpit/i })).toBeNull();
   });
 
-  it("leaves the Account Executive their read-only portfolio instead", () => {
+  it("leaves the Account Executive the same read-only lists as everyone else", () => {
     shellFor(signedIn("account_executive"));
-    expect(screen.getByRole("link", { name: /my drives/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^live$/i })).toBeDefined();
   });
 
-  /** Nothing in the AE's sidebar may reach publishing or shortlisting. */
+  /**
+   * Nothing in the AE's sidebar may reach the publishing or shortlisting
+   * SCREENS. Narrowed 2026-08-18 from a match on "publish" anywhere in the
+   * href: the shared list at /central/drives/yet-to-publish contains that word
+   * and is a read-only list - the publish action on it is gated by
+   * `canPublishDrive`, which is false for an AE.
+   */
   it("offers the Account Executive no route to publishing or shortlisting", () => {
     shellFor(signedIn("account_executive"));
     for (const link of screen.getAllByRole("link")) {
-      expect(link.getAttribute("href")).not.toMatch(/publish|shortlist/i);
+      expect(link.getAttribute("href")).not.toMatch(/\/central\/publish|shortlist/i);
     }
   });
 
@@ -192,18 +207,24 @@ describe("the placement overview", () => {
 });
 
 describe("the drive portfolio", () => {
+  /**
+   * SPEC CHANGE 2026-08-18: "My drives" is gone as a label - it was the same
+   * list RLS was already narrowing, and the heading claimed a distinction the
+   * data did not have. Both roles still reach it, now called Live.
+   */
   it("is offered to the Delivery Head", () => {
     shellFor(signedIn("delivery_head"));
-    expect(screen.getByRole("link", { name: /my drives/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^live$/i })).toBeDefined();
   });
 
   it("is offered to the Account Executive", () => {
     shellFor(signedIn("account_executive"));
-    expect(screen.getByRole("link", { name: /my drives/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^live$/i })).toBeDefined();
   });
 
   it("is not offered to a student, who raises nothing", () => {
     shellFor(signedIn("student"));
+    expect(screen.queryByRole("link", { name: /^live$/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /my drives/i })).toBeNull();
   });
 });
@@ -594,5 +615,62 @@ describe("Student details replaces Publish a drive", () => {
   it("does not offer the student directory to a role that cannot read students", () => {
     shellFor(signedIn("account_executive"), async () => {}, "/my-drives");
     expect(screen.queryByRole("link", { name: /all students/i })).toBeNull();
+  });
+});
+
+/**
+ * One Drives sidebar for everybody but the student (2026-08-18, Karthik):
+ * "the side bar on drives should be similar for all people viewing it (other
+ * than students). just the edit rights will be different. view on side bar
+ * heading and subheading should be the same."
+ *
+ * The rights were never in the sidebar - `canPublishDrive`,
+ * `canShortlistFromPortfolio` and `canViewDriveApplicants` decide those, and
+ * none of them moves here. What changes is that the LABELS stop implying a
+ * difference that does not exist: "My drives" and "Drives I approved" were the
+ * same list, filtered by RLS either way.
+ */
+describe("the Drives group is the same for every staff role", () => {
+  const STAFF_WITH_DRIVES: readonly AppRole[] = [
+    "account_executive",
+    "delivery_head",
+    "central_placement_coordinator",
+    "campus_placement_coordinator",
+    "admin",
+  ];
+
+  it.each(STAFF_WITH_DRIVES)("gives %s exactly Yet to publish, Live and Completed", (role) => {
+    shellFor(signedIn(role));
+
+    expect(screen.getByRole("link", { name: /^yet to publish$/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^live$/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^completed$/i })).toBeDefined();
+  });
+
+  it.each(STAFF_WITH_DRIVES)("offers %s none of the old per-role drive labels", (role) => {
+    shellFor(signedIn(role));
+
+    expect(screen.queryByRole("link", { name: /^my drives$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /drives i approved/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /drive cockpit/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^all drives$/i })).toBeNull();
+  });
+
+  /** Explicitly NOT the student: they get four lists of their own (N7). */
+  it("leaves the student's Drives heading alone", () => {
+    shellFor(signedIn("student"));
+
+    expect(screen.queryByRole("link", { name: /^yet to publish$/i })).toBeNull();
+  });
+
+  /**
+   * The point of the parity: what each role may DO is unchanged, and that is
+   * decided by the domain, not by which links they were shown.
+   */
+  it("does not hand anybody a right they did not have", () => {
+    expect(canPublishDrive("account_executive")).toBe(false);
+    expect(canPublishDrive("delivery_head")).toBe(false);
+    expect(canPublishDrive("central_placement_coordinator")).toBe(true);
+    expect(canShortlistFromPortfolio("account_executive")).toBe(false);
   });
 });

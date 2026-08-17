@@ -180,6 +180,8 @@ export function DafPublish({ view }: { view: PublishView }) {
   const [openToAll, setOpenToAll] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [windowStart, setWindowStart] = useState("");
+  /** N3: "there should also be a now click box." Stamped at publish, not here. */
+  const [openNow, setOpenNow] = useState(false);
   const [windowEnd, setWindowEnd] = useState("");
   const [rounds, setRounds] = useState<readonly DriveRound[]>([]);
   const [roundName, setRoundName] = useState("");
@@ -250,7 +252,7 @@ export function DafPublish({ view }: { view: PublishView }) {
             openToAllOverride: openToAll,
             // A drive with no window yet must not silently exclude everyone:
             // the window is set elsewhere and checked by the readiness list.
-            applicationStart: loadedDrive.applicationStart ?? new Date(0),
+            applicationStart: openNow ? new Date() : (loadedDrive.applicationStart ?? new Date(0)),
             applicationEnd: loadedDrive.applicationEnd ?? new Date(8.64e15),
             criteria: {
               eligibleDegrees: degrees,
@@ -264,7 +266,9 @@ export function DafPublish({ view }: { view: PublishView }) {
               targetCampuses: campuses,
             },
           },
-    [loadedDrive, degrees, branches, minCgpa, arrearPolicy, cities, campuses, openToAll],
+    // `openNow` is in the list because the audience is judged against the
+    // window, and ticking it changes the start the audience is judged on.
+    [loadedDrive, degrees, branches, minCgpa, arrearPolicy, cities, campuses, openToAll, openNow],
   );
 
   const audience = useMemo(() => {
@@ -281,6 +285,19 @@ export function DafPublish({ view }: { view: PublishView }) {
   }, [drive, cohort]);
 
   const overrideIncomplete = openToAll && overrideReason.trim() === "";
+
+  /**
+   * "Open now" (2026-08-18). Expressing the most common intent there is - open
+   * it as I publish - took four fields of `datetime-local` arithmetic, and a
+   * minute out in the wrong direction announces a drive students cannot yet
+   * apply to, which reads as a broken page.
+   *
+   * The instant is stamped AT PUBLISH, not when the box is ticked: a
+   * coordinator who ticks it and then spends five minutes on the targeting
+   * would otherwise publish a window that opened in the past.
+   */
+  const startForPublish = (): string | null =>
+    openNow ? toLocalInput(new Date()) : windowStart === "" ? null : windowStart;
 
   /**
    * The readiness list is the domain's, not a hand-written one.
@@ -304,7 +321,9 @@ export function DafPublish({ view }: { view: PublishView }) {
           offerCategory: loadedDrive.offerCategory,
           hasEligibilityCriteria: true,
           roundCount: rounds.length,
-          applicationStart: windowStart === "" ? null : windowStart,
+          // Ticked, the start is answered - the readiness rule must not still
+          // report "application start" as missing and refuse to publish.
+          applicationStart: startForPublish(),
           applicationEnd: windowEnd === "" ? null : windowEnd,
           onHold: loadedDrive.onHold,
         };
@@ -347,7 +366,7 @@ export function DafPublish({ view }: { view: PublishView }) {
         arrearPolicy,
         openToAllOverride: openToAll,
         overrideReason: openToAll ? overrideReason.trim() : null,
-        applicationStart: windowStart === "" ? null : windowStart,
+        applicationStart: startForPublish(),
         applicationEnd: windowEnd === "" ? null : windowEnd,
         rounds,
       });
@@ -493,9 +512,20 @@ export function DafPublish({ view }: { view: PublishView }) {
                   id="window-start"
                   type="datetime-local"
                   value={windowStart}
+                  disabled={openNow}
                   onChange={(e) => setWindowStart(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm disabled:bg-surface-muted disabled:text-ink-500"
                 />
+                {/* The date the coordinator typed is kept, not cleared: unticking
+                    must give them their own answer back, not a blank field. */}
+                <label className="mt-2 flex items-center gap-2 text-sm text-ink-700">
+                  <input
+                    type="checkbox"
+                    checked={openNow}
+                    onChange={(e) => setOpenNow(e.target.checked)}
+                  />
+                  Open now — the moment I publish
+                </label>
               </div>
               <div>
                 <label

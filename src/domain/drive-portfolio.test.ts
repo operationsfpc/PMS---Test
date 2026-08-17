@@ -459,6 +459,13 @@ describe("searchDrives", () => {
     expect(searchDrives(DRIVES, "infosys")).toEqual([]);
   });
 
+  it("still finds a drive whose role was never filled in", () => {
+    const unnamed = [{ companyName: "Zoho Corporation", roleTitle: null }] as const;
+
+    expect(searchDrives(unnamed, "zoho")).toHaveLength(1);
+    expect(searchDrives(unnamed, "engineer")).toHaveLength(0);
+  });
+
   it("keeps the order it was given", () => {
     expect(searchDrives(DRIVES, "j").map((d) => d.companyName)).toEqual([
       "HCL Technologies",

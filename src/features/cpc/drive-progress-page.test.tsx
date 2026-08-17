@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import {
   type DriveProgressEntry,
@@ -80,18 +81,79 @@ describe("DriveProgressPage", () => {
     expect(within(meena).getByText(/not shortlisted/i)).toBeDefined();
   });
 
-  it("is read-only — no controls anywhere", async () => {
+  /**
+   * Narrowed 2026-08-18, deliberately: the page gained a search box, and a
+   * search changes nothing about a drive. What this test is FOR is that no
+   * control here can record a result, mark attendance or decide an offer -
+   * recording stays with the Central CPC (D10). So: no writing controls, and
+   * the only button on the page is the search submit.
+   */
+  it("is read-only — nothing here records anything", async () => {
     render(<DriveProgressPage view={view()} />);
 
     await screen.findByText("Zoho");
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Search"]);
   });
 
   it("says so when no drive touches their campus yet", async () => {
     render(<DriveProgressPage view={view([])} />);
 
     expect(await screen.findByText(/no drives involve your students yet/i)).toBeDefined();
+  });
+});
+
+/**
+ * "Add a search bar to the Drive progress section for Campus Placement
+ * Coordinators … quickly search for specific companies and monitor their
+ * ongoing drive progress without manual scrolling." (2026-08-18)
+ *
+ * The same `searchDrives` predicate the Live list uses, so "hcl" means the same
+ * thing on every screen that lists drives - and each card here carries a whole
+ * cohort's rounds, so this page is the longest scroll in the application.
+ */
+describe("DriveProgressPage — searching", () => {
+  const two = {
+    drives: async () => [
+      { ...DRIVE, companyName: "Cognizant" },
+      { ...DRIVE, driveId: "d2", companyName: "Accenture", roleTitle: "Jr. Software engineer" },
+    ],
+  };
+
+  it("offers a labelled search box", async () => {
+    render(<DriveProgressPage view={two} />);
+    await screen.findByText("Cognizant");
+
+    expect(screen.getByRole("searchbox", { name: /search drives/i })).toBeDefined();
+  });
+
+  it("narrows to the company the coordinator is asking about", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={two} />);
+    await screen.findByText("Cognizant");
+
+    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "accen");
+
+    expect(screen.getByText("Accenture")).toBeDefined();
+    expect(screen.queryByText("Cognizant")).toBeNull();
+  });
+
+  it("says nothing matched rather than looking like an empty campus", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={two} />);
+    await screen.findByText("Cognizant");
+
+    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "infosys");
+
+    expect(screen.getByText(/no drives match/i)).toBeDefined();
+    expect(screen.queryByText(/no drives involve your students yet/i)).toBeNull();
+  });
+
+  it("offers no search box at all when there is nothing to search", async () => {
+    render(<DriveProgressPage view={{ drives: async () => [] }} />);
+    await screen.findByText(/no drives involve your students yet/i);
+
+    expect(screen.queryByRole("searchbox")).toBeNull();
   });
 });
