@@ -65,6 +65,9 @@ export interface PublishDrive {
    * same as a cutoff of zero.
    */
   readonly minOverallCgpa: number | null;
+  /** The school bars, set here (2026-08-18). Null means the drive sets none. */
+  readonly minTenthPercentage: number | null;
+  readonly minTwelfthPercentage: number | null;
   readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
   readonly targeting: DriveTargeting;
   /**
@@ -82,6 +85,8 @@ export interface PublishInput {
   readonly degrees: readonly string[];
   readonly branches: readonly string[];
   readonly minOverallCgpa: number | null;
+  readonly minTenthPercentage: number | null;
+  readonly minTwelfthPercentage: number | null;
   readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
   readonly openToAllOverride: boolean;
   readonly overrideReason: string | null;
@@ -114,6 +119,7 @@ const EXCLUSION_LABEL: Record<Exclude<VisibilityReason, "visible">, string> = {
   opted_out: "Opted out of placements",
   disbarred: "Disbarred",
   not_eligible: "Does not meet eligibility",
+  area_not_chosen: "Did not choose this area",
   internship_cap_consumed: "Internship cap already used",
   placed_at_equal_or_higher: "Placed at an equal or higher category",
 };
@@ -176,6 +182,13 @@ export function DafPublish({ view }: { view: PublishView }) {
   // Seeded from the drive in `load()`. There is no sensible default for either:
   // a hardcoded cutoff is a rule nobody approved, and it used to be published.
   const [minCgpa, setMinCgpa] = useState("");
+  /**
+   * The school bars (2026-08-18). The columns have existed since 0004 and
+   * `evaluateEligibility` has always read them - nothing has ever been able to
+   * SET them, so every drive has silently declared none.
+   */
+  const [minTenth, setMinTenth] = useState("");
+  const [minTwelfth, setMinTwelfth] = useState("");
   const [arrearPolicy, setArrearPolicy] = useState<EligibilityCriteria["arrearPolicy"]>("flexible");
   const [openToAll, setOpenToAll] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
@@ -192,6 +205,11 @@ export function DafPublish({ view }: { view: PublishView }) {
       setLoaded(next);
       // Seed the editors from whatever the drive already has, so an existing
       // window or round list is edited rather than silently replaced.
+      // `?? ""` rather than a null check: a drive that has never been given a
+      // bar must open on an empty box, and `String(undefined)` reaches the
+      // audience as NaN - a cutoff nobody set, excluding everybody.
+      setMinTenth(next.drive.minTenthPercentage?.toString() ?? "");
+      setMinTwelfth(next.drive.minTwelfthPercentage?.toString() ?? "");
       setWindowStart(toLocalInput(next.drive.applicationStart));
       setWindowEnd(toLocalInput(next.drive.applicationEnd));
       /**
@@ -250,6 +268,9 @@ export function DafPublish({ view }: { view: PublishView }) {
             driveType: loadedDrive.driveType ?? "placement",
             offerCategory: loadedDrive.offerCategory,
             openToAllOverride: openToAll,
+            // 2026-08-18: the drive's area, so the audience counts only the
+            // students who asked for that kind of work.
+            roleCategory: loadedDrive.roleCategory,
             // A drive with no window yet must not silently exclude everyone:
             // the window is set elsewhere and checked by the readiness list.
             applicationStart: openNow ? new Date() : (loadedDrive.applicationStart ?? new Date(0)),
@@ -259,8 +280,8 @@ export function DafPublish({ view }: { view: PublishView }) {
               eligibleBranches: branches,
               eligiblePassingYears: [],
               minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
-              minTenthPercentage: null,
-              minTwelfthPercentage: null,
+              minTenthPercentage: minTenth === "" ? null : Number(minTenth),
+              minTwelfthPercentage: minTwelfth === "" ? null : Number(minTwelfth),
               arrearPolicy,
               targetCities: cities,
               targetCampuses: campuses,
@@ -268,7 +289,19 @@ export function DafPublish({ view }: { view: PublishView }) {
           },
     // `openNow` is in the list because the audience is judged against the
     // window, and ticking it changes the start the audience is judged on.
-    [loadedDrive, degrees, branches, minCgpa, arrearPolicy, cities, campuses, openToAll, openNow],
+    [
+      loadedDrive,
+      degrees,
+      branches,
+      minCgpa,
+      minTenth,
+      minTwelfth,
+      arrearPolicy,
+      cities,
+      campuses,
+      openToAll,
+      openNow,
+    ],
   );
 
   const audience = useMemo(() => {
@@ -363,6 +396,10 @@ export function DafPublish({ view }: { view: PublishView }) {
         degrees,
         branches,
         minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
+        // An empty box is "no bar", never a bar of zero - the same distinction
+        // the CGPA cutoff makes, and the one an invented 7.0 got wrong before.
+        minTenthPercentage: minTenth === "" ? null : Number(minTenth),
+        minTwelfthPercentage: minTwelfth === "" ? null : Number(minTwelfth),
         arrearPolicy,
         openToAllOverride: openToAll,
         overrideReason: openToAll ? overrideReason.trim() : null,
@@ -468,6 +505,38 @@ export function DafPublish({ view }: { view: PublishView }) {
                     step="0.1"
                     value={minCgpa}
                     onChange={(e) => setMinCgpa(e.target.value)}
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="min-tenth"
+                    className="mb-1.5 block text-sm font-medium text-ink-700"
+                  >
+                    Minimum 10th percentage
+                  </label>
+                  <input
+                    id="min-tenth"
+                    type="number"
+                    step="0.01"
+                    value={minTenth}
+                    onChange={(e) => setMinTenth(e.target.value)}
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="min-twelfth"
+                    className="mb-1.5 block text-sm font-medium text-ink-700"
+                  >
+                    Minimum 12th percentage
+                  </label>
+                  <input
+                    id="min-twelfth"
+                    type="number"
+                    step="0.01"
+                    value={minTwelfth}
+                    onChange={(e) => setMinTwelfth(e.target.value)}
                     className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                   />
                 </div>

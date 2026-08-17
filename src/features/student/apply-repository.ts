@@ -11,6 +11,8 @@ export type ApplyStudent = SnapshotStudent & {
   readonly participationStatus: ParticipationStatus;
   readonly academics: AcademicProfile;
   readonly offers: readonly Offer[];
+  /** The areas they asked for (2026-08-18). A drive reaches only those. */
+  readonly roleCategories: readonly RoleCategory[];
 };
 
 export type ApplyDrive = VisibleDrive & { readonly roleCategory: RoleCategory };
@@ -39,6 +41,8 @@ const REFUSALS: Record<string, string> = {
   opted_out: "You have opted out of campus placements.",
   disbarred: "You are not currently eligible to apply. Contact your coordinator.",
   not_eligible: "You do not meet this drive's eligibility criteria.",
+  area_not_chosen:
+    "This drive is for an area you did not choose on your registration form. Ask your coordinator if that has changed.",
   internship_cap_consumed: "You have already accepted an internship offer.",
   placed_at_equal_or_higher:
     "You are already placed at this category or higher, so this drive is not open to you.",
@@ -68,6 +72,7 @@ export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepo
           participationStatus: student.participationStatus,
           academics: student.academics,
           offers: student.offers,
+          roleCategories: student.roleCategories,
         },
         drive,
         now,

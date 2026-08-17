@@ -18,6 +18,7 @@ import type {
   DriveStatus,
   DriveType,
   ParticipationStatus,
+  RoleCategory,
   SrfStatus,
 } from "./types";
 
@@ -27,6 +28,12 @@ export interface StudentContext {
   /** Verified data only — eligibility is never evaluated against pending edits. */
   readonly academics: AcademicProfile;
   readonly offers: readonly Offer[];
+  /**
+   * The areas they asked to be considered for, from their registration form
+   * (2026-08-18). Optional because a form submitted before 0049 recorded none -
+   * and silence is not refusal, so an empty list matches every drive.
+   */
+  readonly roleCategories?: readonly RoleCategory[];
 }
 
 export interface VisibleDrive {
@@ -40,6 +47,15 @@ export interface VisibleDrive {
    * academic eligibility. Setting it must be audit-logged with a reason.
    */
   readonly openToAllOverride: boolean;
+  /**
+   * The area this drive is for, declared by the AE on the PIF (2026-08-18):
+   * "a drive has to be classified into one of these areas … This should go to
+   * the students only showing interest in that area."
+   *
+   * Null on a drive that declares none - which is every drive raised before the
+   * rule. Hiding those from everybody would empty their audience overnight.
+   */
+  readonly roleCategory?: RoleCategory | null;
   readonly applicationStart: Date;
   readonly applicationEnd: Date;
   readonly criteria: EligibilityCriteria;
@@ -51,6 +67,7 @@ export type VisibilityReason =
   | "opted_out"
   | "disbarred"
   | "not_eligible"
+  | "area_not_chosen"
   | "internship_cap_consumed"
   | "placed_at_equal_or_higher";
 
@@ -94,6 +111,25 @@ export function isDriveVisibleToStudent(
   // --- Placement-history gates, which the override DOES bypass (R5a) -------
   if (drive.openToAllOverride) {
     return { visible: true, reason: "visible" };
+  }
+
+  /**
+   * The area the student asked for. A PREFERENCE, not a sanction - which is why
+   * it sits below the override with the other preference gates rather than
+   * above it with consent and eligibility.
+   *
+   * Both empty cases mean "no opinion", deliberately: a drive that declares no
+   * area predates the rule, and a student who has chosen none has not refused
+   * everything, they have not answered.
+   */
+  if (
+    drive.roleCategory !== null &&
+    drive.roleCategory !== undefined &&
+    student.roleCategories !== undefined &&
+    student.roleCategories.length > 0 &&
+    !student.roleCategories.includes(drive.roleCategory)
+  ) {
+    return { visible: false, reason: "area_not_chosen" };
   }
 
   // The cap is checked before the ladder (decision Q2): a Super Dream

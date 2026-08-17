@@ -321,3 +321,84 @@ describe("canApply", () => {
     expect(canApply(student(), drive({ id: "drive-1" }), during, ["drive-9"]).allowed).toBe(true);
   });
 });
+
+/**
+ * A drive reaches the students who asked for that kind of work (2026-08-18).
+ *
+ * "a drive has to be classified into one of these areas by the AE while raising
+ * a PIF. This should go to the students only showing interest in that area."
+ *
+ * The five areas are the same vocabulary the student picked on their
+ * registration form, which is what makes the match meaningful - and, since
+ * 0049, what makes it possible at all.
+ */
+describe("R5 — the area the drive is for", () => {
+  const softwareDrive = drive({ roleCategory: "software_technical" });
+
+  it("shows a software drive to a student who asked for software", () => {
+    expect(
+      isDriveVisibleToStudent(student({ roleCategories: ["software_technical"] }), softwareDrive)
+        .visible,
+    ).toBe(true);
+  });
+
+  it("hides it from a student who asked only for sales", () => {
+    const result = isDriveVisibleToStudent(student({ roleCategories: ["sales"] }), softwareDrive);
+
+    expect(result.visible).toBe(false);
+    expect(result.reason).toBe("area_not_chosen");
+  });
+
+  it("shows it to a student who asked for several areas including this one", () => {
+    expect(
+      isDriveVisibleToStudent(
+        student({ roleCategories: ["sales", "software_technical"] }),
+        softwareDrive,
+      ).visible,
+    ).toBe(true);
+  });
+
+  /**
+   * A drive with no area declared predates the rule (and `role_category` is
+   * nullable on `drives` for drafts). Hiding it from everybody would silently
+   * empty the audience for every drive raised before today.
+   */
+  it("shows a drive that declares no area to everybody", () => {
+    expect(
+      isDriveVisibleToStudent(student({ roleCategories: ["sales"] }), drive({ roleCategory: null }))
+        .visible,
+    ).toBe(true);
+  });
+
+  /**
+   * A student who has chosen nothing has not opted out of everything - they
+   * have not answered. Treating silence as refusal would hide every drive from
+   * anybody whose form predates 0049, with no message they could act on.
+   */
+  it("shows the drive to a student who has chosen no area at all", () => {
+    expect(isDriveVisibleToStudent(student({ roleCategories: [] }), softwareDrive).visible).toBe(
+      true,
+    );
+  });
+
+  /** It is a preference, not a sanction: the CPC override still bypasses it. */
+  it("is bypassed by the R5a override, like the other preference gates", () => {
+    expect(
+      isDriveVisibleToStudent(
+        student({ roleCategories: ["sales"] }),
+        drive({ roleCategory: "software_technical", openToAllOverride: true }),
+      ).visible,
+    ).toBe(true);
+  });
+
+  it("refuses the application too, not just the listing", () => {
+    const result = canApply(
+      student({ roleCategories: ["sales"] }),
+      softwareDrive,
+      new Date("2026-06-15T00:00:00Z"),
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("area_not_chosen");
+  });
+});

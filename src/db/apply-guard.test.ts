@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, seed, type TestDb } from "./harness";
 
 /**
@@ -228,5 +228,168 @@ describe("a self-placed ladder offer must carry a category (D6)", () => {
     });
     const rows = await t.sql(`select id from offers where student_id = $1`, [ids.arjun]);
     expect(rows).toHaveLength(1);
+  });
+});
+
+/**
+ * 0050 — the area the drive is for, and the school-marks bars.
+ *
+ * Both rules exist in the domain and are asked by every screen. These prove the
+ * DATABASE agrees: the publish screen counts an audience, and a gate looser
+ * than that count makes the number a coordinator was shown a promise the
+ * database will break.
+ */
+describe("the area the drive is for", () => {
+  /**
+   * This file shares ONE database across its tests (`beforeAll`), and the
+   * ladder tests above leave Priya holding offers. Clearing them here keeps
+   * these tests about the area and nothing else - a refusal from the ladder
+   * would otherwise read as a pass or a fail of the wrong rule.
+   */
+  beforeEach(async () => {
+    await t.sql(`delete from offers where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from applications where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from student_role_preferences where student_id = $1`, [ids.priya]);
+    await t.sql(
+      `update students set tenth_percentage = 91, twelfth_percentage = 88 where id = $1`,
+      [ids.priya],
+    );
+  });
+
+  const prefer = async (category: string) =>
+    await t.sql(
+      `insert into student_role_preferences (student_id, category) values ($1, $2)
+       on conflict do nothing`,
+      [ids.priya, category],
+    );
+
+  it("accepts an application to an area the student chose", async () => {
+    await prefer("software_technical");
+
+    await expect(apply(await makeDrive())).resolves.toHaveLength(1);
+  });
+
+  it("refuses one to an area they did not choose, saying so", async () => {
+    await prefer("sales");
+
+    await t.expectRejection(
+      async () => await apply(await makeDrive({ role_category: "software_technical" })),
+      /area you did not choose/i,
+    );
+  });
+
+  it("accepts it when they chose several areas including this one", async () => {
+    await prefer("sales");
+    await prefer("software_technical");
+
+    await expect(apply(await makeDrive())).resolves.toHaveLength(1);
+  });
+
+  /**
+   * Silence is not refusal. Every form submitted before 0049 recorded no
+   * preference at all, and reading that as "wants nothing" would lock the whole
+   * existing roster out of every drive, with nothing on screen to explain it.
+   */
+  it("accepts it from a student who has recorded no preference at all", async () => {
+    await expect(apply(await makeDrive())).resolves.toHaveLength(1);
+  });
+
+  /**
+   * A drive with NO area cannot be live at all - `live_requires_complete_record`
+   * (0004) has demanded a role category since the beginning, so the "declares
+   * no area" case the domain handles is a DRAFT, and a draft is refused by the
+   * status gate long before this rule is reached. The domain still covers it
+   * (`src/domain/visibility.test.ts`), because that layer also judges drives
+   * that are not live yet - on the publish screen, before they are published.
+   */
+  it("cannot even be asked about a live drive with no area", async () => {
+    await t.expectRejection(
+      async () => await makeDrive({ role_category: null }),
+      /live_requires_complete_record/i,
+    );
+  });
+
+  /** A preference, not a sanction — so R5a's override still bypasses it. */
+  it("is bypassed by the open-to-all override", async () => {
+    await prefer("sales");
+
+    await expect(
+      apply(
+        await makeDrive({
+          open_to_all_override: true,
+          // `override_needs_reason` (0004): an override is audit-logged prose,
+          // never a bare flag.
+          open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+        }),
+      ),
+    ).resolves.toHaveLength(1);
+  });
+});
+
+describe("the 10th and 12th bars", () => {
+  beforeEach(async () => {
+    await t.sql(`delete from offers where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from applications where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from student_role_preferences where student_id = $1`, [ids.priya]);
+  });
+
+  it("accepts a student who clears both", async () => {
+    await t.sql(
+      `update students set tenth_percentage = 91, twelfth_percentage = 88 where id = $1`,
+      [ids.priya],
+    );
+
+    await expect(
+      apply(await makeDrive({ min_tenth_percentage: 60, min_twelfth_percentage: 60 })),
+    ).resolves.toHaveLength(1);
+  });
+
+  it("refuses one who misses the 10th bar, naming it", async () => {
+    await t.sql(`update students set tenth_percentage = 55 where id = $1`, [ids.priya]);
+
+    await t.expectRejection(
+      async () => await apply(await makeDrive({ min_tenth_percentage: 60 })),
+      /at least 60.*10th/i,
+    );
+  });
+
+  it("refuses one who misses the 12th bar", async () => {
+    await t.sql(`update students set twelfth_percentage = 59.99 where id = $1`, [ids.priya]);
+
+    await t.expectRejection(
+      async () => await apply(await makeDrive({ min_twelfth_percentage: 60 })),
+      /at least 60.*12th/i,
+    );
+  });
+
+  /** "We do not know" cannot clear a threshold. */
+  it("refuses one whose 10th percentage is not on record", async () => {
+    await t.sql(`update students set tenth_percentage = null where id = $1`, [ids.priya]);
+
+    await t.expectRejection(
+      async () => await apply(await makeDrive({ min_tenth_percentage: 60 })),
+      /at least 60.*10th/i,
+    );
+  });
+
+  /**
+   * The override is about placement HISTORY - the ladder and the internship
+   * cap. It was never a way past the company's own bar, and the domain checks
+   * eligibility before it for the same reason.
+   */
+  it("is not bypassed by the open-to-all override", async () => {
+    await t.sql(`update students set tenth_percentage = 40 where id = $1`, [ids.priya]);
+
+    await t.expectRejection(
+      async () =>
+        await apply(
+          await makeDrive({
+            min_tenth_percentage: 60,
+            open_to_all_override: true,
+            open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+          }),
+        ),
+      /at least 60.*10th/i,
+    );
   });
 });

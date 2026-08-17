@@ -71,6 +71,8 @@ const DRIVE: PublishDrive = {
   declaredRoundCount: null,
   // A drive that declares nothing: every test that cares states its own.
   minOverallCgpa: null,
+  minTenthPercentage: null,
+  minTwelfthPercentage: null,
   arrearPolicy: "flexible",
   targeting: { cities: [], campuses: [], degrees: [], branches: [] },
 };
@@ -542,5 +544,60 @@ describe("DafPublish — opening the applications now", () => {
 
     expect(publish).not.toHaveBeenCalled();
     expect((await screen.findByRole("alert")).textContent).toMatch(/ends before it starts/i);
+  });
+});
+
+/**
+ * "we also need 10th and 12th marks based targetting. now only cgpa field is
+ * there." (2026-08-18, set at publish — Karthik's answer to Q3.)
+ *
+ * The columns have existed since 0004 and `evaluateEligibility` has always read
+ * them; nothing has ever been able to SET them. 0050 enforces them in the apply
+ * gate as well, so the audience below is a promise the database keeps.
+ */
+describe("DafPublish — the 10th and 12th bars", () => {
+  it("offers both, empty when the drive sets neither", async () => {
+    routed(view());
+
+    expect(((await screen.findByLabelText(/minimum 10th/i)) as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText(/minimum 12th/i) as HTMLInputElement).value).toBe("");
+  });
+
+  it("publishes what the coordinator set", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.type(screen.getByLabelText(/minimum 10th/i), "60");
+    await userEvent.type(screen.getByLabelText(/minimum 12th/i), "65.5");
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    const sent = publish.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent.minTenthPercentage).toBe(60);
+    expect(sent.minTwelfthPercentage).toBe(65.5);
+  });
+
+  /** An empty box is "no bar", never a bar of zero. */
+  it("publishes null when neither is set", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    const sent = publish.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(sent.minTenthPercentage).toBeNull();
+    expect(sent.minTwelfthPercentage).toBeNull();
+  });
+
+  /** The audience is judged on the bar as typed, before anything is published. */
+  it("shrinks the audience as the bar is raised", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.type(screen.getByLabelText(/minimum 10th/i), "95");
+
+    await waitFor(() => expect(count()).toBe(0));
   });
 });

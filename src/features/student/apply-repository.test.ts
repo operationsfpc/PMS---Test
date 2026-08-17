@@ -29,6 +29,9 @@ const student = {
   historyOfArrears: 0,
   technicalSkills: "TypeScript",
   resumes: [{ id: "r1", roleCategory: "software_technical" as const }],
+  // 2026-08-18: a drive reaches the students who asked for that area, so an
+  // applicant carries what they asked for.
+  roleCategories: ["software_technical" as const],
   srfStatus: "srf_approved" as const,
   participationStatus: "active" as const,
   academics: {

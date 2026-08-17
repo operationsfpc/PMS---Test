@@ -25,6 +25,7 @@ function one<T>(value: unknown): T | null {
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
 const REFUSALS: Record<string, string> = {
+  area_not_chosen: "This drive is for an area you did not choose on your registration form.",
   window_not_open: "Applications for this drive have not opened yet.",
   window_closed: "Applications for this drive have closed.",
   already_applied: "You have already applied to this drive.",
@@ -48,6 +49,7 @@ export const STUDENT_COLUMNS = `
   srf_status, participation_status,
   degrees(name), branches(name), campuses(name, cities(name)),
   student_documents!student_documents_student_id_fkey(id, kind, role_category),
+  student_role_preferences(category),
   student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 
@@ -190,6 +192,10 @@ export function createSupabaseDrivesView(
       resumes: ((row.student_documents ?? []) as Array<Record<string, unknown>>)
         .filter((d) => d.kind === "resume" && d.role_category !== null)
         .map((d) => ({ id: d.id as string, roleCategory: d.role_category as RoleCategory })),
+      // 2026-08-18: a drive reaches the students who asked for that area.
+      roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>)
+        .map((p) => p.category as RoleCategory)
+        .filter((c) => c !== undefined),
       srfStatus: row.srf_status as ApplyStudent["srfStatus"],
       participationStatus: row.participation_status as ApplyStudent["participationStatus"],
       academics,
@@ -251,6 +257,7 @@ export function createSupabaseDrivesView(
             participationStatus: student.participationStatus,
             academics: student.academics,
             offers: student.offers,
+            roleCategories: student.roleCategories,
           },
           drive,
           now,

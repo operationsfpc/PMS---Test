@@ -161,6 +161,8 @@ const INPUT = {
   degrees: ["B.E"],
   branches: ["CSE"],
   minOverallCgpa: 7,
+  minTenthPercentage: null,
+  minTwelfthPercentage: null,
   arrearPolicy: "flexible" as const,
   openToAllOverride: false,
   overrideReason: null,

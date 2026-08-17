@@ -25,6 +25,7 @@ export const PUBLISH_DRIVE_COLUMNS = `
   status, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa,
   application_start, application_end, on_hold,
   min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
+  min_tenth_percentage, min_twelfth_percentage,
   arrears_policy, round_count,
   drive_rounds(id, sequence, name),
   drive_eligible_degrees(degrees(name)),
@@ -39,6 +40,7 @@ export const PUBLISH_COHORT_COLUMNS = `
   current_arrears, history_of_arrears,
   degrees(name), branches(name), campuses(name, cities(name)),
   offers(id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source),
+  student_role_preferences(category),
   student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 
@@ -129,6 +131,12 @@ function toCandidate(row: Record<string, unknown>): PublishCandidate {
     id: row.id as string,
     name: row.full_name as string,
     srfStatus: row.srf_status as PublishCandidate["srfStatus"],
+    // The audience a drive is published to is the audience that can apply, so
+    // the area preference has to be counted here too - or the number on the
+    // screen is a promise the apply gate will not keep.
+    roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>).map(
+      (p) => p.category as RoleCategory,
+    ),
     participationStatus: row.participation_status as PublishCandidate["participationStatus"],
     academics,
     offers: offers.map(
@@ -235,6 +243,17 @@ export function createSupabasePublishView(
           row.min_overall_cgpa === null || row.min_overall_cgpa === undefined
             ? null
             : Number(row.min_overall_cgpa),
+        // The school bars, seeded like the CGPA cutoff: fetching a value and
+        // then opening the form on something else is exactly how two live
+        // drives lost their declared 7.50 (P9).
+        minTenthPercentage:
+          row.min_tenth_percentage === null || row.min_tenth_percentage === undefined
+            ? null
+            : Number(row.min_tenth_percentage),
+        minTwelfthPercentage:
+          row.min_twelfth_percentage === null || row.min_twelfth_percentage === undefined
+            ? null
+            : Number(row.min_twelfth_percentage),
         arrearPolicy:
           (row.arrears_policy as EligibilityCriteria["arrearPolicy"] | null) ?? "flexible",
         targeting: {
@@ -287,6 +306,8 @@ export function createSupabasePublishView(
         .from("drives")
         .update({
           min_overall_cgpa: input.minOverallCgpa,
+          min_tenth_percentage: input.minTenthPercentage,
+          min_twelfth_percentage: input.minTwelfthPercentage,
           arrears_policy: input.arrearPolicy,
           open_to_all_override: input.openToAllOverride,
           open_to_all_reason: input.overrideReason,
