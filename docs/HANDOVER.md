@@ -1,12 +1,85 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2511 tests passing across 144 files**, plus **1 Playwright journey** — run,
+**2536 tests passing across 144 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
 gate. Remote is at **`0045`** (no migration this session); live Cloudflare
-version `a8ef055b-ac0c-4a47-8e5f-ca88ec210b3b`. Commit hash deliberately not
+version `94708890-667e-43c9-a726-306b39b6f669`. Commit hash deliberately not
 quoted here: it has been wrong three times, always because it was written
 before the commit existed. Use `git log --oneline -5`.
+
+---
+
+## ✅ SHIPPED 2026-08-17 — the mystery "15", AE read-only, CTC bands on screen
+
+Three items from Karthik. **Front end only — no migration.** Live version
+`94708890-667e-43c9-a726-306b39b6f669`, JS byte-identical to the local `dist/`
+(857 072 bytes, sha256 `128d2e77…`).
+
+### 1. The number 15 was the match score, wearing no label
+
+*"What is the number 15? I see that in a lot of places while shortlisting
+students. It is not clickable. It is not referring to anything else."*
+
+It was `rankApplicants`' weighted score (`src/domain/ranking.ts`), printed as a
+bare numeral in the right-hand corner of every shortlisting row. Karthik's test
+student had CGPA 0, no skill scores and had not listed the role category — so
+the only points scored were the 15 for having no arrears. The arithmetic was
+never wrong; the screen simply never said what the number was or what it was
+out of, and a numeral with no label cannot be told apart from a rank, a count
+or an id.
+
+Now a labelled `<figure>`: **"Match score / 15 / 100"**, with the notice above
+the list explaining that it weighs CGPA, required skills, arrears and role
+preference, and that it is advisory.
+
+**Gotcha for next time:** if a number appears on a screen, it needs a label and
+a scale in the same element. This one survived UAT twice.
+
+### 2. The AE could publish and shortlist. They cannot now
+
+*"The AE should only be able to view the students shortlisted or selected or
+their drive status and results. They should not be able to publish drives or
+shortlist students."*
+
+The **drive cockpit** was in the AE's sidebar. The cockpit is a work queue and
+its work is publishing and shortlisting, so offering it offered both. Fixed in
+three places, deliberately:
+
+| Layer | Change |
+|---|---|
+| `src/domain/drive-portfolio.ts` | new `canPublishDrive` — Central CPC only |
+| `src/components/app-shell.tsx` | cockpit removed from the AE nav |
+| `src/features/central-cpc/cockpit-page.tsx` | both action links gated; `role` is a **required** prop |
+| `src/app.tsx` | `ShortlistersOnly` / `PublishersOnly` guard the two routes |
+
+The AE keeps `/my-drives`, which already shows drive status, applicants, who
+was shortlisted and who was selected — read-only. The Delivery Head is
+excluded from publishing too: approving the commercials is not announcing the
+drive.
+
+**`CockpitPage.role` is required, not defaulted.** A permissive default is a
+permission granted by forgetfulness. Do not "fix" a type error by defaulting it
+back to the Central CPC.
+
+**Still outstanding — server side.** These are UI guards. RLS should refuse an
+AE's publish/shortlist writes as well; nothing in this session touched the
+database. Worth a pgTAP pass before launch.
+
+### 3. The CTC bands are now stated where the classification is made
+
+`describeOfferCategoryBands` (`src/domain/offer-category.ts`) renders a banner
+above the Delivery Head's approval queue: Regular up to ₹5 LPA, Dream above ₹5
+and up to ₹10, Super Dream above ₹10. The wording is **derived from the bands**
+so retuning them retunes the sentence, and the dropdown's labels now come from
+the same `offerCategoryLabel`, so the banner and the control cannot disagree.
+
+**⚠️ Open question for Karthik.** He phrased the top band as *"10L and 10L+ CTC
+are Super dream"*. The domain has always treated band edges as belonging to the
+**lower** band, so exactly ₹10.00 LPA classifies as **Dream**, and ₹10.01 LPA
+as Super Dream. The banner says so explicitly rather than silently adopting
+either reading. If ₹10.00 should in fact be Super Dream, `DEFAULT_OFFER_CATEGORY_BANDS.dreamMaxLpa`
+goes to `9.99` — one number, one test, no migration.
 
 ---
 
