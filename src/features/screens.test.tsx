@@ -179,15 +179,12 @@ describe("PifApprovalQueue", () => {
   });
 
   /**
-   * 2026-08-17 (Karthik): "in the place where the delivery head selects a
-   * drive as regular/Dream/Super dream, display an alert message saying that
-   * up to 5L CTC are Regular offers, 5 up to 10L are Dream and 10L+ CTC are
-   * Super dream offers."
+   * 2026-08-17 (Karthik): the Delivery Head classifies every drive and §3.3
+   * makes it immutable, so the bands have to be readable at the click.
    *
-   * The dropdown was pre-set from the CTC and could be overridden, but the
-   * rule behind the suggestion was nowhere on screen — so an override was a
-   * guess. §3.3 makes the classification immutable once saved, which makes
-   * this the one moment the bands have to be readable.
+   * SPEC CHANGE, same day: "5.00 is dream and 10.00 is super dream." The
+   * banner must state the edge as a FLOOR, because the previous wording ("up
+   * to ₹5 LPA" for Regular) is now the wrong answer.
    */
   it("states the CTC bands where the category is chosen", async () => {
     routed(<PifApprovalQueue repository={stub} />);
@@ -196,9 +193,18 @@ describe("PifApprovalQueue", () => {
     expect(within(note).getByText("Regular")).toBeDefined();
     expect(within(note).getByText("Dream")).toBeDefined();
     expect(within(note).getByText("Super Dream")).toBeDefined();
-    expect(note.textContent).toMatch(/up to ₹5 LPA/i);
-    expect(note.textContent).toMatch(/above ₹5 LPA and up to ₹10 LPA/i);
-    expect(note.textContent).toMatch(/above ₹10 LPA/i);
+    expect(note.textContent).toMatch(/below ₹5 LPA/i);
+    expect(note.textContent).toMatch(/₹5 LPA and above, below ₹10 LPA/i);
+    expect(note.textContent).toMatch(/₹10 LPA and above/i);
+  });
+
+  /** The edge itself is the thing people get wrong, so it is spelled out. */
+  it("spells out which band owns the boundary", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    const note = await screen.findByRole("note", { name: /ctc bands/i });
+    expect(note.textContent).toMatch(/₹5 LPA is Dream/i);
+    expect(note.textContent).toMatch(/₹10 LPA is Super Dream/i);
+    expect(note.textContent).not.toMatch(/₹5 LPA is Regular/i);
   });
 
   /**

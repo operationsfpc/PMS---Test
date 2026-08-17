@@ -10,16 +10,25 @@ export const OFFER_CATEGORIES = ["regular", "dream", "super_dream"] as const;
 
 export type OfferCategory = (typeof OFFER_CATEGORIES)[number];
 
+/**
+ * Where each band STARTS, in lakhs per annum.
+ *
+ * SPEC CHANGE 2026-08-17 (Karthik): "5.00 is dream and 10.00 is super dream."
+ * A band edge belongs to the band ABOVE it. The fields are named for the floor
+ * they set rather than a ceiling, because the previous names (`regularMaxLpa`,
+ * `dreamMaxLpa`) invited exactly the reading that put a ₹5 LPA offer in the
+ * Regular row of the campus overview.
+ */
 export interface OfferCategoryBands {
-  /** Inclusive upper bound of the `regular` band, in lakhs per annum. */
-  readonly regularMaxLpa: number;
-  /** Inclusive upper bound of the `dream` band, in lakhs per annum. */
-  readonly dreamMaxLpa: number;
+  /** A CTC at or above this is at least `dream`. Below it is `regular`. */
+  readonly dreamMinLpa: number;
+  /** A CTC at or above this is `super_dream`. */
+  readonly superDreamMinLpa: number;
 }
 
 export const DEFAULT_OFFER_CATEGORY_BANDS: OfferCategoryBands = {
-  regularMaxLpa: 5,
-  dreamMaxLpa: 10,
+  dreamMinLpa: 5,
+  superDreamMinLpa: 10,
 };
 
 const RANK: Readonly<Record<OfferCategory, number>> = {
@@ -41,8 +50,8 @@ export function compareOfferCategory(a: OfferCategory, b: OfferCategory): number
 /**
  * Suggests an offer category for a CTC.
  *
- * Boundaries are inclusive of the lower band: ₹5.00 LPA is `regular`,
- * ₹5.01 LPA is `dream`.
+ * A band edge belongs to the band above it (Karthik, 2026-08-17): ₹4.99 LPA is
+ * `regular`, ₹5.00 LPA is `dream`, ₹10.00 LPA is `super_dream`.
  *
  * @throws if the CTC is not a positive finite number, or the bands are not ascending.
  */
@@ -54,16 +63,21 @@ export function classifyOfferCategory(
     throw new RangeError(`CTC must be a positive finite number in LPA, received: ${ctcLpa}`);
   }
 
-  if (bands.regularMaxLpa >= bands.dreamMaxLpa) {
+  assertAscending(bands);
+
+  if (ctcLpa < bands.dreamMinLpa) return "regular";
+  if (ctcLpa < bands.superDreamMinLpa) return "dream";
+  return "super_dream";
+}
+
+/** Nonsense bands classify nonsense, so they are refused rather than applied. */
+function assertAscending(bands: OfferCategoryBands): void {
+  if (bands.dreamMinLpa >= bands.superDreamMinLpa) {
     throw new RangeError(
-      `Offer category bands must ascend: regularMaxLpa (${bands.regularMaxLpa}) ` +
-        `must be less than dreamMaxLpa (${bands.dreamMaxLpa})`,
+      `Offer category bands must ascend: dreamMinLpa (${bands.dreamMinLpa}) ` +
+        `must be less than superDreamMinLpa (${bands.superDreamMinLpa})`,
     );
   }
-
-  if (ctcLpa <= bands.regularMaxLpa) return "regular";
-  if (ctcLpa <= bands.dreamMaxLpa) return "dream";
-  return "super_dream";
 }
 
 /** One band, in words. */
@@ -96,36 +110,31 @@ const lpa = (value: number) => `₹${value} LPA`;
  * Derived from the bands, never typed alongside them — bands are
  * Admin-configurable, and a hardcoded sentence would start lying the first
  * time anyone retunes them. The boundary wording matches
- * `classifyOfferCategory` exactly: the lower band owns its upper edge, so
- * ₹5.00 LPA is Regular and ₹5.01 LPA is Dream.
+ * `classifyOfferCategory` exactly: an edge belongs to the band above it, so
+ * ₹5 LPA reads as "and above" under Dream and never as a Regular ceiling.
  *
  * @throws if the bands do not ascend.
  */
 export function describeOfferCategoryBands(
   bands: OfferCategoryBands = DEFAULT_OFFER_CATEGORY_BANDS,
 ): readonly OfferCategoryBandDescription[] {
-  if (bands.regularMaxLpa >= bands.dreamMaxLpa) {
-    throw new RangeError(
-      `Offer category bands must ascend: regularMaxLpa (${bands.regularMaxLpa}) ` +
-        `must be less than dreamMaxLpa (${bands.dreamMaxLpa})`,
-    );
-  }
+  assertAscending(bands);
 
   return [
     {
       category: "regular",
       label: CATEGORY_LABEL.regular,
-      range: `up to ${lpa(bands.regularMaxLpa)}`,
+      range: `below ${lpa(bands.dreamMinLpa)}`,
     },
     {
       category: "dream",
       label: CATEGORY_LABEL.dream,
-      range: `above ${lpa(bands.regularMaxLpa)} and up to ${lpa(bands.dreamMaxLpa)}`,
+      range: `${lpa(bands.dreamMinLpa)} and above, below ${lpa(bands.superDreamMinLpa)}`,
     },
     {
       category: "super_dream",
       label: CATEGORY_LABEL.super_dream,
-      range: `above ${lpa(bands.dreamMaxLpa)}`,
+      range: `${lpa(bands.superDreamMinLpa)} and above`,
     },
   ];
 }

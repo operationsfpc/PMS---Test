@@ -59,8 +59,9 @@ function CtcBandNote() {
         ))}
       </ul>
       <p className="mt-2 text-xs text-ink-500">
-        Guidance only — the category below is suggested from the CTC and the final call is yours.
-        Band edges belong to the lower band, so ₹5 LPA is Regular and ₹5.01 LPA is Dream.
+        Guidance only — the category below is suggested from the CTC and the final call is yours. A
+        band edge belongs to the band above it: exactly ₹5 LPA is Dream, and exactly ₹10 LPA is
+        Super Dream.
       </p>
     </aside>
   );

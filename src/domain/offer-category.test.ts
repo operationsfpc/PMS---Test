@@ -19,21 +19,31 @@ describe("classifyOfferCategory", () => {
     expect(classifyOfferCategory(3.5, bands)).toBe("regular");
   });
 
-  describe("boundaries are exact and inclusive of the lower band", () => {
-    it("treats exactly ₹5.00 LPA as regular", () => {
-      expect(classifyOfferCategory(5, bands)).toBe("regular");
+  /**
+   * SPEC CHANGE 2026-08-17 (Karthik, verbatim): "5.00 is dream and 10.00 is
+   * super dream."
+   *
+   * The boundary INVERTED. It used to belong to the band below it — ₹5.00 was
+   * regular — which is what put a ₹5 LPA offer in the "Regular" row of the
+   * campus overview. A band edge now belongs to the band ABOVE it, so the
+   * fields are `dreamMinLpa` and `superDreamMinLpa`: a category is named by
+   * where it STARTS, and there is no way left to read the number as a ceiling.
+   */
+  describe("a band edge belongs to the band above it", () => {
+    it("treats ₹4.99 LPA as regular", () => {
+      expect(classifyOfferCategory(4.99, bands)).toBe("regular");
     });
 
-    it("treats ₹5.01 LPA as dream", () => {
-      expect(classifyOfferCategory(5.01, bands)).toBe("dream");
+    it("treats exactly ₹5.00 LPA as dream", () => {
+      expect(classifyOfferCategory(5, bands)).toBe("dream");
     });
 
-    it("treats exactly ₹10.00 LPA as dream", () => {
-      expect(classifyOfferCategory(10, bands)).toBe("dream");
+    it("treats ₹9.99 LPA as dream", () => {
+      expect(classifyOfferCategory(9.99, bands)).toBe("dream");
     });
 
-    it("treats ₹10.01 LPA as super_dream", () => {
-      expect(classifyOfferCategory(10.01, bands)).toBe("super_dream");
+    it("treats exactly ₹10.00 LPA as super_dream", () => {
+      expect(classifyOfferCategory(10, bands)).toBe("super_dream");
     });
   });
 
@@ -42,10 +52,10 @@ describe("classifyOfferCategory", () => {
   });
 
   it("honours Admin-configured bands rather than the defaults", () => {
-    const custom = { regularMaxLpa: 8, dreamMaxLpa: 20 };
-    expect(classifyOfferCategory(8, custom)).toBe("regular");
-    expect(classifyOfferCategory(12, custom)).toBe("dream");
-    expect(classifyOfferCategory(20.5, custom)).toBe("super_dream");
+    const custom = { dreamMinLpa: 8, superDreamMinLpa: 20 };
+    expect(classifyOfferCategory(7.99, custom)).toBe("regular");
+    expect(classifyOfferCategory(8, custom)).toBe("dream");
+    expect(classifyOfferCategory(20, custom)).toBe("super_dream");
   });
 
   describe("rejects unusable input rather than guessing", () => {
@@ -54,7 +64,7 @@ describe("classifyOfferCategory", () => {
     });
 
     it("throws when the configured bands are not ascending", () => {
-      expect(() => classifyOfferCategory(6, { regularMaxLpa: 10, dreamMaxLpa: 5 })).toThrow(
+      expect(() => classifyOfferCategory(6, { dreamMinLpa: 10, superDreamMinLpa: 5 })).toThrow(
         /band/i,
       );
     });
@@ -84,40 +94,44 @@ describe("offerCategoryRank", () => {
 describe("describeOfferCategoryBands", () => {
   it("describes each band as a sentence a Delivery Head can act on", () => {
     expect(describeOfferCategoryBands(DEFAULT_OFFER_CATEGORY_BANDS)).toEqual([
-      { category: "regular", label: "Regular", range: "up to ₹5 LPA" },
-      { category: "dream", label: "Dream", range: "above ₹5 LPA and up to ₹10 LPA" },
-      { category: "super_dream", label: "Super Dream", range: "above ₹10 LPA" },
+      { category: "regular", label: "Regular", range: "below ₹5 LPA" },
+      { category: "dream", label: "Dream", range: "₹5 LPA and above, below ₹10 LPA" },
+      { category: "super_dream", label: "Super Dream", range: "₹10 LPA and above" },
     ]);
   });
 
   it("follows the bands when they are retuned", () => {
-    expect(describeOfferCategoryBands({ regularMaxLpa: 4, dreamMaxLpa: 8 })).toEqual([
-      { category: "regular", label: "Regular", range: "up to ₹4 LPA" },
-      { category: "dream", label: "Dream", range: "above ₹4 LPA and up to ₹8 LPA" },
-      { category: "super_dream", label: "Super Dream", range: "above ₹8 LPA" },
+    expect(describeOfferCategoryBands({ dreamMinLpa: 4, superDreamMinLpa: 8 })).toEqual([
+      { category: "regular", label: "Regular", range: "below ₹4 LPA" },
+      { category: "dream", label: "Dream", range: "₹4 LPA and above, below ₹8 LPA" },
+      { category: "super_dream", label: "Super Dream", range: "₹8 LPA and above" },
     ]);
   });
 
   /** Keeps decimals rather than rounding them away: ₹7.5 LPA is a real band edge. */
   it("keeps fractional band edges intact", () => {
-    const [regular] = describeOfferCategoryBands({ regularMaxLpa: 4.5, dreamMaxLpa: 9 });
-    expect(regular?.range).toBe("up to ₹4.5 LPA");
+    const [regular] = describeOfferCategoryBands({ dreamMinLpa: 4.5, superDreamMinLpa: 9 });
+    expect(regular?.range).toBe("below ₹4.5 LPA");
   });
 
   /** The same guard classifyOfferCategory applies: a description of nonsense bands is worse than none. */
   it("refuses bands that do not ascend", () => {
-    expect(() => describeOfferCategoryBands({ regularMaxLpa: 10, dreamMaxLpa: 5 })).toThrow(
+    expect(() => describeOfferCategoryBands({ dreamMinLpa: 10, superDreamMinLpa: 5 })).toThrow(
       RangeError,
     );
   });
 
-  /** The boundary the prose claims must be the boundary the classifier enforces. */
+  /**
+   * The boundary the prose claims must be the boundary the classifier
+   * enforces. This is the test that would have caught the ₹5 LPA offer sitting
+   * in the "Regular" row while the banner said otherwise.
+   */
   it("agrees with classifyOfferCategory at every boundary", () => {
     const bands = DEFAULT_OFFER_CATEGORY_BANDS;
-    expect(classifyOfferCategory(bands.regularMaxLpa, bands)).toBe("regular");
-    expect(classifyOfferCategory(bands.regularMaxLpa + 0.01, bands)).toBe("dream");
-    expect(classifyOfferCategory(bands.dreamMaxLpa, bands)).toBe("dream");
-    expect(classifyOfferCategory(bands.dreamMaxLpa + 0.01, bands)).toBe("super_dream");
+    expect(classifyOfferCategory(bands.dreamMinLpa - 0.01, bands)).toBe("regular");
+    expect(classifyOfferCategory(bands.dreamMinLpa, bands)).toBe("dream");
+    expect(classifyOfferCategory(bands.superDreamMinLpa - 0.01, bands)).toBe("dream");
+    expect(classifyOfferCategory(bands.superDreamMinLpa, bands)).toBe("super_dream");
   });
 });
 

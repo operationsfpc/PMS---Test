@@ -50,6 +50,29 @@ export function canPublishDrive(role: AppRole): boolean {
   return role === "central_placement_coordinator";
 }
 
+/**
+ * Who may see the company-facing applicant list on the drive portfolio.
+ * 2026-08-17 (Karthik).
+ *
+ * "For drives with a status of Published or Approved, viewing company
+ * applicants is strictly restricted to the Account Executive. Central
+ * Placement Coordinators and other non-Account Executive roles cannot view or
+ * access the applicants list for these drives."
+ *
+ * The request was framed by status - approved and published - but the answer
+ * does not vary by status, so this does not pretend to consult one. Before
+ * approval a drive has no applicants to list, so restricting every status is
+ * the same rule stated without a branch that could never be false. The moment
+ * that stops being true, this signature grows a status and the test says why.
+ *
+ * This is NOT the coordinators' working list. Shortlisting, Rounds & results,
+ * Final selection and the campus Drive progress screen are untouched - they
+ * are how a coordinator reaches applicants, and they carry their own rules.
+ */
+export function canViewDriveApplicants(role: AppRole): boolean {
+  return role === "account_executive";
+}
+
 export type DriveRole = "raised" | "approved" | "published";
 
 export interface DriveOwnership {

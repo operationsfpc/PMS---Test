@@ -313,3 +313,58 @@ describe("DrivePortfolioPage \u2014 shortlisting access", () => {
     expect(screen.queryByRole("link", { name: /shortlist applicants/i })).toBeNull();
   });
 });
+
+/**
+ * 2026-08-17 (Karthik), two changes to this screen.
+ *
+ * The blurb claimed the reader publishes drives. Since publishing became the
+ * Central CPC's alone, that was false for both roles this screen serves.
+ *
+ * And the applicant list — the company-facing roll of who applied — is the
+ * AE's. The Delivery Head and the Central CPC could open it here; they no
+ * longer can. Their route to applicants is Shortlisting and Rounds & results,
+ * which carry their own rules.
+ */
+describe("the applicant list belongs to the Account Executive", () => {
+  it("offers the AE the applicants to their own drive", async () => {
+    show({ role: "account_executive" });
+    expect(await screen.findByRole("button", { name: /applicants to zoho/i })).toBeDefined();
+  });
+
+  it.each(["central_placement_coordinator", "delivery_head"] as const)(
+    "does not offer %s a way into the applicant list",
+    async (role) => {
+      show({ role });
+      await screen.findByText(/zoho corporation/i);
+      expect(screen.queryByRole("button", { name: /applicants to zoho/i })).toBeNull();
+    },
+  );
+
+  /**
+   * Withholding the roll of names is not the same as withholding the numbers.
+   * A coordinator still needs to know a drive has 2 applicants and 1 offer.
+   */
+  it("still shows a coordinator the funnel, just not the names", async () => {
+    show({ role: "central_placement_coordinator" });
+    await screen.findByText(/zoho corporation/i);
+
+    expect(screen.getAllByText(/applied/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/anjali subramanian/i)).toBeNull();
+    expect(screen.queryByText(/rahul nair/i)).toBeNull();
+  });
+
+  it("never leaks a name to a coordinator who cannot open the list", async () => {
+    show({ role: "delivery_head" });
+    await screen.findByText(/zoho corporation/i);
+    expect(screen.queryByText(/21CSE1042/)).toBeNull();
+  });
+});
+
+describe("the blurb describes what the reader actually does", () => {
+  it("says raise or approve, and no longer claims they publish", async () => {
+    show({ role: "account_executive" });
+
+    const blurb = await screen.findByText(/every drive i raise or approve/i);
+    expect(blurb.textContent).not.toMatch(/publish/i);
+  });
+});

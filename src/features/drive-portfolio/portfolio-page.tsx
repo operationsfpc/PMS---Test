@@ -2,6 +2,7 @@ import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { applicationWindow } from "@domain/drive-analytics";
 import {
   canShortlistFromPortfolio,
+  canViewDriveApplicants,
   type DriveRole,
   driveProgress,
   involvementIn,
@@ -94,6 +95,13 @@ export function DrivePortfolioPage({
   // that is, is the domain's answer - an AE must not choose which candidates
   // their own recruiter sees.
   const mayShortlist = canShortlistFromPortfolio(role);
+  /**
+   * 2026-08-17 (Karthik): the company-facing applicant list on approved and
+   * published drives is "strictly restricted to the Account Executive". The
+   * funnel counts stay for everyone - a coordinator still needs to know a
+   * drive has two applicants - but the roll of names does not.
+   */
+  const mayViewApplicants = canViewDriveApplicants(role);
   const [drives, setDrives] = useState<readonly PortfolioDrive[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
@@ -143,7 +151,10 @@ export function DrivePortfolioPage({
     <div>
       <PageHeader
         title={title}
-        subtitle="Every drive you raised, approved or published — and what has become of it."
+        /* Publishing became the Central CPC's alone, so a blurb telling the AE
+           and the Delivery Head they publish was describing a power neither
+           has. Karthik's words, 2026-08-17. */
+        subtitle="Every drive I raise or approve — and what has become of it."
       />
 
       {drives.length === 0 ? (
@@ -270,14 +281,16 @@ export function DrivePortfolioPage({
                         </section>
 
                         <div className="mt-4 flex flex-wrap items-center gap-3">
-                          <button
-                            type="button"
-                            aria-expanded={open}
-                            onClick={() => setExpanded(open ? null : drive.driveId)}
-                            className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
-                          >
-                            {open ? "Hide" : "Show"} applicants to {drive.companyName}
-                          </button>
+                          {mayViewApplicants && (
+                            <button
+                              type="button"
+                              aria-expanded={open}
+                              onClick={() => setExpanded(open ? null : drive.driveId)}
+                              className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
+                            >
+                              {open ? "Hide" : "Show"} applicants to {drive.companyName}
+                            </button>
+                          )}
 
                           {mayShortlist && funnel.applied > 0 && (
                             <Link
@@ -290,7 +303,9 @@ export function DrivePortfolioPage({
                         </div>
                       </section>
 
-                      {open && (
+                      {/* Gated on the rule as well as on `open`: a stale
+                          expansion must not survive a role that may not read it. */}
+                      {open && mayViewApplicants && (
                         <section
                           aria-label={`${drive.companyName} applicant list`}
                           className="border-t border-line bg-surface-muted p-5"

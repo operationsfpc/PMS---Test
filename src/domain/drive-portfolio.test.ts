@@ -3,12 +3,13 @@ import {
   type ApplicantFacts,
   canPublishDrive,
   canShortlistFromPortfolio,
+  canViewDriveApplicants,
   driveProgress,
   involvementIn,
   summariseFunnel,
 } from "./drive-portfolio";
 import type { ApplicantRound } from "./student-progress";
-import { APP_ROLES } from "./types";
+import { APP_ROLES, DRIVE_STATUSES } from "./types";
 
 /**
  * A drive seen by the people who own it: the Account Executive who raised it
@@ -260,4 +261,75 @@ describe("canPublishDrive", () => {
       expect(canPublishDrive(role)).toBe(false);
     }
   });
+});
+
+/**
+ * 2026-08-17 (Karthik): "For drives with a status of Published or Approved,
+ * viewing company applicants is strictly restricted to the Account Executive.
+ * Central Placement Coordinators and other non-Account Executive roles cannot
+ * view or access the applicants list for these drives. (Central placement
+ * coordinator and delivery head have this option currently.)"
+ *
+ * This governs the DRIVE PORTFOLIO's applicant list — the company-facing roll
+ * of who applied, which belongs to the AE who owns the recruiter relationship.
+ * It is not the coordinators' working list: they reach applicants through
+ * Shortlisting, Rounds & results and Final selection, which are unaffected.
+ */
+describe("canViewDriveApplicants", () => {
+  it("lets the Account Executive see the applicants to an approved drive", () => {
+    expect(canViewDriveApplicants("account_executive")).toBe(true);
+  });
+
+  it("lets the Account Executive see the applicants to a published drive", () => {
+    expect(canViewDriveApplicants("account_executive")).toBe(true);
+  });
+
+  /** Named explicitly in the request as roles that have it today and must not. */
+  it.each(["central_placement_coordinator", "delivery_head"] as const)(
+    "refuses %s on an approved drive",
+    (role) => {
+      expect(canViewDriveApplicants(role)).toBe(false);
+    },
+  );
+
+  it.each(["central_placement_coordinator", "delivery_head"] as const)(
+    "refuses %s on a published drive",
+    (role) => {
+      expect(canViewDriveApplicants(role)).toBe(false);
+    },
+  );
+
+  /**
+   * "Published" is the whole family the UI files under Published, not the
+   * `live` status alone — a drive does not stop being published because its
+   * rounds have started.
+   */
+  it.each(["live", "applications_closed", "in_rounds", "completed"] as const)(
+    "treats %s as published, so only the AE sees the list",
+    (status) => {
+      expect(canViewDriveApplicants("account_executive")).toBe(true);
+      expect(canViewDriveApplicants("central_placement_coordinator")).toBe(false);
+    },
+  );
+
+  /** Nobody else, whatever the status. */
+  it("refuses every other role outright", () => {
+    for (const role of APP_ROLES.filter((r) => r !== "account_executive")) {
+      for (const status of DRIVE_STATUSES) {
+        expect(canViewDriveApplicants(role)).toBe(false);
+      }
+    }
+  });
+
+  /**
+   * Before approval a drive has no applicants to show, so this is not a
+   * loosening — it keeps the rule a statement about who, not a coincidence of
+   * empty data.
+   */
+  it.each(["draft", "submitted", "rejected"] as const)(
+    "still shows the AE nothing to hide on a %s drive",
+    (status) => {
+      expect(canViewDriveApplicants("account_executive")).toBe(true);
+    },
+  );
 });
