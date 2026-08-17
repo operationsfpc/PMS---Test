@@ -1,12 +1,113 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2809 tests passing across 150 files**, plus **1 Playwright journey** — run,
+**2936 tests passing across 152 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0047`** (0046 and 0047 pushed this session); live Cloudflare
-version `ed484041-4522-4e94-8a91-267d84e03d82`. Commit hash deliberately not
+gate. Remote is at **`0048`** (0048 pushed 2026-08-18); live Cloudflare
+version `89409f04-5f55-4179-a8e6-65dbab4a9393`. Commit hash deliberately not
 quoted here: it has been wrong three times, always because it was written
 before the commit existed. Use `git log --oneline -5`.
+
+---
+
+## ✅ SHIPPED 2026-08-18 — boards, the reject button nobody had, three drive tabs
+
+Live `89409f04-5f55-4179-a8e6-65dbab4a9393`, JS byte-identical to `dist/`
+(880 709 bytes, sha256 `fe9b3f35…`). Remote migrations at **`0048`**.
+`pnpm check` exits 0 — **2936 tests / 152 files**. Spec:
+`docs/specs/2026-08-18-srf-boards-rejection-and-drives-nav.md` (✅ APPROVED,
+answers 1a · 2 required · 3 state named · 4 "University / Board" · 5 yes ·
+6a · 7 yes · 8–10 as recommended).
+
+### 🔴 The rejection half of PRD §4.2 has never worked, in two ways at once
+
+1. **No screen offered Reject.** `decideSrf` has refused empty reasons for
+   weeks, `srf_rejection_reason` has existed since 0003, and 0020 has permitted
+   the student's `srf_rejected → srf_submitted` — and `/cpc/verification` still
+   showed **only Approve**. A rule with no control on any screen is a rule
+   nobody can follow. There is now "Send back for changes" with a required
+   comment, campus CPC only (0042 already refuses everyone else in the database).
+2. **A rejected form reopened BLANK.** `submit_srf` sets `srf_draft = null`, and
+   the page merged roster identity + draft only. So to correct one line a
+   student retyped thirty from memory — and a figure retyped from memory is a
+   figure that can be mistyped, so the coordinator would then be checking a NEW
+   error. `srfValuesFromSubmitted` (domain) now prefills from what was
+   submitted; a real draft still wins (it is newer); the uploads are the one
+   thing that must be re-attached, and the form says so in a line of its own.
+
+The student is also told: `0048` writes a notification (not to an opted-out
+student — D7's rule), and the coordinator's own words now appear on the
+dashboard prompt. A resubmission carries a **Resubmitted** badge and repeats
+what was asked for, so the same defect is not missed twice.
+
+### School boards, and who awarded a diploma
+
+`src/domain/boards.ts` owns the vocabulary (7 boards), the 36 states/UTs, and
+the two rules that make an answer coherent: a State Board names its state,
+Other is named. `0048` refuses the same pairs in SQL, **in both directions** —
+a state stored against CBSE would be shown to a coordinator beside the marksheet
+and read as a fact.
+
+💡 **ONE enum value for CISCE, two labels** — ICSE at class 10, ISC at class 12.
+Two values would let a student record "ISC" against their tenth and nothing
+downstream could tell that apart from a real answer.
+
+Columns are **nullable and not backfilled**: three students are already
+approved, and an invented board is a claim nobody checked. `describeBoard(null)`
+reads "Not recorded".
+
+🔴 **One missing field took the whole verification queue down.** Adding
+`tenthBoard` to the queue's row type made `describeBoard(undefined)` throw, and
+the screen rendered as `<div />` — not an error, just nothing. It now reads
+"Not recorded" for a nullish selection, with a test that says why. **Anything
+rendered once per row must survive a field that is not there yet.**
+
+### The marks-scale question now names its college (6a)
+
+"How your college reports marks" governs the semester lines, which for a PG
+student are **PG** semesters. It reads **"How does your PG college report
+marks?"** on PG, and the completed-UG block's bare "UG scale" is now **"How does
+your UG college report marks?"**. This is a **deliberate deviation from the
+literal request** ("add the word UG in the question"), agreed at approval as 6a:
+labelling the PG semester scale "UG" would collect a percentage as a CGPA and
+change who is eligible for a drive. Reverting is one string plus one test.
+
+### Drives: three tabs, no chips, and a search box
+
+`Yet to publish` (**approved only** — Yet to publish keeps the cockpit, because
+it carries the publish action) · `Live` · `Completed`. Drafts are gone from the
+Central CPC as asked. `/central/drives` and `/central/drives/published` still
+answer, pointing at Live.
+
+**⚠️ A39 — UNCONFIRMED.** `submitted` and `rejected` drives now appear on **no**
+Central CPC screen. That follows from 0047 (raise = AE, approve = DH, publish =
+Central CPC), and reversing it is one entry in `DRIVE_TAB_STATUSES`.
+
+The three chips (All my drives · Raised by me · Approved by me) are **removed** —
+they filtered a list to itself, since every drive an AE can see is one they
+raised. A **search box** replaced them (`searchDrives`: every term must match,
+company and role), which is what a growing list actually needs.
+
+### 🔜 NEXT SESSION STARTS HERE
+
+**`docs/specs/2026-08-18-click-to-see-everything.md` — 7 items, 8 questions,
+AWAITING APPROVAL.** It consolidates everything asked after this shipped, and
+supersedes `2026-08-17-drive-details-for-central-cpc.md`:
+
+N1 click-through to a full record everywhere (one canonical `/drives/:id`) ·
+N2 the same Drives sidebar for every staff role · N3 an "Open now" box on the
+application window · N4 **10th/12th targeting — must land in the RLS apply gate
+too, or the audience count and the gate disagree** · N5 the PIF's rounds
+materialise as the drive's rounds · N6 search on campus Drive progress ·
+N7 the student's four lists (to apply / in progress / not applied / closed).
+
+🔴 **P10, found while building, nobody's report: the SRF's role preferences and
+resumes are never stored.** `student_role_preferences` has been empty since
+0003 and the resume `File`s are discarded after ticking a box — so R7's "one
+resume per role category" is fed only by `/student/profile`, and a student who
+has only filled in the SRF has no resume on file at all, while `rankApplicants`
+scores role-preference match. It needs its own decision; it is written up at
+the end of that spec.
 
 ---
 
