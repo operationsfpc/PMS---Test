@@ -1,12 +1,80 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2536 tests passing across 144 files**, plus **1 Playwright journey** — run,
+**2803 tests passing across 150 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0045`** (no migration this session); live Cloudflare
-version `94708890-667e-43c9-a726-306b39b6f669`. Commit hash deliberately not
+gate. Remote is at **`0047`** (0046 and 0047 pushed this session); live Cloudflare
+version `478ec77f-b1f8-4c8d-9153-d62222b0a425`. Commit hash deliberately not
 quoted here: it has been wrong three times, always because it was written
 before the commit existed. Use `git log --oneline -5`.
+
+---
+
+## ✅ SHIPPED 2026-08-17 (later) — one verb, one role
+
+Live `478ec77f-b1f8-4c8d-9153-d62222b0a425`, JS byte-identical to `dist/`
+(866 850 bytes, sha256 `ed230af0…`). Remote migrations at **0047**.
+
+### The drive lifecycle now has three roles and no overlaps
+
+    raise -> account_executive    approve -> delivery_head    publish -> central_cpc
+
+**0008 handed out `for all` on `drives` twice** — to `delivery_head` and to
+`is_operator()` (admin + Central CPC). `for all` includes INSERT, so both of
+the people whose job is to *check* the AE could raise a drive of their own and
+then approve or publish it themselves. The UI never offered it. The database
+allowed it. **0047** splits those grants into `update` + `delete` and gives
+INSERT to the AE alone.
+
+**A second hole surfaced while writing the test.** 0008 checked no status on
+INSERT and 0009's transition guard only fires on UPDATE — so an AE could insert
+a drive already `approved` or `live` and step past both other roles in one
+statement. INSERT is now confined to `draft` and `submitted`.
+
+`/ae/pif` and `/delivery-head/pif-approvals` were open to anyone signed in.
+Both refuse at the door now.
+
+**⚠️ The contradiction in the request, and how it was read.** Karthik wrote
+"Only Central PC can approve it" one sentence before "Central PC cannot raise
+or approve a drive". Read against the same day's "only the Central Placement
+Coordinator is authorized to publish it", the first is a slip for **publish** —
+the only reading under which all three sentences agree. That reading is
+implemented and flagged at `src/domain/drive-portfolio.test.ts`. **Confirm it.**
+
+### Also shipped
+
+- The match score (the "15") is gone from the shortlisting screen. Still
+  calculated — it orders the list — and still saved with the decision, because
+  PRD 13.1 wants the recommendation kept beside the choice.
+- `(R9)` removed from the Package copy. `src/copy.test.ts` now **fails the
+  build** on any `(R9)`/`(D10)`/`(§12.3)` reaching a screen.
+- Sidebar: "Publish a drive" → **"Student details"** (All students · Skill
+  repository). "Publish and target" was a dead entry — it needs a drive id, so
+  from the sidebar it only ever said "choose a drive from the drive cockpit".
+- **New:** `/central/students` — every student in the placement process, with
+  filters, search and CSV export. The Placed count on the overview links
+  straight to `?filter=placed`.
+
+### 🔜 NEXT SESSION STARTS HERE — the overview boxes are half-built
+
+`src/domain/placement-metrics.ts` is **written and green (29 tests)** but **not
+yet wired to any screen**. It computes exactly what Karthik specified:
+
+- Row 1 — registered · eligible (60% bar) · unique placed · placement offers ·
+  unique interns · internship offers
+- Row 2 — drives completed / in progress, placement and internship separately
+- `internship_convertible` counts as a **placement**, never an internship
+
+Still to do: the two-row layout, moving the campus selector to the right and
+shrinking it, and making each box open the list behind its number.
+
+**⚠️ ASSUMPTION — UNCONFIRMED (A34):** "60% in graduation" is implemented as
+**CGPA ≥ 6.0** on the 10-point scale. Colleges convert differently (some ×9.5).
+One constant, `CGPA_BAR`. **Ask Karthik.**
+
+Good news on the data: `programme_level` and `ug_aggregate_cgpa` already exist,
+so "post-graduation as well if applicable" is genuinely computable — a PG
+student is held to four marks, an undergraduate to three.
 
 ---
 

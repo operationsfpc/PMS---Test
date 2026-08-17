@@ -90,8 +90,8 @@ first wherever it exists.
 | Import a roster | route `/admin/roster` | ✅ | — | — | — | — | — | — |
 | Submit the registration form (SRF) | `srf-access.ts` | — | ✅ | — | — | — | — | — |
 | Verify SRF / certificates | `CampusCpcOnly` guard + RLS `0042` | — | — | ✅ | — | — | — | — |
-| Raise a PIF | route `/ae/pif` | — | — | — | ✅ | — | — | — |
-| Approve / reject a PIF | `decidePif` | — | — | — | — | ✅ | — | — |
+| **Raise a drive (PIF)** | `canRaiseDrive` + RLS `0047` | **—** | — | — | ✅ | **—** | **—** | — |
+| **Approve / reject a PIF** | `canApproveDrive` | **—** | — | — | **—** | ✅ | **—** | — |
 | **Set the offer category** | `classifyOfferCategory` suggests; DH decides | — | — | — | — | ✅ | — | — |
 | **Publish a drive** | `canPublishDrive` | — | — | — | — | **—** | ✅ | — |
 | **Shortlist applicants** | `canShortlistFromPortfolio` | — | — | ✅ | **—** | **—** | ✅ | — |
@@ -103,6 +103,17 @@ first wherever it exists.
 | Export the recruiter pack | `/central/shortlisting` | — | — | ✅ | — | — | ✅ | — |
 | Placement overview | `/dashboard` | ✅ | — | ✅ | **—** | ✅ | ✅ | ✅ |
 | Drive progress | `/cpc/drives`, `/central/drives` | — | — | 👁 | 👁 *(own)* | 👁 | ✅ | — |
+
+### The drive lifecycle: three verbs, three roles, no overlaps
+
+    raise -> account_executive    approve -> delivery_head    publish -> central_cpc
+
+Enforced in the domain (`canRaiseDrive` / `canApproveDrive` / `canPublishDrive`),
+at the route, and since **0047** in RLS. Admin holds **none** of the three: being
+able to fix anything is not a reason to be able to do everything.
+
+An AE sees only the drives they raised — `drives_ae_read` scopes on
+`created_by = auth.uid()`.
 
 ### The five changes made on 2026-08-17
 
@@ -144,8 +155,8 @@ a broken account.
 entry and do not land on one: a placement overview would render zeroes and look
 broken. Their drives are their overview.
 
-**⚠️ The UI guards are ahead of the database.** The 2026-08-17 restrictions
-(publish, shortlist, applicant list) are enforced in the browser and at the
-route. Matching **RLS policies have not been written**, so a crafted request
-could still get further than the UI allows. This should be closed with a pgTAP
-pass before launch — it is the top open item in `docs/HANDOVER.md`.
+**⚠️ The UI guards are still partly ahead of the database.** Raising a drive is
+now enforced in RLS (**0047**, with tests in `src/db/drive-lifecycle-roles.test.ts`).
+**Publish, shortlist and the applicant list are still browser-and-route only** —
+a crafted request could get further than the UI allows. Close these before
+launch; it is the top open item in `docs/HANDOVER.md`.
