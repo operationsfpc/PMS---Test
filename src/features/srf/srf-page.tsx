@@ -223,7 +223,12 @@ export function SrfPage({
   });
 
   const selectedCategories = watch("roleCategories");
-  const resumeCategories = watch("resumeCategories");
+  /**
+   * The resume FILES, keyed by role category (P10). The form used to keep a
+   * list of categories whose box had been touched and throw the files away.
+   */
+  const resumes = watch("resumes");
+  const resumeCategories = Object.keys(resumes ?? {}) as RoleCategory[];
   const programmeLevel = watch("programmeLevel");
   const semesters = watch("semesters");
   const diplomaMarks = watch("diplomaMarks");
@@ -384,7 +389,7 @@ export function SrfPage({
    * a marksheet that is not there, count it as provided, and let the student
    * submit unevidenced marks. The uploads are deliberately re-picked.
    */
-  const serialised = JSON.stringify({ ...watch(), marksheets: {} });
+  const serialised = JSON.stringify({ ...watch(), marksheets: {}, resumes: {} });
 
   useEffect(() => {
     if (!isDirty) return;
@@ -1176,9 +1181,16 @@ export function SrfPage({
                             field.onChange(next);
                             // Dropping a category must drop its resume too, or the
                             // cross-field rule would silently pass on stale data.
+                            // Dropping a category drops its resume with it, or
+                            // the submission would carry a file for an area the
+                            // student is no longer asking to be considered for.
                             setValue(
-                              "resumeCategories",
-                              resumeCategories.filter((c) => next.includes(c)),
+                              "resumes",
+                              Object.fromEntries(
+                                Object.entries(resumes ?? {}).filter(([c]) =>
+                                  next.includes(c as RoleCategory),
+                                ),
+                              ),
                               { shouldValidate: true },
                             );
                           }}
@@ -1204,25 +1216,28 @@ export function SrfPage({
                           // when several are on screen, so the reason goes on the
                           // field that is actually empty.
                           error={
-                            errors.resumeCategories !== undefined &&
-                            !resumeCategories.includes(category)
+                            errors.resumes !== undefined && !resumeCategories.includes(category)
                               ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
                               : undefined
                           }
                           onChange={(e) => {
-                            const has = e.target.value !== "";
-                            setValue(
-                              "resumeCategories",
-                              has
-                                ? [...new Set([...resumeCategories, category])]
-                                : resumeCategories.filter((c) => c !== category),
-                              { shouldValidate: true },
-                            );
+                            const file = e.target.files?.[0];
+                            const next = { ...(resumes ?? {}) };
+                            if (file === undefined) delete next[category];
+                            else next[category] = file;
+                            setValue("resumes", next, { shouldValidate: true });
                           }}
                         />
                       ))}
                     </div>
-                    <ErrorText>{errors.resumeCategories?.message}</ErrorText>
+                    {/* A record's error lands on `.root`, not `.message` - the
+                        same shape the marksheets and the semester list need. */}
+                    <ErrorText>
+                      {errors.resumes?.root?.message ??
+                        (typeof errors.resumes?.message === "string"
+                          ? errors.resumes.message
+                          : undefined)}
+                    </ErrorText>
                   </div>
                 )}
               </Section>

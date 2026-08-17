@@ -47,7 +47,8 @@ const valid: SrfFormValues = {
     "semester-2": file("sem2.pdf"),
   },
   roleCategories: ["software_technical"],
-  resumeCategories: ["software_technical"],
+  // P10: the FILE, not a note that a box was touched (2026-08-18).
+  resumes: { software_technical: file("cv.pdf") },
   consent: true,
 };
 
@@ -67,17 +68,30 @@ describe("srfSchema", () => {
   });
 
   it("requires at least one role category", () => {
-    expect(errorsFor({ roleCategories: [], resumeCategories: [] }).roleCategories).toMatch(
-      /at least one/i,
-    );
+    expect(errorsFor({ roleCategories: [], resumes: {} }).roleCategories).toMatch(/at least one/i);
   });
 
   it("requires a resume for every selected role category", () => {
     const errors = errorsFor({
       roleCategories: ["software_technical", "sales"],
-      resumeCategories: ["software_technical"],
+      resumes: { software_technical: file("cv.pdf") },
     });
-    expect(errors.resumeCategories).toMatch(/resume for every role category/i);
+    expect(errors.resumes).toMatch(/resume for every role category/i);
+  });
+
+  /** P10: and the resume it accepts is the file itself, ready to be stored. */
+  it("carries the uploaded file through, one per area", () => {
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      roleCategories: ["software_technical", "sales"],
+      resumes: { software_technical: file("sw.pdf"), sales: file("sales.pdf") },
+    });
+
+    expect(parsed.success).toBe(true);
+    expect(Object.keys(parsed.success ? parsed.data.resumes : {}).sort()).toEqual([
+      "sales",
+      "software_technical",
+    ]);
   });
 
   // Arrears and CGPA moved onto the semester lines on 2026-08-04. The rules
@@ -285,7 +299,7 @@ describe("srfSchema", () => {
       ],
       degree: "",
       roleCategories: [],
-      resumeCategories: [],
+      resumes: {},
     });
     // `semesters.0.marks` as well as the group message: a bad figure is now
     // reported ON the field the student has to fix, which is what was asked

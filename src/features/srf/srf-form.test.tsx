@@ -416,8 +416,12 @@ describe("SRF marksheet evidence", () => {
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
     expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
-    expect(uploads).toHaveLength(3);
-    expect(uploads.every((u) => u.startsWith("marksheets/s1/"))).toBe(true);
+    // Three marksheets, and - since P10 - the resume for the one area chosen.
+    // Both buckets, both under the student's own id, which is what the storage
+    // policy (0022) checks.
+    expect(uploads.filter((u) => u.startsWith("marksheets/s1/"))).toHaveLength(3);
+    expect(uploads.filter((u) => u.startsWith("resumes/s1/"))).toHaveLength(1);
+    expect(uploads).toHaveLength(4);
   });
 });
 
@@ -687,5 +691,98 @@ describe("the diploma's awarding university or board", () => {
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
     expect(await screen.findByText(/university or board that awarded your diploma/i)).toBeDefined();
+  });
+});
+
+/**
+ * P10 — the preferences and resumes the SRF collects are actually STORED
+ * (2026-08-18, Karthik: "preferences and resumes SUBMITTED AT THE TIME of
+ * submitting SRF has to be recorded and saved. This has to be used while
+ * publishing a drive").
+ *
+ * They never were. `student_role_preferences` has been an empty table since
+ * 0003, and the resume `File`s were read only to tick a box and then discarded
+ * — so a student who had only ever filled in the SRF had no resume on file at
+ * all, while `rankApplicants` scored role-preference match against nothing.
+ */
+describe("what the SRF does with preferences and resumes", () => {
+  const submitted = async (): Promise<Record<string, unknown>> => {
+    const sent: unknown[] = [];
+    signedIn();
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json([{ student_id: "s1", srf_status: "srf_submitted" }]);
+      }),
+    );
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+    // A second area, so the test can tell one resume from the other.
+    await user.click(screen.getByRole("checkbox", { name: /^sales$/i }));
+    await user.upload(
+      screen.getByLabelText(/sales resume/i),
+      new File(["sales cv"], "sales.pdf", { type: "application/pdf" }),
+    );
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    return sent[0] as Record<string, unknown>;
+  };
+
+  it("sends every role category the student chose", async () => {
+    const payload = await submitted();
+
+    expect(payload.p_role_categories).toEqual(
+      expect.arrayContaining(["software_technical", "sales"]),
+    );
+  });
+
+  it("sends one resume per chosen category, each with the file that was uploaded", async () => {
+    const payload = await submitted();
+    const resumes = payload.p_resumes as Array<Record<string, unknown>>;
+
+    expect(resumes).toHaveLength(2);
+    expect(resumes.map((r) => r.role_category).sort()).toEqual(["sales", "software_technical"]);
+    for (const resume of resumes) {
+      expect(String(resume.storage_path)).toMatch(/^s1\//);
+      expect(Number(resume.size_bytes)).toBeGreaterThan(0);
+    }
+  });
+
+  it("actually puts the files in the resumes bucket, not just their names in a payload", async () => {
+    const uploads: string[] = [];
+    signedIn().push(...uploads);
+    // The uploads array returned by signedIn() is the one the stub writes to.
+    const sent: unknown[] = [];
+    const captured = signedIn();
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json({ id: "s1" })),
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json([{ student_id: "s1", srf_status: "srf_submitted" }]);
+      }),
+    );
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(captured.some((path) => path.startsWith("resumes/s1/"))).toBe(true);
+  });
+
+  it("still refuses to submit when a chosen category has no resume", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+    await user.click(screen.getByRole("checkbox", { name: /^sales$/i }));
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText(/a sales resume is required/i)).toBeDefined();
   });
 });

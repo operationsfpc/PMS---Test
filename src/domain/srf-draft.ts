@@ -37,7 +37,7 @@ export type RosterOwnedField = (typeof ROSTER_OWNED)[number];
  * carrying marks with nothing to check them against. The uploads are re-picked
  * instead, which is the only honest option.
  */
-const NEVER_DRAFTED = ["marksheets"] as const;
+const NEVER_DRAFTED = ["marksheets", "resumes"] as const;
 
 /**
  * What the student actually submitted, as far as this layer needs to know.
@@ -174,6 +174,7 @@ export function srfValuesFromSubmitted(record: SubmittedSrfRecord): Record<strin
     otherProfiles: (record.otherProfiles ?? []).map((p) => ({ label: p.label, value: p.value })),
 
     marksheets: {},
+    resumes: {},
     certificates: [],
     consent: false,
   };

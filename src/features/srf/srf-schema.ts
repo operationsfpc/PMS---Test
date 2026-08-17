@@ -10,7 +10,7 @@ import {
   isValidPercentage,
   missingResumesFor,
 } from "@domain/srf-rules";
-import { ROLE_CATEGORIES } from "@domain/types";
+import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { z } from "zod";
 
 /**
@@ -135,7 +135,17 @@ export const srfSchema = z
 
     // Preferences
     roleCategories: z.array(z.enum(ROLE_CATEGORIES)).min(1, "Select at least one role category"),
-    resumeCategories: z.array(z.enum(ROLE_CATEGORIES)),
+    /**
+     * THE FILES, keyed by role category (P10, 2026-08-18).
+     *
+     * This used to be `resumeCategories: RoleCategory[]` - a list of categories
+     * whose upload box had been touched. The `File` itself was read to decide
+     * whether the box was non-empty and then dropped on the floor, so the form
+     * demanded a resume per category, refused to submit without one, and stored
+     * none of them. Same shape as `marksheets`, and for the same reason: what
+     * is submitted has to be the thing itself.
+     */
+    resumes: z.record(z.string(), z.instanceof(File, { error: "Choose a file to upload" })),
 
     // Profiles
     /**
@@ -354,10 +364,14 @@ export const srfSchema = z
       }
     }
   })
-  .refine((d) => missingResumesFor(d.roleCategories, d.resumeCategories).length === 0, {
-    path: ["resumeCategories"],
-    message: "Upload a resume for every role category you selected",
-  });
+  .refine(
+    (d) =>
+      missingResumesFor(d.roleCategories, Object.keys(d.resumes) as RoleCategory[]).length === 0,
+    {
+      path: ["resumes"],
+      message: "Upload a resume for every role category you selected",
+    },
+  );
 
 export type SrfFormValues = z.input<typeof srfSchema>;
 export type SrfSubmission = z.output<typeof srfSchema>;
@@ -410,7 +424,7 @@ export const SRF_DEFAULTS: SrfFormValues = {
   ],
   marksheets: {},
   roleCategories: [],
-  resumeCategories: [],
+  resumes: {},
   otherProfiles: [],
   linkedin: "",
   github: "",

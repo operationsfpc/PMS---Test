@@ -34,6 +34,13 @@ export class SrfSubmitError extends Error {}
 const MARKSHEET_BUCKET = "marksheets";
 
 /**
+ * Resumes live in their own bucket, as they always have - the apply flow (0033)
+ * writes there too. Same storage policy shape: every object under the student's
+ * own id (0022).
+ */
+const RESUME_BUCKET = "resumes";
+
+/**
  * Certificates share the marksheet bucket: same owner, same privacy, same
  * `<student>/...` path rule the storage policy checks (0022). A second bucket
  * would be a second policy to get wrong.
@@ -148,6 +155,42 @@ async function uploadMarksheets(
 /** An unanswered text box is NULL in the database, never an empty string. */
 const orNull = (value: string): string | null => (value.trim() === "" ? null : value.trim());
 
+/**
+ * Puts each role-category resume in storage and describes what landed there.
+ *
+ * P10: these files were read to decide whether an upload box was non-empty and
+ * then DISCARDED. The form demanded one resume per selected area, refused to
+ * submit without them, and stored none - so R7's "one resume per role category
+ * goes to the recruiter" was fed entirely by whatever the student later
+ * uploaded on their profile page.
+ *
+ * Uploaded before the transaction for the same reason marksheets are: storage
+ * cannot join it. An object with no row costs a few kilobytes; a row with no
+ * object would hand a recruiter a dead link.
+ */
+async function uploadResumes(
+  client: SupabaseClient,
+  studentId: string,
+  values: SrfSubmission,
+): Promise<Array<{ role_category: string; storage_path: string; size_bytes: number }>> {
+  const uploaded: Array<{ role_category: string; storage_path: string; size_bytes: number }> = [];
+
+  for (const [category, file] of Object.entries(values.resumes)) {
+    const path = `${studentId}/profile-${category}-${crypto.randomUUID()}-${file.name}`;
+    const { error } = await client.storage.from(RESUME_BUCKET).upload(path, file);
+
+    if (error !== null) {
+      throw new SrfSubmitError(
+        `Could not upload your ${category.replaceAll("_", " ")} resume. Check your connection and try again.`,
+      );
+    }
+
+    uploaded.push({ role_category: category, storage_path: path, size_bytes: file.size });
+  }
+
+  return uploaded;
+}
+
 /** Resolves the signed-in user. Injected so the dependency is explicit and testable. */
 export type GetAuthUserId = () => Promise<string | null>;
 
@@ -200,6 +243,7 @@ export function createSupabaseSrfRepository(
       }
 
       const uploads = await uploadMarksheets(client, own.id as string, values);
+      const resumes = await uploadResumes(client, own.id as string, values);
 
       /**
        * ONE call, one transaction (0028).
@@ -301,6 +345,14 @@ export function createSupabaseSrfRepository(
         p_documents: uploads,
         // Named here, uploaded above. A certificate with no file was already
         // refused by the schema, so anything reaching this point has one.
+        /**
+         * P10. The areas the student is asking to be considered for, and the CV
+         * they want sent for each. Both are read when a drive is published - a
+         * drive is classified into one area and reaches the students who chose
+         * it - so neither can stay a tick on a screen.
+         */
+        p_role_categories: values.roleCategories,
+        p_resumes: resumes,
         p_certificates: values.certificates
           .map((certificate, index) => ({
             name: certificate.name,
