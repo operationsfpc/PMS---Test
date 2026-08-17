@@ -1,12 +1,129 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2936 tests passing across 152 files**, plus **1 Playwright journey** — run,
+**3007 tests passing across 155 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0048`** (0048 pushed 2026-08-18); live Cloudflare
-version `89409f04-5f55-4179-a8e6-65dbab4a9393`. Commit hash deliberately not
+gate. Remote is at **`0050`** (0048–0050 pushed 2026-08-18); live Cloudflare
+version `53f07d57-3f3b-4dac-a7e8-9396c46c16f2`. Commit hash deliberately not
 quoted here: it has been wrong three times, always because it was written
 before the commit existed. Use `git log --oneline -5`.
+
+---
+
+## ✅ SHIPPED 2026-08-18 (later) — P10, area targeting, the AE's named rounds
+
+Live `53f07d57-3f3b-4dac-a7e8-9396c46c16f2`, JS byte-identical to `dist/`
+(885 581 bytes, sha256 `544a645b…`). Remote at **`0050`**. Three commits:
+`3e935b6` (0049), `4b75e1e` (0050), `180300a` (PIF rounds), plus `6263dc2`
+earlier in the day.
+
+### 🔴 P10 — the SRF demanded resumes and stored none of them (`0049`)
+
+The form has always asked for up to five role categories and **refused to submit
+without one resume per category** — and `submit_srf` wrote **neither**.
+`student_role_preferences` had been empty since 0003; the resume `File` was read
+to decide whether the upload box was non-empty and then dropped. So a student
+who had only ever filled in the SRF had **no resume on file and no recorded
+preference**, while `rankApplicants` scores role-preference match and R7
+promises the recruiter one resume per area. `/student/profile` quietly covered
+for it, which is why nobody reported it.
+
+`resumes: Record<RoleCategory, File>` replaces the old `resumeCategories`
+booleans; `uploadResumes` puts each in the `resumes` bucket under the student's
+own id; `0049` (arity 4 → 6, **old overload dropped**) writes both.
+
+Two rules in that write, each with a test:
+- a resubmission **keeps** a resume that was not re-uploaded (correcting one
+  line of a sent-back form must not strip a CV a recruiter is about to be sent);
+- it never touches a resume carrying a `drive_id` (0033) — that one **is** what
+  a recruiter was sent.
+
+⚠️ **Two permissions were missing.** `student_role_preferences` had no grant and
+no policy at all. And 0008 grants **no DELETE anywhere**, so replacing a resume
+needed one — but a bare grant would have been too wide, because
+`documents_write_self` is `for all`: DELETE would have let a student remove
+**marksheets a coordinator had already verified**. It is now split into
+insert/update policies plus a delete confined to their own profile resume.
+
+### A drive reaches the students who asked for that area (`0050`)
+
+The AE classifies the drive (PIF already had `role_category`); it reaches only
+students who chose that area, their per-area resume is picked automatically at
+apply time (`buildApplicationSnapshot` always did this — there was simply never
+a resume to pick), and a drive-specific upload still wins (F14).
+
+Enforced in **three** places, because a rule enforced in one has a way round it:
+the student's list, the publish audience count, and `0050`'s apply gate — plus
+0030's read policy, so it is not even listed.
+
+💡 **Two "no opinion" cases are deliberately not refusals**: a drive with no
+declared area, and a student with no recorded preference (every form submitted
+before 0049). Reading silence as refusal would have emptied the audience for the
+entire roster overnight, with nothing on screen to explain it.
+
+### 10th/12th targeting, and where each gate sits
+
+Columns have existed since 0004 and `evaluateEligibility` always read them —
+**nothing could ever set them**, so every drive silently declared none. Now on
+the publish screen (Karthik: the Central CPC sets them), seeded from the drive
+like the CGPA cutoff — opening a form on something other than what was fetched
+is how two live drives lost their declared 7.50 (P9).
+
+📌 **The shapes differ on purpose, mirroring the domain:** the **area** is a
+preference and sits BELOW the R5a override; the **marks bars** are eligibility
+and sit ABOVE it. An override is about placement history, never about whether a
+student meets the company's bar. A NULL percentage against a bar that is set is
+a refusal — "we do not know" cannot clear a threshold.
+
+### The AE names the rounds, and they become the drive's rounds
+
+F11 asked for a **count**: it told the Central CPC how many boxes to invent on
+another screen and told the student nothing, and **nothing connected the two** —
+a drive declared as three rounds could go live with none, and nobody could be
+advanced past round one. The PIF now collects a named, numbered list;
+`round_count` is derived from it; `pif-repository` writes the `drive_rounds`
+rows the publish screen already edits. A failed rounds insert is deliberately
+not fatal — PostgREST gives each write its own transaction, so the drive has
+already committed, and losing a whole PIF over its round list is worse.
+
+### Also shipped earlier the same day (`6263dc2`)
+
+- **One Drives sidebar for every non-student role** — Yet to publish · Live ·
+  Completed. No right moved: `canPublishDrive` / `canShortlistFromPortfolio` /
+  `canViewDriveApplicants` still decide what each role may do.
+- **"Open now"** on the application window. 🔴 The test caught a real defect:
+  "now" must be in the same wall-clock format as the field it replaces. As an
+  ISO-Z stamp it was string-compared against a `datetime-local` value — right by
+  luck in the morning, wrong by 5½ hours in the evening.
+- **Search on Drive progress** (campus CPC), sharing
+  `@components/drive-search` + `searchDrives` with the Live list.
+
+### 🔜 NEXT SESSION STARTS HERE — two screens, mockups first
+
+`docs/specs/2026-08-18-click-to-see-everything.md`. Every question in it is now
+**answered** (recorded at the top of this section's commits):
+
+1. **N7 — the student's four lists.** *Drives to apply* (time left) · *Drives in
+   progress* (current round) · **Not Applied-Closed** (closed, never applied) ·
+   **Applied-Closed** (applied, now closed). Search plus filters on **location,
+   role and closing time** — closing time SHOWN, not merely filterable.
+2. **N1 — click to see everything.** One canonical `/drives/:id` reached from
+   every list, and an applicant view that opens the **apply-time snapshot**, not
+   live data (confirmed).
+
+**Karthik's standing rule 2 applies: mockup before either is built.**
+
+### 🔴 Still open, and NOT smuggled into these migrations
+
+**Academic eligibility other than the 10th/12th bars is still not enforced
+server-side.** `enforce_application_gates` checks status, window, SRF approval,
+participation, campus, area, 10th, 12th, the internship cap and the ladder — but
+**not** the CGPA cutoff, degrees or branches. Those live in the UI and the
+audience count only. Adding the CGPA one is delicate: the mapping between
+`students.overall_cgpa` (which the SRF never writes) and the latest VERIFIED
+semester is exactly what caused the 2026-08-13 publish bug, and getting it wrong
+in a gate locks the whole cohort out. It wants its own migration and its own
+live proof.
 
 ---
 
