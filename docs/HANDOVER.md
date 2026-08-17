@@ -1,10 +1,10 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**2803 tests passing across 150 files**, plus **1 Playwright journey** — run,
+**2809 tests passing across 150 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
 gate. Remote is at **`0047`** (0046 and 0047 pushed this session); live Cloudflare
-version `478ec77f-b1f8-4c8d-9153-d62222b0a425`. Commit hash deliberately not
+version `ed484041-4522-4e94-8a91-267d84e03d82`. Commit hash deliberately not
 quoted here: it has been wrong three times, always because it was written
 before the commit existed. Use `git log --oneline -5`.
 
@@ -55,6 +55,16 @@ implemented and flagged at `src/domain/drive-portfolio.test.ts`. **Confirm it.**
   filters, search and CSV export. The Placed count on the overview links
   straight to `?filter=placed`.
 
+### Also shipped: Add students
+
+`/admin/roster` is now **"Add students"** (was "Import student roster"), with a
+**downloadable header-row template**. The importer refuses a file whose columns
+are not in the exact expected order, so retyping the header by hand was a
+failed import waiting to happen. The template is generated from
+`ROSTER_COLUMNS` and a test uploads it back through the parser, so it cannot
+drift. Headings only — an example row would get imported by whoever forgot to
+delete it.
+
 ### 🔜 NEXT SESSION STARTS HERE — the overview boxes are half-built
 
 `src/domain/placement-metrics.ts` is **written and green (29 tests)** but **not
@@ -68,9 +78,15 @@ yet wired to any screen**. It computes exactly what Karthik specified:
 Still to do: the two-row layout, moving the campus selector to the right and
 shrinking it, and making each box open the list behind its number.
 
-**⚠️ ASSUMPTION — UNCONFIRMED (A34):** "60% in graduation" is implemented as
-**CGPA ≥ 6.0** on the 10-point scale. Colleges convert differently (some ×9.5).
-One constant, `CGPA_BAR`. **Ask Karthik.**
+**✅ A34 CONFIRMED 2026-08-17:** "6.0 CGPA or 60% in marks is fine." The bar is
+settled; `CGPA_BAR` stays at 6.0.
+
+**✅ "Registered" CONFIRMED:** "students whose addition to the portal has been
+approved" — so it is **every student on the portal**, not the registration
+form. Only an Admin can add one, and the addition is the approval.
+
+**✅ The publish/approve contradiction CONFIRMED:** "your assumption about
+Central PC can only publish is correct."
 
 Good news on the data: `programme_level` and `ug_aggregate_cgpa` already exist,
 so "post-graduation as well if applicable" is genuinely computable — a PG
