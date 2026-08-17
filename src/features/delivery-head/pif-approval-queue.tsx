@@ -1,7 +1,13 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import type { OfferCategory } from "@domain/offer-category";
-import { classifyOfferCategory, OFFER_CATEGORIES } from "@domain/offer-category";
+import {
+  classifyOfferCategory,
+  DEFAULT_OFFER_CATEGORY_BANDS,
+  describeOfferCategoryBands,
+  OFFER_CATEGORIES,
+  offerCategoryLabel,
+} from "@domain/offer-category";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -22,11 +28,43 @@ import {
  * the real domain rule and remains the Delivery Head's to change - the screen
  * never re-implements the banding.
  */
-const CATEGORY_LABEL: Record<OfferCategory, string> = {
-  regular: "Regular",
-  dream: "Dream",
-  super_dream: "Super Dream",
-};
+/**
+ * The CTC bands, stated where the classification is made.
+ *
+ * Requested 2026-08-17 (Karthik). The dropdown was already pre-set from the
+ * CTC, but the rule behind the suggestion was nowhere on screen - so changing
+ * it was a guess, and §3.3 makes the result immutable. One banner for the
+ * screen, not one per card: the bands do not vary by PIF.
+ *
+ * The wording is derived from `DEFAULT_OFFER_CATEGORY_BANDS`, so retuning the
+ * bands retunes the sentence. It is guidance, not a lock - Q1 leaves the final
+ * call with the Delivery Head, and a banner that read as a rule would make a
+ * legitimate override feel like a violation.
+ */
+function CtcBandNote() {
+  const bands = describeOfferCategoryBands(DEFAULT_OFFER_CATEGORY_BANDS);
+
+  return (
+    <aside
+      role="note"
+      aria-label="CTC bands for offer categories"
+      className="mb-4 rounded-card border border-[#A46AFC] bg-[#A46AFC]/5 p-4"
+    >
+      <p className="text-sm font-semibold text-ink-900">How CTC maps to an offer category</p>
+      <ul className="mt-2 flex flex-col gap-1 text-sm text-ink-700">
+        {bands.map((band) => (
+          <li key={band.category}>
+            <strong>{band.label}</strong> — {band.range}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-ink-500">
+        Guidance only — the category below is suggested from the CTC and the final call is yours.
+        Band edges belong to the lower band, so ₹5 LPA is Regular and ₹5.01 LPA is Dream.
+      </p>
+    </aside>
+  );
+}
 
 export function PifApprovalQueue({ repository }: { repository?: ApprovalRepository }) {
   const [repo] = useState<ApprovalRepository>(
@@ -99,6 +137,10 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
         </Card>
       )}
 
+      {/* Stated before the queue: the rule has to be read before the click,
+          not after the classification is already immutable. */}
+      {rows !== null && rows.length > 0 && <CtcBandNote />}
+
       {rows === null ? (
         error === null ? (
           <p role="status" className="p-6 text-sm text-neutral-500">
@@ -152,9 +194,12 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                         }))
                       }
                     >
+                      {/* The banner above and this dropdown must not be able
+                          to call the same category different things, so both
+                          take their words from the domain. */}
                       {OFFER_CATEGORIES.map((c) => (
                         <option key={c} value={c}>
-                          {CATEGORY_LABEL[c]}
+                          {offerCategoryLabel(c)}
                         </option>
                       ))}
                     </select>

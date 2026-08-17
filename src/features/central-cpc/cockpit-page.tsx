@@ -1,5 +1,6 @@
 import { Badge, Card, PageHeader } from "@components/ui";
-import type { DriveStatus } from "@domain/types";
+import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
+import type { AppRole, DriveStatus } from "@domain/types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -81,10 +82,20 @@ const FILTERS: Record<
 export function CockpitPage({
   view,
   filter,
+  role,
 }: {
   view: CockpitView;
   filter?: CockpitFilter | undefined;
+  /**
+   * Decides which actions are offered, and nothing else. Required rather than
+   * defaulted: a permissive default is a permission granted by forgetfulness.
+   */
+  role: AppRole;
 }) {
+  // 2026-08-17 (Karthik): the AE views drive status and results; they neither
+  // publish nor shortlist. The domain owns both answers - this screen only asks.
+  const mayPublish = canPublishDrive(role);
+  const mayShortlist = canShortlistFromPortfolio(role);
   const [loaded, setLoaded] = useState<readonly DriveSummary[] | null>(null);
   const [reviews, setReviews] = useState<readonly DisbarmentReview[]>([]);
 
@@ -159,7 +170,7 @@ export function CockpitPage({
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-3 text-sm">
-                  {(drive.status === "approved" || drive.status === "draft") && (
+                  {mayPublish && (drive.status === "approved" || drive.status === "draft") && (
                     <Link
                       to={`/central/publish?drive=${drive.driveId}`}
                       className="font-medium text-brand-600 hover:underline"
@@ -168,16 +179,17 @@ export function CockpitPage({
                     </Link>
                   )}
 
-                  {(drive.status === "live" ||
-                    drive.status === "applications_closed" ||
-                    drive.status === "in_rounds") && (
-                    <Link
-                      to={`/central/shortlisting?drive=${drive.driveId}`}
-                      className="font-medium text-brand-600 hover:underline"
-                    >
-                      Shortlist applicants
-                    </Link>
-                  )}
+                  {mayShortlist &&
+                    (drive.status === "live" ||
+                      drive.status === "applications_closed" ||
+                      drive.status === "in_rounds") && (
+                      <Link
+                        to={`/central/shortlisting?drive=${drive.driveId}`}
+                        className="font-medium text-brand-600 hover:underline"
+                      >
+                        Shortlist applicants
+                      </Link>
+                    )}
 
                   {drive.rounds.map((round) => (
                     <Link

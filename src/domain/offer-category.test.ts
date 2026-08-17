@@ -3,6 +3,7 @@ import {
   classifyOfferCategory,
   compareOfferCategory,
   DEFAULT_OFFER_CATEGORY_BANDS,
+  describeOfferCategoryBands,
   offerCategoryRank,
 } from "./offer-category";
 
@@ -68,6 +69,55 @@ describe("offerCategoryRank", () => {
   it("ranks regular below dream below super_dream", () => {
     expect(offerCategoryRank("regular")).toBeLessThan(offerCategoryRank("dream"));
     expect(offerCategoryRank("dream")).toBeLessThan(offerCategoryRank("super_dream"));
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik): the Delivery Head classifies every drive and the
+ * classification is immutable afterwards (§3.3) — so the bands have to be on
+ * the screen at the moment of the click, not in a policy document.
+ *
+ * The prose is DERIVED from the bands rather than typed next to them. Bands
+ * are Admin-configurable; a hardcoded "up to ₹5 LPA" would start lying the
+ * first time anybody retunes them.
+ */
+describe("describeOfferCategoryBands", () => {
+  it("describes each band as a sentence a Delivery Head can act on", () => {
+    expect(describeOfferCategoryBands(DEFAULT_OFFER_CATEGORY_BANDS)).toEqual([
+      { category: "regular", label: "Regular", range: "up to ₹5 LPA" },
+      { category: "dream", label: "Dream", range: "above ₹5 LPA and up to ₹10 LPA" },
+      { category: "super_dream", label: "Super Dream", range: "above ₹10 LPA" },
+    ]);
+  });
+
+  it("follows the bands when they are retuned", () => {
+    expect(describeOfferCategoryBands({ regularMaxLpa: 4, dreamMaxLpa: 8 })).toEqual([
+      { category: "regular", label: "Regular", range: "up to ₹4 LPA" },
+      { category: "dream", label: "Dream", range: "above ₹4 LPA and up to ₹8 LPA" },
+      { category: "super_dream", label: "Super Dream", range: "above ₹8 LPA" },
+    ]);
+  });
+
+  /** Keeps decimals rather than rounding them away: ₹7.5 LPA is a real band edge. */
+  it("keeps fractional band edges intact", () => {
+    const [regular] = describeOfferCategoryBands({ regularMaxLpa: 4.5, dreamMaxLpa: 9 });
+    expect(regular?.range).toBe("up to ₹4.5 LPA");
+  });
+
+  /** The same guard classifyOfferCategory applies: a description of nonsense bands is worse than none. */
+  it("refuses bands that do not ascend", () => {
+    expect(() => describeOfferCategoryBands({ regularMaxLpa: 10, dreamMaxLpa: 5 })).toThrow(
+      RangeError,
+    );
+  });
+
+  /** The boundary the prose claims must be the boundary the classifier enforces. */
+  it("agrees with classifyOfferCategory at every boundary", () => {
+    const bands = DEFAULT_OFFER_CATEGORY_BANDS;
+    expect(classifyOfferCategory(bands.regularMaxLpa, bands)).toBe("regular");
+    expect(classifyOfferCategory(bands.regularMaxLpa + 0.01, bands)).toBe("dream");
+    expect(classifyOfferCategory(bands.dreamMaxLpa, bands)).toBe("dream");
+    expect(classifyOfferCategory(bands.dreamMaxLpa + 0.01, bands)).toBe("super_dream");
   });
 });
 

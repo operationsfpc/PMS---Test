@@ -30,6 +30,26 @@ export function canShortlistFromPortfolio(role: AppRole): boolean {
   return role === "central_placement_coordinator" || role === "campus_placement_coordinator";
 }
 
+/**
+ * Who may publish a drive. 2026-08-17 (Karthik).
+ *
+ * "The AE should only be able to view the students shortlisted or selected or
+ * their drive status and results. They should not be able to publish drives or
+ * shortlist students."
+ *
+ * Publishing is the act that makes a drive visible to students and opens the
+ * application window (PRD §12). It is deliberately NOT the same person who
+ * raised the PIF: the AE speaks for the recruiter, and the separation between
+ * "the client asked for this" and "our students were told about it" is the
+ * whole point of the Central CPC sitting in the middle.
+ *
+ * The Delivery Head approves the commercials and is excluded for the same
+ * reason — approval is not announcement.
+ */
+export function canPublishDrive(role: AppRole): boolean {
+  return role === "central_placement_coordinator";
+}
+
 export type DriveRole = "raised" | "approved" | "published";
 
 export interface DriveOwnership {

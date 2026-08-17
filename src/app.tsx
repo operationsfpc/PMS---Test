@@ -1,4 +1,5 @@
 import { AppShell } from "@components/app-shell";
+import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import { AdminCampusRoute } from "@features/admin/campus-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
@@ -43,6 +44,48 @@ function CampusCpcOnly({ children }: { children: ReactNode }) {
       <p className="p-8 text-sm text-ink-700">
         This queue belongs to the campus placement coordinator. Registration forms and certificates
         are verified at the campus, not centrally.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+/**
+ * 2026-08-17 (Karthik): "the AE should only be able to view the students
+ * shortlisted or selected or their drive status and results. They should not
+ * be able to publish drives or shortlist students."
+ *
+ * Taking the links out of the sidebar is presentation, not access control: a
+ * bookmark from before the change still resolves. These shut the door, and
+ * they ask the domain who may come through rather than listing roles again.
+ */
+function ShortlistersOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && !canShortlistFromPortfolio(role)) {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        Shortlisting belongs to the placement coordinators. Choosing which students a recruiter sees
+        is their decision — you can follow this drive, and its results, under “My drives”.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+/** Publishing announces a drive to students. Central CPC only — see `canPublishDrive`. */
+function PublishersOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && !canPublishDrive(role)) {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        Publishing a drive belongs to the central placement coordinator. Raising and approving a
+        drive is not the same as announcing it to students.
       </p>
     );
   }
@@ -111,7 +154,14 @@ export function App() {
                 <Route path="/ae/pif" element={<PifPage />} />
                 <Route path="/my-drives" element={<DrivePortfolioRoute />} />
                 <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
-                <Route path="/central/shortlisting" element={<ShortlistRoute />} />
+                <Route
+                  path="/central/shortlisting"
+                  element={
+                    <ShortlistersOnly>
+                      <ShortlistRoute />
+                    </ShortlistersOnly>
+                  }
+                />
                 {/* PRD §5: the Central Student Skill Repository. */}
                 <Route path="/central/skills" element={<SkillsRoute />} />
                 <Route path="/central/drives" element={<CockpitRoute />} />
@@ -124,7 +174,14 @@ export function App() {
                   path="/central/drives/published"
                   element={<CockpitRoute filter="published" />}
                 />
-                <Route path="/central/publish" element={<PublishRoute />} />
+                <Route
+                  path="/central/publish"
+                  element={
+                    <PublishersOnly>
+                      <PublishRoute />
+                    </PublishersOnly>
+                  }
+                />
                 <Route path="/central/results" element={<ResultsRoute />} />
                 <Route path="/central/offers" element={<OfferRoute />} />
               </Routes>

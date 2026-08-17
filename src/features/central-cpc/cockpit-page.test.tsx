@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import type { AppRole } from "@domain/types";
 import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -45,17 +47,20 @@ const IN_ROUNDS: DriveSummary = {
   ],
 };
 
-const routed = (view: CockpitView) =>
+/** Bound to a name so Biome does not read the prop as an ARIA `role` attribute. */
+const CENTRAL_CPC: AppRole = "central_placement_coordinator";
+
+const routed = (view: CockpitView, role: AppRole = CENTRAL_CPC) =>
   render(
     <MemoryRouter>
-      <CockpitPage view={view} />
+      <CockpitPage view={view} role={role} />
     </MemoryRouter>,
   );
 
 const routed2 = (view: CockpitView, filter: "yet-to-publish" | "published") =>
   render(
     <MemoryRouter>
-      <CockpitPage view={view} filter={filter} />
+      <CockpitPage view={view} filter={filter} role={CENTRAL_CPC} />
     </MemoryRouter>,
   );
 
@@ -178,6 +183,7 @@ describe("disbarment reviews", () => {
               { studentId: "s1", studentName: "Arjun Menon", rollNumber: "21CSE9001", absences: 3 },
             ],
           }}
+          role={CENTRAL_CPC}
         />
       </MemoryRouter>,
     );
@@ -196,6 +202,7 @@ describe("disbarment reviews", () => {
               { studentId: "s1", studentName: "Arjun Menon", rollNumber: "21CSE9001", absences: 4 },
             ],
           }}
+          role={CENTRAL_CPC}
         />
       </MemoryRouter>,
     );
@@ -207,11 +214,57 @@ describe("disbarment reviews", () => {
   it("shows nothing when nobody has reached the limit", async () => {
     render(
       <MemoryRouter>
-        <CockpitPage view={{ drives: async () => [], reviews: async () => [] }} />
+        <CockpitPage
+          view={{ drives: async () => [], reviews: async () => [] }}
+          role={CENTRAL_CPC}
+        />
       </MemoryRouter>,
     );
 
     await screen.findByText(/no drives yet/i);
     expect(screen.queryByText(/needs review/i)).toBeNull();
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik): "the AE should only be able to view the students
+ * shortlisted or selected or their drive status and results. They should not
+ * be able to publish drives or shortlist students."
+ *
+ * The cockpit is defence in depth. The AE's sidebar no longer reaches it, but
+ * a bookmark or a pasted URL still does, and a screen that renders the actions
+ * anyway is a screen that invites the click. Who may act is the domain's
+ * answer (`canPublishDrive` / `canShortlistFromPortfolio`), never a prop
+ * somebody remembers to pass.
+ */
+describe("the cockpit's actions are role-gated", () => {
+  it("offers the Central Placement Coordinator both actions", async () => {
+    routed(view([APPROVED, LIVE]), "central_placement_coordinator");
+    await screen.findByText("Zoho");
+    expect(screen.getByRole("link", { name: /publish/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /shortlist/i })).toBeDefined();
+  });
+
+  it("offers an Account Executive neither", async () => {
+    routed(view([APPROVED, LIVE]), "account_executive");
+    await screen.findByText("Zoho");
+    expect(screen.queryByRole("link", { name: /publish/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /shortlist/i })).toBeNull();
+  });
+
+  /** Read-only is not the same as blank: the drives, and their status, remain. */
+  it("still shows an Account Executive the drives and their status", async () => {
+    routed(view([APPROVED, LIVE]), "account_executive");
+    expect(await screen.findByText("Zoho")).toBeDefined();
+    expect(screen.getByText("Freshworks")).toBeDefined();
+    expect(screen.getByText("live")).toBeDefined();
+  });
+
+  /** Approving the commercials is not publishing them. */
+  it("offers the Delivery Head neither action", async () => {
+    routed(view([APPROVED, LIVE]), "delivery_head");
+    await screen.findByText("Zoho");
+    expect(screen.queryByRole("link", { name: /publish/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /shortlist/i })).toBeNull();
   });
 });

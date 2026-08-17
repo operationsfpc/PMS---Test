@@ -65,3 +65,67 @@ export function classifyOfferCategory(
   if (ctcLpa <= bands.dreamMaxLpa) return "dream";
   return "super_dream";
 }
+
+/** One band, in words. */
+export interface OfferCategoryBandDescription {
+  readonly category: OfferCategory;
+  readonly label: string;
+  /** e.g. "above ₹5 LPA and up to ₹10 LPA". */
+  readonly range: string;
+}
+
+const CATEGORY_LABEL: Readonly<Record<OfferCategory, string>> = {
+  regular: "Regular",
+  dream: "Dream",
+  super_dream: "Super Dream",
+};
+
+/** Human label for a category. One spelling, so no two screens disagree. */
+export function offerCategoryLabel(category: OfferCategory): string {
+  return CATEGORY_LABEL[category];
+}
+
+/** `5` → "₹5 LPA"; `4.5` → "₹4.5 LPA". No trailing zeros, no lost decimals. */
+const lpa = (value: number) => `₹${value} LPA`;
+
+/**
+ * The bands as prose, for the screen where the Delivery Head classifies a
+ * drive (§17.5). Requested 2026-08-17: the classification is immutable once
+ * saved (§3.3), so the rule has to be visible at the moment of the decision.
+ *
+ * Derived from the bands, never typed alongside them — bands are
+ * Admin-configurable, and a hardcoded sentence would start lying the first
+ * time anyone retunes them. The boundary wording matches
+ * `classifyOfferCategory` exactly: the lower band owns its upper edge, so
+ * ₹5.00 LPA is Regular and ₹5.01 LPA is Dream.
+ *
+ * @throws if the bands do not ascend.
+ */
+export function describeOfferCategoryBands(
+  bands: OfferCategoryBands = DEFAULT_OFFER_CATEGORY_BANDS,
+): readonly OfferCategoryBandDescription[] {
+  if (bands.regularMaxLpa >= bands.dreamMaxLpa) {
+    throw new RangeError(
+      `Offer category bands must ascend: regularMaxLpa (${bands.regularMaxLpa}) ` +
+        `must be less than dreamMaxLpa (${bands.dreamMaxLpa})`,
+    );
+  }
+
+  return [
+    {
+      category: "regular",
+      label: CATEGORY_LABEL.regular,
+      range: `up to ${lpa(bands.regularMaxLpa)}`,
+    },
+    {
+      category: "dream",
+      label: CATEGORY_LABEL.dream,
+      range: `above ${lpa(bands.regularMaxLpa)} and up to ${lpa(bands.dreamMaxLpa)}`,
+    },
+    {
+      category: "super_dream",
+      label: CATEGORY_LABEL.super_dream,
+      range: `above ${lpa(bands.dreamMaxLpa)}`,
+    },
+  ];
+}

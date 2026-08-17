@@ -76,7 +76,17 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     },
     { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
   ],
-  // The AE follows the drives they raised; RLS scopes the cockpit to those.
+  /**
+   * The AE raises drives and then watches them. 2026-08-17 (Karthik): "the AE
+   * should only be able to view the students shortlisted or selected or their
+   * drive status and results. They should not be able to publish drives or
+   * shortlist students."
+   *
+   * The drive cockpit was removed from here: it is a work queue whose work is
+   * publishing and shortlisting, so offering it offered both. `/my-drives`
+   * answers every question the AE actually has - status, applicants, who was
+   * shortlisted, who was selected - and answers it read-only.
+   */
   account_executive: [
     {
       heading: "Drive initiation",
@@ -84,10 +94,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     },
     {
       heading: "My drives",
-      items: [
-        { to: "/my-drives", label: "My drives" },
-        { to: "/central/drives", label: "Drive cockpit" },
-      ],
+      items: [{ to: "/my-drives", label: "My drives" }],
     },
   ],
   campus_manager: [

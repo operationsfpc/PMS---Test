@@ -219,9 +219,10 @@ export function ShortlistPage({
       />
 
       <p className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-ink-700">
-        Ranking and rationale are internal and are <strong>never shown to students</strong>. The
-        ranking is advisory — your selection is what is recorded. Saving{" "}
-        <strong>notifies the shortlisted students</strong> and{" "}
+        Ranking and rationale are internal and are <strong>never shown to students</strong>. The{" "}
+        <strong>match score</strong> is out of 100 — it weighs CGPA, the skills this role requires,
+        arrears and whether the student asked for this kind of role. It is advisory: your selection
+        is what is recorded. Saving <strong>notifies the shortlisted students</strong> and{" "}
         <strong>schedules them for Round 1</strong>.
       </p>
 
@@ -286,7 +287,11 @@ export function ShortlistPage({
               const blocked = applicant?.optedOut === true;
               const overridden = overrides[candidate.applicationId] !== undefined;
               return (
-                <li key={candidate.applicationId} className="flex items-start gap-4 p-4">
+                <li
+                  key={candidate.applicationId}
+                  aria-label={candidate.studentName}
+                  className="flex items-start gap-4 p-4"
+                >
                   {blocked && !overridden ? (
                     <span className="mt-1 w-4 text-center text-ink-300" aria-hidden="true">
                       –
@@ -357,9 +362,24 @@ export function ShortlistPage({
                       ))}
                     </ul>
                   </div>
-                  <span className="shrink-0 text-lg font-semibold text-brand-600">
-                    {candidate.score}
-                  </span>
+                  {/*
+                   * 2026-08-17 (Karthik): "what is the number 15? ... it is not
+                   * referring to anything else." It was this score, printed bare.
+                   * A numeral with no label and no scale is not information - the
+                   * reader cannot tell a score from a rank from a count. The
+                   * value never changed; the screen just started saying what it
+                   * is and what it is out of.
+                   */}
+                  <figure
+                    aria-label={`Match score for ${candidate.studentName}`}
+                    className="m-0 shrink-0 text-right"
+                  >
+                    <figcaption className="text-[11px] font-medium uppercase tracking-wide text-ink-400">
+                      Match score
+                    </figcaption>
+                    <span className="text-lg font-semibold text-brand-600">{candidate.score}</span>
+                    <span className="text-xs text-ink-400"> / 100</span>
+                  </figure>
                 </li>
               );
             })}

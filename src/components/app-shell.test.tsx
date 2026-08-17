@@ -79,9 +79,31 @@ describe("the drive cockpit", () => {
     expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
   });
 
-  it("is offered to the Account Executive, who raises them", () => {
+  /**
+   * SPEC CHANGE 2026-08-17 (Karthik): "the AE should only be able to view the
+   * students shortlisted or selected or their drive status and results. They
+   * should not be able to publish drives or shortlist students."
+   *
+   * The cockpit is a work queue, and its work is publishing and shortlisting.
+   * Offering it to the AE offered both. Their read-only view of the same
+   * drives is the portfolio at /my-drives, which is still in their sidebar.
+   */
+  it("is no longer offered to the Account Executive, whose access is read-only", () => {
     shellFor(signedIn("account_executive"));
-    expect(screen.getByRole("link", { name: /drive cockpit/i })).toBeDefined();
+    expect(screen.queryByRole("link", { name: /drive cockpit/i })).toBeNull();
+  });
+
+  it("leaves the Account Executive their read-only portfolio instead", () => {
+    shellFor(signedIn("account_executive"));
+    expect(screen.getByRole("link", { name: /my drives/i })).toBeDefined();
+  });
+
+  /** Nothing in the AE's sidebar may reach publishing or shortlisting. */
+  it("offers the Account Executive no route to publishing or shortlisting", () => {
+    shellFor(signedIn("account_executive"));
+    for (const link of screen.getAllByRole("link")) {
+      expect(link.getAttribute("href")).not.toMatch(/publish|shortlist/i);
+    }
   });
 
   it("is still not offered to a student", () => {

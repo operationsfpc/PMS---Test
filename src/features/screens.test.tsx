@@ -4,7 +4,7 @@ import { AppShell } from "@components/app-shell";
 import type { AppRole } from "@domain/types";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -176,6 +176,88 @@ describe("PifApprovalQueue", () => {
   it("surfaces an on-hold PIF", async () => {
     routed(<PifApprovalQueue repository={stub} />);
     expect((await screen.findAllByText(/on hold/i)).length).toBeGreaterThan(0);
+  });
+
+  /**
+   * 2026-08-17 (Karthik): "in the place where the delivery head selects a
+   * drive as regular/Dream/Super dream, display an alert message saying that
+   * up to 5L CTC are Regular offers, 5 up to 10L are Dream and 10L+ CTC are
+   * Super dream offers."
+   *
+   * The dropdown was pre-set from the CTC and could be overridden, but the
+   * rule behind the suggestion was nowhere on screen — so an override was a
+   * guess. §3.3 makes the classification immutable once saved, which makes
+   * this the one moment the bands have to be readable.
+   */
+  it("states the CTC bands where the category is chosen", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    const note = await screen.findByRole("note", { name: /ctc bands/i });
+
+    expect(within(note).getByText("Regular")).toBeDefined();
+    expect(within(note).getByText("Dream")).toBeDefined();
+    expect(within(note).getByText("Super Dream")).toBeDefined();
+    expect(note.textContent).toMatch(/up to ₹5 LPA/i);
+    expect(note.textContent).toMatch(/above ₹5 LPA and up to ₹10 LPA/i);
+    expect(note.textContent).toMatch(/above ₹10 LPA/i);
+  });
+
+  /**
+   * Guidance, not a lock. Q1 gives the Delivery Head the final call, and a
+   * banner that read as a rule would make an override feel like a violation.
+   */
+  it("presents the bands as guidance the Delivery Head may override", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    const note = await screen.findByRole("note", { name: /ctc bands/i });
+    expect(note.textContent).toMatch(/guidance|yours|override/i);
+  });
+
+  /** One banner for the screen, not one per card: the bands do not vary by PIF. */
+  it("states the bands once, however many PIFs are queued", async () => {
+    routed(<PifApprovalQueue repository={stub} />);
+    await screen.findByRole("note", { name: /ctc bands/i });
+    expect(screen.getAllByRole("note", { name: /ctc bands/i })).toHaveLength(1);
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik): "They should not be able to publish drives or
+ * shortlist students."
+ *
+ * The sidebar no longer offers the AE either screen, but a bookmark from
+ * before this change still resolves. Removing a link is not access control —
+ * the door has to be shut too.
+ */
+describe("publishing and shortlisting refuse the Account Executive at the door", () => {
+  const at = (path: string, role: AppRole) =>
+    render(
+      <AuthContext.Provider value={signedIn(role)}>
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+
+  it("turns the AE away from shortlisting", async () => {
+    at("/central/shortlisting?drive=d1", "account_executive");
+    expect(await screen.findByText(/belongs to the placement coordinators/i)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^shortlist/i })).toBeNull();
+  });
+
+  it("turns the AE away from publishing", async () => {
+    at("/central/publish?drive=d1", "account_executive");
+    expect(await screen.findByText(/belongs to the central placement coordinator/i)).toBeDefined();
+  });
+
+  /** The Delivery Head approves the commercials; announcing them is not theirs either. */
+  it("turns the Delivery Head away from publishing", async () => {
+    at("/central/publish?drive=d1", "delivery_head");
+    expect(await screen.findByText(/belongs to the central placement coordinator/i)).toBeDefined();
+  });
+
+  it("still lets the Central Placement Coordinator through to shortlisting", async () => {
+    at("/central/shortlisting?drive=d1", "central_placement_coordinator");
+    expect(await screen.findByRole("heading", { name: /shortlisting/i })).toBeDefined();
+    expect(screen.queryByText(/belongs to the placement coordinators/i)).toBeNull();
   });
 });
 

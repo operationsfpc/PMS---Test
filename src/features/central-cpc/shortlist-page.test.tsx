@@ -402,3 +402,50 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(/R9/);
   });
 });
+
+/**
+ * 2026-08-17 (Karthik): "what is the number 15? I see that in a lot of places
+ * while shortlisting students. It is not clickable. It is not referring to
+ * anything else."
+ *
+ * It was `rankApplicants`' weighted score, rendered as a bare numeral in the
+ * corner of every row. A number with no unit and no label is not information:
+ * 15 could have been a rank, a count of applicants, an ID or a percentage, and
+ * the coordinator had no way to tell which. The value was right; the screen
+ * simply never said what it was.
+ */
+describe("the match score says what it is", () => {
+  it("labels the score and shows the scale it is out of", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    const row = await screen.findByRole("listitem", { name: /strong candidate/i });
+    const score = within(row).getByRole("figure", { name: /match score/i });
+
+    // The scale is the point: 15 alone is meaningless, "15 / 100" is not.
+    expect(score.textContent).toMatch(/\/\s*100/);
+    expect(score.textContent).toMatch(/match score/i);
+  });
+
+  it("still shows the score the domain calculated, unrounded and unaltered", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    const row = await screen.findByRole("listitem", { name: /weak candidate/i });
+    // CGPA 6/10 -> 24, no skill score -> 0, standing arrears -> 0, role not
+    // preferred -> 0. The screen must report the domain's arithmetic, not its own.
+    expect(within(row).getByRole("figure", { name: /match score/i }).textContent).toMatch(
+      /24\s*\/\s*100/,
+    );
+  });
+
+  /** The explanation of the number belongs next to the number. */
+  it("explains what the score is for, without implying it is a decision", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+    await screen.findByText(/strong candidate/i);
+
+    const note = screen.getByText(/never shown to students/i).closest("p");
+    expect(note?.textContent).toMatch(/match score/i);
+    expect(note?.textContent).toMatch(/out of 100/i);
+    // Advisory, not a verdict: the tick is the decision, the number is input to it.
+    expect(note?.textContent).toMatch(/advisory/i);
+  });
+});

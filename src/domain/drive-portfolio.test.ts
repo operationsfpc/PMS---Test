@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type ApplicantFacts,
+  canPublishDrive,
   canShortlistFromPortfolio,
   driveProgress,
   involvementIn,
@@ -227,5 +228,36 @@ describe("canShortlistFromPortfolio", () => {
   /** The campus coordinator shortlists their own campus's applicants (§13.1). */
   it("lets the campus coordinator shortlist", () => {
     expect(canShortlistFromPortfolio("campus_placement_coordinator")).toBe(true);
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik): "the AE should only be able to view the students
+ * shortlisted or selected or their drive status and results. They should not
+ * be able to publish drives or shortlist students."
+ *
+ * Publishing is what makes a drive visible to students and opens applications
+ * (PRD §12). The AE is the recruiter's contact and raised the PIF; letting the
+ * same person publish removes the only separation between "the client wants
+ * this" and "our students are told about it".
+ */
+describe("canPublishDrive", () => {
+  it("lets the Central Placement Coordinator publish", () => {
+    expect(canPublishDrive("central_placement_coordinator")).toBe(true);
+  });
+
+  it("does not let the Account Executive publish the drive they raised", () => {
+    expect(canPublishDrive("account_executive")).toBe(false);
+  });
+
+  /** Approving the commercials is not the same as announcing the drive. */
+  it("does not let the Delivery Head publish", () => {
+    expect(canPublishDrive("delivery_head")).toBe(false);
+  });
+
+  it("lets nobody else near it", () => {
+    for (const role of APP_ROLES.filter((r) => r !== "central_placement_coordinator")) {
+      expect(canPublishDrive(role)).toBe(false);
+    }
   });
 });
