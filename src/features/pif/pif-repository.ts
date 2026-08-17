@@ -68,7 +68,8 @@ function toRow(values: PifFormValues, actorId: string, status: "draft" | "submit
     additional_designations: values.additionalDesignations ?? [],
     // F11: read back by the Central CPC's publish screen, which used to ask
     // them to remember the round list.
-    round_count: values.roundCount ?? null,
+    // Derived, never asked for twice: the list IS the count.
+    round_count: (values.rounds ?? []).length === 0 ? null : (values.rounds ?? []).length,
 
     status,
     created_by: actorId,
@@ -132,7 +133,35 @@ export function createSupabasePifRepository(
       throw new PifError(explain(error), { cause: error });
     }
 
-    return { id: data.id as string, status: data.status as string };
+    const driveId = data.id as string;
+
+    /**
+     * The rounds the AE was told about, written as the drive's own rounds
+     * (2026-08-18): "the drive round shown in PIF should get auto populated in
+     * drives shown in live/published drives with an ability to be edited."
+     *
+     * Before this the AE stated a COUNT and the Central CPC created the rounds
+     * by hand on another screen - so a drive declared as three rounds could go
+     * live with none, and nobody could be advanced past round one.
+     *
+     * A failure here is deliberately NOT fatal. The drive is the thing worth
+     * keeping: the AE can see it, the Central CPC completes it, and the publish
+     * screen shows exactly the rounds that exist. Losing a whole PIF over its
+     * round list would be the worse outcome, and PostgREST gives each write its
+     * own transaction anyway, so the insert above has already committed.
+     */
+    const rounds = values.rounds ?? [];
+    if (rounds.length > 0) {
+      await client.from("drive_rounds").insert(
+        rounds.map((round) => ({
+          drive_id: driveId,
+          sequence: round.sequence,
+          name: round.name.trim(),
+        })),
+      );
+    }
+
+    return { id: driveId, status: data.status as string };
   }
 
   return {

@@ -223,8 +223,17 @@ describe("createSupabasePifRepository — eligibility scale and rounds", () => {
     expect(body.min_overall_marks).toBeNull();
   });
 
-  it("carries the number of rounds through to the drive", async () => {
-    const body = await capture({ ...values, roundCount: 4 });
+  /** The list IS the count now, so the two cannot disagree. */
+  it("derives the round count from the rounds the AE named", async () => {
+    const body = await capture({
+      ...values,
+      rounds: [
+        { sequence: 1, name: "Aptitude test" },
+        { sequence: 2, name: "Technical interview" },
+        { sequence: 3, name: "HR" },
+        { sequence: 4, name: "Offer discussion" },
+      ],
+    });
 
     expect(body.round_count).toBe(4);
   });
@@ -236,5 +245,96 @@ describe("createSupabasePifRepository — eligibility scale and rounds", () => {
     });
 
     expect(body.additional_designations).toEqual(["Associate Engineer", "Trainee Engineer"]);
+  });
+});
+
+/**
+ * The AE's named rounds become the drive's rounds (2026-08-18).
+ *
+ * "the drive round shown in PIF should get auto populated in drives shown in
+ * live/published drives with an ability to be edited. these are logical rounds
+ * to which students can progress."
+ *
+ * Before this, the AE stated a count and the Central CPC created the rounds by
+ * hand on a different screen - so a drive declared as three rounds could go
+ * live with none, and nobody could be advanced past round one.
+ */
+describe("createSupabasePifRepository — the rounds reach the drive", () => {
+  const ACTOR = AE;
+
+  /** MSW standing in for both writes: the drive, then its rounds. */
+  const clientCapturing = ({
+    rounds,
+    failRounds = false,
+  }: {
+    rounds: Array<Record<string, unknown>>;
+    failRounds?: boolean;
+  }) => {
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json({ id: "drive-1", status: "submitted" }),
+      ),
+      http.post(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
+        if (failRounds) {
+          return HttpResponse.json({ message: "nope", code: "42501" }, { status: 403 });
+        }
+        const body = (await request.json()) as
+          | Record<string, unknown>
+          | Array<Record<string, unknown>>;
+        rounds.push(...(Array.isArray(body) ? body : [body]));
+        return HttpResponse.json([]);
+      }),
+    );
+
+    return createClient(BASE, "anon-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  };
+
+  it("writes one drive_round per round the AE named, in order", async () => {
+    const rounds: Array<Record<string, unknown>> = [];
+    const client = clientCapturing({ rounds });
+
+    await createSupabasePifRepository(client, async () => ACTOR).submit({
+      ...values,
+      rounds: [
+        { sequence: 1, name: "Aptitude test" },
+        { sequence: 2, name: "Technical interview" },
+      ],
+    });
+
+    expect(rounds).toEqual([
+      { drive_id: "drive-1", sequence: 1, name: "Aptitude test" },
+      { drive_id: "drive-1", sequence: 2, name: "Technical interview" },
+    ]);
+  });
+
+  it("writes none when a draft has none yet", async () => {
+    const rounds: Array<Record<string, unknown>> = [];
+    const client = clientCapturing({ rounds });
+
+    await createSupabasePifRepository(client, async () => ACTOR).saveDraft({
+      ...values,
+      rounds: [],
+    });
+
+    expect(rounds).toEqual([]);
+  });
+
+  /**
+   * The drive is the thing that matters. A rounds insert that fails leaves a
+   * PIF the AE can see and the Central CPC can complete - losing the whole
+   * submission over it would be worse, and the publish screen shows what is
+   * there.
+   */
+  it("does not lose the PIF when the rounds cannot be written", async () => {
+    const client = clientCapturing({ rounds: [], failRounds: true });
+
+    await expect(
+      createSupabasePifRepository(client, async () => ACTOR).submit({
+        ...values,
+        rounds: [{ sequence: 1, name: "Aptitude test" }],
+      }),
+    ).resolves.toMatchObject({ id: "drive-1" });
   });
 });

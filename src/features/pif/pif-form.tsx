@@ -111,6 +111,8 @@ export function PifForm({
     register,
     control: formControl,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<PifFormValues>({
     defaultValues: { ...PIF_DEFAULTS },
@@ -181,6 +183,9 @@ export function PifForm({
     setValueAs: (v: unknown) => (v === "" || v === null || v === undefined ? null : Number(v)),
   };
   const err = (k: keyof PifFormValues) => errors[k]?.message as string | undefined;
+
+  /** The named rounds (2026-08-18). Numbered by position, like the semesters. */
+  const rounds = watch("rounds") ?? [];
 
   return (
     <>
@@ -452,18 +457,81 @@ export function PifForm({
               </select>
             )}
           </Labelled>
-          {/* F11: the Central CPC was typing the round list from an email. */}
-          <Labelled label="Number of rounds" error={err("roundCount")}>
-            {(id) => (
-              <input
-                id={id}
-                type="number"
-                min="1"
-                className={control}
-                {...register("roundCount", numeric)}
-              />
+          {/*
+           * The rounds, named and numbered (2026-08-18). F11 asked the AE for a
+           * COUNT, which told the Central CPC how many boxes to invent and told
+           * the student nothing - nobody can prepare for "Round 2". The AE heard
+           * the process from the company, so the names are theirs to record, and
+           * they are carried onto the drive at publish.
+           */}
+          <div className="sm:col-span-2">
+            <p className="mb-1.5 text-sm font-medium text-ink-700">Rounds in the process</p>
+            <p className="mb-3 text-xs text-ink-500">
+              In order — e.g. Round 1 Aptitude test, Round 2 Technical interview.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              {rounds.map((round, index) => (
+                <div key={round.sequence} className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-56 flex-1">
+                    <Labelled label={`Round ${round.sequence} name`}>
+                      {(id) => (
+                        <input
+                          id={id}
+                          className={control}
+                          value={round.name}
+                          onChange={(e) =>
+                            setValue(
+                              "rounds",
+                              rounds.map((r, i) =>
+                                i === index ? { ...r, name: e.target.value } : r,
+                              ),
+                              { shouldValidate: true },
+                            )
+                          }
+                        />
+                      )}
+                    </Labelled>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove round ${round.sequence}`}
+                    onClick={() =>
+                      setValue(
+                        "rounds",
+                        // Numbers are positional, so close the gap - the same
+                        // rule the semester lines follow.
+                        rounds
+                          .filter((_, i) => i !== index)
+                          .map((r, i) => ({ ...r, sequence: i + 1 })),
+                        { shouldValidate: true },
+                      )
+                    }
+                    className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-danger-700 hover:bg-danger-50"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setValue("rounds", [...rounds, { sequence: rounds.length + 1, name: "" }], {
+                  shouldValidate: true,
+                })
+              }
+              className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2 text-sm font-semibold text-brand-500 hover:bg-brand-50"
+            >
+              Add round
+            </button>
+            {err("rounds") !== undefined && (
+              <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
+                {err("rounds")}
+              </p>
             )}
-          </Labelled>
+          </div>
           <Labelled label="Tentative drive date" error={err("tentativeDate")}>
             {(id) => (
               <input id={id} type="date" className={control} {...register("tentativeDate")} />

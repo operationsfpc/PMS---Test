@@ -30,7 +30,11 @@ const complete = {
   arrearsPolicy: "no_standing",
   eligiblePassingYears: [2027],
   driveMode: "on_campus",
-  roundCount: 3,
+  rounds: [
+    { sequence: 1, name: "Aptitude test" },
+    { sequence: 2, name: "Technical interview" },
+    { sequence: 3, name: "HR" },
+  ],
 };
 
 describe("pifDraftSchema", () => {
@@ -165,17 +169,29 @@ describe("pifSubmitSchema", () => {
    *
    * The Central CPC was typing the round list from memory, or from an email.
    */
-  it("requires the number of rounds before the PIF may be submitted", () => {
-    expect(pifSubmitSchema.safeParse({ ...complete, roundCount: null }).success).toBe(false);
+  /**
+   * SPEC CHANGE 2026-08-18: the AE NAMES the rounds rather than counting them.
+   * "AE name them on the PIF with Round Number - Round 1 - Aptitude Test;
+   * Round 2 - Interview" - they are the logical rounds a student progresses
+   * through, and "Round 2" is not something anyone can prepare for.
+   */
+  it("requires the rounds before the PIF may be submitted", () => {
+    expect(pifSubmitSchema.safeParse({ ...complete, rounds: [] }).success).toBe(false);
   });
 
-  it("refuses a selection process with no rounds in it", () => {
-    expect(pifSubmitSchema.safeParse({ ...complete, roundCount: 0 }).success).toBe(false);
+  it("refuses a round nobody has named", () => {
+    const parsed = pifSubmitSchema.safeParse({
+      ...complete,
+      rounds: [{ sequence: 1, name: "  " }],
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.success ? "" : parsed.error.issues[0]?.message).toMatch(/name every round/i);
   });
 
   it("lets a draft be saved before the rounds are known", () => {
     expect(
-      pifDraftSchema.safeParse({ ...PIF_DEFAULTS, companyName: "Zoho", roundCount: null }).success,
+      pifDraftSchema.safeParse({ ...PIF_DEFAULTS, companyName: "Zoho", rounds: [] }).success,
     ).toBe(true);
   });
 

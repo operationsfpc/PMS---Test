@@ -70,7 +70,8 @@ export const PIF_DEFAULTS = {
   timelineNotes: "",
   driveType: "",
   additionalDesignations: [] as string[],
-  roundCount: null,
+  // Typed, not inferred as `readonly []`: RHF needs a mutable array shape.
+  rounds: [] as Array<{ sequence: number; name: string }>,
 } as const;
 
 /**
@@ -125,8 +126,19 @@ export const pifDraftSchema = z.object({
   timelineNotes: optionalText,
   driveType: z.enum(["", ...DRIVE_TYPES]).default(""),
   additionalDesignations: additionalDesignations.default([]),
-  /** F11: how many rounds the recruiter runs. Optional in a draft. */
-  roundCount: nullableNumber,
+  /**
+   * The rounds the recruiter runs, NAMED and in order (2026-08-18):
+   * "AE name them on the PIF with Round Number - Round 1 - Aptitude Test;
+   * Round 2 - Interview". They are the logical rounds a student progresses
+   * through, so they are carried onto the drive at publish rather than being
+   * invented a second time by the Central CPC.
+   *
+   * F11's bare count is derived from this now - a count and a list cannot
+   * disagree if there is only a list.
+   */
+  rounds: z
+    .array(z.object({ sequence: z.number().int().positive(), name: z.string() }))
+    .default([]),
 });
 
 /**
@@ -139,10 +151,13 @@ export const pifSubmitSchema = pifDraftSchema
     spocEmail: z.string().trim().email("Enter a valid contact email."),
     roleTitle: requiredText("Role title"),
     roleCategory: z.enum(ROLE_CATEGORIES, { message: "Choose a role category." }),
-    roundCount: z
-      .number({ message: "Enter the number of rounds in the selection process." })
-      .int()
-      .positive("A selection process has at least one round."),
+    rounds: z
+      .array(z.object({ sequence: z.number().int().positive(), name: z.string() }))
+      .min(1, "A selection process has at least one round.")
+      .refine(
+        (rounds) => rounds.every((round) => round.name.trim() !== ""),
+        "Name every round — a student cannot prepare for “Round 2”.",
+      ),
     jobDescription: requiredText("Job description"),
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),

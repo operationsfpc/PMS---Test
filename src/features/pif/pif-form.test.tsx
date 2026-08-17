@@ -20,8 +20,13 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
-  // F11: the number of rounds is now part of a complete PIF.
-  await user.type(screen.getByLabelText(/number of rounds/i), "3");
+  /**
+   * The rounds, NAMED (2026-08-18). A count told the Central CPC how many boxes
+   * to invent and told a student nothing: "Round 2" is not something you can
+   * prepare for.
+   */
+  await user.click(screen.getByRole("button", { name: /add round/i }));
+  await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
   await user.click(screen.getByRole("checkbox", { name: /2027/ }));
 }
 
@@ -174,7 +179,7 @@ describe("PifForm — what the recruiter actually said", () => {
   });
 
   /** F11: the Central CPC was typing the round list from an email. */
-  it("collects the number of rounds and sends it", async () => {
+  it("collects the rounds by name and sends them", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
@@ -183,7 +188,9 @@ describe("PifForm — what the recruiter actually said", () => {
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ roundCount: 3 });
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      rounds: [{ sequence: 1, name: "Aptitude test" }],
+    });
   });
 
   /**
@@ -323,5 +330,83 @@ describe("PifForm \u2014 a blank number is not a zero", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0]?.[0]?.minOverallCgpa).toBeNull();
     expect(onSubmit.mock.calls[0]?.[0]?.minTenthPercentage).toBeNull();
+  });
+});
+
+/**
+ * The AE NAMES the rounds (2026-08-18, Karthik's answer to Q4):
+ * "AE name them on the PIF with Round Number - Round 1 - Aptitude Test;
+ * Round 2 - Interview; etc.," and "these are logical rounds to which students
+ * can progress."
+ *
+ * A count told the Central CPC how many boxes to invent and told a student
+ * nothing at all: "Round 2" is not something you can prepare for. The AE heard
+ * the process from the company, so the names are theirs to record.
+ */
+describe("the rounds the AE was told about", () => {
+  it("asks for a name per round, numbered", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+
+    expect(screen.getByLabelText(/round 1 name/i)).toBeDefined();
+  });
+
+  it("numbers each new round after the last", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+
+    expect(screen.getByLabelText(/round 2 name/i)).toBeDefined();
+  });
+
+  it("renumbers what is left when a round is removed, leaving no gap", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
+    await user.type(screen.getByLabelText(/round 2 name/i), "Interview");
+
+    await user.click(screen.getByRole("button", { name: /remove round 1/i }));
+
+    expect((screen.getByLabelText(/round 1 name/i) as HTMLInputElement).value).toBe("Interview");
+    expect(screen.queryByLabelText(/round 2 name/i)).toBeNull();
+  });
+
+  it("submits the rounds in order, with their names", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    await fillRequired(user);
+
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round 2 name/i), "Technical interview");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const values = onSubmit.mock.calls[0]?.[0] as { rounds: unknown };
+    expect(values.rounds).toEqual([
+      { sequence: 1, name: "Aptitude test" },
+      { sequence: 2, name: "Technical interview" },
+    ]);
+  });
+
+  it("refuses a submission whose round has no name", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    await fillRequired(user);
+
+    // A second round, added and left unnamed.
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(await screen.findByText(/name every round/i)).toBeDefined();
   });
 });
