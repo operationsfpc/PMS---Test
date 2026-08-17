@@ -6,6 +6,7 @@ import { registrationFunnel } from "@domain/registration-funnel";
 import { computePlacementStats, type StudentPlacementFacts } from "@domain/statistics";
 import type { SrfStatus } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 
 export interface CampusBreakdown {
   readonly campusId: string;
@@ -235,8 +236,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                   Where the cohort is, from the roster to a signed offer.
                 </p>
                 <ol className="space-y-2">
-                  {funnel.map((stage) => (
-                    <li key={stage.key}>
+                  {funnel.map((stage) => {
+                    /*
+                     * 2026-08-17: the Placed count opens the students behind
+                     * it. Only this stage — the others have no breakdown to
+                     * open, and a link that went nowhere useful would teach
+                     * the reader that none of them are worth pressing.
+                     */
+                    const row = (
                       <div className="flex items-baseline justify-between gap-3 text-sm">
                         <span className="text-ink-700">{stage.label}</span>
                         <span className="shrink-0">
@@ -244,16 +251,31 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                           <span className="text-xs text-ink-500">{stage.percentOfRoster}%</span>
                         </span>
                       </div>
-                      {/* The bar is the point: a stage that drops off a cliff
+                    );
+
+                    return (
+                      <li key={stage.key}>
+                        {stage.key === "placed" ? (
+                          <Link
+                            to="/central/students?filter=placed"
+                            className="block rounded-lg transition-colors hover:bg-brand-50"
+                          >
+                            {row}
+                          </Link>
+                        ) : (
+                          row
+                        )}
+                        {/* The bar is the point: a stage that drops off a cliff
                           is visible before the numbers are read. */}
-                      <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-                        <div
-                          className="h-full bg-brand-500"
-                          style={{ width: `${stage.percentOfRoster}%` }}
-                        />
-                      </div>
-                    </li>
-                  ))}
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                          <div
+                            className="h-full bg-brand-500"
+                            style={{ width: `${stage.percentOfRoster}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ol>
               </section>
             </Card>
@@ -268,7 +290,8 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 ) : (
                   <>
                     <p className="mt-1 mb-3 text-sm text-ink-500">
-                      One figure per placed student, at their placement record (R9).
+                      One figure per placed student. A student holding several offers is counted
+                      once, at their best one.
                     </p>
                     <section aria-label="Package figures">
                       <dl className="grid grid-cols-2 gap-3">

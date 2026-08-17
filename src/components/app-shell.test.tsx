@@ -218,7 +218,8 @@ describe("the grouped sidebar", () => {
 
     for (const heading of [
       /^drives$/i,
-      /publish a drive/i,
+      // Renamed 2026-08-17: "Publish a drive" became "Student details".
+      /student details/i,
       /drives in progress/i,
       /requests/i,
       /^overview$/i,
@@ -498,7 +499,7 @@ describe("the sidebar groups collapse to the one in use", () => {
   it("collapses the groups the reader is not in", () => {
     shellCollapsed(signedIn("central_placement_coordinator"));
     expect(
-      screen.getByRole("button", { name: /publish a drive/i }).getAttribute("aria-expanded"),
+      screen.getByRole("button", { name: /student details/i }).getAttribute("aria-expanded"),
     ).toBe("false");
     expect(screen.queryByRole("link", { name: /skill repository/i })).toBeNull();
   });
@@ -507,7 +508,7 @@ describe("the sidebar groups collapse to the one in use", () => {
     shellCollapsed(signedIn("central_placement_coordinator"), async () => {}, "/central/skills");
 
     expect(
-      screen.getByRole("button", { name: /publish a drive/i }).getAttribute("aria-expanded"),
+      screen.getByRole("button", { name: /student details/i }).getAttribute("aria-expanded"),
     ).toBe("true");
     expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /^overview/i }).getAttribute("aria-expanded")).toBe(
@@ -520,7 +521,7 @@ describe("the sidebar groups collapse to the one in use", () => {
     shellCollapsed(signedIn("central_placement_coordinator"));
 
     expect(screen.queryByRole("link", { name: /skill repository/i })).toBeNull();
-    await user.click(screen.getByRole("button", { name: /publish a drive/i }));
+    await user.click(screen.getByRole("button", { name: /student details/i }));
     expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
   });
 
@@ -532,7 +533,7 @@ describe("the sidebar groups collapse to the one in use", () => {
     for (const heading of [
       "Overview",
       "Drives",
-      "Publish a drive",
+      "Student details",
       "Drives in progress",
       "Requests",
     ]) {
@@ -540,5 +541,47 @@ describe("the sidebar groups collapse to the one in use", () => {
       // does not also match "Drives in progress".
       expect(screen.getByRole("button", { name: heading })).toBeDefined();
     }
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik): "on the side bar, publish a drive heading and its
+ * subheading publish and target is not required. We can instead create a
+ * heading student details - under which we can have skill repository. Add one
+ * more page to display details of all students part of the placement process."
+ *
+ * "Publish and target" was a dead entry: it needs a drive id, and opening it
+ * from the sidebar only ever said "choose a drive from the drive cockpit".
+ * Publishing is reached from the drive itself, under Yet to publish, which is
+ * where a coordinator is already standing when they decide to publish.
+ */
+describe("Student details replaces Publish a drive", () => {
+  it("no longer offers a bare Publish and target entry", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    expect(screen.queryByRole("link", { name: /publish and target/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Publish a drive" })).toBeNull();
+  });
+
+  it("groups the skill repository under Student details", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    expect(screen.getByRole("button", { name: "Student details" })).toBeDefined();
+    expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
+  });
+
+  it("adds the all-students page under the same heading", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    const link = screen.getByRole("link", { name: /all students/i });
+    expect(link.getAttribute("href")).toBe("/central/students");
+  });
+
+  /** Publishing must still be reachable — from the drive, not from a bare link. */
+  it("keeps the yet-to-publish queue, which is how a drive gets published", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    expect(screen.getByRole("link", { name: /yet to publish/i })).toBeDefined();
+  });
+
+  it("does not offer the student directory to a role that cannot read students", () => {
+    shellFor(signedIn("account_executive"), async () => {}, "/my-drives");
+    expect(screen.queryByRole("link", { name: /all students/i })).toBeNull();
   });
 });

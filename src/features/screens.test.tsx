@@ -452,3 +452,53 @@ describe("the drive portfolio route", () => {
     expect(screen.getByRole("status").textContent).toMatch(/loading your drives/i);
   });
 });
+
+/**
+ * 2026-08-17 (Karthik): "AE can only raise drives (no one else can raise a
+ * drive). Delivery head can only approve (delivery head cannot raise a drive).
+ * ... Central PC cannot raise or approve a drive."
+ *
+ * The routes were open to anyone signed in. The PIF form in particular was
+ * reachable by the Delivery Head and the Central CPC, either of whom could
+ * have raised a drive and then acted on it themselves — which is the entire
+ * separation gone, from one screen.
+ */
+describe("the drive lifecycle keeps its three roles apart", () => {
+  const at = (path: string, role: AppRole) =>
+    render(
+      <AuthContext.Provider value={signedIn(role)}>
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>
+      </AuthContext.Provider>,
+    );
+
+  it("lets the Account Executive raise a drive", async () => {
+    at("/ae/pif", "account_executive");
+    expect(await screen.findByRole("heading", { name: /position information/i })).toBeDefined();
+  });
+
+  it.each(["delivery_head", "central_placement_coordinator", "admin"] as const)(
+    "refuses %s the PIF form",
+    async (role) => {
+      at("/ae/pif", role);
+      expect(await screen.findByText(/only an account executive raises a drive/i)).toBeDefined();
+      expect(screen.queryByRole("heading", { name: /position information/i })).toBeNull();
+    },
+  );
+
+  it("lets the Delivery Head approve", async () => {
+    at("/delivery-head/pif-approvals", "delivery_head");
+    expect(await screen.findByRole("heading", { name: /pif approvals/i })).toBeDefined();
+  });
+
+  it.each(["account_executive", "central_placement_coordinator"] as const)(
+    "refuses %s the approval queue",
+    async (role) => {
+      at("/delivery-head/pif-approvals", role);
+      expect(
+        await screen.findByText(/approving a drive belongs to the delivery head/i),
+      ).toBeDefined();
+    },
+  );
+});

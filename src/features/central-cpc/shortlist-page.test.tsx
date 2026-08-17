@@ -404,48 +404,72 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
 });
 
 /**
- * 2026-08-17 (Karthik): "what is the number 15? I see that in a lot of places
- * while shortlisting students. It is not clickable. It is not referring to
- * anything else."
+ * SPEC CHANGE 2026-08-17 (Karthik): "we can remove the display of 15 number
+ * with the description of it. This is not used currently."
  *
- * It was `rankApplicants`' weighted score, rendered as a bare numeral in the
- * corner of every row. A number with no unit and no label is not information:
- * 15 could have been a rank, a count of applicants, an ID or a percentage, and
- * the coordinator had no way to tell which. The value was right; the screen
- * simply never said what it was.
+ * The number was `rankApplicants`' weighted score. Labelling it (earlier the
+ * same day) answered "what is it?" but not "what is it for?" - and the honest
+ * answer was nothing: the coordinator shortlists on the facts, not the score.
+ *
+ * The RANKING SURVIVES. It still orders the list, and the score and rationale
+ * are still WRITTEN on save, because PRD 13.1 requires the recommendation to
+ * be stored next to the decision so the two can be compared later. What has
+ * gone is the presentation of a number nobody acted on.
  */
-describe("the match score says what it is", () => {
-  it("labels the score and shows the scale it is out of", async () => {
+describe("the match score is not shown", () => {
+  it("shows no score figure on any row", async () => {
     render(<ShortlistPage driveId="d1" view={view()} />);
+    await screen.findByText(/strong candidate/i);
 
-    const row = await screen.findByRole("listitem", { name: /strong candidate/i });
-    const score = within(row).getByRole("figure", { name: /match score/i });
-
-    // The scale is the point: 15 alone is meaningless, "15 / 100" is not.
-    expect(score.textContent).toMatch(/\/\s*100/);
-    expect(score.textContent).toMatch(/match score/i);
+    expect(screen.queryAllByRole("figure")).toHaveLength(0);
+    expect(screen.queryByText(/match score/i)).toBeNull();
   });
 
-  it("still shows the score the domain calculated, unrounded and unaltered", async () => {
+  it("does not print the raw score anywhere on the row", async () => {
     render(<ShortlistPage driveId="d1" view={view()} />);
 
     const row = await screen.findByRole("listitem", { name: /weak candidate/i });
-    // CGPA 6/10 -> 24, no skill score -> 0, standing arrears -> 0, role not
-    // preferred -> 0. The screen must report the domain's arithmetic, not its own.
-    expect(within(row).getByRole("figure", { name: /match score/i }).textContent).toMatch(
-      /24\s*\/\s*100/,
-    );
+    // 24 was this applicant's score. The row still shows CGPA 6, so the
+    // assertion is about the score specifically, not about digits.
+    expect(row.textContent).not.toMatch(/\b24\b/);
+    expect(row.textContent).not.toMatch(/\/\s*100/);
   });
 
-  /** The explanation of the number belongs next to the number. */
-  it("explains what the score is for, without implying it is a decision", async () => {
+  it("no longer explains a score the screen does not show", async () => {
     render(<ShortlistPage driveId="d1" view={view()} />);
     await screen.findByText(/strong candidate/i);
 
     const note = screen.getByText(/never shown to students/i).closest("p");
-    expect(note?.textContent).toMatch(/match score/i);
-    expect(note?.textContent).toMatch(/out of 100/i);
-    // Advisory, not a verdict: the tick is the decision, the number is input to it.
-    expect(note?.textContent).toMatch(/advisory/i);
+    expect(note?.textContent).not.toMatch(/match score/i);
+    expect(note?.textContent).not.toMatch(/out of 100/i);
+  });
+
+  /** The order is still the ranking's, so removing the number changed nothing else. */
+  it("still lists the stronger candidate first", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+    const rows = await screen.findAllByRole("listitem");
+    expect(rows[0]?.textContent).toMatch(/strong candidate/i);
+  });
+
+  /** PRD 13.1: the recommendation is still recorded, it is just not displayed. */
+  it("still saves the score and rationale for the audit trail", async () => {
+    const saved: ShortlistDecision[][] = [];
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          saveShortlist: async (_drive, decisions) => {
+            saved.push([...decisions]);
+          },
+        })}
+      />,
+    );
+
+    await screen.findByText(/strong candidate/i);
+    await userEvent.click(screen.getByRole("button", { name: /^shortlist/i }));
+
+    const strong = saved[0]?.find((d) => d.applicationId === "app-strong");
+    expect(strong?.score).toBeGreaterThan(0);
+    expect(strong?.rationale.length).toBeGreaterThan(0);
   });
 });

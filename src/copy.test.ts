@@ -39,6 +39,17 @@ function tsxFiles(dir: string): string[] {
  * A `\u2014` left standing after this is text between tags — the only place
  * the sequence survives to the screen.
  */
+/**
+ * Comments, gone — block and line, however many lines they span.
+ *
+ * Done over the whole file rather than line by line, because the last line of
+ * a wrapped comment looks like ordinary code - it starts with a word rather
+ * than with an asterisk, and a line-by-line filter waves it straight through.
+ */
+function withoutComments(source: string): string {
+  return source.replaceAll(/\/\*[\s\S]*?\*\//g, "").replaceAll(/\/\/[^\n]*/g, "");
+}
+
 function withoutStringLiterals(line: string): string {
   return line
     .replaceAll(/"(?:[^"\\]|\\.)*"/g, '""')
@@ -47,6 +58,18 @@ function withoutStringLiterals(line: string): string {
 }
 
 const ESCAPE = /\\u[0-9a-fA-F]{4}/;
+
+/**
+ * Internal rule codes: R9, D10, F15, Q4, and section marks like 12.3.
+ *
+ * Reported 2026-08-17 against the placement overview: "the Package section
+ * copy contains internal technical notation ((R9))". These codes are how the
+ * PRD and this codebase talk to each other, and they are genuinely useful in
+ * comments - which is why they belong there and nowhere near a screen. To a
+ * coordinator, "at their placement record (R9)" is a reference to a document
+ * they have never been given.
+ */
+const RULE_CODE = /\((?:[RDFQ]\d+|\u00a7[\d.]+)\)/;
 
 describe("user-facing copy", () => {
   const files = tsxFiles(SRC);
@@ -72,4 +95,20 @@ describe("user-facing copy", () => {
       ).toEqual([]);
     },
   );
+
+  it.each(files.map((f) => relative(SRC, f)))("%s shows no internal rule code", (relPath) => {
+    // Comments are where these codes belong, so they go first.
+    const offenders = withoutComments(readFileSync(join(SRC, relPath), "utf8"))
+      .split("\n")
+      .map((line, index) => ({ line, number: index + 1 }))
+      .filter(({ line }) => RULE_CODE.test(withoutStringLiterals(line)))
+      .map(({ line, number }) => `${number}: ${line.trim()}`);
+
+    expect(
+      offenders,
+      "R9, D10, \u00a712.3 and the like are internal shorthand. On a screen they " +
+        "point at a document the reader has never seen. Say the thing instead.\n" +
+        offenders.join("\n"),
+    ).toEqual([]);
+  });
 });

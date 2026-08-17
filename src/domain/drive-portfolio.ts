@@ -51,6 +51,31 @@ export function canPublishDrive(role: AppRole): boolean {
 }
 
 /**
+ * The drive lifecycle: three verbs, three roles, no overlaps.
+ * 2026-08-17 (Karthik), "to keep drives simple".
+ *
+ *     raise -> AE          approve -> Delivery Head      publish -> Central CPC
+ *
+ * The separation IS the control. If one role held two of these, a drive could
+ * travel from an idea to in front of students without a second person having
+ * looked at it - and the commercial terms the AE agreed with the recruiter are
+ * exactly what the Delivery Head exists to check.
+ *
+ * Admin is deliberately given none of them. Admin sets up the organisation;
+ * being able to fix anything is not a reason to be able to do everything, and
+ * an Admin who could raise and approve their own drive would be the whole
+ * separation defeated by one account.
+ */
+export function canRaiseDrive(role: AppRole): boolean {
+  return role === "account_executive";
+}
+
+/** Approving is the Delivery Head's alone — and they may not raise one to approve. */
+export function canApproveDrive(role: AppRole): boolean {
+  return role === "delivery_head";
+}
+
+/**
  * Who may see the company-facing applicant list on the drive portfolio.
  * 2026-08-17 (Karthik).
  *

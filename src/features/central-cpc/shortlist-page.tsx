@@ -219,10 +219,9 @@ export function ShortlistPage({
       />
 
       <p className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-ink-700">
-        Ranking and rationale are internal and are <strong>never shown to students</strong>. The{" "}
-        <strong>match score</strong> is out of 100 — it weighs CGPA, the skills this role requires,
-        arrears and whether the student asked for this kind of role. It is advisory: your selection
-        is what is recorded. Saving <strong>notifies the shortlisted students</strong> and{" "}
+        Ranking and rationale are internal and are <strong>never shown to students</strong>. The
+        order is advisory — your selection is what is recorded. Saving{" "}
+        <strong>notifies the shortlisted students</strong> and{" "}
         <strong>schedules them for Round 1</strong>.
       </p>
 
@@ -363,23 +362,13 @@ export function ShortlistPage({
                     </ul>
                   </div>
                   {/*
-                   * 2026-08-17 (Karthik): "what is the number 15? ... it is not
-                   * referring to anything else." It was this score, printed bare.
-                   * A numeral with no label and no scale is not information - the
-                   * reader cannot tell a score from a rank from a count. The
-                   * value never changed; the screen just started saying what it
-                   * is and what it is out of.
+                   * The score used to be printed here. Removed 2026-08-17: it
+                   * was not used, and a number nobody acts on is a number that
+                   * has to be explained forever. It is still CALCULATED - it
+                   * orders this list - and still saved with the decision,
+                   * because PRD 13.1 wants the recommendation kept beside the
+                   * choice. It is simply not shown.
                    */}
-                  <figure
-                    aria-label={`Match score for ${candidate.studentName}`}
-                    className="m-0 shrink-0 text-right"
-                  >
-                    <figcaption className="text-[11px] font-medium uppercase tracking-wide text-ink-400">
-                      Match score
-                    </figcaption>
-                    <span className="text-lg font-semibold text-brand-600">{candidate.score}</span>
-                    <span className="text-xs text-ink-400"> / 100</span>
-                  </figure>
                 </li>
               );
             })}

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   type ApplicantFacts,
+  canApproveDrive,
   canPublishDrive,
+  canRaiseDrive,
   canShortlistFromPortfolio,
   canViewDriveApplicants,
   driveProgress,
@@ -332,4 +334,74 @@ describe("canViewDriveApplicants", () => {
       expect(canViewDriveApplicants("account_executive")).toBe(true);
     },
   );
+});
+
+/**
+ * 2026-08-17 (Karthik): "To keep drives simple, AE can only raise drives (no
+ * one else can raise a drive). Delivery head can only approve (delivery head
+ * cannot raise a drive). Only Central PC can [publish] it. Central PC cannot
+ * raise or approve a drive."
+ *
+ * ⚠️ The message says "Only Central PC can APPROVE it" in one sentence and
+ * "Central PC cannot raise or approve" in the next. Read against the rest of
+ * the thread — "once an Account Executive creates a drive, only the Central
+ * Placement Coordinator is authorized to publish it" (2026-08-17) — the first
+ * is a slip for PUBLISH. That is the reading implemented here, and it is the
+ * only one under which the three sentences agree.
+ *
+ * So the lifecycle is three roles and three verbs, each held by exactly one
+ * role and none of them held by two:
+ *
+ *     raise -> AE          approve -> Delivery Head      publish -> Central CPC
+ */
+describe("one verb, one role", () => {
+  it("lets only the Account Executive raise a drive", () => {
+    expect(canRaiseDrive("account_executive")).toBe(true);
+    for (const role of APP_ROLES.filter((r) => r !== "account_executive")) {
+      expect(canRaiseDrive(role)).toBe(false);
+    }
+  });
+
+  it("lets only the Delivery Head approve a drive", () => {
+    expect(canApproveDrive("delivery_head")).toBe(true);
+    for (const role of APP_ROLES.filter((r) => r !== "delivery_head")) {
+      expect(canApproveDrive(role)).toBe(false);
+    }
+  });
+
+  it("lets only the Central Placement Coordinator publish a drive", () => {
+    expect(canPublishDrive("central_placement_coordinator")).toBe(true);
+    for (const role of APP_ROLES.filter((r) => r !== "central_placement_coordinator")) {
+      expect(canPublishDrive(role)).toBe(false);
+    }
+  });
+
+  /**
+   * The separation IS the control. If one role held two of these verbs, a
+   * drive could go from an idea to in front of students without anyone else
+   * having looked at it.
+   */
+  it.each(APP_ROLES)("gives %s at most one of the three verbs", (role) => {
+    const held = [canRaiseDrive(role), canApproveDrive(role), canPublishDrive(role)].filter(
+      Boolean,
+    );
+    expect(held.length).toBeLessThanOrEqual(1);
+  });
+
+  /** Named explicitly in the request, so pinned explicitly. */
+  it("does not let the Delivery Head raise a drive", () => {
+    expect(canRaiseDrive("delivery_head")).toBe(false);
+  });
+
+  it("does not let the Central Placement Coordinator raise or approve one", () => {
+    expect(canRaiseDrive("central_placement_coordinator")).toBe(false);
+    expect(canApproveDrive("central_placement_coordinator")).toBe(false);
+  });
+
+  /** An Admin is not a shortcut through the lifecycle either. */
+  it("gives an Admin none of the three", () => {
+    expect(canRaiseDrive("admin")).toBe(false);
+    expect(canApproveDrive("admin")).toBe(false);
+    expect(canPublishDrive("admin")).toBe(false);
+  });
 });

@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { DashboardPage, type DashboardSnapshot, type DashboardView } from "./dashboard-page";
+
+/**
+ * The dashboard links out since 2026-08-17 - the Placed count opens the
+ * breakdown behind it - so it needs a router. Wrapping here rather than at
+ * every call site keeps the 26 existing tests reading as they did.
+ */
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * The executive dashboard.
@@ -534,5 +543,43 @@ describe("the drive-specific box", () => {
     const section = await box();
     expect(within(section).getByText("Eligible")).toBeDefined();
     expect(within(section).queryByText(/attended/i)).toBeNull();
+  });
+});
+
+/**
+ * 2026-08-17 (Karthik): "Hyperlink the Placed count (in Students overview /
+ * Package) to open or export a detailed breakdown (e.g. student name, company,
+ * package, role). Gives coordinators instant visibility into individual
+ * placement records directly from the overview dashboard."
+ *
+ * The number was a dead end: a coordinator could see that one student was
+ * placed and had no way to ask who. It now opens the student directory,
+ * already filtered to the placed — the same list, counted the same way, so the
+ * figure and the rows behind it cannot disagree.
+ */
+describe("the placed count opens the breakdown", () => {
+  it("makes the Placed stage a link to the placed students", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const link = await screen.findByRole("link", { name: /placed/i });
+    expect(link.getAttribute("href")).toBe("/central/students?filter=placed");
+  });
+
+  it("still shows the count itself inside the link", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const link = await screen.findByRole("link", { name: /placed/i });
+    // SNAPSHOT has one placed student; the link must carry the number, not
+    // replace it with the word "Placed".
+    expect(link.textContent).toMatch(/\d/);
+  });
+
+  /** The other funnel stages have no breakdown to open, so they stay plain. */
+  it("leaves the stages that have no breakdown as plain rows", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+    await screen.findByText(/on the roster/i);
+
+    expect(screen.queryByRole("link", { name: /on the roster/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /registration form submitted/i })).toBeNull();
   });
 });

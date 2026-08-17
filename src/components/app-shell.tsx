@@ -136,11 +136,23 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/my-drives", label: "All drives" },
       ],
     },
+    /**
+     * 2026-08-17 (Karthik): "publish a drive heading and its subheading publish
+     * and target is not required. We can instead create a heading student
+     * details - under which we can have skill repository."
+     *
+     * "Publish and target" was a dead entry from here: the screen needs a
+     * drive id, so opening it from the sidebar only ever said "choose a drive
+     * from the drive cockpit". Publishing is reached from the drive itself,
+     * under Yet to publish - which is where the coordinator already is when
+     * they decide to publish it. The route still exists; only the bare link
+     * has gone.
+     */
     {
-      heading: "Publish a drive",
+      heading: "Student details",
       items: [
-        { to: "/central/publish", label: "Publish and target" },
-        // PRD §5: view-only reference while publishing; feeds R11.
+        { to: "/central/students", label: "All students" },
+        // PRD §5: view-only reference; feeds the shortlisting rank.
         { to: "/central/skills", label: "Skill repository" },
       ],
     },

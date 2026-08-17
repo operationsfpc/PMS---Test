@@ -1,5 +1,10 @@
 import { AppShell } from "@components/app-shell";
-import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
+import {
+  canApproveDrive,
+  canPublishDrive,
+  canRaiseDrive,
+  canShortlistFromPortfolio,
+} from "@domain/drive-portfolio";
 import { AdminCampusRoute } from "@features/admin/campus-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
@@ -12,6 +17,7 @@ import { PublishRoute } from "@features/central-cpc/publish-route";
 import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
 import { SkillsRoute } from "@features/central-cpc/skills-route";
+import { StudentDirectoryRoute } from "@features/central-cpc/students-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { CertificateQueue } from "@features/cpc/certificate-queue";
 import { DriveProgressRoute } from "@features/cpc/drive-progress-route";
@@ -69,6 +75,48 @@ function ShortlistersOnly({ children }: { children: ReactNode }) {
       <p className="p-8 text-sm text-ink-700">
         Shortlisting belongs to the placement coordinators. Choosing which students a recruiter sees
         is their decision — you can follow this drive, and its results, under “My drives”.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+/**
+ * The drive lifecycle is three verbs held by three different roles — raise,
+ * approve, publish — and 2026-08-17 made that explicit: "AE can only raise
+ * drives (no one else can raise a drive). Delivery head can only approve.
+ * ... Central PC cannot raise or approve a drive."
+ *
+ * These guards are the doors. The separation is worth nothing if the PIF form
+ * is reachable by the person who would later approve it.
+ */
+function RaisersOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && !canRaiseDrive(role)) {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        Only an Account Executive raises a drive. They own the recruiter’s brief, and keeping that
+        separate from approving and publishing it is what makes each step a real check.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+/** Approving is the Delivery Head's alone — see `canApproveDrive`. */
+function ApproversOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && !canApproveDrive(role)) {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        Approving a drive belongs to the Delivery Head. They check the commercial terms the Account
+        Executive agreed, which is not a check if the same person did both.
       </p>
     );
   }
@@ -151,9 +199,23 @@ export function App() {
                 />
                 <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
                 <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
-                <Route path="/ae/pif" element={<PifPage />} />
+                <Route
+                  path="/ae/pif"
+                  element={
+                    <RaisersOnly>
+                      <PifPage />
+                    </RaisersOnly>
+                  }
+                />
                 <Route path="/my-drives" element={<DrivePortfolioRoute />} />
-                <Route path="/delivery-head/pif-approvals" element={<PifApprovalQueue />} />
+                <Route
+                  path="/delivery-head/pif-approvals"
+                  element={
+                    <ApproversOnly>
+                      <PifApprovalQueue />
+                    </ApproversOnly>
+                  }
+                />
                 <Route
                   path="/central/shortlisting"
                   element={
@@ -164,6 +226,9 @@ export function App() {
                 />
                 {/* PRD §5: the Central Student Skill Repository. */}
                 <Route path="/central/skills" element={<SkillsRoute />} />
+                {/* Every student in the placement process. Also the
+                    destination of the Placed count on the overview. */}
+                <Route path="/central/students" element={<StudentDirectoryRoute />} />
                 <Route path="/central/drives" element={<CockpitRoute />} />
                 {/* D2: the Central CPC's pipeline, split. */}
                 <Route
