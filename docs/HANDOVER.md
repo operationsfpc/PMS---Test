@@ -1,12 +1,95 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
-**3007 tests passing across 155 files**, plus **1 Playwright journey** — run,
+**3104 tests passing across 157 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
-gate. Remote is at **`0050`** (0048–0050 pushed 2026-08-18); live Cloudflare
-version `53f07d57-3f3b-4dac-a7e8-9396c46c16f2`. Commit hash deliberately not
+gate. Remote is at **`0051`** (0048–0051 pushed 2026-08-18); live Cloudflare
+version `6d02294a-6271-49e4-b1e4-2744f386902f`. Commit hash deliberately not
 quoted here: it has been wrong three times, always because it was written
 before the commit existed. Use `git log --oneline -5`.
+
+---
+
+## ✅ SHIPPED 2026-08-18 (latest) — the JD attaches, the shift is a value, joining is a decision
+
+Live `6d02294a-6271-49e4-b1e4-2744f386902f`, JS byte-identical to `dist/`
+(894 706 bytes, sha256 `eb5ade72…`), `/ae/pif` 200. Remote at **`0051`**.
+Spec: `docs/specs/2026-08-18-pif-jd-attachment-shift-and-joining.md`
+(✅ APPROVED, answers 1–10 recorded verbatim), mockup
+`2026-08-18-pif-jd-shift-joining-mockup.html`.
+
+### J1 — the recruiter's own JD, attached
+
+The AE retyped it, or pasted a fragment, and **the document never entered the
+system** — so the Delivery Head approved a role from a title and a CTC, and the
+student applied to a one-line summary of what the company wrote.
+
+📌 **The first bucket namespaced by DRIVE id, not student id.** Every bucket
+until now (0010, 0022) says `<student_uuid>/…` in its policy. `job-descriptions`
+says `<drive_uuid>/…`, and its read rule is **delegated**: *you may read the JD
+if you may read the drive it sits under*. The subquery runs as the caller, so
+`drives`' own RLS decides — 0030 for the student, 0008/0044 for staff. One rule
+instead of two, and it cannot drift from who can see the drive.
+
+🔴 **The upload runs BEFORE the row, which is why the drive id is now generated
+client-side.** Same order as the SRF's marksheets and for the same reason:
+storage cannot join the insert. An object with no row costs a few kilobytes and
+is invisible; a row with no object hands the approver and every applicant a link
+that opens nothing.
+
+The typed description is **no longer required** (answer 2: "keep space to type
+JD. Field is not mandatory"). It stays because a card, a phone and a CSV can
+show text and cannot show a PDF.
+
+### J2 — Day / Night / Rotational / Flexible, hours typed in for Night
+
+Rotational and Flexible were added at approval (answer 5). Only Night carries
+hours, and a night shift with no hours is refused **at submit** — not in the
+database, because a draft is a row like any other.
+
+### J3 — Immediate / Later, one comment box per option (answer 6)
+
+Only the chosen option's comment is stored, in the schema **and** in the row
+builder **and** in a check constraint. A note about joining next July, left on a
+drive that now says immediate, is worse than no note.
+
+### 🔴 A real defect the db test caught, before it ever ran live
+
+`shift_night_timing is null or shift_type = 'night'` **passes when `shift_type`
+is NULL** — a check constraint accepts NULL, and `false OR NULL` is NULL. The
+test that caught it puts hours on a drive with no shift at all. Both new pairing
+constraints use **`is not distinct from`**. Worth remembering: every "X only
+when Y" constraint in this schema has the same trap.
+
+### ⚠️ The handover's own "four live drives say General" was WRONG — re-read live
+
+There are **11 drives**, and their shift column actually reads `Night` (5),
+`Day` (4), `day` (1) and `9 AM to 7 PM` (1). Nothing was backfilled (answer 9),
+so `describeShift` repeats each verbatim. **Ten of the eleven are one keystroke
+from canonical** — `'Night' → 'night'` is a two-line update whenever Karthik
+wants it, and `9 AM to 7 PM` must NOT be guessed at (it is a day shift written
+as hours, and inventing that is exactly what answer 9 forbids). The constraint
+is **NOT VALID**, which is what lets all eleven stay.
+
+### Proved on LIVE data as a real AE through RLS, all rolled back (0 rows left)
+
+| Attempt | Result |
+|---|---|
+| night shift + hours + later joining + JD | **ACCEPTED** |
+| day shift carrying night hours | REFUSED — `night_timing_belongs_to_night` |
+| hours with no shift chosen at all | REFUSED — same (this is the NULL trap) |
+| a "later" comment on an immediate joining | REFUSED — `joining_notes_match_the_choice` |
+| a JD path with no file name | REFUSED — `jd_attachment_is_whole` |
+| free text where a shift is expected | REFUSED — `shift_type_is_a_known_shift` |
+
+And the storage read rule, evaluated **as a real student**: the JD folder of a
+live drive she can see → **true**; a draft drive's → **false**; a folder that is
+not a drive → **false**. Bucket present, private, PDF-only, 5 MB; both new
+policies present.
+
+⚠️ **There is still no `delivery_head` profile in production** — 4 AEs and 2
+Central CPCs. Third session running. The approval queue this change improves has
+nobody sitting at it.
 
 ---
 
