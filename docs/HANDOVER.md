@@ -93,6 +93,62 @@ nobody sitting at it.
 
 ---
 
+## ⏸ PARKED 2026-08-18 — Zoho CRM integration (awaiting Karthik's answers)
+
+Raised at the end of the session, **nothing built, no decision taken**. Karthik:
+the ER team keeps potential recruiters in Zoho CRM, and the AEs live there too —
+*"I can design the PIF in Zoho CRM itself. Can we do an API integration to move
+the PIF from Zoho CRM directly to Delivery Head?"*
+
+**Answer given: yes, it fits.** The PIF *is* the `drives` row, and the DH queue
+is just `status = 'submitted'`, so Zoho only has to create that one row.
+
+**Three designs were put to him, with a recommendation:**
+
+- **A — Zoho is the front door.** Webhook → Edge Function → `drives` row.
+- **B — Zoho PRE-FILLS our PIF** (`/ae/pif?zoho=<record id>`). **Recommended:**
+  no double entry, no webhook to secure, no RLS bypass, validation and audit
+  stay in one place.
+- **C — both directions**: push the DH's decision and the drive's outcome back
+  onto the Zoho record. Recommended as the *next* step after B.
+
+**The four things that made the recommendation, worth re-reading before building
+any of it:**
+
+1. 🔴 **We have no server component at all** — no Edge Functions, no cron, no
+   queue. An inbound webhook is a **new deployment surface to own**, and that,
+   not the field mapping, is the real cost.
+2. 🔴 **A webhook has no session, so it bypasses RLS** — which is exactly the
+   hole `0047` closed. Any inbound path needs a deliberate, narrow service route
+   that forces `status`, resolves `created_by` to a real AE profile, and never
+   becomes a general-purpose insert.
+3. 🔴 **Our enums are load-bearing.** A wrong `role_category` sends a drive to
+   nobody (`0050`); CTC is `numeric` LPA, not prose; the CGPA cutoff carries its
+   SCALE, and 65 is a fine percentage and a nonsense CGPA. Zoho can enforce a
+   picklist, not a cross-field rule — so the endpoint must **refuse**, never
+   coerce, and the refusal must reach the AE somewhere.
+4. 🔴 **Webhooks retry.** No idempotency key (the Zoho record id, unique) means a
+   retry silently creates a **second drive** — doubling the audience, the
+   shortlist and the offer count.
+
+💡 **The one genuine advantage of our architecture here:** Edge Functions are
+Deno TypeScript, so an inbound endpoint can import `src/domain` and
+`pifSubmitSchema` **directly** — Zoho's payload judged by the exact rules the UI
+uses, not a second copy that drifts.
+
+**8 questions are with Karthik and he will revert:** 1 which design · 2 Zoho
+edition + data centre (`.in`?) · 3 what happens to an invalid payload (refuse
+back to Zoho, or land as a draft here) · 4 does a post-submission edit in Zoho
+update the drive · 5 where an AE fixes a sent-back PIF · 6 where the JD PDF is
+attached · 7 Zoho user → PMS `account_executive` profile mapping (4 live; a
+drive with no real `created_by` leaves `/my-drives` empty and the audit unable
+to name who raised it) · 8 who administers Zoho, and is there a sandbox.
+
+**Do not start building until those are answered** — the spec comes first, per
+the standing rules.
+
+---
+
 ## ✅ SHIPPED 2026-08-18 (later) — P10, area targeting, the AE's named rounds
 
 Live `53f07d57-3f3b-4dac-a7e8-9396c46c16f2`, JS byte-identical to `dist/`
