@@ -16,7 +16,8 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/contact email/i), "karthik@zoho.com");
   await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
   await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
-  await user.type(screen.getByLabelText(/job description/i), "Build backend services.");
+  // Two controls now match "job description": the typed one and the PDF.
+  await user.type(screen.getByLabelText(/^job description$/i), "Build backend services.");
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
@@ -28,6 +29,8 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("button", { name: /add round/i }));
   await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
   await user.click(screen.getByRole("checkbox", { name: /2027/ }));
+  // J3 (2026-08-18): the joining choice is required at submit (answer 7).
+  await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
 }
 
 describe("PifForm", () => {
@@ -408,5 +411,256 @@ describe("the rounds the AE was told about", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(await screen.findByText(/name every round/i)).toBeDefined();
+  });
+});
+
+/**
+ * J1, J2 and J3 (2026-08-18).
+ *
+ *   "add an option to ATTACH a JD (job description) as PDF FILE."
+ *   "Shift time, instead of a text box, change to radio button."
+ *   "in offer rollout and joining timeline, instead of a large text box, have
+ *    radio button for immediate joining and joining later."
+ */
+describe("PifForm — the attached JD, the shift and the joining timeline", () => {
+  const pdf = (name = "Zoho-GET-JD.pdf") =>
+    new File([new Uint8Array(2048)], name, { type: "application/pdf" });
+
+  describe("the attached JD", () => {
+    it("takes the recruiter's PDF and carries it to the submission", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      const values = onSubmit.mock.calls[0]?.[0] as { jobDescriptionFile: File | null };
+      expect(values.jobDescriptionFile?.name).toBe("Zoho-GET-JD.pdf");
+    });
+
+    it("names the file it is holding, so the AE can see it attached", async () => {
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+      await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
+
+      expect(await screen.findByText(/Zoho-GET-JD\.pdf/)).toBeDefined();
+    });
+
+    it("refuses a file that is not a PDF, before anything is uploaded", async () => {
+      const onSubmit = vi.fn();
+      // `applyAccept: false` because the picker's own filter is not a rule: a
+      // file dragged onto the input, or chosen through "All files", reaches
+      // the form regardless of `accept`.
+      const user = userEvent.setup({ applyAccept: false });
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.upload(
+        screen.getByLabelText(/attach the job description/i),
+        new File(["x"], "jd.docx", { type: "application/msword" }),
+      );
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      expect(await screen.findByText(/must be a PDF/i)).toBeDefined();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("submits with no attachment at all — it is optional (answer 1)", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+      await fillRequired(user);
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    });
+
+    /**
+     * Answer 2: "keep space to type JD. Field is not mandatory." The typed
+     * description survives as the thing a drive card and a CSV can show.
+     */
+    it("keeps the typed description, and no longer demands it", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+      expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
+
+      await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+      await user.type(screen.getByLabelText(/contact email/i), "karthik@zoho.com");
+      await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
+      await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+      await user.type(screen.getByLabelText(/number of openings/i), "25");
+      await user.type(screen.getByLabelText(/work location/i), "Chennai");
+      await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
+      await user.click(screen.getByRole("button", { name: /add round/i }));
+      await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
+      await user.click(screen.getByRole("checkbox", { name: /2027/ }));
+      await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    });
+  });
+
+  describe("the shift", () => {
+    it("offers the four shifts as radios, and no text box", async () => {
+      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+      for (const shift of ["Day", "Night", "Rotational", "Flexible"]) {
+        expect(screen.getByRole("radio", { name: shift })).toBeDefined();
+      }
+      // The old free-text box is what produced "General" on four live drives.
+      expect(screen.queryByRole("textbox", { name: /^shift/i })).toBeNull();
+    });
+
+    it("preselects nothing — a preselected Day is an answer nobody gave", () => {
+      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+      for (const shift of ["Day", "Night", "Rotational", "Flexible"]) {
+        expect((screen.getByRole("radio", { name: shift }) as HTMLInputElement).checked).toBe(
+          false,
+        );
+      }
+    });
+
+    it("asks for the hours only once Night is chosen", async () => {
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+      expect(screen.queryByLabelText(/night shift timing/i)).toBeNull();
+
+      await user.click(screen.getByRole("radio", { name: "Night" }));
+
+      expect(screen.getByLabelText(/night shift timing/i)).toBeDefined();
+    });
+
+    it("submits the shift with its hours", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.click(screen.getByRole("radio", { name: "Night" }));
+      await user.type(screen.getByLabelText(/night shift timing/i), "9.00 pm – 6.00 am");
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+        shiftType: "night",
+        shiftNightTiming: "9.00 pm – 6.00 am",
+      });
+    });
+
+    it("refuses a night shift with no hours", async () => {
+      const onSubmit = vi.fn();
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.click(screen.getByRole("radio", { name: "Night" }));
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      expect(await screen.findByText(/give the hours of the night shift/i)).toBeDefined();
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("forgets the hours when the AE switches back to a day shift", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.click(screen.getByRole("radio", { name: "Night" }));
+      await user.type(screen.getByLabelText(/night shift timing/i), "9.00 pm – 6.00 am");
+      await user.click(screen.getByRole("radio", { name: "Day" }));
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+        shiftType: "day",
+        shiftNightTiming: "",
+      });
+    });
+  });
+
+  describe("the joining timeline", () => {
+    it("offers the two options as radios, and no prose box", () => {
+      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+      expect(screen.getByRole("radio", { name: /immediate joining/i })).toBeDefined();
+      expect(screen.getByRole("radio", { name: /joining later/i })).toBeDefined();
+      expect(screen.queryByLabelText(/offer rollout and joining timeline/i)).toBeNull();
+    });
+
+    it("gives each option its own comments box (answer 6)", async () => {
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+      expect(screen.queryByLabelText(/comments/i)).toBeNull();
+
+      await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+      expect(screen.getByLabelText(/comments on immediate joining/i)).toBeDefined();
+
+      await user.click(screen.getByRole("radio", { name: /joining later/i }));
+      expect(screen.getByLabelText(/comments on joining later/i)).toBeDefined();
+      expect(screen.queryByLabelText(/comments on immediate joining/i)).toBeNull();
+    });
+
+    it("submits the choice and only its own comment", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.type(screen.getByLabelText(/comments on immediate joining/i), "Within 30 days");
+      await user.click(screen.getByRole("radio", { name: /joining later/i }));
+      await user.type(
+        screen.getByLabelText(/comments on joining later/i),
+        "Offers Nov 2026, joining July 2027",
+      );
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+        joiningTimeline: "later",
+        joiningLaterNotes: "Offers Nov 2026, joining July 2027",
+        // Switching the radio must not carry a note about immediate joining
+        // onto a drive that now says next July.
+        joiningImmediateNotes: "",
+      });
+    });
+
+    it("refuses to submit until one of them is chosen (answer 7)", async () => {
+      const onSubmit = vi.fn();
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      // Undo the choice `fillRequired` made, the only way a radio group can be
+      // emptied: re-render is not available, so this asserts on a fresh form.
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      const forms = screen.getAllByRole("button", { name: /submit for approval/i });
+      await user.click(forms[forms.length - 1] as HTMLElement);
+
+      expect(await screen.findByText(/whether joining is immediate or later/i)).toBeDefined();
+    });
+
+    it("accepts either option with no comment at all", async () => {
+      const onSubmit = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      await fillRequired(user);
+
+      await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ joiningTimeline: "immediate" });
+    });
   });
 });

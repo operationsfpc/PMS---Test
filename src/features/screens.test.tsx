@@ -130,6 +130,13 @@ describe("PifApprovalQueue", () => {
    * unchanged: banding comes from the real domain rule, and both irreversible
    * consequences must be stated before the click.
    */
+  /** J1/J2/J3 (2026-08-18): these fixtures are about banding, not attachments. */
+  const noAttachment = {
+    jobDescriptionUrl: null,
+    jobDescriptionName: null,
+    shift: "Day shift",
+    joining: "Immediate joining",
+  };
   const stub = {
     pending: async () => [
       {
@@ -141,6 +148,7 @@ describe("PifApprovalQueue", () => {
         driveType: "placement",
         onHold: true,
         createdAt: "2026-08-01T09:00:00Z",
+        ...noAttachment,
       },
       {
         id: "p1",
@@ -151,6 +159,7 @@ describe("PifApprovalQueue", () => {
         driveType: "placement",
         onHold: false,
         createdAt: "2026-08-01T10:00:00Z",
+        ...noAttachment,
       },
     ],
     decide: async () => undefined,

@@ -29,6 +29,32 @@ const values: PifFormValues = {
   driveType: "placement",
 };
 
+/**
+ * Storage is stubbed at the client, not over HTTP: supabase-js signs and
+ * chunks uploads, and none of that is what these tests are about.
+ */
+function storageStub(opts: { uploadFails?: boolean } = {}) {
+  const client = createClient(BASE, "anon-key", {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const uploads: { bucket: string; path: string; size: number; contentType?: string }[] = [];
+
+  client.storage.from = ((bucket: string) => ({
+    upload: async (path: string, file: File, options?: { contentType?: string }) => {
+      uploads.push({ bucket, path, size: file.size, ...options });
+      return opts.uploadFails === true
+        ? { data: null, error: new Error("network") }
+        : { data: { path }, error: null };
+    },
+  })) as unknown as typeof client.storage.from;
+
+  return { client, uploads };
+}
+
+/** The recruiter's JD, as the browser hands it over. */
+const jdFile = (name = "Zoho-GET-JD.pdf") =>
+  new File([new Uint8Array(2048)], name, { type: "application/pdf" });
+
 describe("createSupabasePifRepository", () => {
   it("saves a draft as status draft, owned by the AE who raised it", async () => {
     let body: Record<string, unknown> = {};
@@ -245,6 +271,146 @@ describe("createSupabasePifRepository — eligibility scale and rounds", () => {
     });
 
     expect(body.additional_designations).toEqual(["Associate Engineer", "Trainee Engineer"]);
+  });
+});
+
+/**
+ * J1/J2/J3 (2026-08-18): the attached JD, the shift and the joining timeline.
+ */
+describe("createSupabasePifRepository — the JD, the shift and the joining timeline", () => {
+  const captureWith = async (
+    client: Parameters<typeof createSupabasePifRepository>[0],
+    input: PifFormValues,
+    mode: "draft" | "submit" = "submit",
+  ) => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: body.id ?? "d1", status: mode });
+      }),
+    );
+    const repository = createSupabasePifRepository(client, async () => AE);
+    await (mode === "draft" ? repository.saveDraft(input) : repository.submit(input));
+    return body;
+  };
+
+  it("puts the JD in the job-descriptions bucket, under the drive it belongs to", async () => {
+    const { client, uploads } = storageStub();
+
+    const body = await captureWith(client, { ...values, jobDescriptionFile: jdFile() });
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]?.bucket).toBe("job-descriptions");
+    // The read policy in 0051 asks whether the FIRST path segment is a drive
+    // the reader may see, so the folder has to be the drive's own id — which
+    // is why the id is generated here rather than by the database.
+    expect(uploads[0]?.path.startsWith(`${body.id as string}/`)).toBe(true);
+    expect(uploads[0]?.contentType).toBe("application/pdf");
+  });
+
+  it("records where the file went, what it is called and how big it is", async () => {
+    const { client } = storageStub();
+
+    const body = await captureWith(client, { ...values, jobDescriptionFile: jdFile() });
+
+    expect(body.jd_storage_path).toMatch(new RegExp(`^${body.id as string}/.+\\.pdf$`));
+    // The name the recruiter gave it, kept separately: the stored path carries
+    // a timestamp so a replacement cannot collide, and "jd-1755500000-…" is
+    // not what anyone should be shown.
+    expect(body.jd_file_name).toBe("Zoho-GET-JD.pdf");
+    expect(body.jd_size_bytes).toBe(2048);
+  });
+
+  it("uploads nothing, and stores nothing, when no JD was attached", async () => {
+    const { client, uploads } = storageStub();
+
+    const body = await captureWith(client, { ...values, jobDescriptionFile: null });
+
+    expect(uploads).toEqual([]);
+    expect(body.jd_storage_path).toBeNull();
+    expect(body.jd_file_name).toBeNull();
+    expect(body.jd_size_bytes).toBeNull();
+  });
+
+  /**
+   * The upload runs BEFORE the row, exactly as the SRF's marksheets do. An
+   * object with no row costs a few kilobytes; a row with no object hands the
+   * Delivery Head and the student a link that opens nothing.
+   */
+  it("writes no drive at all when the upload fails, and says which part failed", async () => {
+    const { client } = storageStub({ uploadFails: true });
+    let inserted = false;
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, () => {
+        inserted = true;
+        return HttpResponse.json({ id: "d1", status: "submitted" });
+      }),
+    );
+
+    await expect(
+      createSupabasePifRepository(client, async () => AE).submit({
+        ...values,
+        jobDescriptionFile: jdFile(),
+      }),
+    ).rejects.toThrow(/job description/i);
+    expect(inserted).toBe(false);
+  });
+
+  it("attaches the JD to a draft too — an AE gathers the file before the detail", async () => {
+    const { client, uploads } = storageStub();
+
+    await captureWith(client, { ...values, jobDescriptionFile: jdFile() }, "draft");
+
+    expect(uploads).toHaveLength(1);
+  });
+
+  it("stores the shift as a value, with the hours only on a night shift", async () => {
+    const { client } = storageStub();
+
+    const night = await captureWith(client, {
+      ...values,
+      shiftType: "night",
+      shiftNightTiming: "9.00 pm – 6.00 am",
+    });
+    expect(night.shift_type).toBe("night");
+    expect(night.shift_night_timing).toBe("9.00 pm – 6.00 am");
+
+    // A timing left behind by a switch back to Day is dropped here as well as
+    // in the schema: 0051 refuses the pair outright, and the AE would lose the
+    // whole PIF to a check constraint.
+    const day = await captureWith(client, {
+      ...values,
+      shiftType: "day",
+      shiftNightTiming: "9.00 pm – 6.00 am",
+    });
+    expect(day.shift_type).toBe("day");
+    expect(day.shift_night_timing).toBeNull();
+  });
+
+  it("stores the joining choice with only its own comment", async () => {
+    const { client } = storageStub();
+
+    const later = await captureWith(client, {
+      ...values,
+      joiningTimeline: "later",
+      joiningImmediateNotes: "Within 30 days",
+      joiningLaterNotes: "Offers Nov 2026, joining July 2027",
+    });
+
+    expect(later.joining_timeline).toBe("later");
+    expect(later.joining_later_notes).toBe("Offers Nov 2026, joining July 2027");
+    expect(later.joining_immediate_notes).toBeNull();
+  });
+
+  it("leaves the joining columns empty on a draft that has not chosen yet", async () => {
+    const { client } = storageStub();
+
+    const body = await captureWith(client, { ...values, joiningTimeline: "" }, "draft");
+
+    expect(body.joining_timeline).toBeNull();
+    expect(body.joining_immediate_notes).toBeNull();
+    expect(body.joining_later_notes).toBeNull();
   });
 });
 

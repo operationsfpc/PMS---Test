@@ -41,6 +41,7 @@ export interface Enums {
     | "completed"
     | "rejected";
   drive_type: "placement" | "internship_convertible" | "internship";
+  joining_timeline: "immediate" | "later";
   marks_scale: "cgpa" | "percentage";
   offer_category: "regular" | "dream" | "super_dream";
   offer_source: "on_campus" | "self_placed";
@@ -53,6 +54,7 @@ export interface Enums {
     | "sales"
     | "operations_business";
   round_result: "selected" | "rejected" | "waitlisted" | "on_hold";
+  school_board: "state_board" | "cbse" | "cisce" | "nios" | "ib" | "cambridge" | "other";
   srf_status: "invited" | "registered" | "srf_submitted" | "srf_approved" | "srf_rejected";
   verification_status: "pending" | "verified" | "rejected";
 }
@@ -280,6 +282,13 @@ export interface DrivesRow {
   round_count: number | null;
   min_overall_marks: number | null;
   min_overall_cgpa_scale: Enums["marks_scale"];
+  jd_storage_path: string | null;
+  jd_file_name: string | null;
+  jd_size_bytes: number | null;
+  shift_night_timing: string | null;
+  joining_timeline: Enums["joining_timeline"] | null;
+  joining_immediate_notes: string | null;
+  joining_later_notes: string | null;
 }
 
 export type DrivesInsert = Pick<DrivesRow, "company_name"> &
@@ -333,6 +342,13 @@ export type DrivesInsert = Pick<DrivesRow, "company_name"> &
       | "round_count"
       | "min_overall_marks"
       | "min_overall_cgpa_scale"
+      | "jd_storage_path"
+      | "jd_file_name"
+      | "jd_size_bytes"
+      | "shift_night_timing"
+      | "joining_timeline"
+      | "joining_immediate_notes"
+      | "joining_later_notes"
     >
   >;
 
@@ -544,13 +560,21 @@ export interface ShortlistEntriesRow {
   rationale: string | null;
   decided_by: string | null;
   decided_at: string;
+  opt_out_override_reason: string | null;
 }
 
 export type ShortlistEntriesInsert = Pick<ShortlistEntriesRow, "application_id"> &
   Partial<
     Pick<
       ShortlistEntriesRow,
-      "id" | "included" | "rank" | "score" | "rationale" | "decided_by" | "decided_at"
+      | "id"
+      | "included"
+      | "rank"
+      | "score"
+      | "rationale"
+      | "decided_by"
+      | "decided_at"
+      | "opt_out_override_reason"
     >
   >;
 
@@ -746,6 +770,13 @@ export interface StudentsRow {
   ug_aggregate_declared: number | null;
   ug_aggregate_scale: Enums["marks_scale"] | null;
   other_profiles: Json;
+  tenth_board: Enums["school_board"] | null;
+  tenth_board_state: string | null;
+  tenth_board_other: string | null;
+  twelfth_board: Enums["school_board"] | null;
+  twelfth_board_state: string | null;
+  twelfth_board_other: string | null;
+  diploma_university: string | null;
 }
 
 export type StudentsInsert = Pick<
@@ -802,5 +833,12 @@ export type StudentsInsert = Pick<
       | "ug_aggregate_declared"
       | "ug_aggregate_scale"
       | "other_profiles"
+      | "tenth_board"
+      | "tenth_board_state"
+      | "tenth_board_other"
+      | "twelfth_board"
+      | "twelfth_board_state"
+      | "twelfth_board_other"
+      | "diploma_university"
     >
   >;

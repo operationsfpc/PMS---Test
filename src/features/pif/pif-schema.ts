@@ -1,4 +1,7 @@
+import { jobDescriptionFileProblem } from "@domain/attachments";
+import { JOINING_TIMELINES, joiningNotesFor } from "@domain/joining";
 import { isValidForScale, MARKS_SCALES } from "@domain/marks";
+import { nightTimingFor, nightTimingIsMissing, SHIFT_TYPES } from "@domain/shift";
 import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
 import { z } from "zod";
 
@@ -30,6 +33,24 @@ const optionalUrl = z
 const nullableNumber = z.number().nullable().default(null);
 
 /**
+ * The recruiter's own JD (J1, 2026-08-18).
+ *
+ * Validated in a DRAFT as well as a submission. A draft may be half-finished,
+ * but it may not hold a file the bucket will refuse — the AE would lose the
+ * upload and be told "could not save the PIF" about a form that is fine.
+ */
+const jobDescriptionFile = z
+  .custom<File | null>((v) => v === null || v === undefined || v instanceof File, {
+    message: "Attach the job description as a file.",
+  })
+  .transform((v) => (v instanceof File ? v : null))
+  .superRefine((file, ctx) => {
+    const problem = jobDescriptionFileProblem(file);
+    if (problem !== null) ctx.addIssue({ code: "custom", message: problem });
+  })
+  .default(null);
+
+/**
  * Checkbox groups hand back an array of strings (or a bare string when one box
  * is ticked). Normalising here keeps the DOM's representation out of the rest
  * of the schema and out of the form.
@@ -57,7 +78,9 @@ export const PIF_DEFAULTS = {
   ctcMaxLpa: null,
   ctcBreakup: "",
   shiftType: "",
+  shiftNightTiming: "",
   bondDetails: "",
+  jobDescriptionFile: null as File | null,
   minOverallCgpa: null,
   minOverallCgpaScale: "cgpa",
   minTenthPercentage: null,
@@ -68,6 +91,9 @@ export const PIF_DEFAULTS = {
   driveMode: "",
   tentativeDate: "",
   timelineNotes: "",
+  joiningTimeline: "",
+  joiningImmediateNotes: "",
+  joiningLaterNotes: "",
   driveType: "",
   additionalDesignations: [] as string[],
   // Typed, not inferred as `readonly []`: RHF needs a mutable array shape.
@@ -106,8 +132,15 @@ export const pifDraftSchema = z.object({
   ctcMinLpa: nullableNumber,
   ctcMaxLpa: nullableNumber,
   ctcBreakup: optionalText,
-  shiftType: optionalText,
+  /**
+   * J2: a radio, not a text box. `""` is "not answered" — the form preselects
+   * nothing, because a preselected Day is an answer nobody gave.
+   */
+  shiftType: z.enum(["", ...SHIFT_TYPES]).default(""),
+  /** Night only. `@domain/shift` and `0051` both refuse it anywhere else. */
+  shiftNightTiming: optionalText,
   bondDetails: optionalText,
+  jobDescriptionFile,
   minOverallCgpa: nullableNumber,
   /**
    * F12: recruiters state the bar the way their own HR does. The DECLARED
@@ -123,7 +156,16 @@ export const pifDraftSchema = z.object({
   mandatorySkills: optionalText,
   driveMode: z.enum(["", ...DRIVE_MODES]).default(""),
   tentativeDate: optionalText,
+  /**
+   * The prose box J3 replaces. Kept in the contract because four live drives
+   * hold their whole joining story in it and answer 9 leaves them untouched;
+   * the form no longer collects it.
+   */
   timelineNotes: optionalText,
+  /** J3: the choice, and one comment box per option (answer 6). */
+  joiningTimeline: z.enum(["", ...JOINING_TIMELINES]).default(""),
+  joiningImmediateNotes: optionalText,
+  joiningLaterNotes: optionalText,
   driveType: z.enum(["", ...DRIVE_TYPES]).default(""),
   additionalDesignations: additionalDesignations.default([]),
   /**
@@ -158,7 +200,17 @@ export const pifSubmitSchema = pifDraftSchema
         (rounds) => rounds.every((round) => round.name.trim() !== ""),
         "Name every round — a student cannot prepare for “Round 2”.",
       ),
-    jobDescription: requiredText("Job description"),
+    /**
+     * NOT required since 2026-08-18 (answer 2: "keep space to type JD. Field
+     * is not mandatory"). The recruiter's PDF can carry it now, and retyping
+     * an attachment to get past a validator is how a summary that nobody
+     * checked ends up on a student's drive card.
+     */
+    jobDescription: optionalText,
+    /** J3: the choice is required; its comment is not (answer 7). */
+    joiningTimeline: z.enum(JOINING_TIMELINES, {
+      message: "Say whether joining is immediate or later.",
+    }),
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),
     ctcMinLpa: z.number().positive("Minimum CTC is required."),
@@ -204,7 +256,30 @@ export const pifSubmitSchema = pifDraftSchema
       path: ["additionalDesignations"],
       message: "Each designation may only be named once.",
     },
-  );
+  )
+  /**
+   * J2: "night shift" with no hours is not something a student can plan
+   * around, and it is the only reason the timing box exists.
+   */
+  .refine((v) => !nightTimingIsMissing(v.shiftType, v.shiftNightTiming), {
+    path: ["shiftNightTiming"],
+    message: "Give the hours of the night shift — a student plans their travel around them.",
+  })
+  /**
+   * Anything the AE typed and then abandoned by changing a radio is dropped
+   * HERE, not merely hidden by the form. A hidden field still submits, and
+   * `0051` refuses a night timing on a day shift outright.
+   */
+  .transform((v) => {
+    const notes = joiningNotesFor(v.joiningTimeline, v.joiningImmediateNotes, v.joiningLaterNotes);
+
+    return {
+      ...v,
+      shiftNightTiming: nightTimingFor(v.shiftType, v.shiftNightTiming),
+      joiningImmediateNotes: notes.immediate,
+      joiningLaterNotes: notes.later,
+    };
+  });
 
 export type PifFormValues = z.input<typeof pifDraftSchema>;
 export type PifSubmission = z.output<typeof pifSubmitSchema>;

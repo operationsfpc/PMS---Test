@@ -22,6 +22,11 @@ const pif = {
   driveType: "placement",
   onHold: false,
   createdAt: "2026-08-01T09:00:00Z",
+  // J1/J2/J3 (2026-08-18): what the Delivery Head is actually approving.
+  jobDescriptionUrl: null as string | null,
+  jobDescriptionName: null as string | null,
+  shift: "Day shift",
+  joining: "Immediate joining",
 };
 
 function repo(overrides: Partial<ApprovalRepository> = {}): ApprovalRepository {
@@ -123,5 +128,57 @@ describe("PifApprovalQueue", () => {
       <PifApprovalQueue repository={repo({ pending: async () => [{ ...pif, onHold: true }] })} />,
     );
     expect(await screen.findByText(/on hold/i)).toBeDefined();
+  });
+});
+
+/**
+ * J1/J2/J3 (2026-08-18), answer 10: the JD belongs on the screen where the
+ * role is approved. Approving a drive from a company name and a CTC is
+ * approving a job title.
+ */
+describe("PifApprovalQueue — the JD, the shift and the joining timeline", () => {
+  it("offers the attached JD as a link, named as the recruiter named it", async () => {
+    render(
+      <PifApprovalQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...pif,
+              jobDescriptionUrl: "https://signed/jd",
+              jobDescriptionName: "GS-Analyst-JD.pdf",
+            },
+          ],
+        })}
+      />,
+    );
+
+    const link = await screen.findByRole("link", { name: /GS-Analyst-JD\.pdf/ });
+    expect(link.getAttribute("href")).toBe("https://signed/jd");
+  });
+
+  it("says so plainly when no JD was attached, rather than showing a dead link", async () => {
+    render(<PifApprovalQueue repository={repo()} />);
+
+    expect(await screen.findByText(/no job description attached/i)).toBeDefined();
+    expect(screen.queryByRole("link", { name: /\.pdf/ })).toBeNull();
+  });
+
+  it("shows the shift and the joining timeline beside the decision", async () => {
+    render(
+      <PifApprovalQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...pif,
+              shift: "Night shift (9pm – 6am)",
+              joining: "Joining later — Joining July 2027",
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText("Night shift (9pm – 6am)")).toBeDefined();
+    expect(screen.getByText("Joining later — Joining July 2027")).toBeDefined();
   });
 });

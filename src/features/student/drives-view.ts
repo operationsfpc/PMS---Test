@@ -1,5 +1,8 @@
 import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
+import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
+import { describeJoining } from "@domain/joining";
 import type { Offer } from "@domain/offers";
+import { describeShift } from "@domain/shift";
 import type { AcademicProfile, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -68,12 +71,17 @@ export const DRIVE_COLUMNS = `
   ctc_min_lpa, ctc_max_lpa, min_overall_cgpa, min_tenth_percentage,
   min_twelfth_percentage, arrears_policy, eligible_passing_years,
   job_description, work_locations, ctc_breakup, bond_details, shift_type,
+  shift_night_timing, timeline_notes, joining_timeline, joining_immediate_notes,
+  joining_later_notes, jd_storage_path, jd_file_name,
   mandatory_skills, drive_mode, openings, additional_designations,
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name))),
   drive_rounds(sequence, name)
 `;
+
+/** Long enough to open and read a PDF on a phone; short enough not to be forwarded. */
+const JD_LINK_TTL_SECONDS = 60 * 10;
 
 /** Names out of an embedded link table, e.g. drive_eligible_degrees(degrees(name)). */
 function linkedNames(rows: unknown, key: string): readonly string[] {
@@ -244,10 +252,45 @@ export function createSupabaseDrivesView(
     };
   }
 
+  /**
+   * One signed link per attached JD, for the whole list at once.
+   *
+   * Signed and short-lived, like every other document in the system (PRD
+   * §21.2) — the bucket is private and `0051` lets a student read an object
+   * only if they can read the drive whose folder it sits in.
+   *
+   * A failure is swallowed deliberately: the JD is one fact on a card, and a
+   * list that refused to load over an unsignable object would leave the
+   * student unable to apply to anything at all.
+   */
+  async function signJobDescriptions(
+    drives: readonly Record<string, unknown>[],
+  ): Promise<Map<string, string>> {
+    const paths = drives
+      .map((raw) => raw.jd_storage_path as string | null)
+      .filter((path): path is string => typeof path === "string" && path !== "");
+
+    const links = new Map<string, string>();
+    if (paths.length === 0) return links;
+
+    const { data } = await client.storage
+      .from(JOB_DESCRIPTION_BUCKET)
+      .createSignedUrls(paths, JD_LINK_TTL_SECONDS);
+
+    for (const link of data ?? []) {
+      if (link.path !== null && link.signedUrl !== null && link.signedUrl !== undefined) {
+        links.set(link.path, link.signedUrl);
+      }
+    }
+
+    return links;
+  }
+
   return {
     async openDrives(): Promise<readonly OpenDrive[]> {
       const { student, drives, appliedIds } = await load();
       const now = clock();
+      const jdLinks = await signJobDescriptions(drives);
 
       return drives.flatMap((raw) => {
         const drive = toDrive(raw);
@@ -295,7 +338,21 @@ export function createSupabaseDrivesView(
               openings: (raw.openings as number | null) ?? null,
               ctcBreakup: text(raw.ctc_breakup),
               bondDetails: text(raw.bond_details),
-              shiftType: text(raw.shift_type),
+              // J2/J3 (2026-08-18): worded by the domain, so the card and the
+              // approver's queue cannot describe the same drive differently.
+              shift: describeShift(
+                raw.shift_type as string | null,
+                raw.shift_night_timing as string | null,
+              ),
+              joining: describeJoining(
+                raw.joining_timeline as string | null,
+                ((raw.joining_immediate_notes ?? raw.joining_later_notes) as string | null) ??
+                  (raw.timeline_notes as string | null),
+              ),
+              // J1 (answers 3 and 4): the student downloads what the recruiter
+              // actually wrote, not the AE's one-line summary of it.
+              jobDescriptionUrl: jdLinks.get((raw.jd_storage_path as string | null) ?? "") ?? null,
+              jobDescriptionName: (raw.jd_file_name as string | null) ?? null,
               mandatorySkills: text(raw.mandatory_skills),
               driveMode: text(raw.drive_mode),
               applicationStart: (raw.application_start as string | null) ?? null,

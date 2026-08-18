@@ -1,5 +1,8 @@
 import { Button, Card, PageHeader } from "@components/ui";
+import { describeFileSize } from "@domain/attachments";
+import { JOINING_TIMELINES, joiningLabel } from "@domain/joining";
 import { MARKS_SCALES } from "@domain/marks";
+import { SHIFT_TYPES, shiftLabel } from "@domain/shift";
 import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ReactNode, useId, useRef, useState } from "react";
@@ -87,6 +90,54 @@ function Labelled({
 
 const control =
   "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-[#A46AFC]";
+
+/**
+ * A radio group, as a fieldset with a real legend.
+ *
+ * Nothing is preselected anywhere it is used: a preselected first option is an
+ * answer nobody gave, and it would be stored as if the AE had chosen it.
+ */
+function RadioGroup({
+  legend,
+  name,
+  options,
+  value,
+  onChange,
+  error,
+}: {
+  legend: string;
+  name: string;
+  options: readonly { value: string; label: string }[];
+  value: string;
+  onChange: (next: string) => void;
+  error?: string | undefined;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-2 text-sm font-medium text-ink-900">{legend}</legend>
+      <div className="flex flex-wrap gap-x-6 gap-y-2">
+        {options.map((option) => (
+          <label key={option.value} className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name={name}
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              className="size-4 accent-[#3D3777]"
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+      {error !== undefined && (
+        <p className="mt-1 text-xs text-[#DD4820]" role="status">
+          {error}
+        </p>
+      )}
+    </fieldset>
+  );
+}
 
 /**
  * The AE's Position Information Form.
@@ -186,6 +237,11 @@ export function PifForm({
 
   /** The named rounds (2026-08-18). Numbered by position, like the semesters. */
   const rounds = watch("rounds") ?? [];
+
+  /** J1/J2/J3 (2026-08-18): each drives a conditional part of the form. */
+  const jobDescriptionFile = watch("jobDescriptionFile") ?? null;
+  const shiftType = watch("shiftType") ?? "";
+  const joiningTimeline = watch("joiningTimeline") ?? "";
 
   return (
     <>
@@ -297,9 +353,56 @@ export function PifForm({
               </select>
             )}
           </Labelled>
+          {/* Answer 2 (2026-08-18): "keep space to type JD. Field is not
+              mandatory." It is what the student's drive card and the recruiter
+              export can actually show — a PDF is neither excerptable nor
+              readable on a phone between lectures. */}
           <Labelled label="Job description" error={err("jobDescription")} wide>
             {(id) => (
-              <textarea id={id} rows={4} className={control} {...register("jobDescription")} />
+              <>
+                <textarea id={id} rows={4} className={control} {...register("jobDescription")} />
+                <p className="mt-1 text-xs text-ink-500">
+                  Optional. Shown on the student's drive card and in the recruiter export.
+                </p>
+              </>
+            )}
+          </Labelled>
+
+          {/*
+           * J1 (2026-08-18): "add an option to ATTACH a JD (job description) as
+           * PDF FILE." The AE used to retype or paste a fragment of the
+           * recruiter's mail; the document itself never entered the system, so
+           * nobody downstream could read what the company actually wrote.
+           *
+           * It sits BESIDE the typed description (answer 1), not instead of it.
+           */}
+          <Labelled label="Attach the job description (PDF)" error={err("jobDescriptionFile")} wide>
+            {(id) => (
+              <>
+                <input
+                  id={id}
+                  type="file"
+                  accept="application/pdf,.pdf"
+                  className={`${control} file:mr-3 file:rounded-md file:border-0 file:bg-[#3D3777] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
+                  onChange={(e) =>
+                    setValue("jobDescriptionFile", e.target.files?.[0] ?? null, {
+                      shouldValidate: true,
+                    })
+                  }
+                />
+                <p className="mt-1 text-xs text-ink-500">
+                  PDF only, up to 5 MB. Visible to the Delivery Head approving the drive and to the
+                  students it is published to.
+                </p>
+                {jobDescriptionFile !== null && (
+                  <p className="mt-2 text-xs font-medium text-ink-800">
+                    Attached: {jobDescriptionFile.name}{" "}
+                    <span className="font-normal text-ink-500">
+                      ({describeFileSize(jobDescriptionFile.size)})
+                    </span>
+                  </p>
+                )}
+              </>
             )}
           </Labelled>
           <Labelled label="Number of openings" error={err("openings")}>
@@ -335,9 +438,49 @@ export function PifForm({
           <Labelled label="CTC breakup (fixed / variable)" error={err("ctcBreakup")} wide>
             {(id) => <input id={id} className={control} {...register("ctcBreakup")} />}
           </Labelled>
-          <Labelled label="Shift type" error={err("shiftType")}>
-            {(id) => <input id={id} className={control} {...register("shiftType")} />}
-          </Labelled>
+          {/*
+           * J2 (2026-08-18): "Shift time, instead of a text box, change to
+           * radio button — Day and Night as options with time to be filled as
+           * text for night box." Rotational and Flexible were added at
+           * approval (answer 5).
+           *
+           * A free-text box produced "General" on four live drives, which tells
+           * a student nothing about whether they will be awake at 3am.
+           */}
+          <div className="sm:col-span-2">
+            <RadioGroup
+              legend="Shift"
+              name="shiftType"
+              value={shiftType}
+              options={SHIFT_TYPES.map((s) => ({ value: s, label: shiftLabel(s) }))}
+              error={err("shiftType")}
+              onChange={(next) => {
+                setValue("shiftType", next as typeof shiftType, { shouldValidate: true });
+                // Hiding the box is not enough: a hidden field still submits,
+                // and `0051` refuses a night timing on a day shift.
+                if (next !== "night") setValue("shiftNightTiming", "");
+              }}
+            />
+            {shiftType === "night" && (
+              <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
+                <Labelled label="Night shift timing" error={err("shiftNightTiming")}>
+                  {(id) => (
+                    <>
+                      <input
+                        id={id}
+                        className={control}
+                        placeholder="9.00 pm – 6.00 am IST"
+                        {...register("shiftNightTiming")}
+                      />
+                      <p className="mt-1 text-xs text-ink-500">
+                        In the recruiter's own words. A student plans their travel around it.
+                      </p>
+                    </>
+                  )}
+                </Labelled>
+              </div>
+            )}
+          </div>
           <Labelled label="Bond / service agreement" error={err("bondDetails")}>
             {(id) => <input id={id} className={control} {...register("bondDetails")} />}
           </Labelled>
@@ -537,11 +680,64 @@ export function PifForm({
               <input id={id} type="date" className={control} {...register("tentativeDate")} />
             )}
           </Labelled>
-          <Labelled label="Offer rollout and joining timeline" error={err("timelineNotes")} wide>
-            {(id) => (
-              <textarea id={id} rows={3} className={control} {...register("timelineNotes")} />
+          {/*
+           * J3 (2026-08-18): "instead of a large text box, have radio button
+           * for immediate joining and joining later. Have a comments box also
+           * for both the options."
+           *
+           * The one fact a student plans their year around used to be buried in
+           * prose, so no screen could show it and no list could be filtered by
+           * it. One comment box PER OPTION (answer 6) — switching the radio
+           * drops the other, because a note about joining next July left on a
+           * drive that says immediate is worse than no note at all.
+           */}
+          <div className="sm:col-span-2">
+            <RadioGroup
+              legend="Offer rollout and joining"
+              name="joiningTimeline"
+              value={joiningTimeline}
+              options={JOINING_TIMELINES.map((t) => ({ value: t, label: joiningLabel(t) }))}
+              error={err("joiningTimeline")}
+              onChange={(next) => {
+                setValue("joiningTimeline", next as typeof joiningTimeline, {
+                  shouldValidate: true,
+                });
+                setValue(next === "immediate" ? "joiningLaterNotes" : "joiningImmediateNotes", "");
+              }}
+            />
+            {joiningTimeline !== "" && (
+              <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
+                {joiningTimeline === "immediate" ? (
+                  <Labelled
+                    label="Comments on immediate joining"
+                    error={err("joiningImmediateNotes")}
+                  >
+                    {(id) => (
+                      <textarea
+                        id={id}
+                        rows={2}
+                        className={control}
+                        placeholder="Optional — e.g. onboarding within 30 days of the offer."
+                        {...register("joiningImmediateNotes")}
+                      />
+                    )}
+                  </Labelled>
+                ) : (
+                  <Labelled label="Comments on joining later" error={err("joiningLaterNotes")}>
+                    {(id) => (
+                      <textarea
+                        id={id}
+                        rows={2}
+                        className={control}
+                        placeholder="Optional — e.g. offers in Nov 2026, joining from July 2027."
+                        {...register("joiningLaterNotes")}
+                      />
+                    )}
+                  </Labelled>
+                )}
+              </div>
             )}
-          </Labelled>
+          </div>
         </Section>
 
         <div className="flex flex-wrap gap-3 pb-10">

@@ -1,8 +1,18 @@
+import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
+import { joiningNotesFor } from "@domain/joining";
 import { normaliseToCgpa } from "@domain/marks";
+import { nightTimingFor } from "@domain/shift";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PifFormValues } from "./pif-schema";
 
 export class PifError extends Error {}
+
+/** Where the attached JD lives, and what it was called when it arrived. */
+interface JobDescriptionUpload {
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly sizeBytes: number;
+}
 
 export interface PifRepository {
   saveDraft(values: PifFormValues): Promise<{ id: string; status: string }>;
@@ -22,8 +32,32 @@ const nullIfBlank = (v: unknown) => (typeof v === "string" && v.trim() === "" ? 
  * so the AE's form must not be able to set it even if a field were added by
  * mistake later.
  */
-function toRow(values: PifFormValues, actorId: string, status: "draft" | "submitted") {
+function toRow(
+  values: PifFormValues,
+  actorId: string,
+  status: "draft" | "submitted",
+  driveId: string,
+  jd: JobDescriptionUpload | null,
+) {
+  // J2/J3: whatever the AE typed and then abandoned by changing a radio is
+  // dropped here as well as in the schema. `0051` refuses a night timing on a
+  // day shift and a comment against the option that was not chosen, and losing
+  // a whole PIF to a check constraint is not a good way to learn that.
+  const nightTiming = nightTimingFor(values.shiftType ?? "", values.shiftNightTiming ?? "");
+  const joining = joiningNotesFor(
+    values.joiningTimeline ?? "",
+    values.joiningImmediateNotes ?? "",
+    values.joiningLaterNotes ?? "",
+  );
+
   return {
+    /**
+     * Generated here, not by the database, because the JD object has to sit in
+     * a folder named after its drive: `0051`'s read policy asks whether that
+     * folder is a drive the reader may see, and the upload has to happen
+     * before the row exists (see `write`).
+     */
+    id: driveId,
     company_name: values.companyName,
     industry: nullIfBlank(values.industry),
     company_website: nullIfBlank(values.companyWebsite),
@@ -41,7 +75,15 @@ function toRow(values: PifFormValues, actorId: string, status: "draft" | "submit
     ctc_max_lpa: values.ctcMaxLpa ?? null,
     ctc_breakup: nullIfBlank(values.ctcBreakup),
     shift_type: nullIfBlank(values.shiftType),
+    shift_night_timing: nullIfBlank(nightTiming),
     bond_details: nullIfBlank(values.bondDetails),
+
+    // J1: the recruiter's own JD. Three columns rather than one, because a
+    // storage path is not a file name and neither is a size - and the AE, the
+    // Delivery Head and the student are all shown the name.
+    jd_storage_path: jd?.storagePath ?? null,
+    jd_file_name: jd?.fileName ?? null,
+    jd_size_bytes: jd?.sizeBytes ?? null,
 
     // F12: two columns, deliberately. `min_overall_marks` + its scale are what
     // the AE typed and what a coordinator checks against the recruiter's mail;
@@ -62,6 +104,9 @@ function toRow(values: PifFormValues, actorId: string, status: "draft" | "submit
     drive_mode: nullIfBlank(values.driveMode),
     tentative_date: nullIfBlank(values.tentativeDate),
     timeline_notes: nullIfBlank(values.timelineNotes),
+    joining_timeline: nullIfBlank(values.joiningTimeline),
+    joining_immediate_notes: nullIfBlank(joining.immediate),
+    joining_later_notes: nullIfBlank(joining.later),
     drive_type: nullIfBlank(values.driveType),
 
     // F7: one interview process, several job titles, ONE PIF.
@@ -115,15 +160,45 @@ export function createSupabasePifRepository(
     return data.session?.user.id ?? null;
   },
 ): PifRepository {
+  /**
+   * Puts the attached JD in storage and describes what landed there.
+   *
+   * Uploaded BEFORE the drive row, the same order the SRF's marksheets use and
+   * for the same reason: storage cannot join the insert. An object with no row
+   * costs a few kilobytes and is invisible; a row with no object hands the
+   * Delivery Head approving the drive, and every student who applies to it, a
+   * link that opens nothing.
+   */
+  async function uploadJobDescription(driveId: string, file: File): Promise<JobDescriptionUpload> {
+    // Timestamped so replacing the JD cannot collide with the file it replaces.
+    const path = `${driveId}/jd-${Date.now()}-${file.name}`;
+    const { error } = await client.storage
+      .from(JOB_DESCRIPTION_BUCKET)
+      .upload(path, file, { contentType: "application/pdf" });
+
+    if (error !== null) {
+      throw new PifError(
+        "Could not upload the job description. Check your connection and try again — nothing has been saved.",
+        { cause: error },
+      );
+    }
+
+    return { storagePath: path, fileName: file.name, sizeBytes: file.size };
+  }
+
   async function write(values: PifFormValues, status: "draft" | "submitted") {
     const actorId = await getActorId();
     if (actorId === null) {
       throw new PifError("Your session has expired. Please sign in again.");
     }
 
+    const driveId = crypto.randomUUID();
+    const file = values.jobDescriptionFile ?? null;
+    const jd = file === null ? null : await uploadJobDescription(driveId, file);
+
     const { data, error } = await client
       .from("drives")
-      .insert(toRow(values, actorId, status))
+      .insert(toRow(values, actorId, status, driveId, jd))
       .select("id, status")
       .single();
 
@@ -132,8 +207,6 @@ export function createSupabasePifRepository(
       // for whoever has to work out why it happened.
       throw new PifError(explain(error), { cause: error });
     }
-
-    const driveId = data.id as string;
 
     /**
      * The rounds the AE was told about, written as the drive's own rounds
@@ -154,14 +227,14 @@ export function createSupabasePifRepository(
     if (rounds.length > 0) {
       await client.from("drive_rounds").insert(
         rounds.map((round) => ({
-          drive_id: driveId,
+          drive_id: data.id as string,
           sequence: round.sequence,
           name: round.name.trim(),
         })),
       );
     }
 
-    return { id: driveId, status: data.status as string };
+    return { id: data.id as string, status: data.status as string };
   }
 
   return {

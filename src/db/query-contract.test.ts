@@ -10,6 +10,7 @@ import {
   DASHBOARD_DRIVE_BOX_COLUMNS,
   DASHBOARD_LIVE_DRIVE_COLUMNS,
 } from "@features/dashboard/dashboard-view";
+import { COLUMNS as PIF_APPROVAL_COLUMNS } from "@features/delivery-head/approval-repository";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
 import {
@@ -239,6 +240,10 @@ describe("every hand-written select matches the schema", () => {
     // The publish screen ran on invented data until 2026-08-04, so neither of
     // these selects had ever met the schema.
     ["publish drive", "drives", PUBLISH_DRIVE_COLUMNS],
+    // The Delivery Head's queue, registered when it grew the JD, the shift and
+    // the joining timeline (2026-08-18). It had never been checked against the
+    // schema at all, and it is the one screen that stops a drive.
+    ["pif approval queue", "drives", PIF_APPROVAL_COLUMNS],
     ["srf prefill", "students", SRF_PROFILE_COLUMNS],
     // What a verified student may still edit themselves (R10).
     ["student profile edit", "students", STUDENT_PROFILE_COLUMNS],

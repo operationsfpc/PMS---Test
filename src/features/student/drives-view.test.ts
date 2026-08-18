@@ -419,3 +419,109 @@ describe("createSupabaseDrivesView — the detail behind View more", () => {
     );
   });
 });
+
+/**
+ * J1/J2/J3 (2026-08-18), answers 3 and 4: the student can download the
+ * recruiter's own JD, and reads the shift and the joining plan in words rather
+ * than in whatever the AE typed.
+ */
+describe("createSupabaseDrivesView — the JD, the shift and the joining timeline", () => {
+  /** Storage stubbed at the client; supabase-js signs URLs, not this code. */
+  const withStorage = (signed: Record<string, string> = {}) => {
+    const client = createClient(BASE, "anon-key", {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    let asked: string[] = [];
+
+    client.storage.from = ((bucket: string) => ({
+      createSignedUrls: async (paths: string[]) => {
+        asked = paths;
+        return {
+          data: paths.map((path) => ({ path, signedUrl: signed[path] ?? null, error: null })),
+          error: null,
+          bucket,
+        };
+      },
+    })) as unknown as typeof client.storage.from;
+
+    return {
+      view: () =>
+        createSupabaseDrivesView(
+          client,
+          async () => "u1",
+          () => new Date("2026-09-05T00:00:00Z"),
+        ),
+      bucketPaths: () => asked,
+    };
+  };
+
+  it("gives the student a signed link to the attached JD", async () => {
+    stub({
+      drives: [liveDrive({ jd_storage_path: "d1/jd-1.pdf", jd_file_name: "Zoho-MTS-JD.pdf" })],
+    });
+    const { view: v, bucketPaths } = withStorage({ "d1/jd-1.pdf": "https://signed/jd" });
+
+    const [drive] = await v().openDrives();
+
+    expect(bucketPaths()).toEqual(["d1/jd-1.pdf"]);
+    expect(drive?.details.jobDescriptionUrl).toBe("https://signed/jd");
+    expect(drive?.details.jobDescriptionName).toBe("Zoho-MTS-JD.pdf");
+  });
+
+  it("asks storage for nothing when no open drive has one", async () => {
+    stub({ drives: [liveDrive()] });
+    const { view: v, bucketPaths } = withStorage();
+
+    const [drive] = await v().openDrives();
+
+    expect(bucketPaths()).toEqual([]);
+    expect(drive?.details.jobDescriptionUrl).toBeNull();
+  });
+
+  /**
+   * The JD is one fact on a card. A list that refuses to load because one
+   * object cannot be signed would leave the student unable to apply to
+   * anything at all.
+   */
+  it("still lists the drive when the link cannot be signed", async () => {
+    stub({ drives: [liveDrive({ jd_storage_path: "d1/jd-1.pdf" })] });
+    const { view: v } = withStorage();
+
+    const [drive] = await v().openDrives();
+
+    expect(drive?.companyName).toBe("Zoho");
+    expect(drive?.details.jobDescriptionUrl).toBeNull();
+  });
+
+  it("words the shift and the joining plan the way the domain does", async () => {
+    stub({
+      drives: [
+        liveDrive({
+          shift_type: "night",
+          shift_night_timing: "9pm – 6am",
+          joining_timeline: "later",
+          joining_later_notes: "Joining July 2027",
+        }),
+      ],
+    });
+
+    const [drive] = await view().openDrives();
+
+    expect(drive?.details.shift).toBe("Night shift (9pm – 6am)");
+    expect(drive?.details.joining).toBe("Joining later — Joining July 2027");
+  });
+
+  /** Answer 9: a drive raised before the radio existed keeps its own words. */
+  it("repeats a legacy shift and a legacy timeline verbatim", async () => {
+    stub({
+      drives: [
+        liveDrive({ shift_type: "General", timeline_notes: "Offers in Nov, joining in batches" }),
+      ],
+    });
+
+    const [drive] = await view().openDrives();
+
+    expect(drive?.details.shift).toBe("General");
+    expect(drive?.details.joining).toBe("Offers in Nov, joining in batches");
+  });
+});

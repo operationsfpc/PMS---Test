@@ -13,7 +13,12 @@ export interface OpenDriveDetails {
   readonly openings: number | null;
   readonly ctcBreakup: string;
   readonly bondDetails: string;
-  readonly shiftType: string;
+  /** J2/J3 (2026-08-18): worded by @domain/shift and @domain/joining. */
+  readonly shift: string;
+  readonly joining: string;
+  /** J1: a short-lived signed link to the recruiter's own JD, or null. */
+  readonly jobDescriptionUrl: string | null;
+  readonly jobDescriptionName: string | null;
   readonly mandatorySkills: string;
   readonly driveMode: string;
   readonly applicationStart: string | null;
@@ -204,7 +209,8 @@ export function DrivesList({ view }: { view: DrivesView }) {
                       <Fact label="Locations" value={drive.details.locations} />
                       <Fact label="CTC breakup" value={drive.details.ctcBreakup} />
                       <Fact label="Must-have skills" value={drive.details.mandatorySkills} />
-                      <Fact label="Shift" value={drive.details.shiftType} />
+                      <Fact label="Shift" value={drive.details.shift} />
+                      <Fact label="Joining" value={drive.details.joining} />
                       <Fact label="Bond / service agreement" value={drive.details.bondDetails} />
                       <Fact
                         label="Openings"
@@ -223,6 +229,28 @@ export function DrivesList({ view }: { view: DrivesView }) {
                       {/* F7: one interview process, several job titles. */}
                       <Fact label="Also hiring for" value={drive.details.designations.join(", ")} />
                     </dl>
+
+                    {/*
+                     * J1 (2026-08-18, answers 3 and 4). The recruiter's own JD,
+                     * behind a short-lived signed link. Nothing is rendered
+                     * when none was attached: a dead link cannot be told apart
+                     * from a broken permission, and the student asks a
+                     * coordinator either way.
+                     */}
+                    {drive.details.jobDescriptionUrl !== null && (
+                      <p className="mt-4 text-sm">
+                        <a
+                          href={drive.details.jobDescriptionUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-semibold text-[#3D3777] underline underline-offset-2"
+                        >
+                          {drive.details.jobDescriptionName ?? "Job description (PDF)"}
+                        </a>{" "}
+                        <span className="text-ink-500">— the full job description from</span>{" "}
+                        <span className="text-ink-500">{drive.companyName}</span>
+                      </p>
+                    )}
 
                     {drive.details.rounds.length > 0 && (
                       <div className="mt-4">

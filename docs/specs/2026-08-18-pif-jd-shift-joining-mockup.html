@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PIF — JD attachment, shift, joining timeline (mockup)</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Raleway:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #3d3777;
+        --secondary: #ffb800;
+        --accent: #a46afc;
+        --line: #dadada;
+        --muted: #f5f5f5;
+        --ink-900: #1c1b2a;
+        --ink-700: #4b4a5c;
+        --ink-500: #7a7989;
+        --danger: #dd4820;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 28px 16px 60px;
+        background: #ecf1f0;
+        font-family: Inter, system-ui, sans-serif;
+        color: var(--ink-900);
+      }
+      .wrap { max-width: 820px; margin: 0 auto; }
+      h1 {
+        font-family: Raleway, sans-serif;
+        font-size: 20px;
+        color: var(--primary);
+        margin: 0 0 4px;
+      }
+      .sub { color: var(--ink-700); font-size: 13px; margin: 0 0 22px; }
+      .card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 18px;
+      }
+      h2 {
+        font-family: Raleway, sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--primary);
+        margin: 0 0 16px;
+      }
+      label.f { display: block; font-size: 13px; font-weight: 500; margin: 0 0 6px; }
+      input[type="text"], textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 11px;
+        font: inherit;
+        font-size: 14px;
+        outline: none;
+      }
+      input[type="text"]:focus, textarea:focus { border-color: var(--accent); }
+      .hint { font-size: 12px; color: var(--ink-500); margin: 6px 0 0; }
+      .req { color: var(--danger); font-size: 12px; margin: 6px 0 0; }
+      .grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+      .wide { grid-column: 1 / -1; }
+      fieldset { border: 0; margin: 0; padding: 0; }
+      legend { font-size: 13px; font-weight: 500; padding: 0; margin-bottom: 8px; }
+      .radios { display: flex; gap: 22px; flex-wrap: wrap; }
+      .radios label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+      input[type="radio"] { accent-color: var(--primary); width: 16px; height: 16px; }
+      .branch {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-left: 3px solid var(--accent);
+        background: #a46afc0d;
+        border-radius: 0 8px 8px 0;
+      }
+      .drop {
+        border: 1.5px dashed var(--accent);
+        border-radius: 10px;
+        padding: 16px;
+        background: #a46afc08;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 8px 14px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+      .file {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-top: 12px;
+      }
+      .file .name { font-weight: 600; }
+      .file .meta { color: var(--ink-500); }
+      .note {
+        border: 1px solid var(--accent);
+        background: #a46afc0d;
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--ink-700);
+        margin-bottom: 18px;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--primary);
+        background: #ffb80033;
+        border-radius: 999px;
+        padding: 3px 9px;
+        margin-left: 8px;
+      }
+      @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Position Information Form — proposed changes</h1>
+      <p class="sub">
+        Three blocks only. Everything else on the PIF is unchanged. Conditional fields are shown
+        open so they can be judged.
+      </p>
+
+      <div class="note">
+        Both conditional branches (<strong>Night</strong> and <strong>Joining later</strong>) are
+        drawn expanded here. On the real form each appears only once its radio is chosen, and the
+        night timing is cleared if the AE switches back to Day.
+      </div>
+
+      <!-- J1 -->
+      <div class="card">
+        <h2>Role details <span class="tag">J1 — attach the JD</span></h2>
+        <div class="grid">
+          <div class="wide">
+            <label class="f" for="jd">Job description <span style="color:var(--danger)">*</span></label>
+            <textarea id="jd" rows="4">Graduate Engineer Trainee — build and maintain services on the payments platform…</textarea>
+            <p class="hint">
+              Shown on the student's drive card and in the recruiter export. Kept even when a PDF
+              is attached — a card cannot show a PDF.
+            </p>
+          </div>
+
+          <div class="wide">
+            <label class="f" for="jdfile">Attach the job description (PDF)</label>
+            <div class="drop">
+              <div>
+                <div style="font-size:14px;font-weight:600">Attach the recruiter's JD</div>
+                <div class="hint" style="margin-top:2px">PDF only · up to 5 MB · one file</div>
+              </div>
+              <button class="btn" id="jdfile" type="button">Choose file</button>
+            </div>
+
+            <div class="file">
+              <span>📄</span>
+              <span class="name">Zoho-GET-2026-JD.pdf</span>
+              <span class="meta">412 KB</span>
+              <span style="flex:1"></span>
+              <button class="btn" type="button">Replace</button>
+              <button class="btn" type="button" style="color:var(--danger)">Remove</button>
+            </div>
+            <p class="hint">
+              Stored privately and only ever opened through a short-lived signed link. Visible to
+              the Delivery Head approving the drive and to students who can see it.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- J2 -->
+      <div class="card">
+        <h2>Role details — shift <span class="tag">J2 — Day / Night</span></h2>
+        <fieldset>
+          <legend>Shift</legend>
+          <div class="radios">
+            <label><input type="radio" name="shift" /> Day</label>
+            <label><input type="radio" name="shift" checked /> Night</label>
+          </div>
+
+          <div class="branch">
+            <label class="f" for="nt">Night shift timing <span style="color:var(--danger)">*</span></label>
+            <input id="nt" type="text" value="9.00 pm – 6.00 am IST" />
+            <p class="hint">
+              In the recruiter's own words. Required once Night is chosen — "night shift" with no
+              hours is nothing a student can plan around.
+            </p>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- J3 -->
+      <div class="card">
+        <h2>Selection process and timeline <span class="tag">J3 — joining</span></h2>
+        <fieldset>
+          <legend>Offer rollout and joining</legend>
+          <div class="radios">
+            <label><input type="radio" name="joining" /> Immediate joining</label>
+            <label><input type="radio" name="joining" checked /> Joining later</label>
+          </div>
+
+          <div style="margin-top:14px">
+            <label class="f" for="jc">Comments</label>
+            <input
+              id="jc"
+              type="text"
+              value="Offer letters in Nov 2026; onboarding from the first week of July 2027."
+            />
+            <p class="hint">
+              One box, shown whichever option is chosen. Required when "Joining later" is chosen,
+              optional for immediate joining.
+            </p>
+          </div>
+        </fieldset>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn primary" type="button">Submit for approval</button>
+        <button class="btn" type="button">Save draft</button>
+      </div>
+    </div>
+  </body>
+</html>

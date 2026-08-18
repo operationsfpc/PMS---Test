@@ -31,7 +31,10 @@ const open = {
     openings: 25,
     ctcBreakup: "6.5 fixed + 2.5 variable",
     bondDetails: "No bond",
-    shiftType: "General",
+    shift: "Day shift",
+    joining: "Immediate joining",
+    jobDescriptionUrl: null as string | null,
+    jobDescriptionName: null as string | null,
     mandatorySkills: "TypeScript, SQL",
     driveMode: "on_campus",
     applicationStart: "2026-09-01T00:00:00Z",
@@ -250,5 +253,56 @@ describe("DrivesList \u2014 confirming an application", () => {
 
     expect(apply).not.toHaveBeenCalled();
     expect(screen.queryByText(/are you sure/i)).toBeNull();
+  });
+});
+
+/**
+ * J1 (2026-08-18), answers 3 and 4: the student downloads the recruiter's own
+ * JD rather than the AE's one-line summary of it.
+ */
+describe("DrivesList — the attached job description", () => {
+  const withJd = (details: Partial<(typeof open)["details"]>) =>
+    view({ openDrives: async () => [{ ...open, details: { ...open.details, ...details } }] });
+
+  it("offers the JD as a link, named as the recruiter named it", async () => {
+    const user = userEvent.setup();
+    render(
+      <DrivesList
+        view={withJd({
+          jobDescriptionUrl: "https://signed/jd",
+          jobDescriptionName: "Zoho-MTS-JD.pdf",
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
+
+    const link = screen.getByRole("link", { name: /Zoho-MTS-JD\.pdf/ });
+    expect(link.getAttribute("href")).toBe("https://signed/jd");
+  });
+
+  it("shows no link at all when nothing was attached", async () => {
+    const user = userEvent.setup();
+    render(<DrivesList view={view()} />);
+
+    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
+
+    // Never a dead link: a student who clicks one cannot tell a missing file
+    // from a broken permission, and will ask a coordinator either way.
+    expect(screen.queryByRole("link", { name: /job description/i })).toBeNull();
+  });
+
+  it("shows the shift and the joining plan in the words the domain chose", async () => {
+    const user = userEvent.setup();
+    render(
+      <DrivesList
+        view={withJd({ shift: "Night shift (9pm – 6am)", joining: "Joining later — July 2027" })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
+
+    expect(screen.getByText("Night shift (9pm – 6am)")).toBeDefined();
+    expect(screen.getByText("Joining later — July 2027")).toBeDefined();
   });
 });

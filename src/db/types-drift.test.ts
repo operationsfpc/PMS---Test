@@ -1,4 +1,5 @@
 import { SCHOOL_BOARDS } from "@domain/boards";
+import { JOINING_TIMELINES } from "@domain/joining";
 import { OFFER_CATEGORIES } from "@domain/offer-category";
 import {
   APP_ROLES,
@@ -45,6 +46,11 @@ describe("Postgres enums match the domain vocabularies", () => {
     // class 10, ISC at class 12), which is exactly why the values must not
     // drift: `boardLabel` is the only thing that knows the difference.
     ["school_board", SCHOOL_BOARDS],
+    // 2026-08-18. A real enum because nothing existed before it — unlike the
+    // shift, whose column already held free text on four live drives and is
+    // therefore guarded by a NOT VALID check constraint instead
+    // (`pif-jd-shift-joining.test.ts`).
+    ["joining_timeline", JOINING_TIMELINES],
   ];
 
   it.each(cases)(

@@ -176,6 +176,50 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                   {pif.driveType !== null && ` · ${pif.driveType.replaceAll("_", " ")}`}
                 </p>
 
+                {/*
+                 * J1/J2/J3 (2026-08-18, answer 10). The Delivery Head approves
+                 * the commercials of a role, and until today this card carried
+                 * a company, a title and a CTC — so the shift a student would
+                 * work, when they would start, and the recruiter's own JD were
+                 * all things the approver had to take on trust.
+                 */}
+                <dl className="mt-3 grid gap-3 rounded-lg bg-surface-muted p-3 sm:grid-cols-3">
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      Shift
+                    </dt>
+                    <dd className="mt-0.5 text-sm text-ink-800">{pif.shift}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      Joining
+                    </dt>
+                    <dd className="mt-0.5 text-sm text-ink-800">{pif.joining}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      Job description
+                    </dt>
+                    <dd className="mt-0.5 text-sm text-ink-800">
+                      {pif.jobDescriptionUrl === null ? (
+                        // Never a link that opens nothing: an approver who
+                        // clicks one cannot tell a missing file from a broken
+                        // permission.
+                        <span className="text-ink-500">No job description attached</span>
+                      ) : (
+                        <a
+                          href={pif.jobDescriptionUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium text-[#3D3777] underline underline-offset-2"
+                        >
+                          {pif.jobDescriptionName ?? "Open the job description (PDF)"}
+                        </a>
+                      )}
+                    </dd>
+                  </div>
+                </dl>
+
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
                     <label
