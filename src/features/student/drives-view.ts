@@ -1,7 +1,7 @@
 import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
 import { describeJoining } from "@domain/joining";
-import type { Offer } from "@domain/offers";
+import { highestOfferCategory, type Offer } from "@domain/offers";
 import { describeShift } from "@domain/shift";
 import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
@@ -60,7 +60,7 @@ export const STUDENT_COLUMNS = `
   twelfth_percentage, current_arrears, history_of_arrears, technical_skills,
   srf_status, participation_status,
   degrees(name), branches(name), campuses(name, cities(name)),
-  student_documents!student_documents_student_id_fkey(id, kind, role_category),
+  student_documents!student_documents_student_id_fkey(id, kind, role_category, storage_path),
   student_role_preferences(category),
   student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
@@ -215,6 +215,16 @@ export function createSupabaseDrivesView(
       resumes: ((row.student_documents ?? []) as Array<Record<string, unknown>>)
         .filter((d) => d.kind === "resume" && d.role_category !== null)
         .map((d) => ({ id: d.id as string, roleCategory: d.role_category as RoleCategory })),
+      resumeNames: Object.fromEntries(
+        ((row.student_documents ?? []) as Array<Record<string, unknown>>)
+          .filter((d) => d.kind === "resume" && d.role_category !== null)
+          .map((d) => [
+            d.role_category as string,
+            // The display name is the storage path's last segment — the file
+            // as it was uploaded (D2 shows it in the apply confirmation).
+            ((d.storage_path as string | null) ?? "").split("/").at(-1) ?? "resume.pdf",
+          ]),
+      ),
       // 2026-08-18: a drive reaches the students who asked for that area.
       roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>)
         .map((p) => p.category as RoleCategory)
@@ -352,6 +362,8 @@ export function createSupabaseDrivesView(
             canApply: verdict.allowed,
             refusal: verdict.allowed ? null : (REFUSALS[verdict.reason] ?? "Not open to you."),
             applied: appliedIds.includes(drive.id),
+            // D2: the saved per-area resume that auto-fetches at apply time.
+            profileResumeName: student.resumeNames[drive.roleCategory] ?? null,
             // F14: everything behind "View more". A student is about to
             // promise to attend every round of this drive and to accept an
             // offer from it; a company name and a CTC is not enough to decide
@@ -397,7 +409,9 @@ export function createSupabaseDrivesView(
       const { student, drives, appliedIds } = await load();
       const raw = drives.find((d) => d.id === driveId);
       if (raw === undefined) throw new Error("Drive not found");
-      await applyRepo.apply(student, toDrive(raw), appliedIds, clock(), resume);
+      // D2: null means "send the saved per-area resume" — the snapshot
+      // builder picks it when no drive-specific file arrives.
+      await applyRepo.apply(student, toDrive(raw), appliedIds, clock(), resume ?? undefined);
     },
 
     /**
@@ -564,6 +578,9 @@ export function createSupabaseDrivesView(
         inProgress,
         notApplied,
         appliedClosed,
+        // C2 (UAT 2026-08-19): the rung they hold, so the tabs can say what
+        // remains open instead of looking shut.
+        placedAt: highestOfferCategory(student.offers),
       };
     },
   };

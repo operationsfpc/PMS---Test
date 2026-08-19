@@ -1,4 +1,5 @@
 import { Badge, Card, PageHeader } from "@components/ui";
+import { describeCtcRange } from "@domain/ctc";
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import type { AppRole, DriveStatus } from "@domain/types";
 import { useEffect, useState } from "react";
@@ -14,6 +15,9 @@ export interface DriveSummary {
   readonly driveId: string;
   readonly companyName: string;
   readonly roleTitle: string | null;
+  /** C3 (UAT 2026-08-19): role + CTC is what tells two same-company drives apart. */
+  readonly ctcMinLpa: number | null;
+  readonly ctcMaxLpa: number | null;
   readonly status: DriveStatus;
   readonly onHold: boolean;
   readonly applicationCount: number;
@@ -160,7 +164,10 @@ export function CockpitPage({
                   <div className="min-w-0">
                     <p className="font-medium text-ink-900">{drive.companyName}</p>
                     <p className="text-sm text-ink-500">
-                      {drive.roleTitle ?? "Role not set"} · {drive.applicationCount} applicants
+                      {drive.roleTitle ?? "Role not set"}
+                      {describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa) !== null &&
+                        ` · ${describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa)}`}{" "}
+                      · {drive.applicationCount} applicants
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -170,6 +177,16 @@ export function CockpitPage({
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-3 text-sm">
+                  {/* B2 (UAT 2026-08-19): every card opens the record page,
+                      whatever its status — a submitted drive awaiting the
+                      Delivery Head used to be a dead end with no link at all. */}
+                  <Link
+                    to={`/drives/${drive.driveId}`}
+                    className="font-medium text-brand-600 hover:underline"
+                  >
+                    View drive
+                  </Link>
+
                   {mayPublish && (drive.status === "approved" || drive.status === "draft") && (
                     <Link
                       to={`/central/publish?drive=${drive.driveId}`}

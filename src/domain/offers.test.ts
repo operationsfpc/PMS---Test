@@ -3,6 +3,7 @@ import {
   highestOfferCategory,
   isInternshipCapConsumed,
   type Offer,
+  resolveDisplayedPlacement,
   resolvePlacementRecord,
 } from "./offers";
 
@@ -180,5 +181,64 @@ describe("resolvePlacementRecord", () => {
     it("rejects an override pointing at an unknown offer", () => {
       expect(() => resolvePlacementRecord([offer({ id: "a" })], "ghost")).toThrow(/override/i);
     });
+  });
+});
+
+/**
+ * C1 (UAT 2026-08-19): "Thanush has been placed and his off-campus offer was
+ * approved … but he still appears under Not Placed in the All Students view."
+ *
+ * The DISPLAY of a student's placement is a different question from R9's
+ * reporting record. A coordinator looking at the directory asks "does this
+ * student have a job?", and a self-placed student does. R9's statistics keep
+ * excluding self-placed — that separation is the PRD's and stands.
+ */
+describe("resolveDisplayedPlacement", () => {
+  it("returns null for a student with no offers", () => {
+    expect(resolveDisplayedPlacement([])).toBeNull();
+  });
+
+  it("shows a self-placed student as placed — the C1 bug", () => {
+    const shown = resolveDisplayedPlacement([
+      offer({ id: "self", source: "self_placed", ctcLpa: 3.5 }),
+    ]);
+    expect(shown?.id).toBe("self");
+  });
+
+  it("prefers the on-campus record over any self-placed offer, even a richer one", () => {
+    const shown = resolveDisplayedPlacement([
+      offer({ id: "campus", ctcLpa: 4 }),
+      offer({ id: "self", source: "self_placed", ctcLpa: 40 }),
+    ]);
+    expect(shown?.id).toBe("campus");
+  });
+
+  it("picks the best self-placed offer by the same highest-CTC rule", () => {
+    const shown = resolveDisplayedPlacement([
+      offer({ id: "low", source: "self_placed", ctcLpa: 3 }),
+      offer({ id: "high", source: "self_placed", ctcLpa: 6 }),
+    ]);
+    expect(shown?.id).toBe("high");
+  });
+
+  it("breaks a self-placed CTC tie to the earliest declared", () => {
+    const shown = resolveDisplayedPlacement([
+      offer({ id: "later", source: "self_placed", ctcLpa: 5, declaredAt: new Date("2026-02-01") }),
+      offer({
+        id: "earlier",
+        source: "self_placed",
+        ctcLpa: 5,
+        declaredAt: new Date("2026-01-01"),
+      }),
+    ]);
+    expect(shown?.id).toBe("earlier");
+  });
+
+  it("a self-placed plain internship is not a placement", () => {
+    expect(
+      resolveDisplayedPlacement([
+        offer({ id: "intern", source: "self_placed", driveType: "internship" }),
+      ]),
+    ).toBeNull();
   });
 });

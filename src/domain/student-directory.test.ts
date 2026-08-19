@@ -39,6 +39,7 @@ const PLACED: DirectoryStudent = {
     roleTitle: "Member Technical Staff",
     ctcLpa: 6.5,
     offerCategory: "dream",
+    source: "on_campus",
   },
 };
 

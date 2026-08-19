@@ -1,5 +1,6 @@
 import { Badge, Card, PageHeader } from "@components/ui";
 import { searchDrives } from "@domain/drive-portfolio";
+import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import {
   CLOSING_FILTERS,
   type ClosingFilter,
@@ -46,6 +47,12 @@ export interface StudentDriveLists {
   readonly inProgress: readonly ProgressDriveRow[];
   readonly notApplied: readonly ClosedDriveRow[];
   readonly appliedClosed: readonly ConcludedDriveRow[];
+  /**
+   * C2 (UAT 2026-08-19): the rung the student already holds, or absent. A
+   * placed student LOOKED locked out — the list quietly hid same-and-lower
+   * drives and said nothing. The banner says what remains open instead.
+   */
+  readonly placedAt?: OfferCategory | null;
 }
 
 export interface StudentDriveListsView extends DrivesView {
@@ -179,6 +186,15 @@ export function DriveTabs({
   return (
     <>
       <PageHeader title="Drives" subtitle="Everything a drive can be to you, in four lists." />
+
+      {lists?.placedAt != null && (
+        <Card className="mb-4 border border-success-500/40 bg-success-50 p-4">
+          <p className="text-sm text-ink-900">
+            You are placed — <strong>{offerCategoryLabel(lists.placedAt)}</strong>. Drives in higher
+            categories remain open to you and appear in “To apply” as they come.
+          </p>
+        </Card>
+      )}
 
       {error !== null && (
         <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">

@@ -26,6 +26,7 @@ const openCard: OpenDrive = {
   canApply: true,
   refusal: null,
   applied: false,
+  profileResumeName: null,
   details: {
     jobDescription: "",
     designations: [],
@@ -93,6 +94,23 @@ function view(lists: StudentDriveLists = LISTS): StudentDriveListsView {
     apply: async () => undefined,
   };
 }
+
+describe("DriveTabs — a placed student is not locked out (C2, UAT 2026-08-19)", () => {
+  it("tells a placed student which rungs remain open, instead of looking shut", async () => {
+    render(<DriveTabs view={view({ ...LISTS, placedAt: "regular" })} now={NOW} />);
+
+    const note = await screen.findByText(/you are placed/i);
+    expect(note.textContent).toMatch(/regular/i);
+    expect(note.textContent).toMatch(/higher/i);
+  });
+
+  it("says nothing about placement to a student who has none", async () => {
+    render(<DriveTabs view={view()} now={NOW} />);
+
+    await screen.findByText("Zoho");
+    expect(screen.queryByText(/you are placed/i)).toBeNull();
+  });
+});
 
 describe("DriveTabs", () => {
   it("shows the four tabs with their counts, To apply selected first", async () => {

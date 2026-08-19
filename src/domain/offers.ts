@@ -41,6 +41,44 @@ export function placementOffers(offers: readonly Offer[]): readonly Offer[] {
   return offers.filter((o) => isOnCampus(o) && LADDER_DRIVE_TYPES.includes(o.driveType));
 }
 
+/** The highest-CTC offer, ties to the earliest declared — R9's rule, reused. */
+function bestByCtc(candidates: readonly Offer[]): Offer | null {
+  let best: Offer | null = null;
+  for (const offer of candidates) {
+    if (
+      best === null ||
+      offer.ctcLpa > best.ctcLpa ||
+      (offer.ctcLpa === best.ctcLpa && offer.declaredAt < best.declaredAt)
+    ) {
+      best = offer;
+    }
+  }
+  return best;
+}
+
+/**
+ * The placement a DIRECTORY shows for this student — a different question
+ * from R9's reporting record.
+ *
+ * C1 (UAT 2026-08-19): a self-placed student appeared under "Not Placed" in
+ * the All Students view, because the screen asked `resolvePlacementRecord`,
+ * whose job is the reported statistic and which excludes self-placed offers
+ * by design (PRD §16.2). A coordinator looking at the list asks "does this
+ * student have a job?", and a self-placed student does.
+ *
+ * The on-campus record still wins when both exist — it is the official one.
+ * Self-placed fills the gap, chosen by the same highest-CTC rule. A plain
+ * internship is not a placement from either source.
+ */
+export function resolveDisplayedPlacement(offers: readonly Offer[]): Offer | null {
+  const record = resolvePlacementRecord(offers);
+  if (record !== null) return record;
+
+  return bestByCtc(
+    offers.filter((o) => !isOnCampus(o) && LADDER_DRIVE_TYPES.includes(o.driveType)),
+  );
+}
+
 /** Offers that occupy a rung on the Regular → Dream → Super Dream ladder. */
 function ladderOffers(offers: readonly Offer[]): readonly Offer[] {
   return offers.filter((o) => LADDER_DRIVE_TYPES.includes(o.driveType));
@@ -91,18 +129,5 @@ export function resolvePlacementRecord(
     return chosen;
   }
 
-  let best: Offer | null = null;
-  for (const offer of candidates) {
-    if (best === null) {
-      best = offer;
-      continue;
-    }
-    if (offer.ctcLpa > best.ctcLpa) {
-      best = offer;
-    } else if (offer.ctcLpa === best.ctcLpa && offer.declaredAt < best.declaredAt) {
-      best = offer;
-    }
-  }
-
-  return best;
+  return bestByCtc(candidates);
 }

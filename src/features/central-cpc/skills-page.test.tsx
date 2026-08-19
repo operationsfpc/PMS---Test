@@ -69,6 +69,19 @@ describe("SkillsPage — the grid", () => {
     expect(screen.getByRole("columnheader", { name: "AI skills" })).toBeDefined();
   });
 
+  /**
+   * D7 (UAT 2026-08-19): "column headings should freeze/stick, since they
+   * currently disappear when the CPC scrolls down." Sticky positioning has no
+   * accessible-role equivalent, so the class IS the behaviour here.
+   */
+  it("keeps the column headers stuck to the top while scrolling (D7)", async () => {
+    render(<SkillsPage view={view()} />);
+    const header = await screen.findByRole("columnheader", { name: "Aptitude" });
+    const thead = header.closest("thead");
+    expect(thead?.className).toMatch(/sticky/);
+    expect(thead?.className).toMatch(/top-0/);
+  });
+
   it("filters by name or roll number", async () => {
     const user = userEvent.setup();
     render(<SkillsPage view={view()} />);

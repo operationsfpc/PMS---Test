@@ -248,6 +248,13 @@ export function ProfileEditPage({
           step={1}
           description="Be specific — this feeds shortlisting."
         >
+          {/* D3 (UAT 2026-08-19): changes apply forward only — applications
+              snapshot the profile at apply time (R7), so this is already true;
+              the line makes it a promise the student can read. */}
+          <p className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm text-ink-700">
+            Changes here apply to <strong>new drives from this point on</strong>. Applications you
+            have already made carry the profile as it was when you applied.
+          </p>
           <div className="flex flex-col gap-4">
             <TextField
               label="Technical skills"

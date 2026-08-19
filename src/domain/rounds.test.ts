@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { advancingParticipants, canMarkAttendance, canRecordResult } from "./rounds";
+import {
+  advancedBeyond,
+  advancingParticipants,
+  canMarkAttendance,
+  canRecordResult,
+} from "./rounds";
 
 /**
  * Round progression (domain-model §5, decisions Q9 and Q10).
@@ -76,5 +81,41 @@ describe("canRecordResult", () => {
 
   it.each(["account_executive", "student", "campus_manager"] as const)("refuses %s", (role) => {
     expect(canRecordResult(role, true).allowed).toBe(false);
+  });
+});
+
+/**
+ * F1 (UAT 2026-08-19): "Round progression should be strictly linear …
+ * Currently, the CPC can change a student's selection status after they've
+ * already advanced, which corrupts results in later rounds."
+ *
+ * A student who sits in Round 3 got there THROUGH Round 2's `selected`.
+ * Re-recording Round 2 as `rejected` would leave them participating in a
+ * round their own history now says they never reached.
+ */
+describe("advancedBeyond", () => {
+  const rounds = [
+    { sequence: 1, applicationIds: ["a", "b", "c"] },
+    { sequence: 2, applicationIds: ["a", "b"] },
+    { sequence: 3, applicationIds: ["a"] },
+  ];
+
+  it("locks a student's earlier rounds once they sit in a later one", () => {
+    const locked = advancedBeyond(1, rounds);
+    expect(locked.has("a")).toBe(true);
+    expect(locked.has("b")).toBe(true);
+  });
+
+  it("does not lock a student in their LATEST round", () => {
+    expect(advancedBeyond(2, rounds).has("b")).toBe(false);
+    expect(advancedBeyond(3, rounds).has("a")).toBe(false);
+  });
+
+  it("locks nobody when no later round has participants", () => {
+    expect(advancedBeyond(3, rounds).size).toBe(0);
+  });
+
+  it("never locks a student who was not advanced", () => {
+    expect(advancedBeyond(1, rounds).has("c")).toBe(false);
   });
 });

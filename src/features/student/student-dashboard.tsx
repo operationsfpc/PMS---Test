@@ -5,6 +5,7 @@ import {
   countAbsences,
   needsDisbarmentReview,
 } from "@domain/attendance";
+import { condenseNotifications } from "@domain/notifications";
 import type { OfferCategory } from "@domain/offer-category";
 import { type ApplicantRound, applicationProgress, studentPrompt } from "@domain/student-progress";
 import type { OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
@@ -184,45 +185,63 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
         subtitle={`${snapshot.rollNumber} · ${snapshot.degree} ${snapshot.branch} · Batch of ${snapshot.passingYear} · ${snapshot.campus}`}
       />
 
-      {notes.length > 0 && (
-        <section aria-label="Notifications" className="mb-6">
-          <Card className="p-5">
-            <p className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900">
-              Notifications
-              {notes.some((n) => !n.read) && (
-                <Badge tone="warning">{notes.filter((n) => !n.read).length} unread</Badge>
-              )}
-            </p>
-            <ul className="mt-3 space-y-2">
-              {notes.map((note) => (
-                <li
-                  key={note.id}
-                  className={`rounded-lg border p-3 ${
-                    note.read ? "border-line" : "border-warning/50 bg-warning/5"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-ink-900">{note.title}</p>
-                      <p className="mt-0.5 text-sm text-ink-700">{note.body}</p>
-                      <p className="mt-1 text-xs text-ink-500">{onDate(note.createdAt)}</p>
-                    </div>
-                    {!note.read && (
-                      <button
-                        type="button"
-                        onClick={() => void markRead(note.id)}
-                        className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
-                      >
-                        Mark read
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </section>
-      )}
+      {notes.length > 0 &&
+        (() => {
+          /**
+           * E1/E2 (UAT 2026-08-19): the top 3, unread first; the rest live on
+           * the full alerts page. A read note SINKS — it is never deleted.
+           */
+          const { shown, hidden } = condenseNotifications(notes, 3);
+          return (
+            <section aria-label="Notifications" className="mb-6">
+              <Card className="p-5">
+                <p className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900">
+                  Notifications
+                  {notes.some((n) => !n.read) && (
+                    <Badge tone="warning">{notes.filter((n) => !n.read).length} unread</Badge>
+                  )}
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {shown.map((note) => (
+                    <li
+                      key={note.id}
+                      className={`rounded-lg border p-3 ${
+                        note.read ? "border-line" : "border-warning/50 bg-warning/5"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink-900">{note.title}</p>
+                          <p className="mt-0.5 text-sm text-ink-700">{note.body}</p>
+                          <p className="mt-1 text-xs text-ink-500">{onDate(note.createdAt)}</p>
+                        </div>
+                        {note.read ? (
+                          <span className="shrink-0 text-xs font-medium text-ink-500">✓ Read</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void markRead(note.id)}
+                            className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
+                          >
+                            Mark read
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                {hidden > 0 && (
+                  <Link
+                    to="/student/notifications"
+                    className="mt-3 inline-block text-sm font-medium text-brand-600 hover:underline"
+                  >
+                    Read all {notes.length} notifications →
+                  </Link>
+                )}
+              </Card>
+            </section>
+          );
+        })()}
 
       <section aria-label="What to do next" className="mb-6">
         <Card className="overflow-hidden">

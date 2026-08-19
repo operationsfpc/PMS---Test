@@ -30,6 +30,32 @@ const PLACED: DirectoryStudent = {
     roleTitle: "Member Technical Staff",
     ctcLpa: 6.5,
     offerCategory: "dream",
+    source: "on_campus",
+  },
+};
+
+/**
+ * C1 (UAT 2026-08-19): Thanush — self-placed, approved, and shown as "Not
+ * Placed". A self-placed student IS placed in this directory; the row says
+ * where the offer came from so the reporting line stays legible.
+ */
+const SELF_PLACED: DirectoryStudent = {
+  studentId: "s3",
+  fullName: "Thanush Krishna",
+  rollNumber: "21CSE1100",
+  campusName: "SDNB Vaishnav College",
+  degree: "B.E.",
+  branch: "CSE",
+  passingYear: 2026,
+  srfStatus: "srf_approved",
+  participationStatus: "active",
+  applications: 2,
+  placement: {
+    companyName: "FACE Prep Campus",
+    roleTitle: null,
+    ctcLpa: 3.5,
+    offerCategory: "regular",
+    source: "self_placed",
   },
 };
 
@@ -86,6 +112,27 @@ describe("StudentDirectoryPage", () => {
     show();
     const row = await screen.findByRole("row", { name: /rahul nair/i });
     expect(within(row).getByText(/not placed/i)).toBeDefined();
+  });
+
+  /** C1: a self-placed student is placed, and the row says the source. */
+  it("shows a self-placed student as placed, labelled self-placed", async () => {
+    show([PLACED, UNPLACED, SELF_PLACED]);
+    const row = await screen.findByRole("row", { name: /thanush krishna/i });
+
+    expect(within(row).getByText(/FACE Prep Campus/)).toBeDefined();
+    expect(within(row).getByText(/self-placed/i)).toBeDefined();
+    expect(within(row).queryByText(/not placed/i)).toBeNull();
+  });
+
+  it("counts a self-placed student inside the Placed filter", async () => {
+    const user = userEvent.setup();
+    show([PLACED, UNPLACED, SELF_PLACED]);
+    await screen.findByText("Thanush Krishna");
+
+    await user.click(screen.getByRole("radio", { name: /^placed/i }));
+
+    expect(screen.getByText("Thanush Krishna")).toBeDefined();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
   });
 
   it("shows the roll number, campus and branch", async () => {

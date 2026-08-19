@@ -30,6 +30,7 @@ const open = {
   canApply: true,
   refusal: null,
   applied: false,
+  profileResumeName: null as string | null,
   details: {
     jobDescription: "Build and maintain backend services.",
     designations: ["Associate Engineer"],
@@ -259,6 +260,57 @@ describe("DrivesList \u2014 confirming an application", () => {
 
     expect(apply).not.toHaveBeenCalled();
     expect(screen.queryByText(/are you sure/i)).toBeNull();
+  });
+});
+
+/**
+ * D2 (UAT 2026-08-19): "a student's preferred resume … should auto-populate
+ * when they apply." The saved per-area resume is the default; the upload is
+ * the override. A student with neither is still refused.
+ */
+describe("DrivesList — the saved resume auto-fetches (D2)", () => {
+  const withSaved = { ...open, profileResumeName: "software-technical-resume.pdf" };
+
+  const startApplying = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole("button", { name: /apply to Zoho/i }));
+  };
+
+  it("names the resume that will be sent, before the student confirms", async () => {
+    const user = userEvent.setup();
+    render(<DrivesList view={view({ openDrives: async () => [withSaved] })} />);
+
+    await startApplying(user);
+
+    expect(screen.getByText(/software-technical-resume\.pdf/)).toBeDefined();
+    expect(screen.getByText(/will be sent/i)).toBeDefined();
+  });
+
+  it("applies WITHOUT an upload — the saved resume is a real resume", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<DrivesList view={view({ openDrives: async () => [withSaved], apply })} />);
+
+    await startApplying(user);
+    await user.click(screen.getByRole("button", { name: /yes, apply/i }));
+
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("d1", null));
+  });
+
+  it("an upload still wins over the saved resume", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<DrivesList view={view({ openDrives: async () => [withSaved], apply })} />);
+
+    await startApplying(user);
+    await user.upload(
+      screen.getByLabelText(/replace|resume for this drive/i),
+      new File(["cv"], "tailored.pdf", { type: "application/pdf" }),
+    );
+    await user.click(screen.getByRole("button", { name: /yes, apply/i }));
+
+    await waitFor(() => expect(apply).toHaveBeenCalled());
+    const [, resume] = apply.mock.calls[0] as [string, File];
+    expect(resume.name).toBe("tailored.pdf");
   });
 });
 

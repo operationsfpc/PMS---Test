@@ -18,6 +18,8 @@ const APPROVED: DriveSummary = {
   driveId: "d1",
   companyName: "Zoho",
   roleTitle: "MTS",
+  ctcMinLpa: 6,
+  ctcMaxLpa: 8,
   status: "approved",
   onHold: false,
   applicationCount: 0,
@@ -28,6 +30,8 @@ const LIVE: DriveSummary = {
   driveId: "d2",
   companyName: "Freshworks",
   roleTitle: "SDE",
+  ctcMinLpa: 4.5,
+  ctcMaxLpa: null,
   status: "live",
   onHold: false,
   applicationCount: 42,
@@ -38,6 +42,8 @@ const IN_ROUNDS: DriveSummary = {
   driveId: "d3",
   companyName: "Zoho Two",
   roleTitle: "QA",
+  ctcMinLpa: null,
+  ctcMaxLpa: null,
   status: "in_rounds",
   onHold: false,
   applicationCount: 30,
@@ -164,6 +170,54 @@ describe("CockpitPage", () => {
     routed(view([]));
 
     expect(await screen.findByText(/no drives yet/i)).toBeDefined();
+  });
+
+  /**
+   * B2 (UAT 2026-08-19): "Complete and Publish is currently the only clickable
+   * action, and the only way to open a drive." A submitted drive waiting on
+   * the Delivery Head had NO link at all — the card was a dead end. Every
+   * card now opens the canonical /drives/:id record, whatever its status.
+   */
+  /**
+   * C3 (UAT 2026-08-19): two drives from the same company are told apart by
+   * role and CTC — so both sit on the card.
+   */
+  it("shows the CTC band beside the role, so same-company drives are distinct", async () => {
+    routed(view([APPROVED, LIVE]));
+
+    const zoho = (await screen.findByText("Zoho")).closest("li");
+    if (zoho === null) throw new Error("row not found");
+    expect(zoho.textContent).toMatch(/₹6–8 LPA/);
+
+    const fresh = screen.getByText("Freshworks").closest("li");
+    if (fresh === null) throw new Error("row not found");
+    expect(fresh.textContent).toMatch(/₹4\.5 LPA/);
+  });
+
+  it("every drive card links to the canonical drive record", async () => {
+    const SUBMITTED: DriveSummary = {
+      ...APPROVED,
+      driveId: "d7",
+      companyName: "Waiting Co",
+      status: "submitted",
+    };
+    routed(view([SUBMITTED, LIVE, IN_ROUNDS]));
+
+    const waiting = (await screen.findByText("Waiting Co")).closest("li");
+    if (waiting === null) throw new Error("row not found");
+    expect(
+      within(waiting)
+        .getByRole("link", { name: /view drive/i })
+        .getAttribute("href"),
+    ).toBe("/drives/d7");
+
+    const live = screen.getByText("Freshworks").closest("li");
+    if (live === null) throw new Error("row not found");
+    expect(
+      within(live)
+        .getByRole("link", { name: /view drive/i })
+        .getAttribute("href"),
+    ).toBe("/drives/d2");
   });
 });
 

@@ -238,7 +238,7 @@ describe("every hand-written select matches the schema", () => {
     [
       "cockpit drives",
       "drives",
-      "id, company_name, role_title, status, on_hold, drive_rounds(id, sequence, name)",
+      "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, drive_rounds(id, sequence, name)",
     ],
     // The publish screen ran on invented data until 2026-08-04, so neither of
     // these selects had ever met the schema.

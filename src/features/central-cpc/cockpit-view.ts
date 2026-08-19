@@ -17,7 +17,9 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
     async drives() {
       const { data: drives } = await client
         .from("drives")
-        .select("id, company_name, role_title, status, on_hold, drive_rounds(id, sequence, name)")
+        .select(
+          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, drive_rounds(id, sequence, name)",
+        )
         .order("created_at", { ascending: false });
 
       const rows = (drives ?? []) as Array<Record<string, unknown>>;
@@ -37,6 +39,9 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
             driveId: row.id as string,
             companyName: (row.company_name as string | null) ?? "Unnamed drive",
             roleTitle: (row.role_title as string | null) ?? null,
+            // Numerics arrive from PostgREST as strings.
+            ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
+            ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),
             status: (row.status as DriveStatus | null) ?? "draft",
             onHold: (row.on_hold as boolean | null) ?? false,
             applicationCount: count ?? 0,

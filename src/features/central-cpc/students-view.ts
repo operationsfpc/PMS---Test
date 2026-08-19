@@ -1,5 +1,5 @@
 import type { Offer } from "@domain/offers";
-import { resolvePlacementRecord } from "@domain/offers";
+import { resolveDisplayedPlacement } from "@domain/offers";
 import type { DirectoryStudent } from "@domain/student-directory";
 import type { DriveType, ParticipationStatus, SrfStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -56,7 +56,10 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
         client
           .from("offers")
           .select(
-            "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at",
+            // company_name and role_title live on the OFFER for a self-placed
+            // one (drive_id is null there) — C1's Thanush had both and the
+            // view never asked for them.
+            "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at, company_name, role_title",
           )
           .in("student_id", studentIds),
         client.from("applications").select("id, student_id").in("student_id", studentIds),
@@ -88,6 +91,12 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
       );
 
       const offersByStudent = new Map<string, Offer[]>();
+      // What the offer row itself says about the company — the only naming a
+      // self-placed offer has.
+      const offerNames = new Map<
+        string,
+        { companyName: string | null; roleTitle: string | null }
+      >();
       for (const row of (offerRows ?? []) as Array<Record<string, unknown>>) {
         const studentId = row.student_id as string;
         const forStudent = offersByStudent.get(studentId) ?? [];
@@ -101,6 +110,10 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
           source: row.source as Offer["source"],
         });
         offersByStudent.set(studentId, forStudent);
+        offerNames.set(row.id as string, {
+          companyName: (row.company_name as string | null) ?? null,
+          roleTitle: (row.role_title as string | null) ?? null,
+        });
       }
 
       const applicationCounts = new Map<string, number>();
@@ -111,8 +124,11 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
 
       return rows.map((row): DirectoryStudent => {
         const studentId = row.id as string;
-        const record = resolvePlacementRecord(offersByStudent.get(studentId) ?? []);
+        // C1: the DISPLAYED placement, which a self-placed offer satisfies —
+        // not R9's reported record, which excludes them by design.
+        const record = resolveDisplayedPlacement(offersByStudent.get(studentId) ?? []);
         const drive = record === null ? undefined : drives.get(record.driveId);
+        const named = record === null ? undefined : offerNames.get(record.id);
 
         return {
           studentId,
@@ -129,10 +145,11 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
             record === null
               ? null
               : {
-                  companyName: drive?.companyName ?? "Company not recorded",
-                  roleTitle: drive?.roleTitle ?? null,
+                  companyName: drive?.companyName ?? named?.companyName ?? "Company not recorded",
+                  roleTitle: drive?.roleTitle ?? named?.roleTitle ?? null,
                   ctcLpa: record.ctcLpa,
                   offerCategory: record.offerCategory,
+                  source: record.source,
                 },
         };
       });

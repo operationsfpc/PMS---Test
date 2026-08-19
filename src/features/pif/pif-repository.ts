@@ -15,8 +15,16 @@ interface JobDescriptionUpload {
 }
 
 export interface PifRepository {
-  saveDraft(values: PifFormValues): Promise<{ id: string; status: string }>;
-  submit(values: PifFormValues): Promise<{ id: string; status: string }>;
+  /**
+   * `existingDraftId` is B1's fix (UAT 2026-08-19): a draft is ONE row for its
+   * whole life. Without it, save-draft-then-submit left an orphan draft behind
+   * on every list — the AE's, the Delivery Head's and the Central CPC's.
+   */
+  saveDraft(
+    values: PifFormValues,
+    existingDraftId?: string,
+  ): Promise<{ id: string; status: string }>;
+  submit(values: PifFormValues, existingDraftId?: string): Promise<{ id: string; status: string }>;
 }
 
 export type GetActorId = () => Promise<string | null>;
@@ -186,26 +194,49 @@ export function createSupabasePifRepository(
     return { storagePath: path, fileName: file.name, sizeBytes: file.size };
   }
 
-  async function write(values: PifFormValues, status: "draft" | "submitted") {
+  async function write(
+    values: PifFormValues,
+    status: "draft" | "submitted",
+    existingDraftId?: string,
+  ) {
     const actorId = await getActorId();
     if (actorId === null) {
       throw new PifError("Your session has expired. Please sign in again.");
     }
 
-    const driveId = crypto.randomUUID();
+    const driveId = existingDraftId ?? crypto.randomUUID();
     const file = values.jobDescriptionFile ?? null;
     const jd = file === null ? null : await uploadJobDescription(driveId, file);
 
-    const { data, error } = await client
-      .from("drives")
-      .insert(toRow(values, actorId, status, driveId, jd))
-      .select("id, status")
-      .single();
+    const row = toRow(values, actorId, status, driveId, jd);
+
+    // B1: updating an existing draft PATCHes the row it already is. RLS
+    // (0047) confines this to the AE's own drive while it is still a draft.
+    // A JD that was not re-attached must not be nulled out of the row.
+    const { data, error } = await (existingDraftId === undefined
+      ? client.from("drives").insert(row).select("id, status").single()
+      : client
+          .from("drives")
+          .update(
+            jd === null
+              ? (({ jd_storage_path, jd_file_name, jd_size_bytes, id, created_by, ...rest }) =>
+                  rest)(row)
+              : (({ id, created_by, ...rest }) => rest)(row),
+          )
+          .eq("id", existingDraftId)
+          .select("id, status")
+          .single());
 
     if (error !== null) {
       // Keep the original as `cause`: the message is for the AE, the cause is
       // for whoever has to work out why it happened.
       throw new PifError(explain(error), { cause: error });
+    }
+
+    // The update replaces the round list wholesale — re-inserting on top of
+    // the old rows would double every round.
+    if (existingDraftId !== undefined) {
+      await client.from("drive_rounds").delete().eq("drive_id", existingDraftId);
     }
 
     /**
@@ -238,7 +269,7 @@ export function createSupabasePifRepository(
   }
 
   return {
-    saveDraft: (values) => write(values, "draft"),
-    submit: (values) => write(values, "submitted"),
+    saveDraft: (values, existingDraftId) => write(values, "draft", existingDraftId),
+    submit: (values, existingDraftId) => write(values, "submitted", existingDraftId),
   };
 }

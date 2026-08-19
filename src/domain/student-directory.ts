@@ -16,7 +16,7 @@
  */
 
 import type { OfferCategory } from "./offer-category";
-import type { ParticipationStatus, SrfStatus } from "./types";
+import type { OfferSource, ParticipationStatus, SrfStatus } from "./types";
 
 /** The one offer reported as this student's placement, flattened for display. */
 export interface DirectoryPlacement {
@@ -24,6 +24,13 @@ export interface DirectoryPlacement {
   readonly roleTitle: string | null;
   readonly ctcLpa: number;
   readonly offerCategory: OfferCategory | null;
+  /**
+   * C1 (UAT 2026-08-19): a self-placed student IS placed here. The source is
+   * carried so the row can say so — R9's reported statistic still excludes
+   * self-placed, and a directory that silently mixed the two would make the
+   * overview number look wrong instead of differently-scoped.
+   */
+  readonly source: OfferSource;
 }
 
 export interface DirectoryStudent {

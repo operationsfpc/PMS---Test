@@ -80,15 +80,33 @@ describe("buildApplicationSnapshot", () => {
  * application is what the student chose for THIS drive.
  */
 describe("applicationEvidenceProblems", () => {
-  it("refuses an application with no resume attached to it", () => {
-    const problems = applicationEvidenceProblems({ hasDriveResume: false });
+  it("refuses an application with no resume anywhere", () => {
+    const problems = applicationEvidenceProblems({
+      hasDriveResume: false,
+      hasProfileResume: false,
+    });
 
     expect(problems).toHaveLength(1);
     expect(problems[0]).toMatch(/resume/i);
   });
 
   it("accepts one that carries a resume chosen for this drive", () => {
-    expect(applicationEvidenceProblems({ hasDriveResume: true })).toEqual([]);
+    expect(applicationEvidenceProblems({ hasDriveResume: true, hasProfileResume: false })).toEqual(
+      [],
+    );
+  });
+
+  /**
+   * D2 (UAT 2026-08-19): "a student's preferred resume … should auto-populate
+   * when they apply." The per-area resume on file is a real resume — the
+   * drive-specific upload is the OVERRIDE, not the entry fee. This deliberately
+   * softens F14's "must upload per drive", which the client asked for and has
+   * now asked to relax.
+   */
+  it("accepts one that falls back to the saved per-area resume (D2)", () => {
+    expect(applicationEvidenceProblems({ hasDriveResume: false, hasProfileResume: true })).toEqual(
+      [],
+    );
   });
 });
 

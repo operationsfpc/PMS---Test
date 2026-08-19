@@ -63,6 +63,7 @@ const EXPORT_COLUMNS = [
   "Role",
   "CTC (LPA)",
   "Offer category",
+  "Source",
 ] as const;
 
 /** Real downloads go through a Blob; tests hand in a spy. */
@@ -134,6 +135,12 @@ export function StudentDirectoryPage({
       "CTC (LPA)": s.placement === null ? "" : String(s.placement.ctcLpa),
       "Offer category":
         s.placement?.offerCategory == null ? "" : offerCategoryLabel(s.placement.offerCategory),
+      Source:
+        s.placement === null
+          ? ""
+          : s.placement.source === "self_placed"
+            ? "Self-placed"
+            : "On-campus",
     }));
 
     // BOM-prefixed so Excel reads it as UTF-8 rather than mangling every name.
@@ -281,6 +288,11 @@ export function StudentDirectoryPage({
                           <>
                             <p className="font-medium text-ink-900">
                               {student.placement.companyName}
+                              {student.placement.source === "self_placed" && (
+                                <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                  Self-placed
+                                </span>
+                              )}
                             </p>
                             <p className="text-xs text-ink-500">
                               {student.placement.roleTitle ?? "Role not recorded"} · ₹

@@ -32,7 +32,10 @@ import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
 import { StudentOffCampusRoute, StudentOptOutRoute } from "@features/student/participation-routes";
 import { StudentProfileRoute } from "@features/student/profile-route";
-import { StudentDashboardRoute } from "@features/student/student-dashboard-route";
+import {
+  StudentDashboardRoute,
+  StudentNotificationsRoute,
+} from "@features/student/student-dashboard-route";
 import { useAuth } from "@lib/auth-context";
 import type { ReactNode } from "react";
 import { Route, Routes } from "react-router";
@@ -173,6 +176,7 @@ export function App() {
                     to a college, for a passing year, under /admin/campuses. */}
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
                 <Route path="/student" element={<StudentDashboardRoute />} />
+                <Route path="/student/notifications" element={<StudentNotificationsRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
                 {/* N1: the one canonical drive page, for every role. */}
                 <Route path="/drives/:driveId" element={<DriveRecordRoute />} />

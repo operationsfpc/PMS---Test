@@ -64,6 +64,13 @@ function view(overrides: Partial<ShortlistView> = {}): ShortlistView {
   };
 }
 
+/**
+ * F2 (UAT 2026-08-19): saving asks first. The dialog's confirm button, found
+ * once the dialog has opened.
+ */
+const confirmButton = async () =>
+  within(await screen.findByRole("alertdialog")).getByRole("button", { name: /confirm/i });
+
 describe("ShortlistPage", () => {
   it("ranks the strongest applicant first, using the domain rule", async () => {
     render(<ShortlistPage driveId="d1" view={view()} />);
@@ -100,6 +107,7 @@ describe("ShortlistPage", () => {
     if (row === null) throw new Error("row not found");
     await user.click(within(row).getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+    await user.click(await confirmButton());
 
     await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
 
@@ -155,6 +163,7 @@ describe("ShortlistPage", () => {
     if (row === null) throw new Error("row not found");
     await user.click(within(row).getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+    await user.click(await confirmButton());
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/central placement coordinator/i);
@@ -215,6 +224,7 @@ describe("ShortlistPage \u2014 an opted-out applicant", () => {
     // Overriding makes them selectable; it does not select them by stealth.
     await user.click(within(row).getByRole("checkbox"));
     await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+    await user.click(await confirmButton());
 
     await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
     const [, decisions] = saveShortlist.mock.calls[0] as [string, ShortlistDecision[]];
@@ -269,6 +279,7 @@ describe("ShortlistPage \u2014 after saving", () => {
     await screen.findByText("Strong Candidate");
     await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
     await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+    await user.click(await confirmButton());
   };
 
   it("confirms the shortlist was saved, and says how many are on it", async () => {
@@ -319,6 +330,7 @@ describe("ShortlistPage \u2014 after saving", () => {
 
     await screen.findByText("Strong Candidate");
     await user.click(screen.getByRole("button", { name: /shortlist 0/i }));
+    await user.click(await confirmButton());
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not save/i);
     expect(screen.queryByRole("status")).toBeNull();
@@ -404,6 +416,92 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
 });
 
 /**
+ * UAT 2026-08-19: D6 (advisory target count) · D8 (the drive's skills on the
+ * screen) · D9 (select all) · F2 (a confirmation guards the save).
+ */
+describe("ShortlistPage — UAT 2026-08-19", () => {
+  it("selects every eligible applicant with one Select all (D9)", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+
+    expect(screen.getByRole("button", { name: /shortlist 2/i })).toBeDefined();
+
+    // And unticking it clears them all again.
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+    expect(screen.getByRole("button", { name: /shortlist 0/i })).toBeDefined();
+  });
+
+  it("Select all never picks up an opted-out applicant by stealth (D9)", async () => {
+    const OPTED: ShortlistApplicant = {
+      ...WEAK,
+      applicationId: "app-opted",
+      studentName: "Opted Out Candidate",
+      optedOut: true,
+    };
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [OPTED, STRONG] })} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+
+    expect(screen.getByRole("button", { name: /shortlist 1/i })).toBeDefined();
+  });
+
+  it("asks before saving, and cancel saves nothing (F2)", async () => {
+    const saveShortlist = vi.fn();
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/1 student/i);
+    expect(dialog.textContent).toMatch(/notified/i);
+
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+    expect(saveShortlist).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("shows an advisory target and counts against it (D6)", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.type(screen.getByLabelText(/target shortlist size/i), "5");
+    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+
+    expect(screen.getByText(/1 of 5 selected/i)).toBeDefined();
+  });
+
+  it("shows the drive's required skills to the coordinator (D8)", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    await screen.findByText("Strong Candidate");
+    expect(screen.getByText(/skills required/i)).toBeDefined();
+    expect(screen.getByText("TypeScript")).toBeDefined();
+  });
+
+  it("says plainly when the PIF recorded no skills, instead of nothing (D8)", async () => {
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({ drive: async () => ({ ...DRIVE, mandatorySkills: [] }) })}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    expect(screen.getByText(/no specific skills recorded/i)).toBeDefined();
+  });
+});
+
+/**
  * SPEC CHANGE 2026-08-17 (Karthik): "we can remove the display of 15 number
  * with the description of it. This is not used currently."
  *
@@ -466,7 +564,8 @@ describe("the match score is not shown", () => {
     );
 
     await screen.findByText(/strong candidate/i);
-    await userEvent.click(screen.getByRole("button", { name: /^shortlist/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^shortlist \d/i }));
+    await userEvent.click(await confirmButton());
 
     const strong = saved[0]?.find((d) => d.applicationId === "app-strong");
     expect(strong?.score).toBeGreaterThan(0);

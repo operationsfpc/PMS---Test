@@ -334,4 +334,95 @@ describe("StudentDashboard — notifications", () => {
     await screen.findByText(/21CSE1042/);
     expect(screen.queryByText(/unread/i)).toBeNull();
   });
+
+  /**
+   * E1/E2 (UAT 2026-08-19): the panel condenses to the top 3 and links to the
+   * full alerts page; a read note sinks but never disappears.
+   */
+  const MANY = [
+    {
+      id: "m1",
+      kind: "offer",
+      title: "Offer from Zoho",
+      body: "b",
+      createdAt: "2026-08-19T05:00:00Z",
+      read: false,
+    },
+    {
+      id: "m2",
+      kind: "round_cleared",
+      title: "You cleared Round 2 of Zoho",
+      body: "b",
+      createdAt: "2026-08-19T04:00:00Z",
+      read: false,
+    },
+    {
+      id: "m3",
+      kind: "round_cleared",
+      title: "You cleared Round 1 of Zoho",
+      body: "b",
+      createdAt: "2026-08-19T03:00:00Z",
+      read: true,
+    },
+    {
+      id: "m4",
+      kind: "shortlisted",
+      title: "You are shortlisted for Zoho",
+      body: "b",
+      createdAt: "2026-08-19T02:00:00Z",
+      read: true,
+    },
+    {
+      id: "m5",
+      kind: "shortlisted",
+      title: "You are shortlisted for HCL",
+      body: "b",
+      createdAt: "2026-08-19T01:00:00Z",
+      read: true,
+    },
+  ];
+
+  it("shows only the top 3 and links to the rest (E1)", async () => {
+    show(view({}, { notifications: async () => MANY }));
+
+    expect(await screen.findByText("Offer from Zoho")).toBeDefined();
+    expect(screen.getByText("You cleared Round 2 of Zoho")).toBeDefined();
+    expect(screen.getByText("You cleared Round 1 of Zoho")).toBeDefined();
+    expect(screen.queryByText("You are shortlisted for Zoho")).toBeNull();
+
+    const readAll = screen.getByRole("link", { name: /all 5 notifications/i });
+    expect(readAll.getAttribute("href")).toBe("/student/notifications");
+  });
+
+  it("puts unread above read even when the read note is newer (E2)", async () => {
+    const notes = [
+      {
+        id: "r",
+        kind: "offer",
+        title: "Read but new",
+        body: "b",
+        createdAt: "2026-08-19T09:00:00Z",
+        read: true,
+      },
+      {
+        id: "u",
+        kind: "offer",
+        title: "Unread but old",
+        body: "b",
+        createdAt: "2026-08-01T09:00:00Z",
+        read: false,
+      },
+    ];
+    show(view({}, { notifications: async () => notes }));
+
+    const titles = await screen.findAllByText(/read but new|unread but old/i);
+    expect(titles[0]?.textContent).toMatch(/unread but old/i);
+  });
+
+  it("labels a read note as read rather than hiding it (E2)", async () => {
+    show(view({}, { notifications: async () => [NOTES[1] as (typeof NOTES)[1]] }));
+
+    await screen.findByText("You are shortlisted for Zoho");
+    expect(screen.getByText(/✓ read/i)).toBeDefined();
+  });
 });

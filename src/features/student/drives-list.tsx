@@ -42,13 +42,22 @@ export interface OpenDrive {
   /** Student-facing prose, already translated from R6's refusal code. */
   readonly refusal: string | null;
   readonly applied: boolean;
+  /**
+   * D2 (UAT 2026-08-19): the saved per-area resume that will be sent if the
+   * student uploads nothing. Null when they have none for this role area —
+   * then the upload is required, as F14 originally asked.
+   */
+  readonly profileResumeName: string | null;
   readonly details: OpenDriveDetails;
 }
 
 export interface DrivesView {
   openDrives(): Promise<readonly OpenDrive[]>;
-  /** F14: the resume the student chose for THIS drive travels with it. */
-  apply(driveId: string, resume: File): Promise<void>;
+  /**
+   * F14 + D2: `resume` is the drive-specific override; null means "send the
+   * saved per-area resume", which the snapshot builder picks automatically.
+   */
+  apply(driveId: string, resume: File | null): Promise<void>;
 }
 
 const CATEGORY_LABEL: Record<OfferCategory, string> = {
@@ -125,7 +134,10 @@ export function DrivesList({
   async function confirm(drive: OpenDrive) {
     // The domain decides what an application must carry, so the screen and the
     // repository refuse for the same reason and say the same words.
-    const problems = applicationEvidenceProblems({ hasDriveResume: resume !== null });
+    const problems = applicationEvidenceProblems({
+      hasDriveResume: resume !== null,
+      hasProfileResume: drive.profileResumeName !== null,
+    });
     if (problems.length > 0) {
       setProblem(problems.join(" "));
       return;
@@ -135,7 +147,7 @@ export function DrivesList({
     setBusyId(drive.id);
     setError(null);
     try {
-      await view.apply(drive.id, resume as File);
+      await view.apply(drive.id, resume);
       setConfirmingId(null);
       setResume(null);
       setRows((current) =>
@@ -331,11 +343,26 @@ export function DrivesList({
                     </p>
 
                     <div className="mt-3">
+                      {/* D2: the saved per-area resume is the default; the
+                          upload replaces it. With none on file the upload is
+                          required, as F14 originally asked. */}
+                      {drive.profileResumeName !== null && (
+                        <p className="mb-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-ink-700">
+                          Your saved resume <strong>{drive.profileResumeName}</strong> will be sent
+                          with this application unless you upload a different one below.
+                        </p>
+                      )}
                       <label
                         htmlFor={`resume-${drive.id}`}
                         className="mb-1 block text-sm font-medium text-ink-700"
                       >
-                        Resume for this drive <span className="text-destructive">*</span>
+                        {drive.profileResumeName === null ? (
+                          <>
+                            Resume for this drive <span className="text-destructive">*</span>
+                          </>
+                        ) : (
+                          "Replace with a drive-specific resume (optional)"
+                        )}
                       </label>
                       <p className="mb-2 text-xs text-ink-500">
                         This is what {drive.companyName} will read. Tailor it to this role rather

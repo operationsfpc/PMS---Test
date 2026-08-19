@@ -53,7 +53,7 @@ describe("ResultsPage", () => {
     expect(screen.getByText(/absent/i)).toBeDefined();
   });
 
-  it("records a result for one participant", async () => {
+  it("records a result for one participant — after an explicit confirmation (F2)", async () => {
     const record = vi.fn();
     const user = userEvent.setup();
     render(<ResultsPage roundId="r1" view={view({ record })} />);
@@ -62,7 +62,60 @@ describe("ResultsPage", () => {
     if (row === null) throw new Error("row not found");
     await user.selectOptions(within(row).getByRole("combobox"), "selected");
 
+    // The student is notified the moment this lands, so the screen asks first.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/priya ramesh/i);
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
     await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app1", "selected"));
+  });
+
+  it("cancelling the confirmation records nothing and resets the row (F2)", async () => {
+    const record = vi.fn();
+    const user = userEvent.setup();
+    render(<ResultsPage roundId="r1" view={view({ record })} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await user.selectOptions(within(row).getByRole("combobox"), "rejected");
+
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+    expect(record).not.toHaveBeenCalled();
+    expect(within(row).getByRole<HTMLSelectElement>("combobox").value).toBe("");
+  });
+
+  it("records an interim state (waitlisted) without ceremony — nobody is notified", async () => {
+    const record = vi.fn();
+    const user = userEvent.setup();
+    render(<ResultsPage roundId="r1" view={view({ record })} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await user.selectOptions(within(row).getByRole("combobox"), "waitlisted");
+
+    await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app1", "waitlisted"));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  /**
+   * F1 (UAT 2026-08-19): once a student sits in a later round, their result
+   * here is history — the screen shows it and refuses to re-open it.
+   */
+  it("renders a read-only result for a student already advanced (F1)", async () => {
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({ participants: async () => [{ ...PRIYA, result: "selected" }, ARJUN] })}
+        locked={new Set(["app1"])}
+      />,
+    );
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).queryByRole("combobox")).toBeNull();
+    expect(within(row).getByText(/advanced/i)).toBeDefined();
   });
 
   it("shows a result that was already recorded", async () => {
@@ -118,6 +171,8 @@ describe("ResultsPage", () => {
     const row = (await screen.findByText("Priya Ramesh")).closest("li");
     if (row === null) throw new Error("row not found");
     await user.selectOptions(within(row).getByRole("combobox"), "selected");
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/central placement coordinator/i);
@@ -162,7 +217,10 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
         driveId="d1"
         view={driveView({
           advance,
-          participants: async () => [{ ...PRIYA, result: "selected" }, ARJUN],
+          // Round-aware: Priya is selected in Round 1 and NOT yet in Round 2 —
+          // a fixture that put her in both told F1 she had already advanced.
+          participants: async (roundId) =>
+            roundId === "r1" ? [{ ...PRIYA, result: "selected" }, ARJUN] : [],
         })}
       />,
     );
@@ -198,5 +256,51 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     await user.click(screen.getByRole("button", { name: /create round 3/i }));
 
     await waitFor(() => expect(addRound).toHaveBeenCalledWith("d1", "HR"));
+  });
+
+  /**
+   * F1 (UAT 2026-08-19): a student already sitting in Round 2 cannot have
+   * their Round 1 result re-recorded — and they no longer count towards
+   * "Advance N", so the button cannot advance the same student twice.
+   */
+  it("locks earlier-round results for students already advanced", async () => {
+    const participants = vi.fn(async (roundId: string) =>
+      roundId === "r1" ? [{ ...PRIYA, result: "selected" as const }, ARJUN] : [PRIYA],
+    );
+    routed(<DriveRoundsPage driveId="d1" view={driveView({ participants })} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await waitFor(() => expect(within(row).queryByRole("combobox")).toBeNull());
+    expect(within(row).getByText(/advanced/i)).toBeDefined();
+
+    // Priya is the only selected — and she has already gone. Nothing to advance.
+    expect(screen.queryByRole("button", { name: /advance/i })).toBeNull();
+  });
+
+  /**
+   * UAT transcript 2026-08-19: "Advancing students works once but fails on
+   * second attempt without a page refresh" — the screen never reloaded after
+   * advancing, so it argued with the database until someone pressed F5.
+   */
+  it("reloads the round after advancing, so the button reflects reality", async () => {
+    let advanced = false;
+    const participants = vi.fn(async (roundId: string) => {
+      if (roundId === "r1") return [{ ...PRIYA, result: "selected" as const }, ARJUN];
+      return advanced ? [PRIYA] : [];
+    });
+    const advance = vi.fn().mockImplementation(async () => {
+      advanced = true;
+      return 1;
+    });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={driveView({ participants, advance })} />);
+
+    await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
+
+    // After the reload Priya is locked (she sits in Round 2 now) — the
+    // advance button is gone rather than lying about 1 more to move.
+    await waitFor(() => expect(screen.queryByRole("button", { name: /advance/i })).toBeNull());
+    expect(await screen.findByRole("status")).toBeDefined();
   });
 });

@@ -62,20 +62,23 @@ export function buildApplicationSnapshot(
 }
 
 /**
- * What an application must carry before it may be submitted. F14.
+ * What an application must carry before it may be submitted.
  *
- * "Ask for a drive specific resume to be uploaded at the time of applying."
- * The per-category resume from the SRF is generic and often months old; the
- * recruiter reads whatever arrives with the application, so the student
- * chooses it per drive.
+ * F14 asked for a drive-specific resume at apply time; D2 (UAT 2026-08-19)
+ * relaxed it — "a student's preferred resume … should auto-populate when they
+ * apply." The saved per-area resume is the default; a drive-specific upload
+ * REPLACES it. Only a student with neither is refused.
  *
  * Returned as a LIST so the screen can name every missing thing at once - a
  * student fixing one item per submit gives up.
  */
 export function applicationEvidenceProblems(evidence: {
   readonly hasDriveResume: boolean;
+  readonly hasProfileResume: boolean;
 }): readonly string[] {
-  return evidence.hasDriveResume
+  return evidence.hasDriveResume || evidence.hasProfileResume
     ? []
-    : ["Upload the resume you want this recruiter to read. It is sent with your application."];
+    : [
+        "Upload the resume you want this recruiter to read — you have none on file for this role area.",
+      ];
 }

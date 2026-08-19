@@ -27,6 +27,32 @@ export function advancingParticipants(results: readonly ParticipantResult[]): re
   return results.filter((r) => r.result === "selected").map((r) => r.studentId);
 }
 
+export interface RoundParticipation {
+  readonly sequence: number;
+  readonly applicationIds: readonly string[];
+}
+
+/**
+ * F1 (UAT 2026-08-19) — round progression is strictly linear.
+ *
+ * The applications that sit in any round AFTER `sequence`. Their results in
+ * `sequence` (and every earlier round) are history: a student in Round 3 got
+ * there THROUGH Round 2's `selected`, and re-recording Round 2 as `rejected`
+ * would leave them participating in a round their own record says they never
+ * reached. The screen renders their earlier results read-only.
+ */
+export function advancedBeyond(
+  sequence: number,
+  rounds: readonly RoundParticipation[],
+): ReadonlySet<string> {
+  const locked = new Set<string>();
+  for (const round of rounds) {
+    if (round.sequence <= sequence) continue;
+    for (const id of round.applicationIds) locked.add(id);
+  }
+  return locked;
+}
+
 /**
  * Attendance may only be marked by a coordinator, and only for a student who
  * was actually scheduled.

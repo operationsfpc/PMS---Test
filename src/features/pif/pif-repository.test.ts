@@ -120,6 +120,93 @@ describe("createSupabasePifRepository", () => {
     await expect(repo(null).saveDraft(values)).rejects.toBeInstanceOf(PifError);
   });
 
+  /**
+   * B1 (UAT 2026-08-19): "Once a drive is submitted/published, it should
+   * disappear from the drafts list. Currently the draft remains visible even
+   * after going live."
+   *
+   * Root cause: every save INSERTED a fresh row. Save-draft-then-submit left
+   * TWO drives behind — the submission travelled the pipeline and the
+   * abandoned draft sat in "Yet to publish" forever, on the AE's list, the
+   * Delivery Head's and the Central CPC's alike.
+   */
+  describe("a draft is ONE row for its whole life (B1)", () => {
+    it("re-saving a draft updates the same row instead of inserting a second drive", async () => {
+      let inserts = 0;
+      let patchedId: string | null = null;
+      let patchBody: Record<string, unknown> = {};
+
+      server.use(
+        http.post(`${BASE}/rest/v1/drives`, () => {
+          inserts += 1;
+          return HttpResponse.json({ id: "d1", status: "draft" });
+        }),
+        http.patch(`${BASE}/rest/v1/drives`, async ({ request }) => {
+          patchedId = new URL(request.url).searchParams.get("id") ?? null;
+          patchBody = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ id: "d1", status: "draft" });
+        }),
+      );
+
+      const r = repo();
+      const first = await r.saveDraft(values);
+      await r.saveDraft({ ...values, roleTitle: "Revised title" }, first.id);
+
+      expect(inserts).toBe(1);
+      expect(patchedId).toBe("eq.d1");
+      expect(patchBody.role_title).toBe("Revised title");
+    });
+
+    it("submitting a saved draft promotes THAT row to submitted — no orphan draft", async () => {
+      let inserts = 0;
+      let patchBody: Record<string, unknown> = {};
+
+      server.use(
+        http.post(`${BASE}/rest/v1/drives`, () => {
+          inserts += 1;
+          return HttpResponse.json({ id: "d1", status: "draft" });
+        }),
+        http.patch(`${BASE}/rest/v1/drives`, async ({ request }) => {
+          patchBody = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json({ id: "d1", status: "submitted" });
+        }),
+      );
+
+      const r = repo();
+      const draft = await r.saveDraft(values);
+      const submitted = await r.submit(values, draft.id);
+
+      expect(inserts).toBe(1);
+      expect(patchBody.status).toBe("submitted");
+      expect(submitted).toEqual({ id: "d1", status: "submitted" });
+    });
+
+    it("an update replaces the draft's rounds rather than doubling them", async () => {
+      let roundsDeleted = false;
+      const roundInserts: Array<Record<string, unknown>> = [];
+
+      server.use(
+        http.patch(`${BASE}/rest/v1/drives`, () =>
+          HttpResponse.json({ id: "d1", status: "draft" }),
+        ),
+        http.delete(`${BASE}/rest/v1/drive_rounds`, ({ request }) => {
+          roundsDeleted = new URL(request.url).searchParams.get("drive_id") === "eq.d1";
+          return HttpResponse.json([]);
+        }),
+        http.post(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
+          const rows = (await request.json()) as Array<Record<string, unknown>>;
+          roundInserts.push(...rows);
+          return HttpResponse.json(rows);
+        }),
+      );
+
+      await repo().saveDraft({ ...values, rounds: [{ sequence: 1, name: "Aptitude test" }] }, "d1");
+
+      expect(roundsDeleted).toBe(true);
+      expect(roundInserts).toEqual([{ drive_id: "d1", sequence: 1, name: "Aptitude test" }]);
+    });
+  });
+
   it("translates a refusal into something the AE can act on", async () => {
     server.use(
       http.post(`${BASE}/rest/v1/drives`, () =>

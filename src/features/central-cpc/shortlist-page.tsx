@@ -105,6 +105,10 @@ export function ShortlistPage({
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [overriding, setOverriding] = useState<string | null>(null);
   const [overrideDraft, setOverrideDraft] = useState("");
+  /** F2 (UAT 2026-08-19): the save waits behind an explicit confirmation. */
+  const [confirming, setConfirming] = useState(false);
+  /** D6: advisory only — a number the CPC steers by, never a gate. */
+  const [target, setTarget] = useState("");
 
   const refresh = useCallback(async () => {
     const [loadedDrive, loadedApplicants] = await Promise.all([
@@ -151,6 +155,25 @@ export function ShortlistPage({
         ? current.filter((id) => id !== applicationId)
         : [...current, applicationId],
     );
+  }
+
+  /**
+   * D9 (UAT 2026-08-19): every applicant who is actually selectable — an
+   * opted-out student without an override is not, and "select all" must never
+   * sweep one in by stealth.
+   */
+  const selectable = useMemo(
+    () =>
+      (applicants ?? [])
+        .filter((a) => !a.optedOut || overrides[a.applicationId] !== undefined)
+        .map((a) => a.applicationId),
+    [applicants, overrides],
+  );
+  const allSelected = selectable.length > 0 && selectable.every((id) => selected.includes(id));
+
+  function toggleAll() {
+    setSavedCount(null);
+    setSelected(allSelected ? [] : selectable);
   }
 
   /**
@@ -211,7 +234,7 @@ export function ShortlistPage({
             <Button variant="secondary" onClick={() => void exportShortlist()}>
               Export shortlist (CSV)
             </Button>
-            <Button onClick={() => void save()} disabled={saving}>
+            <Button onClick={() => setConfirming(true)} disabled={saving}>
               {saving ? "Saving…" : `Shortlist ${selected.length}`}
             </Button>
           </span>
@@ -224,6 +247,48 @@ export function ShortlistPage({
         <strong>notifies the shortlisted students</strong> and{" "}
         <strong>schedules them for Round 1</strong>.
       </p>
+
+      {/* D8 (UAT 2026-08-19): "No specific skills required" with no detail told
+          the coordinator nothing. The drive's own skills, or an honest gap. */}
+      {drive !== null && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-medium text-ink-700">Skills required:</span>
+          {drive.mandatorySkills.length === 0 ? (
+            <span className="text-ink-500">
+              No specific skills recorded for this role — the PIF left them blank.
+            </span>
+          ) : (
+            drive.mandatorySkills.map((skill) => (
+              <span
+                key={skill}
+                className="rounded-full border border-accent/40 bg-accent/5 px-2.5 py-0.5 text-xs font-medium text-ink-900"
+              >
+                {skill}
+              </span>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* D6 (UAT 2026-08-19): a number to steer by. Advisory — the recruiter
+          asked for so many, and the button never refuses more or fewer. */}
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+          Target shortlist size (optional)
+          <input
+            type="number"
+            min="1"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className="w-36 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
+          />
+        </label>
+        {target !== "" && Number(target) > 0 && (
+          <p className="text-sm font-medium text-ink-700">
+            {`${selected.length} of ${Number(target)} selected`}
+          </p>
+        )}
+      </div>
 
       {(applicants ?? []).some((a) => a.optedOut) && (
         <div
@@ -280,6 +345,19 @@ export function ShortlistPage({
         </Card>
       ) : (
         <Card>
+          {/* D9: one box for the lot. Indeterminate states are more honest as
+              a plain label, so the box is checked only when ALL are. */}
+          <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-3">
+            <input
+              type="checkbox"
+              aria-label="Select all applicants"
+              checked={allSelected}
+              onChange={toggleAll}
+            />
+            <span className="text-sm font-medium text-ink-700">
+              Select all ({selectable.length})
+            </span>
+          </div>
           <ul className="divide-y divide-neutral-200">
             {ranked.map((candidate, index) => {
               const applicant = byId.get(candidate.applicationId);
@@ -374,6 +452,45 @@ export function ShortlistPage({
             })}
           </ul>
         </Card>
+      )}
+
+      {/* F2 (UAT 2026-08-19): an accidental save notifies real students and
+          schedules them for a round — so the save asks first. */}
+      {confirming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            role="alertdialog"
+            aria-label="Confirm shortlist"
+            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+          >
+            <h2 className="font-heading text-lg font-bold text-ink-900">Confirm the shortlist</h2>
+            <p className="mt-2 text-sm text-ink-700">
+              <strong>{selected.length}</strong> {selected.length === 1 ? "student" : "students"}{" "}
+              will be shortlisted for {drive?.companyName ?? "this drive"}. They will be{" "}
+              <strong>notified</strong> and <strong>scheduled for Round 1</strong>.{" "}
+              {ranked.length - selected.length > 0 && (
+                <>
+                  {ranked.length - selected.length}{" "}
+                  {ranked.length - selected.length === 1 ? "applicant" : "applicants"} will be left
+                  off.
+                </>
+              )}
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setConfirming(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setConfirming(false);
+                  void save();
+                }}
+              >
+                Confirm — notify and schedule
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

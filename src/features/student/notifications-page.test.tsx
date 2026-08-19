@@ -1,0 +1,72 @@
+// @vitest-environment jsdom
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
+import { describe, expect, it, vi } from "vitest";
+import { NotificationsPage, type NotificationsView } from "./notifications-page";
+
+/**
+ * E1 (UAT 2026-08-19): the "Read More" destination — every notification the
+ * student has, unread first, dated, nothing ever deleted by reading it.
+ */
+const NOTES = [
+  {
+    id: "n1",
+    kind: "shortlisted",
+    title: "You are shortlisted for Zoho",
+    body: "Round 1 is next.",
+    createdAt: "2026-08-10T10:00:00Z",
+    read: true,
+  },
+  {
+    id: "n2",
+    kind: "round_cleared",
+    title: "You cleared Round 1 of Zoho",
+    body: "Well done.",
+    createdAt: "2026-08-12T10:00:00Z",
+    read: false,
+  },
+];
+
+const view = (over: Partial<NotificationsView> = {}): NotificationsView => ({
+  notifications: async () => NOTES,
+  markRead: async () => {},
+  ...over,
+});
+
+const show = (v: NotificationsView = view()) =>
+  render(
+    <MemoryRouter>
+      <NotificationsPage view={v} />
+    </MemoryRouter>,
+  );
+
+describe("NotificationsPage", () => {
+  it("lists every notification, unread first, each with its date", async () => {
+    show();
+
+    const items = await screen.findAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]?.textContent).toMatch(/cleared round 1/i);
+    expect(items[0]?.textContent).toMatch(/12 Aug 2026/);
+    expect(items[1]?.textContent).toMatch(/shortlisted for zoho/i);
+    expect(items[1]?.textContent).toMatch(/10 Aug 2026/);
+  });
+
+  it("marks one read on request and keeps it on the page", async () => {
+    const markRead = vi.fn();
+    const user = userEvent.setup();
+    show(view({ markRead }));
+
+    await user.click(await screen.findByRole("button", { name: /mark read/i }));
+
+    await waitFor(() => expect(markRead).toHaveBeenCalledWith("n2"));
+    expect(screen.getByText(/you cleared round 1 of zoho/i)).toBeDefined();
+  });
+
+  it("says so plainly when there are none", async () => {
+    show(view({ notifications: async () => [] }));
+
+    expect(await screen.findByText(/no notifications yet/i)).toBeDefined();
+  });
+});

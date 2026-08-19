@@ -435,7 +435,10 @@ export function SkillsPage({ view }: { view: SkillsView }) {
         </div>
       </Card>
 
-      <Card className="overflow-x-auto p-0">
+      {/* D7 (UAT 2026-08-19): the grid scrolls INSIDE the card so the header
+          row can stick — sticky cannot escape an overflow ancestor, so the
+          scroll and the stick must share a container. */}
+      <Card className="max-h-[75vh] overflow-auto p-0">
         {visible.length === 0 ? (
           <p className="p-6 text-sm text-ink-700">
             {students.length === 0
@@ -444,7 +447,7 @@ export function SkillsPage({ view }: { view: SkillsView }) {
           </p>
         ) : (
           <table className="w-full min-w-[720px] text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_var(--color-line,#DADADA)]">
               <tr className="border-b border-line text-left">
                 <th scope="col" className="px-4 py-3">
                   <input

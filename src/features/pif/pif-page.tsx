@@ -17,14 +17,21 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     () => repository ?? createSupabasePifRepository(supabase()),
   );
   const [outcome, setOutcome] = useState<"draft" | "submitted" | null>(null);
+  /**
+   * B1 (UAT 2026-08-19): once saved, the draft's id travels with the session
+   * so every further save — and the final submit — lands on the SAME row.
+   * Without it, save-then-submit left an orphan draft on every drives list.
+   */
+  const [draftId, setDraftId] = useState<string | undefined>(undefined);
 
   async function submit(values: PifFormValues) {
-    await repo.submit(values);
+    await repo.submit(values, draftId);
     setOutcome("submitted");
   }
 
   async function saveDraft(values: PifFormValues) {
-    await repo.saveDraft(values);
+    const saved = await repo.saveDraft(values, draftId);
+    setDraftId(saved.id);
     setOutcome("draft");
   }
 

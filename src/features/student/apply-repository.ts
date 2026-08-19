@@ -13,6 +13,8 @@ export type ApplyStudent = SnapshotStudent & {
   readonly offers: readonly Offer[];
   /** The areas they asked for (2026-08-18). A drive reaches only those. */
   readonly roleCategories: readonly RoleCategory[];
+  /** D2 (UAT 2026-08-19): per-area resume file names, for the apply screen. */
+  readonly resumeNames: Readonly<Record<string, string>>;
 };
 
 export type ApplyDrive = VisibleDrive & { readonly roleCategory: RoleCategory };
