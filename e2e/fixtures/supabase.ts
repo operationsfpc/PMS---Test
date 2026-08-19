@@ -87,7 +87,16 @@ function fullStudent(seed: StudentSeed): Record<string, unknown> {
     degrees: { name: "B.E" },
     branches: { name: "Computer Science and Engineering" },
     campuses: { name: "Tech Institute of Engineering", cities: { name: "Coimbatore" } },
-    student_documents: [{ id: "resume-tech", kind: "resume", role_category: "software_technical" }],
+    student_documents: [
+      {
+        id: "resume-tech",
+        kind: "resume",
+        role_category: "software_technical",
+        // D2 (UAT 2026-08-19): the saved resume auto-fetches at apply time,
+        // named by its storage path's last segment.
+        storage_path: "student-1/anitha-software-technical.pdf",
+      },
+    ],
   };
 }
 

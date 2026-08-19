@@ -84,12 +84,11 @@ test.describe("student journey", () => {
     await expect(page.getByText(/are you sure/i)).toBeVisible();
     await expect(page.getByText(/attend all the rounds/i)).toBeVisible();
 
-    // F14: and the recruiter reads the CV chosen for THIS drive.
-    await page.getByLabel(/resume for this drive/i).setInputFiles({
-      name: "zoho-resume.pdf",
-      mimeType: "application/pdf",
-      buffer: Buffer.from("%PDF-1.4 resume"),
-    });
+    // D2 (UAT 2026-08-19): her saved per-area resume auto-fetches — the
+    // screen names it, the upload is the optional override, and she can
+    // apply without re-uploading anything.
+    await expect(page.getByText(/anitha-software-technical\.pdf/)).toBeVisible();
+    await expect(page.getByLabel(/replace with a drive-specific resume/i)).toBeVisible();
     await page.getByRole("button", { name: "Yes, apply" }).click();
 
     // N7: an applied drive MOVES — out of To apply, into In progress, wearing
@@ -108,11 +107,12 @@ test.describe("student journey", () => {
     expect(application?.drive_id).toBe("drive-open");
     expect(application?.profile_snapshot).toMatchObject({
       profile: { fullName: "Anitha Raman", rollNumber: "TEC001" },
-      // F14: the resume the recruiter reads is the one chosen for this drive,
-      // not the generic one on the profile.
-      resumeId: "drive-resume-1",
+      // D2 (UAT 2026-08-19): no drive-specific upload was made, so the
+      // snapshot carries her SAVED per-area resume — auto-fetched, exactly
+      // as the confirmation promised.
+      resumeId: "resume-tech",
     });
-    expect(application?.resume_id).toBe("drive-resume-1");
+    expect(application?.resume_id).toBe("resume-tech");
 
     expect(supabase.unhandled()).toEqual([]);
   });

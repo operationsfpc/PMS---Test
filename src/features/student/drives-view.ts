@@ -218,12 +218,16 @@ export function createSupabaseDrivesView(
       resumeNames: Object.fromEntries(
         ((row.student_documents ?? []) as Array<Record<string, unknown>>)
           .filter((d) => d.kind === "resume" && d.role_category !== null)
-          .map((d) => [
-            d.role_category as string,
+          .map((d) => {
             // The display name is the storage path's last segment — the file
-            // as it was uploaded (D2 shows it in the apply confirmation).
-            ((d.storage_path as string | null) ?? "").split("/").at(-1) ?? "resume.pdf",
-          ]),
+            // as it was uploaded (D2 shows it in the apply confirmation). A
+            // path with no name still names the fact a resume is on file.
+            const basename = ((d.storage_path as string | null) ?? "").split("/").at(-1);
+            return [
+              d.role_category as string,
+              basename === undefined || basename === "" ? "your saved resume" : basename,
+            ];
+          }),
       ),
       // 2026-08-18: a drive reaches the students who asked for that area.
       roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>)

@@ -2,7 +2,15 @@ pues# UAT Feedback — 19 Aug 2026
 
 **Source:** Meeting transcript + `Meetings Tracker .docx` (section dated 19/08).  
 **Answers confirmed:** See session notes above.  
-**Status:** AWAITING APPROVAL — do not build until approved.
+**Status:** ✅ APPROVED ("go in that order") — **BUILT AND SHIPPED 2026-08-20.**
+All P1–P5 items live. Migrations 0053+0054 pushed. See HANDOVER.md.
+Deviations from this spec, agreed by construction:
+- D2 relaxed F14: the saved per-area resume is the default, the drive upload
+  is the optional override (a student with neither is still refused).
+- F2 on the results screen confirms `selected`/`rejected` only — the two that
+  notify the student; interim states record without ceremony.
+- F6 shipped as in-app notifications via DB triggers (0054); the student's
+  In-progress card does not yet repeat the schedule (noted as follow-up).
 
 ---
 

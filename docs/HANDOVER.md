@@ -4,6 +4,107 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-20 — the whole 19/08 UAT round (P1–P5), migrations 0053+0054
+
+Live Cloudflare `3a022b25-e231-40bc-bceb-8f274d2536d2`, JS byte-identical to
+`dist/` (943 425 bytes, sha256 `46b779b6…`). Remote at **`0054`**. Suite:
+**3297 tests / 170 files**, `pnpm check` exits 0, Playwright journey passes
+(updated to D2's semantics — it now proves the saved resume auto-fetches).
+Spec: `docs/specs/2026-08-19-uat-feedback.md` (✅ approved "go in that order",
+all answers Q1–Q8 recorded in it). Commits: `8451678` (P1+P2), `d05a7aa`
+(P3–P5), plus this handover.
+
+### The bugs (P1), each with its root cause
+
+1. **C1 — Thanush "Not Placed" while holding an approved offer.** The
+   directory asked `resolvePlacementRecord`, which excludes self-placed BY
+   DESIGN (it is R9's reporting statistic). New domain fn
+   `resolveDisplayedPlacement`: on-campus record wins, else best self-placed
+   ladder offer. Directory shows a "Self-placed" badge + CSV Source column.
+   R9's reported numbers still exclude self-placed — that separation stands.
+2. **B1 — drafts survived publish.** `pif-repository.write()` ALWAYS
+   INSERTED: save-draft-then-submit left an orphan draft on every list.
+   A draft is one row now — the page carries `draftId`, the repo PATCHes
+   (rounds and contacts replaced wholesale; an un-re-attached JD is not
+   nulled out).
+3. **B2 — dead cockpit cards.** A `submitted` drive had NO link at all.
+   Every card now links "View drive" → `/drives/:id`.
+4. **E4 — "notifications replace each other".** Proved FALSE at the data
+   layer (live rows stack; triggers are plain INSERTs). What testers saw was
+   a panel with no order/boundary — fixed by the E1/E2 redesign.
+5. **UAT advance bug ("works once, fails without F5").** The rounds screen
+   never re-read after writing. `loadParticipants` reloads + `advancedBeyond`
+   recomputes after every advance.
+
+### The features, by group
+
+- **Notifications:** dashboard shows top 3 (`condenseNotifications`), unread
+  first; "Read all N →" `/student/notifications` (new page + route); read
+  notes sink with "✓ Read", never deleted; dates everywhere.
+- **Shortlisting:** Select-all (never sweeps in an opted-out student without
+  override) · advisory "Target shortlist size" · drive's `mandatory_skills`
+  as chips (honest empty message) · confirmation dialog before save.
+- **Rounds:** F1 linear — `advancedBeyond` locks earlier-round results for
+  advanced students (read-only "(advanced)"), and they no longer count toward
+  "Advance N" · F2 — `selected`/`rejected` confirm before recording (they
+  notify; interim states do not ceremonialise) · F3 — advance dialog takes an
+  optional proof → `advance-proofs` bucket + `drive_rounds.advance_proof_path`
+  · F4 — per-round mode/time (IST)/shared link editable after creation · F5 —
+  per-student links: per-row editor + CSV bulk (`parseMeetingSlotsCsv`,
+  header checked verbatim — positional reads would swap students' interviews)
+  · F6 — 0054 triggers notify participants on schedule change and the ONE
+  student on slot assignment; opted-out students never notified.
+- **PIF restructure:** Drive type is the FIRST card; compensation follows the
+  type (placement→CTC · internship→stipend ₹/month min-max · convertible→
+  both), abandoned figures DROPPED in schema transform (the J2/J3 rule);
+  role section reordered (title→category→openings→locations→JD→shift→bond);
+  contacts are a "+" list, ALL optional (Q2) — spocEmail no longer required
+  at submit; empty contacts → "Central Placement Coordinator is the point of
+  contact" on the form AND the record page. `drive_contacts` table
+  (staff-read RLS — students never see a recruiter's phone); legacy `spoc_*`
+  still read as a one-entry fallback on old drives, written by nothing.
+- **Students:** C2 — placed students see "You are placed — {rung}. Higher
+  categories remain open" banner on Drives (fed by `highestOfferCategory`);
+  C3 — `describeCtcRange` on cockpit cards (role + CTC distinguishes
+  same-company drives; student lists already carried both); D2 — the saved
+  per-area resume auto-fetches at apply (named in the confirmation; upload is
+  the override; neither → refused — F14 relaxed BY the client's D2); D3 —
+  forward-only note on profile edit (snapshots already guaranteed it);
+  D7 — sticky skill-repo headers (scroll container + sticky thead).
+- **D1 — drive-type preference:** `students.drive_type_preferences
+  drive_type[] default '{}'` (0054). Checkboxes on `/student/profile`
+  (no approval — Q6). Enforced in THREE places like the area rule:
+  `isDriveVisibleToStudent` (`drive_type_not_preferred`, below R5a override,
+  empty = no opinion), the apply-gate in 0054, and the refusal copy. The
+  publish audience count shows "Did not ask for this drive type".
+
+### 🔴 Worth remembering
+
+- **0054 restates `enforce_application_gates` wholesale** (CREATE OR REPLACE
+  cannot patch a body). While copying, I "improved" a refusal message and the
+  apply-guard test caught it — copy verbatim, diff against the previous
+  migration, THEN add the new block.
+- **A tool-call with several edits is all-or-nothing** — a failed later edit
+  rolled back the earlier ones once; always re-grep after a failed Edit call.
+- The e2e mock's resume row had no `storage_path`; an empty basename produced
+  an empty resume NAME on screen. `resumeNames` now falls back to
+  "your saved resume".
+
+### 🔜 Deliberately not smuggled in (next session candidates)
+
+1. The student's In-progress card does not yet SHOW the round schedule/link
+   (F6's notification carries them). Small drives-view + card change.
+2. `drive_contacts` are not surfaced to the DH approval queue (record page
+   only).
+3. Live proof of 0053/0054 as real roles through RLS — pushed and
+   PGlite-proved, not yet exercised against production rows.
+4. Old orphan drafts in production from B1's bug (pre-fix rows): check
+   `drives status='draft'` whose company also exists later; delete with
+   Karthik's confirmation.
+5. Items 5 (xlsx export pack), Zoho intake — unchanged, still parked.
+
+---
+
 ## ✅ LIVE 2026-08-19 — Test data injected for shortlisting trial (no app change)
 
 No migration, no UI change. Pure SQL seed scripts against production. Committed
