@@ -158,7 +158,20 @@ export async function stubSupabase(page: Page, options: StubOptions): Promise<Su
     }
 
     if (table === "applications") {
-      return json([...applied].map((drive_id) => ({ drive_id })));
+      // N7's lists read id + applied_at as well as the drive id.
+      return json(
+        [...applied].map((drive_id, i) => ({
+          id: `app-${i + 1}`,
+          drive_id,
+          applied_at: new Date(now).toISOString(),
+        })),
+      );
+    }
+
+    // N7: the four lists join each application to its rounds. The journey's
+    // student starts with none in progress.
+    if (table === "round_participants" || table === "round_results" || table === "attendance") {
+      return json([]);
     }
 
     if (table === "offers") {

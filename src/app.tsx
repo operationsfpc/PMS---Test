@@ -26,6 +26,7 @@ import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { DrivePortfolioRoute } from "@features/drive-portfolio/portfolio-route";
+import { DriveRecordRoute } from "@features/drive-record/record-route";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
@@ -173,6 +174,8 @@ export function App() {
                 <Route path="/admin/roster" element={<AdminRosterPage />} />
                 <Route path="/student" element={<StudentDashboardRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
+                {/* N1: the one canonical drive page, for every role. */}
+                <Route path="/drives/:driveId" element={<DriveRecordRoute />} />
                 {/* F2: two decisions, two heads. */}
                 <Route path="/student/opt-out" element={<StudentOptOutRoute />} />
                 <Route path="/student/off-campus" element={<StudentOffCampusRoute />} />

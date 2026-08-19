@@ -217,7 +217,10 @@ export function DrivePortfolioPage({
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="font-heading text-lg font-bold text-ink-900">
-                              {drive.companyName}
+                              {/* N1: the name is the door to the full record. */}
+                              <Link to={`/drives/${drive.driveId}`} className="hover:underline">
+                                {drive.companyName}
+                              </Link>
                             </p>
                             <p className="text-sm text-ink-500">{drive.roleTitle}</p>
                             <div className="mt-2 flex flex-wrap items-center gap-2">

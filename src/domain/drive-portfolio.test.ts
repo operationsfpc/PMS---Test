@@ -309,7 +309,7 @@ describe("canViewDriveApplicants", () => {
    */
   it.each(["live", "applications_closed", "in_rounds", "completed"] as const)(
     "treats %s as published, so only the AE sees the list",
-    (status) => {
+    (_status) => {
       expect(canViewDriveApplicants("account_executive")).toBe(true);
       expect(canViewDriveApplicants("central_placement_coordinator")).toBe(false);
     },
@@ -318,7 +318,7 @@ describe("canViewDriveApplicants", () => {
   /** Nobody else, whatever the status. */
   it("refuses every other role outright", () => {
     for (const role of APP_ROLES.filter((r) => r !== "account_executive")) {
-      for (const status of DRIVE_STATUSES) {
+      for (const _status of DRIVE_STATUSES) {
         expect(canViewDriveApplicants(role)).toBe(false);
       }
     }
@@ -331,7 +331,7 @@ describe("canViewDriveApplicants", () => {
    */
   it.each(["draft", "submitted", "rejected"] as const)(
     "still shows the AE nothing to hide on a %s drive",
-    (status) => {
+    (_status) => {
       expect(canViewDriveApplicants("account_executive")).toBe(true);
     },
   );

@@ -63,8 +63,11 @@ test.describe("student journey", () => {
     // On a phone the nav is behind the hamburger — this is the real path a
     // student takes, and it is the only one they have (PRD §21.2).
     await page.getByRole("button", { name: "Open navigation" }).click();
-    await page.getByRole("link", { name: "Open drives" }).click();
-    await expect(page.getByRole("heading", { name: "Open drives" })).toBeVisible();
+    // N7 (2026-08-19): one entry named Drives; the four lists are its tabs.
+    await page.getByRole("button", { name: "Drives", exact: true }).click();
+    await page.getByRole("link", { name: "Drives", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Drives" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /To apply/ })).toBeVisible();
 
     // Visible, because she is eligible.
     await expect(page.getByRole("heading", { name: "Zoho" })).toBeVisible();
@@ -89,8 +92,13 @@ test.describe("student journey", () => {
     });
     await page.getByRole("button", { name: "Yes, apply" }).click();
 
-    // The application is now irreversible, and the UI must say so.
-    await expect(page.getByText("Applied")).toBeVisible();
+    // N7: an applied drive MOVES — out of To apply, into In progress, wearing
+    // its standing. The application is irreversible and the screen says where
+    // it went rather than leaving a dead Apply button behind.
+    await expect(page.getByRole("tab", { name: "To apply (0)" })).toBeVisible();
+    await page.getByRole("tab", { name: "In progress (1)" }).click();
+    await expect(page.getByRole("heading", { name: "Zoho" })).toBeVisible();
+    await expect(page.getByText("Applied — awaiting shortlist")).toBeVisible();
     await expect(page.getByRole("button", { name: "Apply to Zoho" })).toHaveCount(0);
 
     // R7: the application carries a frozen snapshot of the profile, not a

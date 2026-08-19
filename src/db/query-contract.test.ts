@@ -12,6 +12,7 @@ import {
 } from "@features/dashboard/dashboard-view";
 import { COLUMNS as PIF_APPROVAL_COLUMNS } from "@features/delivery-head/approval-repository";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
+import { RECORD_APPLICANT_COLUMNS, RECORD_DRIVE_COLUMNS } from "@features/drive-record/record-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
 import {
   DRIVE_COLUMNS,
@@ -82,10 +83,12 @@ function parse(spec: string): { columns: string[]; embeds: Embed[] } {
   const embeds: Embed[] = [];
 
   for (const part of splitTopLevel(spec)) {
-    // `table(...)` or, when the relationship needs naming, `table!fkey(...)`.
-    const embed = /^(\w+)(?:!(\w+))?\s*\(([\s\S]*)\)$/.exec(part);
-    if (embed?.[1] !== undefined && embed[3] !== undefined) {
-      embeds.push({ table: embed[1], spec: embed[3], hint: embed[2] });
+    // `table(...)`, `table!fkey(...)` when the relationship needs naming, or
+    // `alias:table!fkey(...)` when one table is embedded more than once (N1's
+    // drive record embeds profiles three times).
+    const embed = /^(?:(\w+):)?(\w+)(?:!(\w+))?\s*\(([\s\S]*)\)$/.exec(part);
+    if (embed?.[2] !== undefined && embed[4] !== undefined) {
+      embeds.push({ table: embed[2], spec: embed[4], hint: embed[3] });
     } else {
       columns.push(part);
     }
@@ -303,6 +306,13 @@ describe("every hand-written select matches the schema", () => {
     ["shortlist export", "applications", "id, profile_snapshot, shortlist_entries(included)"],
     // D10: the campus coordinator's full-cycle screen.
     ["drive progress applications", "applications", PROGRESS_APPLICATION_COLUMNS],
+    // N1 (2026-08-19): the canonical drive page. It embeds profiles three
+    // times through named constraints — exactly the shape that 400s when a
+    // constraint name is guessed wrong, so it is proved here.
+    ["drive record", "drives", RECORD_DRIVE_COLUMNS],
+    ["drive record applicants", "applications", RECORD_APPLICANT_COLUMNS],
+    // N7: the four lists read the student's applications with their ids.
+    ["student drive lists applications", "applications", "id, drive_id, applied_at"],
     ["drive progress offers", "offers", "student_id, drive_id, ctc_lpa, offer_category"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],
     ["staff profiles", "profiles", "email, is_active"],

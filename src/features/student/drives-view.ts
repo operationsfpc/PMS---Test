@@ -3,7 +3,9 @@ import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
 import { describeJoining } from "@domain/joining";
 import type { Offer } from "@domain/offers";
 import { describeShift } from "@domain/shift";
-import type { AcademicProfile, RoleCategory } from "@domain/types";
+import { classifyStudentDrive } from "@domain/student-drive-lists";
+import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
+import type { AcademicProfile, DriveStatus, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -12,7 +14,14 @@ import {
   type ApplyStudent,
   createSupabaseApplyRepository,
 } from "./apply-repository";
-import type { DrivesView, OpenDrive } from "./drives-list";
+import type {
+  ClosedDriveRow,
+  ConcludedDriveRow,
+  ProgressDriveRow,
+  StudentDriveLists,
+  StudentDriveListsView,
+} from "./drive-tabs";
+import type { OpenDrive } from "./drives-list";
 
 /**
  * PostgREST returns an embedded to-one relation as an object, but the generated
@@ -77,8 +86,14 @@ export const DRIVE_COLUMNS = `
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name))),
-  drive_rounds(sequence, name)
+  drive_rounds(id, sequence, name)
 `;
+
+/**
+ * N7: every status a student may read (0030's policy). The closed statuses
+ * feed the two closed lists; `openDrives` still drops everything not live.
+ */
+const STUDENT_READABLE_STATUSES = ["live", "applications_closed", "in_rounds", "completed"];
 
 /** Long enough to open and read a PDF on a phone; short enough not to be forwarded. */
 const JD_LINK_TTL_SECONDS = 60 * 10;
@@ -125,7 +140,7 @@ export function createSupabaseDrivesView(
   clock: () => Date = () => new Date(),
   /** Injected only by tests; production always uses the real repository. */
   applyRepo: ApplyRepository = createSupabaseApplyRepository(client),
-): DrivesView {
+): StudentDriveListsView {
   async function load() {
     const userId = await getAuthUserId();
     if (userId === null) throw new Error("No session");
@@ -139,8 +154,8 @@ export function createSupabaseDrivesView(
     if (!row) throw new Error("No student record");
 
     const [{ data: drives }, { data: applications }, { data: offers }] = await Promise.all([
-      client.from("drives").select(DRIVE_COLUMNS).eq("status", "live"),
-      client.from("applications").select("drive_id").eq("student_id", row.id),
+      client.from("drives").select(DRIVE_COLUMNS).in("status", STUDENT_READABLE_STATUSES),
+      client.from("applications").select("id, drive_id, applied_at").eq("student_id", row.id),
       client.from("offers").select(OFFER_LADDER_COLUMNS).eq("student_id", row.id),
     ]);
 
@@ -223,9 +238,18 @@ export function createSupabaseDrivesView(
       ),
     };
 
-    const appliedIds = ((applications ?? []) as Array<{ drive_id: string }>).map((a) => a.drive_id);
+    const applicationRows = (applications ?? []) as Array<{
+      id: string;
+      drive_id: string;
+      applied_at: string;
+    }>;
 
-    return { student, drives: (drives ?? []) as Array<Record<string, unknown>>, appliedIds };
+    return {
+      student,
+      drives: (drives ?? []) as Array<Record<string, unknown>>,
+      applications: applicationRows,
+      appliedIds: applicationRows.map((a) => a.drive_id),
+    };
   }
 
   function toDrive(raw: Record<string, unknown>): ApplyDrive {
@@ -321,6 +345,7 @@ export function createSupabaseDrivesView(
             id: drive.id,
             companyName: raw.company_name as string,
             roleTitle: (raw.role_title as string | null) ?? "Role not specified",
+            roleCategory: drive.roleCategory,
             ctcLabel: max === null ? `₹${min ?? "—"} LPA` : `₹${min}–${max} LPA`,
             offerCategory: drive.offerCategory,
             applicationEnd: raw.application_end as string,
@@ -373,6 +398,173 @@ export function createSupabaseDrivesView(
       const raw = drives.find((d) => d.id === driveId);
       if (raw === undefined) throw new Error("Drive not found");
       await applyRepo.apply(student, toDrive(raw), appliedIds, clock(), resume);
+    },
+
+    /**
+     * N7 — the four lists (approved 2026-08-19). One pass over everything the
+     * student can read; `classifyStudentDrive` decides the list, so each
+     * drive lands in exactly one.
+     *
+     * An APPLIED drive is never re-judged by R5: eligibility was settled at
+     * apply time and snapshotted (R7). Re-hiding it now would disappear a
+     * drive the student is mid-interview with.
+     */
+    async lists(): Promise<StudentDriveLists> {
+      const { student, drives, applications, appliedIds } = await load();
+      const now = clock();
+
+      const applicationByDrive = new Map(applications.map((a) => [a.drive_id, a]));
+      const applicationIds = applications.map((a) => a.id);
+
+      const [{ data: participants }, { data: results }, { data: attendance }] =
+        applicationIds.length === 0
+          ? [{ data: [] }, { data: [] }, { data: [] }]
+          : await Promise.all([
+              client
+                .from("round_participants")
+                .select("round_id, application_id")
+                .in("application_id", applicationIds),
+              client
+                .from("round_results")
+                .select("round_id, application_id, result")
+                .in("application_id", applicationIds),
+              client
+                .from("attendance")
+                .select("round_id, application_id, status")
+                .in("application_id", applicationIds),
+            ]);
+
+      const key = (applicationId: string, roundId: string) => `${applicationId}::${roundId}`;
+      const sat = new Set(
+        ((participants ?? []) as Array<Record<string, unknown>>).map((p) =>
+          key(p.application_id as string, p.round_id as string),
+        ),
+      );
+      const resultBy = new Map(
+        ((results ?? []) as Array<Record<string, unknown>>).map((r) => [
+          key(r.application_id as string, r.round_id as string),
+          r.result as ApplicantRound["result"],
+        ]),
+      );
+      const attendanceBy = new Map(
+        ((attendance ?? []) as Array<Record<string, unknown>>).map((a) => [
+          key(a.application_id as string, a.round_id as string),
+          a.status as ApplicantRound["attendance"],
+        ]),
+      );
+
+      const toApplyIds = new Set<string>();
+      const inProgress: ProgressDriveRow[] = [];
+      const notApplied: ClosedDriveRow[] = [];
+      const appliedClosed: ConcludedDriveRow[] = [];
+
+      for (const raw of drives) {
+        const drive = toDrive(raw);
+        const driveStatus = raw.status as DriveStatus;
+        const application = applicationByDrive.get(drive.id);
+
+        if (application !== undefined) {
+          const rounds: ApplicantRound[] = (
+            Array.isArray(raw.drive_rounds) ? raw.drive_rounds : []
+          ).map((r) => {
+            const round = r as Record<string, unknown>;
+            const at = key(application.id, round.id as string);
+            return {
+              sequence: Number(round.sequence ?? 0),
+              name: String(round.name ?? "Round"),
+              participating: sat.has(at),
+              attendance: attendanceBy.get(at) ?? null,
+              result: resultBy.get(at) ?? null,
+            };
+          });
+
+          const progress = applicationProgress({
+            rounds,
+            hasOffer: student.offers.some((offer) => offer.driveId === drive.id),
+          });
+
+          const list = classifyStudentDrive(
+            {
+              applied: true,
+              driveStatus,
+              applicationEnd: drive.applicationEnd,
+              stage: progress.stage,
+            },
+            now,
+          );
+
+          const row: ProgressDriveRow = {
+            id: drive.id,
+            companyName: raw.company_name as string,
+            roleTitle: (raw.role_title as string | null) ?? "Role not specified",
+            roleCategory: drive.roleCategory,
+            locations: text(raw.work_locations),
+            appliedAt: application.applied_at,
+            progressLabel: progress.label,
+            roundsCleared: progress.roundsCleared,
+            totalRounds: progress.totalRounds,
+          };
+
+          if (list === "applied_closed") {
+            appliedClosed.push({ ...row, outcomeLabel: progress.label });
+          } else {
+            inProgress.push(row);
+          }
+          continue;
+        }
+
+        const verdict = canApply(
+          {
+            srfStatus: student.srfStatus,
+            participationStatus: student.participationStatus,
+            academics: student.academics,
+            offers: student.offers,
+            roleCategories: student.roleCategories,
+          },
+          drive,
+          now,
+          appliedIds,
+        );
+
+        // R5's hides still hide: "you missed it" about a drive the student
+        // was never eligible for is a reproach nobody earned.
+        const hidden =
+          !verdict.allowed &&
+          !["window_not_open", "window_closed", "drive_not_live"].includes(verdict.reason);
+        if (hidden) continue;
+
+        const list = classifyStudentDrive(
+          { applied: false, driveStatus, applicationEnd: drive.applicationEnd, stage: null },
+          now,
+        );
+
+        if (list === "to_apply") {
+          toApplyIds.add(drive.id);
+        } else {
+          const min = raw.ctc_min_lpa as number | null;
+          const max = raw.ctc_max_lpa as number | null;
+          notApplied.push({
+            id: drive.id,
+            companyName: raw.company_name as string,
+            roleTitle: (raw.role_title as string | null) ?? "Role not specified",
+            roleCategory: drive.roleCategory,
+            ctcLabel: max === null ? `₹${min ?? "—"} LPA` : `₹${min}–${max} LPA`,
+            locations: text(raw.work_locations),
+            closedOn: raw.application_end as string,
+          });
+        }
+      }
+
+      // The open cards go through the SAME builder as `openDrives`, so the
+      // To-apply tab and the old list cannot describe a drive differently.
+      const openCards = await this.openDrives();
+
+      return {
+        toApply: openCards.filter((card) => toApplyIds.has(card.id)),
+        inProgress,
+        notApplied,
+        appliedClosed,
+      };
     },
   };
 }

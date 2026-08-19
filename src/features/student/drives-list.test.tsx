@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { ApplyError } from "./apply-repository";
 import { DrivesList, type DrivesView } from "./drives-list";
+
+/** The card carries a Link to /drives/:id (N1), so a router must be present. */
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * The student's view of open drives.
@@ -18,6 +23,7 @@ const open = {
   id: "d1",
   companyName: "Zoho",
   roleTitle: "Member Technical Staff",
+  roleCategory: "software_technical" as const,
   ctcLabel: "₹6.5–9 LPA",
   offerCategory: "dream" as const,
   applicationEnd: "2026-09-10T00:00:00Z",

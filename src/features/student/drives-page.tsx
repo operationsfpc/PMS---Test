@@ -1,10 +1,15 @@
 import { supabase } from "@lib/supabase";
 import { useState } from "react";
-import { DrivesList, type DrivesView } from "./drives-list";
+import { DriveTabs, type StudentDriveListsView } from "./drive-tabs";
 import { createSupabaseDrivesView } from "./drives-view";
 
-/** Route wrapper: builds the live view once and hands it to the list. */
-export function StudentDrivesPage({ view }: { view?: DrivesView }) {
-  const [resolved] = useState<DrivesView>(() => view ?? createSupabaseDrivesView(supabase()));
-  return <DrivesList view={resolved} />;
+/**
+ * Route wrapper: the student's Drives area is the four lists now (N7,
+ * approved 2026-08-19). The old single list lives on inside the To-apply tab.
+ */
+export function StudentDrivesPage({ view }: { view?: StudentDriveListsView }) {
+  const [resolved] = useState<StudentDriveListsView>(
+    () => view ?? createSupabaseDrivesView(supabase()),
+  );
+  return <DriveTabs view={resolved} />;
 }

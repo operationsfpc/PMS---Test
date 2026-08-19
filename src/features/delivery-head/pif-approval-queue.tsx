@@ -10,6 +10,7 @@ import {
 } from "@domain/offer-category";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
   ApprovalError,
   type ApprovalRepository,
@@ -170,6 +171,14 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                     {pif.companyName}
                   </h2>
                   {pif.onHold && <Badge tone="warning">On hold</Badge>}
+                  {/* N1: "delivery head should be able to click and view all
+                      relevant fields of the drive." */}
+                  <Link
+                    to={`/drives/${pif.id}`}
+                    className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
+                  >
+                    View the full drive
+                  </Link>
                 </div>
                 <p className="text-sm text-ink-500">
                   {pif.roleTitle ?? "Role not specified"} · {ctcLabel}

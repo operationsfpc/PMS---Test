@@ -331,9 +331,10 @@ describe("AppShell navigation", () => {
     expect(screen.getByRole("link", { name: /position information form/i })).toBeDefined();
   });
 
-  it("gives a student the drives list, not just a dashboard", () => {
+  it("gives a student the drives area, not just a dashboard", () => {
+    // N7 (2026-08-19): one entry named Drives; the four lists are its tabs.
     shellFor(signedIn("student"));
-    expect(screen.getByRole("link", { name: /open drives/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /^drives$/i })).toBeDefined();
   });
 
   it("gives a CEO their read-only overview", () => {

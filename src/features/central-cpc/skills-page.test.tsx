@@ -98,9 +98,7 @@ describe("SkillsPage — editing one student", () => {
     await user.click(within(priya).getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(saveScores).toHaveBeenCalledWith([
-        { studentId: "s1", skillAreaId: "a2", score: 3 },
-      ]),
+      expect(saveScores).toHaveBeenCalledWith([{ studentId: "s1", skillAreaId: "a2", score: 3 }]),
     );
   });
 

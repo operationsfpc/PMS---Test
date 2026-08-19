@@ -1,7 +1,10 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { applicationEvidenceProblems } from "@domain/application-snapshot";
 import type { OfferCategory } from "@domain/offer-category";
+import { describeTimeLeft } from "@domain/student-drive-lists";
+import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { ApplyError } from "./apply-repository";
 
 /** Everything behind "View more" (F14). Null when the drive did not say. */
@@ -30,6 +33,8 @@ export interface OpenDrive {
   readonly id: string;
   readonly companyName: string;
   readonly roleTitle: string;
+  /** N7: the four-list screen filters on it. */
+  readonly roleCategory: RoleCategory;
   readonly ctcLabel: string;
   readonly offerCategory: OfferCategory | null;
   readonly applicationEnd: string;
@@ -77,7 +82,16 @@ function Fact({ label, value }: { label: string; value: string }) {
  * Mobile-first: students are on phones (PRD §21.2), so this is a stacked card
  * list rather than a table.
  */
-export function DrivesList({ view }: { view: DrivesView }) {
+export function DrivesList({
+  view,
+  embedded = false,
+  now = () => new Date(),
+}: {
+  view: DrivesView;
+  /** True inside the four-tab screen, which brings its own heading. */
+  embedded?: boolean;
+  now?: () => Date;
+}) {
   const [rows, setRows] = useState<readonly OpenDrive[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -138,10 +152,12 @@ export function DrivesList({ view }: { view: DrivesView }) {
 
   return (
     <>
-      <PageHeader
-        title="Open drives"
-        subtitle="Drives you are eligible for. Applying cannot be withdrawn."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Open drives"
+          subtitle="Drives you are eligible for. Applying cannot be withdrawn."
+        />
+      )}
 
       {error !== null && (
         <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
@@ -185,6 +201,32 @@ export function DrivesList({ view }: { view: DrivesView }) {
                 </p>
                 <p className="mt-1 text-xs text-ink-500">
                   Applications close {day(drive.applicationEnd)}
+                </p>
+                {/* N7: closing time SHOWN, hot under 24 hours. */}
+                {!drive.applied &&
+                  (() => {
+                    const left = describeTimeLeft(new Date(drive.applicationEnd), now());
+                    return (
+                      <p
+                        className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                          left.urgent
+                            ? "bg-[#FF7200] text-white"
+                            : "bg-surface-muted text-[#3D3777]"
+                        }`}
+                      >
+                        {left.urgent ? "🔥 " : "⏳ "}
+                        {left.label}
+                      </p>
+                    );
+                  })()}
+                {/* N1: the card links to the drive's one canonical page. */}
+                <p className="mt-2">
+                  <Link
+                    to={`/drives/${drive.id}`}
+                    className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
+                  >
+                    View everything about {drive.companyName}
+                  </Link>
                 </p>
 
                 {/* F14: "Add a view more button to view further details on the

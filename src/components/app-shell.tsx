@@ -54,7 +54,8 @@ const DRIVES: NavGroup = {
 export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   student: [
     { heading: "Home", items: [{ to: "/student", label: "My dashboard" }] },
-    { heading: "Drives", items: [{ to: "/student/drives", label: "Open drives" }] },
+    // N7: one entry; the four lists are tabs inside it.
+    { heading: "Drives", items: [{ to: "/student/drives", label: "Drives" }] },
     {
       heading: "My record",
       items: [
@@ -318,9 +319,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 >
                   Preview as
                 </label>
+                {/* Hidden on phones like its label: it made the DEV header
+                    ~535px wide on a 412px viewport, so mobile Chrome zoomed
+                    the whole app out to fit — which is what made every tap
+                    near the fold flaky in the student journey (2026-08-19). */}
                 <select
                   id="role-switch"
-                  className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none"
+                  className="hidden rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none sm:block"
                   value={preview ?? signedInRole}
                   onChange={(e) => setPreview(e.target.value as AppRole)}
                 >
