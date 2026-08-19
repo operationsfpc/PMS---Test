@@ -93,7 +93,59 @@ nobody sitting at it.
 
 ---
 
+## ⏸ READY TO BUILD 2026-08-19 — Zoho PIF intake: spec answered, Zoho admin has the checklist, WAITING FOR KARTHIK'S GO
+
+**Nothing built. Do not start until Karthik says go** — his words: "i will
+revert after the zoho admin gets this done. you can start the work after i
+give a go ahead."
+
+**Spec: `docs/specs/2026-08-19-zoho-pif-intake.md`** — all 8 original
+questions AND all 5 follow-ups answered verbatim in it. The decisions:
+
+- **Design A** — Zoho Deals is the front door. Webhook → Edge Function
+  `zoho-pif-intake` → `drives` row. Our first server component.
+- `zoho.in` DC · module **Deals** · **no sandbox** (test = dummy Deal on live
+  CRM, rows deleted in the proof) · OAuth self-client creds coming from the
+  internal Zoho admin · workflow-rule trigger.
+- Valid payload → `status='submitted'` (straight to DH queue). Invalid →
+  `status='draft'` **as a record only** — the AE fixes in Zoho and submits a
+  FRESH Deal; drafts and rejected drives are never edited (answers 3+5+Q1a).
+- No edits after submission; re-fires swallowed by unique
+  `drives.zoho_record_id` (migration `0052`, with `intake_source`).
+- AE notifications are **in-app only for v1** (email deferred — still no
+  EmailProvider in the system). DH approve/reject also notifies in-app.
+- Zoho owner email → `account_executive` profile; **no match → refuse**.
+  ⚠️ The 4 live AE profiles are TEST accounts (answer 7) — real AEs must be
+  invited on their Zoho emails before this goes live.
+- JD is attached to the Deal (PDF ≤ 5 MB); pulled via Zoho API into
+  `job-descriptions/<drive_uuid>/` BEFORE the row insert (0051's order).
+
+**Zoho admin's first cut reviewed** (2 screenshots in `docs/inbox/`,
+`WhatsApp Image 2026-08-19 at 15.01.35/53.jpeg`): webhook "Send Deals to
+PMS" → webhook.site placeholder, 21 fields mapped, form-data, `mm-dd-yyyy`.
+🔴 Gaps that would refuse EVERY intake: no Deal Id, no owner email, no auth
+header, trigger fires on "Modified" (every edit), no rounds field, no
+joining timeline, no eligibility block, `_raw` fields implying display
+labels instead of canonical enum values. All of it is in the checklist
+handed to the admin: **`docs/zoho-admin-checklist-2026-08-19.pdf`** (+ .html
+source) — fields, exact picklist values for all 7 vocabularies, formats
+(rounds: `Round 1 - Aptitude Test; Round 2 - …`), JD convention, OAuth
+scopes (`ZohoCRM.modules.deals.READ`, `ZohoCRM.Attachments.READ`,
+`ZohoCRM.users.READ` on accounts.zoho.in).
+
+**When the go arrives, build in this order (TDD):** payload-mapping domain
+rules (form-data → `pifSubmitSchema` verdict is pure — test the refusals
+first) → migration `0052` with db tests (unique `zoho_record_id`, forced
+status, `intake_source`) → Edge Function (auth header → validate → resolve
+AE → pull JD → insert) → in-app notifications → live proof with the dummy
+Deal. OAuth creds go into git-ignored `.env` by Karthik's hand, then into
+Edge Function secrets — never in chat, never in git.
+
+---
+
 ## ⏸ PARKED 2026-08-18 — Zoho CRM integration (awaiting Karthik's answers)
+
+**✅ SUPERSEDED by the 2026-08-19 section above — kept for the reasoning.**
 
 Raised at the end of the session, **nothing built, no decision taken**. Karthik:
 the ER team keeps potential recruiters in Zoho CRM, and the AEs live there too —

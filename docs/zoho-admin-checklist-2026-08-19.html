@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Zoho CRM × FACE Prep Campus PMS — Webhook Integration Checklist</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1f2430; font-size: 10.5pt; line-height: 1.45; margin: 0; }
+  h1 { color: #3D3777; font-size: 17pt; margin: 0 0 2px; }
+  .sub { color: #666; font-size: 9.5pt; margin-bottom: 14px; }
+  h2 { color: #3D3777; font-size: 12.5pt; border-bottom: 2px solid #FFB800; padding-bottom: 3px; margin: 18px 0 8px; }
+  h3 { font-size: 11pt; margin: 12px 0 4px; color: #3D3777; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; page-break-inside: avoid; }
+  th { background: #3D3777; color: #fff; text-align: left; padding: 5px 8px; font-size: 9.5pt; }
+  td { border: 1px solid #DADADA; padding: 4px 8px; vertical-align: top; font-size: 9.5pt; }
+  code { font-family: Menlo, Consolas, monospace; font-size: 9pt; background: #F5F5F5; padding: 1px 4px; border-radius: 3px; }
+  .chk { width: 22px; text-align: center; font-size: 12pt; }
+  .crit { color: #DD4820; font-weight: bold; }
+  .note { background: #FFF7E0; border-left: 4px solid #FFB800; padding: 6px 10px; margin: 8px 0; font-size: 9.5pt; }
+  .rule { background: #FFF0EC; border-left: 4px solid #DD4820; padding: 6px 10px; margin: 8px 0; font-size: 9.5pt; }
+  ul { margin: 4px 0 8px 18px; padding: 0; }
+  li { margin-bottom: 3px; }
+  .keep td { background: #F2FBF6; }
+</style>
+</head>
+<body>
+
+<h1>Zoho CRM → PMS Webhook: Integration Checklist</h1>
+<div class="sub">FACE Prep Campus — Placement Management System &nbsp;·&nbsp; 19&nbsp;Aug&nbsp;2026 &nbsp;·&nbsp; for the Zoho CRM administrator &nbsp;·&nbsp; based on the current “Send Deals to PMS” webhook + “CRM Deals x PMS” workflow rule</div>
+
+<div class="note"><b>What already looks good:</b> Deals module, POST with form-data body, the snake_case parameter names, sourcing from Accounts / Contacts / Deals, and the fixed <code>mm-dd-yyyy</code> date format. Please keep all of that as is.</div>
+
+<div class="rule"><b>One rule governs everything below:</b> the PMS validates every payload against the same rules its own form uses, and it <b>refuses rather than converts</b>. A picklist value that is not an exact match, or a missing required field, means the whole Deal is refused and lands as a draft for the AE to redo. So exact values matter more than anything else on this list.</div>
+
+<h2>1 &nbsp;Webhook configuration changes</h2>
+<table>
+  <tr><th class="chk">✔</th><th>Item</th><th>What to do</th></tr>
+  <tr><td class="chk">☐</td><td class="crit">Add the Deal record ID</td><td>Add parameter <code>zoho_record_id</code> = Deal Id. This is how the PMS de-duplicates retries and how it fetches the JD attachment. <b>Without it the integration cannot work.</b></td></tr>
+  <tr><td class="chk">☐</td><td class="crit">Add the Deal owner’s email</td><td>Add parameter <code>owner_email</code> = Deal Owner → Email. The PMS matches it to the Account Executive’s PMS login. No match → the Deal is refused.</td></tr>
+  <tr><td class="chk">☐</td><td class="crit">Authorization header</td><td>Currently “General” with no header. Before the real URL goes in, add a custom header (name and secret value will be provided) so only Zoho can call the endpoint.</td></tr>
+  <tr><td class="chk">☐</td><td class="crit">Workflow trigger condition</td><td>“Execute On: Modified” fires on <i>every</i> edit, including half-filled Deals. Change to fire <b>once, deliberately</b> — e.g. when a Stage / picklist becomes <i>“Submit to PMS”</i>. Re-fires are tolerated (de-duplicated) but create noise.</td></tr>
+  <tr><td class="chk">☐</td><td>Replace the test URL</td><td><code>webhook.site/…</code> is fine for testing. The production URL (a Supabase Edge Function) will be provided together with the auth header secret.</td></tr>
+</table>
+
+<h2>2 &nbsp;Parameters to ADD to the webhook body</h2>
+<table>
+  <tr><th class="chk">✔</th><th>Parameter name</th><th>Source / type in Zoho</th><th>Notes</th></tr>
+  <tr><td class="chk">☐</td><td><code>zoho_record_id</code></td><td>Deal Id</td><td class="crit">Required — see §1</td></tr>
+  <tr><td class="chk">☐</td><td><code>owner_email</code></td><td>Deal Owner email</td><td class="crit">Required — see §1</td></tr>
+  <tr><td class="chk">☐</td><td><code>rounds</code></td><td>Multi-line text field on the Deal</td><td class="crit">Required. Exact format in §4. A Deal with no rounds is refused.</td></tr>
+  <tr><td class="chk">☐</td><td><code>joining_timeline</code></td><td>New picklist: <code>immediate</code> / <code>later</code></td><td class="crit">Required at submission</td></tr>
+  <tr><td class="chk">☐</td><td><code>joining_immediate_notes</code></td><td>Single-line text</td><td>Optional; only meaningful when timeline is <code>immediate</code></td></tr>
+  <tr><td class="chk">☐</td><td><code>joining_later_notes</code></td><td>Single-line text</td><td>Optional; only meaningful when timeline is <code>later</code></td></tr>
+  <tr><td class="chk">☐</td><td><code>min_overall_cgpa</code></td><td>Number (decimal)</td><td>Optional cutoff. Judged on the scale below: 65 is a valid percentage and an invalid CGPA</td></tr>
+  <tr><td class="chk">☐</td><td><code>min_overall_cgpa_scale</code></td><td>New picklist: <code>cgpa</code> / <code>percentage</code></td><td>States which scale the cutoff was declared on</td></tr>
+  <tr><td class="chk">☐</td><td><code>min_tenth_percentage</code></td><td>Number (decimal)</td><td>Optional 10th-standard bar</td></tr>
+  <tr><td class="chk">☐</td><td><code>min_twelfth_percentage</code></td><td>Number (decimal)</td><td>Optional 12th-standard bar</td></tr>
+  <tr><td class="chk">☐</td><td><code>arrears_policy</code></td><td>New picklist — values in §3</td><td>Required (defaults to <code>flexible</code> if truly unknown)</td></tr>
+  <tr><td class="chk">☐</td><td><code>mandatory_skills</code></td><td>Text</td><td>Optional</td></tr>
+  <tr><td class="chk">☐</td><td><code>shift_night_timing</code></td><td>Single-line text, e.g. “9 PM – 6 AM”</td><td class="crit">Required when <code>shift_type</code> = <code>night</code>; must be empty otherwise</td></tr>
+  <tr><td class="chk">☐</td><td><code>spoc_designation</code></td><td>Contact → Title</td><td>Optional but wanted</td></tr>
+  <tr><td class="chk">☐</td><td><code>spoc_phone</code></td><td>Contact → Phone</td><td>Optional but wanted</td></tr>
+  <tr><td class="chk">☐</td><td><code>additional_designations</code></td><td>Text, semicolon-separated</td><td>Optional: other job titles covered by the same interview process</td></tr>
+</table>
+
+<h2>3 &nbsp;Picklist values — must match EXACTLY (lowercase, underscores)</h2>
+<p>Six fields carry fixed vocabularies. The stored picklist <b>value</b> must be the code below; the display label shown to the AE can be the friendly text.</p>
+
+<table>
+  <tr><th class="chk">✔</th><th>Field</th><th>Exact values (stored)</th><th>Display labels (suggested)</th></tr>
+  <tr><td class="chk">☐</td><td><code>role_category</code> <span class="crit">(most critical — routes the drive to students)</span></td>
+      <td><code>software_technical</code><br/><code>technical_support_it_ops</code><br/><code>digital_marketing</code><br/><code>sales</code><br/><code>operations_business</code></td>
+      <td>Software / Technical<br/>Technical Support / IT Operations<br/>Digital Marketing<br/>Sales<br/>Operations and Business Roles</td></tr>
+  <tr><td class="chk">☐</td><td><code>drive_type_raw</code> → please rename to <code>drive_type</code></td>
+      <td><code>placement</code><br/><code>internship_convertible</code><br/><code>internship</code></td>
+      <td>Placement<br/>Internship (convertible to placement)<br/>Internship only</td></tr>
+  <tr><td class="chk">☐</td><td><code>drive_mode_raw</code> → please rename to <code>drive_mode</code></td>
+      <td><code>on_campus</code><br/><code>physical_outside_campus</code><br/><code>virtual</code><br/><code>pooled</code></td>
+      <td>On campus<br/>Physical, outside campus<br/>Virtual<br/>Pooled</td></tr>
+  <tr><td class="chk">☐</td><td><code>shift_type</code></td>
+      <td><code>day</code><br/><code>night</code><br/><code>rotational</code><br/><code>flexible</code></td>
+      <td>Day<br/>Night (hours required)<br/>Rotational<br/>Flexible</td></tr>
+  <tr><td class="chk">☐</td><td><code>arrears_policy</code></td>
+      <td><code>no_standing</code><br/><code>no_history</code><br/><code>flexible</code></td>
+      <td>No standing arrears<br/>No arrear history at all<br/>Flexible</td></tr>
+  <tr><td class="chk">☐</td><td><code>joining_timeline</code></td>
+      <td><code>immediate</code><br/><code>later</code></td>
+      <td>Immediate<br/>Later</td></tr>
+  <tr><td class="chk">☐</td><td><code>min_overall_cgpa_scale</code></td>
+      <td><code>cgpa</code><br/><code>percentage</code></td>
+      <td>CGPA (10-point)<br/>Percentage</td></tr>
+</table>
+
+<div class="note">The <code>_raw</code> suffix on the current <code>drive_mode_raw</code> / <code>drive_type_raw</code> suggests sending display labels for the PMS to translate — please don’t: send the exact codes above and drop the suffix. The PMS refuses anything else by design.</div>
+
+<h2>4 &nbsp;Field formats</h2>
+<table>
+  <tr><th class="chk">✔</th><th>Field</th><th>Format</th><th>Example</th></tr>
+  <tr><td class="chk">☐</td><td><code>rounds</code></td><td><code>Round N - Name</code>, separated by semicolons, in order</td><td><code>Round 1 - Aptitude Test; Round 2 - Technical Interview; Round 3 - HR</code></td></tr>
+  <tr><td class="chk">☐</td><td><code>eligible_passing_years</code></td><td>Multi-select; years separated by semicolons</td><td><code>2026;2027</code></td></tr>
+  <tr><td class="chk">☐</td><td><code>additional_designations</code></td><td>Titles separated by semicolons; no repeats of the Deal Name</td><td><code>Associate Engineer; Graduate Trainee</code></td></tr>
+  <tr><td class="chk">☐</td><td><code>ctc_min_lpa</code> / <code>ctc_max_lpa</code></td><td>Plain numbers in LPA — never text like “4.5 LPA + variable”</td><td><code>4.5</code> &nbsp;(prose goes in <code>ctc_breakup</code>)</td></tr>
+  <tr><td class="chk">☐</td><td><code>bond_duration_months</code></td><td>Whole number of months (0 or empty = no bond)</td><td><code>12</code></td></tr>
+  <tr><td class="chk">☐</td><td><code>tentative_date</code></td><td><code>mm-dd-yyyy</code> (as already configured)</td><td><code>09-15-2026</code></td></tr>
+</table>
+
+<h2>5 &nbsp;The Job Description attachment</h2>
+<ul>
+  <li>☐ &nbsp;The JD is attached <b>to the Deal record itself</b> as a <b>PDF, maximum 5&nbsp;MB</b>, before submission. The PMS pulls it via the Zoho API using the record ID.</li>
+  <li>☐ &nbsp;If several files are attached, the JD should be the one whose filename contains “JD” — please agree a naming convention with the AE team (e.g. <code>&lt;Company&gt;-JD.pdf</code>).</li>
+</ul>
+
+<h2>6 &nbsp;API access (for pulling the JD + verification)</h2>
+<ul>
+  <li>☐ &nbsp;Create a <b>Self Client</b> in the Zoho API Console (<b>accounts.zoho.in</b> — the .in data centre) and share the Client ID, Client Secret and a grant token for scopes: <code>ZohoCRM.modules.deals.READ</code>, <code>ZohoCRM.Attachments.READ</code>, <code>ZohoCRM.users.READ</code>.</li>
+  <li>☐ &nbsp;Hand the credentials over <b>directly</b> (not by chat/email in plain text) — they will be stored as server secrets, never in code.</li>
+</ul>
+
+<h2>7 &nbsp;What the PMS does with each Deal (for reference)</h2>
+<ul>
+  <li>A valid Deal becomes a submitted PIF in the <b>Delivery Head’s approval queue</b>, owned by the AE matched via <code>owner_email</code>.</li>
+  <li>An invalid Deal lands as a <b>draft</b> and the AE is notified in the PMS with the exact problems. The fix is a <b>fresh Deal submission from Zoho</b> — drafts are not edited.</li>
+  <li>Duplicate/retried webhook calls for the same <code>zoho_record_id</code> are ignored — no duplicate drives.</li>
+  <li>Edits in Zoho after submission are <b>not</b> synced. Sent-back PIFs are resubmitted as fresh Deals.</li>
+</ul>
+
+<div class="note"><b>Testing (no sandbox):</b> we will jointly run one end-to-end test using a clearly named dummy Deal (e.g. Account “ZZ-TEST — DO NOT USE”) against the production PMS; everything it creates is removed afterwards. Please keep the webhook.site URL until we hand over the production endpoint + auth secret.</div>
+
+</body>
+</html>
