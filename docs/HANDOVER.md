@@ -4,6 +4,78 @@
 
 ---
 
+## ✅ LIVE 2026-08-19 — Test data injected for shortlisting trial (no app change)
+
+No migration, no UI change. Pure SQL seed scripts against production. Committed
+in `b3f4057` alongside the N7/N1 ship. Suite still **3166 tests / 157 files**,
+`pnpm check` exits 0.
+
+### 100 test students — `scripts/seed-100-test-students.sql`
+
+5 real FPC partner campuses (2027 graduating cohort, from
+`~/FPC-Data/fpc-students-2026.csv`):
+
+| Campus | City | Programme | Students |
+|---|---|---|---|
+| SDNB Vaishnav College for Women | Chennai | B.Sc CS / CT — CS with AI | 20 |
+| S-VYASA University | Bengaluru | BCA — AI and DS | 20 |
+| Takshashila University | Chennai | B.Sc CS / CT — AI & ML | 20 |
+| Kamaraj College | Virudhunagar | BCA — AI and DS | 20 |
+| AMET University | Chennai | B.Sc CS / CT — AI & ML | 20 |
+
+Per campus: 16 `srf_approved` · 2 `srf_submitted` · 1 `srf_rejected` · 1 `invited`.
+Each approved student has:
+- 6 verified semesters (CGPA arc, placeholder marksheet doc satisfying NOT NULL)
+- Scores across all 8 `DEFAULT_SKILL_AREAS` (1–5 scale, CGPA-correlated,
+  deliberate outliers at j=5 (underperformer) and j=12 (overperformer))
+- Role preferences across all 5 categories
+
+**Test-data marker:** `email LIKE 'fpc.test.%@example.com'`
+
+🔴 **Live schema diverges from local migrations** — discovered during this session:
+- `campuses` has `city_id` FK (not `city` text), plus `code`, `address`,
+  `primary_contact_name/email/phone` — all NOT NULL
+- `student_semesters.marksheet_id` is NOT NULL in live (nullable in 0003)
+- `student_semesters` has `marks_scale` and `declared_marks` columns (not in 0003)
+- Degrees in live use different names: `"B.Sc CS / CT"` not `"B.Sc"`
+- `cities` is a separate table; `student_skill_scores` is the correct table
+  (not the dropped `skill_scores` from 0003)
+- **Local migrations are behind live** — do not use local migration files to
+  reason about the live schema; always introspect via Management API.
+
+### 10 dummy drives — `scripts/seed-dummy-drives.sql`
+
+| Drive | Role | Category | CTC | Min CGPA | Rounds |
+|---|---|---|---|---|---|
+| Dummy Drive 1 | Software Developer | Regular | 3.0–3.5 | 6.0 | 3 |
+| Dummy Drive 2 | IT Support Analyst | Regular | 3.0–3.2 | 6.0 | 2 |
+| Dummy Drive 3 | Systems Engineer | Regular | 3.4–3.6 | 6.0 | 3 |
+| Dummy Drive 4 | Programmer Analyst | Regular | 3.8–4.0 | 6.0 | 3 |
+| Dummy Drive 5 | Digital Marketing Analyst | Regular | 4.0–4.5 | 6.0 | 2 |
+| Dummy Drive 6 | Associate IT Engineer | Regular | 3.6–3.8 | 6.0 | 2 |
+| Dummy Drive 7 | Business Analyst | Regular | 4.5–4.8 | 6.0 | 3 |
+| **Dummy Drive 8** | Software Engineer | **Dream** | 5.0–5.5 | **6.5** | 4 |
+| Dummy Drive 9 | Sales Development Associate | Regular | 4.0–4.2 | 6.0 | 2 |
+| Dummy Drive 10 | Technical Support Engineer | Regular | 4.2–4.6 | 6.0 | 2 |
+
+- All 10 drives: `status = applications_closed`, all 5 test campuses targeted
+- **800 applications** pre-injected (80 approved students × 10 drives)
+- Drive 8 (Dream) lets Karthik test ladder restriction for students who already
+  hold a regular offer
+- **Marker:** `company_name LIKE 'Dummy Drive%'`
+
+### Cleanup before go-live
+
+Run in this order:
+1. `scripts/remove-test-students.sql` — deletes students by email marker,
+   cascades to applications, semesters, skill scores, preferences
+2. `scripts/remove-test-drives.sql` — deletes drives by name marker,
+   cascades to rounds and campus targets (applications already gone)
+Campuses, cities, degrees, branches and skill_areas are intentionally kept
+(real infrastructure for production onboarding).
+
+---
+
 ## ✅ SHIPPED 2026-08-19 (later) — N7's four lists and N1's canonical drive page
 
 Live `7e6ed3f6-9420-4bd8-a5db-04e134f9182d`, JS byte-identical to `dist/`
