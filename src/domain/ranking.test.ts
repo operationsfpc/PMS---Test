@@ -30,7 +30,7 @@ describe("rankApplicants", () => {
         {
           ...base,
           overallCgpa: 10,
-          skillScores: [{ skill: "TypeScript", score: 100 }],
+          skillScores: [{ skill: "TypeScript", score: 5 }],
           preferredRoleCategories: ["software_technical"],
         },
       ],
@@ -90,7 +90,7 @@ describe("rankApplicants", () => {
 
   it("scores a missing mandatory skill as zero for that skill, not as absent", () => {
     const [ranked] = rankApplicants(
-      [{ ...base, skillScores: [{ skill: "TypeScript", score: 100 }] }],
+      [{ ...base, skillScores: [{ skill: "TypeScript", score: 5 }] }],
       { ...drive, mandatorySkills: ["TypeScript", "SQL"] },
     );
 

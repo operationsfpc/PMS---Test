@@ -82,11 +82,11 @@ describe("validateSkillAreaName", () => {
 
 describe("parseSkillScore", () => {
   it("accepts an integer in range", () => {
-    expect(parseSkillScore("85")).toEqual({ ok: true, score: 85 });
+    expect(parseSkillScore("4")).toEqual({ ok: true, score: 4 });
   });
 
   it("accepts up to two decimals and surrounding whitespace", () => {
-    expect(parseSkillScore(" 72.55 ")).toEqual({ ok: true, score: 72.55 });
+    expect(parseSkillScore(" 3 ")).toEqual({ ok: true, score: 3 });
   });
 
   it("accepts both ends of the range", () => {
@@ -102,16 +102,18 @@ describe("parseSkillScore", () => {
     expect(parseSkillScore("good")).toEqual({ ok: false, reason: '"good" is not a number.' });
   });
 
-  it("refuses a score outside 0–100, naming the range", () => {
+  it("refuses a score outside 1–5, naming the range (Karthik 2026-08-19: '1-5 SCALE')", () => {
     const reason = `A score is between ${SKILL_SCORE_MIN} and ${SKILL_SCORE_MAX}.`;
-    expect(parseSkillScore("101")).toEqual({ ok: false, reason });
-    expect(parseSkillScore("-1")).toEqual({ ok: false, reason });
+    expect(parseSkillScore("6")).toEqual({ ok: false, reason });
+    expect(parseSkillScore("0")).toEqual({ ok: false, reason });
+    // The old 0–100 world: a coordinator pasting last term's sheet must be told.
+    expect(parseSkillScore("85")).toEqual({ ok: false, reason });
   });
 
-  it("refuses more than two decimal places rather than silently rounding", () => {
-    expect(parseSkillScore("72.555")).toEqual({
+  it("refuses fractions rather than silently rounding — the 5-point scale is whole numbers", () => {
+    expect(parseSkillScore("3.5")).toEqual({
       ok: false,
-      reason: "Use at most two decimal places.",
+      reason: "Whole numbers only on the 1–5 scale.",
     });
   });
 });
@@ -152,7 +154,7 @@ describe("parseSkillSheet", () => {
     const result = parseSkillSheet(
       [
         ["roll_number", "  APTITUDE ", "ai   skills"],
-        ["21CSE1042", "85", "72.5"],
+        ["21CSE1042", "4", "3"],
       ],
       areas,
     );
@@ -163,34 +165,34 @@ describe("parseSkillSheet", () => {
         row: 2,
         rollNumber: "21CSE1042",
         scores: [
-          { area: "Aptitude", score: 85 },
-          { area: "AI skills", score: 72.5 },
+          { area: "Aptitude", score: 4 },
+          { area: "AI skills", score: 3 },
         ],
       },
     ]);
   });
 
   it("skips a blank cell rather than treating it as zero", () => {
-    const result = parseSkillSheet([header, ["21CSE1042", "", "60"]], areas);
+    const result = parseSkillSheet([header, ["21CSE1042", "", "2"]], areas);
     expect(result.accepted).toEqual([
-      { row: 2, rollNumber: "21CSE1042", scores: [{ area: "AI skills", score: 60 }] },
+      { row: 2, rollNumber: "21CSE1042", scores: [{ area: "AI skills", score: 2 }] },
     ]);
   });
 
   it("skips fully blank rows without rejecting them", () => {
-    const result = parseSkillSheet([header, ["", "", ""], ["21CSE1042", "50", "60"]], areas);
+    const result = parseSkillSheet([header, ["", "", ""], ["21CSE1042", "5", "2"]], areas);
     expect(result.rejected).toEqual([]);
     expect(result.accepted).toHaveLength(1);
   });
 
   it("rejects a row with no roll number, naming the spreadsheet row", () => {
-    const result = parseSkillSheet([header, ["", "85", "60"]], areas);
+    const result = parseSkillSheet([header, ["", "4", "2"]], areas);
     expect(result.rejected).toEqual([{ row: 2, reason: "Roll number is missing." }]);
   });
 
   it("rejects a duplicate roll number", () => {
     const result = parseSkillSheet(
-      [header, ["21CSE1042", "85", "60"], ["21CSE1042", "70", "60"]],
+      [header, ["21CSE1042", "4", "2"], ["21CSE1042", "3", "2"]],
       areas,
     );
     expect(result.rejected).toEqual([
@@ -200,7 +202,7 @@ describe("parseSkillSheet", () => {
   });
 
   it("rejects a bad score, naming the column it sits in", () => {
-    const result = parseSkillSheet([header, ["21CSE1042", "excellent", "60"]], areas);
+    const result = parseSkillSheet([header, ["21CSE1042", "excellent", "2"]], areas);
     expect(result.rejected).toEqual([{ row: 2, reason: 'Aptitude: "excellent" is not a number.' }]);
     expect(result.accepted).toEqual([]);
   });
@@ -227,9 +229,9 @@ describe("parseSkillSheet", () => {
   it("skips a hole in the row list, as it does a blank row", () => {
     const rows: string[][] = [
       ["roll_number", "Aptitude"],
-      ["21CSE1042", "50"],
+      ["21CSE1042", "5"],
     ];
-    rows[3] = ["21CSE9001", "60"]; // hole at index 2
+    rows[3] = ["21CSE9001", "2"]; // hole at index 2
     const result = parseSkillSheet(rows, areas);
     expect(result.rejected).toEqual([]);
     expect(result.accepted.map((r) => r.rollNumber)).toEqual(["21CSE1042", "21CSE9001"]);
@@ -237,7 +239,7 @@ describe("parseSkillSheet", () => {
 
   it("reads a hole in the roll cell as a missing roll number", () => {
     const row: string[] = [];
-    row[1] = "50"; // hole at index 0
+    row[1] = "5"; // hole at index 0
     const result = parseSkillSheet([["roll_number", "Aptitude"], row], areas);
     expect(result.rejected).toEqual([{ row: 2, reason: "Roll number is missing." }]);
   });
@@ -248,7 +250,7 @@ describe("parseSkillSheet", () => {
   });
 
   it("counts the header when numbering rows, matching what the spreadsheet shows", () => {
-    const result = parseSkillSheet([header, ["21CSE1042", "85", "60"], ["", "1", "2"]], areas);
+    const result = parseSkillSheet([header, ["21CSE1042", "4", "2"], ["", "1", "2"]], areas);
     expect(result.rejected).toEqual([{ row: 3, reason: "Roll number is missing." }]);
   });
 });

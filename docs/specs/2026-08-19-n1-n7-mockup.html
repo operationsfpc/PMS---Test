@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mockup — N7 student's four lists · N1 canonical drive page</title>
+<style>
+  :root {
+    --primary:#3D3777; --secondary:#FFB800; --accent:#A46AFC; --accent2:#1EE0E1;
+    --warning:#FF7200; --destructive:#DD4820; --destructive-bg:#FFF0EC;
+    --surface:#ECF1F0; --line:#DADADA; --muted:#F5F5F5;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:Geist,"Helvetica Neue",Arial,sans-serif; background:#fafafa; color:#222; padding:24px; }
+  h1,h2,h3 { font-family:Raleway,Arial,sans-serif; }
+  .note { max-width:1200px; margin:0 auto 20px; background:#FFF7E0; border-left:4px solid var(--secondary); padding:10px 14px; font-size:13px; }
+  .wrap { display:flex; gap:32px; max-width:1200px; margin:0 auto; align-items:flex-start; flex-wrap:wrap; }
+
+  /* ---------- phone frame: N7 ---------- */
+  .phone { width:390px; border:10px solid #222; border-radius:36px; background:#fff; overflow:hidden; flex-shrink:0; }
+  .p-head { background:var(--primary); color:#fff; padding:14px 16px 0; }
+  .p-head h1 { font-size:18px; }
+  .tabs { display:flex; margin-top:10px; overflow-x:auto; }
+  .tab { padding:8px 10px; font-size:12.5px; color:#cfcae8; white-space:nowrap; border-bottom:3px solid transparent; }
+  .tab.on { color:#fff; border-color:var(--secondary); font-weight:600; }
+  .tab .n { background:rgba(255,255,255,.18); border-radius:9px; padding:0 6px; margin-left:4px; font-size:11px; }
+  .search-row { padding:10px 12px 4px; display:flex; gap:8px; }
+  .search { flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; color:#888; background:var(--muted); }
+  .fbtn { border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:13px; background:#fff; }
+  .chips { padding:6px 12px 2px; display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:11.5px; border:1px solid var(--accent); color:var(--primary); border-radius:12px; padding:2px 9px; background:#faf7ff; }
+  .chip.x { background:var(--primary); color:#fff; }
+  .card { margin:8px 12px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .card h3 { font-size:15px; color:var(--primary); }
+  .card .role { font-size:12.5px; color:#555; margin-top:1px; }
+  .meta { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; font-size:11.5px; color:#666; }
+  .meta b { color:#333; font-weight:600; }
+  .left { margin-top:9px; font-size:12.5px; font-weight:600; color:var(--primary); background:var(--surface); border-radius:8px; padding:5px 9px; display:inline-block; }
+  .left.urgent { color:#fff; background:var(--warning); }
+  .rowline { margin-top:9px; font-size:12.5px; }
+  .stage { color:var(--primary); font-weight:600; }
+  .ghost { color:#888; }
+  .badge { font-size:11px; border-radius:10px; padding:2px 8px; font-weight:600; }
+  .b-sel { background:#E8F8EF; color:#177245; }
+  .b-out { background:var(--destructive-bg); color:var(--destructive); }
+  .b-closed { background:var(--muted); color:#777; }
+  .divider { text-align:center; font-size:11px; color:#999; padding:8px 0 2px; }
+  .p-section { border-top:1px dashed var(--line); margin-top:10px; padding-top:4px; }
+  .p-label { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:#999; padding:6px 14px 0; }
+
+  /* ---------- desktop: N1 ---------- */
+  .desk { flex:1; min-width:600px; border:1px solid var(--line); border-radius:12px; background:#fff; overflow:hidden; }
+  .d-head { background:var(--primary); color:#fff; padding:18px 24px; }
+  .crumb { font-size:12px; color:#cfcae8; margin-bottom:6px; }
+  .d-head h1 { font-size:22px; }
+  .d-head .sub { font-size:13.5px; color:#e6e2ff; margin-top:2px; }
+  .statuses { margin-top:10px; display:flex; gap:8px; }
+  .pill { font-size:11.5px; border-radius:12px; padding:3px 10px; background:rgba(255,255,255,.15); }
+  .pill.live { background:var(--secondary); color:#3a2c00; font-weight:700; }
+  .d-body { padding:20px 24px; display:grid; grid-template-columns:1fr 1fr; gap:18px 28px; }
+  .sect { border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .sect h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--primary); border-bottom:2px solid var(--secondary); display:inline-block; padding-bottom:2px; margin-bottom:10px; }
+  dl { display:grid; grid-template-columns:150px 1fr; gap:5px 12px; font-size:13px; }
+  dt { color:#777; }
+  dd { color:#222; }
+  .full { grid-column:1 / -1; }
+  .jd { font-size:13px; white-space:pre-line; color:#333; background:var(--muted); border-radius:8px; padding:10px 12px; }
+  .jdfile { display:inline-block; margin-top:8px; font-size:12.5px; color:var(--primary); font-weight:600; }
+  .rounds li { font-size:13px; margin-bottom:4px; }
+  .prov { font-size:12.5px; color:#555; }
+  .prov b { color:#222; }
+  .applicants td { font-size:12.5px; padding:6px 8px; border-top:1px solid var(--line); }
+  .applicants th { font-size:11.5px; text-align:left; color:#777; padding:4px 8px; }
+  .applicants a { color:var(--primary); font-weight:600; }
+  .snapnote { font-size:11.5px; color:#8a6d00; background:#FFF7E0; border-radius:6px; padding:5px 8px; margin-top:8px; }
+  .lock { font-size:11.5px; color:#999; font-style:italic; }
+</style>
+</head>
+<body>
+
+<div class="note"><b>Mockup for approval — nothing built.</b> Left: N7, the student's Drives area on a phone (four lists as four tabs; closing time <i>shown</i>, search + filters on location, role, closing time). Right: N1, the one canonical drive page every list links to — read-only, role-gated visibility (recruiter contact AE-only), applicant rows open the apply-time snapshot.</div>
+
+<div class="wrap">
+
+  <!-- ================= N7: student phone ================= -->
+  <div class="phone">
+    <div class="p-head">
+      <h1>Drives</h1>
+      <div class="tabs">
+        <div class="tab on">To apply <span class="n">3</span></div>
+        <div class="tab">In progress <span class="n">2</span></div>
+        <div class="tab">Not applied · closed <span class="n">4</span></div>
+        <div class="tab">Applied · closed <span class="n">1</span></div>
+      </div>
+    </div>
+
+    <div class="search-row">
+      <div class="search">🔍 Company or role</div>
+      <div class="fbtn">Filters</div>
+    </div>
+    <div class="chips">
+      <span class="chip x">Chennai ✕</span>
+      <span class="chip">Location</span>
+      <span class="chip">Role category</span>
+      <span class="chip">Closing time</span>
+    </div>
+
+    <!-- To apply -->
+    <div class="card">
+      <h3>TCS</h3>
+      <div class="role">Systems Engineer · Software / Technical</div>
+      <div class="meta"><span><b>₹4.0–6.5 LPA</b></span><span>Chennai, Hyderabad</span><span>Night shift</span></div>
+      <div class="rowline ghost">Closes <b>24 Aug, 5:00 PM</b></div>
+      <div class="left">⏳ 4 days left to apply</div>
+    </div>
+    <div class="card">
+      <h3>HCL Technologies</h3>
+      <div class="role">Graduate Engineer · Software / Technical</div>
+      <div class="meta"><span><b>₹4.5 LPA</b></span><span>Chennai</span><span>Day shift</span></div>
+      <div class="rowline ghost">Closes <b>today, 11:59 PM</b></div>
+      <div class="left urgent">🔥 6 hours left to apply</div>
+    </div>
+
+    <div class="p-label">In progress — preview</div>
+    <div class="card">
+      <h3>Accenture</h3>
+      <div class="role">Jr. Software Engineer · applied 12 Aug</div>
+      <div class="rowline">Now in: <span class="stage">Round 2 of 3 — Technical Interview</span></div>
+      <div class="rowline ghost">Round 1 Aptitude — <span class="badge b-sel">Cleared</span></div>
+    </div>
+
+    <div class="p-label">Not applied · closed — preview</div>
+    <div class="card">
+      <h3>Cognizant</h3>
+      <div class="role">Process Executive · Operations and Business</div>
+      <div class="rowline ghost">Closed <b>12 Aug</b> — you didn’t apply <span class="badge b-closed">Missed</span></div>
+    </div>
+
+    <div class="p-label">Applied · closed — preview</div>
+    <div class="card">
+      <h3>Wipro</h3>
+      <div class="role">Project Engineer · applied 2 Aug</div>
+      <div class="rowline">Outcome: <span class="badge b-out">Not selected — Round 2</span></div>
+    </div>
+    <div class="divider">every card opens the full drive page →</div>
+  </div>
+
+  <!-- ================= N1: canonical drive page ================= -->
+  <div class="desk">
+    <div class="d-head">
+      <div class="crumb">Drives › Live › Accenture</div>
+      <h1>Accenture — Jr. Software Engineer</h1>
+      <div class="sub">Technical Support / IT Operations · also hiring: Support Analyst</div>
+      <div class="statuses">
+        <span class="pill live">LIVE</span>
+        <span class="pill">Dream · set by Delivery Head</span>
+        <span class="pill">Internship convertible</span>
+      </div>
+    </div>
+
+    <div class="d-body">
+      <div class="sect">
+        <h2>Compensation</h2>
+        <dl>
+          <dt>CTC</dt><dd>₹4.00 – ₹6.00 LPA</dd>
+          <dt>Breakup</dt><dd>30000 + 5000</dd>
+          <dt>Category</dt><dd>Dream — classified at approval, immutable</dd>
+          <dt>Bond</dt><dd>2 years</dd>
+        </dl>
+      </div>
+
+      <div class="sect">
+        <h2>Where &amp; when</h2>
+        <dl>
+          <dt>Locations</dt><dd>Bengaluru, Chennai, Hyderabad</dd>
+          <dt>Mode</dt><dd>On campus · tentative 15 Aug 2026</dd>
+          <dt>Window</dt><dd>11 Aug 10:17 → 12 Aug 10:18</dd>
+          <dt>Shift</dt><dd>Day</dd>
+          <dt>Joining</dt><dd>Later — September</dd>
+        </dl>
+      </div>
+
+      <div class="sect">
+        <h2>Eligibility as published</h2>
+        <dl>
+          <dt>CGPA</dt><dd>≥ 7.50 (CGPA scale)</dd>
+          <dt>10th / 12th</dt><dd>≥ 70% / ≥ 70%</dd>
+          <dt>Arrears</dt><dd>Flexible</dd>
+          <dt>Passing years</dt><dd>2026, 2027</dd>
+          <dt>Skills</dt><dd>Coding</dd>
+          <dt>Role area</dt><dd>Technical Support / IT Operations</dd>
+        </dl>
+      </div>
+
+      <div class="sect">
+        <h2>Selection process</h2>
+        <ol class="rounds">
+          <li><b>Round 1</b> — Aptitude Test</li>
+          <li><b>Round 2</b> — Technical Interview</li>
+          <li><b>Round 3</b> — HR</li>
+        </ol>
+        <div class="prov" style="margin-top:8px">Openings: <b>10</b></div>
+      </div>
+
+      <div class="sect full">
+        <h2>Job description</h2>
+        <div class="jd">IT Coding — as typed by the AE, whitespace preserved, plain text only.</div>
+        <a class="jdfile" href="#">📎 Accenture-JD.pdf (signed link, expires)</a>
+      </div>
+
+      <div class="sect full">
+        <h2>Applicants — staff with rights only</h2>
+        <table class="applicants" style="width:100%; border-collapse:collapse">
+          <tr><th>Student</th><th>Campus</th><th>Applied</th><th>Standing</th><th></th></tr>
+          <tr><td><a href="#">Thanush Krishna</a></td><td>KGiSL</td><td>12 Aug</td><td>Round 2 — awaiting result</td><td><a href="#">View snapshot →</a></td></tr>
+        </table>
+        <div class="snapnote">⚠️ “View snapshot” opens the profile <b>as it was at apply time</b> — what the recruiter received — never the live profile.</div>
+      </div>
+
+      <div class="sect full">
+        <h2>Provenance</h2>
+        <div class="prov">
+          Raised by <b>AE Test</b> · 11 Aug 10:16 &nbsp;→&nbsp; Approved by <b>Delivery Head</b> · 11 Aug 10:18 &nbsp;→&nbsp; Published by <b>Radhika (Central CPC)</b> · 11 Aug 10:18
+        </div>
+        <div class="lock" style="margin-top:6px">Recruiter contact (TESTABCD, testabcd@gmail.com, 98765…) — visible to the drive’s AE only. This page edits nothing; actions stay on their own screens.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

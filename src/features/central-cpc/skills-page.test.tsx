@@ -23,7 +23,7 @@ const PRIYA: SkillStudentRow = {
   studentName: "Priya Ramesh",
   rollNumber: "21CSE1042",
   campusName: "Alliance University",
-  scores: { a1: 85 },
+  scores: { a1: 4 },
 };
 
 const ARJUN: SkillStudentRow = {
@@ -56,7 +56,7 @@ describe("SkillsPage — the grid", () => {
     render(<SkillsPage view={view()} />);
 
     const priya = await rowOf("Priya Ramesh");
-    expect(within(priya).getByText("85")).toBeDefined();
+    expect(within(priya).getByText("4")).toBeDefined();
 
     const arjun = await rowOf("Arjun Menon");
     // No score is "—", never 0 — unmeasured must not read as a mark.
@@ -94,12 +94,12 @@ describe("SkillsPage — editing one student", () => {
 
     await user.click(await screen.findByRole("button", { name: /edit priya ramesh/i }));
     const priya = await rowOf("Priya Ramesh");
-    await user.type(within(priya).getByLabelText("AI skills"), "72.5");
+    await user.type(within(priya).getByLabelText("AI skills"), "3");
     await user.click(within(priya).getByRole("button", { name: /^save$/i }));
 
     await waitFor(() =>
       expect(saveScores).toHaveBeenCalledWith([
-        { studentId: "s1", skillAreaId: "a2", score: 72.5 },
+        { studentId: "s1", skillAreaId: "a2", score: 3 },
       ]),
     );
   });
@@ -133,7 +133,7 @@ describe("SkillsPage — editing one student", () => {
 
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
-      expect.stringContaining("between 0 and 100"),
+      expect.stringContaining("between 1 and 5"),
     );
     expect(saveScores).not.toHaveBeenCalled();
   });
@@ -194,13 +194,13 @@ describe("SkillsPage — bulk apply to selected students", () => {
     await user.click(screen.getByRole("checkbox", { name: /select priya ramesh/i }));
     await user.click(screen.getByRole("checkbox", { name: /select arjun menon/i }));
     await user.selectOptions(screen.getByLabelText(/^skill area$/i), "a2");
-    await user.type(screen.getByLabelText(/^score$/i), "60");
+    await user.type(screen.getByLabelText(/^score$/i), "2");
     await user.click(screen.getByRole("button", { name: /apply to 2 selected/i }));
 
     await waitFor(() =>
       expect(saveScores).toHaveBeenCalledWith([
-        { studentId: "s1", skillAreaId: "a2", score: 60 },
-        { studentId: "s2", skillAreaId: "a2", score: 60 },
+        { studentId: "s1", skillAreaId: "a2", score: 2 },
+        { studentId: "s2", skillAreaId: "a2", score: 2 },
       ]),
     );
   });
@@ -213,7 +213,7 @@ describe("SkillsPage — bulk apply to selected students", () => {
 
     await user.click(screen.getByRole("checkbox", { name: /select all/i }));
     await user.selectOptions(screen.getByLabelText(/^skill area$/i), "a1");
-    await user.type(screen.getByLabelText(/^score$/i), "50");
+    await user.type(screen.getByLabelText(/^score$/i), "5");
     await user.click(screen.getByRole("button", { name: /apply to 2 selected/i }));
 
     await waitFor(() => expect(saveScores).toHaveBeenCalled());
@@ -250,16 +250,16 @@ describe("SkillsPage — CSV import", () => {
     render(<SkillsPage view={view({ saveScores })} />);
     await screen.findByText("Priya Ramesh");
 
-    await upload(user, "roll_number,Aptitude,AI skills\n21CSE1042,90,72.5\n21CSE9001,,60\n");
+    await upload(user, "roll_number,Aptitude,AI skills\n21CSE1042,5,3\n21CSE9001,,2\n");
 
     expect(await screen.findByText(/2 rows ready to import/i)).toBeDefined();
     await user.click(screen.getByRole("button", { name: /import 2 rows/i }));
 
     await waitFor(() =>
       expect(saveScores).toHaveBeenCalledWith([
-        { studentId: "s1", skillAreaId: "a1", score: 90 },
-        { studentId: "s1", skillAreaId: "a2", score: 72.5 },
-        { studentId: "s2", skillAreaId: "a2", score: 60 },
+        { studentId: "s1", skillAreaId: "a1", score: 5 },
+        { studentId: "s1", skillAreaId: "a2", score: 3 },
+        { studentId: "s2", skillAreaId: "a2", score: 2 },
       ]),
     );
   });
@@ -270,14 +270,14 @@ describe("SkillsPage — CSV import", () => {
     render(<SkillsPage view={view({ saveScores })} />);
     await screen.findByText("Priya Ramesh");
 
-    await upload(user, "roll_number,Aptitude\n21CSE1042,90\nNOBODY,50\n");
+    await upload(user, "roll_number,Aptitude\n21CSE1042,5\nNOBODY,3\n");
 
     expect(await screen.findByText(/row 3/i)).toBeDefined();
     expect(screen.getByText(/"NOBODY" is not on the roster/i)).toBeDefined();
 
     await user.click(screen.getByRole("button", { name: /import 1 row/i }));
     await waitFor(() =>
-      expect(saveScores).toHaveBeenCalledWith([{ studentId: "s1", skillAreaId: "a1", score: 90 }]),
+      expect(saveScores).toHaveBeenCalledWith([{ studentId: "s1", skillAreaId: "a1", score: 5 }]),
     );
   });
 
@@ -286,7 +286,7 @@ describe("SkillsPage — CSV import", () => {
     render(<SkillsPage view={view()} />);
     await screen.findByText("Priya Ramesh");
 
-    await upload(user, "roll_number,Juggling\n21CSE1042,90\n");
+    await upload(user, "roll_number,Juggling\n21CSE1042,5\n");
 
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
@@ -313,20 +313,20 @@ describe("SkillsPage — outcomes", () => {
     const students = vi
       .fn(async () => [PRIYA, ARJUN])
       .mockResolvedValueOnce([PRIYA, ARJUN])
-      .mockResolvedValue([{ ...PRIYA, scores: { a1: 85, a2: 72.5 } }, ARJUN]);
+      .mockResolvedValue([{ ...PRIYA, scores: { a1: 4, a2: 3 } }, ARJUN]);
     const user = userEvent.setup();
     render(<SkillsPage view={view({ students })} />);
 
     await user.click(await screen.findByRole("button", { name: /edit priya ramesh/i }));
     const priya = await rowOf("Priya Ramesh");
-    await user.type(within(priya).getByLabelText("AI skills"), "72.5");
+    await user.type(within(priya).getByLabelText("AI skills"), "3");
     await user.click(within(priya).getByRole("button", { name: /^save$/i }));
 
     expect(await screen.findByRole("status")).toHaveProperty(
       "textContent",
       expect.stringContaining("Saved 1 score"),
     );
-    expect(within(await rowOf("Priya Ramesh")).getByText("72.5")).toBeDefined();
+    expect(within(await rowOf("Priya Ramesh")).getByText("3")).toBeDefined();
   });
 
   it("surfaces a failed save as an error, not silence", async () => {
@@ -343,7 +343,7 @@ describe("SkillsPage — outcomes", () => {
 
     await user.click(await screen.findByRole("button", { name: /edit priya ramesh/i }));
     const priya = await rowOf("Priya Ramesh");
-    await user.type(within(priya).getByLabelText("AI skills"), "70");
+    await user.type(within(priya).getByLabelText("AI skills"), "2");
     await user.click(within(priya).getByRole("button", { name: /^save$/i }));
 
     expect(await screen.findByRole("alert")).toHaveProperty(

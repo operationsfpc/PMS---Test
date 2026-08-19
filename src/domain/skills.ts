@@ -7,8 +7,10 @@
  * (`rankApplicants`), which is why the validation lives here and not on a
  * screen — a wrong number admitted here becomes a wrong shortlist there.
  *
- * ⚠️ ASSUMPTION — UNCONFIRMED (A35, refines A12): a score is 0–100 with at
- * most two decimals. The client named the areas but not the scale.
+ * ✅ A35 ANSWERED (Karthik, 2026-08-19): "1-5 SCALE". Whole numbers 1–5 —
+ * ⚠️ half-points refused, an assumption; one line here if he wants 3.5.
+ * ✅ A36 ANSWERED same day: "Students do not see their scores" — which is
+ * what 0037's read policy already enforces (students read NOTHING).
  */
 
 /** The areas asked for on 2026-08-06. Seeds — the Central CPC can add more. */
@@ -23,8 +25,8 @@ export const DEFAULT_SKILL_AREAS = [
   "AI-assisted Full Stack Development",
 ] as const;
 
-export const SKILL_SCORE_MIN = 0;
-export const SKILL_SCORE_MAX = 100;
+export const SKILL_SCORE_MIN = 1;
+export const SKILL_SCORE_MAX = 5;
 export const SKILL_AREA_NAME_MAX = 60;
 
 /** What a human meant: trimmed, single-spaced. */
@@ -60,9 +62,9 @@ export type ParsedScore =
   | { readonly ok: false; readonly reason: string };
 
 /**
- * One score, as typed. Two decimals at most: the storage column is
- * numeric(5,2), and silently rounding a coordinator's entry would store a
- * number they never typed.
+ * One score, as typed. Whole numbers on the 1–5 scale: silently rounding a
+ * coordinator's 3.5 would store a number they never typed, and a 0–100 figure
+ * pasted from last term's sheet must be refused loudly, not scaled quietly.
  */
 export function parseSkillScore(raw: string): ParsedScore {
   const text = raw.trim();
@@ -73,8 +75,8 @@ export function parseSkillScore(raw: string): ParsedScore {
   if (value < SKILL_SCORE_MIN || value > SKILL_SCORE_MAX) {
     return { ok: false, reason: `A score is between ${SKILL_SCORE_MIN} and ${SKILL_SCORE_MAX}.` };
   }
-  if (Math.round(value * 100) !== value * 100) {
-    return { ok: false, reason: "Use at most two decimal places." };
+  if (!Number.isInteger(value)) {
+    return { ok: false, reason: "Whole numbers only on the 1–5 scale." };
   }
   return { ok: true, score: value };
 }

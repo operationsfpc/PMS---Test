@@ -72,21 +72,21 @@ describe("0037 — student skill scores", () => {
     await t.asUser(
       ids.centralUser,
       `insert into student_skill_scores (student_id, skill_area_id, score, recorded_by)
-       values ($1, $2, 85.5, $3)`,
+       values ($1, $2, 4, $3)`,
       [ids.priya, await areaId("Aptitude"), ids.centralUser],
     );
 
     const [row] = await t.sql(`select score from student_skill_scores where student_id = $1`, [
       ids.priya,
     ]);
-    expect(Number(row?.score)).toBe(85.5);
+    expect(Number(row?.score)).toBe(4);
   });
 
   it("updates in place: one score per student per area", async () => {
     await t.asUser(
       ids.centralUser,
       `insert into student_skill_scores (student_id, skill_area_id, score, recorded_by)
-       values ($1, $2, 90, $3)
+       values ($1, $2, 5, $3)
        on conflict (student_id, skill_area_id)
        do update set score = excluded.score, recorded_by = excluded.recorded_by`,
       [ids.priya, await areaId("Aptitude"), ids.centralUser],
@@ -96,15 +96,29 @@ describe("0037 — student skill scores", () => {
       ids.priya,
     ]);
     expect(rows).toHaveLength(1);
-    expect(Number(rows[0]?.score)).toBe(90);
+    expect(Number(rows[0]?.score)).toBe(5);
   });
 
-  it("refuses a score outside 0–100", async () => {
+  it("refuses a score outside 1–5 — 0052, Karthik's '1-5 SCALE' (2026-08-19)", async () => {
+    for (const bad of [0, 6, 85]) {
+      await t.expectRejection(
+        () =>
+          t.sql(
+            `insert into student_skill_scores (student_id, skill_area_id, score)
+             values ($1, $2, $3)`,
+            [ids.arjun, aptitudeId, bad],
+          ),
+        /score_within_scale/i,
+      );
+    }
+  });
+
+  it("refuses a half-point — the 5-point scale is whole numbers (0052)", async () => {
     await t.expectRejection(
       () =>
         t.sql(
           `insert into student_skill_scores (student_id, skill_area_id, score)
-           values ($1, $2, 101)`,
+           values ($1, $2, 3.5)`,
           [ids.arjun, aptitudeId],
         ),
       /score_within_scale/i,
@@ -117,7 +131,7 @@ describe("0037 — student skill scores", () => {
         t.asUser(
           ids.cpcUser,
           `insert into student_skill_scores (student_id, skill_area_id, score, recorded_by)
-           values ($1, $2, 50, $3)`,
+           values ($1, $2, 3, $3)`,
           [ids.priya, aptitudeId, ids.cpcUser],
         ),
       /row-level security/i,
@@ -177,7 +191,7 @@ describe("0037 — student skill scores", () => {
     await t.asUser(
       ids.centralUser,
       `insert into student_skill_scores (student_id, skill_area_id, score, recorded_by)
-       values ($1, $2, 70, $3)`,
+       values ($1, $2, 2, $3)`,
       [ids.arjun, cloudId, ids.centralUser],
     );
     await t.sql(`delete from skill_areas where id = $1`, [cloudId]);

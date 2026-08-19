@@ -1,3 +1,4 @@
+import { SKILL_SCORE_MAX } from "./skills";
 import type { RoleCategory } from "./types";
 
 export interface SkillScore {
@@ -84,7 +85,7 @@ export function rankApplicants(
         const match = applicant.skillScores.find(
           (s) => s.skill.toLowerCase() === skill.toLowerCase(),
         );
-        return match === undefined ? 0 : clamp01(match.score / 100);
+        return match === undefined ? 0 : clamp01(match.score / SKILL_SCORE_MAX);
       });
 
       const met = scores.filter((s) => s > 0).length;
