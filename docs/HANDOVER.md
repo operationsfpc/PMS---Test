@@ -4,6 +4,69 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-19 (later) — N7's four lists and N1's canonical drive page
+
+Live `7e6ed3f6-9420-4bd8-a5db-04e134f9182d`, JS byte-identical to `dist/`
+(918 049 bytes, sha256 `f260cec6…`). `pnpm check` exits 0 — **3166 tests /
+160 files** — and the Playwright journey passes. Commit `512e341`. No
+migration — front end + one contract-test parser extension only.
+
+### N7 — the student's Drives area is four tabs
+
+`@domain/student-drive-lists` owns the rule: a readable drive lands in
+EXACTLY one of To apply · In progress · Not applied-closed · Applied-closed
+(`classifyStudentDrive`). "Closed" is judged from the STUDENT's side — a
+round-one rejection closes the drive for them while it runs on for others.
+Time left is SHOWN on every To-apply card (`describeTimeLeft`, hot under
+24 h); filters are search + location + role area + closing time (closing
+filter on To apply only). An applied drive is **never re-judged by R5** —
+eligibility was settled at apply time. R5's hides still hide in the closed
+lists: "you missed it" about a drive they were never eligible for is a
+reproach nobody earned. The apply flow moved INTO the To-apply tab intact.
+
+### N1 — `/drives/:id`, one canonical read-only page for every role
+
+`src/features/drive-record/`. Sections role-gated in the PAGE, rows gated by
+RLS: recruiter contact renders for the AE alone ⚠️ (UI-only — the drives
+row itself is column-unfiltered by RLS, a pre-existing fact worth a future
+column-level view); applicants + provenance are staff-only; the applicant's
+"View snapshot" opens the APPLY-TIME profile. Reached from: every student
+card, the portfolio company names, and a link in the DH approval queue.
+
+📌x **The contract parser learned `alias:table!fkey(...)`** — the record page
+embeds `profiles` three times through named FK constraints, and
+`query-contract.test.ts` now proves aliased embeds instead of refusing the
+syntax.
+
+### 🔴 Two real defects the journey caught — both worth remembering
+
+1. **A destructured default prop is a NEW identity every render.**
+   `now = () => new Date()` in `DriveTabs`' signature sat in `useMemo` deps
+   → continuous remount of the list → the Apply confirmation could never be
+   clicked. Module-scope the default (`wallClock`).
+2. **The DEV-only "Preview as" select made the phone header 535px wide** —
+   mobile Chromium zoomed the whole app out to fit, the visual viewport
+   panned, and every tap near the fold became flaky. Hidden below `sm` (its
+   label already was). Production never had the select — the zoom was a
+   dev/e2e artefact, but it had silently degraded every dev phone check.
+   💡 Debug pattern that found it: `page.screenshot` frames in a loop while
+   the click retries, then `window.innerWidth` vs the device's CSS width
+   (535 ≠ 412 = zoomed).
+
+Journey updated to N7's semantics: after applying, the drive MOVES to In
+progress wearing "Applied — awaiting shortlist" — the old "Applied badge in
+the same list" assertion described the old screen.
+
+### 🔜 Follow-ups deliberately not smuggled in
+
+1. `/students/:studentId` (N1's second canonical page) — not started.
+2. Overview boxes (placement-metrics) — still unwired.
+3. Item 5's xlsx + resume-PDF export pack — awaiting Karthik's answers to
+   the three packaging questions.
+4. Zoho build — still gated on Karthik's go.
+
+---
+
 ## ✅ SHIPPED 2026-08-19 — the answered backlog: P9 restored · shifts canonical · skills on 1–5 (`0052`)
 
 Karthik answered six pending items in one message; four landed the same day.
