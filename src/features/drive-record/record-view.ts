@@ -75,7 +75,12 @@ export interface DriveRecord {
     readonly campuses: readonly string[];
   };
   readonly rounds: readonly { readonly sequence: number; readonly name: string }[];
-  readonly recruiter: DriveRecruiterContact;
+  /**
+   * A4 (UAT 2026-08-19): a drive carries any number of contacts now. Old
+   * drives still answer through their legacy spoc_* columns, mapped into the
+   * same list. Empty means the Central CPC is the point of contact (A5).
+   */
+  readonly recruiters: readonly DriveRecruiterContact[];
   readonly provenance: DriveProvenance;
   readonly applicants: readonly DriveApplicantRow[];
 }
@@ -95,6 +100,7 @@ export const RECORD_DRIVE_COLUMNS = `
   min_overall_cgpa, min_overall_cgpa_scale, min_tenth_percentage, min_twelfth_percentage,
   arrears_policy, eligible_passing_years, mandatory_skills,
   spoc_name, spoc_designation, spoc_email, spoc_phone,
+  drive_contacts(sequence, name, designation, email, phone),
   created_at, approved_at, published_at,
   raised_by:profiles!drives_created_by_fkey(full_name),
   approver:profiles!drives_approved_by_fkey(full_name),
@@ -129,6 +135,35 @@ function linkedNames(rows: unknown, key: string): readonly string[] {
   return rows
     .map((row) => one<{ name?: string }>((row as Record<string, unknown>)[key])?.name)
     .filter((name): name is string => typeof name === "string" && name !== "");
+}
+
+/**
+ * A4: the drive_contacts rows, in order — or the legacy spoc_* columns as a
+ * one-entry list, so a drive raised before 0053 still names its contact.
+ */
+function recruiterContacts(row: Record<string, unknown>): readonly DriveRecruiterContact[] {
+  const rows = (Array.isArray(row.drive_contacts) ? row.drive_contacts : []) as Array<
+    Record<string, unknown>
+  >;
+  if (rows.length > 0) {
+    return rows
+      .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
+      .map((c) => ({
+        name: text(c.name),
+        designation: text(c.designation),
+        email: text(c.email),
+        phone: text(c.phone),
+      }));
+  }
+
+  const legacy = {
+    name: text(row.spoc_name),
+    designation: text(row.spoc_designation),
+    email: text(row.spoc_email),
+    phone: text(row.spoc_phone),
+  };
+  const hasLegacy = Object.values(legacy).some((v) => v !== "");
+  return hasLegacy ? [legacy] : [];
 }
 
 const JD_LINK_TTL_SECONDS = 60 * 10;
@@ -227,12 +262,7 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
             name: String((r as Record<string, unknown>).name ?? "Round"),
           }))
           .sort((a, b) => a.sequence - b.sequence),
-        recruiter: {
-          name: text(row.spoc_name),
-          designation: text(row.spoc_designation),
-          email: text(row.spoc_email),
-          phone: text(row.spoc_phone),
-        },
+        recruiters: recruiterContacts(row),
         provenance: {
           raisedBy: one<{ full_name?: string }>(row.raised_by)?.full_name ?? null,
           raisedAt: (row.created_at as string | null) ?? null,

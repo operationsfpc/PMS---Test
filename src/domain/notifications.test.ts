@@ -53,6 +53,14 @@ describe("sortNotifications", () => {
     expect(after).toHaveLength(2);
   });
 
+  it("leaves two notes born in the same instant in their given order", () => {
+    const sorted = sortNotifications([
+      note({ id: "a", createdAt: "2026-08-19T10:00:00Z" }),
+      note({ id: "b", createdAt: "2026-08-19T10:00:00Z" }),
+    ]);
+    expect(sorted.map((n) => n.id)).toEqual(["a", "b"]);
+  });
+
   it("does not mutate its input", () => {
     const input = [note({ id: "z", read: true }), note({ id: "a" })];
     sortNotifications(input);

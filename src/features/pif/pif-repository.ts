@@ -69,10 +69,8 @@ function toRow(
     company_name: values.companyName,
     industry: nullIfBlank(values.industry),
     company_website: nullIfBlank(values.companyWebsite),
-    spoc_name: nullIfBlank(values.spocName),
-    spoc_designation: nullIfBlank(values.spocDesignation),
-    spoc_email: nullIfBlank(values.spocEmail),
-    spoc_phone: nullIfBlank(values.spocPhone),
+    // A4 (UAT 2026-08-19): contacts live in drive_contacts now. The legacy
+    // spoc_* columns stay readable on old drives and are written by nothing.
 
     role_title: nullIfBlank(values.roleTitle),
     role_category: nullIfBlank(values.roleCategory),
@@ -82,6 +80,9 @@ function toRow(
     ctc_min_lpa: values.ctcMinLpa ?? null,
     ctc_max_lpa: values.ctcMaxLpa ?? null,
     ctc_breakup: nullIfBlank(values.ctcBreakup),
+    // A2: ₹ per month, whole rupees — an internship's pay is not an annual figure.
+    stipend_min_monthly: values.stipendMinMonthly ?? null,
+    stipend_max_monthly: values.stipendMaxMonthly ?? null,
     shift_type: nullIfBlank(values.shiftType),
     shift_night_timing: nullIfBlank(nightTiming),
     bond_details: nullIfBlank(values.bondDetails),
@@ -261,6 +262,31 @@ export function createSupabasePifRepository(
           drive_id: data.id as string,
           sequence: round.sequence,
           name: round.name.trim(),
+        })),
+      );
+    }
+
+    /**
+     * A4: the drive's contacts, replaced wholesale like the rounds. Not fatal
+     * for the same reason — the drive is the thing worth keeping.
+     */
+    if (existingDraftId !== undefined) {
+      await client.from("drive_contacts").delete().eq("drive_id", existingDraftId);
+    }
+    const contactRows = (values.contacts ?? []).filter((c) =>
+      [c.name, c.designation, c.email, c.phone].some(
+        (f) => typeof f === "string" && f.trim() !== "",
+      ),
+    );
+    if (contactRows.length > 0) {
+      await client.from("drive_contacts").insert(
+        contactRows.map((contact, index) => ({
+          drive_id: data.id as string,
+          sequence: index + 1,
+          name: nullIfBlank(contact.name),
+          designation: nullIfBlank(contact.designation),
+          email: nullIfBlank(contact.email),
+          phone: nullIfBlank(contact.phone),
         })),
       );
     }

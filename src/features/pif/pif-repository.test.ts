@@ -17,7 +17,7 @@ const repo = (actor: string | null = AE) =>
 const values: PifFormValues = {
   ...PIF_DEFAULTS,
   companyName: "Zoho Corporation",
-  spocEmail: "karthik@zoho.com",
+  contacts: [{ name: "R Karthik", designation: "TA Lead", email: "karthik@zoho.com", phone: "" }],
   roleTitle: "Member Technical Staff",
   roleCategory: "software_technical",
   jobDescription: "Backend services.",
@@ -118,6 +118,46 @@ describe("createSupabasePifRepository", () => {
 
   it("refuses to write anything when the session has gone", async () => {
     await expect(repo(null).saveDraft(values)).rejects.toBeInstanceOf(PifError);
+  });
+
+  /** A4 (UAT 2026-08-19): the contacts land in their own table, in order. */
+  it("writes the contacts to drive_contacts, numbered in order", async () => {
+    const contactRows: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, () => HttpResponse.json({ id: "d1", status: "draft" })),
+      http.post(`${BASE}/rest/v1/drive_contacts`, async ({ request }) => {
+        const rows = (await request.json()) as Array<Record<string, unknown>>;
+        contactRows.push(...rows);
+        return HttpResponse.json(rows);
+      }),
+    );
+
+    await repo().saveDraft({
+      ...values,
+      contacts: [
+        { name: "R Karthik", designation: "TA Lead", email: "karthik@zoho.com", phone: "" },
+        { name: "Meena S", designation: "", email: "", phone: "9840012345" },
+      ],
+    });
+
+    expect(contactRows).toEqual([
+      {
+        drive_id: "d1",
+        sequence: 1,
+        name: "R Karthik",
+        designation: "TA Lead",
+        email: "karthik@zoho.com",
+        phone: null,
+      },
+      {
+        drive_id: "d1",
+        sequence: 2,
+        name: "Meena S",
+        designation: null,
+        email: null,
+        phone: "9840012345",
+      },
+    ]);
   });
 
   /**

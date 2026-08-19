@@ -197,6 +197,7 @@ function profileStub(row: Record<string, unknown>) {
 }
 
 const VALUES = {
+  driveTypePreferences: [] as const,
   technicalSkills: "TypeScript",
   areasOfInterest: "",
   areasOfExpertise: "",

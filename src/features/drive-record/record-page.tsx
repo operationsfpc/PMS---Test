@@ -292,13 +292,29 @@ export function DriveRecordPage({
         )}
 
         {role === "account_executive" && (
-          <Section title="Recruiter contact — visible to you alone">
-            <dl className="grid gap-3 sm:grid-cols-2">
-              <Fact label="Name" value={record.recruiter.name} />
-              <Fact label="Designation" value={record.recruiter.designation} />
-              <Fact label="Email" value={record.recruiter.email} />
-              <Fact label="Phone" value={record.recruiter.phone} />
-            </dl>
+          <Section title="Recruiter contacts — visible to you alone">
+            {record.recruiters.length === 0 ? (
+              // A5 (UAT 2026-08-19): an honest "none", with the routing stated.
+              <p className="text-sm text-ink-700">
+                No contact recorded for this company — communication goes through the{" "}
+                <strong>Central Placement Coordinator</strong>.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {record.recruiters.map((contact) => (
+                  <dl
+                    // Contacts have no id of their own; the four fields together are the identity.
+                    key={`${contact.name}|${contact.designation}|${contact.email}|${contact.phone}`}
+                    className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2"
+                  >
+                    <Fact label="Name" value={contact.name} />
+                    <Fact label="Designation" value={contact.designation} />
+                    <Fact label="Email" value={contact.email} />
+                    <Fact label="Phone" value={contact.phone} />
+                  </dl>
+                ))}
+              </div>
+            )}
           </Section>
         )}
 

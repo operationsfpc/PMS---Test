@@ -45,6 +45,7 @@ import type {
  */
 
 const EMPTY: StudentProfileValues = {
+  driveTypePreferences: [],
   technicalSkills: "",
   areasOfInterest: "",
   areasOfExpertise: "",
@@ -255,6 +256,43 @@ export function ProfileEditPage({
             Changes here apply to <strong>new drives from this point on</strong>. Applications you
             have already made carry the profile as it was when you applied.
           </p>
+
+          {/* D1 (UAT 2026-08-19): the drive types they want. Ticking none
+              means "show me everything" — silence is not refusal. */}
+          <fieldset className="mb-4">
+            <legend className="mb-2 text-sm font-medium text-ink-900">
+              Drive types you want to be considered for
+            </legend>
+            <p className="mb-2 text-xs text-ink-500">
+              Only drives of these types will be shown to you. Tick none to see every type.
+            </p>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {(
+                [
+                  { value: "placement", label: "Placement" },
+                  { value: "internship", label: "Internship" },
+                  { value: "internship_convertible", label: "Internship (convertible)" },
+                ] as const
+              ).map((option) => (
+                <label key={option.value} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={values.driveTypePreferences.includes(option.value)}
+                    onChange={() =>
+                      setValues((current) => ({
+                        ...current,
+                        driveTypePreferences: current.driveTypePreferences.includes(option.value)
+                          ? current.driveTypePreferences.filter((t) => t !== option.value)
+                          : [...current.driveTypePreferences, option.value],
+                      }))
+                    }
+                    className="size-4 accent-[#3D3777]"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex flex-col gap-4">
             <TextField
               label="Technical skills"

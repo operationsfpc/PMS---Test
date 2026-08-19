@@ -27,6 +27,7 @@ import type { StudentCertificatesRepository, StudentProfileRepository } from "./
  * and links go stale, are nobody else's to maintain, and decide nothing.
  */
 const CURRENT = {
+  driveTypePreferences: ["placement" as const],
   technicalSkills: "TypeScript, React",
   areasOfInterest: "Frontend",
   areasOfExpertise: "Web",
@@ -86,6 +87,44 @@ const renderPage = (
   );
 
 const pdf = () => new File(["scan"], "aws.pdf", { type: "application/pdf" });
+
+/**
+ * D1/D3 (UAT 2026-08-19): the student chooses which DRIVE TYPES they want.
+ * No approval needed — the change applies to new drives from that point on;
+ * past applications carry their apply-time snapshot.
+ */
+describe("ProfileEditPage — drive type preferences", () => {
+  it("shows the three types with the student's current choices ticked", async () => {
+    renderPage(repo());
+
+    const placement = await screen.findByRole("checkbox", { name: /^placement$/i });
+    expect((placement as HTMLInputElement).checked).toBe(true);
+    expect(
+      (screen.getByRole("checkbox", { name: /^internship$/i }) as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(
+      (screen.getByRole("checkbox", { name: /convertible/i }) as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it("saves a changed preference", async () => {
+    const save = vi.fn();
+    const user = userEvent.setup();
+    renderPage(repo({ save }));
+
+    await user.click(await screen.findByRole("checkbox", { name: /^internship$/i }));
+    await user.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0]?.[0].driveTypePreferences).toEqual(["placement", "internship"]);
+  });
+
+  it("says the change applies forward only", async () => {
+    renderPage(repo());
+    await screen.findByRole("checkbox", { name: /^placement$/i });
+    expect(screen.getByText(/new drives from this point/i)).toBeDefined();
+  });
+});
 
 describe("ProfileEditPage", () => {
   it("opens with what the student already has", async () => {

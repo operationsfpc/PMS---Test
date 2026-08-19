@@ -120,6 +120,7 @@ const EXCLUSION_LABEL: Record<Exclude<VisibilityReason, "visible">, string> = {
   disbarred: "Disbarred",
   not_eligible: "Does not meet eligibility",
   area_not_chosen: "Did not choose this area",
+  drive_type_not_preferred: "Did not ask for this drive type",
   internship_cap_consumed: "Internship cap already used",
   placed_at_equal_or_higher: "Placed at an equal or higher category",
 };

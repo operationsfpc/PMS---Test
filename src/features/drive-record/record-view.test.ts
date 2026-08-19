@@ -128,7 +128,8 @@ describe("createSupabaseDriveRecordView", () => {
       { sequence: 1, name: "Aptitude" },
       { sequence: 2, name: "Interview" },
     ]);
-    expect(record?.recruiter.email).toBe("testabcd@example.com");
+    // A4: legacy spoc_* columns still answer, as a one-entry contact list.
+    expect(record?.recruiters[0]?.email).toBe("testabcd@example.com");
     expect(record?.provenance).toMatchObject({
       raisedBy: "AE Test",
       approvedBy: "DH Test",

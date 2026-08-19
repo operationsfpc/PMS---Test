@@ -58,7 +58,7 @@ export const OFFER_LADDER_COLUMNS =
 export const STUDENT_COLUMNS = `
   id, full_name, roll_number, email, passing_year, overall_cgpa, tenth_percentage,
   twelfth_percentage, current_arrears, history_of_arrears, technical_skills,
-  srf_status, participation_status,
+  srf_status, participation_status, drive_type_preferences,
   degrees(name), branches(name), campuses(name, cities(name)),
   student_documents!student_documents_student_id_fkey(id, kind, role_category, storage_path),
   student_role_preferences(category),
@@ -229,6 +229,10 @@ export function createSupabaseDrivesView(
       roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>)
         .map((p) => p.category as RoleCategory)
         .filter((c) => c !== undefined),
+      // D1 (UAT 2026-08-19): and the students who asked for that drive TYPE.
+      driveTypePreferences: (Array.isArray(row.drive_type_preferences)
+        ? row.drive_type_preferences
+        : []) as ApplyStudent["driveTypePreferences"],
       srfStatus: row.srf_status as ApplyStudent["srfStatus"],
       participationStatus: row.participation_status as ApplyStudent["participationStatus"],
       academics,
@@ -335,6 +339,7 @@ export function createSupabaseDrivesView(
             academics: student.academics,
             offers: student.offers,
             roleCategories: student.roleCategories,
+            driveTypePreferences: student.driveTypePreferences,
           },
           drive,
           now,
@@ -534,6 +539,7 @@ export function createSupabaseDrivesView(
             academics: student.academics,
             offers: student.offers,
             roleCategories: student.roleCategories,
+            driveTypePreferences: student.driveTypePreferences,
           },
           drive,
           now,

@@ -1,5 +1,5 @@
 import { normaliseProfileLinks, type ProfileLink } from "@domain/profile-links";
-import type { VerificationStatus } from "@domain/types";
+import type { DriveType, VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -15,6 +15,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * explicitly, and `protect_verified_academics` (0009) refuses the rest anyway.
  */
 export interface StudentProfileValues {
+  /**
+   * D1 (UAT 2026-08-19): which drive TYPES they want. Empty = no preference,
+   * every type shown. Changing it needs no approval (Q6) and applies to new
+   * drives only — past applications carry their apply-time snapshot.
+   */
+  readonly driveTypePreferences: readonly DriveType[];
   readonly technicalSkills: string;
   readonly areasOfInterest: string;
   readonly areasOfExpertise: string;
@@ -68,6 +74,7 @@ export class StudentCertificateError extends Error {}
 
 /** Exported so src/db/query-contract.test.ts can prove it against the schema. */
 export const STUDENT_PROFILE_COLUMNS = `
+  drive_type_preferences,
   technical_skills, areas_of_interest, areas_of_expertise,
   projects, achievements, other_profiles,
   linkedin_url, github_url, leetcode_url, hackerrank_url
@@ -125,6 +132,9 @@ export function createSupabaseStudentProfileRepository(
       const row = data as unknown as Record<string, unknown>;
 
       return {
+        driveTypePreferences: (Array.isArray(row.drive_type_preferences)
+          ? row.drive_type_preferences
+          : []) as DriveType[],
         technicalSkills: text(row.technical_skills),
         areasOfInterest: text(row.areas_of_interest),
         areasOfExpertise: text(row.areas_of_expertise),
@@ -153,6 +163,7 @@ export function createSupabaseStudentProfileRepository(
       const { error } = await client
         .from("students")
         .update({
+          drive_type_preferences: values.driveTypePreferences,
           technical_skills: orNull(values.technicalSkills),
           areas_of_interest: orNull(values.areasOfInterest),
           areas_of_expertise: orNull(values.areasOfExpertise),

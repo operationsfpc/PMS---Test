@@ -15,6 +15,8 @@ export type ApplyStudent = SnapshotStudent & {
   readonly roleCategories: readonly RoleCategory[];
   /** D2 (UAT 2026-08-19): per-area resume file names, for the apply screen. */
   readonly resumeNames: Readonly<Record<string, string>>;
+  /** D1 (UAT 2026-08-19): the drive types they asked for. Empty = every type. */
+  readonly driveTypePreferences: readonly import("@domain/types").DriveType[];
 };
 
 export type ApplyDrive = VisibleDrive & { readonly roleCategory: RoleCategory };
@@ -45,6 +47,8 @@ const REFUSALS: Record<string, string> = {
   not_eligible: "You do not meet this drive's eligibility criteria.",
   area_not_chosen:
     "This drive is for an area you did not choose on your registration form. Ask your coordinator if that has changed.",
+  drive_type_not_preferred:
+    "This drive's type is not among the ones you asked for in your preferences. Update your preferences to see drives like this one.",
   internship_cap_consumed: "You have already accepted an internship offer.",
   placed_at_equal_or_higher:
     "You are already placed at this category or higher, so this drive is not open to you.",

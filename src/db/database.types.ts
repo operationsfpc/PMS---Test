@@ -192,6 +192,18 @@ export type DisbarmentDecisionsInsert = Pick<
 > &
   Partial<Pick<DisbarmentDecisionsRow, "id" | "decided_at">>;
 
+export interface DriveContactsRow {
+  drive_id: string;
+  sequence: number;
+  name: string | null;
+  designation: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+export type DriveContactsInsert = Pick<DriveContactsRow, "drive_id" | "sequence"> &
+  Partial<Pick<DriveContactsRow, "name" | "designation" | "email" | "phone">>;
+
 export interface DriveEligibleBranchesRow {
   drive_id: string;
   branch_id: string;
@@ -216,13 +228,26 @@ export interface DriveRoundsRow {
   online_link: string | null;
   instructions: string | null;
   created_at: string;
+  round_mode: string | null;
+  round_scheduled_at: string | null;
+  round_interview_link: string | null;
+  advance_proof_path: string | null;
 }
 
 export type DriveRoundsInsert = Pick<DriveRoundsRow, "drive_id" | "sequence" | "name"> &
   Partial<
     Pick<
       DriveRoundsRow,
-      "id" | "scheduled_at" | "venue" | "online_link" | "instructions" | "created_at"
+      | "id"
+      | "scheduled_at"
+      | "venue"
+      | "online_link"
+      | "instructions"
+      | "created_at"
+      | "round_mode"
+      | "round_scheduled_at"
+      | "round_interview_link"
+      | "advance_proof_path"
     >
   >;
 
@@ -289,6 +314,8 @@ export interface DrivesRow {
   joining_timeline: Enums["joining_timeline"] | null;
   joining_immediate_notes: string | null;
   joining_later_notes: string | null;
+  stipend_min_monthly: number | null;
+  stipend_max_monthly: number | null;
 }
 
 export type DrivesInsert = Pick<DrivesRow, "company_name"> &
@@ -349,6 +376,8 @@ export type DrivesInsert = Pick<DrivesRow, "company_name"> &
       | "joining_timeline"
       | "joining_immediate_notes"
       | "joining_later_notes"
+      | "stipend_min_monthly"
+      | "stipend_max_monthly"
     >
   >;
 
@@ -493,10 +522,17 @@ export interface RoundParticipantsRow {
   application_id: string;
   added_by: string | null;
   added_at: string;
+  meeting_link: string | null;
+  participant_scheduled_at: string | null;
 }
 
 export type RoundParticipantsInsert = Pick<RoundParticipantsRow, "round_id" | "application_id"> &
-  Partial<Pick<RoundParticipantsRow, "id" | "added_by" | "added_at">>;
+  Partial<
+    Pick<
+      RoundParticipantsRow,
+      "id" | "added_by" | "added_at" | "meeting_link" | "participant_scheduled_at"
+    >
+  >;
 
 export interface RoundResultsRow {
   id: string;
@@ -777,6 +813,7 @@ export interface StudentsRow {
   twelfth_board_state: string | null;
   twelfth_board_other: string | null;
   diploma_university: string | null;
+  drive_type_preferences: unknown;
 }
 
 export type StudentsInsert = Pick<
@@ -840,5 +877,6 @@ export type StudentsInsert = Pick<
       | "twelfth_board_state"
       | "twelfth_board_other"
       | "diploma_university"
+      | "drive_type_preferences"
     >
   >;

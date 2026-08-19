@@ -50,12 +50,14 @@ const RECORD: DriveRecord = {
     { sequence: 1, name: "Aptitude Test" },
     { sequence: 2, name: "Technical Interview" },
   ],
-  recruiter: {
-    name: "TESTABCD",
-    designation: "Recruitment Head",
-    email: "testabcd@example.com",
-    phone: "9876543218",
-  },
+  recruiters: [
+    {
+      name: "TESTABCD",
+      designation: "Recruitment Head",
+      email: "testabcd@example.com",
+      phone: "9876543218",
+    },
+  ],
   provenance: {
     raisedBy: "AE Test",
     raisedAt: "2026-08-11T10:16:00Z",
@@ -110,6 +112,28 @@ describe("DriveRecordPage", () => {
     render(<DriveRecordPage view={view()} role={AE} driveId="d1" />);
     expect(await screen.findByText("testabcd@example.com")).toBeDefined();
     expect(screen.getByText(/visible to you alone/i)).toBeDefined();
+  });
+
+  /** A4/A5 (UAT 2026-08-19): several contacts, or an honest "none". */
+  it("lists every contact the drive carries, for the AE", async () => {
+    const two = {
+      ...RECORD,
+      recruiters: [
+        { name: "First Contact", designation: "HR", email: "one@x.com", phone: "1" },
+        { name: "Second Contact", designation: "Lead", email: "two@x.com", phone: "2" },
+      ],
+    };
+    render(<DriveRecordPage view={view(two)} role={AE} driveId="d1" />);
+
+    expect(await screen.findByText("First Contact")).toBeDefined();
+    expect(screen.getByText("Second Contact")).toBeDefined();
+  });
+
+  it("says the Central CPC is the point of contact when the drive has none (A5)", async () => {
+    render(<DriveRecordPage view={view({ ...RECORD, recruiters: [] })} role={AE} driveId="d1" />);
+
+    await screen.findByText("₹4–6 LPA");
+    expect(screen.getByText(/central placement coordinator/i)).toBeDefined();
   });
 
   it("hides applicants and provenance from a student — the page is still theirs to read", async () => {

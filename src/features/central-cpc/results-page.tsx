@@ -1,4 +1,5 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { type MeetingSlot, parseMeetingSlotsCsv } from "@domain/meeting-slots";
 import { advancedBeyond, advancingParticipants } from "@domain/rounds";
 import type { AttendanceStatus, RoundResult } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
@@ -10,6 +11,9 @@ export interface RoundParticipant {
   readonly rollNumber: string;
   readonly attendance: AttendanceStatus;
   readonly result: RoundResult | null;
+  /** F5 (UAT 2026-08-19): this student's own link and slot, when one is set. */
+  readonly meetingLink?: string | null;
+  readonly participantScheduledAt?: string | null;
 }
 
 export interface ResultsView {
@@ -21,6 +25,16 @@ export interface DriveRoundInfo {
   readonly roundId: string;
   readonly sequence: number;
   readonly name: string;
+  /** F4 (UAT 2026-08-19): the round's own details, editable after creation. */
+  readonly mode: string | null;
+  readonly scheduledAt: string | null;
+  readonly interviewLink: string | null;
+}
+
+export interface RoundDetailsUpdate {
+  readonly mode: string | null;
+  readonly scheduledAt: string | null;
+  readonly interviewLink: string | null;
 }
 
 /**
@@ -30,9 +44,26 @@ export interface DriveRoundInfo {
  */
 export interface DriveRoundsView extends ResultsView {
   rounds(driveId: string): Promise<readonly DriveRoundInfo[]>;
-  /** Schedules the current round's `selected` into the next. Returns how many. */
-  advance(fromRoundId: string, toRoundId: string): Promise<number>;
+  /**
+   * Schedules the current round's `selected` into the next. Returns how many.
+   * F3: an optional proof of the company's instruction travels with it.
+   */
+  advance(fromRoundId: string, toRoundId: string, proof?: File | null): Promise<number>;
   addRound(driveId: string, name: string): Promise<void>;
+  /** F4: mode, time and shared link — editable after creation. */
+  updateRound(roundId: string, details: RoundDetailsUpdate): Promise<void>;
+  /** F5: bulk per-student slots by roll number. Says who did not match. */
+  assignSlots(
+    roundId: string,
+    slots: readonly MeetingSlot[],
+  ): Promise<{ matched: number; unmatched: readonly string[] }>;
+  /** F5: one student's own link and slot. */
+  setParticipantSlot(
+    roundId: string,
+    applicationId: string,
+    meetingLink: string | null,
+    scheduledAt: string | null,
+  ): Promise<void>;
 }
 
 const RESULTS: readonly RoundResult[] = ["selected", "rejected", "waitlisted", "on_hold"];
@@ -51,6 +82,7 @@ export function ResultsPage({
   roundId,
   view,
   locked = EMPTY_LOCK,
+  saveSlot,
 }: {
   roundId: string;
   view: ResultsView;
@@ -60,6 +92,8 @@ export function ResultsPage({
    * strictly linear.
    */
   locked?: ReadonlySet<string>;
+  /** F5: when given, each row offers the student's own meeting link. */
+  saveSlot?: (applicationId: string, meetingLink: string) => Promise<void>;
 }) {
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,6 +191,9 @@ export function ResultsPage({
                 <div className="min-w-0">
                   <p className="font-medium text-ink-900">{participant.studentName}</p>
                   <p className="text-sm text-ink-500">{participant.rollNumber}</p>
+                  {saveSlot !== undefined && (
+                    <SlotEditor participant={participant} saveSlot={saveSlot} />
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -233,6 +270,52 @@ export function ResultsPage({
 
 const EMPTY_LOCK: ReadonlySet<string> = new Set();
 
+/**
+ * F5 (UAT 2026-08-19): one student's own meeting link, edited in their row.
+ * The bulk CSV covers the recruiter's spreadsheet; this covers the one link
+ * that arrived by WhatsApp at 9pm.
+ */
+function SlotEditor({
+  participant,
+  saveSlot,
+}: {
+  participant: RoundParticipant;
+  saveSlot: (applicationId: string, meetingLink: string) => Promise<void>;
+}) {
+  const [link, setLink] = useState(participant.meetingLink ?? "");
+  const [saved, setSaved] = useState(false);
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <input
+        type="url"
+        aria-label={`Meeting link for ${participant.studentName}`}
+        placeholder="https://…"
+        value={link}
+        onChange={(e) => {
+          setSaved(false);
+          setLink(e.target.value);
+        }}
+        className="w-64 rounded-lg border border-line px-2 py-1 text-xs text-ink-900"
+      />
+      <button
+        type="button"
+        onClick={() => {
+          // Promise.resolve: a test double may return undefined, and a crash
+          // in a click handler is a silent one.
+          void Promise.resolve(saveSlot(participant.applicationId, link.trim())).then(() =>
+            setSaved(true),
+          );
+        }}
+        className="text-xs font-medium text-brand-600 hover:underline"
+      >
+        Save link
+      </button>
+      {saved && <span className="text-xs text-success-700">✓ Saved</span>}
+    </div>
+  );
+}
+
 function countAdvancing(participants: readonly RoundParticipant[] | null): number {
   if (participants === null) return 0;
   return advancingParticipants(
@@ -260,6 +343,16 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
   const [error, setError] = useState<string | null>(null);
   /** Remounts the embedded ResultsPage when the world changes underneath it. */
   const [reloadKey, setReloadKey] = useState(0);
+  /** F4: the details panel, opened per round. */
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [detailsDraft, setDetailsDraft] = useState<RoundDetailsUpdate>({
+    mode: null,
+    scheduledAt: null,
+    interviewLink: null,
+  });
+  /** F3: the advance waits behind a confirmation carrying the optional proof. */
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [proof, setProof] = useState<File | null>(null);
 
   const loadRounds = useCallback(async () => {
     const loaded = await view.rounds(driveId);
@@ -320,15 +413,65 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
     if (activeRound === null || nextRound === null) return;
     setError(null);
     try {
-      const moved = await view.advance(activeRound.roundId, nextRound.roundId);
+      const moved = await view.advance(activeRound.roundId, nextRound.roundId, proof);
       setNotice(
         `${moved} ${moved === 1 ? "student" : "students"} scheduled for Round ${nextRound.sequence} (${nextRound.name}).`,
       );
+      setProof(null);
       // Re-read the world instead of arguing with it (the F5 bug).
       await loadParticipants();
       setReloadKey((k) => k + 1);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not advance the students.");
+    }
+  }
+
+  function openDetails() {
+    if (activeRound === null) return;
+    setDetailsDraft({
+      mode: activeRound.mode,
+      scheduledAt: activeRound.scheduledAt,
+      interviewLink: activeRound.interviewLink,
+    });
+    setEditingDetails(true);
+  }
+
+  async function saveDetails() {
+    if (activeRound === null) return;
+    setError(null);
+    try {
+      await view.updateRound(activeRound.roundId, detailsDraft);
+      setEditingDetails(false);
+      setNotice("Round details saved. Participating students are notified.");
+      await loadRounds();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save the round details.");
+    }
+  }
+
+  /** F5: the recruiter's spreadsheet of per-student links, judged by the domain. */
+  async function uploadSlots(file: File) {
+    if (activeRound === null) return;
+    setError(null);
+    setNotice(null);
+    const { slots, problems } = parseMeetingSlotsCsv(await file.text());
+    if (problems.length > 0) {
+      setError(problems.join(" "));
+      return;
+    }
+    try {
+      const { matched, unmatched } = await view.assignSlots(activeRound.roundId, slots);
+      if (unmatched.length > 0) {
+        setError(
+          `No participant in this round carries these roll numbers: ${unmatched.join(", ")}. ` +
+            `${matched} ${matched === 1 ? "link" : "links"} assigned.`,
+        );
+      } else {
+        setNotice(`${matched} ${matched === 1 ? "link" : "links"} assigned and notified.`);
+      }
+      setReloadKey((k) => k + 1);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not assign the links.");
     }
   }
 
@@ -414,18 +557,121 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
         )}
       </div>
 
-      {active !== null && (
+      {active !== null && activeRound !== null && (
         <>
+          {/* F4 (UAT 2026-08-19): the round's own details — shown, and
+              editable AFTER creation, which is when the company finally says. */}
+          <Card className="mb-4 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-ink-700">
+                <strong>Round {activeRound.sequence} details:</strong>{" "}
+                {activeRound.mode === null ? "mode not set" : activeRound.mode.replaceAll("_", " ")}
+                {activeRound.scheduledAt !== null &&
+                  ` · ${new Date(activeRound.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}`}
+                {activeRound.interviewLink !== null && " · shared link set"}
+              </p>
+              {!editingDetails && (
+                <Button variant="secondary" size="sm" onClick={openDetails}>
+                  Edit round details
+                </Button>
+              )}
+            </div>
+
+            {editingDetails && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                  Round mode
+                  <select
+                    value={detailsDraft.mode ?? ""}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({
+                        ...d,
+                        mode: e.target.value === "" ? null : e.target.value,
+                      }))
+                    }
+                    className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                  >
+                    <option value="">Not set</option>
+                    <option value="on_campus">On-campus</option>
+                    <option value="virtual">Virtual</option>
+                    <option value="physical_outside_campus">Physical, outside campus</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                  Scheduled at (IST)
+                  <input
+                    type="datetime-local"
+                    value={detailsDraft.scheduledAt ?? ""}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({
+                        ...d,
+                        scheduledAt: e.target.value === "" ? null : e.target.value,
+                      }))
+                    }
+                    className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                  Shared interview link
+                  <input
+                    type="url"
+                    placeholder="https://…"
+                    value={detailsDraft.interviewLink ?? ""}
+                    onChange={(e) =>
+                      setDetailsDraft((d) => ({
+                        ...d,
+                        interviewLink: e.target.value === "" ? null : e.target.value,
+                      }))
+                    }
+                    className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                  />
+                </label>
+
+                <div className="sm:col-span-3 flex flex-wrap items-end justify-between gap-3">
+                  <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                    Upload per-student links (CSV: roll_number,meeting_link,scheduled_at)
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file !== undefined) void uploadSlots(file);
+                        e.target.value = "";
+                      }}
+                      className="text-sm"
+                    />
+                  </label>
+                  <span className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => setEditingDetails(false)}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" onClick={() => void saveDetails()}>
+                      Save round details
+                    </Button>
+                  </span>
+                </div>
+              </div>
+            )}
+          </Card>
+
           <ResultsPage
             key={`${active}-${reloadKey}`}
             roundId={active}
             view={view}
             locked={locked}
+            saveSlot={(applicationId, meetingLink) =>
+              view.setParticipantSlot(
+                activeRound.roundId,
+                applicationId,
+                meetingLink === "" ? null : meetingLink,
+                null,
+              )
+            }
           />
           <div className="mt-4">
             {nextRound !== null ? (
               advancing > 0 && (
-                <Button onClick={() => void advance()}>
+                <Button onClick={() => setAdvanceOpen(true)}>
                   Advance {advancing} selected to Round {nextRound.sequence} — schedules them
                 </Button>
               )
@@ -442,6 +688,64 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
               </p>
             )}
           </div>
+
+          {/* F3 (UAT 2026-08-19): the advance asks first, and the company's
+              own instruction — a mail, a screenshot — can travel with it. */}
+          {advanceOpen && nextRound !== null && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div
+                role="alertdialog"
+                aria-label="Confirm advancing"
+                className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+              >
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  Advance {advancing} to Round {nextRound.sequence}?
+                </h2>
+                <p className="mt-2 text-sm text-ink-700">
+                  {advancing} {advancing === 1 ? "student" : "students"} marked{" "}
+                  <strong>selected</strong> will be scheduled for Round {nextRound.sequence} (
+                  {nextRound.name}). Once advanced, their result in this round is final.
+                </p>
+                <div className="mt-4">
+                  <label
+                    htmlFor="advance-proof"
+                    className="mb-1 block text-xs font-medium text-ink-500"
+                  >
+                    Proof of company communication (PDF or image, optional)
+                  </label>
+                  <input
+                    id="advance-proof"
+                    type="file"
+                    accept="application/pdf,image/png,image/jpeg,image/webp"
+                    onChange={(e) => setProof(e.target.files?.[0] ?? null)}
+                    className="text-sm"
+                  />
+                  {proof !== null && (
+                    <p className="mt-1 text-xs text-ink-700">Attached: {proof.name}</p>
+                  )}
+                </div>
+                <div className="mt-5 flex justify-end gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setAdvanceOpen(false);
+                      setProof(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setAdvanceOpen(false);
+                      void advance();
+                    }}
+                  >
+                    Confirm — advance and schedule
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

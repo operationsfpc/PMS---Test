@@ -12,15 +12,17 @@ import { PIF_SECTIONS, PifForm } from "./pif-form";
  * makes offer_category immutable once approval sets it.
  */
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
+  // A1 (UAT 2026-08-19): the type comes FIRST — choosing it reveals the
+  // compensation fields that belong to it.
+  await user.click(screen.getByRole("radio", { name: /^placement$/i }));
+  await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
   await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
-  await user.type(screen.getByLabelText(/contact email/i), "karthik@zoho.com");
   await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
   await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
   // Two controls now match "job description": the typed one and the PDF.
   await user.type(screen.getByLabelText(/^job description$/i), "Build backend services.");
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
-  await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
   /**
    * The rounds, NAMED (2026-08-18). A count told the Central CPC how many boxes
    * to invent and told a student nothing: "Round 2" is not something you can
@@ -491,13 +493,13 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
       expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
 
+      await user.click(screen.getByRole("radio", { name: /^placement$/i }));
+      await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
       await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
-      await user.type(screen.getByLabelText(/contact email/i), "karthik@zoho.com");
       await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
       await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
       await user.type(screen.getByLabelText(/number of openings/i), "25");
       await user.type(screen.getByLabelText(/work location/i), "Chennai");
-      await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
       await user.click(screen.getByRole("button", { name: /add round/i }));
       await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
       await user.click(screen.getByRole("checkbox", { name: /2027/ }));
@@ -662,5 +664,133 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
       expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ joiningTimeline: "immediate" });
     });
+  });
+});
+
+/**
+ * UAT 2026-08-19 — A1 (type first) · A2 (compensation follows the type) ·
+ * A4 (several contacts, "+") · A5 (no contact → the Central CPC is the POC).
+ */
+describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
+  it("opens with the drive type as the FIRST section", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    const headings = screen.getAllByRole("heading", { level: 2 });
+    expect(headings[0]?.textContent).toMatch(/drive type/i);
+  });
+
+  it("shows no compensation until the type is chosen", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    expect(screen.queryByLabelText(/minimum ctc/i)).toBeNull();
+    expect(screen.queryByLabelText(/stipend/i)).toBeNull();
+    expect(screen.getByText(/choose the type first/i)).toBeDefined();
+  });
+
+  it("a placement asks for CTC and never a stipend", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("radio", { name: /^placement$/i }));
+
+    expect(screen.getByLabelText(/minimum ctc/i)).toBeDefined();
+    expect(screen.queryByLabelText(/stipend/i)).toBeNull();
+  });
+
+  it("an internship asks for a stipend and never a CTC", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("radio", { name: /^internship$/i }));
+
+    expect(screen.getByLabelText(/stipend minimum/i)).toBeDefined();
+    expect(screen.queryByLabelText(/minimum ctc/i)).toBeNull();
+  });
+
+  it("a convertible internship asks for both", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("radio", { name: /convertible/i }));
+
+    expect(screen.getByLabelText(/stipend minimum/i)).toBeDefined();
+    expect(screen.getByLabelText(/minimum ctc/i)).toBeDefined();
+  });
+
+  it("submits an internship with its stipend", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("radio", { name: /^internship$/i }));
+    await user.type(screen.getByLabelText(/stipend minimum/i), "15000");
+    await user.type(screen.getByLabelText(/stipend maximum/i), "25000");
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.type(screen.getByLabelText(/role title/i), "Intern");
+    await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+    await user.type(screen.getByLabelText(/number of openings/i), "10");
+    await user.type(screen.getByLabelText(/work location/i), "Chennai");
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round 1 name/i), "Interview");
+    await user.click(screen.getByRole("checkbox", { name: /2027/ }));
+    await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      driveType: "internship",
+      stipendMinMonthly: 15000,
+      stipendMaxMonthly: 25000,
+    });
+  });
+});
+
+describe("PifForm — the contacts (A4/A5)", () => {
+  it("starts with no contact and says the Central CPC is the point of contact", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    expect(screen.getByRole("note").textContent).toMatch(/central placement coordinator/i);
+  });
+
+  it("adds contacts with the + button and drops the alert once one is real", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add a contact/i }));
+    // An empty row is not a contact — the alert stays.
+    expect(screen.getByRole("note")).toBeDefined();
+
+    await user.type(screen.getByLabelText(/contact 1 name/i), "R Karthik");
+    expect(screen.queryByRole("note")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /add a contact/i }));
+    expect(screen.getByLabelText(/contact 2 name/i)).toBeDefined();
+  });
+
+  it("sends every contact with the submission", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add a contact/i }));
+    await user.type(screen.getByLabelText(/contact 1 name/i), "R Karthik");
+    await user.type(screen.getByLabelText(/contact 1 email/i), "karthik@zoho.com");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0].contacts).toEqual([
+      { name: "R Karthik", designation: "", email: "karthik@zoho.com", phone: "" },
+    ]);
+  });
+
+  it("removes a contact row", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add a contact/i }));
+    await user.click(screen.getByRole("button", { name: /remove contact 1/i }));
+
+    expect(screen.queryByLabelText(/contact 1 name/i)).toBeNull();
   });
 });

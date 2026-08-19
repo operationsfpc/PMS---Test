@@ -9,8 +9,14 @@ import { type ReactNode, useId, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { PIF_DEFAULTS, type PifFormValues, pifDraftSchema, pifSubmitSchema } from "./pif-schema";
 
-/** Sections 1-4 are the AE's. Section 5 belongs to Delivery. */
+/**
+ * The AE's sections, in the order UAT 2026-08-19 asked for (A1/A3): the drive
+ * type FIRST — it decides which compensation exists, which students see the
+ * drive and how the offer classifies — with the compensation immediately
+ * after it. Offer category still belongs to the Delivery Head.
+ */
 export const PIF_SECTIONS = [
+  { id: "type", title: "Drive type and compensation" },
   { id: "company", title: "Company details" },
   { id: "role", title: "Role details" },
   { id: "eligibility", title: "Eligibility criteria" },
@@ -221,6 +227,9 @@ export function PifForm({
     name: "additionalDesignations" as never,
   });
 
+  /** A4 (UAT 2026-08-19): several contacts per drive, added with a "+". */
+  const contacts = useFieldArray({ control: formControl, name: "contacts" as never });
+
   /**
    * An untouched optional number is NOT zero.
    *
@@ -242,6 +251,16 @@ export function PifForm({
   const jobDescriptionFile = watch("jobDescriptionFile") ?? null;
   const shiftType = watch("shiftType") ?? "";
   const joiningTimeline = watch("joiningTimeline") ?? "";
+  /** A1/A2: the load-bearing first choice, and what compensation follows it. */
+  const driveType = watch("driveType") ?? "";
+  const wantsCtc = driveType === "placement" || driveType === "internship_convertible";
+  const wantsStipend = driveType === "internship" || driveType === "internship_convertible";
+  const contactRows = watch("contacts") ?? [];
+  const hasAnyContact = contactRows.some((c) =>
+    [c?.name, c?.designation, c?.email, c?.phone].some(
+      (f) => typeof f === "string" && f.trim() !== "",
+    ),
+  );
 
   return (
     <>
@@ -259,6 +278,96 @@ export function PifForm({
       )}
 
       <form noValidate>
+        {/* A1 (UAT 2026-08-19): the type comes FIRST — it decides which
+            compensation fields exist at all, so asking it last meant an AE
+            discovered the form's shape after filling it. */}
+        <Section title="Drive type and compensation">
+          <div className="sm:col-span-2">
+            <RadioGroup
+              legend="Drive type"
+              name="driveType"
+              value={driveType}
+              options={DRIVE_TYPES.map((t) => ({ value: t, label: DRIVE_TYPE_LABELS[t] ?? t }))}
+              error={err("driveType")}
+              onChange={(next) => {
+                setValue("driveType", next as typeof driveType, { shouldValidate: true });
+                // A hidden field still submits (the J2 lesson): compensation
+                // the new type does not have is cleared, not merely hidden.
+                if (next === "placement") {
+                  setValue("stipendMinMonthly", null);
+                  setValue("stipendMaxMonthly", null);
+                }
+                if (next === "internship") {
+                  setValue("ctcMinLpa", null);
+                  setValue("ctcMaxLpa", null);
+                  setValue("ctcBreakup", "");
+                }
+              }}
+            />
+          </div>
+
+          {wantsStipend && (
+            <>
+              <Labelled label="Stipend minimum (₹ / month)" error={err("stipendMinMonthly")}>
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    className={control}
+                    {...register("stipendMinMonthly", numeric)}
+                  />
+                )}
+              </Labelled>
+              <Labelled label="Stipend maximum (₹ / month)" error={err("stipendMaxMonthly")}>
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    className={control}
+                    {...register("stipendMaxMonthly", numeric)}
+                  />
+                )}
+              </Labelled>
+            </>
+          )}
+
+          {wantsCtc && (
+            <>
+              <Labelled label="Minimum CTC (LPA)" error={err("ctcMinLpa")}>
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    step="0.01"
+                    className={control}
+                    {...register("ctcMinLpa", numeric)}
+                  />
+                )}
+              </Labelled>
+              <Labelled label="Maximum CTC (LPA)" error={err("ctcMaxLpa")}>
+                {(id) => (
+                  <input
+                    id={id}
+                    type="number"
+                    step="0.01"
+                    className={control}
+                    {...register("ctcMaxLpa", numeric)}
+                  />
+                )}
+              </Labelled>
+              <Labelled label="CTC breakup (fixed / variable)" error={err("ctcBreakup")} wide>
+                {(id) => <input id={id} className={control} {...register("ctcBreakup")} />}
+              </Labelled>
+            </>
+          )}
+
+          {driveType === "" && (
+            <p className="sm:col-span-2 text-sm text-ink-500">
+              Choose the type first — the compensation fields follow from it.
+            </p>
+          )}
+        </Section>
+
         <Section title="Company details">
           <Labelled label="Company name" error={err("companyName")}>
             {(id) => <input id={id} className={control} {...register("companyName")} />}
@@ -269,18 +378,109 @@ export function PifForm({
           <Labelled label="Company website" error={err("companyWebsite")}>
             {(id) => <input id={id} className={control} {...register("companyWebsite")} />}
           </Labelled>
-          <Labelled label="Contact name" error={err("spocName")}>
-            {(id) => <input id={id} className={control} {...register("spocName")} />}
-          </Labelled>
-          <Labelled label="Contact designation" error={err("spocDesignation")}>
-            {(id) => <input id={id} className={control} {...register("spocDesignation")} />}
-          </Labelled>
-          <Labelled label="Contact email" error={err("spocEmail")}>
-            {(id) => <input id={id} className={control} {...register("spocEmail")} />}
-          </Labelled>
-          <Labelled label="Contact phone" error={err("spocPhone")}>
-            {(id) => <input id={id} className={control} {...register("spocPhone")} />}
-          </Labelled>
+
+          {/* A4/A5 (UAT 2026-08-19): several contacts, all optional. With none,
+              the Central CPC is the point of contact — said here, not assumed. */}
+          <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
+            <p className="text-sm font-medium text-ink-900">Company contacts</p>
+            <p className="mt-1 text-xs text-ink-700">
+              Who the placement team reaches at {"the company"}. All optional — add as many as you
+              have.
+            </p>
+
+            {!hasAnyContact && (
+              <p
+                role="note"
+                className="mt-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-ink-900"
+              >
+                No contact added — the <strong>Central Placement Coordinator</strong> will be the
+                point of contact for this company.
+              </p>
+            )}
+
+            {contacts.fields.map((field, index) => (
+              <div
+                key={field.id}
+                className="mt-3 grid gap-2 rounded-lg border border-line bg-white p-3 sm:grid-cols-2"
+              >
+                <div>
+                  <label
+                    htmlFor={`contact-name-${index}`}
+                    className="mb-1 block text-xs font-medium text-ink-700"
+                  >
+                    Contact {index + 1} name
+                  </label>
+                  <input
+                    id={`contact-name-${index}`}
+                    className={control}
+                    {...register(`contacts.${index}.name` as never)}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`contact-designation-${index}`}
+                    className="mb-1 block text-xs font-medium text-ink-700"
+                  >
+                    Contact {index + 1} designation
+                  </label>
+                  <input
+                    id={`contact-designation-${index}`}
+                    className={control}
+                    {...register(`contacts.${index}.designation` as never)}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor={`contact-email-${index}`}
+                    className="mb-1 block text-xs font-medium text-ink-700"
+                  >
+                    Contact {index + 1} email
+                  </label>
+                  <input
+                    id={`contact-email-${index}`}
+                    className={control}
+                    {...register(`contacts.${index}.email` as never)}
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`contact-phone-${index}`}
+                      className="mb-1 block text-xs font-medium text-ink-700"
+                    >
+                      Contact {index + 1} phone
+                    </label>
+                    <input
+                      id={`contact-phone-${index}`}
+                      className={control}
+                      {...register(`contacts.${index}.phone` as never)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove contact ${index + 1}`}
+                    onClick={() => contacts.remove(index)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-3"
+              onClick={() =>
+                contacts.append({ name: "", designation: "", email: "", phone: "" } as never)
+              }
+            >
+              + Add a contact
+            </Button>
+          </div>
         </Section>
 
         <Section title="Role details">
@@ -353,6 +553,16 @@ export function PifForm({
               </select>
             )}
           </Labelled>
+          {/* A3 (UAT 2026-08-19): openings and location directly after the role
+              — the order the meeting proposed. */}
+          <Labelled label="Number of openings" error={err("openings")}>
+            {(id) => (
+              <input id={id} type="number" className={control} {...register("openings", numeric)} />
+            )}
+          </Labelled>
+          <Labelled label="Work location(s)" error={err("workLocations")}>
+            {(id) => <input id={id} className={control} {...register("workLocations")} />}
+          </Labelled>
           {/* Answer 2 (2026-08-18): "keep space to type JD. Field is not
               mandatory." It is what the student's drive card and the recruiter
               export can actually show — a PDF is neither excerptable nor
@@ -404,39 +614,6 @@ export function PifForm({
                 )}
               </>
             )}
-          </Labelled>
-          <Labelled label="Number of openings" error={err("openings")}>
-            {(id) => (
-              <input id={id} type="number" className={control} {...register("openings", numeric)} />
-            )}
-          </Labelled>
-          <Labelled label="Work location(s)" error={err("workLocations")}>
-            {(id) => <input id={id} className={control} {...register("workLocations")} />}
-          </Labelled>
-          <Labelled label="Minimum CTC (LPA)" error={err("ctcMinLpa")}>
-            {(id) => (
-              <input
-                id={id}
-                type="number"
-                step="0.01"
-                className={control}
-                {...register("ctcMinLpa", numeric)}
-              />
-            )}
-          </Labelled>
-          <Labelled label="Maximum CTC (LPA)" error={err("ctcMaxLpa")}>
-            {(id) => (
-              <input
-                id={id}
-                type="number"
-                step="0.01"
-                className={control}
-                {...register("ctcMaxLpa", numeric)}
-              />
-            )}
-          </Labelled>
-          <Labelled label="CTC breakup (fixed / variable)" error={err("ctcBreakup")} wide>
-            {(id) => <input id={id} className={control} {...register("ctcBreakup")} />}
           </Labelled>
           {/*
            * J2 (2026-08-18): "Shift time, instead of a text box, change to
@@ -588,18 +765,7 @@ export function PifForm({
               </select>
             )}
           </Labelled>
-          <Labelled label="Drive type" error={err("driveType")}>
-            {(id) => (
-              <select id={id} className={control} {...register("driveType")}>
-                <option value="">Select…</option>
-                {DRIVE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {DRIVE_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Labelled>
+          {/* Drive type moved to Section 1 (A1, UAT 2026-08-19). */}
           {/*
            * The rounds, named and numbered (2026-08-18). F11 asked the AE for a
            * COUNT, which told the Central CPC how many boxes to invent and told

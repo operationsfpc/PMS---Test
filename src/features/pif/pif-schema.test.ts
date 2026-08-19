@@ -13,10 +13,15 @@ const complete = {
   companyName: "Zoho Corporation",
   industry: "Software",
   companyWebsite: "https://zoho.com",
-  spocName: "R Karthik",
-  spocDesignation: "Talent Acquisition Lead",
-  spocEmail: "karthik@zoho.com",
-  spocPhone: "9876543210",
+  contacts: [
+    {
+      name: "R Karthik",
+      designation: "Talent Acquisition Lead",
+      email: "karthik@zoho.com",
+      phone: "9876543210",
+    },
+  ],
+  driveType: "placement",
   roleTitle: "Member Technical Staff",
   roleCategory: "software_technical",
   jobDescription: "Build and maintain backend services.",
@@ -56,7 +61,9 @@ describe("pifSubmitSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it.each(["companyName", "spocEmail", "roleTitle", "roleCategory", "workLocations"])(
+  // spocEmail left this list on 2026-08-19 (Q2): every contact is optional
+  // now, and a drive with none routes through the Central CPC (A5).
+  it.each(["companyName", "roleTitle", "roleCategory", "workLocations"])(
     "refuses to submit without %s",
     (field) => {
       const result = pifSubmitSchema.safeParse({ ...complete, [field]: "" });
@@ -77,7 +84,10 @@ describe("pifSubmitSchema", () => {
   });
 
   it("rejects a malformed contact email", () => {
-    const result = pifSubmitSchema.safeParse({ ...complete, spocEmail: "karthik@" });
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      contacts: [{ name: "K", designation: "", email: "karthik@", phone: "" }],
+    });
     expect(result.success).toBe(false);
   });
 
@@ -384,5 +394,110 @@ describe("pifSubmitSchema", () => {
   it("leaves offer category out entirely - it is the Delivery Head's, not the AE's", () => {
     const parsed = pifSubmitSchema.parse(complete);
     expect("offerCategory" in parsed).toBe(false);
+  });
+
+  /**
+   * A1/A2 (UAT 2026-08-19): the drive type is the load-bearing first choice,
+   * and the compensation follows FROM it — an internship pays a monthly
+   * stipend, a placement a CTC, a convertible both.
+   */
+  describe("drive type and its compensation", () => {
+    it("requires the drive type at submit — everything else hangs off it", () => {
+      const result = pifSubmitSchema.safeParse({ ...complete, driveType: "" });
+      expect(result.success).toBe(false);
+    });
+
+    it("an internship needs a stipend, not a CTC", () => {
+      const internship = {
+        ...complete,
+        driveType: "internship",
+        ctcMinLpa: null,
+        ctcMaxLpa: null,
+        stipendMinMonthly: 15000,
+      };
+      expect(pifSubmitSchema.safeParse(internship).success).toBe(true);
+      expect(pifSubmitSchema.safeParse({ ...internship, stipendMinMonthly: null }).success).toBe(
+        false,
+      );
+    });
+
+    it("a convertible internship needs BOTH the stipend and the CTC", () => {
+      const convertible = {
+        ...complete,
+        driveType: "internship_convertible",
+        stipendMinMonthly: 15000,
+      };
+      expect(pifSubmitSchema.safeParse(convertible).success).toBe(true);
+      expect(pifSubmitSchema.safeParse({ ...convertible, stipendMinMonthly: null }).success).toBe(
+        false,
+      );
+      expect(pifSubmitSchema.safeParse({ ...convertible, ctcMinLpa: null }).success).toBe(false);
+    });
+
+    it("refuses a stipend range whose ceiling is below its floor", () => {
+      const result = pifSubmitSchema.safeParse({
+        ...complete,
+        driveType: "internship",
+        stipendMinMonthly: 25000,
+        stipendMaxMonthly: 15000,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("drops a stipend typed and then abandoned by switching to placement", () => {
+      const parsed = pifSubmitSchema.parse({
+        ...complete,
+        driveType: "placement",
+        stipendMinMonthly: 15000,
+        stipendMaxMonthly: 20000,
+      });
+      expect(parsed.stipendMinMonthly).toBeNull();
+      expect(parsed.stipendMaxMonthly).toBeNull();
+    });
+
+    it("drops a CTC typed and then abandoned by switching to internship", () => {
+      const parsed = pifSubmitSchema.parse({
+        ...complete,
+        driveType: "internship",
+        stipendMinMonthly: 15000,
+        ctcMinLpa: 6.5,
+        ctcMaxLpa: 9,
+      });
+      expect(parsed.ctcMinLpa).toBeNull();
+      expect(parsed.ctcMaxLpa).toBeNull();
+    });
+  });
+
+  /**
+   * A4/A5 (UAT 2026-08-19): several contacts per drive, ALL optional (Q2) —
+   * a drive with none routes communication through the Central CPC, and the
+   * form says so instead of refusing.
+   */
+  describe("the contacts", () => {
+    it("submits with no contact at all", () => {
+      expect(pifSubmitSchema.safeParse({ ...complete, contacts: [] }).success).toBe(true);
+    });
+
+    it("drops a contact row the AE added and left blank", () => {
+      const parsed = pifSubmitSchema.parse({
+        ...complete,
+        contacts: [
+          { name: "K", designation: "", email: "", phone: "" },
+          { name: "", designation: "", email: "", phone: "" },
+        ],
+      });
+      expect(parsed.contacts).toHaveLength(1);
+    });
+
+    it("keeps several contacts in the order they were given", () => {
+      const parsed = pifSubmitSchema.parse({
+        ...complete,
+        contacts: [
+          { name: "First", designation: "", email: "", phone: "" },
+          { name: "Second", designation: "HR", email: "s@zoho.com", phone: "" },
+        ],
+      });
+      expect(parsed.contacts.map((c) => c.name)).toEqual(["First", "Second"]);
+    });
   });
 });

@@ -299,6 +299,17 @@ describe("every hand-written select matches the schema", () => {
     ["dashboard drive box", "drives", DASHBOARD_DRIVE_BOX_COLUMNS],
     ["dashboard drive rounds", "drive_rounds", "id, drive_id, sequence, name"],
     ["dashboard round participants", "round_participants", "round_id, application_id"],
+    // F4/F5 (UAT 2026-08-19): the round's own details and the participant's slot.
+    [
+      "rounds screen details",
+      "drive_rounds",
+      "id, sequence, name, round_mode, round_scheduled_at, round_interview_link",
+    ],
+    [
+      "participant meeting slots",
+      "round_participants",
+      "application_id, meeting_link, participant_scheduled_at",
+    ],
     ["dashboard round attendance", "attendance", "round_id, application_id, status"],
     ["dashboard round results", "round_results", "round_id, application_id, result"],
     ["dashboard shortlist entries", "shortlist_entries", "application_id, included"],

@@ -186,8 +186,22 @@ describe("ResultsPage", () => {
  */
 describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
   const ROUNDS = [
-    { roundId: "r1", sequence: 1, name: "Aptitude" },
-    { roundId: "r2", sequence: 2, name: "Technical" },
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+    },
+    {
+      roundId: "r2",
+      sequence: 2,
+      name: "Technical",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+    },
   ];
 
   function driveView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
@@ -196,6 +210,9 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       rounds: async () => ROUNDS,
       advance: async () => 1,
       addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
       ...overrides,
     };
   }
@@ -227,8 +244,11 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
 
     const button = await screen.findByRole("button", { name: /advance 1 selected to round 2/i });
     await user.click(button);
+    // F3 (UAT 2026-08-19): the advance asks first, offering a proof upload.
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
-    await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2"));
+    await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
   });
 
   it("offers no advancement from the last round — final selection lives there", async () => {
@@ -297,10 +317,167 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     routed(<DriveRoundsPage driveId="d1" view={driveView({ participants, advance })} />);
 
     await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
     // After the reload Priya is locked (she sits in Round 2 now) — the
     // advance button is gone rather than lying about 1 more to move.
-    await waitFor(() => expect(screen.queryByRole("button", { name: /advance/i })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^advance/i })).toBeNull());
     expect(await screen.findByRole("status")).toBeDefined();
+  });
+});
+
+/**
+ * UAT 2026-08-19 — F3 (proof of the company's instruction travels with the
+ * advance) · F4 (a round's details are editable after creation) · F5 (per-
+ * student meeting links, singly or by CSV).
+ */
+describe("DriveRoundsPage — round details, proof and meeting links", () => {
+  const ROUNDS = [
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: "virtual" as const,
+      scheduledAt: "2026-09-01T10:30",
+      interviewLink: "https://meet.google.com/shared",
+    },
+    {
+      roundId: "r2",
+      sequence: 2,
+      name: "Technical",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+    },
+  ];
+
+  function detailView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
+    return {
+      participants: async (roundId) =>
+        roundId === "r1" ? [{ ...PRIYA, result: "selected" as const }, ARJUN] : [],
+      record: async () => undefined,
+      rounds: async () => ROUNDS,
+      advance: async () => 1,
+      addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
+      ...overrides,
+    };
+  }
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
+  it("edits a round's mode, time and link after creation (F4)", async () => {
+    const updateRound = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ updateRound })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.selectOptions(screen.getByLabelText(/round mode/i), "on_campus");
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
+    await waitFor(() =>
+      expect(updateRound).toHaveBeenCalledWith("r1", {
+        mode: "on_campus",
+        scheduledAt: "2026-09-01T10:30",
+        interviewLink: "https://meet.google.com/shared",
+      }),
+    );
+  });
+
+  it("attaches an optional proof to the advance (F3)", async () => {
+    const advance = vi.fn().mockResolvedValue(1);
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ advance })} />);
+
+    await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    const proof = new File(["mail"], "company-mail.pdf", { type: "application/pdf" });
+    await user.upload(within(dialog).getByLabelText(/proof of company communication/i), proof);
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => expect(advance).toHaveBeenCalled());
+    const [from, to, file] = advance.mock.calls[0] as [string, string, File | null];
+    expect(from).toBe("r1");
+    expect(to).toBe("r2");
+    expect(file?.name).toBe("company-mail.pdf");
+  });
+
+  it("advances with NO proof — it is optional (F3)", async () => {
+    const advance = vi.fn().mockResolvedValue(1);
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ advance })} />);
+
+    await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => expect(advance).toHaveBeenCalled());
+    expect((advance.mock.calls[0] as unknown[])[2]).toBeNull();
+  });
+
+  it("uploads per-student slots by CSV and reports what matched (F5)", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: ["21CSE9999"] });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    const csv = new File(
+      [
+        "roll_number,meeting_link,scheduled_at\n21CSE1042,https://meet.google.com/abc,2026-09-01T10:30\n21CSE9999,https://meet.google.com/def,",
+      ],
+      "slots.csv",
+      { type: "text/csv" },
+    );
+    await user.upload(screen.getByLabelText(/per-student links/i), csv);
+
+    await waitFor(() => expect(assignSlots).toHaveBeenCalled());
+    const [roundId, slots] = assignSlots.mock.calls[0] as [string, unknown[]];
+    expect(roundId).toBe("r1");
+    expect(slots).toHaveLength(2);
+
+    // The coordinator is told who was NOT matched, by roll number.
+    expect((await screen.findByRole("alert")).textContent).toMatch(/21CSE9999/);
+  });
+
+  it("refuses a CSV whose header is wrong, naming the expected one (F5)", async () => {
+    const assignSlots = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(
+      screen.getByLabelText(/per-student links/i),
+      new File(["name,link\nPriya,https://x"], "bad.csv", { type: "text/csv" }),
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/roll_number,meeting_link/);
+    expect(assignSlots).not.toHaveBeenCalled();
+  });
+
+  it("saves one student's own link from their row (F5)", async () => {
+    const setParticipantSlot = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ setParticipantSlot })} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await user.type(
+      within(row).getByLabelText(/meeting link for priya ramesh/i),
+      "https://meet.google.com/priya",
+    );
+    await user.click(within(row).getByRole("button", { name: /save link/i }));
+
+    await waitFor(() =>
+      expect(setParticipantSlot).toHaveBeenCalledWith(
+        "r1",
+        "app1",
+        "https://meet.google.com/priya",
+        null,
+      ),
+    );
   });
 });

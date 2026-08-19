@@ -34,6 +34,12 @@ export interface StudentContext {
    * and silence is not refusal, so an empty list matches every drive.
    */
   readonly roleCategories?: readonly RoleCategory[];
+  /**
+   * D1 (UAT 2026-08-19): the drive TYPES they want — placement, internship,
+   * convertible. Same semantics as the areas: optional, and an empty list is
+   * "no opinion", never "nothing".
+   */
+  readonly driveTypePreferences?: readonly DriveType[];
 }
 
 export interface VisibleDrive {
@@ -68,6 +74,7 @@ export type VisibilityReason =
   | "disbarred"
   | "not_eligible"
   | "area_not_chosen"
+  | "drive_type_not_preferred"
   | "internship_cap_consumed"
   | "placed_at_equal_or_higher";
 
@@ -130,6 +137,19 @@ export function isDriveVisibleToStudent(
     !student.roleCategories.includes(drive.roleCategory)
   ) {
     return { visible: false, reason: "area_not_chosen" };
+  }
+
+  /**
+   * D1 (UAT 2026-08-19): the drive-type preference, judged exactly like the
+   * area — a preference below the override, silent when unanswered. Mirrored
+   * by `enforce_application_gates` in 0054; change both or neither.
+   */
+  if (
+    student.driveTypePreferences !== undefined &&
+    student.driveTypePreferences.length > 0 &&
+    !student.driveTypePreferences.includes(drive.driveType)
+  ) {
+    return { visible: false, reason: "drive_type_not_preferred" };
   }
 
   // The cap is checked before the ladder (decision Q2): a Super Dream

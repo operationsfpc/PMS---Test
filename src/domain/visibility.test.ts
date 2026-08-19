@@ -402,3 +402,56 @@ describe("R5 — the area the drive is for", () => {
     expect(result.reason).toBe("area_not_chosen");
   });
 });
+
+/**
+ * D1 (UAT 2026-08-19): "Students should only see drives matching the job-type
+ * preference set in the PIF." The same shape as the area rule above — a
+ * PREFERENCE below R5a's override, where silence means "no opinion".
+ */
+describe("R5 — the drive-type preference", () => {
+  const placementDrive = drive({ driveType: "placement" });
+
+  it("shows a placement to a student who asked for placements", () => {
+    expect(
+      isDriveVisibleToStudent(student({ driveTypePreferences: ["placement"] }), placementDrive)
+        .visible,
+    ).toBe(true);
+  });
+
+  it("hides it from a student who asked only for internships", () => {
+    const result = isDriveVisibleToStudent(
+      student({ driveTypePreferences: ["internship"] }),
+      placementDrive,
+    );
+
+    expect(result.visible).toBe(false);
+    expect(result.reason).toBe("drive_type_not_preferred");
+  });
+
+  it("shows every type to a student who has expressed no preference", () => {
+    expect(
+      isDriveVisibleToStudent(student({ driveTypePreferences: [] }), placementDrive).visible,
+    ).toBe(true);
+    expect(isDriveVisibleToStudent(student(), placementDrive).visible).toBe(true);
+  });
+
+  it("is bypassed by the R5a override, like the other preference gates", () => {
+    expect(
+      isDriveVisibleToStudent(
+        student({ driveTypePreferences: ["internship"] }),
+        drive({ driveType: "placement", openToAllOverride: true }),
+      ).visible,
+    ).toBe(true);
+  });
+
+  it("refuses the application too, not just the listing", () => {
+    const result = canApply(
+      student({ driveTypePreferences: ["internship"] }),
+      placementDrive,
+      new Date("2026-06-15T00:00:00Z"),
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toBe("drive_type_not_preferred");
+  });
+});

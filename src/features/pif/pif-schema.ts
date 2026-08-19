@@ -61,14 +61,19 @@ const passingYears = z.preprocess((v) => {
   return [Number(v)];
 }, z.array(z.number().int()));
 
+/** A4 (UAT 2026-08-19): one of the drive's contacts. Every field optional (Q2). */
+export interface PifContact {
+  readonly name: string;
+  readonly designation: string;
+  readonly email: string;
+  readonly phone: string;
+}
+
 export const PIF_DEFAULTS = {
   companyName: "",
   industry: "",
   companyWebsite: "",
-  spocName: "",
-  spocDesignation: "",
-  spocEmail: "",
-  spocPhone: "",
+  contacts: [] as PifContact[],
   roleTitle: "",
   roleCategory: "",
   jobDescription: "",
@@ -77,6 +82,8 @@ export const PIF_DEFAULTS = {
   ctcMinLpa: null,
   ctcMaxLpa: null,
   ctcBreakup: "",
+  stipendMinMonthly: null,
+  stipendMaxMonthly: null,
   shiftType: "",
   shiftNightTiming: "",
   bondDetails: "",
@@ -115,15 +122,39 @@ const additionalDesignations = z.preprocess(
   z.array(z.string().max(120)),
 );
 
+/**
+ * A4 (UAT 2026-08-19): the contacts, several per drive. A row the AE added
+ * and left entirely blank is dropped, not refused — the same courtesy the
+ * designation rows extend. An email, when given, must be one.
+ */
+const contacts = z
+  .array(
+    z.object({
+      name: optionalText,
+      designation: optionalText,
+      email: z
+        .string()
+        .trim()
+        .default("")
+        .refine((v) => v === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
+          message: "Enter a valid contact email.",
+        }),
+      phone: optionalText,
+    }),
+  )
+  // A blank row is the "+" pressed and abandoned — dropped, never refused.
+  .transform((rows) =>
+    rows.filter((row) =>
+      [row.name, row.designation, row.email, row.phone].some((field) => field.trim() !== ""),
+    ),
+  );
+
 /** A draft needs only enough to identify what it is about. */
 export const pifDraftSchema = z.object({
   companyName: requiredText("Company name"),
   industry: optionalText,
   companyWebsite: optionalUrl,
-  spocName: optionalText,
-  spocDesignation: optionalText,
-  spocEmail: optionalText,
-  spocPhone: optionalText,
+  contacts: contacts.default([]),
   roleTitle: optionalText,
   roleCategory: z.enum(["", ...ROLE_CATEGORIES]).default(""),
   jobDescription: optionalText,
@@ -132,6 +163,13 @@ export const pifDraftSchema = z.object({
   ctcMinLpa: nullableNumber,
   ctcMaxLpa: nullableNumber,
   ctcBreakup: optionalText,
+  /**
+   * A2 (UAT 2026-08-19): an internship pays a monthly stipend, not a CTC.
+   * ₹ per month, whole rupees. Which of stipend/CTC a SUBMISSION must carry
+   * is decided by the drive type, below.
+   */
+  stipendMinMonthly: nullableNumber,
+  stipendMaxMonthly: nullableNumber,
   /**
    * J2: a radio, not a text box. `""` is "not answered" — the form preselects
    * nothing, because a preselected Day is an answer nobody gave.
@@ -190,8 +228,13 @@ export const pifDraftSchema = z.object({
 export const pifSubmitSchema = pifDraftSchema
   .extend({
     companyName: requiredText("Company name"),
-    spocEmail: z.string().trim().email("Enter a valid contact email."),
     roleTitle: requiredText("Role title"),
+    /**
+     * A1 (UAT 2026-08-19): the drive type is the FIRST question on the form
+     * and everything else — which compensation exists, which students see it,
+     * how the offer classifies — hangs off it. A submission must answer it.
+     */
+    driveType: z.enum(DRIVE_TYPES, { message: "Choose the drive type." }),
     roleCategory: z.enum(ROLE_CATEGORIES, { message: "Choose a role category." }),
     rounds: z
       .array(z.object({ sequence: z.number().int().positive(), name: z.string() }))
@@ -213,7 +256,6 @@ export const pifSubmitSchema = pifDraftSchema
     }),
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),
-    ctcMinLpa: z.number().positive("Minimum CTC is required."),
     minOverallCgpa: z.number().min(0).nullable(),
     eligiblePassingYears: z.preprocess(
       (v) => {
@@ -224,9 +266,45 @@ export const pifSubmitSchema = pifDraftSchema
       z.array(z.number().int()).min(1, "Choose at least one passing year."),
     ),
   })
-  .refine((v) => v.ctcMaxLpa === null || v.ctcMaxLpa >= v.ctcMinLpa, {
-    path: ["ctcMaxLpa"],
-    message: "Maximum CTC cannot be below the minimum.",
+  /**
+   * A2: the compensation the drive type calls for. A placement or convertible
+   * carries a CTC; an internship or convertible carries a stipend. Checked
+   * here rather than as required fields, because which are required depends
+   * on the type.
+   */
+  .superRefine((v, ctx) => {
+    const wantsCtc = v.driveType === "placement" || v.driveType === "internship_convertible";
+    const wantsStipend = v.driveType === "internship" || v.driveType === "internship_convertible";
+
+    if (wantsCtc && (v.ctcMinLpa === null || v.ctcMinLpa <= 0)) {
+      ctx.addIssue({ code: "custom", path: ["ctcMinLpa"], message: "Minimum CTC is required." });
+    }
+    if (wantsCtc && v.ctcMinLpa !== null && v.ctcMaxLpa !== null && v.ctcMaxLpa < v.ctcMinLpa) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ctcMaxLpa"],
+        message: "Maximum CTC cannot be below the minimum.",
+      });
+    }
+    if (wantsStipend && (v.stipendMinMonthly === null || v.stipendMinMonthly <= 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["stipendMinMonthly"],
+        message: "The monthly stipend is required for an internship.",
+      });
+    }
+    if (
+      wantsStipend &&
+      v.stipendMinMonthly !== null &&
+      v.stipendMaxMonthly !== null &&
+      v.stipendMaxMonthly < v.stipendMinMonthly
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["stipendMaxMonthly"],
+        message: "Maximum stipend cannot be below the minimum.",
+      });
+    }
   })
   /**
    * The cutoff is judged on the scale it was declared on — 65 is a reasonable
@@ -272,12 +350,21 @@ export const pifSubmitSchema = pifDraftSchema
    */
   .transform((v) => {
     const notes = joiningNotesFor(v.joiningTimeline, v.joiningImmediateNotes, v.joiningLaterNotes);
+    // A2: compensation the chosen type does not have is DROPPED, not stored —
+    // a stipend on a placement drive is an answer nobody gave (the J2/J3 rule).
+    const wantsCtc = v.driveType === "placement" || v.driveType === "internship_convertible";
+    const wantsStipend = v.driveType === "internship" || v.driveType === "internship_convertible";
 
     return {
       ...v,
       shiftNightTiming: nightTimingFor(v.shiftType, v.shiftNightTiming),
       joiningImmediateNotes: notes.immediate,
       joiningLaterNotes: notes.later,
+      ctcMinLpa: wantsCtc ? v.ctcMinLpa : null,
+      ctcMaxLpa: wantsCtc ? v.ctcMaxLpa : null,
+      ctcBreakup: wantsCtc ? v.ctcBreakup : "",
+      stipendMinMonthly: wantsStipend ? v.stipendMinMonthly : null,
+      stipendMaxMonthly: wantsStipend ? v.stipendMaxMonthly : null,
     };
   });
 

@@ -153,9 +153,11 @@ describe("the drive's rounds", () => {
     );
 
     const rounds = await view().rounds("d1");
+    // F4 (UAT 2026-08-19): each round now carries its own details, null until set.
+    const bare = { mode: null, scheduledAt: null, interviewLink: null };
     expect(rounds).toEqual([
-      { roundId: "r1", sequence: 1, name: "Aptitude" },
-      { roundId: "r2", sequence: 2, name: "Technical" },
+      { roundId: "r1", sequence: 1, name: "Aptitude", ...bare },
+      { roundId: "r2", sequence: 2, name: "Technical", ...bare },
     ]);
   });
 
