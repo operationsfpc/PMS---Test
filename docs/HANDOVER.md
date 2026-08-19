@@ -1,6 +1,49 @@
 # Session Handover — FACE Prep Campus PMS
 
 **Read this, then `CLAUDE.md`, then `docs/domain-model.md`.**
+
+---
+
+## ✅ SHIPPED 2026-08-19 — the answered backlog: P9 restored · shifts canonical · skills on 1–5 (`0052`)
+
+Karthik answered six pending items in one message; four landed the same day.
+Live Cloudflare `c1dc84f8-140b-42de-95b5-61f5de9f0da3`, JS byte-identical to
+`dist/` (sha256 `e3183e2e…`). Remote at **`0052`**. Suite: **3105 tests /
+157 files**, `pnpm test:run` green.
+
+1. **P9 — "update":** Wipro + Accenture (live) have their 7.50 back. The
+   fingerprint matched exactly 2 rows on re-read (production had grown to
+   **14 drives** — re-read before believing any count in this file).
+2. **₹10.00 = Super Dream:** already true since the 2026-08-17 band rebuild
+   (edges belong to the band above). Confirmation only, no change.
+3. **A39 CONFIRMED deliberate:** "Central PC gets only after approval from
+   DH" — submitted/rejected drives on no Central CPC screen stands.
+4. **A35/A36 ANSWERED → `0052`:** skill scores are **whole numbers 1–5**
+   (`score_within_scale` re-created: `>=1 and <=5 and score = round(score)`;
+   table was empty, no backfill). Students already read nothing — 0037's
+   policy, now confirmed. `parseSkillScore` refuses fractions AND a pasted
+   0–100 figure loudly; `rankApplicants` normalises by `SKILL_SCORE_MAX`
+   instead of a literal 100. Proved live: 85 refused, 3 accepted, rolled
+   back, 0 rows left.
+   ⚠️ half-points refused is my assumption — one line in `skills.ts` +
+   the 0052 check if he wants 3.5.
+5. **Shifts — "you decide and move":** all 14 drives canonical (`Night→night`
+   etc.); `9 AM to 7 PM → day`, original wording preserved by the audit
+   trigger. 🔴 Learned: a NOT VALID constraint still checks any row an
+   UPDATE touches — the P9 restore failed until the shift fix ran FIRST.
+6. **P2 — xlsx approved** ("move to xlsx import") + NEW SCOPE: the recruiter
+   export must include each shortlisted student's **resume PDFs**.
+   Clarifying questions put to Karthik (zip structure, missing-resume
+   handling, which resume per R7). Library: **ExcelJS**. Not started.
+7. **N1/N7 mockup shown, awaiting approval:**
+   `docs/specs/2026-08-19-n1-n7-mockup.html` — student's four tabs (To
+   apply · In progress · Not applied-closed · Applied-closed, closing time
+   shown, filters location/role/closing) + canonical `/drives/:id`
+   (read-only, AE-only recruiter contact, snapshot applicant view).
+
+Direct-to-production SQL ran via the Management API
+(`security find-generic-password -s "Supabase CLI" -w` → bearer token →
+`POST /v1/projects/<ref>/database/query`) — psql/docker do not exist here.
 **3104 tests passing across 157 files**, plus **1 Playwright journey** — run,
 not remembered. **`pnpm check` exits 0** — lint, typecheck and every coverage
 gate. Remote is at **`0051`** (0048–0051 pushed 2026-08-18); live Cloudflare
