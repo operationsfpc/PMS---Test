@@ -1,6 +1,17 @@
 I am learning course on LLMs today. This is Tinker LLM course designed by Kalviyam.# UAT Feedback — 20/08 round (from `docs/inbox/Meetings Tracker .pdf`, pages 11–17)
 
-**Status: ✅ APPROVED 2026-08-20 — answers recorded verbatim below. Build to completion.**
+**Status: ✅ SHIPPED 2026-08-20.** All seven groups live — Cloudflare version
+`32e3954e-eb2c-48e6-ba1e-370a83a9a842`, JS byte-identical to `dist/`
+(962 446 bytes, sha256 `bc6d012d…`), remote migrations at **0055**. Suite:
+3394 tests / 173 files, `pnpm check` exits 0, Playwright journey passes.
+G4 executed live: student row `Sai Naveen` (roll "123",
+sainaveen@faceprep.in) had ZERO dependent rows; student row + its
+student-only auth user deleted in one transaction, 0 rows left. 0055's freeze
+proved against production: a venue change on a round with recorded results
+was refused by the trigger (rolled back).
+G6a root cause: the Advance button only rendered when someone was already
+marked Selected — it now stands disabled with instructions, so it can never
+read as missing again.
 
 | Q | Answer |
 |---|---|

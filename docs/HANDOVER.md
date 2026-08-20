@@ -4,6 +4,91 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-20 (evening) — the whole 20/08 UAT round (G1–G7), migration 0055
+
+Live Cloudflare `32e3954e-eb2c-48e6-ba1e-370a83a9a842`, JS byte-identical to
+`dist/` (962 446 bytes, sha256 `bc6d012d…`). ⚠️ An edge-cache HIT served the
+OLD html for ~a minute after deploy — re-curl with `Cache-Control: no-cache`
+before concluding a deploy failed. Remote at **0055**. Suite: **3394 tests /
+173 files**, `pnpm check` exits 0, journey passes. Spec (all answers Q1–Q8
+recorded): `docs/specs/2026-08-20-uat-feedback.md`. Source PDF:
+`docs/inbox/Meetings Tracker .pdf` (pages 11–17).
+
+### What each group turned out to be
+
+- **G1 (Yet-to-publish):** new `@domain/drive-aging` — `daysPending` /
+  `isPendingTooLong` (>3 days, Q2) / `describeRaisedOn` / `compareOldestFirst`
+  / `isExpiredDrive` / `partitionExpired`. Cockpit: raised-on line, Pending
+  badge (unpublished statuses only), sort select (yet-to-publish defaults
+  OLDEST first), expired drives in a collapsed `<details>` (answer 1a — same
+  list, nothing destroyed). **DH approve/reject on the list itself** via a
+  dialog (category picker seeded by `classifyOfferCategory`; reject demands a
+  reason — `decidePif` asked client-side, RLS enforces regardless). 📌 The
+  approval repository MOVED to `src/lib/approval-repository.ts` — two
+  features share it now and features must not import each other.
+- **G2 (PIF):** `required` prop on Labelled/RadioGroup prints `label *`;
+  convention stated once at the top. The submit gate was already real
+  (pifSubmitSchema) — this round only made it VISIBLE.
+- **G3:** student sidebar got "Notifications"; the page grew
+  All/Unread/Read radios fed by new `filterNotifications` (a lens — never
+  reorders, never deletes).
+- **G5:** shortlisting rows show the applicant's own `skill x/5` chips
+  (`SKILL_SCORE_MAX`, honest "No skill scores recorded"); portfolio cards
+  carry CTC + "applications close(d) {date}"; Live tab collapses expired
+  drives like the cockpit.
+- **G6a ("no Advance button"):** root cause — the button only rendered when
+  `advancing > 0`, so a fresh round showed NOTHING and the feature read as
+  missing. It now stands disabled with "Mark students as Selected first…".
+  Two old tests asserting the button's ABSENCE were updated — deliberate
+  spec change, approved.
+- **G6b:** round modes labelled from new `@domain/round-mode` (virtual →
+  "Online" etc. — stored values unchanged, matching 0053's check).
+  `roundLocationKind` decides link vs **venue**; the venue writes 0004's
+  never-used `venue` column; switching mode CLEARS the abandoned field (the
+  J2 hidden-field lesson).
+- **G6c (Q5a):** `roundDetailsFrozen` — frozen at the first recorded fact
+  (present/absent attendance or any result; `provisional` self check-in does
+  NOT freeze). UI hides the editor with a stated lock; **0055** enforces it
+  in a BEFORE UPDATE trigger guarding exactly the four detail columns —
+  `advance_proof_path` deliberately exempt (the advance happens exactly when
+  results exist). Proved on live rows: refusal observed, rolled back.
+- **G7 (Q7b):** `src/features/student-record/` — `/students/:studentId`,
+  N1's second canonical page (identity · placement via
+  `resolveDisplayedPlacement` so page and directory cannot disagree ·
+  academics with per-semester verification state · skills/preferences ·
+  applications linking to `/drives/:id`). Absent and RLS-refused look the
+  same (null) BY DESIGN. Directory names link in; the placed / not-placed
+  counts became filter buttons. All five selects registered in
+  `query-contract.test.ts`.
+- **G4 (live data, answer "ok"):** student "Sai Naveen" (roll "123",
+  sainaveen@faceprep.in) had ZERO dependent rows; student row + its
+  student-only auth user (no staff profile on it) deleted in one
+  transaction. 0 rows left. His CPC access is a different account.
+
+### 🔴 Worth remembering
+
+- The freeze changed F4's OLD fixtures: any rounds test whose participants
+  carry `present`/a result now renders a LOCKED details panel. Fixtures that
+  mean "not started" must say `scheduled` + `result: null`.
+- `pnpm db:types` reformats the generated file wholesale (long unions
+  collapse to one line) — if the migration adds no columns, `git checkout`
+  the file instead of committing 400 lines of churn.
+- Biome reads a JSX `role="…"` STRING literal as an ARIA role — bind app
+  roles to a named const in tests.
+
+### 🔜 Still open after this round
+
+1. The 19/08 leftovers stand: student In-progress card round schedule/link;
+   `drive_contacts` on the DH queue; orphan-draft cleanup; xlsx export pack;
+   Zoho intake (awaiting go).
+2. `/students/:studentId` is reached from the central directory — other
+   screens that name students (shortlisting, rounds, offers) could link to
+   it too. Small follow-ups.
+3. G1's approve-from-list is DH-only by prop wiring; the pif-approvals page
+   still exists and stays the richer view (JD link, shift, joining).
+
+---
+
 ## ✅ SHIPPED 2026-08-20 — the whole 19/08 UAT round (P1–P5), migrations 0053+0054
 
 Live Cloudflare `3a022b25-e231-40bc-bceb-8f274d2536d2`, JS byte-identical to
