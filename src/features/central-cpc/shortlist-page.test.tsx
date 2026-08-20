@@ -572,3 +572,34 @@ describe("the match score is not shown", () => {
     expect(strong?.rationale.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * G5a (UAT 2026-08-20): the screen said "Scored on 0 of 1 required skills"
+ * and nothing else — no visibility into what the student actually has. The
+ * student's own scores now stand beside the ranking's verdict.
+ */
+describe("the applicant's actual skills", () => {
+  it("shows each skill with its score out of 5 (G5a)", async () => {
+    const skilled: ShortlistApplicant = {
+      ...STRONG,
+      skillScores: [
+        { skill: "Java", score: 4 },
+        { skill: "SQL", score: 3 },
+      ],
+    };
+    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [skilled] })} />);
+
+    const row = (await screen.findByText("Strong Candidate")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByText(/java 4\/5/i)).toBeDefined();
+    expect(within(row).getByText(/sql 3\/5/i)).toBeDefined();
+  });
+
+  it("says plainly when no skill scores are recorded (G5a)", async () => {
+    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [WEAK] })} />);
+
+    const row = (await screen.findByText("Weak Candidate")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByText(/no skill scores recorded/i)).toBeDefined();
+  });
+});

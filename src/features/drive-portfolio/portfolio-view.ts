@@ -23,6 +23,7 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
  */
 export const PORTFOLIO_DRIVE_COLUMNS = `
   id, company_name, role_title, status, on_hold,
+  ctc_min_lpa, ctc_max_lpa,
   created_by, approved_by, published_by,
   application_start, application_end,
   drive_rounds(
@@ -124,6 +125,9 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           roleTitle: (row.role_title as string | null) ?? "Role not specified",
           status: (row.status as DriveStatus | null) ?? "draft",
           onHold: (row.on_hold as boolean | null) ?? false,
+          // G5b: numerics arrive from PostgREST as strings.
+          ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
+          ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),
           createdBy: (row.created_by as string | null) ?? null,
           approvedBy: (row.approved_by as string | null) ?? null,
           publishedBy: (row.published_by as string | null) ?? null,

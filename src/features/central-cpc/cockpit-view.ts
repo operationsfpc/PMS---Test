@@ -18,7 +18,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
       const { data: drives } = await client
         .from("drives")
         .select(
-          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, drive_rounds(id, sequence, name)",
+          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, created_at, application_end, drive_rounds(id, sequence, name)",
         )
         .order("created_at", { ascending: false });
 
@@ -45,6 +45,9 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
             status: (row.status as DriveStatus | null) ?? "draft",
             onHold: (row.on_hold as boolean | null) ?? false,
             applicationCount: count ?? 0,
+            // G1a/G1d (UAT 2026-08-20): the card's age and its deadline.
+            createdAt: (row.created_at as string | null) ?? null,
+            applicationEnd: (row.application_end as string | null) ?? null,
             rounds: rounds
               .map((r) => ({
                 roundId: r.id as string,

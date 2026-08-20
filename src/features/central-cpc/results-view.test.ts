@@ -153,12 +153,37 @@ describe("the drive's rounds", () => {
     );
 
     const rounds = await view().rounds("d1");
-    // F4 (UAT 2026-08-19): each round now carries its own details, null until set.
-    const bare = { mode: null, scheduledAt: null, interviewLink: null };
+    // F4 (UAT 2026-08-19): each round now carries its own details, null until
+    // set. G6b (2026-08-20) added the venue for physical rounds.
+    const bare = { mode: null, scheduledAt: null, interviewLink: null, venue: null };
     expect(rounds).toEqual([
       { roundId: "r1", sequence: 1, name: "Aptitude", ...bare },
       { roundId: "r2", sequence: 2, name: "Technical", ...bare },
     ]);
+  });
+
+  /** G6b (UAT 2026-08-20): a physical round's venue is stored beside the link. */
+  it("writes the venue — and clears the link — for a physical round", async () => {
+    const writes: unknown[] = [];
+    server.use(
+      http.patch(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
+        writes.push(await request.clone().json());
+        return HttpResponse.json({ id: "r1" });
+      }),
+    );
+
+    await view().updateRound("r1", {
+      mode: "physical_outside_campus",
+      scheduledAt: "2026-09-01T10:30",
+      interviewLink: null,
+      venue: "Taj Coromandel, Chennai",
+    });
+
+    expect(writes[0]).toMatchObject({
+      round_mode: "physical_outside_campus",
+      round_interview_link: null,
+      venue: "Taj Coromandel, Chennai",
+    });
   });
 
   it("adds the next round with the next sequence number", async () => {

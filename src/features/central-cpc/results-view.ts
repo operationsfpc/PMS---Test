@@ -48,7 +48,7 @@ export function createSupabaseResultsView(
     async rounds(driveId) {
       const { data, error } = await client
         .from("drive_rounds")
-        .select("id, sequence, name, round_mode, round_scheduled_at, round_interview_link")
+        .select("id, sequence, name, round_mode, round_scheduled_at, round_interview_link, venue")
         .eq("drive_id", driveId)
         .order("sequence");
 
@@ -61,6 +61,8 @@ export function createSupabaseResultsView(
         mode: (row.round_mode as string | null) ?? null,
         scheduledAt: toDatetimeLocal((row.round_scheduled_at as string | null) ?? null),
         interviewLink: (row.round_interview_link as string | null) ?? null,
+        // G6b: 0004's venue column, finally written by the screen it was for.
+        venue: (row.venue as string | null) ?? null,
       }));
     },
 
@@ -72,6 +74,7 @@ export function createSupabaseResultsView(
           round_mode: details.mode,
           round_scheduled_at: fromDatetimeLocal(details.scheduledAt),
           round_interview_link: details.interviewLink,
+          venue: details.venue,
         })
         .eq("id", roundId)
         .select("id")

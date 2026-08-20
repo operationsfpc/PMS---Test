@@ -1,4 +1,4 @@
-import type { AppRole, RoundResult } from "./types";
+import type { AppRole, AttendanceStatus, RoundResult } from "./types";
 
 export interface ParticipantResult {
   readonly studentId: string;
@@ -73,6 +73,28 @@ export function canMarkAttendance(role: AppRole, isScheduled: boolean): Permissi
     };
   }
   return { allowed: true };
+}
+
+export interface RoundParticipantRecord {
+  readonly attendance: AttendanceStatus;
+  readonly result: RoundResult | null;
+}
+
+/**
+ * G6c (UAT 2026-08-20, Q5 answer a): a round's details — mode, time, link,
+ * venue — freeze the moment a student begins participating, which is the
+ * first RECORDED fact: attendance marked present or absent, or a result
+ * declared. A schedule can be postponed; a fact cannot be un-happened, and
+ * editing the venue of a round someone already sat rewrites a closed process.
+ *
+ * A provisional QR self check-in does not freeze: nobody has confirmed it,
+ * and a student's own tap must not be able to lock the coordinator out of
+ * correcting a wrong link before the round actually runs.
+ */
+export function roundDetailsFrozen(participants: readonly RoundParticipantRecord[]): boolean {
+  return participants.some(
+    (p) => p.result !== null || p.attendance === "present" || p.attendance === "absent",
+  );
 }
 
 /**

@@ -70,3 +70,34 @@ describe("NotificationsPage", () => {
     expect(await screen.findByText(/no notifications yet/i)).toBeDefined();
   });
 });
+
+/**
+ * G3 (UAT 2026-08-20): the log is FILTERABLE — a lens on read state, never a
+ * deletion. The filter buttons say what they hold.
+ */
+describe("filtering the log", () => {
+  it("narrows to unread on request", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await screen.findAllByRole("listitem");
+    await user.click(screen.getByRole("radio", { name: /unread/i }));
+
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(1);
+    expect(items[0]?.textContent).toMatch(/cleared round 1/i);
+  });
+
+  it("narrows to read on request, and back to all", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await screen.findAllByRole("listitem");
+    await user.click(screen.getByRole("radio", { name: /^read$/i }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getAllByRole("listitem")[0]?.textContent).toMatch(/shortlisted for zoho/i);
+
+    await user.click(screen.getByRole("radio", { name: /^all$/i }));
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+});

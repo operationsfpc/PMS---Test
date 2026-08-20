@@ -6,6 +6,7 @@ import {
   EXPORT_COLUMNS,
   type ShortlistEntry,
 } from "@domain/recruiter-export";
+import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -433,6 +434,24 @@ export function ShortlistPage({
                     <p className="text-sm text-ink-500">
                       {applicant?.rollNumber} · CGPA {applicant?.overallCgpa}
                     </p>
+                    {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
+                        skills" told the coordinator nothing about what the
+                        student HAS. Their own scores, or an honest gap. */}
+                    {applicant !== undefined &&
+                      (applicant.skillScores.length === 0 ? (
+                        <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
+                      ) : (
+                        <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
+                          {applicant.skillScores.map(({ skill, score }) => (
+                            <span
+                              key={skill}
+                              className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
+                            >
+                              {skill} {score}/{SKILL_SCORE_MAX}
+                            </span>
+                          ))}
+                        </p>
+                      ))}
                     <ul className="mt-1 text-xs text-ink-500">
                       {candidate.reasons.map((reason) => (
                         <li key={reason}>{reason}</li>

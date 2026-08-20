@@ -1,6 +1,7 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { type MeetingSlot, parseMeetingSlotsCsv } from "@domain/meeting-slots";
-import { advancedBeyond, advancingParticipants } from "@domain/rounds";
+import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mode";
+import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
 import type { AttendanceStatus, RoundResult } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -29,12 +30,15 @@ export interface DriveRoundInfo {
   readonly mode: string | null;
   readonly scheduledAt: string | null;
   readonly interviewLink: string | null;
+  /** G6b (UAT 2026-08-20): a physical round's address — not a URL. */
+  readonly venue: string | null;
 }
 
 export interface RoundDetailsUpdate {
   readonly mode: string | null;
   readonly scheduledAt: string | null;
   readonly interviewLink: string | null;
+  readonly venue: string | null;
 }
 
 /**
@@ -349,6 +353,7 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
     mode: null,
     scheduledAt: null,
     interviewLink: null,
+    venue: null,
   });
   /** F3: the advance waits behind a confirmation carrying the optional proof. */
   const [advanceOpen, setAdvanceOpen] = useState(false);
@@ -426,12 +431,20 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
     }
   }
 
+  /**
+   * G6c (UAT 2026-08-20, Q5 answer a): the active round's details freeze the
+   * moment participation is a recorded fact. The domain owns the boundary;
+   * 0055's trigger enforces the same rule server-side.
+   */
+  const detailsFrozen = roundDetailsFrozen(participants ?? []);
+
   function openDetails() {
     if (activeRound === null) return;
     setDetailsDraft({
       mode: activeRound.mode,
       scheduledAt: activeRound.scheduledAt,
       interviewLink: activeRound.interviewLink,
+      venue: activeRound.venue,
     });
     setEditingDetails(true);
   }
@@ -565,36 +578,52 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-ink-700">
                 <strong>Round {activeRound.sequence} details:</strong>{" "}
-                {activeRound.mode === null ? "mode not set" : activeRound.mode.replaceAll("_", " ")}
+                {roundModeLabel(activeRound.mode)}
                 {activeRound.scheduledAt !== null &&
                   ` · ${new Date(activeRound.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}`}
+                {activeRound.venue !== null && ` · at ${activeRound.venue}`}
                 {activeRound.interviewLink !== null && " · shared link set"}
               </p>
-              {!editingDetails && (
-                <Button variant="secondary" size="sm" onClick={openDetails}>
-                  Edit round details
-                </Button>
+              {detailsFrozen ? (
+                // G6c: a closed process is not edited. The lock is stated, not
+                // silent — a vanished button reads as a defect, not a rule.
+                <p className="text-xs font-medium text-ink-500">
+                  Round details are locked — students have begun participating in this round.
+                </p>
+              ) : (
+                !editingDetails && (
+                  <Button variant="secondary" size="sm" onClick={openDetails}>
+                    Edit round details
+                  </Button>
+                )
               )}
             </div>
 
-            {editingDetails && (
+            {editingDetails && !detailsFrozen && (
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
                   Round mode
                   <select
                     value={detailsDraft.mode ?? ""}
-                    onChange={(e) =>
-                      setDetailsDraft((d) => ({
-                        ...d,
-                        mode: e.target.value === "" ? null : e.target.value,
-                      }))
-                    }
+                    onChange={(e) => {
+                      const mode = e.target.value === "" ? null : e.target.value;
+                      // G6b: the mode decides WHICH location field exists. The
+                      // abandoned one is cleared, not merely hidden — a hidden
+                      // field still submits (the J2 lesson).
+                      setDetailsDraft((d) =>
+                        roundLocationKind(mode) === "venue"
+                          ? { ...d, mode, interviewLink: null }
+                          : { ...d, mode, venue: null },
+                      );
+                    }}
                     className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
                   >
                     <option value="">Not set</option>
-                    <option value="on_campus">On-campus</option>
-                    <option value="virtual">Virtual</option>
-                    <option value="physical_outside_campus">Physical, outside campus</option>
+                    {ROUND_MODES.map((mode) => (
+                      <option key={mode} value={mode}>
+                        {roundModeLabel(mode)}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
@@ -611,21 +640,41 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
                     className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
                   />
                 </label>
-                <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                  Shared interview link
-                  <input
-                    type="url"
-                    placeholder="https://…"
-                    value={detailsDraft.interviewLink ?? ""}
-                    onChange={(e) =>
-                      setDetailsDraft((d) => ({
-                        ...d,
-                        interviewLink: e.target.value === "" ? null : e.target.value,
-                      }))
-                    }
-                    className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
-                  />
-                </label>
+                {roundLocationKind(detailsDraft.mode) === "venue" ? (
+                  // G6b: a physical round happens at an ADDRESS. Offering a URL
+                  // box forced coordinators to lie to it.
+                  <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                    Venue (address)
+                    <input
+                      type="text"
+                      placeholder="Building, street, city…"
+                      value={detailsDraft.venue ?? ""}
+                      onChange={(e) =>
+                        setDetailsDraft((d) => ({
+                          ...d,
+                          venue: e.target.value === "" ? null : e.target.value,
+                        }))
+                      }
+                      className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                    />
+                  </label>
+                ) : (
+                  <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                    Shared interview link
+                    <input
+                      type="url"
+                      placeholder="https://…"
+                      value={detailsDraft.interviewLink ?? ""}
+                      onChange={(e) =>
+                        setDetailsDraft((d) => ({
+                          ...d,
+                          interviewLink: e.target.value === "" ? null : e.target.value,
+                        }))
+                      }
+                      className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                    />
+                  </label>
+                )}
 
                 <div className="sm:col-span-3 flex flex-wrap items-end justify-between gap-3">
                   <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
@@ -670,10 +719,22 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
           />
           <div className="mt-4">
             {nextRound !== null ? (
-              advancing > 0 && (
+              advancing > 0 ? (
                 <Button onClick={() => setAdvanceOpen(true)}>
                   Advance {advancing} selected to Round {nextRound.sequence} — schedules them
                 </Button>
+              ) : (
+                // G6a (UAT 2026-08-20): "No Advance to Round 2 button
+                // available." It only appeared once someone was Selected, so a
+                // fresh round showed nothing and the feature read as missing.
+                // It stands disabled now, with the instruction that arms it.
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button disabled>Advance to Round {nextRound.sequence}</Button>
+                  <p className="text-sm text-ink-500">
+                    Mark students as <strong>Selected</strong> first — only selected students
+                    advance to the next round.
+                  </p>
+                </div>
               )
             ) : (
               <p className="text-sm text-ink-700">

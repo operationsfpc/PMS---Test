@@ -794,3 +794,51 @@ describe("PifForm — the contacts (A4/A5)", () => {
     expect(screen.queryByLabelText(/contact 1 name/i)).toBeNull();
   });
 });
+
+/**
+ * G2 (UAT 2026-08-20): "no required-field markers anywhere on the form" — an
+ * AE could not tell mandatory from optional, and thin PIFs reached the
+ * Delivery Head. The submit gate has existed since 18/08; what was missing
+ * was the form SAYING which fields it will insist on.
+ */
+describe("PifForm — required-field markers (G2)", () => {
+  it("states the convention once, at the top", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    expect(screen.getByText(/fields marked \* are required to submit/i)).toBeDefined();
+  });
+
+  it("marks every unconditionally required field with *", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    for (const label of [
+      /company name \*/i,
+      /role title \*/i,
+      /role category \*/i,
+      /number of openings \*/i,
+      /work location\(s\) \*/i,
+    ]) {
+      expect(screen.getByLabelText(label)).toBeDefined();
+    }
+    // Radio groups and checkbox groups carry the marker on their legend.
+    expect(screen.getByText(/drive type \*/i)).toBeDefined();
+    expect(screen.getByText(/offer rollout and joining \*/i)).toBeDefined();
+    expect(screen.getByText(/eligible passing years \*/i)).toBeDefined();
+  });
+
+  it("marks the compensation the chosen type demands", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("radio", { name: /internship \(convertible\)/i }));
+    expect(screen.getByLabelText(/minimum ctc \(lpa\) \*/i)).toBeDefined();
+    expect(screen.getByLabelText(/stipend minimum \(₹ \/ month\) \*/i)).toBeDefined();
+    // The maxima are genuinely optional and carry no marker.
+    expect(screen.getByLabelText(/^maximum ctc \(lpa\)$/i)).toBeDefined();
+  });
+
+  it("leaves optional fields unmarked", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    expect(screen.getByLabelText(/^industry \/ domain$/i)).toBeDefined();
+    expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
+  });
+});

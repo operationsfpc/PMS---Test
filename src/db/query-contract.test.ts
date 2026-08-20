@@ -10,7 +10,6 @@ import {
   DASHBOARD_DRIVE_BOX_COLUMNS,
   DASHBOARD_LIVE_DRIVE_COLUMNS,
 } from "@features/dashboard/dashboard-view";
-import { COLUMNS as PIF_APPROVAL_COLUMNS } from "@features/delivery-head/approval-repository";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
 import { RECORD_APPLICANT_COLUMNS, RECORD_DRIVE_COLUMNS } from "@features/drive-record/record-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
@@ -28,6 +27,14 @@ import {
   DASHBOARD_STUDENT_COLUMNS,
   NOTIFICATION_COLUMNS,
 } from "@features/student/student-dashboard-view";
+import {
+  RECORD_APPLICATION_COLUMNS,
+  RECORD_OFFER_COLUMNS,
+  RECORD_SEMESTER_COLUMNS,
+  RECORD_SKILL_COLUMNS,
+  RECORD_STUDENT_COLUMNS,
+} from "@features/student-record/student-record-view";
+import { COLUMNS as PIF_APPROVAL_COLUMNS } from "@lib/approval-repository";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./harness";
 
@@ -360,6 +367,12 @@ describe("every hand-written select matches the schema", () => {
     // 0038: certificates are verified like a CGPA. Registered because it
     // embeds both the student and the document behind the name.
     ["coordinator certificate queue", "student_certificates", CERTIFICATE_QUEUE_COLUMNS],
+    // G7 (UAT 2026-08-20): the canonical student record's five reads.
+    ["student record", "students", RECORD_STUDENT_COLUMNS],
+    ["student record semesters", "student_semesters", RECORD_SEMESTER_COLUMNS],
+    ["student record skills", "student_skill_scores", RECORD_SKILL_COLUMNS],
+    ["student record applications", "applications", RECORD_APPLICATION_COLUMNS],
+    ["student record offers", "offers", RECORD_OFFER_COLUMNS],
   ];
 
   it.each(SELECTS)("%s", async (_name, table, spec) => {

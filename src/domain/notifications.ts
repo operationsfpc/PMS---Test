@@ -44,3 +44,18 @@ export function condenseNotifications<T extends NotificationItem>(
     hidden: Math.max(0, sorted.length - limit),
   };
 }
+
+/** G3 (UAT 2026-08-20): the full log's read-state lens. */
+export type NotificationFilter = "all" | "unread" | "read";
+
+export const NOTIFICATION_FILTERS: readonly NotificationFilter[] = ["all", "unread", "read"];
+
+/** A lens, not an edit: filtering never reorders and never deletes. */
+export function filterNotifications<T extends NotificationItem>(
+  notes: readonly T[],
+  filter: NotificationFilter,
+): readonly T[] {
+  if (filter === "unread") return notes.filter((n) => !n.read);
+  if (filter === "read") return notes.filter((n) => n.read);
+  return notes;
+}

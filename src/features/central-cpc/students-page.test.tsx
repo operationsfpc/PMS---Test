@@ -226,3 +226,33 @@ describe("StudentDirectoryPage", () => {
     expect(screen.queryByText(/no students yet/i)).toBeNull();
   });
 });
+
+/**
+ * G7 (UAT 2026-08-20): "Student numbers/counts aren't clickable, and there's
+ * no way to drill into student details from that view." The name opens the
+ * canonical record, and the summary counts apply their filter.
+ */
+describe("drilling into a student (G7)", () => {
+  it("links every student's name to their canonical record", async () => {
+    show();
+
+    const link = await screen.findByRole("link", { name: /anjali subramanian/i });
+    expect(link.getAttribute("href")).toBe("/students/s1");
+  });
+
+  it("the placed and not-placed counts apply their filter when clicked", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await screen.findByText(/rahul nair/i);
+    await user.click(screen.getByRole("button", { name: /1 placed/i }));
+
+    // The placed filter leaves only Anjali on the table.
+    expect(screen.queryByText(/rahul nair/i)).toBeNull();
+    expect(screen.getByRole("link", { name: /anjali subramanian/i })).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /1 not placed/i }));
+    expect(screen.getByText(/rahul nair/i)).toBeDefined();
+    expect(screen.queryByRole("link", { name: /anjali subramanian/i })).toBeNull();
+  });
+});

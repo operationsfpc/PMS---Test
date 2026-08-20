@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
-import { server } from "../../mocks/node";
+import { server } from "../mocks/node";
 import { ApprovalError, createSupabaseApprovalRepository } from "./approval-repository";
 
 const BASE = "https://project.supabase.co";

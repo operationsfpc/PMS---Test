@@ -8,15 +8,15 @@ import {
   OFFER_CATEGORIES,
   offerCategoryLabel,
 } from "@domain/offer-category";
-import { supabase } from "@lib/supabase";
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 import {
   ApprovalError,
   type ApprovalRepository,
   createSupabaseApprovalRepository,
   type PendingPif,
-} from "./approval-repository";
+} from "@lib/approval-repository";
+import { supabase } from "@lib/supabase";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 
 /**
  * Delivery Head — PIF approval queue. PRD §17.5.

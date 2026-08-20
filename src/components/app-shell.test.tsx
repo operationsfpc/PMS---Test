@@ -675,3 +675,22 @@ describe("the Drives group is the same for every staff role", () => {
     expect(canShortlistFromPortfolio("account_executive")).toBe(false);
   });
 });
+
+/**
+ * G3 (UAT 2026-08-20, Q6 answer a): the notifications page shipped on 19/08
+ * but nothing in the sidebar reached it — a page nobody can navigate to may
+ * as well not exist.
+ */
+describe("the student reaches their notifications from the sidebar", () => {
+  it("offers the student a Notifications entry", () => {
+    shellFor(signedIn("student"));
+    expect(screen.getByRole("link", { name: /^notifications$/i }).getAttribute("href")).toBe(
+      "/student/notifications",
+    );
+  });
+
+  it("does not offer it to staff — the log is the student's own", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+    expect(screen.queryByRole("link", { name: /^notifications$/i })).toBeNull();
+  });
+});

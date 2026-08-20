@@ -53,7 +53,15 @@ const DRIVES: NavGroup = {
 
 export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   student: [
-    { heading: "Home", items: [{ to: "/student", label: "My dashboard" }] },
+    {
+      heading: "Home",
+      items: [
+        { to: "/student", label: "My dashboard" },
+        // G3 (UAT 2026-08-20): the full, filterable log — reachable from the
+        // sidebar, not only from the dashboard's "Read all" link.
+        { to: "/student/notifications", label: "Notifications" },
+      ],
+    },
     // N7: one entry; the four lists are tabs inside it.
     { heading: "Drives", items: [{ to: "/student/drives", label: "Drives" }] },
     {

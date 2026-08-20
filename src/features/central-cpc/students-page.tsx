@@ -9,7 +9,7 @@ import {
 } from "@domain/student-directory";
 import type { SrfStatus } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useSearchParams } from "react-router";
 
 export interface StudentDirectoryView {
   students(): Promise<readonly DirectoryStudent[]>;
@@ -229,9 +229,26 @@ export function StudentDirectoryPage({
             />
           </div>
 
+          {/* G7 (UAT 2026-08-20): the counts are controls, not prose — each
+              applies the filter behind its number. */}
           <p className="mb-3 text-sm text-ink-500">
             Showing <strong className="text-ink-900">{visible.length} students</strong> of{" "}
-            {summary.total} · {summary.placed} placed · {summary.notPlaced} not placed
+            {summary.total} ·{" "}
+            <button
+              type="button"
+              onClick={() => setParams({ filter: "placed" }, { replace: true })}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              {summary.placed} placed
+            </button>{" "}
+            ·{" "}
+            <button
+              type="button"
+              onClick={() => setParams({ filter: "not_placed" }, { replace: true })}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              {summary.notPlaced} not placed
+            </button>
           </p>
 
           {visible.length === 0 ? (
@@ -254,7 +271,12 @@ export function StudentDirectoryPage({
                   {visible.map((student) => (
                     <tr key={student.studentId}>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-ink-900">{student.fullName}</p>
+                        <p className="font-medium text-ink-900">
+                          {/* G7: the name is the door to the canonical record. */}
+                          <Link to={`/students/${student.studentId}`} className="hover:underline">
+                            {student.fullName}
+                          </Link>
+                        </p>
                         <p className="text-xs text-ink-500">
                           {student.rollNumber}
                           {student.participationStatus !== "active" && (

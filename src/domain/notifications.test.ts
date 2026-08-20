@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { condenseNotifications, type NotificationItem, sortNotifications } from "./notifications";
+import {
+  condenseNotifications,
+  filterNotifications,
+  type NotificationItem,
+  sortNotifications,
+} from "./notifications";
 
 /**
  * E1/E2 (UAT 2026-08-19): "Show the top 3–5 notifications with a Read More
@@ -94,5 +99,30 @@ describe("condenseNotifications", () => {
     const { shown, hidden } = condenseNotifications(arrived, 3);
     expect(shown[0]?.id).toBe("fresh");
     expect(shown.length + hidden).toBe(arrived.length);
+  });
+});
+
+/**
+ * G3 (UAT 2026-08-20, Q6 answer a): the notifications page is reachable from
+ * the sidebar and carries a full, FILTERABLE log. The filter is a read-state
+ * lens over the same sorted list — it never reorders and never deletes.
+ */
+describe("filterNotifications", () => {
+  const notes = [
+    { id: "a", createdAt: "2026-08-20T10:00:00Z", read: false },
+    { id: "b", createdAt: "2026-08-19T10:00:00Z", read: true },
+    { id: "c", createdAt: "2026-08-18T10:00:00Z", read: false },
+  ];
+
+  it("shows everything under 'all'", () => {
+    expect(filterNotifications(notes, "all").map((n) => n.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("shows only unread under 'unread'", () => {
+    expect(filterNotifications(notes, "unread").map((n) => n.id)).toEqual(["a", "c"]);
+  });
+
+  it("shows only read under 'read'", () => {
+    expect(filterNotifications(notes, "read").map((n) => n.id)).toEqual(["b"]);
   });
 });

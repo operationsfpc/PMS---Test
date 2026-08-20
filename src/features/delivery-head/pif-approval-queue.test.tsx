@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
+
+import { ApprovalError, type ApprovalRepository } from "@lib/approval-repository";
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { ApprovalError, type ApprovalRepository } from "./approval-repository";
 import { PifApprovalQueue } from "./pif-approval-queue";
 
 /** Each card links to /drives/:id (N1), so a router must be present. */

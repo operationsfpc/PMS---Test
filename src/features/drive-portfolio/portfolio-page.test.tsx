@@ -26,6 +26,8 @@ const DRIVE: PortfolioDrive = {
   roleTitle: "Member Technical Staff",
   status: "in_rounds",
   onHold: false,
+  ctcMinLpa: null,
+  ctcMaxLpa: null,
   createdBy: "ae-1",
   approvedBy: "dh-1",
   publishedBy: "cpc-1",
@@ -375,6 +377,8 @@ describe("DrivePortfolioPage — one list, one status group", () => {
     roleTitle: "Jr. Developer",
     status,
     onHold: false,
+    ctcMinLpa: null,
+    ctcMaxLpa: null,
     createdBy: "p1",
     approvedBy: null,
     publishedBy: null,
@@ -472,6 +476,8 @@ describe("DrivePortfolioPage — searching the list", () => {
     roleTitle,
     status: "live",
     onHold: false,
+    ctcMinLpa: null,
+    ctcMaxLpa: null,
     createdBy: "p1",
     approvedBy: null,
     publishedBy: null,
@@ -552,5 +558,79 @@ describe("DrivePortfolioPage — searching the list", () => {
     expect(screen.getByText("HCL Technologies")).toBeDefined();
     expect(screen.getByText("Accenture")).toBeDefined();
     expect(screen.getByText("LTI Mindtree")).toBeDefined();
+  });
+});
+
+/**
+ * G5b (UAT 2026-08-20): "when a company runs multiple drives, its name
+ * appears twice in listings with no way to tell them apart." The card now
+ * carries the CTC and the applications-close date beside the role.
+ */
+describe("distinguishing same-company drives (G5b)", () => {
+  it("shows the CTC band and the close date on the card", async () => {
+    const priced: PortfolioDrive = {
+      ...DRIVE,
+      ctcMinLpa: 6,
+      ctcMaxLpa: 8,
+      applicationEnd: "2026-09-10T00:00:00.000Z",
+    };
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={{ drives: async () => [priced] }}
+          profileId="ae-1"
+          title="Live"
+          role={CENTRAL}
+        />
+      </MemoryRouter>,
+    );
+
+    const card = (await screen.findByText("Zoho Corporation")).closest("section");
+    if (card === null) throw new Error("card not found");
+    expect(within(card).getByText(/₹6–8 LPA/)).toBeDefined();
+    expect(within(card).getByText(/applications close 10 Sept 2026/i)).toBeDefined();
+  });
+});
+
+/**
+ * G5c / G1d (UAT 2026-08-20, answer 1a): drives whose deadline has passed
+ * collapse into an "Expired" section so the working list stays on drives
+ * needing action. Nothing is destroyed.
+ */
+describe("expired drives collapse (G5c)", () => {
+  const NOW = new Date("2026-08-20T12:00:00+05:30");
+
+  it("moves a past-deadline drive behind an Expired summary", async () => {
+    const expired: PortfolioDrive = {
+      ...DRIVE,
+      driveId: "d8",
+      companyName: "Bygone Corp",
+      status: "applications_closed",
+      applicationEnd: "2026-08-01T00:00:00.000Z",
+    };
+    const open: PortfolioDrive = {
+      ...DRIVE,
+      driveId: "d9",
+      companyName: "Current Co",
+      status: "live",
+      applicationEnd: "2026-08-25T00:00:00.000Z",
+    };
+
+    render(
+      <MemoryRouter>
+        <DrivePortfolioPage
+          view={{ drives: async () => [expired, open] }}
+          profileId="cpc-1"
+          title="Live"
+          role={CENTRAL}
+          statuses={["live", "applications_closed", "in_rounds"]}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Current Co");
+    expect(screen.getByText(/expired — application deadline passed \(1\)/i)).toBeDefined();
+    expect(screen.getByText("Bygone Corp")).toBeDefined();
   });
 });

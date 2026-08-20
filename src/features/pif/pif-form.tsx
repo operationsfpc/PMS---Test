@@ -72,17 +72,20 @@ function Labelled({
   error,
   children,
   wide = false,
+  required = false,
 }: {
   label: string;
   error?: string | undefined;
   children: (id: string) => ReactNode;
   wide?: boolean;
+  /** G2 (UAT 2026-08-20): required to SUBMIT — the marker the form was missing. */
+  required?: boolean;
 }) {
   const id = useId();
   return (
     <div className={wide ? "sm:col-span-2" : undefined}>
       <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink-900">
-        {label}
+        {required ? `${label} *` : label}
       </label>
       {children(id)}
       {error !== undefined && (
@@ -110,6 +113,7 @@ function RadioGroup({
   value,
   onChange,
   error,
+  required = false,
 }: {
   legend: string;
   name: string;
@@ -117,10 +121,14 @@ function RadioGroup({
   value: string;
   onChange: (next: string) => void;
   error?: string | undefined;
+  /** G2: required to submit. */
+  required?: boolean;
 }) {
   return (
     <fieldset>
-      <legend className="mb-2 text-sm font-medium text-ink-900">{legend}</legend>
+      <legend className="mb-2 text-sm font-medium text-ink-900">
+        {required ? `${legend} *` : legend}
+      </legend>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         {options.map((option) => (
           <label key={option.value} className="flex items-center gap-2 text-sm">
@@ -278,6 +286,12 @@ export function PifForm({
       )}
 
       <form noValidate>
+        {/* G2 (UAT 2026-08-20): the convention, stated once. Before this, no
+            field said whether it was mandatory, and thin PIFs reached the
+            Delivery Head looking complete. */}
+        <p className="mb-4 text-sm text-ink-700">
+          Fields marked * are required to submit for approval. A draft can be saved at any point.
+        </p>
         {/* A1 (UAT 2026-08-19): the type comes FIRST — it decides which
             compensation fields exist at all, so asking it last meant an AE
             discovered the form's shape after filling it. */}
@@ -285,6 +299,7 @@ export function PifForm({
           <div className="sm:col-span-2">
             <RadioGroup
               legend="Drive type"
+              required
               name="driveType"
               value={driveType}
               options={DRIVE_TYPES.map((t) => ({ value: t, label: DRIVE_TYPE_LABELS[t] ?? t }))}
@@ -308,7 +323,11 @@ export function PifForm({
 
           {wantsStipend && (
             <>
-              <Labelled label="Stipend minimum (₹ / month)" error={err("stipendMinMonthly")}>
+              <Labelled
+                label="Stipend minimum (₹ / month)"
+                required
+                error={err("stipendMinMonthly")}
+              >
                 {(id) => (
                   <input
                     id={id}
@@ -333,7 +352,7 @@ export function PifForm({
 
           {wantsCtc && (
             <>
-              <Labelled label="Minimum CTC (LPA)" error={err("ctcMinLpa")}>
+              <Labelled label="Minimum CTC (LPA)" required error={err("ctcMinLpa")}>
                 {(id) => (
                   <input
                     id={id}
@@ -369,7 +388,7 @@ export function PifForm({
         </Section>
 
         <Section title="Company details">
-          <Labelled label="Company name" error={err("companyName")}>
+          <Labelled label="Company name" required error={err("companyName")}>
             {(id) => <input id={id} className={control} {...register("companyName")} />}
           </Labelled>
           <Labelled label="Industry / domain" error={err("industry")}>
@@ -484,7 +503,7 @@ export function PifForm({
         </Section>
 
         <Section title="Role details">
-          <Labelled label="Role title" error={err("roleTitle")}>
+          <Labelled label="Role title" required error={err("roleTitle")}>
             {(id) => <input id={id} className={control} {...register("roleTitle")} />}
           </Labelled>
           <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
@@ -541,7 +560,7 @@ export function PifForm({
             </Button>
           </div>
 
-          <Labelled label="Role category" error={err("roleCategory")}>
+          <Labelled label="Role category" required error={err("roleCategory")}>
             {(id) => (
               <select id={id} className={control} {...register("roleCategory")}>
                 <option value="">Select…</option>
@@ -555,12 +574,12 @@ export function PifForm({
           </Labelled>
           {/* A3 (UAT 2026-08-19): openings and location directly after the role
               — the order the meeting proposed. */}
-          <Labelled label="Number of openings" error={err("openings")}>
+          <Labelled label="Number of openings" required error={err("openings")}>
             {(id) => (
               <input id={id} type="number" className={control} {...register("openings", numeric)} />
             )}
           </Labelled>
-          <Labelled label="Work location(s)" error={err("workLocations")}>
+          <Labelled label="Work location(s)" required error={err("workLocations")}>
             {(id) => <input id={id} className={control} {...register("workLocations")} />}
           </Labelled>
           {/* Answer 2 (2026-08-18): "keep space to type JD. Field is not
@@ -725,7 +744,7 @@ export function PifForm({
 
           <fieldset className="sm:col-span-2">
             <legend className="mb-2 text-sm font-medium text-ink-900">
-              Eligible passing years
+              Eligible passing years *
             </legend>
             <div className="flex flex-wrap gap-4">
               {PASSING_YEARS.map((year) => (
@@ -774,7 +793,7 @@ export function PifForm({
            * they are carried onto the drive at publish.
            */}
           <div className="sm:col-span-2">
-            <p className="mb-1.5 text-sm font-medium text-ink-700">Rounds in the process</p>
+            <p className="mb-1.5 text-sm font-medium text-ink-700">Rounds in the process *</p>
             <p className="mb-3 text-xs text-ink-500">
               In order — e.g. Round 1 Aptitude test, Round 2 Technical interview.
             </p>
@@ -860,6 +879,7 @@ export function PifForm({
           <div className="sm:col-span-2">
             <RadioGroup
               legend="Offer rollout and joining"
+              required
               name="joiningTimeline"
               value={joiningTimeline}
               options={JOINING_TIMELINES.map((t) => ({ value: t, label: joiningLabel(t) }))}

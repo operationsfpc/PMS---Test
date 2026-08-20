@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
 import type { AppRole } from "@domain/types";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { CockpitPage, type CockpitView, type DriveSummary } from "./cockpit-page";
 
 /**
@@ -24,6 +25,8 @@ const APPROVED: DriveSummary = {
   onHold: false,
   applicationCount: 0,
   rounds: [],
+  createdAt: null,
+  applicationEnd: null,
 };
 
 const LIVE: DriveSummary = {
@@ -36,6 +39,8 @@ const LIVE: DriveSummary = {
   onHold: false,
   applicationCount: 42,
   rounds: [],
+  createdAt: null,
+  applicationEnd: null,
 };
 
 const IN_ROUNDS: DriveSummary = {
@@ -51,6 +56,8 @@ const IN_ROUNDS: DriveSummary = {
     { roundId: "r1", sequence: 1, name: "Aptitude" },
     { roundId: "r2", sequence: 2, name: "Technical" },
   ],
+  createdAt: null,
+  applicationEnd: null,
 };
 
 /** Bound to a name so Biome does not read the prop as an ARIA `role` attribute. */
@@ -320,5 +327,216 @@ describe("the cockpit's actions are role-gated", () => {
     await screen.findByText("Zoho");
     expect(screen.queryByRole("link", { name: /publish/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /shortlist/i })).toBeNull();
+  });
+});
+
+/**
+ * UAT 2026-08-20, G1a/G1b: no date stamp on any drive — "can't tell how old a
+ * submission is or how long it's been pending approval" — and no way to pull
+ * up "oldest submitted first", which is the natural way to clear a backlog.
+ */
+describe("drive aging on the queue (G1)", () => {
+  const NOW = new Date("2026-08-20T12:00:00+05:30");
+
+  const SUBMITTED_OLD: DriveSummary = {
+    ...APPROVED,
+    driveId: "d20",
+    companyName: "Aged Systems",
+    status: "submitted",
+    createdAt: "2026-08-10T09:00:00+05:30",
+    applicationEnd: null,
+  };
+
+  const SUBMITTED_FRESH: DriveSummary = {
+    ...APPROVED,
+    driveId: "d21",
+    companyName: "Fresh Labs",
+    status: "submitted",
+    createdAt: "2026-08-19T09:00:00+05:30",
+    applicationEnd: null,
+  };
+
+  it("dates every drive and flags one pending too long (G1a)", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([SUBMITTED_OLD])}
+          filter="yet-to-publish"
+          role={CENTRAL_CPC}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/raised on 10 aug 2026/i)).toBeDefined();
+    expect(screen.getByText(/pending 10 days/i)).toBeDefined();
+  });
+
+  it("does not reproach a fresh submission (G1a)", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([SUBMITTED_FRESH])}
+          filter="yet-to-publish"
+          role={CENTRAL_CPC}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/raised on 19 aug 2026/i)).toBeDefined();
+    expect(screen.queryByText(/pending \d+ days/i)).toBeNull();
+  });
+
+  it("orders the yet-to-publish queue oldest first by default (G1b)", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([SUBMITTED_FRESH, SUBMITTED_OLD])}
+          filter="yet-to-publish"
+          role={CENTRAL_CPC}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
+    const names = await screen.findAllByText(/aged systems|fresh labs/i);
+    expect(names[0]?.textContent).toMatch(/aged systems/i);
+  });
+
+  it("can switch to newest first (G1b)", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([SUBMITTED_OLD, SUBMITTED_FRESH])}
+          filter="yet-to-publish"
+          role={CENTRAL_CPC}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Aged Systems");
+    await user.selectOptions(screen.getByLabelText(/sort/i), "newest");
+
+    const names = screen.getAllByText(/aged systems|fresh labs/i);
+    expect(names[0]?.textContent).toMatch(/fresh labs/i);
+  });
+
+  /** G1d (answer 1a): a collapsed section on the same list — nothing destroyed. */
+  it("collapses drives past their application deadline into an Expired section (G1d)", async () => {
+    const EXPIRED: DriveSummary = {
+      ...LIVE,
+      driveId: "d22",
+      companyName: "Bygone Corp",
+      applicationEnd: "2026-08-01T18:00:00+05:30",
+    };
+    const OPEN: DriveSummary = {
+      ...LIVE,
+      driveId: "d23",
+      companyName: "Current Co",
+      applicationEnd: "2026-08-25T18:00:00+05:30",
+    };
+
+    render(
+      <MemoryRouter>
+        <CockpitPage view={view([EXPIRED, OPEN])} filter="published" role={CENTRAL_CPC} now={NOW} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Current Co");
+    // The expired drive sits behind a summary, not in the active list.
+    const expired = screen.getByText(/expired — application deadline passed \(1\)/i);
+    expect(expired).toBeDefined();
+    expect(screen.getByText("Bygone Corp")).toBeDefined();
+  });
+});
+
+/**
+ * UAT 2026-08-20, G1c: "every drive needs a click into View drive even for
+ * the one action (approve) this whole screen exists for." The Delivery Head
+ * decides from the list now — same rules as the approval queue (Q3 confirmed:
+ * rejection demands a reason).
+ */
+describe("the Delivery Head decides from the list (G1c)", () => {
+  /** Bound to a name so Biome does not read the prop as an ARIA `role` attribute. */
+  const DELIVERY_HEAD: AppRole = "delivery_head";
+
+  const SUBMITTED: DriveSummary = {
+    ...APPROVED,
+    driveId: "d30",
+    companyName: "Deciso",
+    status: "submitted",
+    createdAt: "2026-08-19T09:00:00+05:30",
+    applicationEnd: null,
+  };
+
+  const withDecide = (
+    decide: (driveId: string, current: string, decision: unknown) => Promise<void>,
+  ) =>
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([SUBMITTED])}
+          filter="yet-to-publish"
+          role={DELIVERY_HEAD}
+          decide={decide as never}
+        />
+      </MemoryRouter>,
+    );
+
+  it("approves from the list, with the offer category chosen in the dialog", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    withDecide(decide);
+
+    await user.click(await screen.findByRole("button", { name: /approve/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    await user.selectOptions(within(dialog).getByLabelText(/offer category/i), "dream");
+    await user.click(within(dialog).getByRole("button", { name: /confirm — approve/i }));
+
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith("d30", "submitted", {
+        decision: "approve",
+        offerCategory: "dream",
+      }),
+    );
+  });
+
+  it("rejects from the list — with a required reason (Q3)", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    withDecide(decide);
+
+    await user.click(await screen.findByRole("button", { name: /reject/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    // No reason typed: the domain refuses before the network is asked.
+    await user.click(within(dialog).getByRole("button", { name: /confirm — reject/i }));
+    expect(decide).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText(/reason/i), "CTC below our floor");
+    await user.click(within(dialog).getByRole("button", { name: /confirm — reject/i }));
+
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith("d30", "submitted", {
+        decision: "reject",
+        reason: "CTC below our floor",
+      }),
+    );
+  });
+
+  it("offers the Central CPC no approve/reject — approval is not their verb", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage view={view([SUBMITTED])} filter="yet-to-publish" role={CENTRAL_CPC} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Deciso");
+    expect(screen.queryByRole("button", { name: /approve/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /reject/i })).toBeNull();
   });
 });

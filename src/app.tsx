@@ -36,6 +36,7 @@ import {
   StudentDashboardRoute,
   StudentNotificationsRoute,
 } from "@features/student/student-dashboard-route";
+import { StudentRecordRoute } from "@features/student-record/student-record-route";
 import { useAuth } from "@lib/auth-context";
 import type { ReactNode } from "react";
 import { Route, Routes } from "react-router";
@@ -180,6 +181,9 @@ export function App() {
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
                 {/* N1: the one canonical drive page, for every role. */}
                 <Route path="/drives/:driveId" element={<DriveRecordRoute />} />
+                {/* G7 (UAT 2026-08-20, Q7b): the canonical student record —
+                    N1's second canonical page. RLS scopes who reads whom. */}
+                <Route path="/students/:studentId" element={<StudentRecordRoute />} />
                 {/* F2: two decisions, two heads. */}
                 <Route path="/student/opt-out" element={<StudentOptOutRoute />} />
                 <Route path="/student/off-campus" element={<StudentOffCampusRoute />} />

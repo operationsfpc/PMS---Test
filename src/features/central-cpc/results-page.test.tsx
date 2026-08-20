@@ -193,6 +193,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       mode: null,
       scheduledAt: null,
       interviewLink: null,
+      venue: null,
     },
     {
       roundId: "r2",
@@ -201,6 +202,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       mode: null,
       scheduledAt: null,
       interviewLink: null,
+      venue: null,
     },
   ];
 
@@ -294,8 +296,35 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     await waitFor(() => expect(within(row).queryByRole("combobox")).toBeNull());
     expect(within(row).getByText(/advanced/i)).toBeDefined();
 
-    // Priya is the only selected — and she has already gone. Nothing to advance.
-    expect(screen.queryByRole("button", { name: /advance/i })).toBeNull();
+    // Priya is the only selected — and she has already gone. Nothing to
+    // advance — but the button stays VISIBLE and disabled (G6a, UAT
+    // 2026-08-20: "No Advance to Round 2 button available" must never be the
+    // report again).
+    const advance = screen.getByRole("button", { name: /advance to round 2/i });
+    expect((advance as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  /**
+   * G6a (UAT 2026-08-20): "No 'Advance to Round 2' button available." The
+   * button only rendered once someone was marked Selected, so a coordinator
+   * on a fresh round saw nothing and reasonably reported the feature missing.
+   * It now stands disabled with the instruction that makes it light up.
+   */
+  it("shows a disabled Advance button with instructions when nobody is selected yet (G6a)", async () => {
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({
+          participants: async (roundId) =>
+            roundId === "r1" ? [{ ...PRIYA, result: null }, ARJUN] : [],
+        })}
+      />,
+    );
+
+    await screen.findByText("Priya Ramesh");
+    const advance = await screen.findByRole("button", { name: /advance to round 2/i });
+    expect((advance as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/only selected students advance/i)).toBeDefined();
   });
 
   /**
@@ -321,8 +350,12 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
     // After the reload Priya is locked (she sits in Round 2 now) — the
-    // advance button is gone rather than lying about 1 more to move.
-    await waitFor(() => expect(screen.queryByRole("button", { name: /^advance/i })).toBeNull());
+    // advance button DISARMS rather than lying about 1 more to move (G6a:
+    // it stays visible, disabled, so it never reads as missing).
+    await waitFor(() => {
+      const button = screen.getByRole("button", { name: /advance to round 2/i });
+      expect((button as HTMLButtonElement).disabled).toBe(true);
+    });
     expect(await screen.findByRole("status")).toBeDefined();
   });
 });
@@ -341,6 +374,7 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
       mode: "virtual" as const,
       scheduledAt: "2026-09-01T10:30",
       interviewLink: "https://meet.google.com/shared",
+      venue: null,
     },
     {
       roundId: "r2",
@@ -349,8 +383,18 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
       mode: null,
       scheduledAt: null,
       interviewLink: null,
+      venue: null,
     },
   ];
+
+  /** G6c: a participant who has not yet begun — details stay editable. */
+  const NOT_BEGUN: RoundParticipant = {
+    applicationId: "app3",
+    studentName: "Kavya Nair",
+    rollNumber: "21CSE3007",
+    attendance: "scheduled",
+    result: null,
+  };
 
   function detailView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
     return {
@@ -369,22 +413,86 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
 
   const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
-  it("edits a round's mode, time and link after creation (F4)", async () => {
+  it("edits a round's mode, time and link after creation (F4) — while nobody has begun (G6c)", async () => {
     const updateRound = vi.fn();
     const user = userEvent.setup();
-    routed(<DriveRoundsPage driveId="d1" view={detailView({ updateRound })} />);
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={detailView({ updateRound, participants: async () => [NOT_BEGUN] })}
+      />,
+    );
 
     await user.click(await screen.findByRole("button", { name: /edit round details/i }));
     await user.selectOptions(screen.getByLabelText(/round mode/i), "on_campus");
     await user.click(screen.getByRole("button", { name: /save round details/i }));
 
+    // Switching to a physical mode swaps the link for a venue (G6b) — the
+    // abandoned link is CLEARED, not smuggled through (the J2 lesson).
     await waitFor(() =>
       expect(updateRound).toHaveBeenCalledWith("r1", {
         mode: "on_campus",
         scheduledAt: "2026-09-01T10:30",
-        interviewLink: "https://meet.google.com/shared",
+        interviewLink: null,
+        venue: null,
       }),
     );
+  });
+
+  it("a physical round takes a VENUE — an address, not a URL (G6b)", async () => {
+    const updateRound = vi.fn();
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={detailView({ updateRound, participants: async () => [NOT_BEGUN] })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.selectOptions(screen.getByLabelText(/round mode/i), "physical_outside_campus");
+
+    // The link box is gone; a venue box stands in its place.
+    expect(screen.queryByLabelText(/shared interview link/i)).toBeNull();
+    await user.type(
+      screen.getByLabelText(/venue/i),
+      "Taj Coromandel, 37 MG Road, Nungambakkam, Chennai",
+    );
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
+    await waitFor(() =>
+      expect(updateRound).toHaveBeenCalledWith("r1", {
+        mode: "physical_outside_campus",
+        scheduledAt: "2026-09-01T10:30",
+        interviewLink: null,
+        venue: "Taj Coromandel, 37 MG Road, Nungambakkam, Chennai",
+      }),
+    );
+  });
+
+  it("names the modes in plain words — Online, Physical on/outside campus (G6b)", async () => {
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage driveId="d1" view={detailView({ participants: async () => [NOT_BEGUN] })} />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    const select = screen.getByLabelText(/round mode/i);
+    const labels = within(select as HTMLElement)
+      .getAllByRole("option")
+      .map((o) => o.textContent);
+    expect(labels).toContain("Online");
+    expect(labels).toContain("Physical — on campus");
+    expect(labels).toContain("Physical — outside campus");
+  });
+
+  it("locks round details once a student has begun participating (G6c)", async () => {
+    // Priya is marked present and carries a result — participation has begun.
+    routed(<DriveRoundsPage driveId="d1" view={detailView()} />);
+
+    await screen.findByText("Priya Ramesh");
+    expect(screen.queryByRole("button", { name: /edit round details/i })).toBeNull();
+    expect(screen.getByText(/locked/i)).toBeDefined();
   });
 
   it("attaches an optional proof to the advance (F3)", async () => {
@@ -422,7 +530,13 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
   it("uploads per-student slots by CSV and reports what matched (F5)", async () => {
     const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: ["21CSE9999"] });
     const user = userEvent.setup();
-    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+    // G6c: links are assigned BEFORE the round runs — nobody has begun.
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={detailView({ assignSlots, participants: async () => [NOT_BEGUN] })}
+      />,
+    );
 
     await user.click(await screen.findByRole("button", { name: /edit round details/i }));
     const csv = new File(
@@ -446,7 +560,12 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
   it("refuses a CSV whose header is wrong, naming the expected one (F5)", async () => {
     const assignSlots = vi.fn();
     const user = userEvent.setup();
-    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={detailView({ assignSlots, participants: async () => [NOT_BEGUN] })}
+      />,
+    );
 
     await user.click(await screen.findByRole("button", { name: /edit round details/i }));
     await user.upload(

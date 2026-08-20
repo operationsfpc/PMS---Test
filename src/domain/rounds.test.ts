@@ -4,6 +4,7 @@ import {
   advancingParticipants,
   canMarkAttendance,
   canRecordResult,
+  roundDetailsFrozen,
 } from "./rounds";
 
 /**
@@ -117,5 +118,45 @@ describe("advancedBeyond", () => {
 
   it("never locks a student who was not advanced", () => {
     expect(advancedBeyond(1, rounds).has("c")).toBe(false);
+  });
+});
+
+/**
+ * G6c (UAT 2026-08-20, Q5 answer a): round details freeze once students begin
+ * participating — the first recorded attendance or result is the boundary. A
+ * schedule can be postponed; a recorded fact cannot be un-happened, and
+ * editing the venue of a round someone has already sat is rewriting a closed
+ * process.
+ */
+describe("roundDetailsFrozen", () => {
+  it("stays editable while nothing has been recorded", () => {
+    expect(
+      roundDetailsFrozen([
+        { attendance: "scheduled", result: null },
+        { attendance: "scheduled", result: null },
+      ]),
+    ).toBe(false);
+  });
+
+  it("freezes on the first recorded result", () => {
+    expect(
+      roundDetailsFrozen([
+        { attendance: "scheduled", result: "selected" },
+        { attendance: "scheduled", result: null },
+      ]),
+    ).toBe(true);
+  });
+
+  it("freezes on the first marked attendance — present or absent", () => {
+    expect(roundDetailsFrozen([{ attendance: "present", result: null }])).toBe(true);
+    expect(roundDetailsFrozen([{ attendance: "absent", result: null }])).toBe(true);
+  });
+
+  it("does not freeze on a provisional self check-in — nobody has confirmed it yet", () => {
+    expect(roundDetailsFrozen([{ attendance: "provisional", result: null }])).toBe(false);
+  });
+
+  it("is editable with no participants at all", () => {
+    expect(roundDetailsFrozen([])).toBe(false);
   });
 });
