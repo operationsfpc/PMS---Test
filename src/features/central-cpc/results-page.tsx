@@ -81,8 +81,6 @@ export interface DriveRoundsView extends ResultsView {
   completeDrive(driveId: string, reason: string | null): Promise<void>;
 }
 
-const RESULTS: readonly RoundResult[] = ["selected", "rejected", "waitlisted", "on_hold"];
-
 const label = (value: string) => value.replaceAll("_", " ");
 
 /**
@@ -98,6 +96,7 @@ export function ResultsPage({
   view,
   locked = EMPTY_LOCK,
   saveSlot,
+  onRecorded,
 }: {
   roundId: string;
   view: ResultsView;
@@ -109,6 +108,13 @@ export function ResultsPage({
   locked?: ReadonlySet<string>;
   /** F5: when given, each row offers the student's own meeting link. */
   saveSlot?: (applicationId: string, meetingLink: string) => Promise<void>;
+  /**
+   * UAT 2026-08-21 ("Advance button stuck until F5"): fires after results
+   * land, so an embedding screen can re-read the state IT derives from them
+   * — the parent rounds page arms its Advance button from its own copy of
+   * the participants, which this page's writes would otherwise never touch.
+   */
+  onRecorded?: () => void | Promise<void>;
 }) {
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -140,9 +146,13 @@ export function ResultsPage({
       }
       setChecked(new Set());
       await refresh();
+      await onRecorded?.();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not record the results.");
+      // The sequential loop may have landed SOME results before failing —
+      // the embedder's derived state must see those too.
       await refresh();
+      await onRecorded?.();
     }
   }
 
@@ -880,6 +890,7 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
             roundId={active}
             view={view}
             locked={locked}
+            onRecorded={loadParticipants}
             saveSlot={(applicationId, meetingLink) =>
               view.setParticipantSlot(
                 activeRound.roundId,

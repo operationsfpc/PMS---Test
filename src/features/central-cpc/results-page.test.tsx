@@ -416,6 +416,42 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     });
     expect(await screen.findByRole("status")).toBeDefined();
   });
+
+  /**
+   * UAT 2026-08-21: "the Advance button gets stuck / does not work initially;
+   * it works when the page is reloaded." The embedded ResultsPage recorded
+   * results into ITS OWN state and refreshed only itself — the parent's
+   * `advancing` count (which arms the button) was never re-read, so the
+   * button sat disabled until F5. Recording a result must arm the button
+   * without a page reload.
+   */
+  it("arms the Advance button the moment a result is recorded — no reload needed", async () => {
+    // A stateful double: Priya starts undecided; record() flips her.
+    let priyaResult: RoundParticipant["result"] = null;
+    const participants = vi.fn(async (roundId: string) =>
+      roundId === "r1" ? [{ ...PRIYA, result: priyaResult }, ARJUN] : [],
+    );
+    const record = vi.fn(async (_round: string, _app: string, result: "selected") => {
+      priyaResult = result;
+    });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={driveView({ participants, record })} />);
+
+    // Nobody selected yet — the button stands disarmed (G6a).
+    const before = await screen.findByRole("button", { name: /advance to round 2/i });
+    expect((before as HTMLButtonElement).disabled).toBe(true);
+
+    // Mark Priya Selected through the embedded results bar.
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    // The button must arm on its own — F5 is not a step in the workflow.
+    expect(
+      await screen.findByRole("button", { name: /advance 1 selected to round 2/i }),
+    ).toBeDefined();
+  });
 });
 
 /**
