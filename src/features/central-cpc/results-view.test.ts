@@ -213,6 +213,8 @@ describe("the drive's rounds", () => {
           { application_id: "a3", result: "waitlisted" },
         ]),
       ),
+      // Nobody is in the next round yet.
+      http.get(`${BASE}/rest/v1/round_participants`, () => HttpResponse.json([])),
       http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
         scheduled.push(await request.clone().json());
         return HttpResponse.json([{ id: "rp-1" }]);
@@ -229,6 +231,61 @@ describe("the drive's rounds", () => {
     const participants = scheduled[0] as Array<Record<string, unknown>>;
     expect(participants).toHaveLength(1);
     expect(participants[0]).toMatchObject({ round_id: "r2", application_id: "a1" });
+  });
+
+  /**
+   * UAT 2026-08-21 (live, Deloitte drive): "Could not schedule the
+   * participants." — forever. More students were marked selected AFTER an
+   * earlier advance, so the re-advance batch contained a student already
+   * sitting in Round 2. Her unique key refused the WHOLE insert, and every
+   * retry rebuilt the same batch. An advance must only schedule the ones
+   * not already there — and count only them.
+   */
+  it("skips students already in the next round — a re-advance after late selections", async () => {
+    const scheduled: unknown[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/round_results`, () =>
+        HttpResponse.json([
+          { application_id: "a1", result: "selected" },
+          { application_id: "a2", result: "selected" },
+        ]),
+      ),
+      // a1 already advanced last time.
+      http.get(`${BASE}/rest/v1/round_participants`, () =>
+        HttpResponse.json([{ application_id: "a1" }]),
+      ),
+      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        scheduled.push(await request.clone().json());
+        return HttpResponse.json([{ id: "rp-2" }]);
+      }),
+      http.post(`${BASE}/rest/v1/attendance`, () => HttpResponse.json([{ id: "at-2" }])),
+    );
+
+    const moved = await view().advance("r1", "r2");
+
+    expect(moved).toBe(1);
+    const participants = scheduled[0] as Array<Record<string, unknown>>;
+    expect(participants).toHaveLength(1);
+    expect(participants[0]).toMatchObject({ round_id: "r2", application_id: "a2" });
+  });
+
+  it("advances nobody — and writes nothing — when everyone selected is already there", async () => {
+    const scheduled: unknown[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/round_results`, () =>
+        HttpResponse.json([{ application_id: "a1", result: "selected" }]),
+      ),
+      http.get(`${BASE}/rest/v1/round_participants`, () =>
+        HttpResponse.json([{ application_id: "a1" }]),
+      ),
+      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        scheduled.push(await request.clone().json());
+        return HttpResponse.json([{ id: "rp-1" }]);
+      }),
+    );
+
+    expect(await view().advance("r1", "r2")).toBe(0);
+    expect(scheduled).toHaveLength(0);
   });
 
   it("advances nobody when nobody was selected, without writing", async () => {

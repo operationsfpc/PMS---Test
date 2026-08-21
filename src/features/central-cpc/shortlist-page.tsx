@@ -110,6 +110,14 @@ export function ShortlistPage({
   const [confirming, setConfirming] = useState(false);
   /** D6: advisory only — a number the CPC steers by, never a gate. */
   const [target, setTarget] = useState("");
+  /**
+   * SPEC CHANGE 2026-08-21 (Karthik): the already-shortlisted and the not-yet
+   * are SEPARATE TABS. Before this, the saved students came back pre-ticked in
+   * the same list — so they could be selected and "shortlisted again", and
+   * un-ticking one silently REMOVED them on the next save. Decided people are
+   * read-only now; only the undecided can be selected and shortlisted.
+   */
+  const [tab, setTab] = useState<"pending" | "shortlisted">("pending");
 
   const refresh = useCallback(async () => {
     const [loadedDrive, loadedApplicants] = await Promise.all([
@@ -118,7 +126,8 @@ export function ShortlistPage({
     ]);
     setDrive(loadedDrive);
     setApplicants(loadedApplicants);
-    setSelected(loadedApplicants.filter((a) => a.shortlisted).map((a) => a.applicationId));
+    // Nothing is pre-selected: the shortlisted are decided, not "ticked".
+    setSelected([]);
   }, [view, driveId]);
 
   useEffect(() => {
@@ -147,6 +156,25 @@ export function ShortlistPage({
     [applicants],
   );
 
+  /** The two tabs. Ranks stay OVERALL positions, so the audit trail's rank
+   * means the same thing it always did (PRD 13.1). */
+  const alreadyShortlisted = useMemo(
+    () => (applicants ?? []).filter((a) => a.shortlisted),
+    [applicants],
+  );
+  const rankedWithPosition = useMemo(
+    () => ranked.map((candidate, index) => ({ candidate, rank: index + 1 })),
+    [ranked],
+  );
+  const visibleRanked = useMemo(
+    () =>
+      rankedWithPosition.filter(
+        ({ candidate }) =>
+          (byId.get(candidate.applicationId)?.shortlisted === true) === (tab === "shortlisted"),
+      ),
+    [rankedWithPosition, byId, tab],
+  );
+
   function toggle(applicationId: string) {
     // Any change makes the confirmation stale: what is on screen is no longer
     // what was saved, and leaving it up would say otherwise.
@@ -166,6 +194,7 @@ export function ShortlistPage({
   const selectable = useMemo(
     () =>
       (applicants ?? [])
+        .filter((a) => !a.shortlisted)
         .filter((a) => !a.optedOut || overrides[a.applicationId] !== undefined)
         .map((a) => a.applicationId),
     [applicants, overrides],
@@ -202,16 +231,21 @@ export function ShortlistPage({
     setSavedCount(null);
     setSaving(true);
     try {
+      // Only the UNDECIDED travel with the save. The already-shortlisted are
+      // settled rows — re-sending them would re-notify and re-stamp decisions
+      // that were already made (the "shortlist them again" bug, 2026-08-21).
       await view.saveShortlist(
         driveId,
-        ranked.map((candidate, index) => ({
-          applicationId: candidate.applicationId,
-          included: selected.includes(candidate.applicationId),
-          rank: index + 1,
-          score: candidate.score,
-          rationale: candidate.reasons.join(" "),
-          optOutOverrideReason: overrides[candidate.applicationId] ?? null,
-        })),
+        rankedWithPosition
+          .filter(({ candidate }) => byId.get(candidate.applicationId)?.shortlisted !== true)
+          .map(({ candidate, rank }) => ({
+            applicationId: candidate.applicationId,
+            included: selected.includes(candidate.applicationId),
+            rank,
+            score: candidate.score,
+            rationale: candidate.reasons.join(" "),
+            optOutOverrideReason: overrides[candidate.applicationId] ?? null,
+          })),
       );
       // Counted from what was SENT, not from what comes back: a view that
       // returns stale rows must not be able to report a success it did not
@@ -286,19 +320,21 @@ export function ShortlistPage({
         </label>
         {target !== "" && Number(target) > 0 && (
           <p className="text-sm font-medium text-ink-700">
-            {`${selected.length} of ${Number(target)} selected`}
+            {/* The decided count toward the recruiter's ask — already-
+                shortlisted people still fill seats (2026-08-21). */}
+            {`${alreadyShortlisted.length + selected.length} of ${Number(target)} selected`}
           </p>
         )}
       </div>
 
-      {(applicants ?? []).some((a) => a.optedOut) && (
+      {(applicants ?? []).some((a) => a.optedOut && !a.shortlisted) && (
         <div
           role="alert"
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-ink-900"
         >
           <strong>Opted out after applying:</strong>{" "}
           {(applicants ?? [])
-            .filter((a) => a.optedOut)
+            .filter((a) => a.optedOut && !a.shortlisted)
             .map((a) => a.studentName)
             .join(", ")}
           . They cannot be shortlisted and will receive no notifications. You can override per
@@ -345,132 +381,176 @@ export function ShortlistPage({
           <p className="text-sm text-ink-700">Nobody has applied to this drive yet.</p>
         </Card>
       ) : (
-        <Card>
-          {/* D9: one box for the lot. Indeterminate states are more honest as
-              a plain label, so the box is checked only when ALL are. */}
-          <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-3">
-            <input
-              type="checkbox"
-              aria-label="Select all applicants"
-              checked={allSelected}
-              onChange={toggleAll}
-            />
-            <span className="text-sm font-medium text-ink-700">
-              Select all ({selectable.length})
-            </span>
+        <>
+          {/* The two tabs (2026-08-21): decided people are read-only. */}
+          <div className="mb-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setTab("pending")}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                tab === "pending"
+                  ? "border-brand-500 bg-brand-500 text-white"
+                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+              }`}
+            >
+              Not shortlisted ({applicants.length - alreadyShortlisted.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("shortlisted")}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                tab === "shortlisted"
+                  ? "border-brand-500 bg-brand-500 text-white"
+                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+              }`}
+            >
+              Shortlisted ({alreadyShortlisted.length})
+            </button>
           </div>
-          <ul className="divide-y divide-neutral-200">
-            {ranked.map((candidate, index) => {
-              const applicant = byId.get(candidate.applicationId);
-              const blocked = applicant?.optedOut === true;
-              const overridden = overrides[candidate.applicationId] !== undefined;
-              return (
-                <li
-                  key={candidate.applicationId}
-                  aria-label={candidate.studentName}
-                  className="flex items-start gap-4 p-4"
-                >
-                  {blocked && !overridden ? (
-                    <span className="mt-1 w-4 text-center text-ink-300" aria-hidden="true">
-                      –
-                    </span>
-                  ) : (
-                    <input
-                      type="checkbox"
-                      aria-label={`Shortlist ${candidate.studentName}`}
-                      checked={selected.includes(candidate.applicationId)}
-                      onChange={() => toggle(candidate.applicationId)}
-                      className="mt-1"
-                    />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
-                      <span className="text-ink-400">{index + 1}.</span>
-                      <span>{candidate.studentName}</span>
-                      {/* F16: what is ON the shortlist, as opposed to what is
+
+          <Card>
+            {/* D9: one box for the lot. Indeterminate states are more honest as
+                a plain label, so the box is checked only when ALL are. */}
+            {tab === "pending" && visibleRanked.length > 0 && (
+              <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-3">
+                <input
+                  type="checkbox"
+                  aria-label="Select all applicants"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                />
+                <span className="text-sm font-medium text-ink-700">
+                  Select all ({selectable.length})
+                </span>
+              </div>
+            )}
+            {visibleRanked.length === 0 && (
+              <p className="p-6 text-sm text-ink-700">
+                {tab === "pending"
+                  ? "Everyone who applied is already on the shortlist."
+                  : "Nobody is on the shortlist yet."}
+              </p>
+            )}
+            <ul className="divide-y divide-neutral-200">
+              {visibleRanked.map(({ candidate }, index) => {
+                const applicant = byId.get(candidate.applicationId);
+                const blocked = applicant?.optedOut === true;
+                const overridden = overrides[candidate.applicationId] !== undefined;
+                return (
+                  <li
+                    key={candidate.applicationId}
+                    aria-label={candidate.studentName}
+                    className="flex items-start gap-4 p-4"
+                  >
+                    {/* Decided rows carry NO checkbox — a shortlisted student
+                        cannot be shortlisted again (2026-08-21). */}
+                    {tab === "shortlisted" ? null : blocked && !overridden ? (
+                      <span className="mt-1 w-4 text-center text-ink-300" aria-hidden="true">
+                        –
+                      </span>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        aria-label={`Shortlist ${candidate.studentName}`}
+                        checked={selected.includes(candidate.applicationId)}
+                        onChange={() => toggle(candidate.applicationId)}
+                        className="mt-1"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
+                        <span className="text-ink-400">{index + 1}.</span>
+                        <span>{candidate.studentName}</span>
+                        {/* F16: what is ON the shortlist, as opposed to what is
                           merely ticked, is the difference the screen used to
                           refuse to show. */}
-                      {applicant?.shortlisted === true && <Badge tone="success">Shortlisted</Badge>}
-                      {blocked && <Badge tone="danger">Opted out</Badge>}
-                    </p>
-                    {blocked && !overridden && overriding !== candidate.applicationId && (
-                      <button
-                        type="button"
-                        className="mt-1 text-xs font-medium text-brand-600 hover:underline"
-                        onClick={() => {
-                          setOverriding(candidate.applicationId);
-                          setOverrideDraft("");
-                        }}
-                      >
-                        Override with reason…
-                      </button>
-                    )}
-                    {overriding === candidate.applicationId && (
-                      <div className="mt-2 flex flex-wrap items-end gap-2">
-                        <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                          Reason for overriding the opt-out
-                          <input
-                            type="text"
-                            value={overrideDraft}
-                            onChange={(e) => setOverrideDraft(e.target.value)}
-                            className="w-64 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
-                          />
-                        </label>
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            if (overrideDraft.trim() === "") return;
-                            setOverrides((o) => ({
-                              ...o,
-                              [candidate.applicationId]: overrideDraft.trim(),
-                            }));
-                            setOverriding(null);
-                          }}
-                        >
-                          Confirm override
-                        </Button>
-                      </div>
-                    )}
-                    <p className="text-sm text-ink-500">
-                      {applicant?.rollNumber} · CGPA {applicant?.overallCgpa}
-                    </p>
-                    {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
+                        {applicant?.shortlisted === true && (
+                          <Badge tone="success">Shortlisted</Badge>
+                        )}
+                        {blocked && <Badge tone="danger">Opted out</Badge>}
+                      </p>
+                      {tab === "pending" &&
+                        blocked &&
+                        !overridden &&
+                        overriding !== candidate.applicationId && (
+                          <button
+                            type="button"
+                            className="mt-1 text-xs font-medium text-brand-600 hover:underline"
+                            onClick={() => {
+                              setOverriding(candidate.applicationId);
+                              setOverrideDraft("");
+                            }}
+                          >
+                            Override with reason…
+                          </button>
+                        )}
+                      {overriding === candidate.applicationId && (
+                        <div className="mt-2 flex flex-wrap items-end gap-2">
+                          <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                            Reason for overriding the opt-out
+                            <input
+                              type="text"
+                              value={overrideDraft}
+                              onChange={(e) => setOverrideDraft(e.target.value)}
+                              className="w-64 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
+                            />
+                          </label>
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              if (overrideDraft.trim() === "") return;
+                              setOverrides((o) => ({
+                                ...o,
+                                [candidate.applicationId]: overrideDraft.trim(),
+                              }));
+                              setOverriding(null);
+                            }}
+                          >
+                            Confirm override
+                          </Button>
+                        </div>
+                      )}
+                      <p className="text-sm text-ink-500">
+                        {applicant?.rollNumber} · CGPA {applicant?.overallCgpa}
+                      </p>
+                      {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
                         skills" told the coordinator nothing about what the
                         student HAS. Their own scores, or an honest gap. */}
-                    {applicant !== undefined &&
-                      (applicant.skillScores.length === 0 ? (
-                        <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
-                      ) : (
-                        <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
-                          {applicant.skillScores.map(({ skill, score }) => (
-                            <span
-                              key={skill}
-                              className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
-                            >
-                              {skill} {score}/{SKILL_SCORE_MAX}
-                            </span>
-                          ))}
-                        </p>
-                      ))}
-                    <ul className="mt-1 text-xs text-ink-500">
-                      {candidate.reasons.map((reason) => (
-                        <li key={reason}>{reason}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  {/*
-                   * The score used to be printed here. Removed 2026-08-17: it
-                   * was not used, and a number nobody acts on is a number that
-                   * has to be explained forever. It is still CALCULATED - it
-                   * orders this list - and still saved with the decision,
-                   * because PRD 13.1 wants the recommendation kept beside the
-                   * choice. It is simply not shown.
-                   */}
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
+                      {applicant !== undefined &&
+                        (applicant.skillScores.length === 0 ? (
+                          <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
+                        ) : (
+                          <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
+                            {applicant.skillScores.map(({ skill, score }) => (
+                              <span
+                                key={skill}
+                                className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
+                              >
+                                {skill} {score}/{SKILL_SCORE_MAX}
+                              </span>
+                            ))}
+                          </p>
+                        ))}
+                      <ul className="mt-1 text-xs text-ink-500">
+                        {candidate.reasons.map((reason) => (
+                          <li key={reason}>{reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    {/*
+                     * The score used to be printed here. Removed 2026-08-17: it
+                     * was not used, and a number nobody acts on is a number that
+                     * has to be explained forever. It is still CALCULATED - it
+                     * orders this list - and still saved with the decision,
+                     * because PRD 13.1 wants the recommendation kept beside the
+                     * choice. It is simply not shown.
+                     */}
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
+        </>
       )}
 
       {/* F2 (UAT 2026-08-19): an accidental save notifies real students and
@@ -486,14 +566,17 @@ export function ShortlistPage({
             <p className="mt-2 text-sm text-ink-700">
               <strong>{selected.length}</strong> {selected.length === 1 ? "student" : "students"}{" "}
               will be shortlisted for {drive?.companyName ?? "this drive"}. They will be{" "}
-              <strong>notified</strong> and <strong>scheduled for Round 1</strong>.{" "}
-              {ranked.length - selected.length > 0 && (
-                <>
-                  {ranked.length - selected.length}{" "}
-                  {ranked.length - selected.length === 1 ? "applicant" : "applicants"} will be left
-                  off.
-                </>
-              )}
+              <strong>notified</strong> and <strong>scheduled for Round 1</strong>. {(() => {
+                // "Left off" counts only the UNDECIDED — the already-
+                // shortlisted are neither re-saved nor left off (2026-08-21).
+                const undecided = ranked.length - alreadyShortlisted.length;
+                const leftOff = undecided - selected.length;
+                return leftOff > 0 ? (
+                  <>
+                    {leftOff} {leftOff === 1 ? "applicant" : "applicants"} will be left off.
+                  </>
+                ) : null;
+              })()}
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setConfirming(false)}>

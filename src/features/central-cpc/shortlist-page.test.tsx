@@ -125,19 +125,59 @@ describe("ShortlistPage", () => {
     expect(weak?.score).toBeLessThan(strong?.score ?? 0);
   });
 
-  it("pre-selects anyone already shortlisted", async () => {
+  /**
+   * SPEC CHANGE 2026-08-21 (Karthik): "Even though the shortlisted people are
+   * shown with a tag, subsequently I can still select them and shortlist them
+   * again." This test used to assert they came back PRE-TICKED — which is
+   * exactly what made re-shortlisting possible. They now live on their own
+   * read-only tab instead.
+   */
+  it("keeps the already-shortlisted OFF the working tab — on their own, read-only", async () => {
+    const user = userEvent.setup();
     render(
       <ShortlistPage
         driveId="d1"
         view={view({
-          applicants: async () => [{ ...STRONG, shortlisted: true }],
+          applicants: async () => [{ ...STRONG, shortlisted: true }, WEAK],
         })}
       />,
     );
 
+    // The working tab holds only the undecided.
+    await screen.findByText("Weak Candidate");
+    expect(screen.queryByText("Strong Candidate")).toBeNull();
+
+    // The shortlisted tab shows them — with the badge, without a checkbox.
+    await user.click(screen.getByRole("button", { name: /^shortlisted \(1\)/i }));
     const row = (await screen.findByText("Strong Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
-    expect((within(row).getByRole("checkbox") as HTMLInputElement).checked).toBe(true);
+    expect(within(row).getByText(/shortlisted/i)).toBeDefined();
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+  });
+
+  /** The save must not carry the already-shortlisted — they are decided. */
+  it("never re-submits an already-shortlisted student with the save", async () => {
+    const saveShortlist = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          applicants: async () => [{ ...STRONG, shortlisted: true }, WEAK],
+          saveShortlist,
+        })}
+      />,
+    );
+
+    const row = (await screen.findByText("Weak Candidate")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await user.click(within(row).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+    await user.click(await confirmButton());
+
+    await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
+    const [, decisions] = saveShortlist.mock.calls[0] as [string, ShortlistDecision[]];
+    expect(decisions.map((d) => d.applicationId)).toEqual(["app-weak"]);
   });
 
   it("says so plainly when nobody has applied", async () => {
@@ -293,16 +333,27 @@ describe("ShortlistPage \u2014 after saving", () => {
     expect(saved.textContent).toMatch(/shortlist/i);
   });
 
-  it("marks the students who are on it, so the list is not just checkboxes again", async () => {
+  /**
+   * SPEC CHANGE 2026-08-21: a saved student now MOVES to the Shortlisted tab
+   * rather than staying put with a badge — the badge alone left them
+   * selectable, which is the bug this round fixes.
+   */
+  it("moves the saved students to the Shortlisted tab", async () => {
     const user = userEvent.setup();
     render(<ShortlistPage driveId="d1" view={persistingView()} />);
 
     await shortlistOne(user);
     await screen.findByRole("status");
 
-    const row = screen.getByText("Strong Candidate").closest("li");
+    // Gone from the working tab…
+    expect(screen.queryByText("Strong Candidate")).toBeNull();
+
+    // …present, badged and un-tickable on the Shortlisted tab.
+    await user.click(screen.getByRole("button", { name: /^shortlisted \(1\)/i }));
+    const row = (await screen.findByText("Strong Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
     expect(within(row).getByText(/shortlisted/i)).toBeDefined();
+    expect(within(row).queryByRole("checkbox")).toBeNull();
   });
 
   it("clears the confirmation as soon as the selection changes again", async () => {
@@ -312,7 +363,9 @@ describe("ShortlistPage \u2014 after saving", () => {
     await shortlistOne(user);
     await screen.findByRole("status");
 
-    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+    // Strong moved to the Shortlisted tab; ticking someone still undecided
+    // makes the confirmation stale.
+    await user.click(screen.getByRole("checkbox", { name: /shortlist weak candidate/i }));
 
     expect(screen.queryByRole("status")).toBeNull();
   });

@@ -173,6 +173,24 @@ export function createSupabaseResultsView(
       if (advancing.length === 0) return 0;
 
       /**
+       * UAT 2026-08-21 (live): students marked selected AFTER an earlier
+       * advance rebuilt a batch containing someone already in the next round.
+       * Her unique key refused the WHOLE insert, and every retry rebuilt the
+       * same batch — "Could not schedule the participants", forever. Only
+       * the not-yet-scheduled travel, and only they are counted.
+       */
+      const { data: existing, error: existingError } = await client
+        .from("round_participants")
+        .select("application_id")
+        .eq("round_id", toRoundId);
+      if (existingError !== null) {
+        throw new ResultsViewError("Could not read who is already in the next round.");
+      }
+      const already = new Set((existing ?? []).map((row) => row.application_id as string));
+      const newcomers = advancing.filter((id) => !already.has(id));
+      if (newcomers.length === 0) return 0;
+
+      /**
        * F3: the proof is uploaded BEFORE the advance (the 0051 order — an
        * object with no row is invisible; a row pointing at nothing is a link
        * that opens nothing), and its loss is non-fatal: the advance is the
@@ -192,8 +210,8 @@ export function createSupabaseResultsView(
         }
       }
 
-      await rounds.scheduleParticipants(toRoundId, advancing);
-      return advancing.length;
+      await rounds.scheduleParticipants(toRoundId, newcomers);
+      return newcomers.length;
     },
 
     /**

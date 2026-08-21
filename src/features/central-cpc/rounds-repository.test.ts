@@ -48,6 +48,32 @@ describe("createSupabaseRoundsRepository", () => {
       const attendance = bodies[1] as unknown as Array<Record<string, unknown>>;
       expect(attendance[0]?.status).toBe("scheduled");
     });
+
+    /**
+     * UAT 2026-08-21 (screenshot): "Could not schedule the participants." —
+     * and nothing else. The database said exactly what was wrong (a unique
+     * key refused a duplicate) and the screen threw that detail away, so the
+     * coordinator could neither fix it nor report it. The refusal must carry
+     * the database's own words.
+     */
+    it("carries the database's explanation when the insert is refused", async () => {
+      server.use(
+        http.post(`${BASE}/rest/v1/round_participants`, () =>
+          HttpResponse.json(
+            {
+              code: "23505",
+              message:
+                'duplicate key value violates unique constraint "one_participation_per_round"',
+            },
+            { status: 409 },
+          ),
+        ),
+      );
+
+      await expect(repo().scheduleParticipants("r1", ["app1"])).rejects.toThrow(
+        /duplicate key value/i,
+      );
+    });
   });
 
   describe("markAttendance", () => {

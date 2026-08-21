@@ -4,6 +4,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class RoundsError extends Error {}
 
+/**
+ * UAT 2026-08-21: "there is a error msg. but not in full detail." The screen
+ * said "Could not schedule the participants." while the database had named
+ * the exact constraint that refused. The summary stays first — it says what
+ * the coordinator was DOING — and the database's own words follow, so the
+ * refusal can be fixed or reported instead of merely retried.
+ */
+const withDetail = (summary: string, error: { message?: string }): RoundsError =>
+  new RoundsError(
+    typeof error.message === "string" && error.message.trim() !== ""
+      ? `${summary} (${error.message})`
+      : summary,
+  );
+
 export interface RoundsRepository {
   /** The recruiter's chosen participants, uploaded by the Central CPC (Q9). */
   scheduleParticipants(roundId: string, applicationIds: readonly string[]): Promise<void>;
@@ -59,7 +73,7 @@ export function createSupabaseRoundsRepository(
         )
         .select("id");
 
-      if (error !== null) throw new RoundsError("Could not schedule the participants.");
+      if (error !== null) throw withDetail("Could not schedule the participants.", error);
 
       // Scheduling is what makes attendance markable at all, so the rows are
       // created together rather than lazily on first mark.
@@ -75,7 +89,10 @@ export function createSupabaseRoundsRepository(
         .select("id");
 
       if (attendanceError !== null) {
-        throw new RoundsError("Participants were scheduled but attendance could not be prepared.");
+        throw withDetail(
+          "Participants were scheduled but attendance could not be prepared.",
+          attendanceError,
+        );
       }
     },
 
@@ -93,7 +110,7 @@ export function createSupabaseRoundsRepository(
         .select("id")
         .single();
 
-      if (error !== null) throw new RoundsError("Could not save attendance. Please try again.");
+      if (error !== null) throw withDetail("Could not save attendance.", error);
     },
 
     async recordResult(roundId, applicationId, result, isScheduled) {
@@ -119,7 +136,7 @@ export function createSupabaseRoundsRepository(
         .select("id")
         .single();
 
-      if (error !== null) throw new RoundsError("Could not record the result. Please try again.");
+      if (error !== null) throw withDetail("Could not record the result.", error);
     },
 
     async nextRoundParticipants(roundId) {
