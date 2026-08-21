@@ -90,6 +90,21 @@ stage drill-through. **All ✅.**
 
 ---
 
+## Karthik's decisions on the open items (2026-08-21, evening)
+
+1. **CSV phone column — CLOSED.** SRF collection is acceptable; the roster
+   template stays minimal.
+2. **Master resume + AI — stays Phase 2.** Current rule confirmed: one
+   resume per selected role area, and a resume MUST be attached for every
+   area the student chose. (Already enforced: `missingResumesFor` blocks
+   SRF submission until every selected area has its resume — PRD §4.1.)
+3. **Zoho — on hold** (was "awaiting go"; now explicitly held).
+4. **Skills on the publish screen — BUILT & SHIPPED** same evening:
+   "Must-have skills: …" inline under the publish header, honest
+   "No must-have skills declared on the PIF." when absent.
+5. **Email server — later**, as before.
+6. **Superseded items — confirmed OK** as decided.
+
 ## Summary — what a tester could legitimately flag as "not incorporated"
 
 1. **❌ CSV phone column (page-1 item 2)** — roster template still has no

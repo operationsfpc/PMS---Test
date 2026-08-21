@@ -26,7 +26,7 @@ export const PUBLISH_DRIVE_COLUMNS = `
   application_start, application_end, on_hold,
   min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
   min_tenth_percentage, min_twelfth_percentage,
-  arrears_policy, round_count,
+  arrears_policy, round_count, mandatory_skills,
   drive_rounds(id, sequence, name),
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
@@ -256,6 +256,8 @@ export function createSupabasePublishView(
             : Number(row.min_twelfth_percentage),
         arrearPolicy:
           (row.arrears_policy as EligibilityCriteria["arrearPolicy"] | null) ?? "flexible",
+        // Item 38 (2026-08-21): stated inline on the publish screen.
+        mandatorySkills: (row.mandatory_skills as string | null) ?? "",
         targeting: {
           cities: targetedCities(row.drive_target_campuses),
           campuses: linkedNames(row.drive_target_campuses, "campuses"),

@@ -4,6 +4,20 @@
 
 ---
 
+## ✅ 2026-08-21 (late evening) — tracker audit + item 38 inline skills
+
+Full verification of the whole Meetings Tracker against the code:
+`docs/specs/2026-08-21-tracker-verification.md` (51 of ~60 asks verified
+done; the rest decided). Karthik's answers: CSV phone → SRF is fine (closed);
+master-resume AI → Phase 2, per-area resume requirement confirmed (already
+enforced by `missingResumesFor`); Zoho → ON HOLD; skills inline on publish →
+BUILT (PublishDrive.mandatorySkills, publish-view select + DafPublish line);
+email server → later. Shipped: Cloudflare `bd65623e-49ac-4842-9d10-817d625aeb52`,
+JS `index-Ckmnu01d.js` byte-identical (sha256 `539a9cb0…`). Suite: 3507 tests,
+`pnpm check` exit 0. No migration (remote stays at 0057).
+
+---
+
 ## ✅ SHIPPED 2026-08-21 — 21/08 UAT items 1 & 2, migration 0056
 
 Live Cloudflare `0d819c4d-2dc8-4d7c-baa7-366106a37920`, JS `index-DlGFmSHJ.js`

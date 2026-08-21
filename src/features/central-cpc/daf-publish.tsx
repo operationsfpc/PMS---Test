@@ -68,6 +68,12 @@ export interface PublishDrive {
   /** The school bars, set here (2026-08-18). Null means the drive sets none. */
   readonly minTenthPercentage: number | null;
   readonly minTwelfthPercentage: number | null;
+  /**
+   * Tracker item 38 (answer 4, 2026-08-21): the skills the AE tagged to the
+   * role, stated INLINE here — the coordinator publishing a drive should not
+   * need the record page to know what it demands. "" means none declared.
+   */
+  readonly mandatorySkills: string;
   readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
   readonly targeting: DriveTargeting;
   /**
@@ -453,6 +459,17 @@ export function DafPublish({ view }: { view: PublishView }) {
         title={`Publish drive — ${loadedDrive.companyName}`}
         subtitle={loadedDrive.subtitle}
       />
+
+      {/* Item 38 (2026-08-21): the role's skills, alongside the company info —
+          and an honest "none declared" rather than silence. */}
+      <p className="mb-4 text-sm text-ink-700">
+        <span className="font-semibold">Must-have skills:</span>{" "}
+        {loadedDrive.mandatorySkills.trim() === "" ? (
+          <span className="text-ink-500">No must-have skills declared on the PIF.</span>
+        ) : (
+          loadedDrive.mandatorySkills
+        )}
+      </p>
 
       {failure !== null && (
         <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">

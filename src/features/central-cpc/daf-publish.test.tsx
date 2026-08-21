@@ -74,6 +74,7 @@ const DRIVE: PublishDrive = {
   minTenthPercentage: null,
   minTwelfthPercentage: null,
   arrearPolicy: "flexible",
+  mandatorySkills: "TypeScript, SQL",
   targeting: { cities: [], campuses: [], degrees: [], branches: [] },
 };
 
@@ -599,5 +600,35 @@ describe("DafPublish — the 10th and 12th bars", () => {
     await userEvent.type(screen.getByLabelText(/minimum 10th/i), "95");
 
     await waitFor(() => expect(count()).toBe(0));
+  });
+});
+
+/**
+ * Tracker item 38, second half (answer 4, 2026-08-21): the skills tagged to
+ * the role, INLINE on the publish screen — the coordinator publishing a
+ * drive should not need to open the record page to know what it demands.
+ */
+describe("the role's must-have skills, on the publish screen", () => {
+  it("names them alongside the other company info", async () => {
+    render(<DafPublish view={view()} />);
+
+    expect(await screen.findByText(/must-have skills/i)).toBeDefined();
+    expect(screen.getByText(/TypeScript, SQL/)).toBeDefined();
+  });
+
+  it("admits when the role declares none, rather than staying silent", async () => {
+    render(
+      <DafPublish
+        view={view({
+          load: async () => ({
+            drive: { ...DRIVE, mandatorySkills: "" },
+            options: { cities: [], campuses: [], degrees: [], branches: [] },
+            cohort: [],
+          }),
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/no must-have skills declared/i)).toBeDefined();
   });
 });
