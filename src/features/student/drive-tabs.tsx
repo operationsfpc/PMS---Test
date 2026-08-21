@@ -53,6 +53,13 @@ export interface StudentDriveLists {
    * drives and said nothing. The banner says what remains open instead.
    */
   readonly placedAt?: OfferCategory | null;
+  /**
+   * Q2 (UAT 2026-08-21): whether the one-internship allowance (R4) is used.
+   * With the cap consumed, plain internship drives are hidden — the banner
+   * must say so, or the "higher categories remain open" promise reads as a
+   * lie the day an internship drive fails to appear.
+   */
+  readonly internshipCapConsumed?: boolean;
 }
 
 export interface StudentDriveListsView extends DrivesView {
@@ -192,6 +199,9 @@ export function DriveTabs({
           <p className="text-sm text-ink-900">
             You are placed — <strong>{offerCategoryLabel(lists.placedAt)}</strong>. Drives in higher
             categories remain open to you and appear in “To apply” as they come.
+            {lists.internshipCapConsumed === true && (
+              <> Internship-only drives are closed — your one-internship allowance is used.</>
+            )}
           </p>
         </Card>
       )}

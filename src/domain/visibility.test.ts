@@ -176,7 +176,16 @@ describe("isDriveVisibleToStudent", () => {
     });
   });
 
-  describe("the internship cap is checked BEFORE the ladder (decision Q2)", () => {
+  describe("the internship cap hides only PLAIN internship drives (Q1b, UAT 2026-08-21)", () => {
+    /**
+     * Supersedes decision Q2 (2026-08-12), which checked the cap before the
+     * ladder for convertibles too. UAT 2026-08-21: a student placed Regular
+     * via an internship-convertible drive could not see a DREAM convertible
+     * drive, while the banner promised higher categories stay open. Karthik,
+     * 2026-08-21, answer Q1: (b) — the cap blocks plain internship drives
+     * only; a convertible drive is primarily a placement and the LADDER
+     * decides it.
+     */
     const withInternship = student({
       offers: [offer({ id: "i1", driveType: "internship", offerCategory: null })],
     });
@@ -189,19 +198,49 @@ describe("isDriveVisibleToStudent", () => {
       expect(result).toMatchObject({ visible: false, reason: "internship_cap_consumed" });
     });
 
-    it("hides internship-convertible drives once the cap is consumed", () => {
+    it("shows an internship-convertible drive to a capped but unplaced student", () => {
       const result = isDriveVisibleToStudent(
         withInternship,
         drive({ driveType: "internship_convertible", offerCategory: "dream" }),
       );
-      expect(result).toMatchObject({ visible: false, reason: "internship_cap_consumed" });
+      expect(result).toMatchObject({ visible: true, reason: "visible" });
     });
 
-    it("hides a SUPER DREAM internship-convertible drive once the cap is consumed", () => {
-      // The ladder would have allowed this. The cap wins.
+    it("shows a HIGHER-category convertible to a convertible-placed student (the 21/08 report)", () => {
+      // TestShash, live: placed Regular via a Deloitte internship-convertible
+      // offer; the HCL Dream internship-convertible drive must appear.
+      const placedViaConvertible = student({
+        offers: [
+          offer({ id: "c1", driveType: "internship_convertible", offerCategory: "regular" }),
+        ],
+      });
       const result = isDriveVisibleToStudent(
-        withInternship,
-        drive({ driveType: "internship_convertible", offerCategory: "super_dream" }),
+        placedViaConvertible,
+        drive({ driveType: "internship_convertible", offerCategory: "dream" }),
+      );
+      expect(result).toMatchObject({ visible: true, reason: "visible" });
+    });
+
+    it("still hides an EQUAL-category convertible from a convertible-placed student — the ladder", () => {
+      const placedViaConvertible = student({
+        offers: [offer({ id: "c1", driveType: "internship_convertible", offerCategory: "dream" })],
+      });
+      const result = isDriveVisibleToStudent(
+        placedViaConvertible,
+        drive({ driveType: "internship_convertible", offerCategory: "dream" }),
+      );
+      expect(result).toMatchObject({ visible: false, reason: "placed_at_equal_or_higher" });
+    });
+
+    it("still hides a plain internship drive from a convertible-placed student", () => {
+      const placedViaConvertible = student({
+        offers: [
+          offer({ id: "c1", driveType: "internship_convertible", offerCategory: "regular" }),
+        ],
+      });
+      const result = isDriveVisibleToStudent(
+        placedViaConvertible,
+        drive({ driveType: "internship", offerCategory: null }),
       );
       expect(result).toMatchObject({ visible: false, reason: "internship_cap_consumed" });
     });

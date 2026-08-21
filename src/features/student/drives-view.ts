@@ -1,7 +1,8 @@
 import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
+import { describeDriveVenue } from "@domain/drive-venue";
 import { describeJoining } from "@domain/joining";
-import { highestOfferCategory, type Offer } from "@domain/offers";
+import { highestOfferCategory, isInternshipCapConsumed, type Offer } from "@domain/offers";
 import { describeShift } from "@domain/shift";
 import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
@@ -82,7 +83,7 @@ export const DRIVE_COLUMNS = `
   job_description, work_locations, ctc_breakup, bond_details, shift_type,
   shift_night_timing, timeline_notes, joining_timeline, joining_immediate_notes,
   joining_later_notes, jd_storage_path, jd_file_name,
-  mandatory_skills, drive_mode, openings, additional_designations,
+  mandatory_skills, drive_mode, venue, openings, additional_designations,
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name))),
@@ -401,6 +402,14 @@ export function createSupabaseDrivesView(
               jobDescriptionName: (raw.jd_file_name as string | null) ?? null,
               mandatorySkills: text(raw.mandatory_skills),
               driveMode: text(raw.drive_mode),
+              // UAT 2026-08-21 item 2: worded by the domain — named when
+              // recorded, "Venue to be confirmed" when the mode is off-campus
+              // and the CPC has not recorded it yet. "" hides the row.
+              venue:
+                describeDriveVenue(
+                  (raw.drive_mode as Parameters<typeof describeDriveVenue>[0]) ?? null,
+                  (raw.venue as string | null) ?? null,
+                ) ?? "",
               applicationStart: (raw.application_start as string | null) ?? null,
               rounds: (Array.isArray(raw.drive_rounds) ? raw.drive_rounds : [])
                 .map((r) => ({
@@ -591,6 +600,10 @@ export function createSupabaseDrivesView(
         // C2 (UAT 2026-08-19): the rung they hold, so the tabs can say what
         // remains open instead of looking shut.
         placedAt: highestOfferCategory(student.offers),
+        // Q2 (UAT 2026-08-21): and whether the one-internship allowance is
+        // used — the banner says internship-only drives are closed, instead
+        // of promising "higher categories" while they quietly vanish.
+        internshipCapConsumed: isInternshipCapConsumed(student.offers),
       };
     },
   };

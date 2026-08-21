@@ -40,6 +40,7 @@ const openCard: OpenDrive = {
     jobDescriptionName: null,
     mandatorySkills: "",
     driveMode: "",
+    venue: "",
     applicationStart: null,
     rounds: [],
   },
@@ -109,6 +110,32 @@ describe("DriveTabs — a placed student is not locked out (C2, UAT 2026-08-19)"
 
     await screen.findByText("Zoho");
     expect(screen.queryByText(/you are placed/i)).toBeNull();
+  });
+
+  it("admits internship drives are closed when the one-internship allowance is used (Q2, 2026-08-21)", async () => {
+    render(
+      <DriveTabs
+        view={view({ ...LISTS, placedAt: "regular", internshipCapConsumed: true })}
+        now={NOW}
+      />,
+    );
+
+    const note = await screen.findByText(/you are placed/i);
+    expect(note.textContent).toMatch(/higher/i);
+    expect(note.textContent).toMatch(/internship-only drives are closed/i);
+    expect(note.textContent).toMatch(/one-internship allowance/i);
+  });
+
+  it("does not mention the internship allowance when it is untouched", async () => {
+    render(
+      <DriveTabs
+        view={view({ ...LISTS, placedAt: "regular", internshipCapConsumed: false })}
+        now={NOW}
+      />,
+    );
+
+    const note = await screen.findByText(/you are placed/i);
+    expect(note.textContent).not.toMatch(/internship-only/i);
   });
 });
 

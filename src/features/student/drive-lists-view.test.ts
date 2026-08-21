@@ -194,6 +194,47 @@ describe("lists — each drive lands in exactly one of the four", () => {
     ]);
   });
 
+  /** Q2 (UAT 2026-08-21): the banner's honesty about the internship cap. */
+  it("reports the rung held AND whether the internship allowance is used", async () => {
+    stub({
+      offers: [
+        {
+          id: "o1",
+          drive_id: "d9",
+          drive_type: "internship_convertible",
+          offer_category: "regular",
+          ctc_lpa: 5,
+          declared_at: "2026-09-01T00:00:00Z",
+          source: "on_campus",
+        },
+      ],
+    });
+    const lists = await view().lists();
+
+    expect(lists.placedAt).toBe("regular");
+    expect(lists.internshipCapConsumed).toBe(true);
+  });
+
+  it("reports the allowance untouched for a student with no internship offer", async () => {
+    stub({
+      offers: [
+        {
+          id: "o1",
+          drive_id: "d9",
+          drive_type: "placement",
+          offer_category: "regular",
+          ctc_lpa: 5,
+          declared_at: "2026-09-01T00:00:00Z",
+          source: "on_campus",
+        },
+      ],
+    });
+    const lists = await view().lists();
+
+    expect(lists.placedAt).toBe("regular");
+    expect(lists.internshipCapConsumed).toBe(false);
+  });
+
   it("an applied drive is In progress even when the student is no longer 'eligible' — history is not re-judged", async () => {
     stub({
       drives: [

@@ -85,7 +85,6 @@ export interface VisibilityResult {
 }
 
 const LADDER_DRIVE_TYPES: readonly DriveType[] = ["placement", "internship_convertible"];
-const INTERNSHIP_DRIVE_TYPES: readonly DriveType[] = ["internship", "internship_convertible"];
 
 /**
  * R5 — is this NEW drive visible to this student?
@@ -152,9 +151,17 @@ export function isDriveVisibleToStudent(
     return { visible: false, reason: "drive_type_not_preferred" };
   }
 
-  // The cap is checked before the ladder (decision Q2): a Super Dream
-  // internship-convertible drive is still hidden from a capped student.
-  if (INTERNSHIP_DRIVE_TYPES.includes(drive.driveType) && isInternshipCapConsumed(student.offers)) {
+  /**
+   * R4 — the cap hides PLAIN internship drives only (Q1b, UAT 2026-08-21,
+   * superseding decision Q2 of 2026-08-12). An internship-convertible drive
+   * is primarily a placement, so the LADDER below decides it — a student
+   * placed Regular via a convertible offer keeps Dream convertibles open,
+   * exactly as the placed-banner promises. Consuming the cap is unchanged:
+   * any internship or convertible OFFER still uses the one allowance
+   * (isInternshipCapConsumed), so plain internship drives close forever.
+   * Mirrored by `enforce_application_gates` in 0056; change both or neither.
+   */
+  if (drive.driveType === "internship" && isInternshipCapConsumed(student.offers)) {
     return { visible: false, reason: "internship_cap_consumed" };
   }
 

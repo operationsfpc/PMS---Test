@@ -1,4 +1,4 @@
-I am learning course on LLMs today. This is Tinker LLM course designed by Kalviyam.# UAT Feedback — 20/08 round (from `docs/inbox/Meetings Tracker .pdf`, pages 11–17)
+# UAT Feedback — 20/08 round (from `docs/inbox/Meetings Tracker .pdf`, pages 11–17)
 
 **Status: ✅ SHIPPED 2026-08-20.** All seven groups live — Cloudflare version
 `32e3954e-eb2c-48e6-ba1e-370a83a9a842`, JS byte-identical to `dist/`
