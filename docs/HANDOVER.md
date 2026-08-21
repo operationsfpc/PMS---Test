@@ -4,6 +4,28 @@
 
 ---
 
+## ✅ 2026-08-21 (late) — CPC-draft purge (live SQL, no code change)
+
+Central CPC can no longer raise drives (0047), but 3 drafts she created
+BEFORE that migration still sat in Yet-to-publish. Deleted from live via
+Management API with `status='draft'` guard: Wipro / Jr. Software engineer
+(06-08), Accenture / Jr. Software engineer (11-08), Accenture / Junior
+Associate (19-08) — all `created_by` "Shashwathi AE" (a CPC profile despite
+the name). Pre-checked dependents: 0 applications, 0 offers, 0 documents;
+3 draft rounds cascaded. Verified 0 CPC drafts remain. One-time cleanup —
+0047 prevents recurrence. The two `rejected` SampleTest101 drives (real AE)
+were left alone (A39: rejected shows on no Central screen).
+
+Also answered (no change): the shortlisting "Scored on 0 of 2 required
+skills" — the drive's free-text `mandatory_skills` ("Coding, Testing",
+typed at publish) match skill-REPOSITORY area names case-insensitively in
+`rankApplicants`; none of the 8 areas is named Coding/Testing → 0/2. The
+chips on the row ARE repository scores (staff-entered, 0037) — students
+never enter skills. Open design question: free-text mandatory skills vs.
+picking from `skill_areas` at publish (a picker would make 0/n impossible).
+
+---
+
 ## ✅ 2026-08-21 (late evening) — tracker audit + item 38 inline skills
 
 Full verification of the whole Meetings Tracker against the code:
