@@ -1,4 +1,5 @@
 import { jobDescriptionFileProblem } from "@domain/attachments";
+import { driveVenueApplies } from "@domain/drive-venue";
 import { JOINING_TIMELINES, joiningNotesFor } from "@domain/joining";
 import { isValidForScale, MARKS_SCALES } from "@domain/marks";
 import { nightTimingFor, nightTimingIsMissing, SHIFT_TYPES } from "@domain/shift";
@@ -96,6 +97,10 @@ export const PIF_DEFAULTS = {
   eligiblePassingYears: [] as number[],
   mandatorySkills: "",
   driveMode: "",
+  // UAT 2026-08-21 item 2: the off-campus venue. Absence is a legitimate
+  // answer at PIF time — the Central CPC records it later once confirmed.
+  venueStatus: "not_yet_confirmed",
+  venue: "",
   tentativeDate: "",
   timelineNotes: "",
   joiningTimeline: "",
@@ -193,6 +198,15 @@ export const pifDraftSchema = z.object({
   eligiblePassingYears: passingYears.default([]),
   mandatorySkills: optionalText,
   driveMode: z.enum(["", ...DRIVE_MODES]).default(""),
+  /**
+   * UAT 2026-08-21 item 2: where an off-campus (physical-outside or pooled)
+   * drive happens. "Not yet confirmed" must never block a submit — the venue
+   * often is not final when the AE files the PIF; the Central CPC follows up
+   * (answer Q5). Judged in `pifSubmitSchema` only when the mode has a venue
+   * at all (`@domain/drive-venue`).
+   */
+  venueStatus: z.enum(["not_yet_confirmed", "confirmed"]).default("not_yet_confirmed"),
+  venue: optionalText,
   tentativeDate: optionalText,
   /**
    * The prose box J3 replaces. Kept in the contract because four live drives
@@ -343,6 +357,19 @@ export const pifSubmitSchema = pifDraftSchema
     path: ["shiftNightTiming"],
     message: "Give the hours of the night shift — a student plans their travel around them.",
   })
+  /**
+   * UAT 2026-08-21 item 2: "Venue confirmed" with nothing typed is not a
+   * venue. "Not yet confirmed" always submits — blocking the AE on a fact
+   * the company has not given them is the bug this field exists to fix.
+   */
+  .refine(
+    (v) =>
+      !driveVenueApplies(v.driveMode) || v.venueStatus !== "confirmed" || v.venue.trim() !== "",
+    {
+      path: ["venue"],
+      message: "Type the venue, or choose “Venue not yet confirmed”.",
+    },
+  )
   /**
    * Anything the AE typed and then abandoned by changing a radio is dropped
    * HERE, not merely hidden by the form. A hidden field still submits, and

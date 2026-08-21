@@ -138,6 +138,73 @@ describe("PifForm", () => {
 /**
  * F7, F11 and F12 (UAT 2026-08-06) — three things the PIF was not collecting.
  */
+describe("the off-campus venue on the PIF (UAT 2026-08-21, item 2)", () => {
+  it("asks for the venue only when the mode happens off campus", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    expect(screen.queryByRole("radio", { name: /venue not yet confirmed/i })).toBeNull();
+
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "physical_outside_campus");
+    expect(screen.getByRole("radio", { name: /venue not yet confirmed/i })).toBeDefined();
+
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "on_campus");
+    expect(screen.queryByRole("radio", { name: /venue not yet confirmed/i })).toBeNull();
+  });
+
+  it("submits with the venue not yet confirmed — the AE is never blocked", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "physical_outside_campus");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ venueStatus: "not_yet_confirmed" });
+  });
+
+  it("collects a confirmed venue, and clears it when the mode moves back on campus", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "pooled");
+    await user.click(screen.getByRole("radio", { name: /venue confirmed/i }));
+    await user.type(screen.getByLabelText(/^venue$/i), "Kamaraj College, Madurai");
+
+    // The mode changes its mind — the typed venue must not survive in hiding.
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "on_campus");
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "pooled");
+    expect(
+      (screen.getByRole("radio", { name: /venue not yet confirmed/i }) as HTMLInputElement).checked,
+    ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+    });
+  });
+
+  it("demands the venue text once the AE says it is confirmed", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "physical_outside_campus");
+    await user.click(screen.getByRole("radio", { name: /venue confirmed/i }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(await screen.findByText(/type the venue/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
 describe("PifForm — what the recruiter actually said", () => {
   const show = () => render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 

@@ -18,7 +18,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
       const { data: drives } = await client
         .from("drives")
         .select(
-          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, created_at, application_end, drive_rounds(id, sequence, name)",
+          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, created_at, application_end, drive_mode, venue, drive_rounds(id, sequence, name)",
         )
         .order("created_at", { ascending: false });
 
@@ -48,6 +48,9 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
             // G1a/G1d (UAT 2026-08-20): the card's age and its deadline.
             createdAt: (row.created_at as string | null) ?? null,
             applicationEnd: (row.application_end as string | null) ?? null,
+            // UAT 2026-08-21 item 2: the off-campus venue, if the mode has one.
+            driveMode: (row.drive_mode as string | null) ?? null,
+            venue: (row.venue as string | null) ?? null,
             rounds: rounds
               .map((r) => ({
                 roundId: r.id as string,
@@ -58,6 +61,18 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
           };
         }),
       );
+    },
+
+    /**
+     * UAT 2026-08-21 item 2: the Central CPC records the venue the company
+     * finally confirmed. A plain UPDATE — RLS (drives_operator_update) and
+     * the audit trigger do the enforcement and the remembering.
+     */
+    async updateVenue(driveId: string, venue: string) {
+      const { error } = await client.from("drives").update({ venue }).eq("id", driveId);
+      if (error !== null) {
+        throw new Error("Could not save the venue. Check your access and try again.");
+      }
     },
 
     /**

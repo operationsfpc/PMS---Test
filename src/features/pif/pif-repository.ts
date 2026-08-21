@@ -1,4 +1,5 @@
 import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
+import { driveVenueApplies } from "@domain/drive-venue";
 import { joiningNotesFor } from "@domain/joining";
 import { normaliseToCgpa } from "@domain/marks";
 import { nightTimingFor } from "@domain/shift";
@@ -111,6 +112,14 @@ function toRow(
     mandatory_skills: nullIfBlank(values.mandatorySkills),
 
     drive_mode: nullIfBlank(values.driveMode),
+    // UAT 2026-08-21 item 2: the venue exists only where the mode has one and
+    // the AE said "confirmed" — anything typed and then abandoned is dropped
+    // here, not merely hidden by the form (the J2 lesson). Null IS the
+    // "not yet confirmed" state; the Central CPC fills it in later.
+    venue:
+      driveVenueApplies(values.driveMode) && values.venueStatus === "confirmed"
+        ? nullIfBlank(values.venue)
+        : null,
     tentative_date: nullIfBlank(values.tentativeDate),
     timeline_notes: nullIfBlank(values.timelineNotes),
     joining_timeline: nullIfBlank(values.joiningTimeline),

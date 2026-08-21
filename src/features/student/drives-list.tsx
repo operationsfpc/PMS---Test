@@ -24,6 +24,11 @@ export interface OpenDriveDetails {
   readonly jobDescriptionName: string | null;
   readonly mandatorySkills: string;
   readonly driveMode: string;
+  /**
+   * UAT 2026-08-21 item 2: already worded by `@domain/drive-venue` — the
+   * venue itself, "Venue to be confirmed", or "" when the mode has none.
+   */
+  readonly venue: string;
   readonly applicationStart: string | null;
   readonly rounds: readonly { readonly sequence: number; readonly name: string }[];
 }
@@ -261,6 +266,7 @@ export function DrivesList({
                     <dl className="grid gap-3 sm:grid-cols-2">
                       <Fact label="About the role" value={drive.details.jobDescription} />
                       <Fact label="Locations" value={drive.details.locations} />
+                      <Fact label="Venue" value={drive.details.venue} />
                       <Fact label="CTC breakup" value={drive.details.ctcBreakup} />
                       <Fact label="Must-have skills" value={drive.details.mandatorySkills} />
                       <Fact label="Shift" value={drive.details.shift} />

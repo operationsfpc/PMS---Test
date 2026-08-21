@@ -316,6 +316,7 @@ export interface DrivesRow {
   joining_later_notes: string | null;
   stipend_min_monthly: number | null;
   stipend_max_monthly: number | null;
+  venue: string | null;
 }
 
 export type DrivesInsert = Pick<DrivesRow, "company_name"> &
@@ -378,6 +379,7 @@ export type DrivesInsert = Pick<DrivesRow, "company_name"> &
       | "joining_later_notes"
       | "stipend_min_monthly"
       | "stipend_max_monthly"
+      | "venue"
     >
   >;
 

@@ -21,6 +21,7 @@ const RECORD: DriveRecord = {
   status: "live",
   driveType: "internship_convertible",
   driveMode: "on_campus",
+  venue: null,
   offerCategory: "dream",
   openings: 10,
   ctcLabel: "₹4–6 LPA",

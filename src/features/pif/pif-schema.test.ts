@@ -43,6 +43,59 @@ const complete = {
   ],
 };
 
+describe("the off-campus venue (UAT 2026-08-21, item 2)", () => {
+  it("never blocks a submit while the venue is not yet confirmed — the whole point", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      driveMode: "physical_outside_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a confirmed venue with its text", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      driveMode: "pooled",
+      venueStatus: "confirmed",
+      venue: "Kamaraj College, Madurai",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("refuses 'confirmed' with nothing typed — a confirmed venue IS its text", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      driveMode: "physical_outside_campus",
+      venueStatus: "confirmed",
+      venue: "   ",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path[0] === "venue")).toBe(true);
+    }
+  });
+
+  it("ignores the venue entirely when the mode happens on campus or online", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      driveMode: "on_campus",
+      venueStatus: "confirmed",
+      venue: "",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("defaults to not-yet-confirmed so an untouched form still submits", () => {
+    const result = pifSubmitSchema.safeParse({
+      ...complete,
+      driveMode: "physical_outside_campus",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
 describe("pifDraftSchema", () => {
   it("accepts an almost-empty draft, so an AE can save and come back", () => {
     const result = pifDraftSchema.safeParse({ ...PIF_DEFAULTS, companyName: "Zoho" });

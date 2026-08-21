@@ -158,6 +158,8 @@ export function DriveRecordPage({
           <dl className="grid gap-3 sm:grid-cols-2">
             <Fact label="Locations" value={record.locations} />
             <Fact label="Mode" value={record.driveMode.replaceAll("_", " ")} />
+            {/* UAT 2026-08-21 item 2: worded by the domain; null hides it. */}
+            <Fact label="Venue" value={record.venue ?? ""} />
             <Fact label="Applications open" value={when(record.applicationStart)} />
             <Fact label="Applications close" value={when(record.applicationEnd)} />
             <Fact label="Tentative drive date" value={when(record.tentativeDate)} />

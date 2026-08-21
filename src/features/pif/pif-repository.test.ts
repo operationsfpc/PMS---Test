@@ -101,6 +101,51 @@ describe("createSupabasePifRepository", () => {
     expect("offer_category" in body).toBe(false);
   });
 
+  it("stores a confirmed off-campus venue, and null when it is not yet confirmed (UAT 2026-08-21)", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "d1", status: "submitted" });
+      }),
+    );
+
+    await repo().submit({
+      ...values,
+      driveMode: "physical_outside_campus",
+      venueStatus: "confirmed",
+      venue: "HCL Campus, Sholinganallur",
+    });
+    expect(body.venue).toBe("HCL Campus, Sholinganallur");
+
+    await repo().submit({
+      ...values,
+      driveMode: "physical_outside_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "typed then abandoned",
+    });
+    expect(body.venue).toBeNull();
+  });
+
+  it("drops the venue when the mode has none — a hidden field still submits", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "d1", status: "submitted" });
+      }),
+    );
+
+    await repo().submit({
+      ...values,
+      driveMode: "on_campus",
+      venueStatus: "confirmed",
+      venue: "Anna Auditorium",
+    });
+
+    expect(body.venue).toBeNull();
+  });
+
   it("stores empty optional text as null rather than an empty string", async () => {
     let body: Record<string, unknown> = {};
     server.use(

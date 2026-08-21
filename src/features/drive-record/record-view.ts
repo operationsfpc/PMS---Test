@@ -1,4 +1,5 @@
 import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
+import { describeDriveVenue } from "@domain/drive-venue";
 import { describeJoining } from "@domain/joining";
 import type { OfferCategory } from "@domain/offer-category";
 import { describeShift } from "@domain/shift";
@@ -49,6 +50,11 @@ export interface DriveRecord {
   readonly status: DriveStatus;
   readonly driveType: string;
   readonly driveMode: string;
+  /**
+   * UAT 2026-08-21 item 2: already worded by `@domain/drive-venue` — the
+   * venue itself, "Venue to be confirmed", or null when the mode has none.
+   */
+  readonly venue: string | null;
   readonly offerCategory: OfferCategory | null;
   readonly openings: number | null;
   readonly ctcLabel: string;
@@ -92,7 +98,7 @@ export interface DriveRecordView {
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const RECORD_DRIVE_COLUMNS = `
   id, company_name, industry, company_website, role_title, additional_designations,
-  role_category, status, drive_type, drive_mode, offer_category, openings,
+  role_category, status, drive_type, drive_mode, venue, offer_category, openings,
   ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations,
   application_start, application_end, tentative_date,
   shift_type, shift_night_timing, joining_timeline, joining_immediate_notes,
@@ -214,6 +220,10 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         status: row.status as DriveStatus,
         driveType: text(row.drive_type),
         driveMode: text(row.drive_mode),
+        venue: describeDriveVenue(
+          (row.drive_mode as Parameters<typeof describeDriveVenue>[0]) ?? null,
+          (row.venue as string | null) ?? null,
+        ),
         offerCategory: (row.offer_category as OfferCategory | null) ?? null,
         openings: (row.openings as number | null) ?? null,
         ctcLabel:

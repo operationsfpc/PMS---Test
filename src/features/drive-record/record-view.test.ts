@@ -146,6 +146,20 @@ describe("createSupabaseDriveRecordView", () => {
     ]);
   });
 
+  /** UAT 2026-08-21 item 2: the off-campus venue, worded by the domain. */
+  it("words the venue — named when recorded, admitted when still unconfirmed", async () => {
+    stub({ drive: { ...driveRow, drive_mode: "physical_outside_campus", venue: null } });
+    expect((await view().record("d1"))?.venue).toBe("Venue to be confirmed");
+
+    stub({
+      drive: { ...driveRow, drive_mode: "pooled", venue: "Kamaraj College, Madurai" },
+    });
+    expect((await view().record("d1"))?.venue).toBe("Kamaraj College, Madurai");
+
+    stub();
+    expect((await view().record("d1"))?.venue).toBeNull();
+  });
+
   it("answers null for a drive RLS withholds — the page then says so", async () => {
     stub({ drive: null, applications: [] });
     expect(await view().record("dX")).toBeNull();

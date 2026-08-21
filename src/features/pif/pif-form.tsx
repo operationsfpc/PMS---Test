@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { describeFileSize } from "@domain/attachments";
+import { driveVenueApplies } from "@domain/drive-venue";
 import { JOINING_TIMELINES, joiningLabel } from "@domain/joining";
 import { MARKS_SCALES } from "@domain/marks";
 import { SHIFT_TYPES, shiftLabel } from "@domain/shift";
@@ -258,6 +259,8 @@ export function PifForm({
   /** J1/J2/J3 (2026-08-18): each drives a conditional part of the form. */
   const jobDescriptionFile = watch("jobDescriptionFile") ?? null;
   const shiftType = watch("shiftType") ?? "";
+  const driveMode = watch("driveMode") ?? "";
+  const venueStatus = watch("venueStatus") ?? "not_yet_confirmed";
   const joiningTimeline = watch("joiningTimeline") ?? "";
   /** A1/A2: the load-bearing first choice, and what compensation follows it. */
   const driveType = watch("driveType") ?? "";
@@ -774,7 +777,19 @@ export function PifForm({
         <Section title="Selection process and timeline">
           <Labelled label="Drive mode" error={err("driveMode")}>
             {(id) => (
-              <select id={id} className={control} {...register("driveMode")}>
+              <select
+                id={id}
+                className={control}
+                {...register("driveMode", {
+                  onChange: () => {
+                    // UAT 2026-08-21 item 2, the J2 lesson: a venue typed for
+                    // an off-campus mode must not survive, hidden, when the
+                    // mode changes its mind. Reset both halves.
+                    setValue("venueStatus", "not_yet_confirmed");
+                    setValue("venue", "");
+                  },
+                })}
+              >
                 <option value="">Select…</option>
                 {DRIVE_MODES.map((m) => (
                   <option key={m} value={m}>
@@ -784,6 +799,47 @@ export function PifForm({
               </select>
             )}
           </Labelled>
+          {/*
+           * UAT 2026-08-21 item 2: an off-campus drive happens somewhere, and
+           * the PIF had nowhere to say where. The venue is often NOT final at
+           * PIF time — "not yet confirmed" always submits, and the Central
+           * CPC records the venue once the company confirms it (answer Q5).
+           */}
+          {driveVenueApplies(driveMode) && (
+            <div className="sm:col-span-2">
+              <RadioGroup
+                legend="Venue"
+                name="venueStatus"
+                value={venueStatus}
+                options={[
+                  { value: "not_yet_confirmed", label: "Venue not yet confirmed" },
+                  { value: "confirmed", label: "Venue confirmed" },
+                ]}
+                error={err("venueStatus")}
+                onChange={(next) => {
+                  setValue("venueStatus", next as "not_yet_confirmed" | "confirmed", {
+                    shouldValidate: true,
+                  });
+                  // The J2 lesson again: an abandoned venue does not linger.
+                  if (next !== "confirmed") setValue("venue", "");
+                }}
+              />
+              {venueStatus === "confirmed" && (
+                <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
+                  <Labelled label="Venue" error={err("venue")}>
+                    {(id) => (
+                      <input
+                        id={id}
+                        className={control}
+                        placeholder="e.g. HCL Campus, Sholinganallur, Chennai"
+                        {...register("venue")}
+                      />
+                    )}
+                  </Labelled>
+                </div>
+              )}
+            </div>
+          )}
           {/* Drive type moved to Section 1 (A1, UAT 2026-08-19). */}
           {/*
            * The rounds, named and numbered (2026-08-18). F11 asked the AE for a

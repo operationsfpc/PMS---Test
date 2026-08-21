@@ -104,6 +104,49 @@ describe("cockpit drives", () => {
   });
 });
 
+describe("the off-campus venue (UAT 2026-08-21, item 2)", () => {
+  it("carries the drive mode and venue onto the card", async () => {
+    stub({
+      drives: [
+        { ...DRIVE, drive_mode: "physical_outside_campus", venue: "HCL Campus, Sholinganallur" },
+      ],
+    });
+    const [drive] = await view().drives();
+    expect(drive?.driveMode).toBe("physical_outside_campus");
+    expect(drive?.venue).toBe("HCL Campus, Sholinganallur");
+  });
+
+  it("records the confirmed venue with a PATCH on the one drive", async () => {
+    let patched: { url: string; body: Record<string, unknown> } | null = null;
+    server.use(
+      http.patch(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        patched = {
+          url: request.url,
+          body: (await request.json()) as Record<string, unknown>,
+        };
+        return HttpResponse.json(null);
+      }),
+    );
+
+    await view().updateVenue?.("d1", "HCL Campus, Sholinganallur");
+
+    expect(patched).not.toBeNull();
+    const p = patched as unknown as { url: string; body: Record<string, unknown> };
+    expect(p.url).toContain("id=eq.d1");
+    expect(p.body).toEqual({ venue: "HCL Campus, Sholinganallur" });
+  });
+
+  it("surfaces a refusal instead of pretending the venue saved", async () => {
+    server.use(
+      http.patch(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 403 }),
+      ),
+    );
+
+    await expect(view().updateVenue?.("d1", "Somewhere")).rejects.toThrow(/could not save/i);
+  });
+});
+
 describe("cockpit disbarment reviews (R8)", () => {
   it("raises a review at three absences, counted across different drives", async () => {
     stub({

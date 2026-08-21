@@ -540,3 +540,98 @@ describe("the Delivery Head decides from the list (G1c)", () => {
     expect(screen.queryByRole("button", { name: /reject/i })).toBeNull();
   });
 });
+
+/**
+ * UAT 2026-08-21, item 2: an off-campus drive's venue is often unknown at
+ * PIF time. The Central CPC follows up with the company and records it here,
+ * post-submission — and ONLY the Central CPC (answer Q5).
+ */
+describe("the off-campus venue on the cockpit", () => {
+  /** An expression, not a literal — Biome reads a literal `role="…"` as ARIA. */
+  const DELIVERY_HEAD: AppRole = "delivery_head";
+  const OFF_CAMPUS: DriveSummary = {
+    ...LIVE,
+    driveId: "d40",
+    companyName: "HCL Technologies",
+    driveMode: "physical_outside_campus",
+    venue: null,
+  };
+
+  it("admits the venue is still to be confirmed, and lets the Central CPC record it", async () => {
+    const updateVenue = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{ drives: async () => [OFF_CAMPUS], reviews: async () => [], updateVenue }}
+          filter="published"
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/venue to be confirmed/i)).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /update venue/i }));
+    await user.type(screen.getByLabelText(/^venue$/i), "HCL Campus, Sholinganallur");
+    await user.click(screen.getByRole("button", { name: /save venue/i }));
+
+    await waitFor(() =>
+      expect(updateVenue).toHaveBeenCalledWith("d40", "HCL Campus, Sholinganallur"),
+    );
+  });
+
+  it("shows a recorded venue on the card", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{
+            drives: async () => [{ ...OFF_CAMPUS, venue: "HCL Campus, Sholinganallur" }],
+            reviews: async () => [],
+          }}
+          filter="published"
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/HCL Campus, Sholinganallur/)).toBeDefined();
+  });
+
+  it("offers no venue button to the Delivery Head — recording it is not their verb", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{
+            drives: async () => [OFF_CAMPUS],
+            reviews: async () => [],
+            updateVenue: vi.fn(),
+          }}
+          filter="published"
+          role={DELIVERY_HEAD}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/venue to be confirmed/i)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /update venue/i })).toBeNull();
+  });
+
+  it("says nothing about venues for an on-campus drive", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{
+            drives: async () => [{ ...LIVE, driveMode: "on_campus", venue: null }],
+            reviews: async () => [],
+          }}
+          filter="published"
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Freshworks");
+    expect(screen.queryByText(/venue/i)).toBeNull();
+  });
+});

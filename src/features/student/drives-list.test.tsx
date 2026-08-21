@@ -44,6 +44,7 @@ const open = {
     jobDescriptionName: null as string | null,
     mandatorySkills: "TypeScript, SQL",
     driveMode: "on_campus",
+    venue: "",
     applicationStart: "2026-09-01T00:00:00Z",
     rounds: [
       { sequence: 1, name: "Aptitude test" },
@@ -161,6 +162,23 @@ describe("DrivesList \u2014 view more", () => {
     expect(screen.getByText(/build and maintain backend services/i)).toBeDefined();
     expect(screen.getByText(/chennai, tenkasi/i)).toBeDefined();
     expect(screen.getByText(/6.5 fixed \+ 2.5 variable/i)).toBeDefined();
+  });
+
+  /** UAT 2026-08-21 item 2: the off-campus venue, or its honest absence. */
+  it("shows the venue line the domain worded, and hides it when the mode has none", async () => {
+    const user = userEvent.setup();
+    const offCampus = {
+      ...open,
+      details: {
+        ...open.details,
+        driveMode: "physical_outside_campus",
+        venue: "Venue to be confirmed",
+      },
+    };
+    render(<DrivesList view={view({ openDrives: async () => [offCampus] })} />);
+
+    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
+    expect(screen.getByText(/venue to be confirmed/i)).toBeDefined();
   });
 
   /** F7: one interview process may cover several job titles. */

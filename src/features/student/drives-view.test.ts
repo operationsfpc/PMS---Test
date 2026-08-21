@@ -366,6 +366,25 @@ describe("createSupabaseDrivesView — the detail behind View more", () => {
     expect(drive?.details.openings).toBe(25);
   });
 
+  /** UAT 2026-08-21 item 2: where an off-campus drive happens. */
+  it("words the off-campus venue — named when recorded, admitted when not", async () => {
+    stub({
+      drives: [
+        liveDrive({
+          drive_mode: "physical_outside_campus",
+          venue: "HCL Campus, Sholinganallur",
+        }),
+      ],
+    });
+    expect((await view().openDrives())[0]?.details.venue).toBe("HCL Campus, Sholinganallur");
+
+    stub({ drives: [liveDrive({ drive_mode: "pooled", venue: null })] });
+    expect((await view().openDrives())[0]?.details.venue).toBe("Venue to be confirmed");
+
+    stub({ drives: [liveDrive({ drive_mode: "on_campus", venue: null })] });
+    expect((await view().openDrives())[0]?.details.venue).toBe("");
+  });
+
   /** F7: one interview process may cover several designations. */
   it("carries the other designations this one process covers", async () => {
     stub({ drives: [liveDrive({ additional_designations: ["Associate Engineer"] })] });

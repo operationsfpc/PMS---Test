@@ -9,6 +9,7 @@ import {
 } from "@domain/drive-aging";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
+import { canEditDriveVenue, describeDriveVenue, driveVenueApplies } from "@domain/drive-venue";
 import type { OfferCategory } from "@domain/offer-category";
 import {
   classifyOfferCategory,
@@ -40,6 +41,13 @@ export interface DriveSummary {
   readonly createdAt: string | null;
   /** G1d: when applications close — past it, the drive is expired. */
   readonly applicationEnd: string | null;
+  /**
+   * UAT 2026-08-21 item 2: the drive's mode and its off-campus venue. Both
+   * optional so older fixtures and views stay valid; absent reads as "no
+   * venue to speak of".
+   */
+  readonly driveMode?: string | null;
+  readonly venue?: string | null;
 }
 
 export interface DisbarmentReview {
@@ -53,6 +61,11 @@ export interface CockpitView {
   drives(): Promise<readonly DriveSummary[]>;
   /** R8: students at or past the absence limit. A REVIEW, never a sanction. */
   reviews(): Promise<readonly DisbarmentReview[]>;
+  /**
+   * UAT 2026-08-21 item 2: record the confirmed venue of an off-campus
+   * drive, post-submission. Offered to the Central CPC alone (answer Q5).
+   */
+  updateVenue?(driveId: string, venue: string): Promise<void>;
 }
 
 const STATUS_TONE: Record<DriveStatus, "neutral" | "brand" | "warning" | "success" | "danger"> = {
@@ -142,6 +155,10 @@ export function CockpitPage({
   const [category, setCategory] = useState<OfferCategory>("regular");
   const [reason, setReason] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  /** UAT 2026-08-21 item 2: the venue being recorded, and its text. */
+  const [venueEditing, setVenueEditing] = useState<DriveSummary | null>(null);
+  const [venueText, setVenueText] = useState("");
+  const [venueError, setVenueError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     void view.drives().then(setLoaded);
@@ -168,6 +185,32 @@ export function CockpitPage({
 
   const drives = sorted;
   const split = drives === null ? null : partitionExpired(drives, clock);
+
+  /** Q5 (2026-08-21): the venue is the Central CPC's to record — nobody else's. */
+  const mayRecordVenue = view.updateVenue !== undefined && canEditDriveVenue(role);
+
+  function openVenue(drive: DriveSummary) {
+    setVenueText(drive.venue ?? "");
+    setVenueError(null);
+    setVenueEditing(drive);
+  }
+
+  async function saveVenue() {
+    if (venueEditing === null || view.updateVenue === undefined) return;
+    if (venueText.trim() === "") {
+      setVenueError("Type the venue — an empty venue is “not yet confirmed”, not a venue.");
+      return;
+    }
+    try {
+      await view.updateVenue(venueEditing.driveId, venueText.trim());
+      setVenueEditing(null);
+      setVenueText("");
+      setVenueError(null);
+      load();
+    } catch (cause) {
+      setVenueError(cause instanceof Error ? cause.message : "Could not save the venue.");
+    }
+  }
 
   function openDecision(drive: DriveSummary, kind: "approve" | "reject") {
     setCategory(classifyOfferCategory(drive.ctcMaxLpa ?? drive.ctcMinLpa ?? 0));
@@ -272,6 +315,7 @@ export function CockpitPage({
               mayPublish={mayPublish}
               mayShortlist={mayShortlist}
               onDecide={decide === undefined ? null : openDecision}
+              onEditVenue={mayRecordVenue ? openVenue : null}
             />
           )}
 
@@ -289,11 +333,59 @@ export function CockpitPage({
                   mayPublish={mayPublish}
                   mayShortlist={mayShortlist}
                   onDecide={decide === undefined ? null : openDecision}
+                  onEditVenue={mayRecordVenue ? openVenue : null}
                 />
               </div>
             </details>
           )}
         </>
+      )}
+
+      {/* UAT 2026-08-21 item 2: recording the confirmed venue. */}
+      {venueEditing !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            role="dialog"
+            aria-label="Update venue"
+            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+          >
+            <h2 className="font-heading text-lg font-bold text-ink-900">
+              Venue — {venueEditing.companyName}
+            </h2>
+            <p className="mt-1 text-sm text-ink-500">
+              As confirmed by the company. Students see it on the drive card.
+            </p>
+
+            {venueError !== null && (
+              <p role="alert" className="mt-2 text-sm text-destructive">
+                {venueError}
+              </p>
+            )}
+
+            <div className="mt-3">
+              <label
+                htmlFor="cockpit-venue"
+                className="mb-1 block text-sm font-medium text-ink-900"
+              >
+                Venue
+              </label>
+              <input
+                id="cockpit-venue"
+                value={venueText}
+                onChange={(e) => setVenueText(e.target.value)}
+                placeholder="e.g. HCL Campus, Sholinganallur, Chennai"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setVenueEditing(null)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void saveVenue()}>Save venue</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* G1c: the decision, from the list — same rules as the approval queue. */}
@@ -380,12 +472,15 @@ function DriveList({
   mayPublish,
   mayShortlist,
   onDecide,
+  onEditVenue,
 }: {
   drives: readonly DriveSummary[];
   now: Date;
   mayPublish: boolean;
   mayShortlist: boolean;
   onDecide: ((drive: DriveSummary, kind: "approve" | "reject") => void) | null;
+  /** UAT 2026-08-21 item 2 — wired for the Central CPC alone (answer Q5). */
+  onEditVenue: ((drive: DriveSummary) => void) | null;
 }) {
   return (
     <Card>
@@ -409,6 +504,20 @@ function DriveList({
                   </p>
                   {/* G1a: the age of the submission, stated on the card. */}
                   {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
+                  {/* UAT 2026-08-21 item 2: where an off-campus drive happens —
+                      "to be confirmed" is said out loud, never left blank. */}
+                  {describeDriveVenue(
+                    (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
+                    drive.venue ?? null,
+                  ) !== null && (
+                    <p className="mt-0.5 text-xs text-ink-500">
+                      Venue:{" "}
+                      {describeDriveVenue(
+                        (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
+                        drive.venue ?? null,
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
@@ -430,6 +539,19 @@ function DriveList({
                 >
                   View drive
                 </Link>
+
+                {/* UAT 2026-08-21 item 2: the venue stays editable after
+                    submission — the company confirms it late, the CPC records
+                    it here. */}
+                {onEditVenue !== null &&
+                  drive.status !== "draft" &&
+                  driveVenueApplies(
+                    (drive.driveMode ?? null) as Parameters<typeof driveVenueApplies>[0],
+                  ) && (
+                    <Button size="sm" variant="secondary" onClick={() => onEditVenue(drive)}>
+                      Update venue…
+                    </Button>
+                  )}
 
                 {/* G1c: the Delivery Head's one action, on the list itself. */}
                 {onDecide !== null && drive.status === "submitted" && (
