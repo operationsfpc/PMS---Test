@@ -3,6 +3,7 @@ import { describeDriveVenue } from "@domain/drive-venue";
 import { describeJoining } from "@domain/joining";
 import type { OfferCategory } from "@domain/offer-category";
 import { describeShift } from "@domain/shift";
+import type { ApplicantRound } from "@domain/student-progress";
 import type { DriveStatus, RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -31,12 +32,21 @@ export interface DriveRecruiterContact {
 
 export interface DriveApplicantRow {
   readonly applicationId: string;
+  /** C8: the stage list links each name to /students/:id. */
+  readonly studentId: string;
   readonly fullName: string;
   readonly rollNumber: string;
   readonly campus: string;
   readonly appliedAt: string;
   /** The APPLY-TIME snapshot (R7) — never the live profile. */
   readonly snapshot: Record<string, unknown>;
+  /**
+   * C8 (2026-08-21): the facts `filterFunnelStage` judges — so the clickable
+   * counts on the Live card and this page's stage list agree by construction.
+   */
+  readonly shortlisted: boolean;
+  readonly hasOffer: boolean;
+  readonly rounds: readonly ApplicantRound[];
 }
 
 export interface DriveRecord {
@@ -111,7 +121,12 @@ export const RECORD_DRIVE_COLUMNS = `
   raised_by:profiles!drives_created_by_fkey(full_name),
   approver:profiles!drives_approved_by_fkey(full_name),
   publisher:profiles!drives_published_by_fkey(full_name),
-  drive_rounds(sequence, name),
+  drive_rounds(
+    sequence, name,
+    round_participants(application_id),
+    round_results(application_id, result),
+    attendance(application_id, status)
+  ),
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name))
@@ -119,8 +134,9 @@ export const RECORD_DRIVE_COLUMNS = `
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const RECORD_APPLICANT_COLUMNS = `
-  id, applied_at, profile_snapshot,
-  students(full_name, roll_number, campuses(name))
+  id, student_id, applied_at, profile_snapshot,
+  students(full_name, roll_number, campuses(name)),
+  shortlist_entries(included)
 `;
 
 const ARREARS_LABEL: Record<string, string> = {
@@ -177,13 +193,15 @@ const JD_LINK_TTL_SECONDS = 60 * 10;
 export function createSupabaseDriveRecordView(client: SupabaseClient): DriveRecordView {
   return {
     async record(driveId) {
-      const [{ data: raw }, { data: applications }] = await Promise.all([
+      const [{ data: raw }, { data: applications }, { data: offerRows }] = await Promise.all([
         client.from("drives").select(RECORD_DRIVE_COLUMNS).eq("id", driveId).maybeSingle(),
         client
           .from("applications")
           .select(RECORD_APPLICANT_COLUMNS)
           .eq("drive_id", driveId)
           .order("applied_at", { ascending: true }),
+        // C8: who this drive made an offer to — one flag per applicant.
+        client.from("offers").select("student_id").eq("drive_id", driveId),
       ]);
 
       if (raw === null || raw === undefined) return null;
@@ -283,13 +301,51 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         },
         applicants: ((applications ?? []) as Array<Record<string, unknown>>).map((a) => {
           const student = one<Record<string, unknown>>(a.students);
+          const applicationId = a.id as string;
+          const shortlistRows = (
+            Array.isArray(a.shortlist_entries) ? a.shortlist_entries : []
+          ) as Array<Record<string, unknown>>;
+          const offered = new Set(
+            ((offerRows ?? []) as Array<Record<string, unknown>>).map(
+              (o) => o.student_id as string,
+            ),
+          );
+
+          // C8: the same facts the portfolio's funnel counts, assembled per
+          // applicant so `filterFunnelStage` gives this page the same answer.
+          const applicantRounds: ApplicantRound[] = (
+            Array.isArray(row.drive_rounds) ? (row.drive_rounds as unknown[]) : []
+          )
+            .map((r) => {
+              const round = r as Record<string, unknown>;
+              const inRows = (key: string) =>
+                (Array.isArray(round[key]) ? (round[key] as unknown[]) : []).filter(
+                  (entry) => (entry as Record<string, unknown>).application_id === applicationId,
+                ) as Array<Record<string, unknown>>;
+              const result = inRows("round_results")[0];
+              const attendanceRow = inRows("attendance")[0];
+              return {
+                sequence: Number(round.sequence ?? 0),
+                name: String(round.name ?? "Round"),
+                participating: inRows("round_participants").length > 0,
+                attendance:
+                  (attendanceRow?.status as ApplicantRound["attendance"] | undefined) ?? null,
+                result: (result?.result as ApplicantRound["result"] | undefined) ?? null,
+              };
+            })
+            .sort((x, y) => x.sequence - y.sequence);
+
           return {
-            applicationId: a.id as string,
+            applicationId,
+            studentId: text(a.student_id),
             fullName: text(student?.full_name) || "Unknown student",
             rollNumber: text(student?.roll_number),
             campus: one<{ name?: string }>(student?.campuses)?.name ?? "",
             appliedAt: a.applied_at as string,
             snapshot: (a.profile_snapshot ?? {}) as Record<string, unknown>,
+            shortlisted: shortlistRows.some((s) => s.included === true),
+            hasOffer: offered.has(a.student_id as string),
+            rounds: applicantRounds,
           };
         }),
       };

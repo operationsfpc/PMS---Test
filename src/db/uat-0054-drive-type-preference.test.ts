@@ -161,7 +161,9 @@ describe("F6 — the round's schedule reaches the student", () => {
   it("says nothing when an unrelated column changes", async () => {
     const { roundId } = await roundWithParticipant();
     const before = (await notesFor("round_scheduled")).length;
-    await t.sql(`update drive_rounds set name = 'Renamed Interview' where id = $1`, [roundId]);
+    // `instructions` is schedule-irrelevant AND not frozen by 0057 — a NAME
+    // change would now be refused outright on a round with participants.
+    await t.sql(`update drive_rounds set instructions = 'Bring ID cards' where id = $1`, [roundId]);
     expect((await notesFor("round_scheduled")).length).toBe(before);
   });
 

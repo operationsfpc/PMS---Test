@@ -45,7 +45,7 @@ function view(overrides: Partial<ResultsView> = {}): ResultsView {
   };
 }
 
-describe("ResultsPage", () => {
+describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
   it("lists everyone who took part, with their attendance", async () => {
     render(<ResultsPage roundId="r1" view={view()} />);
 
@@ -53,57 +53,111 @@ describe("ResultsPage", () => {
     expect(screen.getByText(/absent/i)).toBeDefined();
   });
 
-  it("records a result for one participant — after an explicit confirmation (F2)", async () => {
+  it("marks the checked students Selected — after ONE confirmation naming them", async () => {
     const record = vi.fn();
     const user = userEvent.setup();
     render(<ResultsPage roundId="r1" view={view({ record })} />);
 
-    const row = (await screen.findByText("Priya Ramesh")).closest("li");
-    if (row === null) throw new Error("row not found");
-    await user.selectOptions(within(row).getByRole("combobox"), "selected");
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
 
-    // The student is notified the moment this lands, so the screen asks first.
+    // The students are notified the moment this lands, so the screen asks first.
     const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/1 student/i);
     expect(dialog.textContent).toMatch(/priya ramesh/i);
     await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app1", "selected"));
+    expect(record).toHaveBeenCalledTimes(1);
   });
 
-  it("cancelling the confirmation records nothing and resets the row (F2)", async () => {
+  it("cancelling the confirmation records nothing and keeps the selection", async () => {
     const record = vi.fn();
     const user = userEvent.setup();
     render(<ResultsPage roundId="r1" view={view({ record })} />);
 
-    const row = (await screen.findByText("Priya Ramesh")).closest("li");
-    if (row === null) throw new Error("row not found");
-    await user.selectOptions(within(row).getByRole("combobox"), "rejected");
-
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark rejected/i }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
 
     expect(record).not.toHaveBeenCalled();
-    expect(within(row).getByRole<HTMLSelectElement>("combobox").value).toBe("");
+    expect(
+      (screen.getByRole("checkbox", { name: /priya ramesh/i }) as HTMLInputElement).checked,
+    ).toBe(true);
   });
 
-  it("records an interim state (waitlisted) without ceremony — nobody is notified", async () => {
+  it("marks On hold without ceremony — an interim state notifies nobody", async () => {
     const record = vi.fn();
     const user = userEvent.setup();
     render(<ResultsPage roundId="r1" view={view({ record })} />);
 
-    const row = (await screen.findByText("Priya Ramesh")).closest("li");
-    if (row === null) throw new Error("row not found");
-    await user.selectOptions(within(row).getByRole("combobox"), "waitlisted");
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark on hold/i }));
 
-    await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app1", "waitlisted"));
+    await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app1", "on_hold"));
     expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
+  it("select-all-undecided ticks exactly the rows without a result; Clear unticks", async () => {
+    const record = vi.fn();
+    const user = userEvent.setup();
+    render(<ResultsPage roundId="r1" view={view({ record })} />);
+
+    await user.click(await screen.findByRole("button", { name: /select all undecided/i }));
+    // Priya has no result; Arjun is already rejected.
+    expect(
+      (screen.getByRole("checkbox", { name: /priya ramesh/i }) as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("checkbox", { name: /arjun menon/i }) as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(screen.getByText(/1 selected of 1 undecided/i)).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+    expect(
+      (screen.getByRole("checkbox", { name: /priya ramesh/i }) as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it("holds the action buttons disabled until somebody is checked", async () => {
+    render(<ResultsPage roundId="r1" view={view()} />);
+
+    await screen.findByText("Priya Ramesh");
+    expect(
+      (screen.getByRole("button", { name: /mark selected/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("marks several students in one confirmed action", async () => {
+    const record = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({
+          participants: async () => [PRIYA, { ...ARJUN, result: null }],
+          record,
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /select all undecided/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/2 students/i);
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => expect(record).toHaveBeenCalledTimes(2));
+    expect(record).toHaveBeenCalledWith("r1", "app1", "selected");
+    expect(record).toHaveBeenCalledWith("r1", "app2", "selected");
   });
 
   /**
    * F1 (UAT 2026-08-19): once a student sits in a later round, their result
    * here is history — the screen shows it and refuses to re-open it.
    */
-  it("renders a read-only result for a student already advanced (F1)", async () => {
+  it("offers no checkbox for a student already advanced (F1)", async () => {
     render(
       <ResultsPage
         roundId="r1"
@@ -114,16 +168,16 @@ describe("ResultsPage", () => {
 
     const row = (await screen.findByText("Priya Ramesh")).closest("li");
     if (row === null) throw new Error("row not found");
-    expect(within(row).queryByRole("combobox")).toBeNull();
+    expect(within(row).queryByRole("checkbox")).toBeNull();
     expect(within(row).getByText(/advanced/i)).toBeDefined();
   });
 
-  it("shows a result that was already recorded", async () => {
+  it("shows a result that was already recorded, as words", async () => {
     render(<ResultsPage roundId="r1" view={view()} />);
 
     const row = (await screen.findByText("Arjun Menon")).closest("li");
     if (row === null) throw new Error("row not found");
-    expect(within(row).getByRole<HTMLSelectElement>("combobox").value).toBe("rejected");
+    expect(within(row).getByText(/rejected/i)).toBeDefined();
   });
 
   it("says how many advance, because only the selected are scheduled next", async () => {
@@ -168,9 +222,8 @@ describe("ResultsPage", () => {
       />,
     );
 
-    const row = (await screen.findByText("Priya Ramesh")).closest("li");
-    if (row === null) throw new Error("row not found");
-    await user.selectOptions(within(row).getByRole("combobox"), "selected");
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
@@ -215,6 +268,11 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       updateRound: async () => undefined,
       assignSlots: async () => ({ matched: 0, unmatched: [] }),
       setParticipantSlot: async () => undefined,
+      roundFacts: async () => new Map(),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
       ...overrides,
     };
   }
@@ -407,6 +465,11 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
       updateRound: async () => undefined,
       assignSlots: async () => ({ matched: 0, unmatched: [] }),
       setParticipantSlot: async () => undefined,
+      roundFacts: async () => new Map(),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
       ...overrides,
     };
   }
@@ -597,6 +660,183 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
         "https://meet.google.com/priya",
         null,
       ),
+    );
+  });
+});
+
+/**
+ * M2 (approved 2026-08-21) — managing rounds and completing the drive from
+ * the rounds screen. B2: a company drops a round mid-drive; the Central CPC
+ * knocks it off or renames it, unless facts have frozen it. C3 (answer 3b):
+ * completing early demands a typed reason.
+ */
+describe("DriveRoundsPage — manage rounds (B2)", () => {
+  const ROUNDS3 = [
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+      venue: null,
+    },
+    {
+      roundId: "r2",
+      sequence: 2,
+      name: "HR",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+      venue: null,
+    },
+  ];
+
+  function manageView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
+    return {
+      ...view(),
+      rounds: async () => ROUNDS3,
+      advance: async () => 1,
+      addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
+      roundFacts: async () =>
+        new Map([
+          ["r1", { hasParticipants: true, hasAttendance: true, hasResults: true }],
+          ["r2", { hasParticipants: false, hasAttendance: false, hasResults: false }],
+        ]),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
+      ...overrides,
+    };
+  }
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
+  it("freezes a round with recorded facts, and says why", async () => {
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={manageView()} />);
+
+    await user.click(await screen.findByRole("button", { name: /manage rounds/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /manage rounds/i });
+    expect(within(dialog).getByText(/frozen — results are recorded/i)).toBeDefined();
+    // The frozen round offers neither rename nor remove.
+    expect(within(dialog).queryByRole("textbox", { name: /rename round 1/i })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: /remove round 1/i })).toBeNull();
+  });
+
+  it("renames an untouched round", async () => {
+    const renameRound = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={manageView({ renameRound })} />);
+
+    await user.click(await screen.findByRole("button", { name: /manage rounds/i }));
+    const dialog = await screen.findByRole("dialog", { name: /manage rounds/i });
+    const input = within(dialog).getByRole("textbox", { name: /rename round 2/i });
+    await user.clear(input);
+    await user.type(input, "HR discussion");
+    await user.click(within(dialog).getByRole("button", { name: /save name/i }));
+
+    await waitFor(() => expect(renameRound).toHaveBeenCalledWith("r2", "HR discussion"));
+  });
+
+  it("removes an untouched round after a confirmation", async () => {
+    const removeRound = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={manageView({ removeRound })} />);
+
+    await user.click(await screen.findByRole("button", { name: /manage rounds/i }));
+    const dialog = await screen.findByRole("dialog", { name: /manage rounds/i });
+    await user.click(within(dialog).getByRole("button", { name: /remove round 2/i }));
+
+    const confirm = await screen.findByRole("alertdialog");
+    expect(confirm.textContent).toMatch(/renumber/i);
+    await user.click(within(confirm).getByRole("button", { name: /remove/i }));
+
+    await waitFor(() => expect(removeRound).toHaveBeenCalledWith("d1", "r2"));
+  });
+});
+
+describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
+  const ROUND1 = [
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+      venue: null,
+    },
+  ];
+
+  function completionView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
+    return {
+      ...view(),
+      rounds: async () => ROUND1,
+      advance: async () => 1,
+      addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
+      roundFacts: async () => new Map(),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
+      ...overrides,
+    };
+  }
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
+  it("completes a fully-decided drive without demanding a reason", async () => {
+    const completeDrive = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={completionView({ completeDrive })} />);
+
+    await user.click(await screen.findByRole("button", { name: /mark drive completed/i }));
+    const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
+    expect(dialog.textContent).toMatch(/every applicant has a final outcome/i);
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+
+    await waitFor(() => expect(completeDrive).toHaveBeenCalledWith("d1", null));
+  });
+
+  it("demands a reason when students are still undecided, and sends it", async () => {
+    const completeDrive = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={completionView({
+          completeDrive,
+          completionFacts: async () => ({ ready: false, undecided: 3 }),
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /mark drive completed/i }));
+    const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
+    expect(dialog.textContent).toMatch(/3 student/i);
+
+    // No reason typed: refused, with the domain's words.
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+    expect(completeDrive).not.toHaveBeenCalled();
+    expect(dialog.textContent).toMatch(/give a reason/i);
+
+    await user.type(
+      within(dialog).getByRole("textbox", { name: /reason/i }),
+      "Company closed the process after Round 1",
+    );
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+
+    await waitFor(() =>
+      expect(completeDrive).toHaveBeenCalledWith("d1", "Company closed the process after Round 1"),
     );
   });
 });

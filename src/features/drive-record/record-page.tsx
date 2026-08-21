@@ -1,7 +1,9 @@
 import { Badge, Card, PageHeader } from "@components/ui";
+import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
 import { offerCategoryLabel } from "@domain/offer-category";
 import type { AppRole } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import type { DriveRecord, DriveRecordView } from "./record-view";
 
 /**
@@ -67,14 +69,25 @@ function fromSnapshot(snapshot: Record<string, unknown>, key: string): string {
   return value === null || value === undefined ? "—" : String(value);
 }
 
+const STAGE_LABEL: Record<FunnelStageKey, string> = {
+  applied: "Applied",
+  shortlisted: "Shortlisted",
+  in_rounds: "In rounds",
+  offers: "Offers",
+  not_selected: "Not selected",
+};
+
 export function DriveRecordPage({
   view,
   role,
   driveId,
+  stage,
 }: {
   view: DriveRecordView;
   role: AppRole;
   driveId: string;
+  /** C8: the funnel number that linked here — `?stage=` on the route. */
+  stage?: string | undefined;
 }) {
   const [record, setRecord] = useState<DriveRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +130,18 @@ export function DriveRecordPage({
 
   const staff = role !== "student";
 
+  /**
+   * C8 (2026-08-21, answer 5b): the list behind a clicked funnel number.
+   * `filterFunnelStage` is the SAME arithmetic the count used, so the number
+   * and this list cannot disagree. Staff only — the counts are theirs.
+   */
+  const activeStage: FunnelStageKey | null =
+    staff && (FUNNEL_STAGES as readonly string[]).includes(stage ?? "")
+      ? (stage as FunnelStageKey)
+      : null;
+  const stageApplicants =
+    activeStage === null ? null : filterFunnelStage(record.applicants, activeStage);
+
   return (
     <>
       <PageHeader
@@ -130,6 +155,59 @@ export function DriveRecordPage({
           .filter((part) => part !== null)
           .join(" · ")}
       />
+
+      {activeStage !== null && stageApplicants !== null && (
+        <section aria-label="Applicants by stage" className="mb-4">
+          <Card className="p-5">
+            <div className="mb-3 flex flex-wrap gap-3 text-sm">
+              {FUNNEL_STAGES.map((key) => {
+                const count = filterFunnelStage(record.applicants, key).length;
+                return key === activeStage ? (
+                  <span key={key} className="font-semibold text-ink-900">
+                    {STAGE_LABEL[key]} ({count})
+                  </span>
+                ) : (
+                  <Link
+                    key={key}
+                    to={`/drives/${driveId}?stage=${key}`}
+                    className="font-medium text-brand-600 hover:underline"
+                  >
+                    {STAGE_LABEL[key]} ({count})
+                  </Link>
+                );
+              })}
+            </div>
+
+            {stageApplicants.length === 0 ? (
+              <p className="text-sm text-ink-500">
+                Nobody is at “{STAGE_LABEL[activeStage]}” on this drive.
+              </p>
+            ) : (
+              <ul className="divide-y divide-neutral-200">
+                {stageApplicants.map((applicant) => (
+                  <li
+                    key={applicant.applicationId}
+                    className="flex flex-wrap items-center justify-between gap-3 py-2.5"
+                  >
+                    <span>
+                      <Link
+                        to={`/students/${applicant.studentId}`}
+                        className="font-medium text-brand-600 hover:underline"
+                      >
+                        {applicant.fullName}
+                      </Link>{" "}
+                      <span className="text-sm text-ink-500">
+                        {applicant.rollNumber}
+                        {applicant.campus !== "" && ` · ${applicant.campus}`}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </section>
+      )}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Badge tone="brand">{STATUS_LABEL[record.status] ?? record.status}</Badge>

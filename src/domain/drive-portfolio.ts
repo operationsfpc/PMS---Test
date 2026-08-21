@@ -257,6 +257,43 @@ export function summariseFunnel(applicants: readonly ApplicantFacts[]): DriveFun
   return { applied: applicants.length, shortlisted, inRounds, offers, notSelected };
 }
 
+/** The five clickable numbers on a drive card, as URL-safe keys. */
+export const FUNNEL_STAGES = [
+  "applied",
+  "shortlisted",
+  "in_rounds",
+  "offers",
+  "not_selected",
+] as const;
+export type FunnelStageKey = (typeof FUNNEL_STAGES)[number];
+
+/**
+ * The applicants a funnel number COUNTED — C8 (2026-08-21, answer 5b).
+ *
+ * Deliberately the same arithmetic as `summariseFunnel`, so every clickable
+ * count and the list behind it agree by construction. "Applied" is everyone;
+ * "shortlisted" is every shortlisted applicant whatever happened later (the
+ * two overlap the later stages, exactly as the counts do); the remaining
+ * three partition by `applicationProgress`.
+ */
+export function filterFunnelStage<T extends ApplicantFacts>(
+  applicants: readonly T[],
+  stage: FunnelStageKey,
+): readonly T[] {
+  if (stage === "applied") return applicants;
+  if (stage === "shortlisted") return applicants.filter((a) => a.shortlisted);
+
+  return applicants.filter((applicant) => {
+    const { stage: progress } = applicationProgress({
+      rounds: applicant.rounds,
+      hasOffer: applicant.hasOffer,
+    });
+    if (stage === "in_rounds") return progress === "in_process";
+    if (stage === "offers") return progress === "selected";
+    return progress === "not_selected";
+  });
+}
+
 /** The least a drive must have for somebody to search for it by name. */
 export interface SearchableDrive {
   readonly companyName: string;

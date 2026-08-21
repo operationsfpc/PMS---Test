@@ -324,11 +324,23 @@ export function DrivePortfolioPage({
               aria-label={`${drive.companyName} applicants`}
               className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
             >
-              <StatCard label="Applied" value={funnel.applied} />
-              <StatCard label="Shortlisted" value={funnel.shortlisted} tone="brand" />
-              <StatCard label="In rounds" value={funnel.inRounds} tone="warning" />
-              <StatCard label="Offers" value={funnel.offers} tone="success" />
-              <StatCard label="Not selected" value={funnel.notSelected} />
+              {/* C8 (2026-08-21, answer 5b): every number opens the drive
+                  page filtered to exactly the applicants it counted. */}
+              <Link to={`/drives/${drive.driveId}?stage=applied`} className="block">
+                <StatCard label="Applied" value={funnel.applied} />
+              </Link>
+              <Link to={`/drives/${drive.driveId}?stage=shortlisted`} className="block">
+                <StatCard label="Shortlisted" value={funnel.shortlisted} tone="brand" />
+              </Link>
+              <Link to={`/drives/${drive.driveId}?stage=in_rounds`} className="block">
+                <StatCard label="In rounds" value={funnel.inRounds} tone="warning" />
+              </Link>
+              <Link to={`/drives/${drive.driveId}?stage=offers`} className="block">
+                <StatCard label="Offers" value={funnel.offers} tone="success" />
+              </Link>
+              <Link to={`/drives/${drive.driveId}?stage=not_selected`} className="block">
+                <StatCard label="Not selected" value={funnel.notSelected} />
+              </Link>
             </section>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">

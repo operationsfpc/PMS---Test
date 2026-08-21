@@ -33,21 +33,43 @@ narrowed R4 verified in live `pg_proc`; `drives.venue` present. Commits
 - ⚠️ Found and removed a stray unrelated first line in
   `docs/specs/2026-08-20-uat-feedback.md`.
 
-### 🟡 OPEN — next session builds these (specs to write, answers pending)
+### ✅ SHIPPED 2026-08-21 (evening) — batches B & C, migration 0057
 
-1. **Rounds-advancement UX rework** (Karthik, 2026-08-21): checkboxes per
-   student, select-all/reject-all, bottom action bar
-   (Selected/Rejected/On hold), confirmation only at the bulk action.
-   Central CPC may DELETE ("knock off") or RENAME drive rounds — companies
-   eliminate rounds mid-drive. Clarifying questions asked, answers pending.
-2. **21/08 batch C** (Central CPC screens): drive pickers under "Drives in
-   progress" — shortlisting/attendance/final-selection dead-end with no
-   drive list (results has one; the others show only "Choose a drive…" —
-   root cause of "empty" reports); picker needs role title + raised date +
-   search + oldest-first; "mark drive completed" action (domain rule: all
-   results out); completed drives into the Completed subsection; absent
-   alerts on attendance; Live-card counts clickable → per-stage student
-   list. Questions asked, answers pending.
+Answers 1 ok · 2 ok · 3 b · 4 ok · 5 b; mockups M1–M3 approved. Live
+Cloudflare `bb3e70d4-fe5e-4e04-b4e0-eaf143c8e3ac`, JS `index-Doc8aJJa.js`
+byte-identical (sha256 `dd666262…`). Remote at **0057** (verified in live
+pg_proc). Suite: **3505 tests**, `pnpm check` exits 0. Spec:
+`docs/specs/2026-08-21-rounds-and-cpc-screens.md`; mockups in
+`docs/mockups/`.
+
+- **B1 bulk results:** ResultsPage rewritten — checkboxes (also on decided
+  rows, corrections stay possible; never on F1-locked rows), select-all-
+  undecided/clear, sticky bottom bar (Selected/Rejected/On hold), ONE
+  confirmation for selected/rejected (they notify); on_hold records
+  quietly. Per-student result dropdown REMOVED — deliberate, approved.
+- **B2 manage rounds:** `@domain/round-editing` (describeRoundFreeze —
+  strongest fact wins the wording; canManageRounds — Central CPC;
+  renumberRounds). "Manage rounds…" dialog: rename/remove untouched rounds;
+  frozen ones say why. 0057 trigger mirrors the freeze (name + DELETE;
+  sequence renumbering deliberately stays allowed). ⚠️ 0054's "unrelated
+  column" test now uses `instructions`, not `name`.
+- **M1 picker:** `@components/drive-picker` + `@lib/drive-picker-data`,
+  wired into results/shortlist/offers/attendance routes — fixes the three
+  "page is empty" reports. Attendance flow: drive → rounds → ?round=.
+  `drivesInProgress` removed from results-view (superseded).
+- **C3 completion:** `@domain/drive-completion` (completionReadiness over
+  applicationProgress stages; decideCompletion — early completion needs a
+  ≥5-char reason, 3b). View: completionFacts/completeDrive; dialog on the
+  rounds screen; cockpit in_rounds card links "Complete drive…" there.
+  `drives.completed_reason` (0057). Completed drives then appear under
+  Drives → Completed (existing status filter).
+- **C6 absent alerts:** 0057 `notify_absent_student` — kind `absent`, fires
+  only on BECOMING absent, never on re-save, never for opted-out (D7).
+- **C8 drill-through:** `filterFunnelStage` (generic, same arithmetic as
+  summariseFunnel — counts and lists agree by construction). Portfolio
+  StatCards are Links → `/drives/:id?stage=…`; record page shows the
+  stage-filtered applicant list (staff only), names → `/students/:id`.
+  record-view applicants now carry studentId/shortlisted/hasOffer/rounds.
 
 ---
 

@@ -1,6 +1,10 @@
 # Spec — Rounds bulk advancement + Central CPC screens (21/08, batches B & C)
 
-**Status: 🟡 APPROVED IN PRINCIPLE — mockups awaiting sign-off, then build.**
+**Status: ✅ SHIPPED 2026-08-21 (evening).** Mockups M1–M3 approved ("all ok").
+Cloudflare `bb3e70d4-fe5e-4e04-b4e0-eaf143c8e3ac`, JS `index-Doc8aJJa.js`
+byte-identical (sha256 `dd666262…`). Remote migrations at **0057** — both
+triggers verified in live `pg_proc`, `drives.completed_reason` present.
+Suite: 3505 tests, `pnpm check` exits 0.
 
 Decisions (Karthik, 2026-08-21): **1 ok · 2 ok · 3 b · 4 ok · 5 b**
 

@@ -162,6 +162,20 @@ describe("DrivePortfolioPage", () => {
     expect(within(funnel).getByText(/shortlisted/i)).toBeDefined();
   });
 
+  /** C8 (2026-08-21, answer 5b): each number opens the stage's list. */
+  it("links every funnel number to the drive page filtered to that stage", async () => {
+    show();
+
+    const funnel = await screen.findByRole("region", { name: "Zoho Corporation applicants" });
+    const applied = within(funnel).getByRole("link", { name: /applied/i });
+    expect(applied.getAttribute("href")).toBe("/drives/d1?stage=applied");
+    expect(
+      within(funnel)
+        .getByRole("link", { name: /not selected/i })
+        .getAttribute("href"),
+    ).toBe("/drives/d1?stage=not_selected");
+  });
+
   it("lists the applicants with where each of them has got to", async () => {
     const user = userEvent.setup();
     show();

@@ -75,7 +75,7 @@ const applicationRow = {
   students: { full_name: "Thanush", roll_number: "21CSE1042", campuses: { name: "KGiSL" } },
 };
 
-function stub(opts: { drive?: unknown; applications?: unknown[] } = {}) {
+function stub(opts: { drive?: unknown; applications?: unknown[]; offers?: unknown[] } = {}) {
   server.use(
     http.get(`${BASE}/rest/v1/drives`, () =>
       HttpResponse.json(opts.drive === undefined ? driveRow : opts.drive),
@@ -83,6 +83,7 @@ function stub(opts: { drive?: unknown; applications?: unknown[] } = {}) {
     http.get(`${BASE}/rest/v1/applications`, () =>
       HttpResponse.json(opts.applications ?? [applicationRow]),
     ),
+    http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
     http.post(`${BASE}/storage/v1/object/sign/job-descriptions/d1/jd-1.pdf`, () =>
       HttpResponse.json({ signedURL: "/signed/jd-1.pdf" }),
     ),
@@ -144,6 +145,50 @@ describe("createSupabaseDriveRecordView", () => {
         snapshot: { academics: { overallCgpa: 7.5 } },
       }),
     ]);
+  });
+
+  /** C8 (2026-08-21): the stage facts the drill-through list filters on. */
+  it("carries each applicant's shortlist, rounds and offer facts", async () => {
+    stub({
+      drive: {
+        ...driveRow,
+        drive_rounds: [
+          {
+            id: "r1",
+            sequence: 1,
+            name: "Aptitude",
+            round_participants: [{ application_id: "a1" }],
+            round_results: [{ application_id: "a1", result: "selected" }],
+            attendance: [{ application_id: "a1", status: "present" }],
+          },
+        ],
+      },
+      applications: [
+        { ...applicationRow, student_id: "s1", shortlist_entries: [{ included: true }] },
+      ],
+      offers: [{ student_id: "s1" }],
+    });
+
+    const [applicant] = (await view().record("d1"))?.applicants ?? [];
+
+    expect(applicant?.shortlisted).toBe(true);
+    expect(applicant?.hasOffer).toBe(true);
+    expect(applicant?.rounds).toEqual([
+      {
+        sequence: 1,
+        name: "Aptitude",
+        participating: true,
+        attendance: "present",
+        result: "selected",
+      },
+    ]);
+  });
+
+  it("an applicant nobody touched has no shortlist, no rounds sat, no offer", async () => {
+    stub();
+    const [applicant] = (await view().record("d1"))?.applicants ?? [];
+    expect(applicant?.shortlisted).toBe(false);
+    expect(applicant?.hasOffer).toBe(false);
   });
 
   /** UAT 2026-08-21 item 2: the off-campus venue, worded by the domain. */

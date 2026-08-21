@@ -1,7 +1,9 @@
+import { DrivePicker, type PickerDrive } from "@components/drive-picker";
 import { Card } from "@components/ui";
 import { useAuth } from "@lib/auth-context";
+import { fetchPickerDrives } from "@lib/drive-picker-data";
 import { supabase } from "@lib/supabase";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { ShortlistPage } from "./shortlist-page";
 import { createSupabaseShortlistView } from "./shortlist-view";
@@ -23,11 +25,31 @@ export function ShortlistRoute() {
     ),
   );
 
+  // M1 (2026-08-21): this page dead-ended at "Choose a drive…" with no
+  // list at all — reported as "the shortlisting page is empty".
+  const [drives, setDrives] = useState<readonly PickerDrive[] | null>(null);
+
+  useEffect(() => {
+    if (driveId !== null) return;
+    void fetchPickerDrives(supabase()).then(setDrives);
+  }, [driveId]);
+
   if (driveId === null) {
+    if (drives === null) {
+      return (
+        <Card className="p-6">
+          <p role="status" className="text-sm text-ink-500">
+            Loading drives…
+          </p>
+        </Card>
+      );
+    }
     return (
-      <Card className="p-6">
-        <p className="text-sm text-ink-700">Choose a drive to shortlist its applicants.</p>
-      </Card>
+      <DrivePicker
+        drives={drives}
+        makeLink={(id) => `/central/shortlisting?drive=${id}`}
+        prompt="Choose a drive to shortlist its applicants."
+      />
     );
   }
 

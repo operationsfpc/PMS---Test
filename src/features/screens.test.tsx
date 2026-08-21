@@ -430,9 +430,10 @@ describe("App routing", () => {
         </MemoryRouter>
       </AuthContext.Provider>,
     );
-    // Attendance is per-round and arrives as ?round=. Defaulting to some round
-    // would risk marking the wrong one, so the screen asks instead.
-    expect(screen.getByText(/choose a round/i)).toBeDefined();
+    // Attendance is per-round and arrives as ?round=. With none, the M1
+    // picker (2026-08-21): choose the drive first, then its round — the old
+    // screen asked for a round while offering no way to find one.
+    expect(screen.getByRole("status").textContent).toMatch(/loading drives/i);
   });
 });
 

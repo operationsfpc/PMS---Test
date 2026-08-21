@@ -7,6 +7,7 @@ import {
   canShortlistFromPortfolio,
   canViewDriveApplicants,
   driveProgress,
+  filterFunnelStage,
   involvementIn,
   searchDrives,
   summariseFunnel,
@@ -471,5 +472,57 @@ describe("searchDrives", () => {
       "HCL Technologies",
       "Accenture",
     ]);
+  });
+});
+
+/**
+ * C8 (2026-08-21, answer 5b): each funnel number on the Live card opens the
+ * drive page filtered to that stage. The filter must return EXACTLY the
+ * applicants the number counted — a "Shortlisted (11)" link that lists ten
+ * people is a discrepancy someone will investigate.
+ */
+describe("filterFunnelStage", () => {
+  const round = (result: "selected" | "rejected" | null) => [
+    { sequence: 1, name: "R1", participating: true, attendance: null, result },
+  ];
+  const applicants = [
+    { applicationId: "a1", shortlisted: false, hasOffer: false, rounds: [] },
+    { applicationId: "a2", shortlisted: true, hasOffer: false, rounds: round(null) },
+    { applicationId: "a3", shortlisted: true, hasOffer: true, rounds: round("selected") },
+    { applicationId: "a4", shortlisted: true, hasOffer: false, rounds: round("rejected") },
+  ];
+
+  it("applied is everyone — the number on the card", () => {
+    expect(filterFunnelStage(applicants, "applied").map((a) => a.applicationId)).toEqual([
+      "a1",
+      "a2",
+      "a3",
+      "a4",
+    ]);
+  });
+
+  it("shortlisted is every shortlisted applicant, whatever happened later", () => {
+    expect(filterFunnelStage(applicants, "shortlisted").map((a) => a.applicationId)).toEqual([
+      "a2",
+      "a3",
+      "a4",
+    ]);
+  });
+
+  it("in rounds, offers and not selected partition the rest by progress", () => {
+    expect(filterFunnelStage(applicants, "in_rounds").map((a) => a.applicationId)).toEqual(["a2"]);
+    expect(filterFunnelStage(applicants, "offers").map((a) => a.applicationId)).toEqual(["a3"]);
+    expect(filterFunnelStage(applicants, "not_selected").map((a) => a.applicationId)).toEqual([
+      "a4",
+    ]);
+  });
+
+  it("every count in summariseFunnel equals its filtered list's length — by construction", () => {
+    const funnel = summariseFunnel(applicants);
+    expect(filterFunnelStage(applicants, "applied")).toHaveLength(funnel.applied);
+    expect(filterFunnelStage(applicants, "shortlisted")).toHaveLength(funnel.shortlisted);
+    expect(filterFunnelStage(applicants, "in_rounds")).toHaveLength(funnel.inRounds);
+    expect(filterFunnelStage(applicants, "offers")).toHaveLength(funnel.offers);
+    expect(filterFunnelStage(applicants, "not_selected")).toHaveLength(funnel.notSelected);
   });
 });

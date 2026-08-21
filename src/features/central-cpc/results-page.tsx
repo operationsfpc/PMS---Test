@@ -1,5 +1,7 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
 import { type MeetingSlot, parseMeetingSlotsCsv } from "@domain/meeting-slots";
+import { describeRoundFreeze, type RoundFacts } from "@domain/round-editing";
 import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mode";
 import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
 import type { AttendanceStatus, RoundResult } from "@domain/types";
@@ -68,6 +70,15 @@ export interface DriveRoundsView extends ResultsView {
     meetingLink: string | null,
     scheduledAt: string | null,
   ): Promise<void>;
+  /** B2 (2026-08-21): each round's recorded facts — what freezes it. */
+  roundFacts(driveId: string): Promise<ReadonlyMap<string, RoundFacts>>;
+  renameRound(roundId: string, name: string): Promise<void>;
+  /** Removes the round and renumbers the survivors to close the gap. */
+  removeRound(driveId: string, roundId: string): Promise<void>;
+  /** C3: how close the drive is to done — feeds the completion dialog. */
+  completionFacts(driveId: string): Promise<CompletionReadiness>;
+  /** C3 (answer 3b): `reason` is null on an ordinary, fully-decided completion. */
+  completeDrive(driveId: string, reason: string | null): Promise<void>;
 }
 
 const RESULTS: readonly RoundResult[] = ["selected", "rejected", "waitlisted", "on_hold"];
@@ -102,15 +113,14 @@ export function ResultsPage({
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
-   * F2 (UAT 2026-08-19): `selected` and `rejected` notify the student the
-   * moment they land (0043's trigger), so the screen asks first. Interim
-   * states (waitlisted, on hold) are quiet and record directly.
+   * M2 (approved 2026-08-21): results are recorded in BULK — checkboxes, a
+   * bottom action bar, and one confirmation for the whole batch. F2's rule
+   * survives it: `selected` and `rejected` notify the students the moment
+   * they land (0043's trigger), so those two ask first; `on_hold` is an
+   * interim state and records quietly.
    */
-  const [pending, setPending] = useState<{
-    applicationId: string;
-    studentName: string;
-    result: RoundResult;
-  } | null>(null);
+  const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
+  const [pending, setPending] = useState<RoundResult | null>(null);
 
   const refresh = useCallback(async () => {
     setParticipants(await view.participants(roundId));
@@ -120,27 +130,47 @@ export function ResultsPage({
     void refresh();
   }, [refresh]);
 
-  async function record(applicationId: string, result: RoundResult) {
+  async function recordChecked(result: RoundResult) {
     setError(null);
     try {
-      await view.record(roundId, applicationId, result);
+      // Sequential on purpose: each write notifies a student, and a pile of
+      // parallel failures produces one unreadable error.
+      for (const applicationId of checked) {
+        await view.record(roundId, applicationId, result);
+      }
+      setChecked(new Set());
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not record the result.");
+      setError(cause instanceof Error ? cause.message : "Could not record the results.");
+      await refresh();
     }
   }
 
-  function requestRecord(participant: RoundParticipant, result: RoundResult) {
+  function requestRecord(result: RoundResult) {
     if (result === "selected" || result === "rejected") {
-      setPending({
-        applicationId: participant.applicationId,
-        studentName: participant.studentName,
-        result,
-      });
+      setPending(result);
       return;
     }
-    void record(participant.applicationId, result);
+    void recordChecked(result);
   }
+
+  function toggle(applicationId: string) {
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(applicationId)) next.delete(applicationId);
+      else next.add(applicationId);
+      return next;
+    });
+  }
+
+  /** The rows a result can still be recorded FOR: undecided and not locked. */
+  const undecided = (participants ?? []).filter(
+    (p) => p.result === null && !locked.has(p.applicationId),
+  );
+
+  const checkedNames = (participants ?? [])
+    .filter((p) => checked.has(p.applicationId))
+    .map((p) => p.studentName);
 
   const advancing = countAdvancing(participants);
 
@@ -185,71 +215,124 @@ export function ResultsPage({
           </p>
         </Card>
       ) : (
-        <Card>
-          <ul className="divide-y divide-neutral-200">
-            {participants.map((participant) => (
-              <li
-                key={participant.applicationId}
-                className="flex flex-wrap items-center justify-between gap-4 p-4"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-ink-900">{participant.studentName}</p>
-                  <p className="text-sm text-ink-500">{participant.rollNumber}</p>
-                  {saveSlot !== undefined && (
-                    <SlotEditor participant={participant} saveSlot={saveSlot} />
-                  )}
-                </div>
+        <>
+          <div className="mb-2 flex flex-wrap items-center gap-4 text-sm">
+            <button
+              type="button"
+              onClick={() => setChecked(new Set(undecided.map((p) => p.applicationId)))}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              Select all undecided
+            </button>
+            <button
+              type="button"
+              onClick={() => setChecked(new Set())}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              Clear
+            </button>
+            <span className="text-ink-500">
+              {checked.size} selected of {undecided.length} undecided
+            </span>
+          </div>
 
-                <div className="flex items-center gap-3">
-                  <Badge tone={participant.attendance === "absent" ? "danger" : "neutral"}>
-                    {label(participant.attendance)}
-                  </Badge>
+          <Card>
+            <ul className="divide-y divide-neutral-200">
+              {participants.map((participant) => (
+                <li
+                  key={participant.applicationId}
+                  className="flex flex-wrap items-center justify-between gap-4 p-4"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    {/* Decided rows keep their checkbox — the old select
+                        allowed corrections, and the bulk bar must too. */}
+                    {!locked.has(participant.applicationId) && (
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${participant.studentName}`}
+                        checked={checked.has(participant.applicationId)}
+                        onChange={() => toggle(participant.applicationId)}
+                        className="mt-1 size-4 accent-[#3D3777]"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink-900">{participant.studentName}</p>
+                      <p className="text-sm text-ink-500">{participant.rollNumber}</p>
+                      {saveSlot !== undefined && (
+                        <SlotEditor participant={participant} saveSlot={saveSlot} />
+                      )}
+                    </div>
+                  </div>
 
-                  {locked.has(participant.applicationId) ? (
-                    // F1: they sit in a later round — this result is history.
-                    <span className="text-sm font-medium capitalize text-ink-700">
-                      {participant.result === null ? "—" : label(participant.result)}{" "}
-                      <span className="font-normal text-ink-500">(advanced)</span>
-                    </span>
-                  ) : (
-                    <select
-                      aria-label={`Result for ${participant.studentName}`}
-                      value={participant.result ?? ""}
-                      onChange={(e) => requestRecord(participant, e.target.value as RoundResult)}
-                      className="rounded-lg border border-neutral-300 px-3 py-2 text-sm capitalize"
-                    >
-                      <option value="" disabled>
-                        Not recorded
-                      </option>
-                      {RESULTS.map((result) => (
-                        <option key={result} value={result}>
-                          {label(result)}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
+                  <div className="flex items-center gap-3">
+                    <Badge tone={participant.attendance === "absent" ? "danger" : "neutral"}>
+                      {label(participant.attendance)}
+                    </Badge>
+
+                    {locked.has(participant.applicationId) ? (
+                      // F1: they sit in a later round — this result is history.
+                      <span className="text-sm font-medium capitalize text-ink-700">
+                        {participant.result === null ? "—" : label(participant.result)}{" "}
+                        <span className="font-normal text-ink-500">(advanced)</span>
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium capitalize text-ink-700">
+                        {participant.result === null ? "Not recorded" : label(participant.result)}
+                      </span>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          {/* M2: the bottom action bar — the ONE place results are recorded. */}
+          <div className="sticky bottom-2 mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-brand-600 p-3 text-white shadow-lg">
+            <span className="text-sm font-semibold">{checked.size} selected</span>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={checked.size === 0}
+              onClick={() => requestRecord("selected")}
+            >
+              Mark Selected
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={checked.size === 0}
+              onClick={() => requestRecord("rejected")}
+            >
+              Mark Rejected
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={checked.size === 0}
+              onClick={() => requestRecord("on_hold")}
+            >
+              Mark On hold
+            </Button>
+          </div>
+        </>
       )}
 
       {pending !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div
             role="alertdialog"
-            aria-label="Confirm result"
+            aria-label="Confirm results"
             className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
-              Record {label(pending.result)}?
+              Mark {checked.size} {checked.size === 1 ? "student" : "students"} as{" "}
+              <span className="capitalize">{label(pending)}</span>?
             </h2>
             <p className="mt-2 text-sm text-ink-700">
-              <strong>{pending.studentName}</strong> will be recorded as{" "}
-              <strong className="capitalize">{label(pending.result)}</strong> in this round and{" "}
+              <strong>{checkedNames.join(", ")}</strong> will be recorded as{" "}
+              <strong className="capitalize">{label(pending)}</strong> in this round and{" "}
               <strong>notified immediately</strong>.
-              {pending.result === "selected" && " Advancing them later schedules the next round."}
+              {pending === "selected" && " Advancing them later schedules the next round."}
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setPending(null)}>
@@ -259,7 +342,7 @@ export function ResultsPage({
                 onClick={() => {
                   const request = pending;
                   setPending(null);
-                  if (request !== null) void record(request.applicationId, request.result);
+                  if (request !== null) void recordChecked(request);
                 }}
               >
                 Confirm — record and notify
@@ -358,6 +441,15 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
   /** F3: the advance waits behind a confirmation carrying the optional proof. */
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [proof, setProof] = useState<File | null>(null);
+  /** B2 (M2, 2026-08-21): the manage-rounds dialog and its per-round facts. */
+  const [managing, setManaging] = useState(false);
+  const [facts, setFacts] = useState<ReadonlyMap<string, RoundFacts>>(new Map());
+  const [renames, setRenames] = useState<Record<string, string>>({});
+  const [removing, setRemoving] = useState<DriveRoundInfo | null>(null);
+  /** C3 (answer 3b): the completion dialog, its readiness and typed reason. */
+  const [completing, setCompleting] = useState<CompletionReadiness | null>(null);
+  const [completionReason, setCompletionReason] = useState("");
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   const loadRounds = useCallback(async () => {
     const loaded = await view.rounds(driveId);
@@ -502,6 +594,75 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
     }
   }
 
+  async function openManage() {
+    setError(null);
+    try {
+      setFacts(await view.roundFacts(driveId));
+      setRenames(Object.fromEntries((rounds ?? []).map((r) => [r.roundId, r.name])));
+      setManaging(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not read the rounds' facts.");
+    }
+  }
+
+  async function saveRename(round: DriveRoundInfo) {
+    const name = (renames[round.roundId] ?? "").trim();
+    if (name === "" || name === round.name) return;
+    setError(null);
+    try {
+      await view.renameRound(round.roundId, name);
+      setNotice(`Round ${round.sequence} renamed to “${name}”.`);
+      await loadRounds();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not rename the round.");
+    }
+  }
+
+  async function confirmRemove() {
+    if (removing === null) return;
+    setError(null);
+    try {
+      await view.removeRound(driveId, removing.roundId);
+      setNotice(`Round ${removing.sequence} (${removing.name}) removed. Rounds renumbered.`);
+      setRemoving(null);
+      setManaging(false);
+      setActive(null);
+      await loadRounds();
+      setReloadKey((k) => k + 1);
+    } catch (cause) {
+      setRemoving(null);
+      setError(cause instanceof Error ? cause.message : "Could not remove the round.");
+    }
+  }
+
+  async function openCompletion() {
+    setError(null);
+    setCompletionReason("");
+    setCompletionError(null);
+    try {
+      setCompleting(await view.completionFacts(driveId));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not read the drive's progress.");
+    }
+  }
+
+  async function confirmCompletion() {
+    if (completing === null) return;
+    // The domain judges the reason — 3b: early completion demands one.
+    const decision = decideCompletion(completing, completionReason);
+    if (!decision.allowed) {
+      setCompletionError(decision.reason);
+      return;
+    }
+    try {
+      await view.completeDrive(driveId, completing.ready ? null : completionReason.trim());
+      setCompleting(null);
+      setNotice("Drive marked completed. It now appears under Drives → Completed.");
+    } catch (cause) {
+      setCompletionError(cause instanceof Error ? cause.message : "Could not complete the drive.");
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -568,6 +729,17 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
             + Add round
           </button>
         )}
+
+        <span className="ml-auto flex gap-2">
+          {/* B2: rename or knock off rounds the company dropped. */}
+          <Button size="sm" variant="secondary" onClick={() => void openManage()}>
+            Manage rounds…
+          </Button>
+          {/* C3: the drive is done when every applicant has an outcome. */}
+          <Button size="sm" variant="secondary" onClick={() => void openCompletion()}>
+            Mark drive completed…
+          </Button>
+        </span>
       </div>
 
       {active !== null && activeRound !== null && (
@@ -808,6 +980,161 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
             </div>
           )}
         </>
+      )}
+
+      {/* B2 (M2): rename or remove rounds — frozen ones say why they refuse. */}
+      {managing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            role="dialog"
+            aria-label="Manage rounds"
+            className="w-full max-w-lg rounded-card bg-white p-6 shadow-xl"
+          >
+            <h2 className="font-heading text-lg font-bold text-ink-900">Manage rounds</h2>
+            <p className="mt-1 text-sm text-ink-500">
+              Rename or remove rounds the company has dropped. A round with recorded attendance or
+              results is frozen — history is not edited.
+            </p>
+
+            <ul className="mt-4 divide-y divide-neutral-200">
+              {(rounds ?? []).map((round) => {
+                const freeze = describeRoundFreeze(
+                  facts.get(round.roundId) ?? {
+                    hasParticipants: false,
+                    hasAttendance: false,
+                    hasResults: false,
+                  },
+                );
+                return (
+                  <li
+                    key={round.roundId}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    {freeze !== null ? (
+                      <>
+                        <span className="text-sm font-medium text-ink-900">
+                          Round {round.sequence} · {round.name}
+                        </span>
+                        <span className="text-xs text-ink-500">{freeze}</span>
+                      </>
+                    ) : (
+                      <>
+                        <label className="flex items-center gap-2 text-sm">
+                          <span className="font-medium text-ink-900">Round {round.sequence} ·</span>
+                          <input
+                            type="text"
+                            aria-label={`Rename round ${round.sequence}`}
+                            value={renames[round.roundId] ?? round.name}
+                            onChange={(e) =>
+                              setRenames((r) => ({ ...r, [round.roundId]: e.target.value }))
+                            }
+                            className="rounded-lg border border-line px-2 py-1.5 text-sm"
+                          />
+                        </label>
+                        <span className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => void saveRename(round)}
+                          >
+                            Save name
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            aria-label={`Remove round ${round.sequence}`}
+                            onClick={() => setRemoving(round)}
+                          >
+                            Remove
+                          </Button>
+                        </span>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-5 flex justify-end">
+              <Button variant="secondary" onClick={() => setManaging(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removing !== null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+          <div
+            role="alertdialog"
+            aria-label="Remove round"
+            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+          >
+            <h2 className="font-heading text-lg font-bold text-ink-900">
+              Remove Round {removing.sequence} — {removing.name}?
+            </h2>
+            <p className="mt-2 text-sm text-ink-700">
+              The remaining rounds renumber to close the gap. This cannot be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setRemoving(null)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void confirmRemove()}>Remove round</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* C3 (answer 3b): completing the drive, with the early-reason path. */}
+      {completing !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div
+            role="alertdialog"
+            aria-label="Complete drive"
+            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+          >
+            <h2 className="font-heading text-lg font-bold text-ink-900">Mark drive completed?</h2>
+            {completing.ready ? (
+              <p className="mt-2 text-sm text-ink-700">
+                Every applicant has a final outcome. The drive moves to Drives → Completed.
+              </p>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-ink-700">
+                  {completing.undecided}{" "}
+                  {completing.undecided === 1 ? "student still has" : "students still have"} no
+                  final outcome. Completing now requires a reason — it is audit-logged.
+                </p>
+                <label
+                  className="mt-3 block text-sm font-medium text-ink-900"
+                  htmlFor="completion-reason"
+                >
+                  Reason
+                </label>
+                <input
+                  id="completion-reason"
+                  value={completionReason}
+                  onChange={(e) => setCompletionReason(e.target.value)}
+                  placeholder="e.g. Company closed the process after Round 2"
+                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
+                />
+              </>
+            )}
+            {completionError !== null && (
+              <p role="status" className="mt-2 text-sm text-destructive">
+                {completionError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setCompleting(null)}>
+                Cancel
+              </Button>
+              <Button onClick={() => void confirmCompletion()}>Complete drive</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

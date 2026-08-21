@@ -1,4 +1,7 @@
+import { completionReadiness } from "@domain/drive-completion";
 import type { MeetingSlot } from "@domain/meeting-slots";
+import { type RoundFacts, renumberRounds } from "@domain/round-editing";
+import { applicationProgress } from "@domain/student-progress";
 import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DriveRoundsView, RoundParticipant } from "./results-page";
@@ -23,12 +26,6 @@ const fromDatetimeLocal = (value: string | null): string | null =>
 
 export class ResultsViewError extends Error {}
 
-export interface DriveInProgress {
-  readonly driveId: string;
-  readonly companyName: string;
-  readonly status: string;
-}
-
 /**
  * Feeds the round-results screen.
  *
@@ -40,7 +37,7 @@ export function createSupabaseResultsView(
   client: SupabaseClient,
   getActorId: () => Promise<string | null>,
   getActorRole: () => Promise<AppRole>,
-): DriveRoundsView & { drivesInProgress(): Promise<readonly DriveInProgress[]> } {
+): DriveRoundsView {
   const rounds = createSupabaseRoundsRepository(client, getActorId, getActorRole);
 
   return {
@@ -199,22 +196,136 @@ export function createSupabaseResultsView(
       return advancing.length;
     },
 
-    /** The picker for the bare route: drives that are past publishing. */
-    async drivesInProgress() {
+    /**
+     * B2 (2026-08-21): what each round has RECORDED — the facts that freeze
+     * it. `attendance` counts only past 'scheduled': a scheduled row is the
+     * participant fact, already counted.
+     */
+    async roundFacts(driveId) {
       const { data, error } = await client
-        .from("drives")
-        .select("id, company_name, status")
-        .in("status", ["live", "applications_closed", "in_rounds"])
-        .order("company_name");
+        .from("drive_rounds")
+        .select(
+          "id, round_participants(application_id), round_results(application_id), attendance(application_id, status)",
+        )
+        .eq("drive_id", driveId);
 
-      if (error !== null) throw new ResultsViewError("Could not list the drives.");
+      if (error !== null) throw new ResultsViewError("Could not read the rounds' facts.");
 
-      return (data ?? []).map((row) => ({
-        driveId: row.id as string,
-        companyName: row.company_name as string,
-        status: row.status as string,
-      }));
+      const facts = new Map<string, RoundFacts>();
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        const rowsOf = (key: string) =>
+          (Array.isArray(row[key]) ? row[key] : []) as Array<Record<string, unknown>>;
+        facts.set(row.id as string, {
+          hasParticipants: rowsOf("round_participants").length > 0,
+          hasAttendance: rowsOf("attendance").some((a) => a.status !== "scheduled"),
+          hasResults: rowsOf("round_results").length > 0,
+        });
+      }
+      return facts;
     },
+
+    async renameRound(roundId, name) {
+      const { error } = await client.from("drive_rounds").update({ name }).eq("id", roundId);
+      if (error !== null) {
+        // 0057's trigger speaks in a coordinator's words — pass them through.
+        throw new ResultsViewError(error.message || "Could not rename the round.");
+      }
+    },
+
+    /** Delete, then renumber ascending — sequences only ever shift DOWN. */
+    async removeRound(driveId, roundId) {
+      const { data } = await client
+        .from("drive_rounds")
+        .select("id, sequence, name")
+        .eq("drive_id", driveId)
+        .order("sequence");
+
+      const before = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+        roundId: row.id as string,
+        sequence: Number(row.sequence),
+        name: (row.name as string | null) ?? "",
+      }));
+
+      const { error } = await client.from("drive_rounds").delete().eq("id", roundId);
+      if (error !== null) {
+        throw new ResultsViewError(error.message || "Could not remove the round.");
+      }
+
+      // The domain owns the renumbering rule; this loop only persists it.
+      for (const round of renumberRounds(before, roundId)) {
+        const current = before.find((b) => b.roundId === round.roundId);
+        if (current !== undefined && current.sequence !== round.sequence) {
+          await client
+            .from("drive_rounds")
+            .update({ sequence: round.sequence })
+            .eq("id", round.roundId);
+        }
+      }
+    },
+
+    /**
+     * C3: the readiness the completion dialog states — every applicant's
+     * stage, judged by the same `applicationProgress` the student sees.
+     */
+    async completionFacts(driveId) {
+      const [{ data: applications }, { data: roundRows }, { data: offerRows }] = await Promise.all([
+        client.from("applications").select("id, student_id").eq("drive_id", driveId),
+        client
+          .from("drive_rounds")
+          .select(
+            "id, sequence, name, round_participants(application_id), round_results(application_id, result), attendance(application_id, status)",
+          )
+          .eq("drive_id", driveId),
+        client.from("offers").select("student_id").eq("drive_id", driveId),
+      ]);
+
+      const offered = new Set(
+        ((offerRows ?? []) as Array<Record<string, unknown>>).map((o) => o.student_id as string),
+      );
+
+      const stages = ((applications ?? []) as Array<Record<string, unknown>>).map((application) => {
+        const applicationId = application.id as string;
+        const roundFacts = ((roundRows ?? []) as Array<Record<string, unknown>>)
+          .map((round) => {
+            const rowsOf = (key: string) =>
+              (Array.isArray(round[key]) ? round[key] : []).filter(
+                (entry) => (entry as Record<string, unknown>).application_id === applicationId,
+              ) as Array<Record<string, unknown>>;
+            return {
+              sequence: Number(round.sequence ?? 0),
+              name: String(round.name ?? "Round"),
+              participating: rowsOf("round_participants").length > 0,
+              attendance:
+                (rowsOf("attendance")[0]?.status as
+                  | "scheduled"
+                  | "present"
+                  | "absent"
+                  | "provisional"
+                  | undefined) ?? null,
+              result: (rowsOf("round_results")[0]?.result as RoundResult | undefined) ?? null,
+            };
+          })
+          .sort((a, b) => a.sequence - b.sequence);
+
+        return applicationProgress({
+          rounds: roundFacts,
+          hasOffer: offered.has(application.student_id as string),
+        });
+      });
+
+      return completionReadiness(stages);
+    },
+
+    async completeDrive(driveId, reason) {
+      const { error } = await client
+        .from("drives")
+        .update({ status: "completed", completed_reason: reason })
+        .eq("id", driveId);
+      if (error !== null) {
+        throw new ResultsViewError(error.message || "Could not complete the drive.");
+      }
+    },
+
     async participants(roundId) {
       const [{ data: attendance }, { data: results }, { data: slots }] = await Promise.all([
         client

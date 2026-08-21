@@ -248,18 +248,145 @@ describe("the drive's rounds", () => {
   });
 });
 
-describe("the drives a round can belong to", () => {
-  it("lists drives that are past publishing, for the picker", async () => {
+/**
+ * Batch B2 + C3 (2026-08-21, M2 approved): managing rounds and completing
+ * the drive, from the rounds screen.
+ */
+describe("managing rounds", () => {
+  it("reports each round's recorded facts, so the dialog can freeze honestly", async () => {
     server.use(
-      http.get(`${BASE}/rest/v1/drives`, () =>
+      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
         HttpResponse.json([
-          { id: "d1", company_name: "Zoho", status: "in_rounds" },
-          { id: "d2", company_name: "TCS", status: "live" },
+          {
+            id: "r1",
+            sequence: 1,
+            name: "Aptitude",
+            round_participants: [{ application_id: "a1" }],
+            round_results: [{ application_id: "a1", result: "selected" }],
+            attendance: [{ application_id: "a1", status: "present" }],
+          },
+          {
+            id: "r2",
+            sequence: 2,
+            name: "HR",
+            round_participants: [],
+            round_results: [],
+            attendance: [],
+          },
         ]),
       ),
     );
 
-    const drives = await view().drivesInProgress();
-    expect(drives.map((d) => d.companyName)).toEqual(["Zoho", "TCS"]);
+    const facts = await view().roundFacts("d1");
+
+    expect(facts.get("r1")).toEqual({
+      hasParticipants: true,
+      hasAttendance: true,
+      hasResults: true,
+    });
+    expect(facts.get("r2")).toEqual({
+      hasParticipants: false,
+      hasAttendance: false,
+      hasResults: false,
+    });
+  });
+
+  it("renames a round with a PATCH on that round alone", async () => {
+    let patched: { url: string; body: Record<string, unknown> } | null = null;
+    server.use(
+      http.patch(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
+        patched = { url: request.url, body: (await request.json()) as Record<string, unknown> };
+        return HttpResponse.json(null);
+      }),
+    );
+
+    await view().renameRound("r2", "HR discussion");
+
+    const p = patched as unknown as { url: string; body: Record<string, unknown> };
+    expect(p.url).toContain("id=eq.r2");
+    expect(p.body).toEqual({ name: "HR discussion" });
+  });
+
+  it("removes a round and renumbers the survivors to close the gap", async () => {
+    const deletes: string[] = [];
+    const patches: Array<{ url: string; body: Record<string, unknown> }> = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
+        HttpResponse.json([
+          { id: "r1", sequence: 1, name: "Aptitude" },
+          { id: "r2", sequence: 2, name: "HR" },
+          { id: "r3", sequence: 3, name: "Offer release" },
+        ]),
+      ),
+      http.delete(`${BASE}/rest/v1/drive_rounds`, ({ request }) => {
+        deletes.push(request.url);
+        return HttpResponse.json(null);
+      }),
+      http.patch(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
+        patches.push({
+          url: request.url,
+          body: (await request.json()) as Record<string, unknown>,
+        });
+        return HttpResponse.json(null);
+      }),
+    );
+
+    await view().removeRound("d1", "r2");
+
+    expect(deletes[0]).toContain("id=eq.r2");
+    // Only r3 needs a new number; r1 is already right.
+    expect(patches).toHaveLength(1);
+    expect(patches[0]?.url).toContain("id=eq.r3");
+    expect(patches[0]?.body).toEqual({ sequence: 2 });
+  });
+});
+
+describe("completing the drive (C3, answer 3b)", () => {
+  it("counts the applicants still undecided", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json([
+          { id: "a1", student_id: "s1" },
+          { id: "a2", student_id: "s2" },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
+        HttpResponse.json([
+          {
+            id: "r1",
+            sequence: 1,
+            name: "R1",
+            round_participants: [{ application_id: "a1" }, { application_id: "a2" }],
+            round_results: [{ application_id: "a1", result: "rejected" }],
+            attendance: [],
+          },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+    );
+
+    const readiness = await view().completionFacts("d1");
+
+    // a1 is rejected (terminal); a2 sat the round with no result (pending).
+    expect(readiness).toEqual({ ready: false, undecided: 1 });
+  });
+
+  it("completes the drive, storing the early reason only when one was needed", async () => {
+    const patches: Array<Record<string, unknown>> = [];
+    server.use(
+      http.patch(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        patches.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json(null);
+      }),
+    );
+
+    await view().completeDrive("d1", null);
+    expect(patches[0]).toEqual({ status: "completed", completed_reason: null });
+
+    await view().completeDrive("d1", "Company closed the process");
+    expect(patches[1]).toEqual({
+      status: "completed",
+      completed_reason: "Company closed the process",
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { useAuth } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { useState } from "react";
-import { useParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { DriveRecordPage } from "./record-page";
 import { createSupabaseDriveRecordView, type DriveRecordView } from "./record-view";
 
@@ -12,6 +12,8 @@ import { createSupabaseDriveRecordView, type DriveRecordView } from "./record-vi
  */
 export function DriveRecordRoute({ view }: { view?: DriveRecordView }) {
   const { driveId } = useParams();
+  // C8: the funnel number that linked here, e.g. `?stage=shortlisted`.
+  const [params] = useSearchParams();
   const auth = useAuth();
   const [resolved] = useState<DriveRecordView>(
     () => view ?? createSupabaseDriveRecordView(supabase()),
@@ -19,5 +21,12 @@ export function DriveRecordRoute({ view }: { view?: DriveRecordView }) {
 
   if (driveId === undefined || auth.status !== "signed-in") return null;
 
-  return <DriveRecordPage view={resolved} role={auth.role} driveId={driveId} />;
+  return (
+    <DriveRecordPage
+      view={resolved}
+      role={auth.role}
+      driveId={driveId}
+      stage={params.get("stage") ?? undefined}
+    />
+  );
 }

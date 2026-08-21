@@ -604,6 +604,17 @@ function DriveList({
                     Final selection
                   </Link>
                 )}
+
+                {/* C3 (2026-08-21): the completion dialog lives on the rounds
+                    screen; the card only takes the coordinator there. */}
+                {mayShortlist && drive.status === "in_rounds" && (
+                  <Link
+                    to={`/central/results?drive=${drive.driveId}`}
+                    className="font-medium text-brand-600 hover:underline"
+                  >
+                    Complete drive…
+                  </Link>
+                )}
               </div>
             </li>
           );
