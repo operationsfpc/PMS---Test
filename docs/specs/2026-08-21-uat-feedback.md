@@ -1,6 +1,10 @@
 # UAT Feedback — 21/08 round (from `docs/inbox/Meetings Tracker  (1).pdf`, pages 17–20)
 
-**Status: 🟡 DIAGNOSED — awaiting answers to Q1–Q5 below before building.**
+**Status: ✅ SHIPPED 2026-08-21.** Answers: Q1 **b** · Q2 wording approved ·
+Q3 tester informed · Q4 **both** · Q5 **Central CPC only**. Cloudflare version
+`0d819c4d-2dc8-4d7c-baa7-366106a37920`, JS `index-DlGFmSHJ.js` byte-identical
+(sha256 `da51a278…`). Remote migrations at **0056** — narrowed R4 gate verified
+in live `pg_proc`, `drives.venue` present. Commits `9681207`, `34dd160`.
 
 Source: "21/08 - PMS Feedback" section, copied to
 `docs/inbox/Meetings Tracker  (1).pdf` on 2026-08-21.

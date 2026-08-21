@@ -4,6 +4,53 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-21 — 21/08 UAT items 1 & 2, migration 0056
+
+Live Cloudflare `0d819c4d-2dc8-4d7c-baa7-366106a37920`, JS `index-DlGFmSHJ.js`
+byte-identical (966 366 bytes, sha256 `da51a278…`). Remote at **0056** —
+narrowed R4 verified in live `pg_proc`; `drives.venue` present. Commits
+`9681207`, `34dd160`. Spec + all answers:
+`docs/specs/2026-08-21-uat-feedback.md`. Source PDF:
+`docs/inbox/Meetings Tracker  (1).pdf` (pages 17–20, double-space filename).
+
+- **Item 1 — "Dream drives not reflecting":** NOT a code defect. HCL was
+  hidden by the internship cap (student TestShash placed Regular via a
+  Deloitte convertible offer); LTI Mindtree by its own degree/branch
+  restrictions (tester setup, tester informed — Q3). Decision **Q1b**
+  (supersedes 2026-08-12 Q2): the cap now hides PLAIN internship drives
+  only — convertibles are the ladder's to judge. Changed in
+  `src/domain/visibility.ts` AND `enforce_application_gates` (0056) —
+  change both or neither. Two old cap tests deliberately flipped. The
+  placed-banner now also states when the one-internship allowance is used
+  (`internshipCapConsumed` on `StudentDriveLists`).
+- **Item 2 — off-campus venue:** `drives.venue` (0056, nullable — NULL IS
+  "venue not yet confirmed"; distinct from 0004's per-round venue). New
+  `@domain/drive-venue` (`driveVenueApplies` — physical_outside + pooled per
+  Q4; `describeDriveVenue`; `canEditDriveVenue` — Central CPC only per Q5).
+  PIF venue block (radio, never blocks submit); cockpit "Update venue…"
+  dialog post-submission; student card + record page show venue or "Venue
+  to be confirmed".
+- ⚠️ Found and removed a stray unrelated first line in
+  `docs/specs/2026-08-20-uat-feedback.md`.
+
+### 🟡 OPEN — next session builds these (specs to write, answers pending)
+
+1. **Rounds-advancement UX rework** (Karthik, 2026-08-21): checkboxes per
+   student, select-all/reject-all, bottom action bar
+   (Selected/Rejected/On hold), confirmation only at the bulk action.
+   Central CPC may DELETE ("knock off") or RENAME drive rounds — companies
+   eliminate rounds mid-drive. Clarifying questions asked, answers pending.
+2. **21/08 batch C** (Central CPC screens): drive pickers under "Drives in
+   progress" — shortlisting/attendance/final-selection dead-end with no
+   drive list (results has one; the others show only "Choose a drive…" —
+   root cause of "empty" reports); picker needs role title + raised date +
+   search + oldest-first; "mark drive completed" action (domain rule: all
+   results out); completed drives into the Completed subsection; absent
+   alerts on attendance; Live-card counts clickable → per-stage student
+   list. Questions asked, answers pending.
+
+---
+
 ## ✅ SHIPPED 2026-08-20 (evening) — the whole 20/08 UAT round (G1–G7), migration 0055
 
 Live Cloudflare `32e3954e-eb2c-48e6-ba1e-370a83a9a842`, JS byte-identical to
