@@ -4,6 +4,44 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-21 (UAT live session) — advance fixed twice over + shortlist tabs
+
+Live Cloudflare `1032a30e-39fe-4ba9-9be4-4e6210f96c91`, JS `index-BU4qmBqu.js`
+byte-identical (985 222 bytes, sha256 `40c8e484…`). Suite **3512 tests**,
+`pnpm check` exit 0. Commits `ed97eda`, `68e92dd`. No migration (remote 0057).
+Screenshots: `docs/inbox/Screenshot 2026-08-21 at 4.27.41 PM.png` (dead links),
+`…4.46.02 PM.png` (the advance failure).
+
+1. **Advance button stuck until F5** — the embedded ResultsPage recorded
+   results into its own state; the parent's `advancing` count never re-read.
+   `ResultsPage.onRecorded` now fires after results land (success AND the
+   partial-failure path); the rounds page passes `loadParticipants`.
+2. **"Could not schedule the participants." forever (live Deloitte drive)**
+   — late selections after an earlier advance rebuilt a batch containing a
+   student ALREADY in Round 2 (Ishwarya); her unique key refused the whole
+   insert on every retry. `advance()` now reads the next round's
+   participants and schedules/counts only newcomers. ⚠️ Live data oddity
+   left alone: Kavitha sits in R2 with a REJECTED R1 result (legacy of the
+   pre-F1-lock era, test data).
+3. **RoundsError detail** — all four write refusals in rounds-repository now
+   append the database's own message (`withDetail`), per Karthik's "error
+   msg but not in full detail".
+4. **Shortlisting two tabs (spec change, Karthik):** Not shortlisted
+   (default, selectable) · Shortlisted (read-only). Nothing pre-ticked; the
+   save submits ONLY undecided rows (ranks stay overall positions); target
+   count includes the already-decided. 🔴 Consequence flagged to Karthik:
+   REMOVING someone from a saved shortlist is no longer possible in the UI
+   (previously possible only by accident). Three old tests deliberately
+   rewritten (pre-tick, badge-in-place, post-save selection).
+
+⏸ AWAITING APPROVAL: `docs/specs/2026-08-21-skills-picker-offer-attachment-links.md`
+— A: PIF mandatory-skills picker over `skill_areas` (needs 0058 part 1:
+AE read on skill_areas — today the AE CANNOT read it) · B: offer-letter
+attachment on final selection (0058 part 2 + `offer-letters` bucket; Q1–Q3
+open) · C: clickable notification links (`linkifyBody`). Build order C→A→B.
+
+---
+
 ## ✅ 2026-08-21 (late) — CPC-draft purge (live SQL, no code change)
 
 Central CPC can no longer raise drives (0047), but 3 drafts she created
