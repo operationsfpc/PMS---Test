@@ -4,6 +4,30 @@
 
 ---
 
+## ⏸ ON HOLD 2026-08-21 — email integration: Resend chosen, spec written, Karthik resumes Monday
+
+P1 is decided: **Resend**. Full agreed spec (committed, NOT yet approved):
+`docs/specs/2026-08-21-email-integration.md`. Read it before touching email.
+Key decisions: sending domain **`email.faceprep.in`** (Cloudflare DNS, we have
+access; `mail.faceprep.in` rejected — live legacy A record), From
+`placements@email.faceprep.in`, Reply-To `placements@faceprep.in` (confirmed
+Google Workspace mailbox — faceprep.in MX is Google; faceprepcampus.com mail
+is Hostinger and stays out of email entirely). Tracking OFF. Free tier for
+dev (100/day cap — `EMAIL_ALLOWLIST` guard specced); $20/mo upgrade is a hard
+gate before the first real cohort invite. Supabase Auth SMTP → Resend in the
+same slice (default ~3/hour limit breaks roster invites).
+
+**Karthik's Monday steps** (already given to him in chat, step-by-step):
+create Resend account → add `email.faceprep.in` (Tokyo region) → Cloudflare
+records **DNS only, never proxied** → verify → API key + webhook secret into
+`.env.local` (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`) → webhook endpoint
+`https://<project-ref>.supabase.co/functions/v1/email-events` with the five
+delivery events → approve the spec. **No code until he approves.** Then TDD
+order is spec §6: domain state machine first, migration is `0058` (⚠️ the
+skills-picker spec below also claims 0058 — renumber whichever lands second).
+
+---
+
 ## ✅ SHIPPED 2026-08-21 (UAT live session) — advance fixed twice over + shortlist tabs
 
 Live Cloudflare `1032a30e-39fe-4ba9-9be4-4e6210f96c91`, JS `index-BU4qmBqu.js`
@@ -2573,7 +2597,8 @@ most valuable thing to prove next; see §1.
   dependency decision (P2)**
 
 **Not started:**
-- Notifications UI and the pgmq queue — **no email provider chosen (P1)**
+- Notifications email + pgmq queue — **provider chosen (Resend), spec on hold
+  awaiting Karthik's approval + keys** — see top of this file
 - Result corrections
 - Playwright journeys for every role except student
 - Compliance module (Phase 2)
@@ -2586,7 +2611,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 
 | # | Needed |
 |---|---|
-| **P1** | **Transactional email provider** + key. Gmail's ~2,000/day cap with no delivery webhooks does not meet PRD §21.2 |
+| **P1** | ~~Provider choice~~ **Resend chosen 2026-08-21.** Waiting on Karthik (Monday): account, DNS on `email.faceprep.in`, keys into `.env.local`, spec approval — `docs/specs/2026-08-21-email-integration.md` |
 | **P2** | Approve a spreadsheet library (SheetJS/ExcelJS) for `.xlsx` roster import and the recruiter export |
 | **P3** | The skill-repository score schema (R11 ranking is invented — A12) |
 | **P7** | Google OAuth verification if >100 users are expected |
