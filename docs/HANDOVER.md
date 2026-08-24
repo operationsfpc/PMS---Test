@@ -4,6 +4,51 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-24 — JD-attachment publish fix · PIF skills picker (0058) · Skills assessed (0059)
+
+Three ships, live `8d42e54c-5b6c-46f8-a4b5-9237273ffa67`, JS `index-D4ddjBTf.js`
+byte-identical (sha256 `c7a00249…`). Remote at **0059**. Suite **3569 tests /
+183 files**, `pnpm check` exit 0. Commits `dcd65c0`, `31ad202`, `9be3252`, +
+skills-assessed.
+
+1. **Publish accepted an attached JD** (`dcd65c0`): `missingBeforeGoLive` only
+   read the typed text; since J1 the PDF is the document of record.
+   `DriveReadiness.hasJobDescriptionFile` ← `jd_storage_path`. Infosys drive
+   verified live as exactly this shape.
+2. **PIF mandatory-skills picker** (`31ad202`, **0058** `skill_areas_ae_read`):
+   spec 2026-08-21 part A approved by Karthik's 2026-08-24 message. Checkboxes
+   over the live catalogue + "Other skills" chips; storage stays comma-joined
+   text; `splitMandatorySkills`/`joinMandatorySkills` are the only translation.
+3. **Skills assessed page** (answers 1a/2a/3a, **0059**): `/central/skills-assessed`,
+   sidebar under Student details. Rename free (scores follow), remove refused
+   with scores — `canRemoveSkillArea` AND the FK flipped to ON DELETE RESTRICT
+   (⚠️ one 0037 cascade test deliberately reversed). Contract parser learned
+   PostgREST `(count)`.
+
+### 🔴 DIAGNOSED, NOT YET BUILT (2026-08-24 UAT, all root-caused in chat):
+
+1. **Remove "View more" expander** from student drive cards — "View everything"
+   (the record page) is canonical and carries all of it. Kill the expander,
+   `OpenDriveDetails` usage, and its tests.
+2. **Shortlisting CGPA 0** — `shortlist-view.ts applicants()` reads the snapshot
+   at the WRONG DEPTH: real shape is `{ profile: { academics: {…}, … } }`, it
+   reads `snapshot.academics ?? snapshot`. Same defect in `record-page.tsx
+   fromSnapshot`. Thanush's snapshot carries 7.5; the screen shows 0. Also
+   `preferredRoleCategories` should read profile's `roleCategories`.
+   portfolio-view and recruiter-export read the right depth.
+3. **No semester (CGPA) verification queue** — pending `student_semesters` of
+   `srf_approved` students have NO queue (certificates got theirs, 0038/0039;
+   semesters only verify via SRF approval, 0031). Thanush live: sem 1 verified,
+   sems 2–3 pending forever. Build mirroring the certificate queue; decide
+   reject semantics (no rejection_reason column — likely migration 0060).
+4. **Student-details view access** (CPC / campus manager / KAM / DH, view-only)
+   — RLS ALREADY permits all of it (campus-scoped readers + org readers,
+   0018; skill tables staff_read). Pure front-end: sidebar entries, read-only
+   skill pages. ⚠️ live has NO campus_manager/KAM profiles yet; DH exists
+   (Varun) with 0 campus assignments (org reader — fine).
+
+---
+
 ## ⏸ ON HOLD 2026-08-21 — email integration: Resend chosen, spec written, Karthik resumes Monday
 
 P1 is decided: **Resend**. Full agreed spec (committed, NOT yet approved):
