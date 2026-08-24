@@ -4,6 +4,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class PublishError extends Error {}
 
+/**
+ * The rounds screens' lesson (2026-08-21), applied here after the Infosys
+ * drive (2026-08-24): a publish the DATABASE refuses must say why. The
+ * summary keeps what the coordinator was doing; the database's own words
+ * follow, so the refusal can be fixed or reported instead of merely retried.
+ */
+const withDetail = (summary: string, error: { message?: string }): PublishError =>
+  new PublishError(
+    typeof error.message === "string" && error.message.trim() !== ""
+      ? `${summary} (${error.message})`
+      : summary,
+  );
+
 export interface PublishRepository {
   publish(driveId: string, current: DriveStatus, readiness: DriveReadiness): Promise<void>;
 }
@@ -50,7 +63,7 @@ export function createSupabasePublishRepository(
         .single();
 
       if (error !== null) {
-        throw new PublishError("Could not publish the drive. Please try again.");
+        throw withDetail("Could not publish the drive.", error);
       }
     },
   };

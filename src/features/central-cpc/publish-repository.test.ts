@@ -82,3 +82,30 @@ describe("createSupabasePublishRepository", () => {
     ).rejects.toThrow(/round[\s\S]*application|application[\s\S]*round/i);
   });
 });
+
+/**
+ * The Infosys drive of 2026-08-24 (afternoon): every checklist tick green,
+ * publish refused by the DATABASE (`live_requires_complete_record`, since
+ * fixed by 0060) — and the screen said only "Please try again", which turns
+ * a nameable refusal into a mystery. Karthik: "if there is a reason for not
+ * allowing it to be published, reason to be displayed."
+ */
+describe("when the database refuses the publish", () => {
+  it("carries the database's own words in the error", async () => {
+    server.use(
+      http.patch(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json(
+          {
+            code: "23514",
+            message: 'new row violates check constraint "live_requires_complete_record"',
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    await expect(repo().publish("d1", "approved", complete)).rejects.toThrow(
+      /live_requires_complete_record/,
+    );
+  });
+});
