@@ -909,3 +909,56 @@ describe("PifForm — required-field markers (G2)", () => {
     expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
   });
 });
+
+/**
+ * The mandatory-skills picker (spec 2026-08-21 part A, approved 2026-08-24).
+ *
+ * "Only these skills should be selectable by the account executive when
+ * raising the PIF. Anything outside this list he has to call it out as other
+ * skills." Free text invited names the ranking could never match — the live
+ * "Scored on 0 of 2 required skills" drive is what this replaces.
+ */
+describe("PifForm — mandatory skills come from the assessed-skills catalogue", () => {
+  const catalogue = ["AI skills", "Aptitude", "Communication skills"];
+
+  it("offers a checkbox per assessed skill and no free-text skills input", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+
+    for (const name of catalogue) {
+      expect(screen.getByRole("checkbox", { name })).toBeDefined();
+    }
+    expect(screen.queryByLabelText(/^mandatory skills$/i)).toBeNull();
+  });
+
+  it("submits picked skills and called-out other skills as the stored text", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("checkbox", { name: "Aptitude" }));
+    await user.type(screen.getByLabelText("Other skill"), "Testing");
+    await user.click(screen.getByRole("button", { name: /add other skill/i }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0]?.[0]?.mandatorySkills).toBe("Aptitude, Testing");
+  });
+
+  it("says an other skill cannot be scored until it is assessed", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+    expect(screen.getByText(/can't be scored until they are assessed/i)).toBeDefined();
+  });
+
+  it("removes an added other skill when its chip is dismissed", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+
+    await user.type(screen.getByLabelText("Other skill"), "Testing");
+    await user.click(screen.getByRole("button", { name: /add other skill/i }));
+    expect(screen.getByText("Testing")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /remove testing/i }));
+    expect(screen.queryByText("Testing")).toBeNull();
+  });
+});

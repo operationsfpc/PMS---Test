@@ -1,6 +1,6 @@
 import { Card } from "@components/ui";
 import { supabase } from "@lib/supabase";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PifForm } from "./pif-form";
 import { createSupabasePifRepository, type PifRepository } from "./pif-repository";
 import type { PifFormValues } from "./pif-schema";
@@ -23,6 +23,12 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
    * Without it, save-then-submit left an orphan draft on every drives list.
    */
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
+  /** The assessed-skills catalogue for the mandatory-skills picker (part A). */
+  const [skillAreas, setSkillAreas] = useState<readonly string[]>([]);
+
+  useEffect(() => {
+    void repo.skillAreas().then(setSkillAreas);
+  }, [repo]);
 
   async function submit(values: PifFormValues) {
     await repo.submit(values, draftId);
@@ -58,7 +64,7 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
           </p>
         </Card>
       )}
-      <PifForm onSubmit={submit} onSaveDraft={saveDraft} />
+      <PifForm onSubmit={submit} onSaveDraft={saveDraft} skillAreas={skillAreas} />
     </>
   );
 }

@@ -206,3 +206,57 @@ export function parseSkillSheet(
 
   return { accepted, rejected, fatal: null };
 }
+
+/**
+ * The PIF's mandatory-skills picker (spec 2026-08-21 part A, approved
+ * 2026-08-24 — "Only these skills should be selectable by the account
+ * executive when raising the PIF. Anything outside this list he has to call
+ * it out as other skills.").
+ *
+ * Storage stays `drives.mandatory_skills` comma-joined text — everything
+ * downstream (shortlist chips, rankApplicants, the record page, the publish
+ * line) already reads that shape — so these two functions are the ONLY
+ * translation between the picker and the column, in both directions.
+ */
+export interface MandatorySkillsSplit {
+  /** Names matching the assessed-skills catalogue, in canonical casing. */
+  readonly catalogue: readonly string[];
+  /** Everything else, verbatim (trimmed) — the AE's "other skills". */
+  readonly other: readonly string[];
+}
+
+/** Stored text → picker state. Nothing is dropped; unknowns become "other". */
+export function splitMandatorySkills(
+  stored: string,
+  catalogueNames: readonly string[],
+): MandatorySkillsSplit {
+  const canonical = new Map(
+    catalogueNames.map((n) => [skillAreaKey(n), normaliseSkillAreaName(n)]),
+  );
+  const catalogue: string[] = [];
+  const other: string[] = [];
+  const seen = new Set<string>();
+
+  for (const part of stored.split(",")) {
+    const name = normaliseSkillAreaName(part);
+    if (name === "") continue;
+    const key = skillAreaKey(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const known = canonical.get(key);
+    if (known === undefined) other.push(name);
+    else catalogue.push(known);
+  }
+
+  return { catalogue, other };
+}
+
+/** Picker state → stored text. An "other" naming a catalogue skill folds in. */
+export function joinMandatorySkills(
+  picked: readonly string[],
+  other: readonly string[],
+  catalogueNames: readonly string[],
+): string {
+  const split = splitMandatorySkills([...picked, ...other].join(","), catalogueNames);
+  return [...split.catalogue, ...split.other].join(", ");
+}

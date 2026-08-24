@@ -220,6 +220,8 @@ describe("every hand-written select matches the schema", () => {
     // 0037: the skill repository replaced 0003's placeholder table.
     ["shortlisting skills", "student_skill_scores", "student_id, score, skill_areas(name)"],
     ["skill repository areas", "skill_areas", "id, name"],
+    // Part A (2026-08-24): the PIF's mandatory-skills picker reads names only.
+    ["pif skill catalogue", "skill_areas", "name"],
     ["skill repository students", "students", SKILL_STUDENT_COLUMNS],
     [
       "shortlisting drive",

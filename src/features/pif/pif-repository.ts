@@ -26,6 +26,13 @@ export interface PifRepository {
     existingDraftId?: string,
   ): Promise<{ id: string; status: string }>;
   submit(values: PifFormValues, existingDraftId?: string): Promise<{ id: string; status: string }>;
+  /**
+   * The assessed-skills catalogue for the mandatory-skills picker (spec
+   * 2026-08-21 part A, approved 2026-08-24). Names only — student scores stay
+   * unreadable to the AE (0037). A refused read degrades to an empty
+   * catalogue: the AE can still raise the PIF using "other skills".
+   */
+  skillAreas(): Promise<readonly string[]>;
 }
 
 export type GetActorId = () => Promise<string | null>;
@@ -306,5 +313,12 @@ export function createSupabasePifRepository(
   return {
     saveDraft: (values, existingDraftId) => write(values, "draft", existingDraftId),
     submit: (values, existingDraftId) => write(values, "submitted", existingDraftId),
+    async skillAreas() {
+      const { data, error } = await client.from("skill_areas").select("name").order("name");
+      if (error !== null) return [];
+      return ((data ?? []) as Array<{ name?: unknown }>)
+        .map((r) => String(r.name ?? ""))
+        .filter((n) => n !== "");
+    },
   };
 }

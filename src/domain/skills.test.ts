@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SKILL_AREAS,
+  joinMandatorySkills,
   normaliseSkillAreaName,
   parseSkillScore,
   parseSkillSheet,
@@ -8,6 +9,7 @@ import {
   SKILL_SCORE_MAX,
   SKILL_SCORE_MIN,
   skillAreaKey,
+  splitMandatorySkills,
   validateSkillAreaName,
 } from "./skills";
 
@@ -252,5 +254,56 @@ describe("parseSkillSheet", () => {
   it("counts the header when numbering rows, matching what the spreadsheet shows", () => {
     const result = parseSkillSheet([header, ["21CSE1042", "4", "2"], ["", "1", "2"]], areas);
     expect(result.rejected).toEqual([{ row: 3, reason: "Roll number is missing." }]);
+  });
+});
+
+/**
+ * The PIF's mandatory-skills picker (spec 2026-08-21 part A, approved
+ * 2026-08-24). The AE picks from the assessed-skills catalogue; anything
+ * outside it is an explicit "other". Storage stays the comma-joined text
+ * everything downstream already reads, so the two directions must round-trip.
+ */
+describe("splitMandatorySkills", () => {
+  const catalogue = ["Aptitude", "Communication skills", "AI skills"];
+
+  it("re-ticks catalogue names case-insensitively and keeps the rest as other", () => {
+    expect(splitMandatorySkills("aptitude, Coding, AI  skills", catalogue)).toEqual({
+      catalogue: ["Aptitude", "AI skills"],
+      other: ["Coding"],
+    });
+  });
+
+  it("returns nothing for blank storage", () => {
+    expect(splitMandatorySkills("", catalogue)).toEqual({ catalogue: [], other: [] });
+    expect(splitMandatorySkills("  ", catalogue)).toEqual({ catalogue: [], other: [] });
+  });
+
+  it("drops duplicates instead of listing a skill twice", () => {
+    expect(splitMandatorySkills("Aptitude, aptitude, Coding, coding", catalogue)).toEqual({
+      catalogue: ["Aptitude"],
+      other: ["Coding"],
+    });
+  });
+});
+
+describe("joinMandatorySkills", () => {
+  const catalogue = ["Aptitude", "Communication skills"];
+
+  it("joins picked and other skills into the stored text", () => {
+    expect(joinMandatorySkills(["Aptitude"], ["Testing"], catalogue)).toBe("Aptitude, Testing");
+  });
+
+  it("folds an other that names a catalogue skill into the catalogue side", () => {
+    expect(joinMandatorySkills([], ["aptitude"], catalogue)).toBe("Aptitude");
+  });
+
+  it("ignores blanks and duplicates", () => {
+    expect(
+      joinMandatorySkills(["Aptitude", "Aptitude"], ["", "  ", "Testing", "testing"], catalogue),
+    ).toBe("Aptitude, Testing");
+  });
+
+  it("returns an empty string when nothing is picked", () => {
+    expect(joinMandatorySkills([], [], catalogue)).toBe("");
   });
 });

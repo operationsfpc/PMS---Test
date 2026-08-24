@@ -676,3 +676,32 @@ describe("createSupabasePifRepository — the rounds reach the drive", () => {
     ).resolves.toMatchObject({ id: "drive-1" });
   });
 });
+
+/**
+ * The assessed-skills catalogue for the mandatory-skills picker (spec
+ * 2026-08-21 part A). Names only — the AE never reads a student's scores;
+ * 0058 grants SELECT on skill_areas alone.
+ */
+describe("skillAreas", () => {
+  it("returns the catalogue names, alphabetical", async () => {
+    const { client } = storageStub();
+    server.use(
+      http.get(`${BASE}/rest/v1/skill_areas`, () =>
+        HttpResponse.json([{ name: "Aptitude" }, { name: "Communication skills" }]),
+      ),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    expect(await repo.skillAreas()).toEqual(["Aptitude", "Communication skills"]);
+  });
+
+  it("returns an empty catalogue when the read is refused, rather than failing the form", async () => {
+    const { client } = storageStub();
+    server.use(
+      http.get(`${BASE}/rest/v1/skill_areas`, () => new HttpResponse(null, { status: 403 })),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    expect(await repo.skillAreas()).toEqual([]);
+  });
+});

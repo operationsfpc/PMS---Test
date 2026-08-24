@@ -4,6 +4,7 @@ import { driveVenueApplies } from "@domain/drive-venue";
 import { JOINING_TIMELINES, joiningLabel } from "@domain/joining";
 import { MARKS_SCALES } from "@domain/marks";
 import { SHIFT_TYPES, shiftLabel } from "@domain/shift";
+import { joinMandatorySkills, normaliseSkillAreaName, skillAreaKey } from "@domain/skills";
 import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { type ReactNode, useId, useRef, useState } from "react";
@@ -166,12 +167,23 @@ function RadioGroup({
 export function PifForm({
   onSubmit,
   onSaveDraft,
+  skillAreas = [],
 }: {
   onSubmit: (values: PifFormValues) => Promise<void>;
   onSaveDraft: (values: PifFormValues) => Promise<void>;
+  /**
+   * The assessed-skills catalogue (spec 2026-08-21 part A, approved
+   * 2026-08-24): the ONLY skills the AE may pick; anything else is an
+   * explicit "other". Free text invited names the ranking could never match.
+   */
+  skillAreas?: readonly string[];
 }) {
   const intent = useRef<"draft" | "submit">("submit");
   const [failure, setFailure] = useState<string | null>(null);
+  /** The picker's state; `mandatorySkills` stays the stored comma-joined text. */
+  const [pickedSkills, setPickedSkills] = useState<readonly string[]>([]);
+  const [otherSkills, setOtherSkills] = useState<readonly string[]>([]);
+  const [otherSkillDraft, setOtherSkillDraft] = useState("");
 
   const {
     register,
@@ -769,9 +781,104 @@ export function PifForm({
             )}
           </fieldset>
 
-          <Labelled label="Mandatory skills" error={err("mandatorySkills")} wide>
-            {(id) => <input id={id} className={control} {...register("mandatorySkills")} />}
-          </Labelled>
+          {/*
+           * Spec 2026-08-21 part A (approved 2026-08-24): the skills are the
+           * ones the students are assessed on — free text here produced a live
+           * drive whose applicants all read "Scored on 0 of 2 required skills"
+           * because "Coding, Testing" matched no assessed skill.
+           */}
+          <fieldset className="sm:col-span-2">
+            <legend className="mb-1 block text-sm font-medium text-ink-700">
+              Mandatory skills
+            </legend>
+            {skillAreas.length > 0 && (
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {skillAreas.map((name) => (
+                  <label key={name} className="flex items-center gap-2 text-sm text-ink-800">
+                    <input
+                      type="checkbox"
+                      checked={pickedSkills.includes(name)}
+                      onChange={(e) => {
+                        const next = e.target.checked
+                          ? [...pickedSkills, name]
+                          : pickedSkills.filter((p) => p !== name);
+                        setPickedSkills(next);
+                        setValue(
+                          "mandatorySkills",
+                          joinMandatorySkills(next, otherSkills, skillAreas),
+                        );
+                      }}
+                    />
+                    {name}
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <div>
+                <label
+                  htmlFor="pif-other-skill"
+                  className="mb-1 block text-xs font-medium text-ink-700"
+                >
+                  Other skill
+                </label>
+                <input
+                  id="pif-other-skill"
+                  className={control}
+                  value={otherSkillDraft}
+                  onChange={(e) => setOtherSkillDraft(e.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label="Add other skill"
+                onClick={() => {
+                  const name = normaliseSkillAreaName(otherSkillDraft);
+                  if (name === "") return;
+                  const next = otherSkills.some((o) => skillAreaKey(o) === skillAreaKey(name))
+                    ? otherSkills
+                    : [...otherSkills, name];
+                  setOtherSkills(next);
+                  setOtherSkillDraft("");
+                  setValue("mandatorySkills", joinMandatorySkills(pickedSkills, next, skillAreas));
+                }}
+              >
+                Add
+              </Button>
+            </div>
+            {otherSkills.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {otherSkills.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-800"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${name}`}
+                      className="font-bold text-ink-500"
+                      onClick={() => {
+                        const next = otherSkills.filter((o) => o !== name);
+                        setOtherSkills(next);
+                        setValue(
+                          "mandatorySkills",
+                          joinMandatorySkills(pickedSkills, next, skillAreas),
+                        );
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="mt-1 text-xs text-ink-500">
+              Skills outside the repository can't be scored until they are assessed and added to the
+              Skill repository.
+            </p>
+          </fieldset>
         </Section>
 
         <Section title="Selection process and timeline">
