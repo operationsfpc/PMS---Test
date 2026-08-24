@@ -92,6 +92,18 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       items: [
         { to: "/cpc/verification", label: "Student verification" },
         { to: "/cpc/certificates", label: "Certificate verification" },
+        // 2026-08-24: semesters added after SRF approval, decided like
+        // certificates — the queue Karthik reported missing.
+        { to: "/cpc/semesters", label: "CGPA verification" },
+      ],
+    },
+    // 2026-08-24 (Karthik): their students' details, view only. RLS scopes
+    // the rows to their campuses; the skills page hides its editors.
+    {
+      heading: "Student details",
+      items: [
+        { to: "/central/students", label: "All students" },
+        { to: "/central/skills", label: "Skill repository" },
       ],
     },
     DRIVES,
@@ -133,9 +145,25 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   ],
   campus_manager: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
+    // 2026-08-24 (Karthik): view-only student details, campus-scoped by RLS.
+    {
+      heading: "Student details",
+      items: [
+        { to: "/central/students", label: "All students" },
+        { to: "/central/skills", label: "Skill repository" },
+      ],
+    },
   ],
   key_account_manager: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Account overview" }] },
+    // 2026-08-24 (Karthik): view-only student details for their campuses.
+    {
+      heading: "Student details",
+      items: [
+        { to: "/central/students", label: "All students" },
+        { to: "/central/skills", label: "Skill repository" },
+      ],
+    },
   ],
   enterprise_relations: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] }],
   er_head: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] }],
@@ -146,6 +174,14 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     {
       heading: "Drive approval",
       items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
+    },
+    // 2026-08-24 (Karthik): view-only student details, org-wide (is_org_reader).
+    {
+      heading: "Student details",
+      items: [
+        { to: "/central/students", label: "All students" },
+        { to: "/central/skills", label: "Skill repository" },
+      ],
     },
     DRIVES,
   ],

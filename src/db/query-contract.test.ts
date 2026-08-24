@@ -4,6 +4,7 @@ import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central
 import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
 import { CERTIFICATE_QUEUE_COLUMNS } from "@features/cpc/certificate-queue-repository";
 import { PROGRESS_APPLICATION_COLUMNS } from "@features/cpc/drive-progress-view";
+import { SEMESTER_QUEUE_COLUMNS } from "@features/cpc/semester-queue-repository";
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
   DASHBOARD_COHORT_COLUMNS,
@@ -374,6 +375,9 @@ describe("every hand-written select matches the schema", () => {
     // 0038: certificates are verified like a CGPA. Registered because it
     // embeds both the student and the document behind the name.
     ["coordinator certificate queue", "student_certificates", CERTIFICATE_QUEUE_COLUMNS],
+    // 2026-08-24: the semester (CGPA) queue — embeds the student AND the
+    // marksheet document behind the declared figure.
+    ["coordinator semester queue", "student_semesters", SEMESTER_QUEUE_COLUMNS],
     // G7 (UAT 2026-08-20): the canonical student record's five reads.
     ["student record", "students", RECORD_STUDENT_COLUMNS],
     ["student record semesters", "student_semesters", RECORD_SEMESTER_COLUMNS],

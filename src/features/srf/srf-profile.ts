@@ -21,6 +21,13 @@ export interface SubmittedSemester {
   readonly historyOfArrears: number;
   /** The scale the figure was declared on, so it always says what it means. */
   readonly marksScale?: MarksScale;
+  /**
+   * 2026-08-24: the coordinator's decision (0061), read back like a
+   * certificate's — the student must see WHY a figure was not accepted, and
+   * a rejected number is theirs to declare again.
+   */
+  readonly status?: VerificationStatus;
+  readonly rejectionReason?: string | null;
 }
 
 export interface SrfProfile {
@@ -129,7 +136,7 @@ export const SRF_PROFILE_COLUMNS = `
   programme_level,
   degrees(name), branches(name),
   student_certificates(name, status, rejection_reason),
-  student_semesters(semester_number, declared_marks, marks_scale, current_arrears, history_of_arrears)
+  student_semesters(semester_number, declared_marks, marks_scale, current_arrears, history_of_arrears, status, rejection_reason)
 `;
 
 const name = (value: unknown): string => {
@@ -160,6 +167,8 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
         currentArrears: Number(s.current_arrears ?? 0),
         historyOfArrears: Number(s.history_of_arrears ?? 0),
         marksScale: (s.marks_scale as MarksScale | null) ?? "cgpa",
+        status: (s.status as VerificationStatus | null) ?? "pending",
+        rejectionReason: (s.rejection_reason as string | null) ?? null,
       }))
       // PostgREST promises no order on an embedded resource, and a degree
       // reads forwards.

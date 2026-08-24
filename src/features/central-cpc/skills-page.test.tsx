@@ -366,3 +366,31 @@ describe("SkillsPage — outcomes", () => {
     );
   });
 });
+
+/**
+ * 2026-08-24 (Karthik): the Student details module — All students and the
+ * Skill repository — opens to the campus placement coordinator, campus
+ * manager, key account manager and delivery head, VIEW ONLY. RLS already
+ * scopes their rows; this proves the screen offers them no way to write.
+ */
+describe("SkillsPage — read-only for viewing roles", () => {
+  it("shows the scores but none of the editing machinery", async () => {
+    render(<SkillsPage view={view()} readOnly />);
+
+    expect(await screen.findByText("Priya Ramesh")).toBeDefined();
+    // The recorded score is visible…
+    expect(screen.getByText("4")).toBeDefined();
+    // …but nothing that writes exists on the page.
+    expect(screen.queryByLabelText(/new skill area/i)).toBeNull();
+    expect(screen.queryByLabelText(/scores file/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /apply to/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit/i })).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("still offers the search", async () => {
+    render(<SkillsPage view={view()} readOnly />);
+    await screen.findByText("Priya Ramesh");
+    expect(screen.getByLabelText(/search students/i)).toBeDefined();
+  });
+});

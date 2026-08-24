@@ -65,6 +65,20 @@ export function createSupabaseAddSemesterView(
         throw new AddSemesterError("Could not save your marksheet. Please try again.");
       }
 
+      /**
+       * 2026-08-24 (0061): a rejected declaration is replaced, not merely
+       * duplicated into a unique-key refusal. The delete is scoped to THIS
+       * student, THIS semester, and REJECTED rows only — a pending or
+       * verified line is never touched from here (RLS refuses the verified
+       * one regardless). Deleting nothing is the ordinary case and is fine.
+       */
+      await client
+        .from("student_semesters")
+        .delete()
+        .eq("student_id", studentId)
+        .eq("semester_number", semester.semesterNumber)
+        .eq("status", "rejected");
+
       const { error } = await client
         .from("student_semesters")
         .insert({

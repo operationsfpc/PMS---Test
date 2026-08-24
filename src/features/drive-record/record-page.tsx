@@ -62,8 +62,16 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** A snapshot value that may be nested under `academics` (the R7 shape). */
-function fromSnapshot(snapshot: Record<string, unknown>, key: string): string {
+/**
+ * A snapshot value, read from the REAL envelope: `buildApplicationSnapshot`
+ * nests everything under `profile`, with `academics` inside it.
+ *
+ * 🔴 2026-08-24: this used to read one level too shallow (`snapshot.academics`)
+ * — the same defect that showed "CGPA 0" on shortlisting. The shallow reads
+ * stay as fallbacks only.
+ */
+function fromSnapshot(envelope: Record<string, unknown>, key: string): string {
+  const snapshot = (envelope.profile ?? envelope) as Record<string, unknown>;
   const academics = (snapshot.academics ?? snapshot) as Record<string, unknown>;
   const value = academics[key] ?? snapshot[key];
   return value === null || value === undefined ? "—" : String(value);

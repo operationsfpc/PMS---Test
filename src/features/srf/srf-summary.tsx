@@ -149,13 +149,27 @@ export function SrfSummary({
           <>
             <h4 className="mt-5 text-sm font-semibold text-ink-900">Semester-wise marks</h4>
             <dl className="mt-1 divide-y divide-neutral-200">
-              {semesters.map((s) => (
-                <Row
-                  key={s.semesterNumber}
-                  label={`Semester ${s.semesterNumber}`}
-                  value={`${shown(s.marks)} · ${s.currentArrears} standing, ${s.historyOfArrears} history`}
-                />
-              ))}
+              {semesters.map((s) => {
+                /**
+                 * 2026-08-24: the coordinator's decision, read back exactly
+                 * like a certificate's — `certificateStanding` is the shared
+                 * vocabulary (Verified · Awaiting verification · Not
+                 * accepted + reason), and a CGPA is decided the same way.
+                 */
+                const standing =
+                  s.status === undefined
+                    ? null
+                    : certificateStanding(s.status, s.rejectionReason ?? null);
+                return (
+                  <Row
+                    key={s.semesterNumber}
+                    label={`Semester ${s.semesterNumber}`}
+                    value={`${shown(s.marks)} · ${s.currentArrears} standing, ${s.historyOfArrears} history${
+                      standing === null ? "" : ` · ${standing.label}`
+                    }${standing?.reason == null ? "" : ` — ${standing.reason}`}`}
+                  />
+                );
+              })}
             </dl>
           </>
         )}
@@ -171,7 +185,12 @@ export function SrfSummary({
             <AddSemester
               srfStatus={profile.srfStatus ?? "registered"}
               programmeLevel={profile.programmeLevel ?? "ug"}
-              declaredSemesters={semesters.map((s) => s.semesterNumber)}
+              // 2026-08-24: a REJECTED semester does not count as declared —
+              // its number is offered again, which is how the corrected
+              // figure gets in (the repository replaces the rejected row).
+              declaredSemesters={semesters
+                .filter((s) => s.status !== "rejected")
+                .map((s) => s.semesterNumber)}
               marksScale={profile.marksScale ?? "cgpa"}
               view={addSemester}
             />

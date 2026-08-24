@@ -77,7 +77,14 @@ export function createSupabaseShortlistView(
 
       return (applications ?? []).map((row): ShortlistApplicant => {
         // R7: the snapshot is the truth for everything downstream.
-        const snapshot = (row.profile_snapshot ?? {}) as Record<string, unknown>;
+        //
+        // 🔴 2026-08-24 (UAT "CGPA showing 0"): the real envelope is
+        // `buildApplicationSnapshot`'s `{ profile: { academics: {…}, … } }`.
+        // This code read one level too shallow — `snapshot.academics` — so
+        // every applicant's CGPA fell back to 0 while their snapshot carried
+        // the true figure. The flat reads stay as fallbacks only.
+        const envelope = (row.profile_snapshot ?? {}) as Record<string, unknown>;
+        const snapshot = (envelope.profile ?? envelope) as Record<string, unknown>;
         const student = one<{
           full_name?: string;
           roll_number?: string;
@@ -94,9 +101,13 @@ export function createSupabaseShortlistView(
           currentArrears: Number(academics.currentArrears ?? 0),
           historyOfArrears: Number(academics.historyOfArrears ?? 0),
           skillScores: skillsByStudent.get(row.student_id as string) ?? [],
-          preferredRoleCategories: Array.isArray(snapshot.preferredRoleCategories)
-            ? (snapshot.preferredRoleCategories as RoleCategory[])
-            : [],
+          // The snapshot profile calls them `roleCategories` (what the student
+          // asked for); the old `preferredRoleCategories` read matched nothing.
+          preferredRoleCategories: Array.isArray(snapshot.roleCategories)
+            ? (snapshot.roleCategories as RoleCategory[])
+            : Array.isArray(snapshot.preferredRoleCategories)
+              ? (snapshot.preferredRoleCategories as RoleCategory[])
+              : [],
           shortlisted: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
           // D7: read LIVE, not from the snapshot — the whole point is that
           // the student opted out AFTER the snapshot was taken.

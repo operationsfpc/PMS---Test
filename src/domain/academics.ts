@@ -237,3 +237,38 @@ export function canAddLaterSemester(context: SemesterAdditionContext): SemesterA
 
   return { allowed: true };
 }
+
+/**
+ * The coordinator's decision on one declared semester (2026-08-24 UAT).
+ *
+ * Mirrors `decideCertificate`: a declared CGPA is a claim until the
+ * coordinator has opened the marksheet beside it and agreed. Semesters
+ * declared on the registration form are decided wholesale by SRF approval
+ * (0031); this rule covers every semester added AFTER — which previously sat
+ * `pending` forever, with no queue anywhere.
+ */
+export type SemesterDecision =
+  | { readonly decision: "verify" }
+  | { readonly decision: "reject"; readonly reason: string };
+
+export type SemesterDecisionResult =
+  | { readonly ok: true; readonly next: "verified" | "rejected" }
+  | { readonly ok: false; readonly error: string };
+
+export function decideSemester(
+  current: "pending" | "verified" | "rejected",
+  decision: SemesterDecision,
+): SemesterDecisionResult {
+  if (current !== "pending") {
+    return { ok: false, error: "This semester has already been decided." };
+  }
+
+  if (decision.decision === "reject" && decision.reason.trim() === "") {
+    return {
+      ok: false,
+      error: "A rejection needs a reason, so the student knows what to correct.",
+    };
+  }
+
+  return { ok: true, next: decision.decision === "verify" ? "verified" : "rejected" };
+}

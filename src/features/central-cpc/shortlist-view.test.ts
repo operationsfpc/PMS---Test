@@ -18,14 +18,28 @@ const BASE = "https://project.supabase.co";
 const client = () =>
   createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } });
 
+/**
+ * ⚠️ Corrected 2026-08-24 (UAT "CGPA showing 0"). This fixture used to invent
+ * a FLAT snapshot — a shape nothing ever wrote. The real envelope, verified
+ * against live rows, is `buildApplicationSnapshot`'s `{ profile: { academics:
+ * {…}, roleCategories, … }, resumeId }`. The view read the invented shape,
+ * the mock agreed with the view, and every real applicant showed "CGPA 0".
+ * The mock backend must describe production, not the code under test.
+ */
 const APPLICATION = {
   id: "app-1",
   student_id: "s1",
   profile_snapshot: {
-    fullName: "Anjali Subramanian",
-    rollNumber: "21CSE1042",
-    academics: { overallCgpa: 8.4, currentArrears: 0, historyOfArrears: 1 },
-    preferredRoleCategories: ["software_technical"],
+    profile: {
+      fullName: "Anjali Subramanian",
+      rollNumber: "21CSE1042",
+      overallCgpa: 8.4,
+      currentArrears: 0,
+      historyOfArrears: 1,
+      academics: { overallCgpa: 8.4, currentArrears: 0, historyOfArrears: 1 },
+      roleCategories: ["software_technical"],
+    },
+    resumeId: "resume-1",
   },
   students: { full_name: "LIVE NAME", roll_number: "LIVE ROLL" },
   shortlist_entries: [{ included: true }],

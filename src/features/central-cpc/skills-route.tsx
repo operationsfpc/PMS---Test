@@ -19,5 +19,9 @@ export function SkillsRoute() {
     ),
   );
 
-  return <SkillsPage view={view} />;
+  // 2026-08-24 (Karthik): every role but the operator pair reads only.
+  const role = auth.status === "signed-in" ? auth.role : "student";
+  const readOnly = role !== "central_placement_coordinator" && role !== "admin";
+
+  return <SkillsPage view={view} readOnly={readOnly} />;
 }

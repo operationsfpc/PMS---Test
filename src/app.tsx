@@ -23,6 +23,7 @@ import { AttendanceRoute } from "@features/cpc/attendance-route";
 import { CertificateQueue } from "@features/cpc/certificate-queue";
 import { DriveProgressRoute } from "@features/cpc/drive-progress-route";
 import { OffCampusQueueRoute, OptOutQueueRoute } from "@features/cpc/participation-queue-routes";
+import { SemesterQueue } from "@features/cpc/semester-queue";
 import { SrfVerificationQueue } from "@features/cpc/srf-verification-queue";
 import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
@@ -206,6 +207,16 @@ export function App() {
                   element={
                     <CampusCpcOnly>
                       <CertificateQueue />
+                    </CampusCpcOnly>
+                  }
+                />
+                {/* 2026-08-24: …and a CGPA is finally verified like a
+                    certificate. Semesters added after SRF approval. */}
+                <Route
+                  path="/cpc/semesters"
+                  element={
+                    <CampusCpcOnly>
+                      <SemesterQueue />
                     </CampusCpcOnly>
                   }
                 />

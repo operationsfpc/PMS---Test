@@ -146,3 +146,29 @@ describe("createSupabaseAddSemesterView", () => {
     ).rejects.toThrow(/session/i);
   });
 });
+
+/**
+ * 2026-08-24 (0061): a REJECTED semester's number is declared again. The
+ * rejected line is the student's to remove — the unique key would otherwise
+ * block the corrected figure for good — so the add clears it first.
+ */
+describe("re-declaring a rejected semester", () => {
+  it("deletes any rejected line for that number before inserting, scoped tight", async () => {
+    const { client, writes } = stub();
+    let deleteSearch: string | null = null;
+    server.use(
+      http.delete(`${BASE}/rest/v1/student_semesters`, ({ request }) => {
+        deleteSearch = new URL(request.url).search;
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await view(client).add(semester);
+
+    expect(deleteSearch).not.toBeNull();
+    expect(deleteSearch).toContain("semester_number=eq.5");
+    expect(deleteSearch).toContain("status=eq.rejected");
+    // The corrected line still lands.
+    expect(writes.some((w) => w.table === "student_semesters")).toBe(true);
+  });
+});

@@ -76,7 +76,13 @@ const RECORD: DriveRecord = {
       rollNumber: "21CSE1042",
       campus: "KGiSL",
       appliedAt: "2026-08-12T09:00:00Z",
-      snapshot: { academics: { overallCgpa: 7.5, tenthPercentage: 88, degree: "B.E" } },
+      // ⚠️ Corrected 2026-08-24: the REAL envelope nests under `profile`
+      // (buildApplicationSnapshot) — the old fixture's invented flat shape let
+      // fromSnapshot read one level too shallow and show "—" for real rows.
+      snapshot: {
+        profile: { academics: { overallCgpa: 7.5, tenthPercentage: 88, degree: "B.E" } },
+        resumeId: null,
+      },
       shortlisted: true,
       hasOffer: false,
       rounds: [],

@@ -137,78 +137,21 @@ describe("DrivesList", () => {
 });
 
 /**
- * F14 (UAT 2026-08-06), three requests about the same screen:
- *  - "Add a view more button to view further details on the drives displayed."
- *  - "Add a warning that you are sure you want to apply for this drive? Say if
- *    you apply, you are expected to attend all the rounds of this drive and
- *    accept if you get a final offer."
- *  - "Ask for a drive specific resume to be uploaded at the time of applying."
+ * ⚠️ DELIBERATELY REVERSED 2026-08-24 (Karthik): "we do not need view
+ * everything and view more about a drive. view everything is sufficient."
+ * F14's inline expander is gone — the canonical /drives/:id record page
+ * carries every detail it showed (JD link, venue, rounds, shift, joining).
+ * The apply warning and the drive-specific resume (F14's other two asks)
+ * stay untouched below.
  */
-describe("DrivesList \u2014 view more", () => {
-  it("keeps the detail out of the way until it is asked for", async () => {
+describe("DrivesList — the card points at the one canonical page", () => {
+  it("offers no View more — the record-page link is the way in", async () => {
     render(<DrivesList view={view()} />);
 
     await screen.findByText("Zoho");
-    expect(screen.queryByText(/build and maintain backend services/i)).toBeNull();
-    expect(screen.getByRole("button", { name: /view more about Zoho/i })).toBeDefined();
-  });
-
-  it("shows the job description, locations and package detail on request", async () => {
-    const user = userEvent.setup();
-    render(<DrivesList view={view()} />);
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-
-    expect(screen.getByText(/build and maintain backend services/i)).toBeDefined();
-    expect(screen.getByText(/chennai, tenkasi/i)).toBeDefined();
-    expect(screen.getByText(/6.5 fixed \+ 2.5 variable/i)).toBeDefined();
-  });
-
-  /** UAT 2026-08-21 item 2: the off-campus venue, or its honest absence. */
-  it("shows the venue line the domain worded, and hides it when the mode has none", async () => {
-    const user = userEvent.setup();
-    const offCampus = {
-      ...open,
-      details: {
-        ...open.details,
-        driveMode: "physical_outside_campus",
-        venue: "Venue to be confirmed",
-      },
-    };
-    render(<DrivesList view={view({ openDrives: async () => [offCampus] })} />);
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-    expect(screen.getByText(/venue to be confirmed/i)).toBeDefined();
-  });
-
-  /** F7: one interview process may cover several job titles. */
-  it("names the other designations this one process covers", async () => {
-    const user = userEvent.setup();
-    render(<DrivesList view={view()} />);
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-
-    expect(screen.getByText(/associate engineer/i)).toBeDefined();
-  });
-
-  /** The student is about to promise to attend all of them, so they are listed. */
-  it("lists the rounds the student is committing to", async () => {
-    const user = userEvent.setup();
-    render(<DrivesList view={view()} />);
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-
-    expect(screen.getByText(/1\. Aptitude test/)).toBeDefined();
-    expect(screen.getByText(/2\. Technical interview/)).toBeDefined();
-  });
-
-  it("hides the detail again", async () => {
-    const user = userEvent.setup();
-    render(<DrivesList view={view()} />);
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-    await user.click(screen.getByRole("button", { name: /view less about Zoho/i }));
-
+    expect(screen.queryByRole("button", { name: /view more/i })).toBeNull();
+    expect(screen.getByRole("link", { name: /view everything about Zoho/i })).toBeDefined();
+    // The detail panel's content is gone with it.
     expect(screen.queryByText(/build and maintain backend services/i)).toBeNull();
   });
 });
@@ -329,56 +272,5 @@ describe("DrivesList — the saved resume auto-fetches (D2)", () => {
     await waitFor(() => expect(apply).toHaveBeenCalled());
     const [, resume] = apply.mock.calls[0] as [string, File];
     expect(resume.name).toBe("tailored.pdf");
-  });
-});
-
-/**
- * J1 (2026-08-18), answers 3 and 4: the student downloads the recruiter's own
- * JD rather than the AE's one-line summary of it.
- */
-describe("DrivesList — the attached job description", () => {
-  const withJd = (details: Partial<(typeof open)["details"]>) =>
-    view({ openDrives: async () => [{ ...open, details: { ...open.details, ...details } }] });
-
-  it("offers the JD as a link, named as the recruiter named it", async () => {
-    const user = userEvent.setup();
-    render(
-      <DrivesList
-        view={withJd({
-          jobDescriptionUrl: "https://signed/jd",
-          jobDescriptionName: "Zoho-MTS-JD.pdf",
-        })}
-      />,
-    );
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-
-    const link = screen.getByRole("link", { name: /Zoho-MTS-JD\.pdf/ });
-    expect(link.getAttribute("href")).toBe("https://signed/jd");
-  });
-
-  it("shows no link at all when nothing was attached", async () => {
-    const user = userEvent.setup();
-    render(<DrivesList view={view()} />);
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-
-    // Never a dead link: a student who clicks one cannot tell a missing file
-    // from a broken permission, and will ask a coordinator either way.
-    expect(screen.queryByRole("link", { name: /job description/i })).toBeNull();
-  });
-
-  it("shows the shift and the joining plan in the words the domain chose", async () => {
-    const user = userEvent.setup();
-    render(
-      <DrivesList
-        view={withJd({ shift: "Night shift (9pm – 6am)", joining: "Joining later — July 2027" })}
-      />,
-    );
-
-    await user.click(await screen.findByRole("button", { name: /view more about Zoho/i }));
-
-    expect(screen.getByText("Night shift (9pm – 6am)")).toBeDefined();
-    expect(screen.getByText("Joining later — July 2027")).toBeDefined();
   });
 });

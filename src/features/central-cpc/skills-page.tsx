@@ -65,7 +65,18 @@ export interface SkillsView {
 const csvField = (value: string) =>
   /[",\n\r]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 
-export function SkillsPage({ view }: { view: SkillsView }) {
+export function SkillsPage({
+  view,
+  readOnly = false,
+}: {
+  view: SkillsView;
+  /**
+   * 2026-08-24 (Karthik): campus CPC, campus manager, KAM and delivery head
+   * see the repository VIEW ONLY. RLS scopes their rows and refuses their
+   * writes regardless — this only removes the controls that would fail.
+   */
+  readOnly?: boolean;
+}) {
   const searchId = useId();
   const newAreaId = useId();
   const bulkAreaId = useId();
@@ -315,53 +326,55 @@ export function SkillsPage({ view }: { view: SkillsView }) {
         </Card>
       )}
 
-      <Card className="mb-4 p-5">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor={newAreaId} className="mb-1 block text-sm font-medium text-ink-900">
-              New skill area
-            </label>
-            <div className="flex gap-2">
+      {!readOnly && (
+        <Card className="mb-4 p-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor={newAreaId} className="mb-1 block text-sm font-medium text-ink-900">
+                New skill area
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id={newAreaId}
+                  type="text"
+                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  placeholder="e.g. Cloud fundamentals"
+                  value={newArea}
+                  onChange={(e) => setNewArea(e.target.value)}
+                />
+                <Button disabled={busy} onClick={() => void addArea()}>
+                  Add skill area
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor={fileId} className="mb-1 block text-sm font-medium text-ink-900">
+                Scores file (CSV)
+              </label>
               <input
-                id={newAreaId}
-                type="text"
+                id={fileId}
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv"
                 className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-                placeholder="e.g. Cloud fundamentals"
-                value={newArea}
-                onChange={(e) => setNewArea(e.target.value)}
+                onChange={(e) => void onFile(e.target.files?.[0])}
               />
-              <Button disabled={busy} onClick={() => void addArea()}>
-                Add skill area
-              </Button>
+              <p className="mt-1 text-xs text-ink-500">
+                Columns: roll_number, then one column per skill area. Blank cells leave the existing
+                score untouched.{" "}
+                <a
+                  className="font-medium text-brand-600 underline"
+                  href={templateHref}
+                  download="skill-scores-template.csv"
+                >
+                  Download template
+                </a>
+              </p>
             </div>
           </div>
-
-          <div>
-            <label htmlFor={fileId} className="mb-1 block text-sm font-medium text-ink-900">
-              Scores file (CSV)
-            </label>
-            <input
-              id={fileId}
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-              onChange={(e) => void onFile(e.target.files?.[0])}
-            />
-            <p className="mt-1 text-xs text-ink-500">
-              Columns: roll_number, then one column per skill area. Blank cells leave the existing
-              score untouched.{" "}
-              <a
-                className="font-medium text-brand-600 underline"
-                href={templateHref}
-                download="skill-scores-template.csv"
-              >
-                Download template
-              </a>
-            </p>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {sheet !== null && (
         <Card className="mb-4 p-5">
@@ -408,41 +421,48 @@ export function SkillsPage({ view }: { view: SkillsView }) {
             />
           </div>
 
-          <div>
-            <label htmlFor={bulkAreaId} className="mb-1 block text-sm font-medium text-ink-900">
-              Skill area
-            </label>
-            <select
-              id={bulkAreaId}
-              className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
-              value={bulkArea !== "" ? bulkArea : (areas[0]?.id ?? "")}
-              onChange={(e) => setBulkArea(e.target.value)}
-            >
-              {areas.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!readOnly && (
+            <>
+              <div>
+                <label htmlFor={bulkAreaId} className="mb-1 block text-sm font-medium text-ink-900">
+                  Skill area
+                </label>
+                <select
+                  id={bulkAreaId}
+                  className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  value={bulkArea !== "" ? bulkArea : (areas[0]?.id ?? "")}
+                  onChange={(e) => setBulkArea(e.target.value)}
+                >
+                  {areas.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div>
-            <label htmlFor={bulkScoreId} className="mb-1 block text-sm font-medium text-ink-900">
-              Score
-            </label>
-            <input
-              id={bulkScoreId}
-              type="text"
-              inputMode="decimal"
-              className="w-28 rounded-lg border border-line bg-white px-3 py-2 text-sm"
-              value={bulkScore}
-              onChange={(e) => setBulkScore(e.target.value)}
-            />
-          </div>
+              <div>
+                <label
+                  htmlFor={bulkScoreId}
+                  className="mb-1 block text-sm font-medium text-ink-900"
+                >
+                  Score
+                </label>
+                <input
+                  id={bulkScoreId}
+                  type="text"
+                  inputMode="decimal"
+                  className="w-28 rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  value={bulkScore}
+                  onChange={(e) => setBulkScore(e.target.value)}
+                />
+              </div>
 
-          <Button disabled={busy || selected.size === 0} onClick={() => void applyBulk()}>
-            {`Apply to ${selected.size} selected`}
-          </Button>
+              <Button disabled={busy || selected.size === 0} onClick={() => void applyBulk()}>
+                {`Apply to ${selected.size} selected`}
+              </Button>
+            </>
+          )}
         </div>
       </Card>
 
@@ -460,18 +480,20 @@ export function SkillsPage({ view }: { view: SkillsView }) {
           <table className="w-full min-w-[720px] text-sm">
             <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_var(--color-line,#DADADA)]">
               <tr className="border-b border-line text-left">
-                <th scope="col" className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    aria-label="Select all"
-                    checked={allVisibleSelected}
-                    onChange={() =>
-                      setSelected(
-                        allVisibleSelected ? new Set() : new Set(visible.map((s) => s.studentId)),
-                      )
-                    }
-                  />
-                </th>
+                {!readOnly && (
+                  <th scope="col" className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all"
+                      checked={allVisibleSelected}
+                      onChange={() =>
+                        setSelected(
+                          allVisibleSelected ? new Set() : new Set(visible.map((s) => s.studentId)),
+                        )
+                      }
+                    />
+                  </th>
+                )}
                 <th scope="col" className="px-4 py-3 font-semibold text-ink-900">
                   Student
                 </th>
@@ -480,9 +502,11 @@ export function SkillsPage({ view }: { view: SkillsView }) {
                     {a.name}
                   </th>
                 ))}
-                <th scope="col" className="px-4 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
+                {!readOnly && (
+                  <th scope="col" className="px-4 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -490,19 +514,21 @@ export function SkillsPage({ view }: { view: SkillsView }) {
                 const isEditing = editing === student.studentId;
                 return (
                   <tr key={student.studentId} className="border-b border-line last:border-b-0">
-                    <td className="px-4 py-3 align-top">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${student.studentName}`}
-                        checked={selected.has(student.studentId)}
-                        onChange={() => {
-                          const next = new Set(selected);
-                          if (next.has(student.studentId)) next.delete(student.studentId);
-                          else next.add(student.studentId);
-                          setSelected(next);
-                        }}
-                      />
-                    </td>
+                    {!readOnly && (
+                      <td className="px-4 py-3 align-top">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${student.studentName}`}
+                          checked={selected.has(student.studentId)}
+                          onChange={() => {
+                            const next = new Set(selected);
+                            if (next.has(student.studentId)) next.delete(student.studentId);
+                            else next.add(student.studentId);
+                            setSelected(next);
+                          }}
+                        />
+                      </td>
+                    )}
                     <td className="px-4 py-3 align-top">
                       <p className="font-medium text-ink-900">{student.studentName}</p>
                       <p className="text-xs text-ink-500">
@@ -525,31 +551,33 @@ export function SkillsPage({ view }: { view: SkillsView }) {
                         )}
                       </td>
                     ))}
-                    <td className="px-4 py-3 align-top">
-                      {isEditing ? (
-                        <div className="flex gap-2">
-                          <Button disabled={busy} onClick={() => void saveEdit(student)}>
-                            Save
-                          </Button>
+                    {!readOnly && (
+                      <td className="px-4 py-3 align-top">
+                        {isEditing ? (
+                          <div className="flex gap-2">
+                            <Button disabled={busy} onClick={() => void saveEdit(student)}>
+                              Save
+                            </Button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-surface-muted"
+                              onClick={() => setEditing(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
                           <button
                             type="button"
                             className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-surface-muted"
-                            onClick={() => setEditing(null)}
+                            aria-label={`Edit ${student.studentName}`}
+                            onClick={() => startEdit(student)}
                           >
-                            Cancel
+                            Edit
                           </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-surface-muted"
-                          aria-label={`Edit ${student.studentName}`}
-                          onClick={() => startEdit(student)}
-                        >
-                          Edit
-                        </button>
-                      )}
-                    </td>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

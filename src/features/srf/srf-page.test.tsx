@@ -743,3 +743,70 @@ describe("SrfPage — the submitted record names the boards", () => {
     expect(screen.getAllByText(/not recorded/i).length).toBe(2);
   });
 });
+
+/**
+ * 2026-08-24: the semester (CGPA) verification loop closes for the STUDENT.
+ * A semester added after approval lands pending; the coordinator decides it
+ * on /cpc/semesters; and the student reads the outcome HERE — including the
+ * reason a figure was not accepted, so the correction is theirs to make.
+ */
+describe("SrfPage — what the student sees of semester verification", () => {
+  const APPROVED = {
+    ...ROSTER,
+    mobile: "9876543210",
+    srfStatus: "srf_approved" as const,
+    programmeLevel: "ug" as const,
+    tenthPercentage: 91.4,
+    twelfthPercentage: 88.2,
+    semesters: [
+      {
+        semesterNumber: 1,
+        marks: 8.5,
+        currentArrears: 0,
+        historyOfArrears: 0,
+        status: "verified" as const,
+        rejectionReason: null,
+      },
+      {
+        semesterNumber: 2,
+        marks: 8.1,
+        currentArrears: 0,
+        historyOfArrears: 0,
+        status: "pending" as const,
+        rejectionReason: null,
+      },
+      {
+        semesterNumber: 3,
+        marks: 9.9,
+        currentArrears: 0,
+        historyOfArrears: 0,
+        status: "rejected" as const,
+        rejectionReason: "Marksheet says 6.9",
+      },
+    ],
+  };
+
+  it("labels each semester with its standing", () => {
+    render(<SrfPage profile={APPROVED} status="srf_approved" />);
+
+    expect(screen.getByText(/Semester 1/)).toBeDefined();
+    expect(screen.getAllByText(/verified/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/awaiting verification/i).length).toBeGreaterThan(0);
+  });
+
+  it("shows the rejection and the coordinator's reason", () => {
+    render(<SrfPage profile={APPROVED} status="srf_approved" />);
+
+    expect(screen.getByText(/not accepted/i)).toBeDefined();
+    expect(screen.getByText(/marksheet says 6\.9/i)).toBeDefined();
+  });
+
+  it("offers the rejected semester to be declared again", () => {
+    render(
+      <SrfPage profile={APPROVED} status="srf_approved" addSemester={{ add: async () => {} }} />,
+    );
+
+    // Semester 3 was rejected, so it is the next one addable — not 4.
+    expect(screen.getByRole("button", { name: /add semester 3/i })).toBeDefined();
+  });
+});

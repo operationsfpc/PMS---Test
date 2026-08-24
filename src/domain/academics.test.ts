@@ -3,6 +3,7 @@ import {
   academicStandingFrom,
   addableSemesters,
   canAddLaterSemester,
+  decideSemester,
   latestVerifiedSemester,
   MAX_SEMESTERS,
   maxSemestersFor,
@@ -334,5 +335,38 @@ describe("addableSemesters", () => {
   /** Same reason as `nextSemesterFor`: a gap is somebody's to explain. */
   it("counts from the highest declared, so a gap is never re-offered", () => {
     expect(addableSemesters({ programmeLevel: "pg", declaredSemesters: [1, 3] })).toEqual([4]);
+  });
+});
+
+/**
+ * Semester (CGPA) verification — 2026-08-24 UAT: "add request by students for
+ * cgpa which has to be approved by campus placement coordinator is not
+ * showing up for approval. similar request for certifications is showing up."
+ *
+ * A semester added AFTER the registration form was approved (F13) sat
+ * `pending` forever: 0031 verifies semesters only at SRF approval, and no
+ * queue existed. The decision rule mirrors `decideCertificate` — a declared
+ * CGPA is a claim until the coordinator has compared it to the marksheet.
+ */
+describe("decideSemester", () => {
+  it("verifies a pending semester", () => {
+    expect(decideSemester("pending", { decision: "verify" })).toEqual({
+      ok: true,
+      next: "verified",
+    });
+  });
+
+  it("rejects a pending semester, reason required", () => {
+    expect(decideSemester("pending", { decision: "reject", reason: "Marksheet says 6.9" })).toEqual(
+      { ok: true, next: "rejected" },
+    );
+
+    const refused = decideSemester("pending", { decision: "reject", reason: "  " });
+    expect(refused.ok).toBe(false);
+  });
+
+  it("refuses to re-decide a decided semester", () => {
+    expect(decideSemester("verified", { decision: "verify" }).ok).toBe(false);
+    expect(decideSemester("rejected", { decision: "verify" }).ok).toBe(false);
   });
 });
