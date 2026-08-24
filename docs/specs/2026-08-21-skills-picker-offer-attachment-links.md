@@ -1,6 +1,11 @@
 # Spec — PIF skills picker · final-selection attachment · clickable notification links
 
-Date: 2026-08-21 (evening). Status: **AWAITING APPROVAL**.
+Date: 2026-08-21 (evening). Status: **A APPROVED & SHIPPED 2026-08-24**
+(Karthik's skills-rework message restated part A verbatim — treated as the
+approval; migration landed as **0058**, so parts B/C and the email spec must
+renumber to 0059+). **B & C still awaiting approval/answers.**
+New, related, 2026-08-24: a "Skills assessed" management page — 3 questions
+put to Karthik (rename/remove semantics · who manages · page vs tab).
 Source: Karthik's message + screenshot `docs/inbox/Screenshot 2026-08-21 at 4.27.41 PM.png`
 (student notifications with plain-text URLs).
 
