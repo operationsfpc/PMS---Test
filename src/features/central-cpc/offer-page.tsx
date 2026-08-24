@@ -20,12 +20,18 @@ export interface OfferCandidate {
   readonly studentName: string;
   readonly rollNumber: string;
   readonly declared: boolean;
+  /** Spec B: the filed letter's display name, or null when none is on file. */
+  readonly letterName?: string | null;
+  /** A short-lived signed URL, or null when none could be produced. */
+  readonly letterUrl?: string | null;
 }
 
 export interface OfferView {
   drive(driveId: string): Promise<OfferDrive>;
   candidates(driveId: string): Promise<readonly OfferCandidate[]>;
   declare(offer: DeclaredOffer): Promise<void>;
+  /** Answer 1d: a letter arriving after declaration is still filed. */
+  attachLetter?(studentId: string, driveId: string, letter: File): Promise<void>;
 }
 
 /**
@@ -40,6 +46,7 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
   const [drive, setDrive] = useState<OfferDrive | null>(null);
   const [candidates, setCandidates] = useState<readonly OfferCandidate[] | null>(null);
   const [ctc, setCtc] = useState<Record<string, string>>({});
+  const [letters, setLetters] = useState<Record<string, File | null>>({});
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -81,6 +88,8 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
         driveType: drive.driveType,
         offerCategory: drive.offerCategory,
         ctcLpa: value,
+        // Spec B: the letter travels with the declaration when one was chosen.
+        letter: letters[candidate.studentId] ?? null,
       });
       await refresh();
     } catch (cause) {
@@ -126,9 +135,74 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                 </div>
 
                 {candidate.declared ? (
-                  <Badge tone="success">Declared</Badge>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Spec B: the filed letter, or the late-attach path (1d). */}
+                    {candidate.letterUrl != null ? (
+                      <a
+                        href={candidate.letterUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-medium text-brand-600 underline"
+                      >
+                        {candidate.letterName ?? "Offer letter"}
+                      </a>
+                    ) : view.attachLetter !== undefined ? (
+                      <div>
+                        <label
+                          htmlFor={`late-letter-${candidate.studentId}`}
+                          className="mb-1 block text-xs font-medium text-ink-700"
+                        >
+                          Attach offer letter (PDF/JPG/PNG)
+                        </label>
+                        <input
+                          id={`late-letter-${candidate.studentId}`}
+                          type="file"
+                          accept="application/pdf,image/jpeg,image/png"
+                          className="text-sm"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file === undefined) return;
+                            void (async () => {
+                              setError(null);
+                              try {
+                                await view.attachLetter?.(candidate.studentId, driveId, file);
+                                await refresh();
+                              } catch (cause) {
+                                setError(
+                                  cause instanceof Error
+                                    ? cause.message
+                                    : "Could not file the offer letter.",
+                                );
+                              }
+                            })();
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                    <Badge tone="success">Declared</Badge>
+                  </div>
                 ) : (
-                  <div className="flex items-end gap-3">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div>
+                      <label
+                        htmlFor={`letter-${candidate.studentId}`}
+                        className="mb-1 block text-xs font-medium text-ink-700"
+                      >
+                        Offer letter (optional, PDF/JPG/PNG)
+                      </label>
+                      <input
+                        id={`letter-${candidate.studentId}`}
+                        type="file"
+                        accept="application/pdf,image/jpeg,image/png"
+                        className="text-sm"
+                        onChange={(e) =>
+                          setLetters({
+                            ...letters,
+                            [candidate.studentId]: e.target.files?.[0] ?? null,
+                          })
+                        }
+                      />
+                    </div>
                     <div>
                       <label
                         htmlFor={`ctc-${candidate.studentId}`}

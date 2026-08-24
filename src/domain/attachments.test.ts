@@ -3,6 +3,8 @@ import {
   describeFileSize,
   JOB_DESCRIPTION_MAX_BYTES,
   jobDescriptionFileProblem,
+  OFFER_LETTER_MAX_BYTES,
+  offerLetterFileProblem,
 } from "./attachments";
 
 /**
@@ -76,5 +78,46 @@ describe("describeFileSize", () => {
   it("says nothing it does not know", () => {
     expect(describeFileSize(null)).toBe("");
     expect(describeFileSize(undefined)).toBe("");
+  });
+});
+
+/**
+ * Spec B (approved 2026-08-24, answer 1b): offer letters arrive as PDFs and
+ * as photographed or screenshotted mails — so JPG/PNG are welcome too.
+ */
+describe("offerLetterFileProblem", () => {
+  const file = (over: Partial<{ name: string; size: number; type: string }> = {}) => ({
+    name: "letter.pdf",
+    size: 100_000,
+    type: "application/pdf",
+    ...over,
+  });
+
+  it("accepts a PDF, a JPG and a PNG", () => {
+    expect(offerLetterFileProblem(file())).toBeNull();
+    expect(offerLetterFileProblem(file({ name: "l.jpg", type: "image/jpeg" }))).toBeNull();
+    expect(offerLetterFileProblem(file({ name: "l.png", type: "image/png" }))).toBeNull();
+  });
+
+  it("accepts nothing at all — the attachment is optional", () => {
+    expect(offerLetterFileProblem(null)).toBeNull();
+    expect(offerLetterFileProblem(undefined)).toBeNull();
+  });
+
+  it("refuses other formats by name", () => {
+    expect(offerLetterFileProblem(file({ name: "l.docx", type: "application/msword" }))).toMatch(
+      /pdf, jpg or png/i,
+    );
+  });
+
+  it("refuses an empty file and an oversized one", () => {
+    expect(offerLetterFileProblem(file({ size: 0 }))).toMatch(/empty/i);
+    expect(offerLetterFileProblem(file({ size: OFFER_LETTER_MAX_BYTES + 1 }))).toMatch(/5 MB/);
+    expect(offerLetterFileProblem(file({ size: OFFER_LETTER_MAX_BYTES }))).toBeNull();
+  });
+
+  it("trusts the extension when the browser gives no type", () => {
+    expect(offerLetterFileProblem(file({ name: "L.JPG", type: "" }))).toBeNull();
+    expect(offerLetterFileProblem(file({ name: "letter", type: "" }))).toMatch(/pdf, jpg or png/i);
   });
 });

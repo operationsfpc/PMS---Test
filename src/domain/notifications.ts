@@ -59,3 +59,40 @@ export function filterNotifications<T extends NotificationItem>(
   if (filter === "read") return notes.filter((n) => n.read);
   return notes;
 }
+
+/**
+ * Spec C (2026-08-21, approved 2026-08-24): a notification body split into
+ * text and URL segments, so the screens can render the URLs as links.
+ *
+ * Pure and shared: the notifications page and the dashboard panel render the
+ * SAME segments, so a link can never be live on one screen and dead on the
+ * other. Trailing punctuation stays text — "…workers.dev/." is a sentence
+ * ending, not a path — because a 404 the student cannot explain is worse
+ * than no link at all.
+ */
+export interface BodySegment {
+  readonly kind: "text" | "link";
+  readonly text: string;
+}
+
+const URL_PATTERN = /https?:\/\/[^\s]+/g;
+const TRAILING_PUNCTUATION = /[.,;)\]}!?]+$/;
+
+export function linkifyBody(body: string): readonly BodySegment[] {
+  const segments: BodySegment[] = [];
+  let cursor = 0;
+
+  for (const match of body.matchAll(URL_PATTERN)) {
+    const raw = match[0];
+    const trimmed = raw.replace(TRAILING_PUNCTUATION, "");
+    const start = match.index;
+
+    if (start > cursor) segments.push({ kind: "text", text: body.slice(cursor, start) });
+    segments.push({ kind: "link", text: trimmed });
+    cursor = start + trimmed.length;
+  }
+
+  if (cursor < body.length) segments.push({ kind: "text", text: body.slice(cursor) });
+
+  return segments;
+}

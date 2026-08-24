@@ -296,6 +296,10 @@ describe("every hand-written select matches the schema", () => {
     ["student notifications", "notifications", NOTIFICATION_COLUMNS],
     ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
     ["drive portfolio offers", "offers", "drive_id, student_id"],
+    // Spec B (2026-08-24): the final-selection screen reads the filed letter.
+    ["final selection offers", "offers", "student_id, attachment_path, attachment_name"],
+    // Answer 5a (2026-08-24): the pack fetches each resume by document id.
+    ["recruiter pack resumes", "student_documents", "id, storage_path"],
     // The ladder's evidence. Unregistered until 2026-08-12, which is how a
     // select naming a non-existent column (`status`) 400'd in silence and
     // let every placed student see every drive.

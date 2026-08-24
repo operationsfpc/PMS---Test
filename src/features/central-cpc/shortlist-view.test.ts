@@ -399,3 +399,54 @@ describe("exporting", () => {
     });
   });
 });
+
+/** Answer 5a (2026-08-24): the resumes travel in the pack, fetched by id. */
+describe("resumeFiles", () => {
+  it("downloads each resume and reports its extension from the stored path", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/student_documents`, () =>
+        HttpResponse.json([
+          { id: "resume-1", storage_path: "s1/resume-technical.PDF" },
+          { id: "resume-2", storage_path: "s2/resume.docx" },
+        ]),
+      ),
+    );
+    const client_ = client();
+    client_.storage.from = ((bucket: string) => ({
+      download: async (path: string) => ({
+        data: new Blob([`${bucket}:${path}`]),
+        error: null,
+      }),
+    })) as unknown as typeof client_.storage.from;
+
+    const files = await createSupabaseShortlistView(
+      client_,
+      async () => "cpc-1",
+      async () => "central_placement_coordinator",
+    ).resumeFiles?.(["resume-1", "resume-2"]);
+
+    expect(files?.get("resume-1")?.extension).toBe(".pdf");
+    expect(files?.get("resume-2")?.extension).toBe(".docx");
+    expect(files?.size).toBe(2);
+  });
+
+  it("fails loudly when a resume cannot be downloaded — a partial pack must not leave", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/student_documents`, () =>
+        HttpResponse.json([{ id: "resume-1", storage_path: "s1/gone.pdf" }]),
+      ),
+    );
+    const client_ = client();
+    client_.storage.from = (() => ({
+      download: async () => ({ data: null, error: new Error("404") }),
+    })) as unknown as typeof client_.storage.from;
+
+    await expect(
+      createSupabaseShortlistView(
+        client_,
+        async () => "cpc-1",
+        async () => "central_placement_coordinator",
+      ).resumeFiles?.(["resume-1"]),
+    ).rejects.toThrow(/could not be downloaded/i);
+  });
+});

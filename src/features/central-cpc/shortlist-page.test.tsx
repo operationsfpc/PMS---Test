@@ -411,7 +411,12 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     resumeId: "resume-1",
   });
 
-  it("downloads a CSV Excel opens \u2014 BOM first, snapshot data, included only \u2014 and logs it", async () => {
+  /**
+   * ⚠️ REWRITTEN 2026-08-24 (answers 5a/5b) — the CSV became the zip pack:
+   * shortlist.xlsx + resumes/, hyperlinked, zipped; and a missing resume now
+   * BLOCKS the export instead of merely being named beside a download.
+   */
+  it("downloads the zip pack — sheet + resumes — and logs it (5a)", async () => {
     const download = vi.fn();
     const logExport = vi.fn();
     const user = userEvent.setup();
@@ -423,6 +428,8 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
             { applicationId: "a1", included: true, snapshot: snapshot("R1", "Priya") },
             { applicationId: "a2", included: false, snapshot: snapshot("R2", "Left Out") },
           ],
+          resumeFiles: async () =>
+            new Map([["resume-1", { data: new Uint8Array([1]).buffer, extension: ".pdf" }]]),
           logExport,
         })}
         download={download}
@@ -433,16 +440,15 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     await user.click(screen.getByRole("button", { name: /export shortlist/i }));
 
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
-    const [filename, text] = download.mock.calls[0] as [string, string];
-    expect(filename).toMatch(/zoho.*\.csv$/i);
-    expect(text.startsWith("\uFEFF")).toBe(true);
-    expect(text).toContain("Roll number");
-    expect(text).toContain("Priya");
-    expect(text).not.toContain("Left Out");
-    expect(logExport).toHaveBeenCalledWith("d1", expect.any(Array), 1);
+    const [filename, content] = download.mock.calls[0] as [string, Blob];
+    expect(filename).toMatch(/zoho.*\.zip$/i);
+    expect(content).toBeInstanceOf(Blob);
+    expect(logExport).toHaveBeenCalledWith("d1", expect.arrayContaining(["Resume"]), 1);
   });
 
-  it("names the shortlisted candidates who have no resume on file", async () => {
+  it("BLOCKS the export when a shortlisted candidate has no resume (5b)", async () => {
+    const download = vi.fn();
+    const logExport = vi.fn();
     const user = userEvent.setup();
     render(
       <ShortlistPage
@@ -455,9 +461,9 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
               snapshot: { ...snapshot("R9", "No Resume"), resumeId: null },
             },
           ],
-          logExport: async () => undefined,
+          logExport,
         })}
-        download={vi.fn()}
+        download={download}
       />,
     );
 
@@ -465,6 +471,9 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     await user.click(screen.getByRole("button", { name: /export shortlist/i }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/R9/);
+    // Nothing left the building and nothing was logged as if it had.
+    expect(download).not.toHaveBeenCalled();
+    expect(logExport).not.toHaveBeenCalled();
   });
 });
 

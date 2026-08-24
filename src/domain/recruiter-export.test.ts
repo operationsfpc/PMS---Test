@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRecruiterExport, EXPORT_COLUMNS } from "./recruiter-export";
+import { buildRecruiterExport, EXPORT_COLUMNS, recruiterPackProblem } from "./recruiter-export";
 
 /**
  * The recruiter export (PRD §14).
@@ -108,5 +108,27 @@ describe("buildRecruiterExport", () => {
     const result = buildRecruiterExport([]);
     expect(result.rows).toEqual([]);
     expect(result.resumeIds).toEqual([]);
+  });
+});
+
+/**
+ * Answer 5b (2026-08-24): a pack with a shortlisted student missing their
+ * resume does not leave the building at all. Half a pack looks complete to
+ * the recruiter reading it — nobody re-counts the folder against the sheet.
+ */
+describe("recruiterPackProblem", () => {
+  it("blocks the export, naming every student without a resume", () => {
+    const problem = recruiterPackProblem({
+      rows: [],
+      resumeIds: [],
+      missingResumes: ["124", "21CSE1042"],
+    });
+    expect(problem).toMatch(/124/);
+    expect(problem).toMatch(/21CSE1042/);
+    expect(problem).toMatch(/cannot be exported/i);
+  });
+
+  it("lets a complete pack through", () => {
+    expect(recruiterPackProblem({ rows: [], resumeIds: ["r1"], missingResumes: [] })).toBeNull();
   });
 });

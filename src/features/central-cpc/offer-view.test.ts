@@ -169,3 +169,34 @@ describe("who may be declared", () => {
     expect(candidate?.studentId).toBe("");
   });
 });
+
+/** Spec B (approved 2026-08-24): declared rows carry their filed letter. */
+describe("the filed offer letters", () => {
+  it("carries the letter name and a signed URL for a declared candidate", async () => {
+    stub({
+      results: [selected("app2", "s2", "Arjun Menon", "21CSE9001")],
+      offers: [
+        {
+          student_id: "s2",
+          attachment_path: "s2/d1/1-Zoho-offer.pdf",
+          attachment_name: "Zoho-offer.pdf",
+        },
+      ],
+    });
+    server.use(
+      http.post(`${BASE}/storage/v1/object/sign/offer-letters`, () =>
+        HttpResponse.json([{ path: "s2/d1/1-Zoho-offer.pdf", signedURL: "/signed/offer.pdf" }]),
+      ),
+    );
+
+    const candidates = await view().candidates("d1");
+    const declared = candidates.find((c) => c.declared);
+
+    expect(declared?.letterName).toBe("Zoho-offer.pdf");
+    expect(declared?.letterUrl).toContain("/signed/offer.pdf");
+  });
+
+  it("exposes attachLetter for the late arrival (answer 1d)", async () => {
+    expect(typeof view().attachLetter).toBe("function");
+  });
+});

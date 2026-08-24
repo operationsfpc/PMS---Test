@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   condenseNotifications,
   filterNotifications,
+  linkifyBody,
   type NotificationItem,
   sortNotifications,
 } from "./notifications";
@@ -124,5 +125,55 @@ describe("filterNotifications", () => {
 
   it("shows only read under 'read'", () => {
     expect(filterNotifications(notes, "read").map((n) => n.id)).toEqual(["b"]);
+  });
+});
+
+/**
+ * Spec C (2026-08-21, approved "go" 2026-08-24): bodies like
+ * "Join at: https://meet.google.com/xyz" rendered as dead text. The split is
+ * pure so both renderers (notifications page, dashboard panel) agree.
+ */
+describe("linkifyBody", () => {
+  it("splits text and URLs", () => {
+    expect(linkifyBody("Join at: https://meet.google.com/xyz now")).toEqual([
+      { kind: "text", text: "Join at: " },
+      { kind: "link", text: "https://meet.google.com/xyz" },
+      { kind: "text", text: " now" },
+    ]);
+  });
+
+  it("keeps trailing punctuation out of the link, so it does not 404", () => {
+    expect(linkifyBody("See https://fpc.workers.dev/.")).toEqual([
+      { kind: "text", text: "See " },
+      { kind: "link", text: "https://fpc.workers.dev/" },
+      { kind: "text", text: "." },
+    ]);
+  });
+
+  it("returns plain text untouched, as one segment", () => {
+    expect(linkifyBody("You are shortlisted.")).toEqual([
+      { kind: "text", text: "You are shortlisted." },
+    ]);
+  });
+
+  it("handles several links and http as well as https", () => {
+    const segments = linkifyBody("A http://a.example and B https://b.example");
+    expect(segments.filter((s) => s.kind === "link").map((s) => s.text)).toEqual([
+      "http://a.example",
+      "https://b.example",
+    ]);
+  });
+
+  it("returns nothing for an empty body", () => {
+    expect(linkifyBody("")).toEqual([]);
+  });
+});
+
+describe("linkifyBody — a body that IS a link", () => {
+  it("starts with the link when the body does", () => {
+    expect(linkifyBody("https://a.example rest")).toEqual([
+      { kind: "link", text: "https://a.example" },
+      { kind: "text", text: " rest" },
+    ]);
   });
 });

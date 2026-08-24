@@ -80,6 +80,8 @@ describe("OfferPage", () => {
       driveType: "placement",
       offerCategory: "dream",
       ctcLpa: 9.25,
+      // Spec B (2026-08-24): the declaration carries the letter slot.
+      letter: null,
     });
   });
 
@@ -128,5 +130,75 @@ describe("OfferPage", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/already been declared/i);
+  });
+});
+
+/**
+ * Spec B (approved 2026-08-24): the recruiter's offer letter, filed with the
+ * declaration — or after it (answer 1d).
+ */
+describe("OfferPage — the offer letter", () => {
+  const [UNDECLARED, DECLARED] = CANDIDATES as [
+    (typeof CANDIDATES)[number],
+    (typeof CANDIDATES)[number],
+  ];
+  const withLetters = (over: Partial<OfferView> = {}) =>
+    view({
+      candidates: async () => [
+        { ...UNDECLARED, letterName: null, letterUrl: null },
+        { ...DECLARED, letterName: "Zoho-offer.pdf", letterUrl: "/signed/offer.pdf" },
+      ],
+      ...over,
+    });
+
+  it("offers an optional letter input on an undeclared row", async () => {
+    render(<OfferPage driveId="d1" view={withLetters()} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    expect(row).not.toBeNull();
+    expect(within(row as HTMLElement).getByLabelText(/offer letter \(optional/i)).toBeDefined();
+  });
+
+  it("sends the chosen letter with the declaration", async () => {
+    const declare = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    render(<OfferPage driveId="d1" view={withLetters({ declare })} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li") as HTMLElement;
+    const letter = new File(["x"], "letter.pdf", { type: "application/pdf" });
+    await user.upload(within(row).getByLabelText(/offer letter \(optional/i), letter);
+    await user.click(within(row).getByRole("button", { name: /declare selected/i }));
+
+    await waitFor(() => expect(declare).toHaveBeenCalled());
+    const sent = (declare.mock.calls.at(0) as unknown[] | undefined)?.at(0) as { letter?: File };
+    expect(sent.letter?.name).toBe("letter.pdf");
+  });
+
+  it("shows a declared row's letter as a link", async () => {
+    render(<OfferPage driveId="d1" view={withLetters()} />);
+
+    const row = (await screen.findByText("Arjun Menon")).closest("li") as HTMLElement;
+    const link = within(row).getByRole("link", { name: /Zoho-offer\.pdf/ });
+    expect(link.getAttribute("href")).toBe("/signed/offer.pdf");
+  });
+
+  it("offers attach-later on a declared row with no letter (answer 1d)", async () => {
+    const attachLetter = vi.fn(async () => undefined);
+    const user = userEvent.setup();
+    render(
+      <OfferPage
+        driveId="d1"
+        view={withLetters({
+          candidates: async () => [{ ...DECLARED, letterName: null, letterUrl: null }],
+          attachLetter,
+        })}
+      />,
+    );
+
+    const row = (await screen.findByText("Arjun Menon")).closest("li") as HTMLElement;
+    const letter = new File(["x"], "late.pdf", { type: "application/pdf" });
+    await user.upload(within(row).getByLabelText(/attach offer letter/i), letter);
+
+    await waitFor(() => expect(attachLetter).toHaveBeenCalledWith("s2", "d1", letter));
   });
 });

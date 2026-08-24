@@ -1,3 +1,4 @@
+import { OFFER_LETTER_BUCKET, offerLetterFileProblem } from "@domain/attachments";
 import type { OfferCategory } from "@domain/offer-category";
 import type { AppRole, DriveType } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -12,10 +13,18 @@ export interface DeclaredOffer {
   readonly driveType: DriveType;
   readonly offerCategory: OfferCategory | null;
   readonly ctcLpa: number;
+  /**
+   * Spec B (approved 2026-08-24): the recruiter's letter, filed with the
+   * declaration. Optional — a letter that arrives later is attached with
+   * `attachLetter` (answer 1d).
+   */
+  readonly letter?: File | null;
 }
 
 export interface OffersRepository {
   declareOffer(offer: DeclaredOffer): Promise<void>;
+  /** Answer 1d: a letter arriving after declaration is still filed. */
+  attachLetter(studentId: string, driveId: string, letter: File): Promise<void>;
 }
 
 /**
@@ -60,9 +69,20 @@ export function createSupabaseOffersRepository(
         throw new OffersError("Your session has expired. Please sign in again.");
       }
 
+      // The 0051 order: the object first, the row after. An orphan object is
+      // invisible and cheap; a row pointing at nothing is a dead link handed
+      // to the student the letter belongs to.
+      const attachment =
+        offer.letter == null
+          ? null
+          : await uploadLetter(offer.studentId, offer.driveId, offer.letter);
+
       const { error } = await client
         .from("offers")
         .insert({
+          ...(attachment === null
+            ? {}
+            : { attachment_path: attachment.path, attachment_name: attachment.name }),
           student_id: offer.studentId,
           drive_id: offer.driveId,
           source: "on_campus",
@@ -84,5 +104,49 @@ export function createSupabaseOffersRepository(
         );
       }
     },
+
+    async attachLetter(studentId, driveId, letter) {
+      if ((await getActorRole()) !== "central_placement_coordinator") {
+        throw new OffersError("Only the Central Placement Coordinator may attach an offer letter.");
+      }
+
+      const attachment = await uploadLetter(studentId, driveId, letter);
+
+      // Deliberately ONLY the attachment columns: the CTC and category were
+      // declared and audited; a late letter must not be a route to rewrite
+      // them.
+      const { error } = await client
+        .from("offers")
+        .update({ attachment_path: attachment.path, attachment_name: attachment.name })
+        .eq("student_id", studentId)
+        .eq("drive_id", driveId)
+        .select("id");
+
+      if (error !== null) {
+        throw new OffersError("Could not file the offer letter. Please try again.");
+      }
+    },
   };
+
+  async function uploadLetter(
+    studentId: string,
+    driveId: string,
+    letter: File,
+  ): Promise<{ path: string; name: string }> {
+    const problem = offerLetterFileProblem(letter);
+    if (problem !== null) throw new OffersError(problem);
+
+    const path = `${studentId}/${driveId}/${Date.now()}-${letter.name}`;
+    const { error } = await client.storage
+      .from(OFFER_LETTER_BUCKET)
+      .upload(path, letter, { contentType: letter.type });
+
+    if (error !== null) {
+      throw new OffersError(
+        "Could not upload the offer letter. Check your connection and try again — nothing has been saved.",
+      );
+    }
+
+    return { path, name: letter.name };
+  }
 }

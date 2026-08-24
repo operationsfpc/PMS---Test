@@ -89,3 +89,107 @@ describe("createSupabaseOffersRepository", () => {
     await expect(repo().declareOffer(offer)).rejects.toThrow(/already/i);
   });
 });
+
+/**
+ * Spec B (approved 2026-08-24): the recruiter's offer letter, filed with the
+ * declaration. Upload BEFORE insert (the 0051 order): an orphan object costs
+ * kilobytes; a row pointing at nothing hands someone a dead link.
+ */
+describe("the offer letter", () => {
+  const letter = new File([new Uint8Array(2048)], "Zoho-offer.pdf", { type: "application/pdf" });
+
+  function stubStorage(client: { storage: { from: unknown } }) {
+    const uploads: string[] = [];
+    client.storage.from = ((bucket: string) => ({
+      upload: async (path: string) => {
+        uploads.push(`${bucket}/${path}`);
+        return { data: { path }, error: null };
+      },
+    })) as unknown as typeof client.storage.from;
+    return uploads;
+  }
+
+  const client = () =>
+    createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } });
+
+  it("uploads under student/drive, then declares with both attachment halves", async () => {
+    const c = client();
+    const uploads = stubStorage(c);
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/offers`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "o1" });
+      }),
+    );
+
+    const r = createSupabaseOffersRepository(
+      c,
+      async () => CPC,
+      async () => "central_placement_coordinator",
+    );
+    await r.declareOffer({ ...offer, letter });
+
+    expect(uploads[0]).toMatch(/^offer-letters\/s1\/d1\//);
+    expect(String(body.attachment_path)).toMatch(/^s1\/d1\//);
+    expect(body.attachment_name).toBe("Zoho-offer.pdf");
+  });
+
+  it("declares with neither half when no letter is given", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/offers`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "o1" });
+      }),
+    );
+
+    await repo().declareOffer(offer);
+
+    expect(body.attachment_path).toBeUndefined();
+  });
+
+  it("attaches a letter to an already-declared offer (answer 1d), touching nothing else", async () => {
+    const c = client();
+    const uploads = stubStorage(c);
+    let patch: Record<string, unknown> = {};
+    let search = "";
+    server.use(
+      http.patch(`${BASE}/rest/v1/offers`, async ({ request }) => {
+        patch = (await request.json()) as Record<string, unknown>;
+        search = new URL(request.url).search;
+        return HttpResponse.json([{ id: "o1" }]);
+      }),
+    );
+
+    const r = createSupabaseOffersRepository(
+      c,
+      async () => CPC,
+      async () => "central_placement_coordinator",
+    );
+    await r.attachLetter("s1", "d1", letter);
+
+    expect(uploads[0]).toMatch(/^offer-letters\/s1\/d1\//);
+    expect(Object.keys(patch).sort()).toEqual(["attachment_name", "attachment_path"]);
+    expect(search).toContain("student_id=eq.s1");
+    expect(search).toContain("drive_id=eq.d1");
+  });
+
+  it("refuses a wrong format before anything is uploaded", async () => {
+    const c = client();
+    const uploads = stubStorage(c);
+    const r = createSupabaseOffersRepository(
+      c,
+      async () => CPC,
+      async () => "central_placement_coordinator",
+    );
+
+    await expect(
+      r.declareOffer({
+        ...offer,
+        letter: new File(["x"], "letter.docx", { type: "application/msword" }),
+      }),
+    ).rejects.toBeInstanceOf(OffersError);
+    expect(uploads).toHaveLength(0);
+  });
+});

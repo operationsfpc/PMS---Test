@@ -74,3 +74,17 @@ export function buildRecruiterExport(entries: readonly ShortlistEntry[]): Recrui
     ),
   };
 }
+
+/**
+ * Answer 5b (2026-08-24): the pack is whole or it does not leave. A recruiter
+ * reading a folder of resumes against a sheet of names does not re-count
+ * them — a missing CV would simply read as a candidate who was never sent.
+ */
+export function recruiterPackProblem(pack: RecruiterExport): string | null {
+  if (pack.missingResumes.length === 0) return null;
+  return `The shortlist cannot be exported: no resume on file for roll number${
+    pack.missingResumes.length === 1 ? "" : "s"
+  } ${pack.missingResumes.join(", ")}. Ask the student${
+    pack.missingResumes.length === 1 ? "" : "s"
+  } to upload one, or remove them from the shortlist.`;
+}

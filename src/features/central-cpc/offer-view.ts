@@ -1,3 +1,4 @@
+import { OFFER_LETTER_BUCKET } from "@domain/attachments";
 import type { OfferCategory } from "@domain/offer-category";
 import type { AppRole, DriveType } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -64,28 +65,59 @@ export function createSupabaseOfferView(
           )
           .eq("round_id", lastRoundId)
           .eq("result", "selected"),
-        client.from("offers").select("student_id").eq("drive_id", driveId),
+        client
+          .from("offers")
+          .select("student_id, attachment_path, attachment_name")
+          .eq("drive_id", driveId),
       ]);
 
-      const declaredStudents = new Set((declared ?? []).map((o) => o.student_id as string));
+      const offerByStudent = new Map(
+        ((declared ?? []) as Array<Record<string, unknown>>).map((o) => [
+          o.student_id as string,
+          o,
+        ]),
+      );
+
+      // Spec B: sign every filed letter in one round trip.
+      const paths = [...offerByStudent.values()].flatMap((o) =>
+        typeof o.attachment_path === "string" && o.attachment_path !== ""
+          ? [o.attachment_path]
+          : [],
+      );
+      const { data: signed } =
+        paths.length === 0
+          ? { data: [] }
+          : await client.storage.from(OFFER_LETTER_BUCKET).createSignedUrls(paths, 600);
+      const urlByPath = new Map(
+        (signed ?? []).flatMap((entry) =>
+          entry?.path === undefined || entry.signedUrl === null
+            ? []
+            : [[entry.path, entry.signedUrl]],
+        ),
+      );
 
       return (results ?? [])
         .map((row): OfferCandidate => {
           const application = one<{ student_id?: string; students: unknown }>(row.applications);
           const student = one<{ full_name?: string; roll_number?: string }>(application?.students);
           const studentId = application?.student_id ?? "";
+          const offer = offerByStudent.get(studentId);
+          const path = (offer?.attachment_path as string | null) ?? null;
 
           return {
             applicationId: row.application_id as string,
             studentId,
             studentName: student?.full_name ?? "Unknown student",
             rollNumber: student?.roll_number ?? "—",
-            declared: declaredStudents.has(studentId),
+            declared: offer !== undefined,
+            letterName: (offer?.attachment_name as string | null) ?? null,
+            letterUrl: path === null ? null : (urlByPath.get(path) ?? null),
           };
         })
         .sort((a, b) => a.studentName.localeCompare(b.studentName));
     },
 
     declare: (offer) => offers.declareOffer(offer),
+    attachLetter: (studentId, driveId, letter) => offers.attachLetter(studentId, driveId, letter),
   };
 }

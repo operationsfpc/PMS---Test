@@ -101,3 +101,33 @@ describe("filtering the log", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 });
+
+/** Spec C (approved 2026-08-24): URLs in bodies are links, not dead text. */
+describe("links in notification bodies", () => {
+  it("renders a URL as a clickable link, opening in a new tab", async () => {
+    render(
+      <MemoryRouter>
+        <NotificationsPage
+          view={{
+            notifications: async () => [
+              {
+                id: "n1",
+                kind: "round_scheduled",
+                title: "Round scheduled",
+                body: "Join at: https://meet.google.com/xyz today",
+                createdAt: "2026-08-24T09:00:00Z",
+                read: false,
+              },
+            ],
+            markRead: async () => undefined,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const link = await screen.findByRole("link", { name: "https://meet.google.com/xyz" });
+    expect(link.getAttribute("href")).toBe("https://meet.google.com/xyz");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+});

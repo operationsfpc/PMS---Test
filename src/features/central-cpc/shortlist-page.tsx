@@ -1,14 +1,15 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
-import { serialiseCsv } from "@domain/csv";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
 import {
   buildRecruiterExport,
   EXPORT_COLUMNS,
+  recruiterPackProblem,
   type ShortlistEntry,
 } from "@domain/recruiter-export";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { buildRecruiterZip } from "./export-pack";
 
 export interface ShortlistApplicant {
   readonly applicationId: string;
@@ -56,11 +57,21 @@ export interface ShortlistView {
   exportEntries(driveId: string): Promise<readonly ShortlistEntry[]>;
   /** PRD §13.2: every export is a data-sharing event and is logged. */
   logExport(driveId: string, columns: readonly string[], studentCount: number): Promise<void>;
+  /**
+   * Answer 5a (2026-08-24): the resumes travel IN the pack. Keyed by resume
+   * document id; the extension comes from the stored file. Optional so the
+   * older tests and mocks keep compiling — absent means an empty pack.
+   */
+  resumeFiles?(
+    resumeIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { data: ArrayBuffer; extension: string }>>;
 }
 
 /** Real downloads go through a Blob; tests hand in a spy. */
-function browserDownload(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+function browserDownload(filename: string, content: Blob | string): void {
+  const blob =
+    typeof content === "string" ? new Blob([content], { type: "text/csv;charset=utf-8" }) : content;
+  const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
@@ -84,7 +95,7 @@ export function ShortlistPage({
 }: {
   driveId: string;
   view: ShortlistView;
-  download?: (filename: string, text: string) => void;
+  download?: (filename: string, content: Blob | string) => void;
 }) {
   const [drive, setDrive] = useState<ShortlistDrive | null>(null);
   const [applicants, setApplicants] = useState<readonly ShortlistApplicant[] | null>(null);
@@ -207,20 +218,49 @@ export function ShortlistPage({
   }
 
   /**
-   * WS8 (D4): a CSV Excel opens — BOM-prefixed so it reads UTF-8 — built from
-   * the SNAPSHOTS (R7), included students only. Logged before it is called
-   * done: an unlogged export is a data-sharing event that never happened.
+   * WS8 (D4), reshaped by answers 5a/5b (2026-08-24): ONE zip —
+   * shortlist.xlsx beside resumes/, each row hyperlinking its candidate's
+   * file — built from the SNAPSHOTS (R7), included students only. A missing
+   * resume BLOCKS the export outright (5b): half a pack reads as complete to
+   * the recruiter, and nobody re-counts the folder against the sheet. Logged
+   * before it is called done: an unlogged export never happened.
    */
   async function exportShortlist() {
     setError(null);
     try {
       const entries = await view.exportEntries(driveId);
       const pack = buildRecruiterExport(entries);
-      const csv = `\uFEFF${serialiseCsv(EXPORT_COLUMNS, pack.rows)}`;
-      const company = (drive?.companyName ?? "drive").toLowerCase().replaceAll(/\s+/g, "-");
-      download(`shortlist-${company}.csv`, csv);
-      await view.logExport(driveId, EXPORT_COLUMNS, pack.rows.length);
-      setMissingResumes(pack.missingResumes);
+
+      const problem = recruiterPackProblem(pack);
+      if (problem !== null) {
+        setError(problem);
+        return;
+      }
+
+      const resumes =
+        (await view.resumeFiles?.(pack.resumeIds)) ??
+        new Map<string, { data: ArrayBuffer; extension: string }>();
+      const files = entries.flatMap((entry) => {
+        if (!entry.included || entry.snapshot.resumeId === null) return [];
+        const file = resumes.get(entry.snapshot.resumeId);
+        if (file === undefined) return [];
+        const roll = entry.snapshot.profile.rollNumber;
+        return [
+          {
+            rollNumber: roll,
+            // Named for the person reading the folder, not for the database.
+            filename: `${roll} - ${entry.snapshot.profile.fullName}${file.extension}`,
+            data: file.data,
+          },
+        ];
+      });
+
+      const companyName = drive?.companyName ?? "drive";
+      const blob = await buildRecruiterZip(companyName, pack.rows, files);
+      const company = companyName.toLowerCase().replaceAll(/\s+/g, "-");
+      download(`shortlist-${company}.zip`, blob);
+      await view.logExport(driveId, [...EXPORT_COLUMNS, "Resume"], pack.rows.length);
+      setMissingResumes([]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
     }

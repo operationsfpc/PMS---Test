@@ -59,3 +59,28 @@ export function describeFileSize(bytes: number | null | undefined): string {
   if (bytes <= 0) return "0 KB";
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
+
+/**
+ * Offer letters (spec B, approved 2026-08-24). Answer 1b: PDF + JPG/PNG —
+ * letters arrive as documents and as photographed or screenshotted mails.
+ * The bucket (0062) enforces exactly the same pair of limits.
+ */
+export const OFFER_LETTER_BUCKET = "offer-letters";
+export const OFFER_LETTER_MAX_BYTES = 5 * 1024 * 1024;
+
+const OFFER_LETTER_TYPES = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const OFFER_LETTER_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png"];
+
+const isOfferLetterFormat = (file: AttachedFile): boolean =>
+  OFFER_LETTER_TYPES.has(file.type) ||
+  (file.type === "" &&
+    OFFER_LETTER_EXTENSIONS.some((ext) => file.name.trim().toLowerCase().endsWith(ext)));
+
+/** Why this file cannot be attached as an offer letter, or null if it can. */
+export function offerLetterFileProblem(file: AttachedFile | null | undefined): string | null {
+  if (file === null || file === undefined) return null;
+  if (!isOfferLetterFormat(file)) return "The offer letter must be a PDF, JPG or PNG.";
+  if (file.size <= 0) return "That file is empty. Attach the offer letter again.";
+  if (file.size > OFFER_LETTER_MAX_BYTES) return "The offer letter must be 5 MB or smaller.";
+  return null;
+}

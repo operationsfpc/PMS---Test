@@ -171,6 +171,44 @@ export function createSupabaseShortlistView(
       }));
     },
 
+    /**
+     * Answer 5a (2026-08-24): the resumes travel IN the pack. A download
+     * failure throws — 5b's principle applies to transport too: a pack
+     * silently missing a file reads as a candidate who was never sent.
+     */
+    async resumeFiles(resumeIds) {
+      if (resumeIds.length === 0) return new Map();
+
+      const { data, error } = await client
+        .from("student_documents")
+        .select("id, storage_path")
+        .in("id", resumeIds);
+
+      if (error !== null) throw new ShortlistError("Could not read the resumes for the pack.");
+
+      const files = new Map<string, { data: ArrayBuffer; extension: string }>();
+      for (const row of (data ?? []) as Array<{ id: string; storage_path: string }>) {
+        const { data: blob, error: downloadError } = await client.storage
+          .from("resumes")
+          .download(row.storage_path);
+
+        if (downloadError !== null || blob === null) {
+          throw new ShortlistError(
+            `A resume could not be downloaded (${row.storage_path.split("/").at(-1) ?? row.id}). Try the export again.`,
+          );
+        }
+
+        const basename = row.storage_path.split("/").at(-1) ?? "";
+        const dot = basename.lastIndexOf(".");
+        files.set(row.id, {
+          data: await blob.arrayBuffer(),
+          extension: dot === -1 ? "" : basename.slice(dot).toLowerCase(),
+        });
+      }
+
+      return files;
+    },
+
     /** PRD §13.2: the data-sharing log. An unlogged export never happened. */
     async logExport(driveId, columns, studentCount) {
       const actorId = await getActorId();

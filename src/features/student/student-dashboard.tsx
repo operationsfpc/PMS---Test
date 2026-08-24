@@ -1,3 +1,4 @@
+import { NotificationBody } from "@components/notification-body";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import {
   ABSENCE_LIMIT,
@@ -212,7 +213,9 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-ink-900">{note.title}</p>
-                          <p className="mt-0.5 text-sm text-ink-700">{note.body}</p>
+                          <p className="mt-0.5 text-sm text-ink-700">
+                            <NotificationBody body={note.body} />
+                          </p>
                           <p className="mt-1 text-xs text-ink-500">{onDate(note.createdAt)}</p>
                         </div>
                         {note.read ? (
