@@ -260,3 +260,22 @@ export function joinMandatorySkills(
   const split = splitMandatorySkills([...picked, ...other].join(","), catalogueNames);
   return [...split.catalogue, ...split.other].join(", ");
 }
+
+/**
+ * Skills assessed (2026-08-24, answer 1a): rename freely — the student scores
+ * follow the skill — but removal is refused while any score exists under it.
+ * Mirrored by the FK becoming ON DELETE RESTRICT (0059): the database refuses
+ * what this refuses, so a direct SQL delete cannot silently destroy the
+ * evaluations either.
+ */
+export type SkillAreaRemoval = { allowed: true } | { allowed: false; reason: string };
+
+export function canRemoveSkillArea(scoreCount: number): SkillAreaRemoval {
+  if (scoreCount <= 0) return { allowed: true };
+  return {
+    allowed: false,
+    reason: `${scoreCount} student score${scoreCount === 1 ? "" : "s"} exist${
+      scoreCount === 1 ? "s" : ""
+    } under this skill. Clear them first, or keep the skill.`,
+  };
+}

@@ -16,6 +16,7 @@ import { OfferRoute } from "@features/central-cpc/offer-route";
 import { PublishRoute } from "@features/central-cpc/publish-route";
 import { ResultsRoute } from "@features/central-cpc/results-route";
 import { ShortlistRoute } from "@features/central-cpc/shortlist-route";
+import { SkillsAssessedRoute } from "@features/central-cpc/skills-assessed-route";
 import { SkillsRoute } from "@features/central-cpc/skills-route";
 import { StudentDirectoryRoute } from "@features/central-cpc/students-route";
 import { AttendanceRoute } from "@features/cpc/attendance-route";
@@ -237,6 +238,8 @@ export function App() {
                 />
                 {/* PRD §5: the Central Student Skill Repository. */}
                 <Route path="/central/skills" element={<SkillsRoute />} />
+                {/* 2026-08-24 (1a/2a/3a): the assessed-skills master list. */}
+                <Route path="/central/skills-assessed" element={<SkillsAssessedRoute />} />
                 {/* Every student in the placement process. Also the
                     destination of the Placed count on the overview. */}
                 <Route path="/central/students" element={<StudentDirectoryRoute />} />

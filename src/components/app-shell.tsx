@@ -182,6 +182,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/central/students", label: "All students" },
         // PRD §5: view-only reference; feeds the shortlisting rank.
         { to: "/central/skills", label: "Skill repository" },
+        // 2026-08-24 (answers 1a/2a/3a): the master list of assessed skills —
+        // template columns, upload validation and the PIF picker all read it.
+        { to: "/central/skills-assessed", label: "Skills assessed" },
       ],
     },
     {

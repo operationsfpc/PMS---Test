@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRemoveSkillArea,
   DEFAULT_SKILL_AREAS,
   joinMandatorySkills,
   normaliseSkillAreaName,
@@ -305,5 +306,28 @@ describe("joinMandatorySkills", () => {
 
   it("returns an empty string when nothing is picked", () => {
     expect(joinMandatorySkills([], [], catalogue)).toBe("");
+  });
+});
+
+/**
+ * Skills assessed (2026-08-24, answers 1a/2a/3a): renaming is allowed — the
+ * scores follow the skill — but removal is refused while any score exists
+ * under it. A removed area would orphan (or cascade-destroy) the very
+ * evaluations the repository exists to keep.
+ */
+describe("canRemoveSkillArea", () => {
+  it("allows removing a skill nobody has been scored on", () => {
+    expect(canRemoveSkillArea(0)).toEqual({ allowed: true });
+  });
+
+  it("refuses while scores exist, and says how many", () => {
+    const verdict = canRemoveSkillArea(12);
+    expect(verdict.allowed).toBe(false);
+    if (!verdict.allowed) expect(verdict.reason).toMatch(/12 student/);
+  });
+
+  it("names a single student's score in the singular", () => {
+    const verdict = canRemoveSkillArea(1);
+    if (!verdict.allowed) expect(verdict.reason).toMatch(/1 student score\b/);
   });
 });

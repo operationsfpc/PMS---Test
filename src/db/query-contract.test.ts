@@ -123,6 +123,9 @@ async function missingColumns(rootTable: string, spec: string): Promise<string[]
     return [`${rootTable} (table does not exist)`];
   }
   for (const column of columns) {
+    // PostgREST's aggregate keyword, not a column: `table(count)` returns the
+    // row count. Learned 2026-08-24 for the skills-assessed usage select.
+    if (column === "count") continue;
     if (!available.includes(column)) missing.push(`${rootTable}.${column}`);
   }
 
@@ -222,6 +225,8 @@ describe("every hand-written select matches the schema", () => {
     ["skill repository areas", "skill_areas", "id, name"],
     // Part A (2026-08-24): the PIF's mandatory-skills picker reads names only.
     ["pif skill catalogue", "skill_areas", "name"],
+    // Skills assessed (2026-08-24): the master list with usage counts.
+    ["skills assessed usage", "skill_areas", "id, name, student_skill_scores(count)"],
     ["skill repository students", "students", SKILL_STUDENT_COLUMNS],
     [
       "shortlisting drive",

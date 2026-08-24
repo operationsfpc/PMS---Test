@@ -40,6 +40,9 @@ function view(overrides: Partial<SkillsView> = {}): SkillsView {
     students: async () => [PRIYA, ARJUN],
     addArea: async (name) => ({ id: "new", name }),
     saveScores: async () => undefined,
+    areasWithUsage: async () => AREAS.map((a) => ({ ...a, scoreCount: 0 })),
+    renameArea: async () => undefined,
+    removeArea: async () => undefined,
     ...overrides,
   };
 }

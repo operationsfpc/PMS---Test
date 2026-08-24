@@ -186,7 +186,13 @@ describe("0037 — student skill scores", () => {
     expect(Number(row?.entries)).toBeGreaterThan(0);
   });
 
-  it("deleting a skill area does not orphan scores silently — it takes them along", async () => {
+  /**
+   * ⚠️ Deliberately REVERSED 2026-08-24 (answer 1a). This test used to prove
+   * 0037's CASCADE — right when deletion was an eyes-open SQL correction,
+   * wrong once a Remove button exists. 0059 makes the database refuse the
+   * delete while scores exist, exactly as `canRemoveSkillArea` does.
+   */
+  it("refuses to delete a skill area that still has scores under it (0059)", async () => {
     const cloudId = await areaId("Cloud fundamentals");
     await t.asUser(
       ids.centralUser,
@@ -194,10 +200,13 @@ describe("0037 — student skill scores", () => {
        values ($1, $2, 2, $3)`,
       [ids.arjun, cloudId, ids.centralUser],
     );
-    await t.sql(`delete from skill_areas where id = $1`, [cloudId]);
+    await t.expectRejection(
+      () => t.sql(`delete from skill_areas where id = $1`, [cloudId]),
+      /foreign key|violates/i,
+    );
     const rows = await t.sql(`select 1 from student_skill_scores where skill_area_id = $1`, [
       cloudId,
     ]);
-    expect(rows).toEqual([]);
+    expect(rows).toHaveLength(1);
   });
 });

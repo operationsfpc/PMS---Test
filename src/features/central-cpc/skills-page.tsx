@@ -43,11 +43,22 @@ export interface ScoreChange {
   readonly score: number | null;
 }
 
+/** One assessed skill with how many scores sit under it (answers 1a/3a). */
+export interface SkillAreaUsage {
+  readonly id: string;
+  readonly name: string;
+  readonly scoreCount: number;
+}
+
 export interface SkillsView {
   areas(): Promise<readonly SkillArea[]>;
   students(): Promise<readonly SkillStudentRow[]>;
   addArea(name: string): Promise<SkillArea>;
   saveScores(changes: readonly ScoreChange[]): Promise<void>;
+  /** Skills assessed (2026-08-24): the master list, with usage counts. */
+  areasWithUsage(): Promise<readonly SkillAreaUsage[]>;
+  renameArea(id: string, name: string): Promise<void>;
+  removeArea(id: string): Promise<void>;
 }
 
 /** CSV-quotes a field only when it needs it. */

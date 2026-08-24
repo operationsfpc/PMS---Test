@@ -1,3 +1,4 @@
+import { normaliseSkillAreaName } from "@domain/skills";
 import type { AppRole } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ScoreChange, SkillArea, SkillStudentRow, SkillsView } from "./skills-page";
@@ -93,6 +94,62 @@ export function createSupabaseSkillsView(
         );
       }
       return { id: data.id as string, name: data.name as string };
+    },
+
+    /**
+     * Skills assessed (2026-08-24, answers 1a/2a). The score count is what
+     * `canRemoveSkillArea` judges — fetched with the list so the page can
+     * refuse a removal before the network is ever asked.
+     */
+    async areasWithUsage() {
+      const { data, error } = await client
+        .from("skill_areas")
+        .select("id, name, student_skill_scores(count)")
+        .order("name");
+      if (error !== null) {
+        throw new SkillsError("Could not load the skills. Please try again.");
+      }
+      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const counts = row.student_skill_scores as Array<{ count?: number }> | null;
+        return {
+          id: row.id as string,
+          name: row.name as string,
+          scoreCount: Number(counts?.[0]?.count ?? 0),
+        };
+      });
+    },
+
+    async renameArea(id, name) {
+      await requireOperator();
+      const cleaned = normaliseSkillAreaName(name);
+
+      const { error } = await client
+        .from("skill_areas")
+        .update({ name: cleaned })
+        .eq("id", id)
+        .select("id, name");
+
+      if (error !== null) {
+        throw new SkillsError(
+          error.code === "23505"
+            ? `"${cleaned}" already exists — two skills cannot share a name.`
+            : "Could not rename the skill. Please try again.",
+        );
+      }
+    },
+
+    async removeArea(id) {
+      await requireOperator();
+
+      const { error } = await client.from("skill_areas").delete().eq("id", id).select("id");
+
+      if (error !== null) {
+        throw new SkillsError(
+          error.code === "23503"
+            ? "Student scores exist under this skill. Clear them first, or keep the skill."
+            : "Could not remove the skill. Please try again.",
+        );
+      }
     },
 
     async saveScores(changes: readonly ScoreChange[]) {

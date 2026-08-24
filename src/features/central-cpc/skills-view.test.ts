@@ -200,3 +200,81 @@ describe("saveScores", () => {
     ).rejects.toThrow(SkillsError);
   });
 });
+
+/**
+ * Skills assessed (2026-08-24, answers 1a/2a): the master list gets its own
+ * management — rename (scores follow) and remove (refused with scores, 0059).
+ */
+describe("areasWithUsage", () => {
+  it("carries how many scores sit under each skill", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/skill_areas`, () =>
+        HttpResponse.json([
+          { id: "a1", name: "AI skills", student_skill_scores: [{ count: 3 }] },
+          { id: "a2", name: "Aptitude", student_skill_scores: [{ count: 0 }] },
+        ]),
+      ),
+    );
+
+    expect(await central().areasWithUsage()).toEqual([
+      { id: "a1", name: "AI skills", scoreCount: 3 },
+      { id: "a2", name: "Aptitude", scoreCount: 0 },
+    ]);
+  });
+});
+
+describe("renameArea", () => {
+  it("PATCHes the one row", async () => {
+    let patched: Record<string, unknown> = {};
+    let search = "";
+    server.use(
+      http.patch(`${BASE}/rest/v1/skill_areas`, async ({ request }) => {
+        patched = (await request.json()) as Record<string, unknown>;
+        search = new URL(request.url).search;
+        return HttpResponse.json([{ id: "a1", name: "Aptitude and reasoning" }]);
+      }),
+    );
+
+    await central().renameArea("a1", "Aptitude  and reasoning");
+
+    expect(patched.name).toBe("Aptitude and reasoning");
+    expect(search).toContain("a1");
+  });
+
+  it("refuses anyone who is not an operator", async () => {
+    const view = createSupabaseSkillsView(
+      client(),
+      async () => "actor-1",
+      async () => "account_executive",
+    );
+    await expect(view.renameArea("a1", "X")).rejects.toBeInstanceOf(SkillsError);
+  });
+});
+
+describe("removeArea", () => {
+  it("DELETEs the one row", async () => {
+    let search = "";
+    server.use(
+      http.delete(`${BASE}/rest/v1/skill_areas`, ({ request }) => {
+        search = new URL(request.url).search;
+        return HttpResponse.json([{ id: "a2" }]);
+      }),
+    );
+
+    await central().removeArea("a2");
+    expect(search).toContain("a2");
+  });
+
+  it("translates the FK refusal into the domain's own words", async () => {
+    server.use(
+      http.delete(`${BASE}/rest/v1/skill_areas`, () =>
+        HttpResponse.json(
+          { code: "23503", message: "violates foreign key constraint" },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await expect(central().removeArea("a1")).rejects.toThrow(/student score/i);
+  });
+});
