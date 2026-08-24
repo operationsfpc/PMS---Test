@@ -13,6 +13,13 @@ export interface DriveReadiness {
   readonly roleTitle: string;
   readonly roleCategory: RoleCategory | null;
   readonly jobDescription: string;
+  /**
+   * J1 (2026-08-18): the recruiter's own JD PDF, attached at the PIF. It is
+   * the document of record; the typed text is an optional, phone-readable
+   * summary. Either satisfies §3.5 — refusing a drive whose JD arrived as an
+   * attachment would demand a retype of a document already on file.
+   */
+  readonly hasJobDescriptionFile: boolean;
   readonly locations: readonly string[];
   readonly ctcMinLpa: number | null;
   readonly driveType: DriveType | null;
@@ -51,7 +58,9 @@ export function missingBeforeGoLive(drive: DriveReadiness): readonly string[] {
   if (blank(drive.companyName)) missing.push("Company name");
   if (blank(drive.roleTitle)) missing.push("Role title");
   if (drive.roleCategory === null) missing.push("Role category");
-  if (blank(drive.jobDescription)) missing.push("Job description");
+  if (blank(drive.jobDescription) && !drive.hasJobDescriptionFile) {
+    missing.push("Job description");
+  }
   if (drive.locations.length === 0) missing.push("At least one location");
   if (drive.ctcMinLpa === null) missing.push("Minimum CTC (LPA)");
   if (drive.driveType === null) missing.push("Drive type");

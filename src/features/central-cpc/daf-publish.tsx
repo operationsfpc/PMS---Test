@@ -51,6 +51,8 @@ export interface PublishDrive {
   readonly offerCategory: OfferCategory | null;
   readonly roleCategory: RoleCategory | null;
   readonly jobDescription: string;
+  /** J1: whether the recruiter's own JD PDF is on file (`jd_storage_path`). */
+  readonly hasJobDescriptionFile: boolean;
   readonly locations: readonly string[];
   readonly ctcMinLpa: number | null;
   readonly applicationStart: Date | null;
@@ -355,6 +357,7 @@ export function DafPublish({ view }: { view: PublishView }) {
           roleTitle: loadedDrive.roleTitle ?? "",
           roleCategory: loadedDrive.roleCategory,
           jobDescription: loadedDrive.jobDescription,
+          hasJobDescriptionFile: loadedDrive.hasJobDescriptionFile,
           locations: loadedDrive.locations,
           ctcMinLpa: loadedDrive.ctcMinLpa,
           driveType: loadedDrive.driveType,

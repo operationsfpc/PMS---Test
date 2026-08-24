@@ -22,6 +22,7 @@ const ready: DriveReadiness = {
   roleTitle: "Software Engineer",
   roleCategory: "software_technical",
   jobDescription: "Build things.",
+  hasJobDescriptionFile: false,
   locations: ["Chennai"],
   ctcMinLpa: 6,
   driveType: "placement",
@@ -42,6 +43,10 @@ describe("missingBeforeGoLive", () => {
     ["companyName", { companyName: "  " }],
     ["roleTitle", { roleTitle: "" }],
     ["jobDescription", { jobDescription: "" }],
+    [
+      "jobDescription file only counts when present",
+      { jobDescription: "", hasJobDescriptionFile: false },
+    ],
     ["locations", { locations: [] }],
     ["ctcMinLpa", { ctcMinLpa: null }],
     ["offerCategory", { offerCategory: null }],
@@ -52,6 +57,22 @@ describe("missingBeforeGoLive", () => {
   ] as const)("reports %s when it is absent", (_label, patch) => {
     const result = missingBeforeGoLive({ ...ready, ...patch });
     expect(result.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * J1 (2026-08-18, answer 2): the recruiter's own JD PDF is the document of
+   * record and the typed text is optional. A drive whose JD arrived as an
+   * attachment must not be refused publication for leaving the text blank —
+   * that is exactly the Infosys drive of 2026-08-24, attached and viewable
+   * yet "Missing: Job description" with no way to fix it on the publish form.
+   */
+  it("accepts an attached JD PDF in place of typed text", () => {
+    const result = missingBeforeGoLive({
+      ...ready,
+      jobDescription: "",
+      hasJobDescriptionFile: true,
+    });
+    expect(result).toEqual([]);
   });
 
   it("lists every missing field at once, not just the first", () => {
@@ -149,6 +170,7 @@ describe("missingBeforeGoLive names every unset field", () => {
       roleTitle: "MTS",
       roleCategory: null,
       jobDescription: "Build things",
+      hasJobDescriptionFile: false,
       locations: ["Chennai"],
       ctcMinLpa: 6,
       driveType: "placement",
@@ -169,6 +191,7 @@ describe("missingBeforeGoLive names every unset field", () => {
       roleTitle: "MTS",
       roleCategory: "software_technical",
       jobDescription: "Build things",
+      hasJobDescriptionFile: false,
       locations: ["Chennai"],
       ctcMinLpa: 6,
       driveType: null,

@@ -528,6 +528,28 @@ describe("the live roster, judged against the live cutoff", () => {
 });
 
 describe("publishing", () => {
+  /**
+   * The Infosys drive of 2026-08-24: JD attached as the recruiter's PDF
+   * (`jd_storage_path` set), typed text never entered — optional since J1.
+   * Publishing refused with "Missing: Job description", and the publish
+   * screen has no attach control, so the drive was stuck.
+   */
+  it("accepts a drive whose JD is the attached PDF, not typed text", async () => {
+    const calls = stub({
+      drive: { ...DRIVE, job_description: null, jd_storage_path: "d1/Infosys-JD.pdf" },
+    });
+
+    await view().publish(INPUT);
+
+    expect(calls.map((c) => `${c.method} ${c.table}`)).toContain("PATCH drives");
+  });
+
+  it("still refuses when there is neither typed text nor an attached JD", async () => {
+    stub({ drive: { ...DRIVE, job_description: null, jd_storage_path: null } });
+
+    await expect(view().publish(INPUT)).rejects.toThrow(/job description/i);
+  });
+
   it("saves the targeting before anything makes the drive visible", async () => {
     const calls = stub();
 

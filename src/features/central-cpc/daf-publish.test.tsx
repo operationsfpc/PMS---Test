@@ -62,6 +62,7 @@ const DRIVE: PublishDrive = {
   offerCategory: "dream",
   roleCategory: "software_technical",
   jobDescription: "Build things.",
+  hasJobDescriptionFile: false,
   locations: ["Chennai"],
   ctcMinLpa: 6,
   applicationStart: new Date("2026-08-01T00:00:00Z"),
@@ -608,6 +609,44 @@ describe("DafPublish — the 10th and 12th bars", () => {
  * the role, INLINE on the publish screen — the coordinator publishing a
  * drive should not need to open the record page to know what it demands.
  */
+describe("DafPublish — a JD that arrived as the recruiter's own PDF", () => {
+  /**
+   * The Infosys drive of 2026-08-24: JD attached at the PIF, viewable and
+   * downloadable, typed text left blank (optional since J1) — and the
+   * publish screen said "Missing: Job description" with no control to fix
+   * it. The attachment must satisfy the checklist.
+   */
+  it("does not report the job description missing", async () => {
+    routed(
+      view({
+        load: async () => ({
+          drive: { ...DRIVE, jobDescription: "", hasJobDescriptionFile: true },
+          options: { cities: [], campuses: [], degrees: [], branches: [] },
+          cohort: [candidate("s1", "Sai Naveen")],
+        }),
+      }),
+    );
+
+    await screen.findByRole("heading", { name: /publish drive — zoho/i });
+    expect(screen.queryByText("Job description")).toBeNull();
+  });
+
+  it("still reports it missing when there is neither text nor file", async () => {
+    routed(
+      view({
+        load: async () => ({
+          drive: { ...DRIVE, jobDescription: "", hasJobDescriptionFile: false },
+          options: { cities: [], campuses: [], degrees: [], branches: [] },
+          cohort: [candidate("s1", "Sai Naveen")],
+        }),
+      }),
+    );
+
+    await screen.findByRole("heading", { name: /publish drive — zoho/i });
+    expect(screen.getByText("Job description")).toBeDefined();
+  });
+});
+
 describe("the role's must-have skills, on the publish screen", () => {
   it("names them alongside the other company info", async () => {
     render(<DafPublish view={view()} />);

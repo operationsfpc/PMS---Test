@@ -25,6 +25,7 @@ const complete = {
   roleTitle: "MTS",
   roleCategory: "software_technical" as const,
   jobDescription: "Backend.",
+  hasJobDescriptionFile: false,
   locations: ["Chennai"],
   ctcMinLpa: 6.5,
   driveType: "placement" as const,

@@ -21,7 +21,7 @@ const name = (value: unknown): string => one<{ name: string }>(value)?.name ?? "
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PUBLISH_DRIVE_COLUMNS = `
-  id, company_name, role_title, role_category, job_description, work_locations,
+  id, company_name, role_title, role_category, job_description, jd_storage_path, work_locations,
   status, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa,
   application_start, application_end, on_hold,
   min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
@@ -227,6 +227,11 @@ export function createSupabasePublishView(
         offerCategory: (row.offer_category as PublishDrive["offerCategory"]) ?? null,
         roleCategory: (row.role_category as RoleCategory | null) ?? null,
         jobDescription: (row.job_description as string | null) ?? "",
+        // J1: the recruiter's attached PDF satisfies the JD requirement; the
+        // typed text is optional since 2026-08-18 and this screen has no way
+        // to attach one — refusing here left the drive stuck (2026-08-24).
+        hasJobDescriptionFile:
+          typeof row.jd_storage_path === "string" && row.jd_storage_path !== "",
         locations:
           typeof row.work_locations === "string" && row.work_locations !== ""
             ? [row.work_locations]
@@ -379,6 +384,8 @@ export function createSupabasePublishView(
         roleTitle: (row.role_title as string | null) ?? "",
         roleCategory: (row.role_category as RoleCategory | null) ?? null,
         jobDescription: (row.job_description as string | null) ?? "",
+        hasJobDescriptionFile:
+          typeof row.jd_storage_path === "string" && row.jd_storage_path !== "",
         locations:
           typeof row.work_locations === "string" && row.work_locations !== ""
             ? [row.work_locations]
