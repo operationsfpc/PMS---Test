@@ -25,27 +25,36 @@ skills-assessed.
    (⚠️ one 0037 cascade test deliberately reversed). Contract parser learned
    PostgREST `(count)`.
 
-### 🔴 DIAGNOSED, NOT YET BUILT (2026-08-24 UAT, all root-caused in chat):
+### ✅ ALL FOUR SHIPPED 2026-08-24 (afternoon), plus the publish fixes
 
-1. **Remove "View more" expander** from student drive cards — "View everything"
-   (the record page) is canonical and carries all of it. Kill the expander,
-   `OpenDriveDetails` usage, and its tests.
-2. **Shortlisting CGPA 0** — `shortlist-view.ts applicants()` reads the snapshot
-   at the WRONG DEPTH: real shape is `{ profile: { academics: {…}, … } }`, it
-   reads `snapshot.academics ?? snapshot`. Same defect in `record-page.tsx
-   fromSnapshot`. Thanush's snapshot carries 7.5; the screen shows 0. Also
-   `preferredRoleCategories` should read profile's `roleCategories`.
-   portfolio-view and recruiter-export read the right depth.
-3. **No semester (CGPA) verification queue** — pending `student_semesters` of
-   `srf_approved` students have NO queue (certificates got theirs, 0038/0039;
-   semesters only verify via SRF approval, 0031). Thanush live: sem 1 verified,
-   sems 2–3 pending forever. Build mirroring the certificate queue; decide
-   reject semantics (no rejection_reason column — likely migration 0060).
-4. **Student-details view access** (CPC / campus manager / KAM / DH, view-only)
-   — RLS ALREADY permits all of it (campus-scoped readers + org readers,
-   0018; skill tables staff_read). Pure front-end: sidebar entries, read-only
-   skill pages. ⚠️ live has NO campus_manager/KAM profiles yet; DH exists
-   (Varun) with 0 campus assignments (org reader — fine).
+Live `554b99ea-4e06-4fe4-8bd8-005beaa4d3f2`, `index-TW91IOXP.js` byte-identical
+(sha256 `4a63d4e1…`). Remote at **0061**. Suite **3599 tests / 187 files**.
+
+1. **Publish** (0060 + withDetail): `live_requires_complete_record` accepts an
+   attached JD; refused publishes now carry the database's words. Infosys row
+   re-probed live: accepted.
+2. **CGPA 0 fixed**: shortlist-view + record-page `fromSnapshot` now descend
+   `{ profile: { academics } }`; fixtures corrected to the REAL envelope (the
+   mock had drifted to agree with the code under test). `roleCategories` read
+   fixed alongside.
+3. **View-more removed** from student drive cards (deliberate reversal of
+   F14's expander; two describe blocks rewritten). `OpenDriveDetails` stays —
+   it feeds the location filters.
+4. **Student-details access**: campus CPC / campus manager / KAM / DH sidebars
+   gained All students + Skill repository; `SkillsPage readOnly` for
+   non-operators. ⚠️ live has NO campus_manager/KAM profiles yet.
+5. **CGPA verification queue** (0061): `/cpc/semesters` ("CGPA verification"
+   under the campus CPC's Verification heading). `decideSemester` mirrors
+   certificates; rejection stores its reason on the row
+   (`semester_rejected_has_reason`); students may delete their own REJECTED
+   lines; add-semester REPLACES a rejected number; SRF summary shows standing
+   via `certificateStanding`. SRF-submitted students excluded (0031 decides
+   theirs at approval). 2 live rows (Thanush sem 2–3) await the coordinator.
+   ⚠️ Known edge: a rejected semester BELOW a later pending/verified one
+   cannot be re-declared (nextSemesterFor counts from the highest) — rare,
+   accepted for now.
+   ⚠️ Reject wording used recommendation 7a WITHOUT explicit approval
+   (Karthik: "proceed") — reversible; his item-7 answer may still arrive.
 
 ---
 
