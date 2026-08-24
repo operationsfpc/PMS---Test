@@ -25,6 +25,29 @@ skills-assessed.
    (⚠️ one 0037 cascade test deliberately reversed). Contract parser learned
    PostgREST `(count)`.
 
+### ✅ EVENING BATCH SHIPPED 2026-08-24 — notification links · offer letters (0062) · recruiter zip pack
+
+Live `acd2e0d7-9d00-454f-9f1c-8ddfc0624ae5`, `index-zWB70iVL.js` byte-identical
+(sha256 `30bd2ac7…`); exceljs/jszip split into their own lazy chunks. Remote at
+**0062** (constraint + bucket + read policy verified live). **3636 tests /
+189 files**, `pnpm check` exit 0.
+
+1. **Spec C**: `linkifyBody` + shared `NotificationBody` — URLs clickable on
+   the notifications page AND the dashboard panel; trailing punctuation
+   stays text.
+2. **Spec B** (answers 1a–1d): offer letter filed with the declaration or
+   attached later; `offer-letters` bucket (PDF/JPG/PNG ≤5MB); read delegated
+   to offers RLS; attach-later PATCHes ONLY the attachment columns.
+3. **Export pack** (5a/5b/5c): the CSV became ONE zip — `shortlist.xlsx` +
+   `resumes/`, rows hyperlinked by relative path; missing resume BLOCKS the
+   export (nothing downloads, nothing logs); 5c was already true via the
+   snapshot's resumeId. ⚠️ Two shortlist-page export tests deliberately
+   rewritten (CSV → zip; warn → block).
+
+Still pending Karthik: Resend setup (3) · Zoho admin checklist + go (4,
+explained to him in plain terms) · real DH invite (6, end of testing) ·
+test-data cleanup timing (8). Item 7 (semester-reject wording 7a) confirmed.
+
 ### ✅ ALL FOUR SHIPPED 2026-08-24 (afternoon), plus the publish fixes
 
 Live `554b99ea-4e06-4fe4-8bd8-005beaa4d3f2`, `index-TW91IOXP.js` byte-identical

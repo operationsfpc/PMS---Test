@@ -1,11 +1,9 @@
 # Spec — PIF skills picker · final-selection attachment · clickable notification links
 
-Date: 2026-08-21 (evening). Status: **A APPROVED & SHIPPED 2026-08-24**
-(Karthik's skills-rework message restated part A verbatim — treated as the
-approval; migration landed as **0058**, so parts B/C and the email spec must
-renumber to 0059+). **B & C still awaiting approval/answers.**
-New, related, 2026-08-24: a "Skills assessed" management page — 3 questions
-put to Karthik (rename/remove semantics · who manages · page vs tab).
+Date: 2026-08-21 (evening). Status: **ALL THREE PARTS SHIPPED 2026-08-24.**
+A (0058) with the skills rework; B (0062, answers 1a–1d: yes · PDF/JPG/PNG
+≤5MB · staff-with-offer + student · attach-later yes) and C ("2 go") in the
+evening batch. The Skills assessed page (1a/2a/3a) shipped as 0059.
 Source: Karthik's message + screenshot `docs/inbox/Screenshot 2026-08-21 at 4.27.41 PM.png`
 (student notifications with plain-text URLs).
 
