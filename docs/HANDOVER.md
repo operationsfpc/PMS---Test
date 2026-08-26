@@ -4,6 +4,57 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-26 (5) — the Account Executive's landing page
+
+Live `240abb8a-ac7c-42a4-93fd-89bd4a014562`, `index-DR7Rv_2c.js` byte-identical
+to `dist/` (sha256 `24002505…`). Remote at **0065**. Suite **3815 tests /
+199 files**, `pnpm check` exit 0. Commit `d398038`. Spec + approved mockup:
+`docs/specs/2026-08-26-ae-overview.md` / `…-ae-overview-mockup.html`.
+
+The last open item from the day. The AE had no overview: `/dashboard` is
+computed from the student roster, which they cannot read (`0018`).
+
+**`/ae/overview`**, sidebar "Overview → My overview", and their landing route.
+
+1. **My drives** — brought in · live now · applicants · shortlisted · offers
+   made · completed, plus their five most recent drives. Every card opens the
+   drives behind it. **No new access**: RLS already returns their own drives
+   and `0019` already gave them the shortlist and offer counts.
+2. **Placement overall** — the organisation's figures as **aggregates**, from
+   `placement_totals()` (**0064**). **Nothing here links**, deliberately: the
+   student directory is closed to an AE.
+
+**Option A, not "make the AE an org reader".** They asked for the numbers, so
+they get numbers and never a student record; the 2026-08-17 rule stands.
+`src/db/placement-totals.test.ts` proves both halves — an AE gets the totals
+AND still reads zero rows from `students`. The same test pins the SQL to
+`computePlacementStats` and `summariseCtc` on one cohort, because the function
+restates rules that live in the domain (the Layer 2 bargain). The **rate** is
+NOT computed in SQL: `summarisePlacementTotals` owns it.
+
+🔴 **Two bugs the tests caught before anyone saw them — both worth remembering:**
+
+- `if not (a or b or c) then raise` **never fired for a student**.
+  `current_app_role()` is NULL with no profile row, `not NULL` is NULL, and
+  `if NULL then` does nothing — the guard would have admitted exactly the
+  callers it names. Now `coalesce(…, false)`. **Any future `security definer`
+  guard must coalesce.**
+- **0064's `revoke … from public` was enough in PGlite and NOT on the live
+  project.** Supabase's default privileges give `anon` its own explicit grant,
+  so the suite said "closed" while production said `anon_may_call: true`.
+  Fixed by **0065**, verified live both before and after. **Grants are one of
+  the few things PGlite cannot tell you the truth about — check them on the
+  project.**
+
+Cross-checked live: `placement_totals()` returns eligible 105 / self-placed 1,
+the same figures the Central CPC's roster-based overview shows.
+
+⚠️ Deliberate reversals: the AE's landing route (`/my-drives` → `/ae/overview`)
+and the sidebar test that asserted they get no overview at all — what still
+holds, and is now tested precisely, is that they are never sent to `/dashboard`.
+
+---
+
 ## ✅ SHIPPED 2026-08-26 (4) — the recruiter export works (it never had)
 
 Live `2e955cfc-ae01-4c65-bda2-43956925d5d2`, `index-BUz-nR5q.js` byte-identical
