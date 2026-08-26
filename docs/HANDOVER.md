@@ -4,6 +4,56 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-26 — every Placement-overview card opens its students
+
+Live `52af5bff-5806-4d0c-b5e0-e10690e06261`, `index-B13mksHQ.js` byte-identical
+to `dist/` (sha256 `206d3810…`). Suite **3697 tests / 190 files**, `pnpm check`
+exit 0. Commit `02d9760`. **No migration** — nothing here touched the database.
+Spec: `docs/specs/2026-08-26-clickable-overview-cards.md` (answers 1a/2/3/4a/6b).
+
+Asked for from the screenshot `docs/inbox/WhatsApp Image 2026-08-24 at 17.04.11.jpeg`:
+"make the cards in Placement Overview clickable to show student info, just like
+in Live Drives." Every headline card, funnel row, package figure, package- and
+offers-by-category row and campus row is now a link into `/central/students`,
+filtered to exactly the population it counted, carrying the campus in view.
+"Drives completed" opens `/central/drives/completed` — it is the one card that
+is not about students.
+
+**The bug it exposed.** The pre-existing Placed link pointed at `filter=placed`,
+which includes self-placed students (C1), while the card above it counts
+on-campus placements only (PRD §16.2). The list was longer than the number that
+opened it. `on_campus` and `self_placed` are now distinct directory filters, and
+`DirectoryStudent.hasSelfPlacement` is carried as its own fact so a student
+holding BOTH kinds of offer is not lost from the Self-placed list (their
+displayed placement is the on-campus one).
+
+- `submitted` / `verified` filter with the funnel's OWN predicates —
+  `countsAsSubmitted` / `countsAsVerified`, now exported from
+  `src/domain/registration-funnel.ts`. Two copies of "an application proves
+  verification" would drift and the list would stop matching the number.
+- `sameMoney` added to `src/domain/math.ts` (rounds to published precision;
+  an epsilon is itself a float). Package figures link to `ctc=` only when some
+  placed student actually holds that figure — an average is nobody's salary and
+  a link that lands on an empty list teaches the reader to stop pressing.
+- Directory page: full chip set (8), a campus `<select>`, and clearable
+  package/category drill-down badges. Everything stays in the URL.
+- ⚠️ Two dashboard tests deliberately rewritten: the Placed href, and the block
+  that asserted the other funnel rows were plain.
+
+### ⛔ OPEN — the Account Executive (answer 5b could not be built)
+
+Karthik chose 5b ("give the AE the overview, links pointing only at their own
+drives' applicants"). It cannot ship as written: an AE is neither
+`is_org_reader()` nor `is_campus_reader()` (0018), so `select from students`
+returns **zero rows** for them — `portfolio-view.ts` says so and reads applicant
+names from the application snapshot instead. `/dashboard` for an AE would render
+"No students yet" and `/central/students` an empty table. Three options are
+written up in §5 of the spec: (1) leave the AE as they are — their Live/Completed
+cards already ARE this pattern; (2) a small AE overview built from their own
+drives (new screen ⇒ mockup first, no RLS change); (3) widen RLS to let an AE
+read the students and offers behind their drives (migration + pgTAP + a real
+widening of who sees student records). **Awaiting Karthik.**
+
 ## ✅ SHIPPED 2026-08-24 — JD-attachment publish fix · PIF skills picker (0058) · Skills assessed (0059)
 
 Three ships, live `8d42e54c-5b6c-46f8-a4b5-9237273ffa67`, JS `index-D4ddjBTf.js`
