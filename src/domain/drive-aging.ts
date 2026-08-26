@@ -57,6 +57,41 @@ export function compareOldestFirst(
   return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
 }
 
+/**
+ * Newest first — the default everywhere since 2026-08-26 (Karthik).
+ *
+ * Deliberately NOT `compareOldestFirst` reversed. Oldest-first sinks an
+ * undated drive because it cannot claim to be the oldest; reversing that makes
+ * it claim to be the newest, and with newest-first the default that would put
+ * every undated drive at the head of every list. Undated sinks either way.
+ */
+export function compareNewestFirst(
+  a: { readonly createdAt: string | null },
+  b: { readonly createdAt: string | null },
+): number {
+  if (a.createdAt === null && b.createdAt === null) return 0;
+  if (a.createdAt === null) return 1;
+  if (b.createdAt === null) return -1;
+  return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+}
+
+/** The two orders every drive list offers. */
+export type DriveOrder = "oldest" | "newest";
+
+/**
+ * One sort for every drive list on the system, so the queue, the picker and
+ * the portfolio cannot answer "which is newest" differently.
+ *
+ * Returns a new array: sorting the caller's list in place would reorder a
+ * memoised prop and make a render depend on how often it ran.
+ */
+export function orderDrives<T extends { readonly createdAt: string | null }>(
+  drives: readonly T[],
+  order: DriveOrder,
+): readonly T[] {
+  return [...drives].sort(order === "oldest" ? compareOldestFirst : compareNewestFirst);
+}
+
 export interface AgeableDrive {
   readonly status: DriveStatus;
   readonly applicationEnd: string | null;

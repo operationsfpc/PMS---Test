@@ -188,3 +188,26 @@ describe("createSupabasePortfolioView", () => {
     expect(await view().drives()).toEqual([]);
   });
 });
+
+/**
+ * 2026-08-26: the portfolio sorts by when the drive was raised, so it has to
+ * carry that date. The query already ordered by `created_at` and then threw
+ * the column away, which meant the page could not offer an order of its own.
+ */
+describe("createSupabasePortfolioView — the raised date", () => {
+  it("carries created_at through to the drive", async () => {
+    stub([{ ...DRIVE, created_at: "2026-08-10T09:00:00Z" }]);
+
+    const [drive] = await view().drives();
+
+    expect(drive?.createdAt).toBe("2026-08-10T09:00:00Z");
+  });
+
+  it("says null rather than inventing a date it was not given", async () => {
+    stub([{ ...DRIVE, created_at: null }]);
+
+    const [drive] = await view().drives();
+
+    expect(drive?.createdAt).toBeNull();
+  });
+});

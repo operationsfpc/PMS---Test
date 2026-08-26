@@ -50,14 +50,15 @@ const picker = (drives: readonly PickerDrive[] = DRIVES) =>
   );
 
 describe("DrivePicker", () => {
-  it("lists company, role, raised date and status — oldest raised first", () => {
+  /** 2026-08-26 (Karthik): newest raised first, across every section. */
+  it("lists company, role, raised date and status — newest raised first", () => {
     picker();
     const rows = screen.getAllByRole("listitem");
-    expect(within(rows[0] as HTMLElement).getByText("Deloitte")).toBeDefined();
-    expect(within(rows[0] as HTMLElement).getByText(/junior associate/i)).toBeDefined();
-    expect(within(rows[0] as HTMLElement).getByText(/raised 12 aug 2026/i)).toBeDefined();
-    expect(within(rows[0] as HTMLElement).getByText(/in rounds/i)).toBeDefined();
-    expect(within(rows[2] as HTMLElement).getByText("LTI Mindtree")).toBeDefined();
+    expect(within(rows[0] as HTMLElement).getByText("LTI Mindtree")).toBeDefined();
+    expect(within(rows[0] as HTMLElement).getByText(/jr\. developer/i)).toBeDefined();
+    expect(within(rows[0] as HTMLElement).getByText(/raised 21 aug 2026/i)).toBeDefined();
+    expect(within(rows[2] as HTMLElement).getByText("Deloitte")).toBeDefined();
+    expect(within(rows[2] as HTMLElement).getByText(/in rounds/i)).toBeDefined();
   });
 
   it("links every drive to where the host page wants it", () => {
@@ -76,13 +77,13 @@ describe("DrivePicker", () => {
     expect(screen.queryByText("Deloitte")).toBeNull();
   });
 
-  it("flips to newest first on request", async () => {
+  it("flips to oldest first on request", async () => {
     const user = userEvent.setup();
     picker();
 
-    await user.selectOptions(screen.getByRole("combobox", { name: /sort/i }), "newest");
+    await user.selectOptions(screen.getByRole("combobox", { name: /sort/i }), "oldest");
     const rows = screen.getAllByRole("listitem");
-    expect(within(rows[0] as HTMLElement).getByText("LTI Mindtree")).toBeDefined();
+    expect(within(rows[0] as HTMLElement).getByText("Deloitte")).toBeDefined();
   });
 
   it("says so when nothing matches, instead of a silent blank", async () => {
@@ -122,7 +123,8 @@ describe("DrivePicker — sparse drives", () => {
     );
 
     expect(screen.getByText("Mystery Co")).toBeDefined();
-    // Undated drives sort LAST under oldest-first — age unknown is not age zero.
+    // Undated drives sort LAST in BOTH orders — age unknown is not age zero,
+    // and reversing that judgement would call it the newest instead.
     const rows = screen.getAllByRole("listitem");
     expect(within(rows[3] as HTMLElement).getByText("Mystery Co")).toBeDefined();
   });

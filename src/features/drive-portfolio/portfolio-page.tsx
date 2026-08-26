@@ -1,7 +1,8 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
+import { DriveSort } from "@components/drive-sort";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
-import { partitionExpired } from "@domain/drive-aging";
+import { type DriveOrder, orderDrives, partitionExpired } from "@domain/drive-aging";
 import { applicationWindow } from "@domain/drive-analytics";
 import {
   canShortlistFromPortfolio,
@@ -41,6 +42,8 @@ export interface PortfolioDrive {
   readonly publishedBy: string | null;
   readonly totalRounds: number;
   readonly roundsDecided: number;
+  /** When the drive was raised. The list is ordered by it (2026-08-26). */
+  readonly createdAt: string | null;
   readonly applicationStart: string | null;
   readonly applicationEnd: string | null;
   readonly applicants: readonly PortfolioApplicant[];
@@ -126,6 +129,13 @@ export function DrivePortfolioPage({
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  /**
+   * 2026-08-26 (Karthik): newest first, here and everywhere else. A
+   * coordinator opening Live is looking for what just happened; the
+   * oldest-first order G1b gave the publish QUEUE is for clearing a backlog,
+   * which is not what this list is.
+   */
+  const [order, setOrder] = useState<DriveOrder>("newest");
 
   useEffect(() => {
     let live = true;
@@ -155,7 +165,10 @@ export function DrivePortfolioPage({
     [drives, statuses],
   );
 
-  const visible = useMemo(() => searchDrives(inScope, query), [inScope, query]);
+  const visible = useMemo(
+    () => orderDrives(searchDrives(inScope, query), order),
+    [inScope, query, order],
+  );
 
   /**
    * G5c / G1d (UAT 2026-08-20, answer 1a): past-deadline drives collapse into
@@ -203,6 +216,10 @@ export function DrivePortfolioPage({
       ) : (
         <>
           <DriveSearch value={query} onChange={setQuery} />
+
+          <div className="mb-3 flex justify-end">
+            <DriveSort value={order} onChange={setOrder} />
+          </div>
 
           {visible.length === 0 ? (
             <Card className="p-6">

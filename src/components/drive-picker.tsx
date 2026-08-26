@@ -1,6 +1,8 @@
+import { compareNewestFirst, compareOldestFirst, type DriveOrder } from "@domain/drive-aging";
 import { searchDrives } from "@domain/drive-portfolio";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { DriveSort } from "./drive-sort";
 import { Badge, Card, type Tone } from "./ui";
 
 /**
@@ -39,12 +41,18 @@ const raisedLabel = (iso: string | null): string | null =>
         year: "numeric",
       })}`;
 
-/** Oldest raised first — a backlog is cleared from the back (G1b's rule). */
-function compare(a: PickerDrive, b: PickerDrive): number {
-  const at = a.raisedOn === null ? Number.POSITIVE_INFINITY : Date.parse(a.raisedOn);
-  const bt = b.raisedOn === null ? Number.POSITIVE_INFINITY : Date.parse(b.raisedOn);
-  return at - bt;
-}
+/**
+ * The domain's comparators, over this component's own field name.
+ *
+ * 2026-08-26: the local copy sorted with `Infinity` for an undated drive and
+ * was then REVERSED for newest-first, which floated every undated drive to the
+ * top. `compareNewestFirst` sinks them in both directions.
+ */
+const compare = (order: DriveOrder) => (a: PickerDrive, b: PickerDrive) =>
+  (order === "oldest" ? compareOldestFirst : compareNewestFirst)(
+    { createdAt: a.raisedOn },
+    { createdAt: b.raisedOn },
+  );
 
 export function DrivePicker({
   drives,
@@ -57,13 +65,13 @@ export function DrivePicker({
   prompt: string;
 }) {
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"oldest" | "newest">("oldest");
+  /** Newest first, like every other drive list (2026-08-26). */
+  const [sort, setSort] = useState<DriveOrder>("newest");
 
-  const visible = useMemo(() => {
-    const matched = searchDrives(drives, query);
-    const sorted = [...matched].sort(compare);
-    return sort === "oldest" ? sorted : sorted.reverse();
-  }, [drives, query, sort]);
+  const visible = useMemo(
+    () => [...searchDrives(drives, query)].sort(compare(sort)),
+    [drives, query, sort],
+  );
 
   return (
     <Card className="p-6">
@@ -82,17 +90,7 @@ export function DrivePicker({
               onChange={(e) => setQuery(e.target.value)}
               className="min-w-56 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm"
             />
-            <label className="flex items-center gap-2 text-sm text-ink-700">
-              Sort
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as "oldest" | "newest")}
-                className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink-900"
-              >
-                <option value="oldest">Oldest first</option>
-                <option value="newest">Newest first</option>
-              </select>
-            </label>
+            <DriveSort value={sort} onChange={setSort} />
           </div>
 
           {visible.length === 0 ? (

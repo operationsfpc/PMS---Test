@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  compareNewestFirst,
   compareOldestFirst,
+  type DriveOrder,
   daysPending,
   describeRaisedOn,
   isExpiredDrive,
   isPendingTooLong,
+  orderDrives,
   PENDING_FLAG_DAYS,
   partitionExpired,
 } from "./drive-aging";
@@ -147,5 +150,61 @@ describe("malformed dates are answered honestly, never with NaN", () => {
     expect(compareOldestFirst({ createdAt: null }, { createdAt: null })).toBe(0);
     expect(compareOldestFirst({ createdAt: "2026-08-01" }, { createdAt: null })).toBe(-1);
     expect(compareOldestFirst({ createdAt: "2026-08-01" }, { createdAt: "2026-08-01" })).toBe(0);
+  });
+});
+
+/**
+ * 2026-08-26 (Karthik): "change the default sort order to Newest First across
+ * all sections."
+ *
+ * Newest-first is NOT oldest-first reversed. Reversing floats the undated
+ * drives to the TOP - `compareOldestFirst` sinks them deliberately, because a
+ * drive with no recorded date cannot claim to be the oldest, and reversing
+ * that judgement makes it claim to be the newest instead. With newest-first
+ * now the default everywhere, that would have put every undated drive at the
+ * head of every list on the system.
+ */
+describe("compareNewestFirst", () => {
+  it("puts the newest submission first and still sinks the undated", () => {
+    const drives = [
+      { createdAt: "2026-08-15T10:00:00Z" },
+      { createdAt: null },
+      { createdAt: "2026-08-19T10:00:00Z" },
+      { createdAt: "2026-08-17T10:00:00Z" },
+    ];
+    const sorted = [...drives].sort(compareNewestFirst);
+    expect(sorted.map((d) => d.createdAt)).toEqual([
+      "2026-08-19T10:00:00Z",
+      "2026-08-17T10:00:00Z",
+      "2026-08-15T10:00:00Z",
+      null,
+    ]);
+  });
+
+  it("treats two undated drives as equals", () => {
+    expect(compareNewestFirst({ createdAt: null }, { createdAt: null })).toBe(0);
+    expect(compareNewestFirst({ createdAt: "2026-08-01" }, { createdAt: null })).toBe(-1);
+    expect(compareNewestFirst({ createdAt: "2026-08-01" }, { createdAt: "2026-08-01" })).toBe(0);
+  });
+});
+
+describe("orderDrives", () => {
+  const drives = [
+    { createdAt: "2026-08-15T10:00:00Z", id: "b" },
+    { createdAt: null, id: "undated" },
+    { createdAt: "2026-08-19T10:00:00Z", id: "c" },
+  ];
+
+  it.each([
+    ["newest", ["c", "b", "undated"]],
+    ["oldest", ["b", "c", "undated"]],
+  ] as [DriveOrder, string[]][])("orders %s first", (order, expected) => {
+    expect(orderDrives(drives, order).map((d) => d.id)).toEqual(expected);
+  });
+
+  it("does not disturb the list it was given", () => {
+    const original = [...drives];
+    orderDrives(drives, "newest");
+    expect(drives).toEqual(original);
   });
 });

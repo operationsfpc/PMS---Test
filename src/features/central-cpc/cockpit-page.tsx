@@ -1,10 +1,12 @@
+import { DriveSort } from "@components/drive-sort";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
 import {
-  compareOldestFirst,
+  type DriveOrder,
   daysPending,
   describeRaisedOn,
   isPendingTooLong,
+  orderDrives,
   partitionExpired,
 } from "@domain/drive-aging";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
@@ -144,9 +146,13 @@ export function CockpitPage({
   const [loaded, setLoaded] = useState<readonly DriveSummary[] | null>(null);
   const [reviews, setReviews] = useState<readonly DisbarmentReview[]>([]);
   /** G1b: oldest first is how a backlog is cleared, so the queue defaults to it. */
-  const [sort, setSort] = useState<"oldest" | "newest">(
-    filter === "yet-to-publish" ? "oldest" : "newest",
-  );
+  /**
+   * 2026-08-26 (Karthik): "change the default sort order to Newest First
+   * across all sections" — a deliberate reversal of G1b's oldest-first default
+   * on the publish queue. Clearing the backlog from the back is still one
+   * click away; it is no longer what the reader is given unasked.
+   */
+  const [sort, setSort] = useState<DriveOrder>("newest");
   /** G1c: the pending decision, its category (approve) or reason (reject). */
   const [deciding, setDeciding] = useState<{
     drive: DriveSummary;
@@ -176,14 +182,9 @@ export function CockpitPage({
       ? loaded
       : loaded.filter((d) => scope.statuses.includes(d.status));
 
-  const sorted =
-    inScope === null
-      ? null
-      : sort === "oldest"
-        ? [...inScope].sort(compareOldestFirst)
-        : [...inScope].sort((a, b) => compareOldestFirst(b, a));
-
-  const drives = sorted;
+  // Not `compareOldestFirst` reversed: that made an undated drive the NEWEST,
+  // which with newest-first as the default would head the queue with it.
+  const drives = inScope === null ? null : orderDrives(inScope, sort);
   const split = drives === null ? null : partitionExpired(drives, clock);
 
   /** Q5 (2026-08-21): the venue is the Central CPC's to record — nobody else's. */
@@ -286,20 +287,10 @@ export function CockpitPage({
         </Card>
       ) : (
         <>
-          {/* G1b (UAT 2026-08-20): "oldest submitted first" is how a backlog
-              is cleared, so the queue defaults to it and says so. */}
+          {/* G1b (UAT 2026-08-20) put the order in the reader's hands; since
+              2026-08-26 it starts at newest first, like every other list. */}
           <div className="mb-3 flex justify-end">
-            <label className="flex items-center gap-2 text-sm text-ink-700">
-              Sort
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as "oldest" | "newest")}
-                className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink-900"
-              >
-                <option value="oldest">Oldest first</option>
-                <option value="newest">Newest first</option>
-              </select>
-            </label>
+            <DriveSort value={sort} onChange={setSort} />
           </div>
 
           {split.active.length === 0 ? (

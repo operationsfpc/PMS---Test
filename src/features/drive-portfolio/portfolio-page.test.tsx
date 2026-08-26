@@ -33,6 +33,7 @@ const DRIVE: PortfolioDrive = {
   publishedBy: "cpc-1",
   totalRounds: 4,
   roundsDecided: 2,
+  createdAt: "2026-08-10T09:00:00.000Z",
   applicationStart: "2026-09-01T00:00:00.000Z",
   applicationEnd: "2026-09-10T00:00:00.000Z",
   applicants: [
@@ -83,6 +84,7 @@ const OTHERS: PortfolioDrive = {
   publishedBy: null,
   totalRounds: 0,
   roundsDecided: 0,
+  createdAt: "2026-08-19T09:00:00.000Z",
   applicationStart: null,
   applicationEnd: null,
   applicants: [],
@@ -391,6 +393,7 @@ describe("DrivePortfolioPage — one list, one status group", () => {
     roleTitle: "Jr. Developer",
     status,
     onHold: false,
+    createdAt: "2026-08-10T09:00:00.000Z",
     ctcMinLpa: null,
     ctcMaxLpa: null,
     createdBy: "p1",
@@ -490,6 +493,7 @@ describe("DrivePortfolioPage — searching the list", () => {
     roleTitle,
     status: "live",
     onHold: false,
+    createdAt: "2026-08-10T09:00:00.000Z",
     ctcMinLpa: null,
     ctcMaxLpa: null,
     createdBy: "p1",
@@ -646,5 +650,75 @@ describe("expired drives collapse (G5c)", () => {
     await screen.findByText("Current Co");
     expect(screen.getByText(/expired — application deadline passed \(1\)/i)).toBeDefined();
     expect(screen.getByText("Bygone Corp")).toBeDefined();
+  });
+});
+
+/**
+ * 2026-08-26 (Karthik): "add the Oldest First and Newest First sort buttons to
+ * the Live Drives section", and make Newest First the default everywhere.
+ *
+ * Live had no ordering control at all - the list arrived in whatever order the
+ * query returned it, which is not a promise a screen should make silently.
+ */
+describe("ordering the portfolio", () => {
+  const AGED: PortfolioDrive = {
+    ...OTHERS,
+    driveId: "d3",
+    companyName: "Aged Systems",
+    createdAt: "2026-08-01T09:00:00.000Z",
+  };
+
+  const UNDATED: PortfolioDrive = {
+    ...OTHERS,
+    driveId: "d4",
+    companyName: "Undated Co",
+    createdAt: null,
+  };
+
+  /** The drive cards, in the order they are rendered — not their applicant panels. */
+  const names = () =>
+    screen
+      .getAllByRole("region")
+      .map((r) => r.getAttribute("aria-label") ?? "")
+      .filter((label) => !/applicant/i.test(label));
+
+  it("lists the newest drive first by default", async () => {
+    show({ view: view([AGED, OTHERS, DRIVE]) });
+    await screen.findByRole("region", { name: "Zoho Corporation" });
+
+    // Freshworks 19 Aug, Zoho 10 Aug, Aged Systems 1 Aug.
+    expect(names().slice(0, 3)).toEqual(["Freshworks", "Zoho Corporation", "Aged Systems"]);
+  });
+
+  it("flips to oldest first on request", async () => {
+    const user = userEvent.setup();
+    show({ view: view([AGED, OTHERS, DRIVE]) });
+    await screen.findByRole("region", { name: "Zoho Corporation" });
+
+    await user.selectOptions(screen.getByLabelText(/sort/i), "oldest");
+
+    expect(names().slice(0, 3)).toEqual(["Aged Systems", "Zoho Corporation", "Freshworks"]);
+  });
+
+  /**
+   * A drive with no recorded date cannot claim to be the newest any more than
+   * it could claim to be the oldest. It sinks in both orders.
+   */
+  it("sinks an undated drive whichever way the list is sorted", async () => {
+    const user = userEvent.setup();
+    show({ view: view([UNDATED, AGED, OTHERS]) });
+    await screen.findByRole("region", { name: "Undated Co" });
+
+    expect(names().at(2)).toBe("Undated Co");
+
+    await user.selectOptions(screen.getByLabelText(/sort/i), "oldest");
+    expect(names().at(2)).toBe("Undated Co");
+  });
+
+  it("offers no sort control when there are no drives to sort", async () => {
+    show({ view: view([]) });
+    await screen.findByText(/no drives yet/i);
+
+    expect(screen.queryByLabelText(/sort/i)).toBeNull();
   });
 });

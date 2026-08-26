@@ -22,7 +22,7 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
  * Head, who is an org reader, gets the campus.
  */
 export const PORTFOLIO_DRIVE_COLUMNS = `
-  id, company_name, role_title, status, on_hold,
+  id, company_name, role_title, status, on_hold, created_at,
   ctc_min_lpa, ctc_max_lpa,
   created_by, approved_by, published_by,
   application_start, application_end,
@@ -131,6 +131,9 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           createdBy: (row.created_by as string | null) ?? null,
           approvedBy: (row.approved_by as string | null) ?? null,
           publishedBy: (row.published_by as string | null) ?? null,
+          // The list is ordered by this (2026-08-26), so it is carried rather
+          // than only sorted on inside the query.
+          createdAt: (row.created_at as string | null) ?? null,
           applicationStart: (row.application_start as string | null) ?? null,
           applicationEnd: (row.application_end as string | null) ?? null,
           totalRounds: roundRows.length,

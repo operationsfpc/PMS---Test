@@ -388,24 +388,13 @@ describe("drive aging on the queue (G1)", () => {
     expect(screen.queryByText(/pending \d+ days/i)).toBeNull();
   });
 
-  it("orders the yet-to-publish queue oldest first by default (G1b)", async () => {
-    render(
-      <MemoryRouter>
-        <CockpitPage
-          view={view([SUBMITTED_FRESH, SUBMITTED_OLD])}
-          filter="yet-to-publish"
-          role={CENTRAL_CPC}
-          now={NOW}
-        />
-      </MemoryRouter>,
-    );
-
-    const names = await screen.findAllByText(/aged systems|fresh labs/i);
-    expect(names[0]?.textContent).toMatch(/aged systems/i);
-  });
-
-  it("can switch to newest first (G1b)", async () => {
-    const user = userEvent.setup();
+  /**
+   * 2026-08-26 (Karthik): "change the default sort order to Newest First
+   * across all sections". A deliberate reversal of G1b's default - the queue
+   * may still be cleared from the back, but that is now a choice the reader
+   * makes rather than the order they are given.
+   */
+  it("orders the yet-to-publish queue newest first by default", async () => {
     render(
       <MemoryRouter>
         <CockpitPage
@@ -417,11 +406,51 @@ describe("drive aging on the queue (G1)", () => {
       </MemoryRouter>,
     );
 
+    const names = await screen.findAllByText(/aged systems|fresh labs/i);
+    expect(names[0]?.textContent).toMatch(/fresh labs/i);
+  });
+
+  it("can still be switched to oldest first, to clear a backlog (G1b)", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([SUBMITTED_FRESH, SUBMITTED_OLD])}
+          filter="yet-to-publish"
+          role={CENTRAL_CPC}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
     await screen.findByText("Aged Systems");
-    await user.selectOptions(screen.getByLabelText(/sort/i), "newest");
+    await user.selectOptions(screen.getByLabelText(/sort/i), "oldest");
 
     const names = screen.getAllByText(/aged systems|fresh labs/i);
-    expect(names[0]?.textContent).toMatch(/fresh labs/i);
+    expect(names[0]?.textContent).toMatch(/aged systems/i);
+  });
+
+  /** An undated drive cannot claim to be the newest either. It sinks. */
+  it("sinks an undated drive under the default order", async () => {
+    const UNDATED: DriveSummary = {
+      ...SUBMITTED_FRESH,
+      driveId: "d22",
+      companyName: "Undated Co",
+      createdAt: null,
+    };
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([UNDATED, SUBMITTED_OLD, SUBMITTED_FRESH])}
+          filter="yet-to-publish"
+          role={CENTRAL_CPC}
+          now={NOW}
+        />
+      </MemoryRouter>,
+    );
+
+    const names = await screen.findAllByText(/aged systems|fresh labs|undated co/i);
+    expect(names.at(-1)?.textContent).toMatch(/undated co/i);
   });
 
   /** G1d (answer 1a): a collapsed section on the same list — nothing destroyed. */
