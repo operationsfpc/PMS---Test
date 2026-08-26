@@ -4,6 +4,40 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-26 (3) — a declared offer says so, and closes the round row
+
+Live `7534343d-80da-492b-80d1-954fa8e56821`, `index-uJqJFAPT.js` byte-identical
+to `dist/` (sha256 `80005032…`). Suite **3738 tests / 192 files**, `pnpm check`
+exit 0. Commit `359b46f`. No migration. Spec:
+`docs/specs/2026-08-26-offer-declared-locks-the-round.md` (answers 1a/2a/3a/4a).
+
+From three screenshots (`… 17.27.04 / .12 / .19.jpeg`): a student with a declared
+offer still read **"Selected"** on Rounds & results, kept a live checkbox, and
+could be re-marked Selected / Rejected / On hold.
+
+**Why nothing caught it:** F1 locks a row when the student sits in a LATER
+round (`advancedBeyond`). The FINAL round has none — and that is exactly where
+offers are declared, so the one row that must never be re-decided was the one
+row nothing protected. The page had no knowledge of offers at all.
+
+- **`src/domain/round-outcome.ts`** — `describeParticipantOutcome` returns
+  `{ label, note, editable }`. The label and the lock are ONE decision;
+  precedence **offer > advanced > result**, the same order `applicationProgress`
+  uses. Sentence case is spelled out because the CSS `capitalize` it replaces
+  rendered "On Hold" / "Offer Declared".
+- **`ResultsPage`** takes `offered` beside `locked`; **`DriveRoundsView.offerHolders(driveId)`**
+  maps the drive's offers → its applications, scoped to THIS drive (a student
+  placed elsewhere has not been offered this job).
+- Students keep their own phrase, **"Offer received"** (answer 4a). Staff say
+  **"Offer declared"**, matching Final selection's "Declared" badge.
+
+⚠️ **Flagged to Karthik:** there is **no withdraw-an-offer path** in the app, so
+a declared offer now freezes that round's result permanently — only a database
+edit undoes a mistaken declaration. Consistent with the offer being the
+placement record (R9); an undo would be its own spec.
+
+---
+
 ## ✅ SHIPPED 2026-08-26 (2) — sort control on Live drives, newest first everywhere
 
 Live `3bab3443-aeb1-4e66-b01b-014f1190ab8f`, `index-S95wx0ia.js` byte-identical
