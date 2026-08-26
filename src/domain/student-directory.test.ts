@@ -34,6 +34,7 @@ const PLACED: DirectoryStudent = {
   srfStatus: "srf_approved",
   participationStatus: "active",
   applications: 3,
+  hasSelfPlacement: false,
   placement: {
     companyName: "Zoho Corporation",
     roleTitle: "Member Technical Staff",
@@ -54,6 +55,7 @@ const UNPLACED: DirectoryStudent = {
   srfStatus: "srf_submitted",
   participationStatus: "active",
   applications: 1,
+  hasSelfPlacement: false,
   placement: null,
 };
 
@@ -152,5 +154,162 @@ describe("summariseDirectory", () => {
   it("splits the roster exactly", () => {
     const summary = summariseDirectory(ALL);
     expect(summary.placed + summary.notPlaced).toBe(summary.total);
+  });
+});
+
+/**
+ * 2026-08-26 (answer 3): the overview's "Placed on campus" counts
+ * `hasOnCampusPlacement` — self-placed excluded, PRD §16.2 — while `placed`
+ * here counts any placement record, self-placed INCLUDED (C1, deliberate).
+ * The card linked to `placed` and therefore opened a longer list than the
+ * number it was printed on. These two filters are the exact populations.
+ */
+const SELF_PLACED: DirectoryStudent = {
+  ...UNPLACED,
+  studentId: "s5",
+  fullName: "Thanush Krishna",
+  campusName: "Alliance University",
+  hasSelfPlacement: true,
+  placement: {
+    companyName: "Freshworks",
+    roleTitle: null,
+    ctcLpa: 4.8,
+    offerCategory: "regular",
+    source: "self_placed",
+  },
+};
+
+/** Holds BOTH. The on-campus record is displayed; the self-placed one is still a fact. */
+const BOTH: DirectoryStudent = {
+  ...PLACED,
+  studentId: "s6",
+  fullName: "Divya Ramesh",
+  hasSelfPlacement: true,
+};
+
+const WIDER = [PLACED, UNPLACED, OPTED_OUT, SELF_PLACED, BOTH];
+
+describe("filterDirectory — the overview's populations", () => {
+  it.each([
+    ["on_campus", ["Anjali Subramanian", "Divya Ramesh"]],
+    ["self_placed", ["Thanush Krishna", "Divya Ramesh"]],
+    ["placed", ["Anjali Subramanian", "Thanush Krishna", "Divya Ramesh"]],
+  ] as [DirectoryFilter, string[]][])(
+    "filter %s returns exactly that population",
+    (filter, expected) => {
+      expect(names(filterDirectory(WIDER, { filter, query: "" }))).toEqual(expected);
+    },
+  );
+
+  /**
+   * A student holding both offers is counted by the Self-placed card, so they
+   * must appear in the list that card opens — displaying their on-campus
+   * record does not undo the self-placed one.
+   */
+  it("does not lose a doubly-placed student from the self-placed list", () => {
+    expect(names(filterDirectory([BOTH], { filter: "self_placed", query: "" }))).toEqual([
+      "Divya Ramesh",
+    ]);
+  });
+
+  /** The funnel rows, filtered by the funnel's own predicates. */
+  it.each([
+    [
+      "submitted",
+      ["Anjali Subramanian", "Rahul Nair", "Meera Iyer", "Thanush Krishna", "Divya Ramesh"],
+    ],
+    // Rahul has applied to one drive, which is why he is verified whatever
+    // his status column says. That is the funnel's rule, not an accident.
+    ["verified", ["Anjali Subramanian", "Rahul Nair", "Thanush Krishna", "Divya Ramesh"]],
+  ] as [DirectoryFilter, string[]][])("filter %s matches the funnel row", (filter, expected) => {
+    expect(names(filterDirectory(WIDER, { filter, query: "" }))).toEqual(expected);
+  });
+
+  it("counts an application as evidence of verification, as the funnel does", () => {
+    const applied = {
+      ...UNPLACED,
+      studentId: "s7",
+      fullName: "Kavya Raj",
+      srfStatus: "registered" as const,
+      applications: 2,
+    };
+    expect(names(filterDirectory([applied], { filter: "verified", query: "" }))).toEqual([
+      "Kavya Raj",
+    ]);
+  });
+
+  it("does not count a student who has applied to nothing and been approved by nobody", () => {
+    const idle = {
+      ...UNPLACED,
+      studentId: "s8",
+      fullName: "Idle Student",
+      srfStatus: "registered" as const,
+      applications: 0,
+    };
+    expect(filterDirectory([idle], { filter: "verified", query: "" })).toEqual([]);
+    expect(filterDirectory([idle], { filter: "submitted", query: "" })).toEqual([]);
+  });
+});
+
+describe("filterDirectory — campus, package and category", () => {
+  it("narrows to one campus, by name", () => {
+    expect(
+      names(filterDirectory(WIDER, { filter: "all", query: "", campus: "Alliance University" })),
+    ).toEqual(["Thanush Krishna"]);
+  });
+
+  it("does not care about the case or padding of a campus name", () => {
+    expect(
+      names(filterDirectory(WIDER, { filter: "all", query: "", campus: "  alliance university " })),
+    ).toEqual(["Thanush Krishna"]);
+  });
+
+  it("returns nothing for a campus nobody is on", () => {
+    expect(filterDirectory(WIDER, { filter: "all", query: "", campus: "Nowhere College" })).toEqual(
+      [],
+    );
+  });
+
+  /** CLAUDE.md: money is never compared with `===`. */
+  it("narrows to the students holding exactly one package figure", () => {
+    expect(names(filterDirectory(WIDER, { filter: "placed", query: "", ctc: 6.5 }))).toEqual([
+      "Anjali Subramanian",
+      "Divya Ramesh",
+    ]);
+  });
+
+  it("matches a package figure a float has mangled", () => {
+    expect(names(filterDirectory(WIDER, { filter: "placed", query: "", ctc: 2.4 * 2 }))).toEqual([
+      "Thanush Krishna",
+    ]);
+  });
+
+  it("never matches an unplaced student on a package", () => {
+    expect(filterDirectory([UNPLACED], { filter: "all", query: "", ctc: 6.5 })).toEqual([]);
+  });
+
+  it("narrows to an offer category", () => {
+    expect(
+      names(filterDirectory(WIDER, { filter: "all", query: "", category: "regular" })),
+    ).toEqual(["Thanush Krishna"]);
+  });
+
+  /** Every dimension composes; none of them silently widens another. */
+  it("composes filter, campus, package, category and query", () => {
+    expect(
+      names(
+        filterDirectory(WIDER, {
+          filter: "on_campus",
+          query: "anjali",
+          campus: "SDNB Vaishnav College",
+          ctc: 6.5,
+          category: "dream",
+        }),
+      ),
+    ).toEqual(["Anjali Subramanian"]);
+
+    expect(
+      filterDirectory(WIDER, { filter: "on_campus", query: "", campus: "Alliance University" }),
+    ).toEqual([]);
   });
 });

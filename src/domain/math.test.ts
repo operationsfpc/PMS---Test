@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { percentOf, roundMoney, roundPercent, roundTo } from "./math";
+import { percentOf, roundMoney, roundPercent, roundTo, sameMoney } from "./math";
 
 /**
  * Numeric helpers for money and marks (CLAUDE.md).
@@ -66,5 +66,35 @@ describe("percentOf", () => {
   it("can exceed nothing and reach a hundred", () => {
     expect(percentOf(4, 4)).toBe(100);
     expect(percentOf(0, 4)).toBe(0);
+  });
+});
+
+/**
+ * CLAUDE.md: never compare money with floating-point equality.
+ *
+ * Added 2026-08-26 for the package figures on the placement overview, which
+ * link to "the students holding exactly this CTC". `6.5 === 6.5` happens to
+ * hold; `0.1 + 0.2 === 0.3` does not, and the difference between the two is
+ * invisible in the data that produced them.
+ */
+describe("sameMoney", () => {
+  it("is true for figures that are equal to the paisa", () => {
+    expect(sameMoney(6.5, 6.5)).toBe(true);
+    expect(sameMoney(12, 12.0)).toBe(true);
+  });
+
+  it("is true for figures a float has quietly mangled", () => {
+    expect(sameMoney(0.1 + 0.2, 0.3)).toBe(true);
+    expect(sameMoney(4.8 * 3, 14.4)).toBe(true);
+  });
+
+  it("is false for figures that genuinely differ", () => {
+    expect(sameMoney(6.5, 6.51)).toBe(false);
+    expect(sameMoney(4.8, 5)).toBe(false);
+  });
+
+  /** A tolerance wide enough to swallow a real difference is not a tolerance. */
+  it("does not swallow a paisa", () => {
+    expect(sameMoney(6.5, 6.505)).toBe(false);
   });
 });

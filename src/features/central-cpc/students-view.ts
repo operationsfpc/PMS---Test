@@ -124,9 +124,10 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
 
       return rows.map((row): DirectoryStudent => {
         const studentId = row.id as string;
+        const offers = offersByStudent.get(studentId) ?? [];
         // C1: the DISPLAYED placement, which a self-placed offer satisfies —
         // not R9's reported record, which excludes them by design.
-        const record = resolveDisplayedPlacement(offersByStudent.get(studentId) ?? []);
+        const record = resolveDisplayedPlacement(offers);
         const drive = record === null ? undefined : drives.get(record.driveId);
         const named = record === null ? undefined : offerNames.get(record.id);
 
@@ -141,6 +142,11 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
           srfStatus: row.srf_status as SrfStatus,
           participationStatus: row.participation_status as ParticipationStatus,
           applications: applicationCounts.get(studentId) ?? 0,
+          // Its own fact, not read off the displayed row: an on-campus record
+          // wins the display (C1), and the Self-placed card on the overview
+          // still counts this student. Reading the source of `placement`
+          // instead would lose them from the list that card opens.
+          hasSelfPlacement: offers.some((o) => o.source === "self_placed"),
           placement:
             record === null
               ? null

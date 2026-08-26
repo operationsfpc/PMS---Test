@@ -1,6 +1,6 @@
 import { Badge, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
-import { offerCategoryLabel } from "@domain/offer-category";
+import { OFFER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import {
   type DirectoryFilter,
   type DirectoryStudent,
@@ -42,9 +42,22 @@ const SRF_TONE: Record<SrfStatus, "neutral" | "brand" | "warning" | "success" | 
   srf_rejected: "danger",
 };
 
+/**
+ * 2026-08-26: one chip per population the placement overview can send here,
+ * so a filter that arrives in the URL is always visible and always reversible.
+ *
+ * "Placed" and "Placed on campus" are deliberately both here and are NOT the
+ * same list: "Placed" answers the coordinator's question - does this student
+ * have a job - and includes self-placed students (C1); "Placed on campus" is
+ * the figure PRD §16.2 reports and the overview prints.
+ */
 const FILTERS: readonly { readonly value: DirectoryFilter; readonly label: string }[] = [
   { value: "all", label: "All students" },
+  { value: "submitted", label: "Form submitted" },
+  { value: "verified", label: "Verified" },
   { value: "placed", label: "Placed" },
+  { value: "on_campus", label: "Placed on campus" },
+  { value: "self_placed", label: "Self-placed" },
   { value: "not_placed", label: "Not placed" },
   { value: "opted_out", label: "Opted out" },
 ];
@@ -79,6 +92,16 @@ function browserDownload(filename: string, text: string): void {
 const isFilter = (value: string | null): value is DirectoryFilter =>
   FILTERS.some((f) => f.value === value);
 
+const isCategory = (value: string | null): value is OfferCategory =>
+  OFFER_CATEGORIES.some((c) => c === value);
+
+/** A package figure from the URL. Nonsense is ignored, never shown as an empty list. */
+function parseCtc(value: string | null): number | undefined {
+  if (value === null || value.trim() === "") return undefined;
+  const figure = Number(value);
+  return Number.isFinite(figure) ? figure : undefined;
+}
+
 export function StudentDirectoryPage({
   view,
   download = browserDownload,
@@ -95,6 +118,26 @@ export function StudentDirectoryPage({
   // breakdown, and so a coordinator can send someone the exact view they mean.
   const filterParam = params.get("filter");
   const filter: DirectoryFilter = isFilter(filterParam) ? filterParam : "all";
+
+  /**
+   * The three drill-downs the placement overview can arrive with. All in the
+   * URL for the same reason as the filter, and all ignored when they are
+   * nonsense - a mistyped parameter must not empty the screen.
+   */
+  const campus = params.get("campus") ?? "";
+  const ctc = parseCtc(params.get("ctc"));
+  const categoryParam = params.get("category");
+  const category = isCategory(categoryParam) ? categoryParam : undefined;
+
+  /** Changing one dimension must never silently drop the others. */
+  const update = (next: Readonly<Record<string, string | undefined>>) => {
+    const merged = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(next)) {
+      if (value === undefined || value === "") merged.delete(key);
+      else merged.set(key, value);
+    }
+    setParams(merged, { replace: true });
+  };
 
   useEffect(() => {
     let live = true;
@@ -115,8 +158,15 @@ export function StudentDirectoryPage({
 
   const summary = useMemo(() => summariseDirectory(students ?? []), [students]);
   const visible = useMemo(
-    () => filterDirectory(students ?? [], { filter, query }),
-    [students, filter, query],
+    () => filterDirectory(students ?? [], { filter, query, campus, ctc, category }),
+    [students, filter, query, campus, ctc, category],
+  );
+
+  /** Every campus actually present in the rows, so the list cannot offer an empty one. */
+  const campuses = useMemo(
+    () =>
+      [...new Set((students ?? []).map((s) => s.campusName))].sort((a, b) => a.localeCompare(b)),
+    [students],
   );
 
   function exportCsv() {
@@ -208,9 +258,7 @@ export function StudentDirectoryPage({
                       className="sr-only"
                       checked={filter === option.value}
                       onChange={() =>
-                        setParams(option.value === "all" ? {} : { filter: option.value }, {
-                          replace: true,
-                        })
+                        update({ filter: option.value === "all" ? undefined : option.value })
                       }
                     />
                     {option.label}
@@ -218,6 +266,24 @@ export function StudentDirectoryPage({
                 ))}
               </div>
             </fieldset>
+
+            {/* F4 carried through (2026-08-26): a card pressed on one campus
+                lands here on that campus, and says so. */}
+            {campuses.length > 1 && (
+              <select
+                aria-label="Campus"
+                value={campus}
+                onChange={(e) => update({ campus: e.target.value })}
+                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-900"
+              >
+                <option value="">All campuses</option>
+                {campuses.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <input
               type="search"
@@ -229,6 +295,37 @@ export function StudentDirectoryPage({
             />
           </div>
 
+          {/*
+           * The package and category drill-downs. They are not permanent
+           * filters, so they are not chips - they are what the reader pressed
+           * on the overview, said out loud, with the way back attached. A
+           * narrowing the reader cannot see reads as a list that lost people.
+           */}
+          {(ctc !== undefined || category !== undefined) && (
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {ctc !== undefined && (
+                <button
+                  type="button"
+                  aria-label={`Clear the package filter, ₹${ctc} LPA`}
+                  onClick={() => update({ ctc: undefined })}
+                  className="rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500"
+                >
+                  Package ₹{ctc} LPA ✕
+                </button>
+              )}
+              {category !== undefined && (
+                <button
+                  type="button"
+                  aria-label={`Clear the category filter, ${offerCategoryLabel(category)}`}
+                  onClick={() => update({ category: undefined })}
+                  className="rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500"
+                >
+                  {offerCategoryLabel(category)} ✕
+                </button>
+              )}
+            </div>
+          )}
+
           {/* G7 (UAT 2026-08-20): the counts are controls, not prose — each
               applies the filter behind its number. */}
           <p className="mb-3 text-sm text-ink-500">
@@ -236,7 +333,7 @@ export function StudentDirectoryPage({
             {summary.total} ·{" "}
             <button
               type="button"
-              onClick={() => setParams({ filter: "placed" }, { replace: true })}
+              onClick={() => update({ filter: "placed" })}
               className="font-medium text-brand-600 hover:underline"
             >
               {summary.placed} placed
@@ -244,7 +341,7 @@ export function StudentDirectoryPage({
             ·{" "}
             <button
               type="button"
-              onClick={() => setParams({ filter: "not_placed" }, { replace: true })}
+              onClick={() => update({ filter: "not_placed" })}
               className="font-medium text-brand-600 hover:underline"
             >
               {summary.notPlaced} not placed

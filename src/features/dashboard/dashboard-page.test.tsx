@@ -557,29 +557,167 @@ describe("the drive-specific box", () => {
  * already filtered to the placed — the same list, counted the same way, so the
  * figure and the rows behind it cannot disagree.
  */
-describe("the placed count opens the breakdown", () => {
-  it("makes the Placed stage a link to the placed students", async () => {
+describe("every card opens the students behind it", () => {
+  /**
+   * 2026-08-26 (Karthik): "make the cards in Placement Overview clickable to
+   * show student info, just like in Live Drives."
+   *
+   * The Live-drives pattern is that every number opens exactly the people it
+   * counted. Here that also fixed a mismatch: the Placed link pointed at
+   * `filter=placed`, which includes self-placed students (C1), while the card
+   * above it counts on-campus placements only (PRD 16.2). The list was longer
+   * than the number that opened it.
+   */
+  const headline = async (name: RegExp) =>
+    within(await screen.findByRole("region", { name: /headline/i })).getByRole("link", { name });
+
+  it.each([
+    [/placement rate/i, "/central/students?filter=on_campus"],
+    [/placed on campus/i, "/central/students?filter=on_campus"],
+    [/self-placed/i, "/central/students?filter=self_placed"],
+    [/opted out/i, "/central/students?filter=opted_out"],
+    [/drives completed/i, "/central/drives/completed"],
+  ])("links the %s card", async (name, href) => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    const link = await screen.findByRole("link", { name: /placed/i });
-    expect(link.getAttribute("href")).toBe("/central/students?filter=placed");
+    expect((await headline(name)).getAttribute("href")).toBe(href);
   });
 
-  it("still shows the count itself inside the link", async () => {
+  it("keeps the number itself inside every headline link", async () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    const link = await screen.findByRole("link", { name: /placed/i });
-    // SNAPSHOT has one placed student; the link must carry the number, not
-    // replace it with the word "Placed".
-    expect(link.textContent).toMatch(/\d/);
+    expect((await headline(/placed on campus/i)).textContent).toMatch(/\d/);
   });
 
-  /** The other funnel stages have no breakdown to open, so they stay plain. */
-  it("leaves the stages that have no breakdown as plain rows", async () => {
+  it.each([
+    [/on the roster/i, "/central/students"],
+    [/registration form submitted/i, "/central/students?filter=submitted"],
+    [/verified by a coordinator/i, "/central/students?filter=verified"],
+    [/placed/i, "/central/students?filter=on_campus"],
+  ])("links the %s funnel row to the same population it counted", async (name, href) => {
     render(<DashboardPage view={view()} title="Placement overview" />);
-    await screen.findByText(/on the roster/i);
 
-    expect(screen.queryByRole("link", { name: /on the roster/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /registration form submitted/i })).toBeNull();
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
+    expect(within(funnel).getByRole("link", { name }).getAttribute("href")).toBe(href);
+  });
+
+  it("opens the campus behind each row of the campus breakdown", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await screen.findByRole("region", { name: /by campus/i });
+    expect(
+      within(section)
+        .getByRole("link", { name: /alliance university/i })
+        .getAttribute("href"),
+    ).toBe("/central/students?campus=Alliance+University");
+  });
+
+  it("opens the students placed in each offer category", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await screen.findByRole("region", { name: /offers by category/i });
+    expect(
+      within(section)
+        .getByRole("link", { name: /super dream/i })
+        .getAttribute("href"),
+    ).toBe("/central/students?filter=placed&category=super_dream");
+  });
+
+  it("opens the students placed in each category of the package breakdown", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const list = await screen.findByRole("list", { name: /package by category/i });
+    expect(within(list).getByRole("link", { name: /dream/i }).getAttribute("href")).toBe(
+      "/central/students?filter=placed&category=dream",
+    );
+  });
+
+  /**
+   * F4: a card clicked while one campus is selected must open THAT campus.
+   * Landing on the whole organisation would answer a question nobody asked and
+   * quietly contradict the number that was pressed.
+   */
+  it("carries the selected campus into every students link", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await userEvent.selectOptions(await screen.findByLabelText("Campus"), "c1");
+
+    expect((await headline(/placed on campus/i)).getAttribute("href")).toBe(
+      "/central/students?filter=on_campus&campus=Alliance+University",
+    );
+
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
+    expect(
+      within(funnel)
+        .getByRole("link", { name: /on the roster/i })
+        .getAttribute("href"),
+    ).toBe("/central/students?campus=Alliance+University");
+  });
+
+  it("leaves the drives-completed card alone when a campus is selected", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await userEvent.selectOptions(await screen.findByLabelText("Campus"), "c1");
+
+    // A drive is not a student and the drive list has no campus filter.
+    expect((await headline(/drives completed/i)).getAttribute("href")).toBe(
+      "/central/drives/completed",
+    );
+  });
+});
+
+/**
+ * The package figures. A link that lands on an empty list teaches the reader
+ * that none of these are worth pressing, so a figure opens `ctc=` only when
+ * some placed student actually holds it - the median of an even-sized cohort
+ * is the midpoint of two packages and frequently belongs to nobody.
+ */
+describe("the package figures", () => {
+  const TWO: DashboardSnapshot = {
+    ...SNAPSHOT,
+    placements: [
+      { studentId: "a", ctcLpa: 9, category: "dream" },
+      { studentId: "b", ctcLpa: 4, category: "regular" },
+    ],
+  };
+
+  const figure = async (name: RegExp) =>
+    within(await screen.findByRole("region", { name: /package figures/i })).getByRole("link", {
+      name,
+    });
+
+  it("opens the students holding the highest and the lowest package", async () => {
+    render(<DashboardPage view={view(TWO)} title="Placement overview" />);
+
+    expect((await figure(/highest/i)).getAttribute("href")).toBe(
+      "/central/students?filter=placed&ctc=9",
+    );
+    expect((await figure(/lowest/i)).getAttribute("href")).toBe(
+      "/central/students?filter=placed&ctc=4",
+    );
+  });
+
+  it("opens the whole placed list for a figure no student holds", async () => {
+    render(<DashboardPage view={view(TWO)} title="Placement overview" />);
+
+    // Average and median are both 6.5 here, and nobody earns 6.5.
+    expect((await figure(/average/i)).getAttribute("href")).toBe("/central/students?filter=placed");
+    expect((await figure(/median/i)).getAttribute("href")).toBe("/central/students?filter=placed");
+  });
+
+  it("opens the holder of a median that is a real package", async () => {
+    const three: DashboardSnapshot = {
+      ...SNAPSHOT,
+      placements: [
+        { studentId: "a", ctcLpa: 9, category: "dream" },
+        { studentId: "b", ctcLpa: 6.5, category: "dream" },
+        { studentId: "c", ctcLpa: 4, category: "regular" },
+      ],
+    };
+    render(<DashboardPage view={view(three)} title="Placement overview" />);
+
+    expect((await figure(/median/i)).getAttribute("href")).toBe(
+      "/central/students?filter=placed&ctc=6.5",
+    );
   });
 });

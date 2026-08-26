@@ -29,6 +29,22 @@ export function roundMoney(value: number): number {
   return roundTo(value, 2);
 }
 
+/**
+ * Two money figures that mean the same amount.
+ *
+ * CLAUDE.md forbids `===` on money, and this is where that rule is kept. The
+ * comparison is made at the precision money is PUBLISHED at, rather than
+ * against an epsilon: an epsilon is itself a float, so `6.505 - 6.5 < 0.005`
+ * is true, and the guard against representation error would have been written
+ * in the same representation error.
+ *
+ * Added 2026-08-26: the package figures on the placement overview link to the
+ * students holding exactly that CTC.
+ */
+export function sameMoney(a: number, b: number): boolean {
+  return roundMoney(a) === roundMoney(b);
+}
+
 /** A percentage, as published: one decimal place. */
 export function roundPercent(value: number): number {
   return roundTo(value, 1);

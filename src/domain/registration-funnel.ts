@@ -30,6 +30,31 @@ export interface FunnelStage {
 const SUBMITTED: readonly SrfStatus[] = ["srf_submitted", "srf_approved", "srf_rejected"];
 
 /**
+ * The facts a stage is judged on. Narrower than `FunnelStudent`, because the
+ * student directory holds these three and not a participation status.
+ */
+export interface FunnelEvidence {
+  readonly srfStatus: SrfStatus;
+  readonly hasApplied: boolean;
+  readonly hasOnCampusPlacement: boolean;
+}
+
+/**
+ * The two middle stages, as predicates.
+ *
+ * Exported 2026-08-26 so the student directory can filter to exactly the
+ * population a funnel row counted. Applying and being placed are EVIDENCE: a
+ * student who applied was necessarily verified, whatever their status column
+ * now says, and a second copy of that reasoning in the directory would drift
+ * until the list disagreed with the number that opened it.
+ */
+export const countsAsSubmitted = (student: FunnelEvidence): boolean =>
+  SUBMITTED.includes(student.srfStatus) || student.hasApplied || student.hasOnCampusPlacement;
+
+export const countsAsVerified = (student: FunnelEvidence): boolean =>
+  student.srfStatus === "srf_approved" || student.hasApplied || student.hasOnCampusPlacement;
+
+/**
  * The funnel, widest first.
  *
  * Stages are computed CUMULATIVELY, so each one is a superset of the next: a
@@ -56,13 +81,9 @@ export function registrationFunnel(students: readonly FunnelStudent[]): readonly
 
   // Applying is no longer reported, but it is still EVIDENCE: a student who
   // applied was necessarily verified, whatever their status column now says.
-  const verified = students.filter(
-    (s) => s.srfStatus === "srf_approved" || s.hasApplied || s.hasOnCampusPlacement,
-  ).length;
+  const verified = students.filter(countsAsVerified).length;
 
-  const submitted = students.filter(
-    (s) => SUBMITTED.includes(s.srfStatus) || s.hasApplied || s.hasOnCampusPlacement,
-  ).length;
+  const submitted = students.filter(countsAsSubmitted).length;
 
   const stages: readonly Omit<FunnelStage, "percentOfRoster">[] = [
     { key: "on_roster", label: "On the roster", count: roster },

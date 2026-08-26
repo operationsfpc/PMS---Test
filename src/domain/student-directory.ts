@@ -15,7 +15,9 @@
  * one that counts.
  */
 
+import { sameMoney } from "./math";
 import type { OfferCategory } from "./offer-category";
+import { countsAsSubmitted, countsAsVerified } from "./registration-funnel";
 import type { OfferSource, ParticipationStatus, SrfStatus } from "./types";
 
 /** The one offer reported as this student's placement, flattened for display. */
@@ -46,13 +48,46 @@ export interface DirectoryStudent {
   readonly applications: number;
   /** Null when they hold no placement record. */
   readonly placement: DirectoryPlacement | null;
+  /**
+   * Holds a self-placed offer — whether or not it is the one displayed.
+   *
+   * 2026-08-26: the overview's Self-placed card counts every student with such
+   * an offer, while `placement` shows the on-campus record when both exist
+   * (C1). Without this fact, a doubly-placed student would be missing from the
+   * list their own card opened.
+   */
+  readonly hasSelfPlacement: boolean;
 }
 
-export type DirectoryFilter = "all" | "placed" | "not_placed" | "opted_out";
+/**
+ * 2026-08-26: `on_campus`, `self_placed`, `submitted` and `verified` were
+ * added so every card on the placement overview can open exactly the students
+ * it counted.
+ *
+ * `placed` keeps its C1 meaning — any placement record, self-placed included —
+ * because that is the question a coordinator asks of a directory. `on_campus`
+ * is the REPORTED statistic (PRD §16.2), and the two are deliberately
+ * different populations rather than one blurred one.
+ */
+export type DirectoryFilter =
+  | "all"
+  | "placed"
+  | "on_campus"
+  | "self_placed"
+  | "not_placed"
+  | "opted_out"
+  | "submitted"
+  | "verified";
 
 export interface DirectoryQuery {
   readonly filter: DirectoryFilter;
   readonly query: string;
+  /** Exact campus name, case-insensitive. Carried from the overview's switcher. */
+  readonly campus?: string | undefined;
+  /** A package figure to drill into. Compared with `sameMoney`, never `===`. */
+  readonly ctc?: number | undefined;
+  /** The placement's offer category. */
+  readonly category?: OfferCategory | undefined;
 }
 
 export interface DirectorySummary {
@@ -70,6 +105,44 @@ export interface DirectorySummary {
  * silently disappears from a report.
  */
 const isPlaced = (student: DirectoryStudent): boolean => student.placement !== null;
+
+/**
+ * Placed ON CAMPUS — the figure PRD §16.2 reports and the overview's card.
+ *
+ * An on-campus record always wins the display when both exist
+ * (`resolveDisplayedPlacement`), so reading the displayed source is the same
+ * population as `hasOnCampusPlacement`, and not a second definition of it.
+ */
+const isPlacedOnCampus = (student: DirectoryStudent): boolean =>
+  student.placement?.source === "on_campus";
+
+/** The evidence the funnel's middle stages are judged on. */
+const evidence = (student: DirectoryStudent) => ({
+  srfStatus: student.srfStatus,
+  hasApplied: student.applications > 0,
+  hasOnCampusPlacement: isPlacedOnCampus(student),
+});
+
+const matchesFilter = (student: DirectoryStudent, filter: DirectoryFilter): boolean => {
+  switch (filter) {
+    case "all":
+      return true;
+    case "placed":
+      return isPlaced(student);
+    case "on_campus":
+      return isPlacedOnCampus(student);
+    case "self_placed":
+      return student.hasSelfPlacement;
+    case "not_placed":
+      return !isPlaced(student);
+    case "opted_out":
+      return student.participationStatus === "opted_out";
+    case "submitted":
+      return countsAsSubmitted(evidence(student));
+    case "verified":
+      return countsAsVerified(evidence(student));
+  }
+};
 
 /** Everything a coordinator might reasonably type into one box. */
 function haystack(student: DirectoryStudent): string {
@@ -96,18 +169,28 @@ function haystack(student: DirectoryStudent): string {
  */
 export function filterDirectory(
   students: readonly DirectoryStudent[],
-  { filter, query }: DirectoryQuery,
+  { filter, query, campus, ctc, category }: DirectoryQuery,
 ): readonly DirectoryStudent[] {
   const needle = query.trim().toLowerCase();
+  const campusName = campus?.trim().toLowerCase();
 
   return students.filter((student) => {
-    const passesFilter =
-      filter === "all" ||
-      (filter === "placed" && isPlaced(student)) ||
-      (filter === "not_placed" && !isPlaced(student)) ||
-      (filter === "opted_out" && student.participationStatus === "opted_out");
+    if (!matchesFilter(student, filter)) return false;
 
-    if (!passesFilter) return false;
+    if (campusName !== undefined && campusName !== "") {
+      if (student.campusName.trim().toLowerCase() !== campusName) return false;
+    }
+
+    // An unplaced student holds no package and no category, so a drill-down
+    // into either excludes them - never matches them on a missing value.
+    if (ctc !== undefined) {
+      if (student.placement === null || !sameMoney(student.placement.ctcLpa, ctc)) return false;
+    }
+
+    if (category !== undefined) {
+      if (student.placement?.offerCategory !== category) return false;
+    }
+
     return needle === "" || haystack(student).includes(needle);
   });
 }

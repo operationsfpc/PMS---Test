@@ -2,8 +2,11 @@ import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
 import { type DriveParticipation, driveFunnel } from "@domain/drive-funnel";
+import { sameMoney } from "@domain/math";
+import type { OfferCategory } from "@domain/offer-category";
 import { registrationFunnel } from "@domain/registration-funnel";
 import { computePlacementStats, type StudentPlacementFacts } from "@domain/statistics";
+import type { DirectoryFilter } from "@domain/student-directory";
 import type { SrfStatus } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -88,6 +91,17 @@ const lpa = (value: number | null) => (value === null ? "—" : `₹${value} LPA
 const rate = (placed: number, eligible: number) =>
   eligible === 0 ? 0 : Math.round((placed / eligible) * 1000) / 10;
 
+/** Which funnel row opens which population. The row's own count, exactly. */
+const FUNNEL_FILTER: Readonly<Record<string, DirectoryFilter | undefined>> = {
+  on_roster: undefined,
+  submitted: "submitted",
+  verified: "verified",
+  // NOT `placed`: that filter includes self-placed students (C1) and this row
+  // counts on-campus placements only (PRD 16.2). The link used to open a
+  // longer list than the number that opened it.
+  placed: "on_campus",
+};
+
 /**
  * The read-only executive view (A20).
  *
@@ -160,6 +174,51 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     [snapshot],
   );
 
+  /**
+   * Every number on this page opens the students behind it (2026-08-26,
+   * copying the Live-drives cards). Built in one place so the campus in view
+   * is carried EVERY time: a card pressed while one campus is selected must
+   * not open the whole organisation, which would contradict the figure that
+   * was pressed.
+   */
+  function studentsLink(
+    to: {
+      filter?: DirectoryFilter | undefined;
+      category?: OfferCategory | undefined;
+      ctc?: number | undefined;
+      /** Overrides the switcher — the campus breakdown links to its own row. */
+      campus?: string | undefined;
+    } = {},
+  ): string {
+    const search = new URLSearchParams();
+    if (to.filter !== undefined) search.set("filter", to.filter);
+
+    const campus = to.campus ?? (campusId === "" ? undefined : campusName);
+    if (campus !== undefined) search.set("campus", campus);
+
+    if (to.category !== undefined) search.set("category", to.category);
+    if (to.ctc !== undefined) search.set("ctc", String(to.ctc));
+
+    const query = search.toString();
+    return query === "" ? "/central/students" : `/central/students?${query}`;
+  }
+
+  /**
+   * A package figure opens its holders — but only when somebody holds it.
+   *
+   * The median of an even-sized cohort is the midpoint of two packages and the
+   * average is nobody's salary, so linking those to `ctc=` would land the
+   * reader on an empty list and teach them that these numbers are not worth
+   * pressing. They open the placed list instead.
+   */
+  function packageLink(figure: number | null): string {
+    if (figure === null) return studentsLink({ filter: "placed" });
+    const held = (snapshot?.placements ?? []).some((p) => sameMoney(p.ctcLpa, figure));
+    return held
+      ? studentsLink({ filter: "placed", ctc: figure })
+      : studentsLink({ filter: "placed" });
+  }
+
   if (snapshot === null) {
     return (
       <div>
@@ -208,22 +267,36 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
         </Card>
       ) : (
         <>
+          {/* 2026-08-26: every card opens the students it counted, exactly as
+              the Live-drives cards open their applicants. */}
           <section aria-label="Headline" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard label="Placement rate" value={`${stats.placementRate}%`} tone="brand" />
-            <StatCard
-              label="Placed on campus"
-              value={stats.placed}
-              hint={`of ${stats.eligible} eligible`}
-            />
-            <StatCard label="Self-placed" value={stats.selfPlaced} tone="warning" />
+            <Link to={studentsLink({ filter: "on_campus" })} className="block">
+              <StatCard label="Placement rate" value={`${stats.placementRate}%`} tone="brand" />
+            </Link>
+            <Link to={studentsLink({ filter: "on_campus" })} className="block">
+              <StatCard
+                label="Placed on campus"
+                value={stats.placed}
+                hint={`of ${stats.eligible} eligible`}
+              />
+            </Link>
+            <Link to={studentsLink({ filter: "self_placed" })} className="block">
+              <StatCard label="Self-placed" value={stats.selfPlaced} tone="warning" />
+            </Link>
             {/* Opt-outs leave the placement denominator, so the number they
                 leave by is reported rather than quietly absorbed. */}
-            <StatCard label="Opted out" value={stats.optedOut} />
-            <StatCard
-              label="Drives completed"
-              value={snapshot.drivesByStatus.completed ?? 0}
-              hint={`${snapshot.liveDrives.length} open now`}
-            />
+            <Link to={studentsLink({ filter: "opted_out" })} className="block">
+              <StatCard label="Opted out" value={stats.optedOut} />
+            </Link>
+            {/* The one card that is not about students, so it opens the drives
+                instead - and the campus switcher does not apply to it. */}
+            <Link to="/central/drives/completed" className="block">
+              <StatCard
+                label="Drives completed"
+                value={snapshot.drivesByStatus.completed ?? 0}
+                hint={`${snapshot.liveDrives.length} open now`}
+              />
+            </Link>
           </section>
 
           <div className="mb-6 grid gap-6 lg:grid-cols-2">
@@ -239,9 +312,9 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                   {funnel.map((stage) => {
                     /*
                      * 2026-08-17: the Placed count opens the students behind
-                     * it. Only this stage — the others have no breakdown to
-                     * open, and a link that went nowhere useful would teach
-                     * the reader that none of them are worth pressing.
+                     * it. 2026-08-26: so does every other stage - the student
+                     * directory can now filter to each of these populations,
+                     * so "no breakdown to open" stopped being true.
                      */
                     const row = (
                       <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -255,16 +328,12 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
 
                     return (
                       <li key={stage.key}>
-                        {stage.key === "placed" ? (
-                          <Link
-                            to="/central/students?filter=placed"
-                            className="block rounded-lg transition-colors hover:bg-brand-50"
-                          >
-                            {row}
-                          </Link>
-                        ) : (
-                          row
-                        )}
+                        <Link
+                          to={studentsLink({ filter: FUNNEL_FILTER[stage.key] })}
+                          className="block rounded-lg transition-colors hover:bg-brand-50"
+                        >
+                          {row}
+                        </Link>
                         {/* The bar is the point: a stage that drops off a cliff
                           is visible before the numbers are read. */}
                         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
@@ -301,14 +370,18 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                           ["Median", packages.medianLpa],
                           ["Lowest", packages.lowestLpa],
                         ].map(([name, value]) => (
-                          <div key={name as string} className="rounded-lg bg-surface-muted p-3">
+                          <Link
+                            key={name as string}
+                            to={packageLink(value as number | null)}
+                            className="block rounded-lg bg-surface-muted p-3 transition-colors hover:bg-brand-50"
+                          >
                             <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
                               {name}
                             </dt>
                             <dd className="mt-0.5 font-heading text-lg font-bold text-ink-900">
                               {lpa(value as number | null)}
                             </dd>
-                          </div>
+                          </Link>
                         ))}
                       </dl>
                     </section>
@@ -319,18 +392,20 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                         className="mt-4 divide-y divide-line border-t border-line"
                       >
                         {packagesByCategory.map(({ category, stats: byCategory }) => (
-                          <li
-                            key={category}
-                            className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
-                          >
-                            <span className="capitalize text-ink-700">{label(category)}</span>
-                            <span className="text-ink-500">
-                              {byCategory.count} placed · avg{" "}
-                              <span className="font-semibold text-ink-900">
-                                {lpa(byCategory.averageLpa)}
-                              </span>{" "}
-                              · high {lpa(byCategory.highestLpa)}
-                            </span>
+                          <li key={category}>
+                            <Link
+                              to={studentsLink({ filter: "placed", category })}
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg py-2 text-sm transition-colors hover:bg-brand-50"
+                            >
+                              <span className="capitalize text-ink-700">{label(category)}</span>
+                              <span className="text-ink-500">
+                                {byCategory.count} placed · avg{" "}
+                                <span className="font-semibold text-ink-900">
+                                  {lpa(byCategory.averageLpa)}
+                                </span>{" "}
+                                · high {lpa(byCategory.highestLpa)}
+                              </span>
+                            </Link>
                           </li>
                         ))}
                       </ul>
@@ -357,11 +432,22 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
             <Card className="p-5">
               <section aria-label="Offers by category">
                 <h2 className="text-lg text-ink-900">Offers by category</h2>
+                {/* These count OFFER ROWS; the directory behind them counts
+                    STUDENTS by their one displayed placement. A student
+                    holding two Dream offers is 2 here and 1 there. */}
                 <ul className="mt-3 space-y-2">
                   {Object.entries(snapshot.offersByCategory).map(([category, count]) => (
-                    <li key={category} className="flex justify-between text-sm">
-                      <span className="capitalize text-ink-700">{label(category)}</span>
-                      <span className="font-semibold text-ink-900">{count}</span>
+                    <li key={category}>
+                      <Link
+                        to={studentsLink({
+                          filter: "placed",
+                          category: category as OfferCategory,
+                        })}
+                        className="flex justify-between rounded-lg text-sm transition-colors hover:bg-brand-50"
+                      >
+                        <span className="capitalize text-ink-700">{label(category)}</span>
+                        <span className="font-semibold text-ink-900">{count}</span>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -540,17 +626,21 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               <h2 className="text-lg text-ink-900">By campus</h2>
               <ul className="mt-3 divide-y divide-neutral-200">
                 {snapshot.campuses.map((campus) => (
-                  <li
-                    key={campus.campusId}
-                    className="flex items-center justify-between gap-4 py-2 text-sm"
-                  >
-                    <span className="text-ink-800">{campus.campusName}</span>
-                    <span className="text-ink-500">
-                      {campus.placed} of {campus.eligible} ·{" "}
-                      <span className="font-semibold text-ink-900">
-                        {rate(campus.placed, campus.eligible)}%
+                  <li key={campus.campusId}>
+                    {/* Its own campus, not the switcher's: this row is the
+                        answer for THAT college. */}
+                    <Link
+                      to={studentsLink({ campus: campus.campusName })}
+                      className="flex items-center justify-between gap-4 rounded-lg py-2 text-sm transition-colors hover:bg-brand-50"
+                    >
+                      <span className="text-ink-800">{campus.campusName}</span>
+                      <span className="text-ink-500">
+                        {campus.placed} of {campus.eligible} ·{" "}
+                        <span className="font-semibold text-ink-900">
+                          {rate(campus.placed, campus.eligible)}%
+                        </span>
                       </span>
-                    </span>
+                    </Link>
                   </li>
                 ))}
               </ul>

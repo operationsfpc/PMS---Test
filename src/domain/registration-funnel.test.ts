@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type FunnelStudent, registrationFunnel } from "./registration-funnel";
+import {
+  countsAsSubmitted,
+  countsAsVerified,
+  type FunnelStudent,
+  registrationFunnel,
+} from "./registration-funnel";
 
 /**
  * "Total registered students, through to number of students placed."
@@ -146,5 +151,62 @@ describe("registrationFunnel", () => {
     expect(funnel.find((s) => s.key === "on_roster")?.count).toBe(1);
     expect(funnel.find((s) => s.key === "verified")?.count).toBe(1);
     expect(funnel.find((s) => s.key === "placed")?.count).toBe(0);
+  });
+});
+
+/**
+ * The stages are also PREDICATES, exported 2026-08-26 so the student directory
+ * can filter to exactly the population a funnel row counted.
+ *
+ * They are exported rather than reimplemented because the cumulative evidence
+ * is the subtle part: a student who applied was necessarily verified, whatever
+ * their status column now says. A second copy of that rule in the directory
+ * would drift, and the list behind the number would stop matching the number.
+ */
+describe("countsAsSubmitted / countsAsVerified", () => {
+  it.each([
+    ["invited", false, false],
+    ["registered", false, false],
+    ["srf_submitted", true, false],
+    ["srf_rejected", true, false],
+    ["srf_approved", true, true],
+  ] as [FunnelStudent["srfStatus"], boolean, boolean][])(
+    "%s has submitted=%s, verified=%s",
+    (srfStatus, submitted, verified) => {
+      const s = student({ srfStatus });
+      expect(countsAsSubmitted(s)).toBe(submitted);
+      expect(countsAsVerified(s)).toBe(verified);
+    },
+  );
+
+  it("treats an application as proof of both, whatever the status column says", () => {
+    const applied = student({ srfStatus: "invited", hasApplied: true });
+    expect(countsAsSubmitted(applied)).toBe(true);
+    expect(countsAsVerified(applied)).toBe(true);
+  });
+
+  it("treats a placement as proof of both", () => {
+    const placed = student({ srfStatus: "registered", hasOnCampusPlacement: true });
+    expect(countsAsSubmitted(placed)).toBe(true);
+    expect(countsAsVerified(placed)).toBe(true);
+  });
+
+  /** The predicates and the stages must never be able to disagree. */
+  it("agrees with the counts the funnel publishes", () => {
+    const cohort = [
+      student(),
+      student({ srfStatus: "srf_submitted" }),
+      student({ srfStatus: "srf_approved" }),
+      student({ srfStatus: "invited", hasApplied: true }),
+      student({ srfStatus: "registered", hasOnCampusPlacement: true }),
+    ];
+    const funnel = registrationFunnel(cohort);
+
+    expect(cohort.filter(countsAsSubmitted).length).toBe(
+      funnel.find((s) => s.key === "submitted")?.count,
+    );
+    expect(cohort.filter(countsAsVerified).length).toBe(
+      funnel.find((s) => s.key === "verified")?.count,
+    );
   });
 });

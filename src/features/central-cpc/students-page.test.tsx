@@ -25,6 +25,7 @@ const PLACED: DirectoryStudent = {
   srfStatus: "srf_approved",
   participationStatus: "active",
   applications: 3,
+  hasSelfPlacement: false,
   placement: {
     companyName: "Zoho Corporation",
     roleTitle: "Member Technical Staff",
@@ -50,6 +51,7 @@ const SELF_PLACED: DirectoryStudent = {
   srfStatus: "srf_approved",
   participationStatus: "active",
   applications: 2,
+  hasSelfPlacement: true,
   placement: {
     companyName: "FACE Prep Campus",
     roleTitle: null,
@@ -70,6 +72,7 @@ const UNPLACED: DirectoryStudent = {
   srfStatus: "srf_submitted",
   participationStatus: "active",
   applications: 1,
+  hasSelfPlacement: false,
   placement: null,
 };
 
@@ -129,7 +132,7 @@ describe("StudentDirectoryPage", () => {
     show([PLACED, UNPLACED, SELF_PLACED]);
     await screen.findByText("Thanush Krishna");
 
-    await user.click(screen.getByRole("radio", { name: /^placed/i }));
+    await user.click(screen.getByRole("radio", { name: "Placed" }));
 
     expect(screen.getByText("Thanush Krishna")).toBeDefined();
     expect(screen.queryByText("Rahul Nair")).toBeNull();
@@ -148,7 +151,7 @@ describe("StudentDirectoryPage", () => {
     show();
     await screen.findByText("Anjali Subramanian");
 
-    await user.click(screen.getByRole("radio", { name: /^placed/i }));
+    await user.click(screen.getByRole("radio", { name: "Placed" }));
 
     expect(screen.getByText("Anjali Subramanian")).toBeDefined();
     expect(screen.queryByText("Rahul Nair")).toBeNull();
@@ -254,5 +257,140 @@ describe("drilling into a student (G7)", () => {
     await user.click(screen.getByRole("button", { name: /1 not placed/i }));
     expect(screen.getByText(/rahul nair/i)).toBeDefined();
     expect(screen.queryByRole("link", { name: /anjali subramanian/i })).toBeNull();
+  });
+});
+
+/**
+ * 2026-08-26: the placement overview's cards each open this page, already
+ * filtered to the population the card counted. Every one of those parameters
+ * has to arrive, apply, and be reversible - a filter the reader cannot see or
+ * undo is a screen that appears to have lost half its students.
+ */
+describe("arriving from the placement overview", () => {
+  /** Holds an on-campus record AND a self-placed offer. */
+  const BOTH: DirectoryStudent = {
+    ...PLACED,
+    studentId: "s4",
+    fullName: "Divya Ramesh",
+    campusName: "Alliance University",
+    hasSelfPlacement: true,
+  };
+
+  const EVERYONE = [PLACED, UNPLACED, SELF_PLACED, BOTH];
+
+  it("shows only on-campus placements for filter=on_campus", async () => {
+    show(EVERYONE, "/central/students?filter=on_campus");
+    await screen.findByText("Anjali Subramanian");
+
+    expect(screen.getByText("Divya Ramesh")).toBeDefined();
+    expect(screen.queryByText("Thanush Krishna")).toBeNull();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+  });
+
+  /** The card counts every self-placed offer, including a doubly-placed student's. */
+  it("shows every self-placed student for filter=self_placed", async () => {
+    show(EVERYONE, "/central/students?filter=self_placed");
+    await screen.findByText("Thanush Krishna");
+
+    expect(screen.getByText("Divya Ramesh")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  it.each([
+    ["submitted", "Rahul Nair"],
+    ["verified", "Anjali Subramanian"],
+  ])("filters to the %s funnel row", async (filter, expected) => {
+    show(EVERYONE, `/central/students?filter=${filter}`);
+    expect(await screen.findByText(expected)).toBeDefined();
+  });
+
+  it("shows the arriving filter as the selected one", async () => {
+    show(EVERYONE, "/central/students?filter=on_campus");
+    await screen.findByText("Anjali Subramanian");
+
+    expect(
+      (screen.getByRole("radio", { name: /placed on campus/i }) as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+
+  it("narrows to one campus and says which", async () => {
+    show(EVERYONE, "/central/students?campus=Alliance+University");
+    await screen.findByText("Divya Ramesh");
+
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect((screen.getByLabelText("Campus") as HTMLSelectElement).value).toBe(
+      "Alliance University",
+    );
+  });
+
+  it("lets the reader change or clear the campus", async () => {
+    const user = userEvent.setup();
+    show(EVERYONE, "/central/students?campus=Alliance+University");
+    await screen.findByText("Divya Ramesh");
+
+    await user.selectOptions(screen.getByLabelText("Campus"), "");
+
+    expect(screen.getByText("Anjali Subramanian")).toBeDefined();
+  });
+
+  it("narrows to one package figure", async () => {
+    show(EVERYONE, "/central/students?filter=placed&ctc=6.5");
+    await screen.findByText("Anjali Subramanian");
+
+    expect(screen.queryByText("Thanush Krishna")).toBeNull();
+  });
+
+  it("narrows to one offer category", async () => {
+    show(EVERYONE, "/central/students?filter=placed&category=regular");
+    await screen.findByText("Thanush Krishna");
+
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  /**
+   * A drill-down the reader cannot see is a list that looks wrong. Both of
+   * these say what they are and clear themselves when pressed.
+   */
+  it("shows the package drill-down as a control that clears itself", async () => {
+    const user = userEvent.setup();
+    show(EVERYONE, "/central/students?filter=placed&ctc=6.5");
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /clear.*6\.5/i }));
+
+    expect(screen.getByText("Thanush Krishna")).toBeDefined();
+  });
+
+  it("shows the category drill-down as a control that clears itself", async () => {
+    const user = userEvent.setup();
+    show(EVERYONE, "/central/students?filter=placed&category=regular");
+    await screen.findByText("Thanush Krishna");
+
+    await user.click(screen.getByRole("button", { name: /clear.*regular/i }));
+
+    expect(screen.getByText("Anjali Subramanian")).toBeDefined();
+  });
+
+  /** Changing the filter must not silently drop the campus the reader is in. */
+  it("keeps the campus when the filter changes", async () => {
+    const user = userEvent.setup();
+    show(EVERYONE, "/central/students?filter=on_campus&campus=Alliance+University");
+    await screen.findByText("Divya Ramesh");
+
+    await user.click(screen.getByRole("radio", { name: "All students" }));
+
+    expect(screen.getByText("Divya Ramesh")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  it("ignores a filter it does not recognise rather than showing nothing", async () => {
+    show(EVERYONE, "/central/students?filter=nonsense");
+    expect(await screen.findByText("Anjali Subramanian")).toBeDefined();
+    expect(screen.getByText("Rahul Nair")).toBeDefined();
+  });
+
+  it("ignores a package figure that is not a number", async () => {
+    show(EVERYONE, "/central/students?ctc=abc");
+    expect(await screen.findByText("Anjali Subramanian")).toBeDefined();
   });
 });
