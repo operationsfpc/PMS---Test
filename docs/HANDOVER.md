@@ -4,6 +4,49 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-26 (4) — the recruiter export works (it never had)
+
+Live `2e955cfc-ae01-4c65-bda2-43956925d5d2`, `index-BUz-nR5q.js` byte-identical
+to `dist/` (sha256 `d2b25036…`). Remote at **0063**. Suite **3757 tests /
+194 files**, `pnpm check` exit 0. Commit `2629836`.
+
+From `docs/inbox/WhatsApp Image 2026-08-25 at 17.28.27 / .33.jpeg`: Export
+answered *"A resume could not be downloaded (…-images (6).pdf). Try the export
+again."*
+
+**Root cause, proven live before any code was written.** `apply-repository`
+uploaded the object to `<student>/<file>` inside the `resumes` bucket and then
+recorded **`resumes/<student>/<file>`** in `student_documents.storage_path`.
+The export downloads with `storage.from("resumes").download(storage_path)` — so
+it asked for `resumes/resumes/<student>/<file>`, an object that has never
+existed. A join against `storage.objects` showed **all 14 resume rows
+unresolvable**: the pack had never once been built, for any drive. 5b's
+"a missing resume BLOCKS the export" turned a path bug into a total block,
+which is exactly what that rule is for.
+
+- **`src/domain/storage-path.ts`** — `objectKeyIn(bucket, path)` strips ONE
+  leading bucket segment. `<student>/resumes/cv.pdf` is untouched (a folder may
+  be named for its bucket), and `"resumes/"` alone is left visible rather than
+  blanked into a mystery.
+- **`shortlist-view`** downloads the key — both conventions now work.
+- **`apply-repository`** records the key, like every other uploader on the table.
+- **0063** repairs the 14 rows. Narrow on purpose: `kind = 'resume'` only.
+  ⚠️ **Participation evidence KEEPS its bucket prefix** (`declarations/…`,
+  `offer-letters/…`): one column there serves two buckets and
+  `cpc/participation-view.signedUrlFor` splits it back off. Repairing those
+  would break the screens that read them. Verified post-push: `still_prefixed 0,
+  unresolvable 0, total 14`, and the declaration/offer-letter rows untouched.
+- **`src/db/harness.ts`** gained `createTestDb({ through })` + `migrateTo()`.
+  A data repair can only be tested against rows that existed before it ran.
+- The button said **"(CSV)"** while answer 5a had already made the artefact a
+  zip. It now says **"Export recruiter pack (ZIP)"**.
+
+🔴 **Lesson:** `student_documents.storage_path` holds two conventions on
+purpose. Any new reader must go through `objectKeyIn`, and any new uploader
+must write the bare key unless its column genuinely spans buckets.
+
+---
+
 ## ✅ SHIPPED 2026-08-26 (3) — a declared offer says so, and closes the round row
 
 Live `7534343d-80da-492b-80d1-954fa8e56821`, `index-uJqJFAPT.js` byte-identical
