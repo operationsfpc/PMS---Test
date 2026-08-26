@@ -195,9 +195,17 @@ describe("the placement overview", () => {
     expect(screen.getByRole("link", { name: /overview/i })).toBeDefined();
   });
 
-  it("is not offered to an Account Executive, who cannot read students", () => {
+  /**
+   * 2026-08-26: the AE now HAS an overview — their own (`/ae/overview`), built
+   * from their drives and the organisation's aggregate figures. What they
+   * still must not be offered is THIS one, which is computed from the student
+   * roster they cannot read.
+   */
+  it("does not offer the roster dashboard to an Account Executive", () => {
     shellFor(signedIn("account_executive"));
-    expect(screen.queryByRole("link", { name: /overview/i })).toBeNull();
+    expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).not.toContain(
+      "/dashboard",
+    );
   });
 
   it("is not offered to a student", () => {
@@ -692,5 +700,41 @@ describe("the student reaches their notifications from the sidebar", () => {
   it("does not offer it to staff — the log is the student's own", () => {
     shellFor(signedIn("central_placement_coordinator"));
     expect(screen.queryByRole("link", { name: /^notifications$/i })).toBeNull();
+  });
+});
+
+/**
+ * 2026-08-26 (Karthik): "AE GETS a landing page". They opened on the Position
+ * information form and had no overview at all — `/dashboard` is built on the
+ * student roster, which an AE cannot read, so it would have greeted them with
+ * "No students yet".
+ */
+describe("the Account Executive's landing page", () => {
+  it("gives the AE an overview, first in their sidebar", () => {
+    shellFor(signedIn("account_executive"));
+
+    const overview = screen.getByRole("link", { name: /my overview/i });
+    expect(overview.getAttribute("href")).toBe("/ae/overview");
+  });
+
+  it("does not send them to the roster-based dashboard", () => {
+    shellFor(signedIn("account_executive"));
+
+    for (const link of screen.getAllByRole("link")) {
+      expect(link.getAttribute("href")).not.toBe("/dashboard");
+    }
+  });
+
+  it("gives it to nobody else", () => {
+    for (const role of [
+      "central_placement_coordinator",
+      "delivery_head",
+      "campus_placement_coordinator",
+      "ceo",
+    ] as const) {
+      const { unmount } = shellFor(signedIn(role));
+      expect(screen.queryByRole("link", { name: /my overview/i })).toBeNull();
+      unmount();
+    }
   });
 });

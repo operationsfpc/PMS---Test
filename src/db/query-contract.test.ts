@@ -1,4 +1,5 @@
 import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repository";
+import { AE_OVERVIEW_DRIVE_COLUMNS } from "@features/ae/overview-view";
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
 import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
@@ -295,6 +296,8 @@ describe("every hand-written select matches the schema", () => {
     // D8/D9: the notifications panel.
     ["student notifications", "notifications", NOTIFICATION_COLUMNS],
     ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
+    // The AE's landing page (2026-08-26): their own drives and who applied.
+    ["ae overview drives", "drives", AE_OVERVIEW_DRIVE_COLUMNS],
     ["drive portfolio offers", "offers", "drive_id, student_id"],
     // Spec B (2026-08-24): the final-selection screen reads the filed letter.
     ["final selection offers", "offers", "student_id, attachment_path, attachment_name"],

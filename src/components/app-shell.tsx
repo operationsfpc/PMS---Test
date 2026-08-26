@@ -137,6 +137,13 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
    * shortlisted, who was selected - and answers it read-only.
    */
   account_executive: [
+    /*
+     * 2026-08-26 (Karthik): "AE GETS a landing page". Their own, not the
+     * shared `/dashboard` — that screen is computed from the student roster,
+     * which an AE cannot read (0018), so it would have greeted them with
+     * "No students yet. Import a campus roster to begin."
+     */
+    { heading: "Overview", items: [{ to: "/ae/overview", label: "My overview" }] },
     {
       heading: "Drive initiation",
       items: [{ to: "/ae/pif", label: "Position information form" }],

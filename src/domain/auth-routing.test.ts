@@ -42,13 +42,17 @@ describe("landingRouteForRole", () => {
   });
 
   /**
-   * The one staff exception, and it is not a preference. The AE has no read
-   * policy on students, so the placement overview renders zeroes for them and
-   * reads as a broken account - which is why they have no Overview entry in
-   * the sidebar either. Their drives ARE their overview.
+   * SPEC CHANGE 2026-08-26 (Karthik): "AE GETS a landing page." They now have
+   * one of their own - their drives, plus the organisation's figures as
+   * aggregates (0064).
+   *
+   * Still NOT `/dashboard`: that screen is computed from the student roster,
+   * which the AE has no read policy on, so it would render zeroes and read as
+   * a broken account. The exception was never about them lacking a landing
+   * page; it was about that particular one being unreadable for them.
    */
-  it("lands an account executive on their drives, not on an overview of zeroes", () => {
-    expect(landingRouteForRole("account_executive")).toBe("/my-drives");
+  it("lands an account executive on their own overview, not the roster dashboard", () => {
+    expect(landingRouteForRole("account_executive")).toBe("/ae/overview");
   });
 
   /**

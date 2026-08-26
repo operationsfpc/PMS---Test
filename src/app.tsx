@@ -8,6 +8,7 @@ import {
 import { AdminCampusRoute } from "@features/admin/campus-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
+import { AeOverviewRoute } from "@features/ae/overview-route";
 import { LoginPage } from "@features/auth/login-page";
 import { RequireAuth } from "@features/auth/require-auth";
 import { RoleLanding } from "@features/auth/role-landing";
@@ -222,6 +223,10 @@ export function App() {
                 />
                 <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
                 <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
+                {/* 2026-08-26: the AE's landing page. Their own drives and
+                    the organisation's aggregate figures (0064) - never the
+                    roster dashboard, which they cannot read. */}
+                <Route path="/ae/overview" element={<AeOverviewRoute />} />
                 <Route
                   path="/ae/pif"
                   element={

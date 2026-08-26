@@ -1,0 +1,21 @@
+-- `placement_totals()` is not for signed-out visitors.
+--
+-- 0064 revoked EXECUTE from PUBLIC and granted it to `authenticated`. That is
+-- enough in PGlite, where the test suite runs — and it was NOT enough on the
+-- live project, which was checked immediately after the push:
+--
+--   proname            | security_definer | authenticated_may_call | anon_may_call
+--   placement_totals   | t                | t                      | t
+--
+-- Supabase ships `alter default privileges ... grant execute on functions to
+-- anon, authenticated, service_role`, so `anon` holds its own explicit grant
+-- and revoking from PUBLIC never touched it. The suite would have gone on
+-- saying this was closed.
+--
+-- The function's own guard already refuses a caller with no session
+-- (`current_app_role()` is null → `not permitted`), so this was never an open
+-- door. But a signed-out visitor should not be able to reach the
+-- organisation's placement figures at all, not even to be told no — an
+-- authorisation check is a second line, never the first.
+
+revoke all on function placement_totals() from anon;

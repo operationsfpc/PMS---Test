@@ -21,16 +21,19 @@ import type { AppRole, ParticipationStatus, SrfStatus } from "./types";
  *  - `student` keeps their own dashboard. A placement overview is not their
  *    screen, and a first-time student goes to the registration form instead -
  *    see `studentLandingRoute`, which their role alone cannot answer.
- *  - `account_executive` has NO read policy on students, so the placement
- *    overview renders zeroes for them and reads as a broken account. That is
- *    also why they have no Overview entry in the sidebar. Their drives are
- *    their overview.
+ *  - `account_executive` has NO read policy on students, so the shared
+ *    placement overview renders zeroes for them and reads as a broken
+ *    account. SPEC CHANGE 2026-08-26 (Karthik: "AE GETS a landing page"):
+ *    they land on `/ae/overview` instead — their own drives, plus the
+ *    organisation's figures as aggregates (0064). The exception was never
+ *    that they should have no landing page; it was that THIS one is
+ *    unreadable for them.
  */
 const LANDING_ROUTES: Record<AppRole, string> = {
   admin: "/dashboard",
   student: "/student",
   campus_placement_coordinator: "/dashboard",
-  account_executive: "/my-drives",
+  account_executive: "/ae/overview",
   delivery_head: "/dashboard",
   central_placement_coordinator: "/dashboard",
   campus_manager: "/dashboard",
