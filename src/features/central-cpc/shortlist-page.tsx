@@ -6,6 +6,7 @@ import {
   recruiterPackProblem,
   type ShortlistEntry,
 } from "@domain/recruiter-export";
+import { checkShortlistTarget } from "@domain/shortlist-target";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -122,6 +123,13 @@ export function ShortlistPage({
   /** D6: advisory only — a number the CPC steers by, never a gate. */
   const [target, setTarget] = useState("");
   /**
+   * UAT 2026-08-26: a shortlist that does not match the recruiter's ask is
+   * saved only after the mismatch has been read and ticked. Advisory still —
+   * the tick is available immediately — but it cannot be clicked through by
+   * reflex, and a save that notifies students deserves that much.
+   */
+  const [acknowledgedTarget, setAcknowledgedTarget] = useState(false);
+  /**
    * SPEC CHANGE 2026-08-21 (Karthik): the already-shortlisted and the not-yet
    * are SEPARATE TABS. Before this, the saved students came back pre-ticked in
    * the same list — so they could be selected and "shortlisted again", and
@@ -186,10 +194,22 @@ export function ShortlistPage({
     [rankedWithPosition, byId, tab],
   );
 
+  /**
+   * UAT 2026-08-26: "2 of 1 selected" was printed and the save went through
+   * unremarked. The comparison itself is a business rule and lives in
+   * `@domain/shortlist-target`; the screen only decides how loudly to say it.
+   * The already-shortlisted count toward the ask — they hold seats.
+   */
+  const targetCheck = useMemo(
+    () => checkShortlistTarget({ target, count: alreadyShortlisted.length + selected.length }),
+    [target, alreadyShortlisted.length, selected.length],
+  );
+
   function toggle(applicationId: string) {
     // Any change makes the confirmation stale: what is on screen is no longer
     // what was saved, and leaving it up would say otherwise.
     setSavedCount(null);
+    setAcknowledgedTarget(false);
     setSelected((current) =>
       current.includes(applicationId)
         ? current.filter((id) => id !== applicationId)
@@ -214,6 +234,7 @@ export function ShortlistPage({
 
   function toggleAll() {
     setSavedCount(null);
+    setAcknowledgedTarget(false);
     setSelected(allSelected ? [] : selectable);
   }
 
@@ -356,15 +377,29 @@ export function ShortlistPage({
             type="number"
             min="1"
             value={target}
-            onChange={(e) => setTarget(e.target.value)}
+            onChange={(e) => {
+              // A changed ask is a different decision — the old acknowledgement
+              // dies with it.
+              setAcknowledgedTarget(false);
+              setTarget(e.target.value);
+            }}
             className="w-36 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
           />
         </label>
-        {target !== "" && Number(target) > 0 && (
-          <p className="text-sm font-medium text-ink-700">
+        {targetCheck.target !== null && (
+          <p
+            role="status"
+            aria-label="Selection against target"
+            className={`text-sm font-medium ${
+              targetCheck.message === null ? "text-ink-700" : "text-destructive"
+            }`}
+          >
             {/* The decided count toward the recruiter's ask — already-
                 shortlisted people still fill seats (2026-08-21). */}
-            {`${alreadyShortlisted.length + selected.length} of ${Number(target)} selected`}
+            {`${targetCheck.count} of ${targetCheck.target} selected`}
+            {targetCheck.message !== null && (
+              <span className="ml-2 font-normal">— {targetCheck.message}</span>
+            )}
           </p>
         )}
       </div>
@@ -620,11 +655,34 @@ export function ShortlistPage({
                 ) : null;
               })()}
             </p>
+
+            {/* UAT 2026-08-26: the recruiter asked for a number. Saying it
+                here — and making it a deliberate tick — is the difference
+                between an advisory target and a target nobody reads. */}
+            {targetCheck.message !== null && (
+              <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-ink-900">
+                <p className="font-medium text-destructive">{targetCheck.message}</p>
+                <label className="mt-3 flex items-start gap-2 text-sm text-ink-900">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={acknowledgedTarget}
+                    onChange={(e) => setAcknowledgedTarget(e.target.checked)}
+                  />
+                  <span>
+                    I know this differs from the target and want to shortlist{" "}
+                    <strong>{targetCheck.count}</strong> anyway.
+                  </span>
+                </label>
+              </div>
+            )}
+
             <div className="mt-5 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setConfirming(false)}>
                 Cancel
               </Button>
               <Button
+                disabled={targetCheck.message !== null && !acknowledgedTarget}
                 onClick={() => {
                   setConfirming(false);
                   void save();

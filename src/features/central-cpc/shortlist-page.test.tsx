@@ -681,3 +681,120 @@ describe("the export button names what it produces", () => {
     expect(button.textContent).not.toMatch(/csv/i);
   });
 });
+
+/**
+ * UAT 2026-08-26: target set to 1, two candidates ticked, "2 of 1 selected"
+ * printed quietly, and the save went through. Saving notifies students and
+ * schedules Round 1 — so the mismatch has to be stated where the decision is
+ * actually taken: in the confirmation that already guards the save.
+ *
+ * The target stays advisory (D6). The screen warns; it never blocks.
+ */
+describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
+  async function selectBoth(user: ReturnType<typeof userEvent.setup>, target: string) {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+    await screen.findByText("Strong Candidate");
+    await user.type(screen.getByLabelText(/target shortlist size/i), target);
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+  }
+
+  it("flags the over-count on the page itself, not just as plain text", async () => {
+    const user = userEvent.setup();
+    await selectBoth(user, "1");
+
+    const status = screen.getByRole("status", { name: /target/i });
+    expect(status.textContent).toMatch(/2 of 1 selected/i);
+    expect(status.textContent).toMatch(/1 more than the recruiter asked for/i);
+  });
+
+  it("warns inside the confirmation when more are selected than asked for", async () => {
+    const user = userEvent.setup();
+    await selectBoth(user, "1");
+    await user.click(screen.getByRole("button", { name: /shortlist 2/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/2 students selected against a target of 1/i);
+    expect(dialog.textContent).toMatch(/1 more than the recruiter asked for/i);
+  });
+
+  it("makes the over-count an explicit second click, not a reflex Confirm", async () => {
+    const saveShortlist = vi.fn();
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.type(screen.getByLabelText(/target shortlist size/i), "1");
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+    await user.click(screen.getByRole("button", { name: /shortlist 2/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: /confirm/i });
+    expect(confirm.hasAttribute("disabled")).toBe(true);
+
+    await user.click(confirm);
+    expect(saveShortlist).not.toHaveBeenCalled();
+
+    // Acknowledging the mismatch — and only that — releases the save.
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /more than the target|target/i }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
+  });
+
+  it("warns just as loudly when FEWER than the target are selected", async () => {
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.type(screen.getByLabelText(/target shortlist size/i), "5");
+    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/4 fewer than the recruiter asked for/i);
+    expect(
+      within(dialog)
+        .getByRole("button", { name: /confirm/i })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+  });
+
+  it("counts the already-shortlisted toward the target, as the page does", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({ applicants: async () => [{ ...WEAK, shortlisted: true }, STRONG] })}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    await user.type(screen.getByLabelText(/target shortlist size/i), "2");
+    await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+
+    // One already shortlisted + one now = the target of 2. Nothing to warn about.
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).not.toMatch(/than the recruiter asked for/i);
+    expect(
+      within(dialog)
+        .getByRole("button", { name: /confirm/i })
+        .hasAttribute("disabled"),
+    ).toBe(false);
+  });
+
+  it("asks nothing extra when no target was set — the field is optional", async () => {
+    const saveShortlist = vi.fn();
+    const user = userEvent.setup();
+    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+    await user.click(screen.getByRole("button", { name: /shortlist 2/i }));
+    await user.click(await confirmButton());
+
+    await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
+  });
+});
