@@ -25,20 +25,49 @@ export interface TestDb {
     params?: unknown[],
   ): Promise<Record<string, unknown>[]>;
   expectRejection(fn: () => Promise<unknown>, matching: RegExp): Promise<void>;
+  /**
+   * Applies the migrations not yet run, up to and including `prefix`.
+   *
+   * For DATA repairs (2026-08-26, 0063): a migration that fixes rows can only
+   * be tested against rows that already exist, so the schema has to be built
+   * to the version BEFORE it, seeded, and then stepped forward.
+   */
+  migrateTo(prefix: string): Promise<void>;
 }
 
-export async function createTestDb(): Promise<TestDb> {
+export async function createTestDb(
+  /** Stop after this migration, e.g. "0062". Absent means every migration. */
+  options: { readonly through?: string } = {},
+): Promise<TestDb> {
   const db = await PGlite.create();
 
-  await db.exec(readFileSync(SHIM, "utf8"));
-  for (const file of readdirSync(MIGRATIONS).sort()) {
-    if (!file.endsWith(".sql")) continue;
+  const files = readdirSync(MIGRATIONS)
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
+  const applied = new Set<string>();
+
+  const apply = async (file: string) => {
+    if (applied.has(file)) return;
     try {
       await db.exec(readFileSync(join(MIGRATIONS, file), "utf8"));
+      applied.add(file);
     } catch (error) {
       throw new Error(`Migration ${file} failed: ${(error as Error).message}`);
     }
+  };
+
+  await db.exec(readFileSync(SHIM, "utf8"));
+  for (const file of files) {
+    if (options.through !== undefined && file.slice(0, 4) > options.through) break;
+    await apply(file);
   }
+
+  const migrateTo = async (prefix: string) => {
+    for (const file of files) {
+      if (file.slice(0, 4) > prefix) break;
+      await apply(file);
+    }
+  };
 
   const sql = async (query: string, params: unknown[] = []) =>
     (await db.query(query, params)).rows as Record<string, unknown>[];
@@ -79,7 +108,7 @@ export async function createTestDb(): Promise<TestDb> {
     }
   };
 
-  return { db, sql, asUser, expectRejection };
+  return { db, sql, asUser, expectRejection, migrateTo };
 }
 
 /** A minimal but complete world: campus, degree, staff, and two students. */

@@ -123,7 +123,15 @@ export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepo
             // Without it, applying to a second drive in the same category
             // would collide on one_resume_per_category.
             drive_id: drive.id,
-            storage_path: `${RESUME_BUCKET}/${path}`,
+            /*
+             * The OBJECT KEY, not the bucket-qualified path (fixed
+             * 2026-08-26, rows repaired by 0063). Written with the bucket in
+             * front, it made the recruiter export ask the resumes bucket for
+             * `resumes/resumes/<student>/<file>`, so every export failed on
+             * the first resume it reached. Every other uploader on this
+             * table writes the key.
+             */
+            storage_path: path,
             size_bytes: driveResume.size,
           })
           .select("id")

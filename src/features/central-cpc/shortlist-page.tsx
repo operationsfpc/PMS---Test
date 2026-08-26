@@ -306,8 +306,10 @@ export function ShortlistPage({
         {...(drive?.roleTitle == null ? {} : { subtitle: drive.roleTitle })}
         actions={
           <span className="flex flex-wrap gap-2">
+            {/* Answer 5a made this a ZIP — the sheet plus every resume — and
+                the label went on saying CSV until 2026-08-26. */}
             <Button variant="secondary" onClick={() => void exportShortlist()}>
-              Export shortlist (CSV)
+              Export recruiter pack (ZIP)
             </Button>
             <Button onClick={() => setConfirming(true)} disabled={saving}>
               {saving ? "Saving…" : `Shortlist ${selected.length}`}

@@ -437,7 +437,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     );
 
     await screen.findByText("Strong Candidate");
-    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+    await user.click(screen.getByRole("button", { name: /export recruiter pack/i }));
 
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
     const [filename, content] = download.mock.calls[0] as [string, Blob];
@@ -468,7 +468,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     );
 
     await screen.findByText("Strong Candidate");
-    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+    await user.click(screen.getByRole("button", { name: /export recruiter pack/i }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/R9/);
     // Nothing left the building and nothing was logged as if it had.
@@ -663,5 +663,21 @@ describe("the applicant's actual skills", () => {
     const row = (await screen.findByText("Weak Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
     expect(within(row).getByText(/no skill scores recorded/i)).toBeDefined();
+  });
+});
+
+/**
+ * 2026-08-26: the button still said "(CSV)" while answer 5a had already made
+ * the artefact a ZIP — `shortlist-<company>.zip`, the sheet plus every resume.
+ * Karthik reported this as "the Export CSV button", which is what the screen
+ * told him it was.
+ */
+describe("the export button names what it produces", () => {
+  it("offers a recruiter pack, not a CSV", async () => {
+    render(<ShortlistPage driveId="d1" view={view()} />);
+
+    const button = await screen.findByRole("button", { name: /export/i });
+    expect(button.textContent).toMatch(/pack|zip/i);
+    expect(button.textContent).not.toMatch(/csv/i);
   });
 });

@@ -156,9 +156,16 @@ describe("applying with a drive-specific resume", () => {
     const uploads: string[] = [];
 
     server.use(
-      http.post(`${BASE}/storage/v1/object/resumes/:path*`, ({ params }) => {
+      http.post(`${BASE}/storage/v1/object/resumes/:path*`, ({ request }) => {
         if (opts.uploadFails === true) return new HttpResponse(null, { status: 400 });
-        uploads.push(String(params.path));
+        // Read off the URL rather than from `params.path`, which arrives as
+        // segments and stringifies with commas — the key storage actually
+        // received is the point of this capture.
+        uploads.push(
+          decodeURIComponent(
+            new URL(request.url).pathname.split("/storage/v1/object/resumes/")[1] ?? "",
+          ),
+        );
         return HttpResponse.json({ Key: "resumes/s1/zoho.pdf" });
       }),
       http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
@@ -190,6 +197,28 @@ describe("applying with a drive-specific resume", () => {
     expect(writes.find((w) => w.table === "applications")?.body).toMatchObject({
       resume_id: "doc-1",
     });
+  });
+
+  /**
+   * 2026-08-26: the row recorded `resumes/<student>/<file>` while the object
+   * was uploaded to `<student>/<file>` INSIDE the resumes bucket. The
+   * recruiter export then asked for `resumes/resumes/...` and failed on every
+   * drive — verified live, all 14 rows unresolvable.
+   *
+   * `student_documents.storage_path` is the object key, exactly as every
+   * other uploader on this table writes it.
+   */
+  it("records the object key, without the bucket in front of it", async () => {
+    const { writes, uploads } = stubStorage();
+
+    await repo().apply(student, drive, [], NOW, resume());
+
+    const body = writes.find((w) => w.table === "student_documents")?.body as {
+      storage_path: string;
+    };
+    expect(body.storage_path).toBe(uploads[0]);
+    expect(body.storage_path.startsWith("resumes/")).toBe(false);
+    expect(body.storage_path.startsWith(`${student.id}/`)).toBe(true);
   });
 
   /** The snapshot is what every downstream step reads (R7). */

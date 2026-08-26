@@ -450,3 +450,64 @@ describe("resumeFiles", () => {
     ).rejects.toThrow(/could not be downloaded/i);
   });
 });
+
+/**
+ * 2026-08-26 (Karthik): "Export shortlist (CSV)" answered with
+ * "A resume could not be downloaded (…-images (6).pdf). Try the export again."
+ *
+ * Not a transient failure and not a missing file: a resume uploaded at apply
+ * time is recorded as `resumes/<student>/<file>`, and the export asked the
+ * `resumes` bucket for exactly that — i.e. `resumes/resumes/<student>/…`.
+ * Verified against production before this test was written: all 14 resume
+ * rows were unresolvable, so the pack had never once been built.
+ */
+describe("resumeFiles — the path the bucket actually knows", () => {
+  const downloadsWithPath = (paths: string[]) => {
+    const client_ = client();
+    client_.storage.from = ((bucket: string) => ({
+      download: async (path: string) => {
+        paths.push(path);
+        return { data: new Blob([bucket]), error: null };
+      },
+    })) as unknown as typeof client_.storage.from;
+    return client_;
+  };
+
+  it("asks for the object key, not the bucket-prefixed row value", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/student_documents`, () =>
+        HttpResponse.json([
+          { id: "resume-1", storage_path: "resumes/s1/d1-1787027936502-images (6).pdf" },
+        ]),
+      ),
+    );
+    const paths: string[] = [];
+
+    const files = await createSupabaseShortlistView(
+      downloadsWithPath(paths),
+      async () => "cpc-1",
+      async () => "central_placement_coordinator",
+    ).resumeFiles?.(["resume-1"]);
+
+    expect(paths).toEqual(["s1/d1-1787027936502-images (6).pdf"]);
+    expect(files?.get("resume-1")?.extension).toBe(".pdf");
+  });
+
+  /** A profile resume (SRF) is stored bare, and must keep working untouched. */
+  it("still asks for a bare path exactly as stored", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/student_documents`, () =>
+        HttpResponse.json([{ id: "resume-2", storage_path: "s2/profile-sales-abc-cv.pdf" }]),
+      ),
+    );
+    const paths: string[] = [];
+
+    await createSupabaseShortlistView(
+      downloadsWithPath(paths),
+      async () => "cpc-1",
+      async () => "central_placement_coordinator",
+    ).resumeFiles?.(["resume-2"]);
+
+    expect(paths).toEqual(["s2/profile-sales-abc-cv.pdf"]);
+  });
+});

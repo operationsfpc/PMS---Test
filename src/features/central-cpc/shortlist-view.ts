@@ -1,4 +1,5 @@
 import type { ShortlistEntry } from "@domain/recruiter-export";
+import { objectKeyIn } from "@domain/storage-path";
 import type { AppRole, RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortlistApplicant, ShortlistDrive, ShortlistView } from "./shortlist-page";
@@ -188,9 +189,12 @@ export function createSupabaseShortlistView(
 
       const files = new Map<string, { data: ArrayBuffer; extension: string }>();
       for (const row of (data ?? []) as Array<{ id: string; storage_path: string }>) {
+        // 2026-08-26: an apply-time resume was recorded WITH its bucket in
+        // front, so this asked the resumes bucket for `resumes/resumes/...`
+        // and every export died on the first file it touched.
         const { data: blob, error: downloadError } = await client.storage
           .from("resumes")
-          .download(row.storage_path);
+          .download(objectKeyIn("resumes", row.storage_path));
 
         if (downloadError !== null || blob === null) {
           throw new ShortlistError(
