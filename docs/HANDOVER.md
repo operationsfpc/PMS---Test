@@ -4,6 +4,32 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-26 (2) — sort control on Live drives, newest first everywhere
+
+Live `3bab3443-aeb1-4e66-b01b-014f1190ab8f`, `index-S95wx0ia.js` byte-identical
+to `dist/` (sha256 `c535234c…`). Suite **3716 tests / 191 files**, `pnpm check`
+exit 0. Commit `da6621b`. No migration.
+
+From `docs/inbox/WhatsApp Image 2026-08-25 at 16.33.20.jpeg` — Live had a search
+box and no ordering control at all.
+
+1. **Live / Completed / My drives** gained the sort. `PortfolioDrive.createdAt`
+   is new: the query already ordered by `created_at` and then discarded the
+   column, so the page could not offer an order of its own.
+2. **`src/components/drive-sort.tsx`** is now the only copy of the control —
+   publish queue, drive picker and portfolio all use it. Three copies is three
+   chances for one to keep the old default.
+3. **`compareNewestFirst` + `orderDrives`** in `src/domain/drive-aging.ts`.
+   Newest-first is NOT oldest-first reversed: `compareOldestFirst` sinks an
+   undated drive deliberately, and reversing that makes it the *newest*. With
+   newest first as the default that would have headed every list on the system
+   with undated drives — the drive picker's local comparator had exactly that
+   bug.
+4. ⚠️ **Deliberate reversal of G1b's default**: the publish queue no longer
+   opens oldest-first. Still one click away. Three tests rewritten to say so.
+
+---
+
 ## ✅ SHIPPED 2026-08-26 — every Placement-overview card opens its students
 
 Live `52af5bff-5806-4d0c-b5e0-e10690e06261`, `index-B13mksHQ.js` byte-identical
