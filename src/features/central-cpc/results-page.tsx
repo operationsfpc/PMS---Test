@@ -3,6 +3,7 @@ import { type CompletionReadiness, decideCompletion } from "@domain/drive-comple
 import { type MeetingSlot, parseMeetingSlotsCsv } from "@domain/meeting-slots";
 import { describeRoundFreeze, type RoundFacts } from "@domain/round-editing";
 import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mode";
+import { describeParticipantOutcome } from "@domain/round-outcome";
 import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
 import type { AttendanceStatus, RoundResult } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
@@ -75,6 +76,14 @@ export interface DriveRoundsView extends ResultsView {
   renameRound(roundId: string, name: string): Promise<void>;
   /** Removes the round and renumbers the survivors to close the gap. */
   removeRound(driveId: string, roundId: string): Promise<void>;
+  /**
+   * 2026-08-26: the applications on this drive holding a DECLARED offer.
+   *
+   * Asked of the drive rather than the round: an offer belongs to the drive,
+   * and the final round — the one where offers happen — has no later round for
+   * F1's lock to key on.
+   */
+  offerHolders(driveId: string): Promise<ReadonlySet<string>>;
   /** C3: how close the drive is to done — feeds the completion dialog. */
   completionFacts(driveId: string): Promise<CompletionReadiness>;
   /** C3 (answer 3b): `reason` is null on an ordinary, fully-decided completion. */
@@ -95,6 +104,7 @@ export function ResultsPage({
   roundId,
   view,
   locked = EMPTY_LOCK,
+  offered = EMPTY_LOCK,
   saveSlot,
   onRecorded,
 }: {
@@ -106,6 +116,12 @@ export function ResultsPage({
    * strictly linear.
    */
   locked?: ReadonlySet<string>;
+  /**
+   * 2026-08-26: applications holding a DECLARED OFFER. The final round has no
+   * later round, so `locked` never covered the one row that must not be
+   * re-decided — the student who has been offered the job.
+   */
+  offered?: ReadonlySet<string>;
   /** F5: when given, each row offers the student's own meeting link. */
   saveSlot?: (applicationId: string, meetingLink: string) => Promise<void>;
   /**
@@ -173,10 +189,16 @@ export function ResultsPage({
     });
   }
 
-  /** The rows a result can still be recorded FOR: undecided and not locked. */
-  const undecided = (participants ?? []).filter(
-    (p) => p.result === null && !locked.has(p.applicationId),
-  );
+  /** One decision per row: what it says, and whether it may still be changed. */
+  const outcomeOf = (participant: RoundParticipant) =>
+    describeParticipantOutcome({
+      result: participant.result,
+      advanced: locked.has(participant.applicationId),
+      offerDeclared: offered.has(participant.applicationId),
+    });
+
+  /** The rows a result can still be recorded FOR: undecided and still open. */
+  const undecided = (participants ?? []).filter((p) => p.result === null && outcomeOf(p).editable);
 
   const checkedNames = (participants ?? [])
     .filter((p) => checked.has(p.applicationId))
@@ -248,51 +270,52 @@ export function ResultsPage({
 
           <Card>
             <ul className="divide-y divide-neutral-200">
-              {participants.map((participant) => (
-                <li
-                  key={participant.applicationId}
-                  className="flex flex-wrap items-center justify-between gap-4 p-4"
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    {/* Decided rows keep their checkbox — the old select
-                        allowed corrections, and the bulk bar must too. */}
-                    {!locked.has(participant.applicationId) && (
-                      <input
-                        type="checkbox"
-                        aria-label={`Select ${participant.studentName}`}
-                        checked={checked.has(participant.applicationId)}
-                        onChange={() => toggle(participant.applicationId)}
-                        className="mt-1 size-4 accent-[#3D3777]"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink-900">{participant.studentName}</p>
-                      <p className="text-sm text-ink-500">{participant.rollNumber}</p>
-                      {saveSlot !== undefined && (
-                        <SlotEditor participant={participant} saveSlot={saveSlot} />
+              {participants.map((participant) => {
+                const outcome = outcomeOf(participant);
+                return (
+                  <li
+                    key={participant.applicationId}
+                    className="flex flex-wrap items-center justify-between gap-4 p-4"
+                  >
+                    <div className="flex min-w-0 items-start gap-3">
+                      {/* Decided rows keep their checkbox — the old select
+                        allowed corrections, and the bulk bar must too. A row
+                        closed by an advance or an offer does not. */}
+                      {outcome.editable && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${participant.studentName}`}
+                          checked={checked.has(participant.applicationId)}
+                          onChange={() => toggle(participant.applicationId)}
+                          className="mt-1 size-4 accent-[#3D3777]"
+                        />
                       )}
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink-900">{participant.studentName}</p>
+                        <p className="text-sm text-ink-500">{participant.rollNumber}</p>
+                        {saveSlot !== undefined && (
+                          <SlotEditor participant={participant} saveSlot={saveSlot} />
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-3">
-                    <Badge tone={participant.attendance === "absent" ? "danger" : "neutral"}>
-                      {label(participant.attendance)}
-                    </Badge>
+                    <div className="flex items-center gap-3">
+                      <Badge tone={participant.attendance === "absent" ? "danger" : "neutral"}>
+                        {label(participant.attendance)}
+                      </Badge>
 
-                    {locked.has(participant.applicationId) ? (
-                      // F1: they sit in a later round — this result is history.
-                      <span className="text-sm font-medium capitalize text-ink-700">
-                        {participant.result === null ? "—" : label(participant.result)}{" "}
-                        <span className="font-normal text-ink-500">(advanced)</span>
+                      {/* F1's "(advanced)" and 2026-08-26's "Offer declared"
+                        are the same decision, made once in the domain. */}
+                      <span className="text-sm font-medium text-ink-700">
+                        {outcome.label}
+                        {outcome.note !== null && (
+                          <span className="font-normal text-ink-500"> ({outcome.note})</span>
+                        )}
                       </span>
-                    ) : (
-                      <span className="text-sm font-medium capitalize text-ink-700">
-                        {participant.result === null ? "Not recorded" : label(participant.result)}
-                      </span>
-                    )}
-                  </div>
-                </li>
-              ))}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </Card>
 
@@ -434,6 +457,8 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   /** F1: applications sitting in any round after the active one. */
   const [locked, setLocked] = useState<ReadonlySet<string>>(EMPTY_LOCK);
+  /** 2026-08-26: applications on this drive that already hold an offer. */
+  const [offered, setOffered] = useState<ReadonlySet<string>>(EMPTY_LOCK);
   const [adding, setAdding] = useState(false);
   const [roundName, setRoundName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -489,6 +514,9 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
       ...later.map((r) => view.participants(r.roundId)),
     ]);
 
+    // Asked on the same beat as the participants: a row closed by an offer
+    // must not re-open for the instant between two loads.
+    setOffered(await view.offerHolders(driveId));
     setParticipants(own ?? []);
     setLocked(
       advancedBeyond(
@@ -499,7 +527,7 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
         })),
       ),
     );
-  }, [view, active, rounds]);
+  }, [view, active, rounds, driveId]);
 
   useEffect(() => {
     void loadParticipants();
@@ -890,6 +918,7 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
             roundId={active}
             view={view}
             locked={locked}
+            offered={offered}
             onRecorded={loadParticipants}
             saveSlot={(applicationId, meetingLink) =>
               view.setParticipantSlot(

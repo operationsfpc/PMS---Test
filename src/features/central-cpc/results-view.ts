@@ -285,6 +285,30 @@ export function createSupabaseResultsView(
      * C3: the readiness the completion dialog states — every applicant's
      * stage, judged by the same `applicationProgress` the student sees.
      */
+    /**
+     * 2026-08-26: the applications on this drive whose student holds a
+     * declared offer. Their round row is closed — see round-outcome.ts.
+     *
+     * Scoped to THIS drive on purpose: a student placed elsewhere has not been
+     * offered this job, and closing their row here would be a lie.
+     */
+    async offerHolders(driveId) {
+      const [{ data: offerRows }, { data: applicationRows }] = await Promise.all([
+        client.from("offers").select("student_id").eq("drive_id", driveId),
+        client.from("applications").select("id, student_id").eq("drive_id", driveId),
+      ]);
+
+      const offered = new Set(
+        ((offerRows ?? []) as Array<Record<string, unknown>>).map((o) => o.student_id as string),
+      );
+
+      return new Set(
+        ((applicationRows ?? []) as Array<Record<string, unknown>>)
+          .filter((a) => offered.has(a.student_id as string))
+          .map((a) => a.id as string),
+      );
+    },
+
     async completionFacts(driveId) {
       const [{ data: applications }, { data: roundRows }, { data: offerRows }] = await Promise.all([
         client.from("applications").select("id, student_id").eq("drive_id", driveId),

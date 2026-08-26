@@ -273,6 +273,8 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       removeRound: async () => undefined,
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
+      // 2026-08-26: nobody has been offered anything unless a test says so.
+      offerHolders: async () => new Set<string>(),
       ...overrides,
     };
   }
@@ -506,6 +508,7 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
       removeRound: async () => undefined,
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
+      offerHolders: async () => new Set<string>(),
       ...overrides,
     };
   }
@@ -746,6 +749,7 @@ describe("DriveRoundsPage — manage rounds (B2)", () => {
       removeRound: async () => undefined,
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
+      offerHolders: async () => new Set<string>(),
       ...overrides,
     };
   }
@@ -824,6 +828,7 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
       removeRound: async () => undefined,
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
+      offerHolders: async () => new Set<string>(),
       ...overrides,
     };
   }
@@ -874,5 +879,172 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
     await waitFor(() =>
       expect(completeDrive).toHaveBeenCalledWith("d1", "Company closed the process after Round 1"),
     );
+  });
+});
+
+/**
+ * 2026-08-26 (Karthik, screenshots 17.27.04/.12/.19): "the status on the right
+ * still shows as Selected and their checkbox remains active … update this
+ * status label to Offer Declared and prevent further selection actions."
+ *
+ * F1 locked students who had moved on to a LATER round. The FINAL round has
+ * none — and that is exactly where offers are declared, so the one row that
+ * must never be re-decided was the one row nothing protected.
+ */
+describe("ResultsPage — a declared offer closes the row", () => {
+  const offered = () =>
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({ participants: async () => [{ ...PRIYA, result: "selected" }, ARJUN] })}
+        offered={new Set(["app1"])}
+      />,
+    );
+
+  const rowFor = async (name: string) => {
+    const row = (await screen.findByText(name)).closest("li");
+    if (row === null) throw new Error("row not found");
+    return row;
+  };
+
+  it("says the offer was declared, not that they were selected", async () => {
+    offered();
+
+    const row = await rowFor("Priya Ramesh");
+    expect(within(row).getByText("Offer declared")).toBeDefined();
+    expect(within(row).queryByText("Selected")).toBeNull();
+  });
+
+  it("takes the checkbox away, so no bulk action can reach them", async () => {
+    offered();
+
+    const row = await rowFor("Priya Ramesh");
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+  });
+
+  it("leaves every other student decidable", async () => {
+    offered();
+
+    const row = await rowFor("Arjun Menon");
+    expect(within(row).getByRole("checkbox")).toBeDefined();
+  });
+
+  /** An offer is the outcome: it outranks the advance, and the advance's note. */
+  it("reports the offer rather than the advance when both are true", async () => {
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({ participants: async () => [{ ...PRIYA, result: "selected" }, ARJUN] })}
+        locked={new Set(["app1"])}
+        offered={new Set(["app1"])}
+      />,
+    );
+
+    const row = await rowFor("Priya Ramesh");
+    expect(within(row).getByText("Offer declared")).toBeDefined();
+    expect(within(row).queryByText(/advanced/i)).toBeNull();
+  });
+
+  it("still records results for everyone else while an offer stands", async () => {
+    const record = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({
+          participants: async () => [
+            { ...PRIYA, result: "selected" },
+            { ...ARJUN, result: null },
+          ],
+          record,
+        })}
+        offered={new Set(["app1"])}
+      />,
+    );
+
+    await user.click(await screen.findByRole("checkbox", { name: /arjun menon/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app2", "selected"));
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The rounds page is what knows the drive, so it is what can ask who holds an
+ * offer. The embedded ResultsPage is handed the answer, exactly as it is
+ * handed F1's lock.
+ */
+describe("DriveRoundsPage — offers reach the round", () => {
+  const ROUNDS = [
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: null,
+      scheduledAt: null,
+      interviewLink: null,
+      venue: null,
+    },
+  ];
+
+  const driveView = (overrides: Partial<DriveRoundsView> = {}): DriveRoundsView => ({
+    ...view({ participants: async () => [{ ...PRIYA, result: "selected" }, ARJUN] }),
+    rounds: async () => ROUNDS,
+    advance: async () => 1,
+    addRound: async () => undefined,
+    updateRound: async () => undefined,
+    assignSlots: async () => ({ matched: 0, unmatched: [] }),
+    setParticipantSlot: async () => undefined,
+    roundFacts: async () => new Map(),
+    renameRound: async () => undefined,
+    removeRound: async () => undefined,
+    completionFacts: async () => ({ ready: true, undecided: 0 }),
+    completeDrive: async () => undefined,
+    offerHolders: async () => new Set<string>(),
+    ...overrides,
+  });
+
+  it("closes the row of a student who already holds an offer", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRoundsPage
+          driveId="d1"
+          view={driveView({ offerHolders: async () => new Set(["app1"]) })}
+        />
+      </MemoryRouter>,
+    );
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByText("Offer declared")).toBeDefined();
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+  });
+
+  it("asks about this drive's offers, not every offer in the system", async () => {
+    const offerHolders = vi.fn().mockResolvedValue(new Set<string>());
+    render(
+      <MemoryRouter>
+        <DriveRoundsPage driveId="d1" view={driveView({ offerHolders })} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Priya Ramesh");
+    expect(offerHolders).toHaveBeenCalledWith("d1");
+  });
+
+  it("leaves every row open when nobody has been offered anything", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRoundsPage driveId="d1" view={driveView()} />
+      </MemoryRouter>,
+    );
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByRole("checkbox")).toBeDefined();
+    expect(within(row).getByText("Selected")).toBeDefined();
   });
 });

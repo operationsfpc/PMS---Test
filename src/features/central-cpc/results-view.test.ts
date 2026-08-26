@@ -447,3 +447,57 @@ describe("completing the drive (C3, answer 3b)", () => {
     });
   });
 });
+
+/**
+ * 2026-08-26: who on this drive already holds an offer.
+ *
+ * An offer belongs to a STUDENT and a DRIVE; the round screen speaks in
+ * application ids. The mapping happens here, once, rather than in the
+ * component that has to render it.
+ */
+describe("offerHolders", () => {
+  it("maps the drive's offers back to their applications", async () => {
+    const queries: string[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/offers`, ({ request }) => {
+        queries.push(new URL(request.url).search);
+        return HttpResponse.json([{ student_id: "s2" }]);
+      }),
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json([
+          { id: "a1", student_id: "s1" },
+          { id: "a2", student_id: "s2" },
+        ]),
+      ),
+    );
+
+    const held = await view().offerHolders("d1");
+
+    expect([...held]).toEqual(["a2"]);
+    // Scoped to this drive: a student placed elsewhere has not been offered
+    // THIS job, and locking their row here would be a lie.
+    expect(queries[0]).toContain("drive_id=eq.d1");
+  });
+
+  it("is empty when nobody has been offered anything", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json([{ id: "a1", student_id: "s1" }]),
+      ),
+    );
+
+    expect([...(await view().offerHolders("d1"))]).toEqual([]);
+  });
+
+  it("ignores an offer whose student never applied through this drive", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([{ student_id: "ghost" }])),
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json([{ id: "a1", student_id: "s1" }]),
+      ),
+    );
+
+    expect([...(await view().offerHolders("d1"))]).toEqual([]);
+  });
+});
