@@ -1,5 +1,5 @@
 import { completionReadiness } from "@domain/drive-completion";
-import type { MeetingSlot } from "@domain/meeting-slots";
+import type { SlotAssignment } from "@domain/meeting-slots";
 import { type RoundFacts, renumberRounds } from "@domain/round-editing";
 import { applicationProgress } from "@domain/student-progress";
 import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
@@ -80,63 +80,102 @@ export function createSupabaseResultsView(
       if (error !== null) throw new ResultsViewError("Could not save the round details.");
     },
 
-    /** F5: the bulk upload, matched by roll number against THIS round. */
-    async assignSlots(roundId, slots: readonly MeetingSlot[]) {
-      const { data, error } = await client
-        .from("round_participants")
-        .select("application_id, applications(students(roll_number))")
-        .eq("round_id", roundId);
-
-      if (error !== null) throw new ResultsViewError("Could not read the round's participants.");
-
-      const one = <T>(value: unknown): T | null =>
-        (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
-
-      const byRoll = new Map(
-        (data ?? []).map((row) => {
-          const application = one<{ students: unknown }>(row.applications);
-          const student = one<{ roll_number?: string }>(application?.students);
-          return [student?.roll_number ?? "", row.application_id as string];
-        }),
-      );
+    /**
+     * F5: the bulk upload.
+     *
+     * UAT 2026-08-26: this used to decide FOR ITSELF who was in the round, by
+     * re-reading roll numbers through a nested embed, and answered "no
+     * participant carries these roll numbers" about students the screen was
+     * displaying. Matching is now the domain's job against the roster on
+     * screen (`matchMeetingSlots`); what arrives here is application ids.
+     *
+     * The other half of that bug: PostgREST answers an UPDATE that matched no
+     * row with 200 and an empty list. Counting `error === null` as success
+     * therefore reported links that were never stored. A row that is missing
+     * is CREATED and then updated — the update is what fires 0054's
+     * `meeting_slot_reaches_student`, so the student is actually told.
+     */
+    async assignSlots(roundId, assignments: readonly SlotAssignment[]) {
+      if (assignments.length === 0) return { matched: 0, unmatched: [] };
 
       let matched = 0;
       const unmatched: string[] = [];
-      for (const slot of slots) {
-        const applicationId = byRoll.get(slot.rollNumber);
-        if (applicationId === undefined) {
-          unmatched.push(slot.rollNumber);
-          continue;
-        }
-        const { error: updateError } = await client
+
+      const writeSlot = async (assignment: SlotAssignment) =>
+        await client
           .from("round_participants")
           .update({
-            meeting_link: slot.meetingLink,
-            participant_scheduled_at: fromDatetimeLocal(slot.scheduledAt),
+            meeting_link: assignment.meetingLink,
+            participant_scheduled_at: fromDatetimeLocal(assignment.scheduledAt),
           })
           .eq("round_id", roundId)
-          .eq("application_id", applicationId)
+          .eq("application_id", assignment.applicationId)
           .select("id");
-        if (updateError === null) matched += 1;
-        else unmatched.push(slot.rollNumber);
+
+      for (const assignment of assignments) {
+        const first = await writeSlot(assignment);
+        if (first.error !== null) {
+          unmatched.push(assignment.rollNumber);
+          continue;
+        }
+        if ((first.data ?? []).length > 0) {
+          matched += 1;
+          continue;
+        }
+
+        // No row to update: the participant row is missing though the student
+        // is scheduled. Create it empty, then write the slot into it.
+        const actorId = await getActorId();
+        const { error: insertError } = await client
+          .from("round_participants")
+          .insert([
+            { round_id: roundId, application_id: assignment.applicationId, added_by: actorId },
+          ])
+          .select("id");
+        if (insertError !== null) {
+          unmatched.push(assignment.rollNumber);
+          continue;
+        }
+
+        const second = await writeSlot(assignment);
+        if (second.error === null) matched += 1;
+        else unmatched.push(assignment.rollNumber);
       }
 
       return { matched, unmatched };
     },
 
-    /** F5: one student's own link. */
+    /**
+     * F5: one student's own link. Same repair as `assignSlots` (2026-08-26):
+     * an UPDATE that matches no row is a 200 with an empty body, so "saved"
+     * was printed over a link that had gone nowhere.
+     */
     async setParticipantSlot(roundId, applicationId, meetingLink, scheduledAt) {
-      const { error } = await client
-        .from("round_participants")
-        .update({
-          meeting_link: meetingLink,
-          participant_scheduled_at: fromDatetimeLocal(scheduledAt),
-        })
-        .eq("round_id", roundId)
-        .eq("application_id", applicationId)
-        .select("id");
+      const write = async () =>
+        await client
+          .from("round_participants")
+          .update({
+            meeting_link: meetingLink,
+            participant_scheduled_at: fromDatetimeLocal(scheduledAt),
+          })
+          .eq("round_id", roundId)
+          .eq("application_id", applicationId)
+          .select("id");
 
+      const { data, error } = await write();
       if (error !== null) throw new ResultsViewError("Could not save the meeting link.");
+
+      if ((data ?? []).length === 0) {
+        const actorId = await getActorId();
+        const { error: insertError } = await client
+          .from("round_participants")
+          .insert([{ round_id: roundId, application_id: applicationId, added_by: actorId }])
+          .select("id");
+        if (insertError !== null) throw new ResultsViewError("Could not save the meeting link.");
+
+        const { error: retryError } = await write();
+        if (retryError !== null) throw new ResultsViewError("Could not save the meeting link.");
+      }
     },
 
     /**

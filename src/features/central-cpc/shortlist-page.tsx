@@ -4,6 +4,7 @@ import {
   buildRecruiterExport,
   EXPORT_COLUMNS,
   recruiterPackProblem,
+  resumePackFilename,
   type ShortlistEntry,
 } from "@domain/recruiter-export";
 import { checkShortlistTarget } from "@domain/shortlist-target";
@@ -269,8 +270,11 @@ export function ShortlistPage({
         return [
           {
             rollNumber: roll,
-            // Named for the person reading the folder, not for the database.
-            filename: `${roll} - ${entry.snapshot.profile.fullName}${file.extension}`,
+            // Named for the person reading the folder, not for the database —
+            // and by the domain, so a slash in a name cannot turn one
+            // candidate's CV into a folder the sheet never links to
+            // (UAT 2026-08-26).
+            filename: resumePackFilename(roll, entry.snapshot.profile.fullName, file.extension),
             data: file.data,
           },
         ];

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildRecruiterExport, EXPORT_COLUMNS, recruiterPackProblem } from "./recruiter-export";
+import {
+  buildRecruiterExport,
+  EXPORT_COLUMNS,
+  recruiterPackProblem,
+  resumeHyperlink,
+  resumePackFilename,
+} from "./recruiter-export";
 
 /**
  * The recruiter export (PRD §14).
@@ -130,5 +136,73 @@ describe("recruiterPackProblem", () => {
 
   it("lets a complete pack through", () => {
     expect(recruiterPackProblem({ rows: [], resumeIds: ["r1"], missingResumes: [] })).toBeNull();
+  });
+});
+
+/**
+ * UAT 2026-08-26 (live, `docs/inbox/WhatsApp Image 2026-08-26 at 16.30.19.jpeg`):
+ * clicking the Resume cell answered "Cannot open the specified file."
+ *
+ * The workbook we shipped wrote the relationship target with RAW SPACES —
+ * `Target="resumes/124 - Thanush Krishna.pdf"`. Excel writes `%20` for a
+ * space and will not resolve a target that does not. The file was in the zip
+ * all along; the link to it was not a URI.
+ */
+describe("resumePackFilename", () => {
+  it("names the file for the human reading the folder", () => {
+    expect(resumePackFilename("124", "Thanush Krishna", ".pdf")).toBe("124 - Thanush Krishna.pdf");
+  });
+
+  it("puts back a missing dot on the extension", () => {
+    expect(resumePackFilename("124", "Thanush Krishna", "pdf")).toBe("124 - Thanush Krishna.pdf");
+  });
+
+  it("accepts a file with no extension at all rather than inventing one", () => {
+    expect(resumePackFilename("124", "Thanush Krishna", "")).toBe("124 - Thanush Krishna");
+  });
+
+  /**
+   * A slash in a name would silently become a FOLDER inside the zip, and the
+   * sheet's link would point at a file that is not where it says it is.
+   */
+  it("strips the characters that would break a path or a Windows filename", () => {
+    expect(resumePackFilename("21/CSE:1042", 'A"nu <B> | C*?', ".pdf")).toBe(
+      "21-CSE-1042 - Anu B C.pdf",
+    );
+  });
+
+  it("collapses the spacing a pasted name carries", () => {
+    expect(resumePackFilename(" 124 ", "Thanush   Krishna ", ".pdf")).toBe(
+      "124 - Thanush Krishna.pdf",
+    );
+  });
+
+  it("falls back to the roll number when the name is empty", () => {
+    expect(resumePackFilename("124", "   ", ".pdf")).toBe("124.pdf");
+  });
+});
+
+describe("resumeHyperlink", () => {
+  it("percent-encodes the path, which is what Excel can actually follow", () => {
+    expect(resumeHyperlink("124 - Thanush Krishna.pdf")).toBe(
+      "resumes/124%20-%20Thanush%20Krishna.pdf",
+    );
+  });
+
+  it("keeps the folder separator a separator", () => {
+    expect(resumeHyperlink("BCA2023156 - TestShash.pdf")).toMatch(/^resumes\//);
+  });
+
+  it("encodes the characters a URI would otherwise read as syntax", () => {
+    expect(resumeHyperlink("124 - A&B #1.pdf")).toBe("resumes/124%20-%20A%26B%20%231.pdf");
+  });
+});
+
+/** A tab pasted into a name is invisible and would break the zip entry. */
+describe("resumePackFilename — invisible characters", () => {
+  it("reads a tab as the space it looks like, not as nothing", () => {
+    expect(resumePackFilename("124", "Thanush\tKrishna\u0007", ".pdf")).toBe(
+      "124 - Thanush Krishna.pdf",
+    );
   });
 });

@@ -501,3 +501,141 @@ describe("offerHolders", () => {
     expect([...(await view().offerHolders("d1"))]).toEqual([]);
   });
 });
+
+/**
+ * UAT 2026-08-26 (live): the bulk upload reported "0 links assigned" for roll
+ * numbers the screen was displaying. Matching has since moved into the domain
+ * (`matchMeetingSlots`), so the view is handed APPLICATION IDs and has one
+ * job: write the slot, and be honest about whether a row was actually
+ * written.
+ *
+ * The silent failure that made the bug invisible: PostgREST's UPDATE against
+ * a `round_participants` row that does not exist returns 200 with an empty
+ * body — "success" that wrote nothing. The screen believed it.
+ */
+describe("assignSlots", () => {
+  function slotStub(opts: { existing?: string[]; updateFails?: boolean } = {}) {
+    const inserted: unknown[] = [];
+    const updated: { url: string; body: unknown }[] = [];
+    const existing = opts.existing ?? [];
+
+    server.use(
+      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        inserted.push(await request.clone().json());
+        return HttpResponse.json([]);
+      }),
+      http.patch(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        const url = new URL(request.url);
+        updated.push({ url: request.url, body: await request.clone().json() });
+        if (opts.updateFails === true) return new HttpResponse(null, { status: 400 });
+        const application = (url.searchParams.get("application_id") ?? "").replace("eq.", "");
+        // Only a row that exists comes back — PostgREST's honest answer.
+        return HttpResponse.json(existing.includes(application) ? [{ id: "rp-1" }] : []);
+      }),
+    );
+
+    return { inserted, updated };
+  }
+
+  const assignment = (applicationId: string, rollNumber: string) => ({
+    applicationId,
+    rollNumber,
+    meetingLink: "https://meet.google.com/abc",
+    scheduledAt: "2026-09-01T10:30",
+  });
+
+  it("writes each student's link and counts only the rows it really wrote", async () => {
+    const { updated } = slotStub({ existing: ["a1"] });
+
+    const result = await view().assignSlots("r1", [assignment("a1", "BCA2023156")]);
+
+    expect(result).toEqual({ matched: 1, unmatched: [] });
+    expect(updated).toHaveLength(1);
+    expect(updated[0]?.body).toEqual({
+      meeting_link: "https://meet.google.com/abc",
+      // IST, as `fromDatetimeLocal` writes it — 10:30 for the student.
+      participant_scheduled_at: "2026-09-01T10:30:00+05:30",
+    });
+    expect(updated[0]?.url).toContain("round_id=eq.r1");
+  });
+
+  /**
+   * The repair. A student can be scheduled for a round (attendance says so,
+   * and the screen lists them) while the `round_participants` row is missing.
+   * Creating the row and then UPDATING it also makes the student's
+   * notification fire — 0054's trigger is an AFTER UPDATE trigger, so an
+   * insert carrying the link would have told them nothing.
+   */
+  it("creates the missing participant row rather than silently writing nothing", async () => {
+    const { inserted, updated } = slotStub({ existing: [] });
+
+    const result = await view().assignSlots("r1", [assignment("a-missing", "124")]);
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toEqual([
+      { round_id: "r1", application_id: "a-missing", added_by: "cpc-1" },
+    ]);
+    // Written after the row was created — twice in all, and the last one wins.
+    expect(updated.length).toBeGreaterThanOrEqual(1);
+    expect(result).toEqual({ matched: 1, unmatched: [] });
+  });
+
+  it("reports the roll number whose write the database refused", async () => {
+    slotStub({ updateFails: true });
+
+    expect(await view().assignSlots("r1", [assignment("a1", "BCA2023156")])).toEqual({
+      matched: 0,
+      unmatched: ["BCA2023156"],
+    });
+  });
+
+  it("does nothing at all when there is nothing to assign", async () => {
+    const { inserted, updated } = slotStub();
+
+    expect(await view().assignSlots("r1", [])).toEqual({ matched: 0, unmatched: [] });
+    expect(inserted).toEqual([]);
+    expect(updated).toEqual([]);
+  });
+});
+
+/**
+ * The single-student "Save link" beside a row had the same silent failure as
+ * the bulk upload: an UPDATE matching no row is a 200, and the screen said
+ * "Meeting link saved" for a link nowhere in the database.
+ */
+describe("setParticipantSlot", () => {
+  function stubSlot(opts: { existing?: string[] } = {}) {
+    const inserted: unknown[] = [];
+    const existing = opts.existing ?? [];
+    server.use(
+      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
+        inserted.push(await request.clone().json());
+        return HttpResponse.json([]);
+      }),
+      http.patch(`${BASE}/rest/v1/round_participants`, ({ request }) => {
+        const application = (new URL(request.url).searchParams.get("application_id") ?? "").replace(
+          "eq.",
+          "",
+        );
+        return HttpResponse.json(existing.includes(application) ? [{ id: "rp-1" }] : []);
+      }),
+    );
+    return inserted;
+  }
+
+  it("saves the link against an existing participant row", async () => {
+    const inserted = stubSlot({ existing: ["a1"] });
+
+    await view().setParticipantSlot("r1", "a1", "https://meet.google.com/abc", null);
+
+    expect(inserted).toEqual([]);
+  });
+
+  it("creates the missing row instead of pretending the link was saved", async () => {
+    const inserted = stubSlot({ existing: [] });
+
+    await view().setParticipantSlot("r1", "a-missing", "https://meet.google.com/abc", null);
+
+    expect(inserted).toHaveLength(1);
+  });
+});

@@ -798,3 +798,67 @@ describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
     await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
   });
 });
+
+/**
+ * UAT 2026-08-26: the pack's Resume links did not open. Beyond the encoding
+ * fixed in `export-pack`, the file NAME itself was assembled by hand on this
+ * page — so a student called "Anu/Priya" would have been written into a
+ * sub-folder the sheet never links to. Naming is a rule about what leaves the
+ * building, so it lives in the domain and is used here.
+ */
+describe("the recruiter pack names resume files safely", () => {
+  const snapshotOf = (roll: string, name: string) => ({
+    profile: {
+      id: `student-${roll}`,
+      rollNumber: roll,
+      fullName: name,
+      email: "x@x.in",
+      degree: "BCA",
+      branch: "AI and DS",
+      passingYear: 2027,
+      overallCgpa: 8,
+      tenthPercentage: 90,
+      twelfthPercentage: 91,
+      currentArrears: 0,
+      historyOfArrears: 0,
+      technicalSkills: "TS",
+    },
+    resumeId: "resume-1",
+  });
+
+  it("puts a slash-carrying name in one flat file, not a folder", async () => {
+    const download = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          exportEntries: async () => [
+            { applicationId: "a1", included: true, snapshot: snapshotOf("124", "Anu/Priya") },
+          ],
+          resumeFiles: async () =>
+            new Map([["resume-1", { data: new Uint8Array([37]).buffer, extension: ".pdf" }]]),
+        })}
+        download={download}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("button", { name: /export recruiter pack/i }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const [, blob] = download.mock.calls[0] as [string, Blob];
+    const { default: JSZip } = await import("jszip");
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+
+    expect(zip.file("resumes/124 - AnuPriya.pdf")).not.toBeNull();
+    // Nothing nested itself one level deeper than the sheet links to.
+    // (`resumes/` itself is the folder entry JSZip creates for the file.)
+    expect(
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => entry.name)
+        .filter((name) => name.startsWith("resumes/")),
+    ).toEqual(["resumes/124 - AnuPriya.pdf"]);
+  });
+});

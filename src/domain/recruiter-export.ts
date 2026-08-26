@@ -75,6 +75,69 @@ export function buildRecruiterExport(entries: readonly ShortlistEntry[]): Recrui
   };
 }
 
+/** The folder every resume sits in, inside the pack. */
+export const RESUME_FOLDER = "resumes";
+
+/**
+ * Characters Windows refuses in a filename, plus the separators that would
+ * turn one candidate's file into a FOLDER inside the zip — and a sheet link
+ * pointing at a file that is not where it says it is.
+ */
+const UNSAFE_IN_FILENAME = /[\\/:*?"<>|]/g;
+
+/**
+ * Control characters, stated by code point: Biome bans them inside a regex.
+ * A pasted tab becomes the space it looks like; the rest simply go.
+ */
+const withoutControlCharacters = (raw: string) =>
+  Array.from(raw)
+    .map((character) => {
+      const code = character.codePointAt(0) ?? 32;
+      if (code >= 32) return character;
+      return character === "\t" ? " " : "";
+    })
+    .join("");
+
+function safeSegment(raw: string, replacement: string): string {
+  return withoutControlCharacters(raw)
+    .replaceAll(UNSAFE_IN_FILENAME, replacement)
+    .replaceAll(/\s+/g, " ")
+    .trim()
+    .replaceAll(/^[.\s]+|[.\s]+$/g, "");
+}
+
+/**
+ * What a candidate's resume is called inside the pack: named for the person
+ * reading the folder, safe on the filesystem they will read it on.
+ *
+ * The roll number keeps its shape (a slash becomes a dash, so `21/CSE1042`
+ * stays legible); the name simply loses what it may not contain.
+ */
+export function resumePackFilename(
+  rollNumber: string,
+  fullName: string,
+  extension: string,
+): string {
+  const roll = safeSegment(rollNumber, "-");
+  const name = safeSegment(fullName, "");
+  const suffix = extension.trim() === "" ? "" : `.${extension.trim().replace(/^\.+/, "")}`;
+  return `${name === "" ? roll : `${roll} - ${name}`}${suffix}`;
+}
+
+/**
+ * The sheet's link to that file.
+ *
+ * UAT 2026-08-26: the workbook carried `Target="resumes/124 - Thanush
+ * Krishna.pdf"` — a path, not a URI. Excel writes `%20` for a space and
+ * answers "Cannot open the specified file" for anything that does not. The
+ * resume was in the zip the whole time; the link was unfollowable.
+ *
+ * Relative on purpose: the pack must work wherever it is unzipped.
+ */
+export function resumeHyperlink(filename: string): string {
+  return `${RESUME_FOLDER}/${encodeURIComponent(filename).replaceAll("'", "%27")}`;
+}
+
 /**
  * Answer 5b (2026-08-24): the pack is whole or it does not leave. A recruiter
  * reading a folder of resumes against a sheet of names does not re-count

@@ -1,4 +1,4 @@
-import { EXPORT_COLUMNS, type ExportRow } from "@domain/recruiter-export";
+import { EXPORT_COLUMNS, type ExportRow, resumeHyperlink } from "@domain/recruiter-export";
 
 /**
  * Answer 5a (2026-08-24): the recruiter pack is ONE zip — `shortlist.xlsx`
@@ -37,15 +37,41 @@ export async function buildRecruiterZip(
     const added = sheet.addRow([...values, ""]);
     const file = fileByRoll.get(String(row["Roll number"]));
     if (file !== undefined) {
+      // UAT 2026-08-26: the target must be a URI, not a path. `resumes/124 -
+      // Thanush Krishna.pdf` — raw spaces — is what Excel answered "Cannot
+      // open the specified file" to. The TEXT stays human; the LINK is
+      // encoded, exactly as Excel writes it itself.
       added.getCell(EXPORT_COLUMNS.length + 1).value = {
         text: file.filename,
-        hyperlink: `resumes/${file.filename}`,
+        hyperlink: resumeHyperlink(file.filename),
       };
     }
   }
 
   const zip = new JSZip();
   zip.file("shortlist.xlsx", await workbook.xlsx.writeBuffer());
+  /**
+   * Windows will happily open `shortlist.xlsx` from INSIDE the zip, into a
+   * temp folder with no `resumes/` beside it — and every link then fails,
+   * however correctly it is written. Say so on the way in.
+   */
+  zip.file(
+    "README.txt",
+    [
+      `Recruiter pack — ${companyName}`,
+      "",
+      "1. Extract this zip to a folder before opening anything.",
+      "   The Resume links in shortlist.xlsx are relative to the resumes/",
+      "   folder beside it, so they cannot work while the file is still",
+      "   inside the zip.",
+      "2. Open shortlist.xlsx — one row per shortlisted candidate.",
+      "3. Click the Resume cell in the last column to open that",
+      "   candidate's CV from resumes/.",
+      "",
+      "Every CV is also in resumes/, named <roll number> - <name>.",
+      "",
+    ].join("\n"),
+  );
   for (const file of files) {
     zip.file(`resumes/${file.filename}`, file.data);
   }

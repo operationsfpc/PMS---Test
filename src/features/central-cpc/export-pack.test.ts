@@ -63,7 +63,9 @@ describe("buildRecruiterZip", () => {
       hyperlink?: string;
       text?: string;
     };
-    expect(linkCell?.hyperlink).toBe("resumes/124 - Thanush Krishna.pdf");
+    // SPEC CHANGE 2026-08-26: the target is percent-encoded — a raw path is
+    // what Excel refused to open. The file still sits under the readable name.
+    expect(linkCell?.hyperlink).toBe("resumes/124%20-%20Thanush%20Krishna.pdf");
   });
 
   it("leaves the Resume cell plain when a row has no matching file", async () => {
@@ -76,5 +78,54 @@ describe("buildRecruiterZip", () => {
     const header = sheet?.getRow(1).values as unknown[];
     const cell = sheet?.getRow(2).getCell(header.indexOf("Resume"));
     expect(cell?.value ?? "").not.toHaveProperty("hyperlink");
+  });
+});
+
+/**
+ * UAT 2026-08-26 (live): "the resume file name of each student is mentioned
+ * in the CSV file but clicking that is not auto opening the PDF resume — the
+ * hyperlink seems to be broken." Excel: "Cannot open the specified file."
+ *
+ * The relationship target was written with raw spaces. Excel percent-encodes
+ * a file link and cannot follow one that is not encoded, so the sheet pointed
+ * at nothing while the resume sat in the zip beside it.
+ */
+describe("the Resume link a recruiter actually clicks", () => {
+  async function packed(name = "124 - Thanush Krishna.pdf") {
+    const blob = await buildRecruiterZip("Zoho", rows, [
+      { rollNumber: "124", filename: name, data: new Uint8Array([37, 80, 68, 70]).buffer },
+    ]);
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
+    const sheetBytes = await zip.file("shortlist.xlsx")?.async("arraybuffer");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(sheetBytes as ArrayBuffer);
+    return { zip, workbook };
+  }
+
+  it("writes a target Excel can follow — percent-encoded, not a raw path", async () => {
+    const { workbook } = await packed();
+    const sheet = workbook.worksheets[0];
+    const header = sheet?.getRow(1).values as unknown[];
+    const cell = sheet?.getRow(2).getCell(header.indexOf("Resume")).value as {
+      hyperlink?: string;
+      text?: string;
+    };
+
+    expect(cell?.hyperlink).toBe("resumes/124%20-%20Thanush%20Krishna.pdf");
+    // The recruiter still READS the human name, encoded or not.
+    expect(cell?.text).toBe("124 - Thanush Krishna.pdf");
+  });
+
+  it("stores the file under the readable name the link resolves to", async () => {
+    const { zip } = await packed();
+    expect(zip.file("resumes/124 - Thanush Krishna.pdf")).not.toBeNull();
+  });
+
+  it("tells the recruiter to extract the pack — links cannot resolve inside a zip", async () => {
+    const { zip } = await packed();
+    const readme = await zip.file("README.txt")?.async("string");
+    expect(readme).toMatch(/extract/i);
+    expect(readme).toMatch(/shortlist\.xlsx/);
+    expect(readme).toMatch(/Zoho/);
   });
 });

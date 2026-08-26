@@ -629,8 +629,14 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     expect((advance.mock.calls[0] as unknown[])[2]).toBeNull();
   });
 
+  /**
+   * SPEC CHANGE 2026-08-26: matching moved out of the view and into the domain,
+   * against the roster this screen is showing (the live "no participant carries
+   * these roll numbers" bug). So only the MATCHED rows now travel to the view,
+   * and an unmatched roll number is reported without a round trip.
+   */
   it("uploads per-student slots by CSV and reports what matched (F5)", async () => {
-    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: ["21CSE9999"] });
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
     const user = userEvent.setup();
     // G6c: links are assigned BEFORE the round runs — nobody has begun.
     routed(
@@ -643,7 +649,7 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     await user.click(await screen.findByRole("button", { name: /edit round details/i }));
     const csv = new File(
       [
-        "roll_number,meeting_link,scheduled_at\n21CSE1042,https://meet.google.com/abc,2026-09-01T10:30\n21CSE9999,https://meet.google.com/def,",
+        `roll_number,meeting_link,scheduled_at\n${NOT_BEGUN.rollNumber},https://meet.google.com/abc,2026-09-01T10:30\n21CSE9999,https://meet.google.com/def,`,
       ],
       "slots.csv",
       { type: "text/csv" },
@@ -651,9 +657,12 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     await user.upload(screen.getByLabelText(/per-student links/i), csv);
 
     await waitFor(() => expect(assignSlots).toHaveBeenCalled());
-    const [roundId, slots] = assignSlots.mock.calls[0] as [string, unknown[]];
+    const [roundId, assignments] = assignSlots.mock.calls[0] as [
+      string,
+      { applicationId: string }[],
+    ];
     expect(roundId).toBe("r1");
-    expect(slots).toHaveLength(2);
+    expect(assignments.map((a) => a.applicationId)).toEqual([NOT_BEGUN.applicationId]);
 
     // The coordinator is told who was NOT matched, by roll number.
     expect((await screen.findByRole("alert")).textContent).toMatch(/21CSE9999/);
@@ -1046,5 +1055,184 @@ describe("DriveRoundsPage — offers reach the round", () => {
     if (row === null) throw new Error("row not found");
     expect(within(row).getByRole("checkbox")).toBeDefined();
     expect(within(row).getByText("Selected")).toBeDefined();
+  });
+});
+
+/**
+ * UAT 2026-08-26 (live, `docs/inbox/WhatsApp Image 2026-08-26 at 16.22.25 (1).jpeg`):
+ * "No participant in this round carries these roll numbers: 124, BCA2023156.
+ * 0 links assigned." — while the list underneath showed both roll numbers.
+ * The screen and the matcher were reading two different sources.
+ *
+ * Karthik, same message: "it would help if the CSV upload had a downloadable
+ * template with the correct headers … there's no sample to reference."
+ */
+describe("DriveRoundsPage — the CSV template and the matching it guarantees", () => {
+  const ROUNDS = [
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: "virtual" as const,
+      scheduledAt: null,
+      interviewLink: null,
+      venue: null,
+    },
+  ];
+
+  const SHASH: RoundParticipant = {
+    applicationId: "app-shash",
+    studentName: "TestShash",
+    rollNumber: "BCA2023156",
+    attendance: "scheduled",
+    result: null,
+  };
+  const THANUSH: RoundParticipant = {
+    applicationId: "app-thanush",
+    studentName: "Thanush Krishna",
+    rollNumber: "124",
+    attendance: "scheduled",
+    result: null,
+  };
+
+  function detailView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
+    return {
+      participants: async () => [SHASH, THANUSH],
+      record: async () => undefined,
+      rounds: async () => ROUNDS,
+      advance: async () => 0,
+      addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
+      roundFacts: async () => new Map(),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
+      offerHolders: async () => new Set<string>(),
+      ...overrides,
+    };
+  }
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
+  const csv = (text: string) => new File([text], "slots.csv", { type: "text/csv" });
+
+  it("downloads a template pre-filled with THIS round's roll numbers", async () => {
+    const download = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView()} download={download} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.click(screen.getByRole("button", { name: /template/i }));
+
+    expect(download).toHaveBeenCalledTimes(1);
+    const [filename, text] = download.mock.calls[0] as [string, string];
+    expect(filename).toMatch(/\.csv$/);
+    expect(text).toBe("roll_number,meeting_link,scheduled_at\nBCA2023156,,\n124,,\n");
+  });
+
+  it("matches the roll numbers the screen is showing — the live bug", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 2, unmatched: [] });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(
+      screen.getByLabelText(/per-student links/i),
+      csv(
+        "roll_number,meeting_link,scheduled_at\nBCA2023156,https://meet.google.com/abc,2026-09-01T10:30\n124,https://meet.google.com/def,",
+      ),
+    );
+
+    await waitFor(() => expect(assignSlots).toHaveBeenCalled());
+    const [roundId, assignments] = assignSlots.mock.calls[0] as [
+      string,
+      { applicationId: string; meetingLink: string; scheduledAt: string | null }[],
+    ];
+    expect(roundId).toBe("r1");
+    expect(assignments).toEqual([
+      {
+        applicationId: "app-shash",
+        rollNumber: "BCA2023156",
+        meetingLink: "https://meet.google.com/abc",
+        scheduledAt: "2026-09-01T10:30",
+      },
+      {
+        applicationId: "app-thanush",
+        rollNumber: "124",
+        meetingLink: "https://meet.google.com/def",
+        scheduledAt: null,
+      },
+    ]);
+  });
+
+  it("matches despite the case and padding a spreadsheet leaves behind", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(
+      screen.getByLabelText(/per-student links/i),
+      csv(
+        '"roll_number","meeting_link","scheduled_at"\n" bca2023156 ","https://meet.google.com/abc",',
+      ),
+    );
+
+    await waitFor(() => expect(assignSlots).toHaveBeenCalled());
+    const [, assignments] = assignSlots.mock.calls[0] as [string, { applicationId: string }[]];
+    expect(assignments.map((a) => a.applicationId)).toEqual(["app-shash"]);
+  });
+
+  it("still names a roll number that is genuinely not in this round, and sends nothing for it", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(
+      screen.getByLabelText(/per-student links/i),
+      csv(
+        "roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,\n21CSE9999,https://meet.google.com/zzz,",
+      ),
+    );
+
+    await waitFor(() => expect(assignSlots).toHaveBeenCalled());
+    const [, assignments] = assignSlots.mock.calls[0] as [string, { applicationId: string }[]];
+    expect(assignments.map((a) => a.applicationId)).toEqual(["app-thanush"]);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/21CSE9999/);
+  });
+
+  it("does not call the server at all when nothing in the file matches", async () => {
+    const assignSlots = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(
+      screen.getByLabelText(/per-student links/i),
+      csv("roll_number,meeting_link,scheduled_at\n21CSE9999,https://meet.google.com/zzz,"),
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/21CSE9999/);
+    expect(assignSlots).not.toHaveBeenCalled();
+  });
+
+  it("reports a link the server accepted for nobody rather than claiming success", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 0, unmatched: ["124"] });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(
+      screen.getByLabelText(/per-student links/i),
+      csv("roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,"),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/124/);
+    expect(alert.textContent).toMatch(/0 links assigned/i);
   });
 });

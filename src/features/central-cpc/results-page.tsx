@@ -1,6 +1,11 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
-import { type MeetingSlot, parseMeetingSlotsCsv } from "@domain/meeting-slots";
+import {
+  buildMeetingSlotsTemplate,
+  matchMeetingSlots,
+  parseMeetingSlotsCsv,
+  type SlotAssignment,
+} from "@domain/meeting-slots";
 import { describeRoundFreeze, type RoundFacts } from "@domain/round-editing";
 import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mode";
 import { describeParticipantOutcome } from "@domain/round-outcome";
@@ -59,10 +64,15 @@ export interface DriveRoundsView extends ResultsView {
   addRound(driveId: string, name: string): Promise<void>;
   /** F4: mode, time and shared link — editable after creation. */
   updateRound(roundId: string, details: RoundDetailsUpdate): Promise<void>;
-  /** F5: bulk per-student slots by roll number. Says who did not match. */
+  /**
+   * F5: the per-student slots, already matched to applications by the domain
+   * against the roster this screen is showing (UAT 2026-08-26). The view
+   * writes them and reports back any the database did not accept — it no
+   * longer re-decides who is in the round.
+   */
   assignSlots(
     roundId: string,
-    slots: readonly MeetingSlot[],
+    assignments: readonly SlotAssignment[],
   ): Promise<{ matched: number; unmatched: readonly string[] }>;
   /** F5: one student's own link and slot. */
   setParticipantSlot(
@@ -451,7 +461,25 @@ function countAdvancing(participants: readonly RoundParticipant[] | null): numbe
  * numbered rounds, adding one, and pushing the selected into the next —
  * explicitly, so who advanced is a decision with an author, not a residue.
  */
-export function DriveRoundsPage({ driveId, view }: { driveId: string; view: DriveRoundsView }) {
+/** Real downloads go through a Blob; tests hand in a spy. */
+function browserDownload(filename: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function DriveRoundsPage({
+  driveId,
+  view,
+  download = browserDownload,
+}: {
+  driveId: string;
+  view: DriveRoundsView;
+  download?: (filename: string, text: string) => void;
+}) {
   const [rounds, setRounds] = useState<readonly DriveRoundInfo[] | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
@@ -592,7 +620,14 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
     }
   }
 
-  /** F5: the recruiter's spreadsheet of per-student links, judged by the domain. */
+  /**
+   * F5: the recruiter's spreadsheet of per-student links, judged by the domain.
+   *
+   * UAT 2026-08-26 (live): the upload said no participant carried roll numbers
+   * that were printed on the screen underneath it. Matching now happens HERE,
+   * against `participants` — the very list being rendered — so the screen and
+   * the matcher cannot disagree again.
+   */
   async function uploadSlots(file: File) {
     if (activeRound === null) return;
     setError(null);
@@ -602,12 +637,29 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
       setError(problems.join(" "));
       return;
     }
+
+    const { assignments, unmatched } = matchMeetingSlots(slots, participants ?? []);
+    const missing = (names: readonly string[]) =>
+      `No participant in this round carries these roll numbers: ${names.join(", ")}.`;
+
+    // Nothing to send: say so without troubling the server, and point at the
+    // template — the file that cannot mismatch.
+    if (assignments.length === 0) {
+      setError(
+        `${missing(unmatched)} Download the template to get this round's roll numbers exactly as they are recorded.`,
+      );
+      return;
+    }
+
     try {
-      const { matched, unmatched } = await view.assignSlots(activeRound.roundId, slots);
-      if (unmatched.length > 0) {
+      const { matched, unmatched: rejected } = await view.assignSlots(
+        activeRound.roundId,
+        assignments,
+      );
+      const notAssigned = [...unmatched, ...rejected];
+      if (notAssigned.length > 0) {
         setError(
-          `No participant in this round carries these roll numbers: ${unmatched.join(", ")}. ` +
-            `${matched} ${matched === 1 ? "link" : "links"} assigned.`,
+          `${missing(notAssigned)} ${matched} ${matched === 1 ? "link" : "links"} assigned.`,
         );
       } else {
         setNotice(`${matched} ${matched === 1 ? "link" : "links"} assigned and notified.`);
@@ -616,6 +668,26 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not assign the links.");
     }
+  }
+
+  /**
+   * The template is THIS round's roster, not an invented sample: download,
+   * type the links into column B, upload back. A roll-number mismatch becomes
+   * impossible because the roll numbers came from the round itself.
+   */
+  function downloadSlotsTemplate() {
+    const round = activeRound;
+    if (round === null) return;
+    download(
+      `round-${round.sequence}-meeting-links.csv`,
+      buildMeetingSlotsTemplate(
+        (participants ?? []).map((participant) => ({
+          rollNumber: participant.rollNumber,
+          meetingLink: participant.meetingLink ?? null,
+          scheduledAt: participant.participantScheduledAt ?? null,
+        })),
+      ),
+    );
   }
 
   async function createRound() {
@@ -887,19 +959,34 @@ export function DriveRoundsPage({ driveId, view }: { driveId: string; view: Driv
                 )}
 
                 <div className="sm:col-span-3 flex flex-wrap items-end justify-between gap-3">
-                  <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                    Upload per-student links (CSV: roll_number,meeting_link,scheduled_at)
-                    <input
-                      type="file"
-                      accept=".csv,text/csv"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file !== undefined) void uploadSlots(file);
-                        e.target.value = "";
-                      }}
-                      className="text-sm"
-                    />
-                  </label>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                      Upload per-student links (CSV: roll_number,meeting_link,scheduled_at)
+                      <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file !== undefined) void uploadSlots(file);
+                          e.target.value = "";
+                        }}
+                        className="text-sm"
+                      />
+                    </label>
+                    {/* UAT 2026-08-26: "there's no sample to reference". This
+                        one is better than a sample — it is this round's own
+                        roll numbers, so a filled-in template always matches. */}
+                    <span className="flex items-center gap-2">
+                      <Button variant="secondary" size="sm" onClick={downloadSlotsTemplate}>
+                        Download CSV template
+                      </Button>
+                      <span className="text-xs text-ink-500">
+                        Pre-filled with this round&rsquo;s {(participants ?? []).length}{" "}
+                        {(participants ?? []).length === 1 ? "student" : "students"} — add a link
+                        against each roll number and upload it back.
+                      </span>
+                    </span>
+                  </div>
                   <span className="flex gap-2">
                     <Button variant="secondary" size="sm" onClick={() => setEditingDetails(false)}>
                       Cancel
