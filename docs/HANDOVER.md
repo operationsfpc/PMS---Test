@@ -4,6 +4,28 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-26 (6) — a shortlist that misses the recruiter's target must be acknowledged
+
+UAT (`docs/inbox/WhatsApp Image 2026-08-26 at 16.13.35.jpeg`): target set to 1,
+two candidates ticked, "2 of 1 selected" printed quietly, save went through —
+which notifies students and schedules Round 1 for more people than the
+recruiter asked for.
+
+- **New rule** `src/domain/shortlist-target.ts` — `checkShortlistTarget`
+  compares the ask with the count (already-shortlisted included, they hold
+  seats). Blank / zero / negative / fractional target = *no target*.
+- The inline counter now turns destructive and carries the gap.
+- The confirmation dialog that already guarded the save (F2) states the
+  mismatch and **holds Confirm until it is explicitly ticked**. No second
+  dialog was added — a confirm-on-top-of-a-confirm gets clicked through.
+- Target stays **advisory** (D6): it warns, it never refuses.
+
+Live `a2d37d93-ca93-4221-b239-0a5945f2386b`, `index-D515Neuu.js` serving the
+new copy. Suite **3832 tests / 200 files**, `pnpm check` exit 0. Commit
+`525d505`.
+
+---
+
 ## ✅ SHIPPED 2026-08-26 (5) — the Account Executive's landing page
 
 Live `240abb8a-ac7c-42a4-93fd-89bd4a014562`, `index-DR7Rv_2c.js` byte-identical
