@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Mockup — the Account Executive's landing page</title>
+<style>
+  :root {
+    --primary:#3D3777; --secondary:#FFB800; --accent:#A46AFC; --accent2:#1EE0E1;
+    --warning:#FF7200; --destructive:#DD4820; --success:#177245;
+    --surface:#ECF1F0; --line:#DADADA; --muted:#F5F5F5;
+  }
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:Geist,"Helvetica Neue",Arial,sans-serif; background:#fafafa; color:#222; padding:24px; }
+  h1,h2,h3 { font-family:Raleway,Arial,sans-serif; }
+  .note { max-width:1180px; margin:0 auto 18px; background:#FFF7E0; border-left:4px solid var(--secondary); padding:11px 14px; font-size:13px; line-height:1.5; }
+  .note b { color:#6b4b00; }
+  .note.red { background:var(--destructive-bg,#FFF0EC); border-color:var(--destructive); }
+  .app { max-width:1180px; margin:0 auto; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; display:flex; }
+
+  /* sidebar */
+  .side { width:232px; border-right:1px solid var(--line); padding:18px 0; flex-shrink:0; background:#fff; }
+  .role { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:#999; padding:0 18px 14px; font-weight:600; }
+  .grp { font-family:Raleway,Arial,sans-serif; font-weight:700; font-size:14.5px; color:#222; padding:9px 18px; display:flex; justify-content:space-between; }
+  .grp .caret { color:#aaa; font-weight:400; }
+  .item { font-size:13.5px; color:#444; padding:8px 18px 8px 26px; }
+  .item.on { background:var(--primary); color:#fff; font-weight:600; border-radius:8px; margin:0 10px; padding-left:16px; }
+  .new { background:#E8F8EF; color:var(--success); font-size:10px; font-weight:700; border-radius:8px; padding:1px 6px; margin-left:6px; }
+
+  /* main */
+  .main { flex:1; padding:22px 26px 30px; background:#fafafa; }
+  .h1 { font-size:26px; color:#111; }
+  .sub { font-size:13.5px; color:#666; margin-top:3px; }
+
+  .sec-head { display:flex; align-items:baseline; justify-content:space-between; margin:24px 0 10px; }
+  .sec-head h2 { font-size:17px; color:#111; }
+  .sec-head .hint { font-size:12.5px; color:#777; }
+
+  .cards { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+  .cards.four { grid-template-columns:repeat(4,1fr); }
+  .card { border:1px solid var(--line); border-radius:10px; background:#fff; padding:12px 13px; }
+  .card .lab { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:#888; font-weight:600; }
+  .card .val { font-family:Raleway,Arial,sans-serif; font-size:23px; font-weight:800; color:#111; margin-top:5px; }
+  .card .val.brand { color:var(--primary); }
+  .card .val.gold { color:#8a6100; }
+  .card .val.green { color:var(--success); }
+  .card .hintline { font-size:11px; color:#999; margin-top:2px; }
+  .card.link { cursor:pointer; }
+  .card.link:hover { border-color:var(--accent); box-shadow:0 1px 6px rgba(164,106,252,.18); }
+  .card.link .lab::after { content:" ↗"; color:var(--accent); font-size:10px; }
+  .card.flat { background:var(--muted); }
+
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  th { text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:#888; padding:9px 14px; border-bottom:1px solid var(--line); font-weight:600; }
+  td { font-size:13px; padding:11px 14px; border-bottom:1px solid #eee; }
+  tr:last-child td { border-bottom:none; }
+  td.co { font-weight:600; color:var(--primary); }
+  td .role2 { display:block; font-size:11.5px; color:#777; font-weight:400; }
+  .pill { font-size:11px; border-radius:11px; padding:2px 9px; font-weight:600; display:inline-block; }
+  .p-live { background:#E8F8EF; color:var(--success); }
+  .p-done { background:var(--muted); color:#666; }
+  .p-wait { background:#FFF7E0; color:#8a6100; }
+  .nums { color:#555; font-size:12.5px; }
+  .nums b { color:#111; }
+
+  .legend { max-width:1180px; margin:16px auto 0; font-size:12.5px; color:#666; line-height:1.6; }
+  .legend code { background:var(--muted); padding:1px 5px; border-radius:4px; }
+  .key { display:inline-block; width:11px; height:11px; border-radius:3px; vertical-align:-1px; margin-right:4px; }
+</style>
+</head>
+<body>
+
+<div class="note">
+  <b>Mockup — Account Executive landing page, <code>/ae/overview</code>.</b>
+  Spec: <code>docs/specs/2026-08-26-ae-overview.md</code>. Nothing is built yet.<br>
+  <b>Section A</b> is their own work, from rows RLS already lets them read.
+  <b>Section B</b> is the organisation's placement numbers — <b>totals only, no student records</b>.
+</div>
+
+<div class="note red">
+  <b>One decision before I build (spec §4):</b> the AE cannot read <code>students</code>.
+  <b>Option A (recommended)</b> — a <code>security definer</code> function returns
+  the aggregate counts, so the AE gets <b>numbers and never a student record</b>, and your
+  2026-08-17 rule stands. <b>Option B</b> — make the AE an org reader: one line, but it also
+  hands them All students, the skill repository and every student's CGPA, email and phone.
+</div>
+
+<div class="app">
+  <div class="side">
+    <div class="role">Account executive</div>
+
+    <div class="grp">Overview <span class="caret">⌄</span></div>
+    <div class="item on">My overview <span class="new" style="background:rgba(255,255,255,.2);color:#fff">NEW</span></div>
+
+    <div class="grp">Drive initiation <span class="caret">›</span></div>
+    <div class="item">Position information form</div>
+
+    <div class="grp">Drives <span class="caret">⌄</span></div>
+    <div class="item">Yet to publish</div>
+    <div class="item">Live</div>
+    <div class="item">Completed</div>
+  </div>
+
+  <div class="main">
+    <div class="h1">My overview</div>
+    <div class="sub">The drives you brought in, and how the placement year is going overall.</div>
+
+    <!-- ============ SECTION A ============ -->
+    <div class="sec-head">
+      <h2>My drives</h2>
+      <span class="hint">Every card opens the drives behind it</span>
+    </div>
+
+    <div class="cards">
+      <div class="card link"><div class="lab">Drives brought in</div><div class="val brand">14</div></div>
+      <div class="card link"><div class="lab">Live now</div><div class="val green">3</div><div class="hintline">2 close this week</div></div>
+      <div class="card link"><div class="lab">Applicants</div><div class="val">286</div></div>
+      <div class="card link"><div class="lab">Shortlisted</div><div class="val">97</div></div>
+      <div class="card link"><div class="lab">Offers made</div><div class="val gold">41</div></div>
+      <div class="card link"><div class="lab">Drives completed</div><div class="val">8</div></div>
+    </div>
+
+    <div class="sec-head">
+      <h2 style="font-size:15px">Most recent</h2>
+      <span class="hint">Newest first — the whole list is under Drives</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Drive</th><th>Status</th><th>Applied</th><th>Shortlisted</th><th>Offers</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="co">Accenture <span class="role2">Junior Analyst · ₹4–5 LPA</span></td>
+          <td><span class="pill p-live">Applications open</span></td>
+          <td class="nums"><b>32</b></td><td class="nums"><b>12</b></td><td class="nums"><b>0</b></td>
+        </tr>
+        <tr>
+          <td class="co">LTI Mindtree <span class="role2">Jr. Software Engineer · ₹4–5 LPA</span></td>
+          <td><span class="pill p-live">In rounds</span></td>
+          <td class="nums"><b>48</b></td><td class="nums"><b>18</b></td><td class="nums"><b>3</b></td>
+        </tr>
+        <tr>
+          <td class="co">Zoho Corporation <span class="role2">Member Technical Staff · ₹6–9 LPA</span></td>
+          <td><span class="pill p-done">Completed</span></td>
+          <td class="nums"><b>61</b></td><td class="nums"><b>21</b></td><td class="nums"><b>9</b></td>
+        </tr>
+        <tr>
+          <td class="co">Freshworks <span class="role2">Associate SDE · ₹7 LPA</span></td>
+          <td><span class="pill p-wait">Yet to publish</span></td>
+          <td class="nums"><b>0</b></td><td class="nums"><b>0</b></td><td class="nums"><b>0</b></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- ============ SECTION B ============ -->
+    <div class="sec-head">
+      <h2>Placement overall</h2>
+      <span class="hint">The whole organisation · totals only, no student records</span>
+    </div>
+
+    <div class="cards">
+      <div class="card flat"><div class="lab">Placement rate</div><div class="val brand">38.6%</div></div>
+      <div class="card flat"><div class="lab">Placed on campus</div><div class="val">231</div><div class="hintline">of 598 eligible</div></div>
+      <div class="card flat"><div class="lab">Self-placed</div><div class="val gold">17</div></div>
+      <div class="card flat"><div class="lab">Opted out</div><div class="val">9</div></div>
+      <div class="card flat"><div class="lab">Eligible</div><div class="val">598</div></div>
+      <div class="card flat"><div class="lab">Drives completed</div><div class="val">27</div><div class="hintline">org-wide</div></div>
+    </div>
+
+    <div class="sec-head">
+      <h2 style="font-size:15px">Package</h2>
+      <span class="hint">One figure per placed student</span>
+    </div>
+
+    <div class="cards four">
+      <div class="card flat"><div class="lab">Highest</div><div class="val">₹18 LPA</div></div>
+      <div class="card flat"><div class="lab">Average</div><div class="val">₹6.4 LPA</div></div>
+      <div class="card flat"><div class="lab">Median</div><div class="val">₹5.5 LPA</div></div>
+      <div class="card flat"><div class="lab">Lowest</div><div class="val">₹3.6 LPA</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span class="key" style="background:#fff;border:1px solid var(--line)"></span>
+  <b>White cards (Section A)</b> are links — they open your own drives, exactly as the Live page does today.<br>
+  <span class="key" style="background:var(--muted);border:1px solid var(--line)"></span>
+  <b>Grey cards (Section B)</b> are figures only. They do <i>not</i> open the student directory, because
+  an AE may not read it — a link that lands on an empty list is worse than a number that never claimed to be one.<br>
+  Both sections call the same domain functions the Central CPC's screen calls
+  (<code>computePlacementStats</code>, <code>summariseCtc</code>, <code>summariseFunnel</code>),
+  so the AE quotes the organisation's number and not a second opinion.
+</div>
+
+</body>
+</html>
