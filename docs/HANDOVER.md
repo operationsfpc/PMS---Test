@@ -4,6 +4,99 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (13) — the CSV waits for Save, and the offer letter reaches the student
+
+Four things Karthik asked to be folded into one piece. Migrations **0068 +
+0069**, both pushed to Mumbai.
+
+### 1. 🔴 The upload notified students before anything was saved
+
+`docs/inbox/WhatsApp Image 2026-08-27 at 17.53.23.jpeg`: **"2 links assigned
+and notified."** while the Round 1 form was still open, its date still empty
+(`dd-mm-yyyy --:--`) and **Save unpressed**.
+
+The file input sat *inside* the edit form but its `onChange` wrote the slots
+straight to `round_participants`, firing `meeting_slot_reaches_student`
+(0054). Three faults from one line:
+
+- **A notification cannot be recalled.** Students were told a time nobody had
+  committed to.
+- **Cancel was a lie.** It sat two inches away and could not take it back.
+- **The time was parsed against a draft date.** `uploadSlots` read
+  `detailsDraft.scheduledAt`, so `1pm` became 1pm on a day still being typed.
+
+**Option 1, approved:** the file is now **staged** — parsed, matched, counted,
+held. "*2 links ready for 2 students. Nothing is sent until you save.*" Save
+writes the round's own details **first** and the slots second, so a student is
+never told their slot for a round that has no mode. Cancel discards. If the
+details save and the links then fail, the message says exactly that, so nobody
+re-enters a time that is already recorded.
+
+**10 existing tests asserted the old behaviour.** Each carries an explicit
+`SPEC CHANGE 2026-08-27 (approved)` note and keeps every assertion about
+*what* gets matched — only *when* moved.
+
+### 2. Postgres was spelling a domain value (0068)
+
+The offer notification read **"(super dream)"**. 0043, and 0067 after it, built
+the words with `replace(offer_category::text, '_', ' ')`. Items (11) and (12)
+gave every screen one spelling; the triggers kept a second.
+`offer_category_label()` now mirrors `CATEGORY_LABEL`. The trigger was rebuilt
+in **full** — self-placed, opted-out and PB4's internship wording each re-proved
+by their own test, because `CREATE OR REPLACE` cannot patch a body.
+
+### 3. A notification can name its drive (0068)
+
+`notifications.drive_id`, nullable, **`on delete set null`**: the notification
+is the record of what a student was told and must outlive the drive it mentions.
+
+### 4. 🔴 The student could not see the offer letter
+
+`…18.18.49.jpeg` and `… (1).jpeg`. `0062` filed the letter against the offer and
+its storage policy has **always** admitted "staff who can read the offer **and
+the student**" (answer 1c, 2026-08-24). **No student screen ever read the
+column** — only the Central CPC's own page did. It was filed and then invisible
+to the person it belongs to.
+
+Now on all three places the offer reaches them: **My offers**, the concluded
+row in **Drives** (which already said "Offer received"), and the **offer
+notification** itself. `notificationCarriesOfferLetter` (domain) keeps it off
+the round schedules for the same drive — otherwise "View offer letter" appears
+under "You cleared Round 3". Both halves must be present to render a link: a
+name with no URL opens nothing, and a URL that failed to sign is a 400 the
+student cannot explain.
+
+### 0069 — the rows written before 0068 existed
+
+Checked against production the moment 0068 landed: **14 offer notifications,
+every one with a null drive**, and 4 offers already carrying a letter. The
+Drives and My-offers routes read the offer row and were already fixed; the
+Notifications route reads `drive_id`. Backfilled as a **function**, not a bare
+UPDATE — a statement inside a migration runs before any test data exists and
+can only be proved by reading it.
+
+**12 of 14 linked. The 2 that did not are correct:** one student holds **two
+HCL Technologies offers on two drives**, and the function refuses to guess — a
+wrong offer letter under the right words is worse than no letter. Neither HCL
+offer carries a letter, so nothing is actually hidden.
+
+### Verified
+
+Commits `31f0768` + `f50e815`. Live `93546e49`, asset `index-BiNM4n7d.js`
+carries "Nothing is sent until you save" and `noreferrer noopener`. Against
+Mumbai in a **rolled-back transaction**: a `super_dream` offer notified
+"… has made you an offer (**Super Dream**)." and carried its drive; the
+rollback left 0 rows behind. `offer_category_label` returns Super Dream /
+Internship, and hands back `mystery` untouched. 4078 tests green (+42),
+`pnpm check` exit 0.
+
+⚠️ **Noticed, not fixed — worth a decision.** `offers.ctc_lpa` is **NOT NULL**,
+so a cap-only internship offer (the very shape 0056 and P10 exist for) must
+still be declared with a CTC. It cost nothing today — the test passes 0 — but
+it is the same contradiction P10 was about, one table further on.
+
+---
+
 ## ✅ SHIPPED 2026-08-27 (12) — one spelling for an offer category, everywhere
 
 The follow-up flagged in (11), approved on the spot. Three screens printed
