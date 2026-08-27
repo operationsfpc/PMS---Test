@@ -7,7 +7,7 @@ import {
   needsDisbarmentReview,
 } from "@domain/attendance";
 import { condenseNotifications } from "@domain/notifications";
-import type { OfferCategory } from "@domain/offer-category";
+import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { type ApplicantRound, applicationProgress, studentPrompt } from "@domain/student-progress";
 import type { OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
 import { useEffect, useState } from "react";
@@ -73,8 +73,6 @@ export interface StudentDashboardView {
   notifications(): Promise<readonly StudentNotificationRow[]>;
   markRead(notificationId: string): Promise<void>;
 }
-
-const humanise = (value: string) => value.replaceAll("_", " ");
 
 /** Asia/Kolkata, always: a student in Chennai should not read a UTC date. */
 const onDate = (iso: string) =>
@@ -349,8 +347,10 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                       <Badge tone="success">
                         {offer.source === "self_placed" ? "Self-placed" : "Placed"}
                       </Badge>
+                      {/* 2026-08-27: the domain's spelling. This said "super
+                          dream" while every staff screen said "Super Dream". */}
                       {offer.offerCategory !== null && (
-                        <Badge tone="brand">{humanise(offer.offerCategory)}</Badge>
+                        <Badge tone="brand">{offerCategoryLabel(offer.offerCategory)}</Badge>
                       )}
                     </div>
                     <p className="font-heading font-bold text-ink-900">{offer.companyName}</p>

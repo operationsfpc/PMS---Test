@@ -221,6 +221,36 @@ export function offerCategoryLabel(category: OfferCategory): string {
   return CATEGORY_LABEL[category];
 }
 
+/**
+ * Narrows a raw column value — anything unrecognised is "no category".
+ *
+ * The counterpart of `asDriveType`. Several screens read `offer_category` as a
+ * bare string, straight off the row.
+ */
+export function asOfferCategory(raw: string | null | undefined): OfferCategory | null {
+  return OFFER_CATEGORIES.find((category) => category === raw) ?? null;
+}
+
+/**
+ * The label, for a caller holding a string rather than a narrowed category.
+ *
+ * UAT 2026-08-27: three screens spelled the category with
+ * `replaceAll("_", " ")` — the student's own dashboard, the CPC progress
+ * board, and the executive dashboard — so they read "super dream" while every
+ * other screen read "Super Dream". The executive dashboard hid it behind a CSS
+ * `capitalize`, which is a stylesheet spelling a domain value, and which would
+ * have gone on "fixing" the case for ever without the underlying string ever
+ * being right.
+ *
+ * An unrecognised value is handed back **untouched**, not blanked: a category
+ * nobody knows is a data problem, and an empty cell is how a data problem goes
+ * unnoticed for a month.
+ */
+export function offerCategoryLabelOf(raw: string): string {
+  const category = asOfferCategory(raw);
+  return category === null ? raw : CATEGORY_LABEL[category];
+}
+
 /** `5` → "₹5 LPA"; `4.5` → "₹4.5 LPA". No trailing zeros, no lost decimals. */
 const lpa = (value: number) => `₹${value} LPA`;
 

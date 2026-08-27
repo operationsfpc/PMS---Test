@@ -205,3 +205,37 @@ describe("DriveProgressPage — filtering and tagging by drive type", () => {
     expect(screen.queryByText("Zoho")).toBeNull();
   });
 });
+
+/**
+ * 2026-08-27: the CPC's progress board spelled the offer category with the
+ * same underscore-stripping humaniser — "Offer · ₹8 LPA · super dream".
+ */
+describe("the offer badge's spelling", () => {
+  const withCategory = (offerCategory: string): readonly DriveProgressEntry[] => [
+    {
+      ...DRIVE,
+      students: [
+        {
+          applicationId: "a9",
+          studentName: "Nithya S",
+          rollNumber: "21CSE7777",
+          shortlisted: true,
+          rounds: [],
+          offer: { ctcLpa: 12, offerCategory },
+        },
+      ],
+    },
+  ];
+
+  it("uses the domain's words for a rung", async () => {
+    render(<DriveProgressPage view={view(withCategory("super_dream"))} />);
+
+    expect(await screen.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
+  });
+
+  it("uses them for an internship too", async () => {
+    render(<DriveProgressPage view={view(withCategory("internship"))} />);
+
+    expect(await screen.findByText(/Offer · ₹12 LPA · Internship/)).toBeDefined();
+  });
+});

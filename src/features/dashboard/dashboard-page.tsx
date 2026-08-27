@@ -3,7 +3,7 @@ import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
 import { type DriveParticipation, driveFunnel } from "@domain/drive-funnel";
 import { sameMoney } from "@domain/math";
-import type { OfferCategory } from "@domain/offer-category";
+import { type OfferCategory, offerCategoryLabelOf } from "@domain/offer-category";
 import { registrationFunnel } from "@domain/registration-funnel";
 import { computePlacementStats, type StudentPlacementFacts } from "@domain/statistics";
 import type { DirectoryFilter } from "@domain/student-directory";
@@ -397,7 +397,12 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                               to={studentsLink({ filter: "placed", category })}
                               className="flex flex-wrap items-center justify-between gap-2 rounded-lg py-2 text-sm transition-colors hover:bg-brand-50"
                             >
-                              <span className="capitalize text-ink-700">{label(category)}</span>
+                              {/* 2026-08-27: the domain's spelling. The
+                                  `capitalize` class was a stylesheet spelling
+                                  a domain value — and it could not have
+                                  rescued "internship" once (10) made it a
+                                  category. */}
+                              <span className="text-ink-700">{offerCategoryLabelOf(category)}</span>
                               <span className="text-ink-500">
                                 {byCategory.count} placed · avg{" "}
                                 <span className="font-semibold text-ink-900">
@@ -445,7 +450,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                         })}
                         className="flex justify-between rounded-lg text-sm transition-colors hover:bg-brand-50"
                       >
-                        <span className="capitalize text-ink-700">{label(category)}</span>
+                        <span className="text-ink-700">{offerCategoryLabelOf(category)}</span>
                         <span className="font-semibold text-ink-900">{count}</span>
                       </Link>
                     </li>

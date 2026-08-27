@@ -721,3 +721,46 @@ describe("the package figures", () => {
     );
   });
 });
+
+/**
+ * 2026-08-27: "Offers by category" and "Package by category" spelled their
+ * categories by stripping underscores and leaning on CSS `capitalize` to fix
+ * the case. The DOM said "super dream"; the screen said "Super Dream" only
+ * because of a stylesheet. A category's spelling is a domain fact, not a
+ * presentation trick — and CSS could not rescue "internship" once (10) made
+ * it a category.
+ */
+describe("category spelling", () => {
+  it("names offer categories in the domain's words, without help from CSS", async () => {
+    render(
+      <DashboardPage
+        view={view({
+          ...SNAPSHOT,
+          offersByCategory: { regular: 3, super_dream: 1, internship: 2 },
+        })}
+        title="Executive overview"
+      />,
+    );
+
+    const offers = await screen.findByRole("region", { name: "Offers by category" });
+    expect(within(offers).getByText("Super Dream")).toBeDefined();
+    expect(within(offers).getByText("Internship")).toBeDefined();
+    expect(within(offers).queryByText("super dream")).toBeNull();
+  });
+
+  it("names package categories the same way", async () => {
+    render(
+      <DashboardPage
+        view={view({
+          ...SNAPSHOT,
+          placements: [{ studentId: "a", ctcLpa: 14, category: "super_dream" }],
+        })}
+        title="Executive overview"
+      />,
+    );
+
+    const packages = await screen.findByRole("list", { name: "Package by category" });
+    expect(within(packages).getByText("Super Dream")).toBeDefined();
+    expect(within(packages).queryByText("super dream")).toBeNull();
+  });
+});

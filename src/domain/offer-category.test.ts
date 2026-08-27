@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  asOfferCategory,
   classifyOfferCategory,
   compareOfferCategory,
   DEFAULT_OFFER_CATEGORY_BANDS,
@@ -9,6 +10,7 @@ import {
   offerCategoriesFor,
   offerCategoryAllowedFor,
   offerCategoryLabel,
+  offerCategoryLabelOf,
   offerCategoryRank,
   offerCategoryRestatesType,
   requiredOfferCategoryFor,
@@ -316,6 +318,51 @@ describe("offerCategoryRestatesType", () => {
           requiredOfferCategoryFor(type) === category,
         );
       }
+    }
+  });
+});
+
+/**
+ * The counterpart of `asDriveType`. Three screens hold `offer_category` as a
+ * bare string and spelled it with `replaceAll("_", " ")` — "super dream",
+ * "internship" — while every other screen said "Super Dream". Two spellings of
+ * one fact is two facts to the person reading them.
+ */
+describe("asOfferCategory", () => {
+  it("recognises every category", () => {
+    for (const category of OFFER_CATEGORIES) {
+      expect(asOfferCategory(category)).toBe(category);
+    }
+  });
+
+  it("answers null for anything that is not a category", () => {
+    expect(asOfferCategory("")).toBeNull();
+    expect(asOfferCategory("super dream")).toBeNull();
+    expect(asOfferCategory("Dream")).toBeNull();
+    expect(asOfferCategory(null)).toBeNull();
+    expect(asOfferCategory(undefined)).toBeNull();
+  });
+});
+
+/**
+ * The label, for a caller holding a string. Unknown values are handed back
+ * untouched rather than swallowed: a category nobody recognises is a data
+ * problem, and printing nothing would hide it.
+ */
+describe("offerCategoryLabelOf", () => {
+  it("gives the domain's spelling for every category", () => {
+    expect(offerCategoryLabelOf("super_dream")).toBe("Super Dream");
+    expect(offerCategoryLabelOf("internship")).toBe("Internship");
+    expect(offerCategoryLabelOf("regular")).toBe("Regular");
+  });
+
+  it("hands back an unrecognised value rather than hiding it", () => {
+    expect(offerCategoryLabelOf("mystery_band")).toBe("mystery_band");
+  });
+
+  it("agrees with offerCategoryLabel for every category", () => {
+    for (const category of OFFER_CATEGORIES) {
+      expect(offerCategoryLabelOf(category)).toBe(offerCategoryLabel(category));
     }
   });
 });

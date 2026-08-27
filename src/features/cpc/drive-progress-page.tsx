@@ -8,6 +8,7 @@ import {
   driveTypeTone,
   matchesDriveType,
 } from "@domain/drive-type";
+import { offerCategoryLabelOf } from "@domain/offer-category";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useEffect, useState } from "react";
 
@@ -170,8 +171,12 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                       {student.offer !== null && (
                         <Badge tone="success">
                           Offer · ₹{student.offer.ctcLpa} LPA
+                          {/* 2026-08-27: the domain's spelling, not the
+                              round-status humaniser it happened to sit next
+                              to. `label` still serves results and attendance,
+                              which have no domain wording of their own. */}
                           {student.offer.offerCategory !== null
-                            ? ` · ${label(student.offer.offerCategory)}`
+                            ? ` · ${offerCategoryLabelOf(student.offer.offerCategory)}`
                             : ""}
                         </Badge>
                       )}

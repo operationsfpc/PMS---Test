@@ -426,3 +426,42 @@ describe("StudentDashboard — notifications", () => {
     expect(screen.getByText(/✓ read/i)).toBeDefined();
   });
 });
+
+/**
+ * 2026-08-27 (second UAT round): the offer badge printed the raw column with
+ * `replaceAll("_", " ")`, so a student's own dashboard said "super dream"
+ * while every staff screen said "Super Dream" — and, since (10) added the
+ * category, "internship" in lower case.
+ */
+describe("the offer badge's spelling", () => {
+  const withOffer = (offerCategory: string) =>
+    view({
+      offers: [
+        {
+          offerId: "o-1",
+          companyName: "Freshworks",
+          roleTitle: null,
+          ctcLpa: 12,
+          offerCategory: offerCategory as never,
+          declaredAt: "2026-06-12T04:30:00.000Z",
+          source: "on_campus",
+        },
+      ],
+    });
+
+  it("uses the domain's words for a rung", async () => {
+    show(withOffer("super_dream"));
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    expect(within(offers).getByText("Super Dream")).toBeDefined();
+    expect(within(offers).queryByText("super dream")).toBeNull();
+  });
+
+  it("uses them for an internship too", async () => {
+    show(withOffer("internship"));
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    expect(within(offers).getByText("Internship")).toBeDefined();
+    expect(within(offers).queryByText("internship")).toBeNull();
+  });
+});
