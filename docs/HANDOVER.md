@@ -4,6 +4,48 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (11) — an internship is named once, not twice
+
+UAT (`docs/inbox/WhatsApp Image 2026-08-27 at 17.40.11.jpeg`): the drive
+record page for *XYZ — Jr. Software engineer* carried three badges —
+**Approved — not yet published**, **Internship**, **internship**. The second
+is the offer category, the third is `drive_type` printed with
+`replaceAll("_", " ")`.
+
+**PB3 shipped in (10) was correct and still insufficient.** It suppressed the
+duplicate on the student card by writing `!== "internship"` into the JSX. A
+rule kept in one screen's markup is a rule the other screens cannot obey — and
+two of them did not: the drive record page, and the Central CPC publish
+subtitle, which read `… · Internship · … · Internship`.
+
+1. **`offerCategoryRestatesType(driveType, category)`** (`@domain/offer-category`)
+   — derived from `requiredOfferCategoryFor`, never from the literal string.
+   When a type dictates its category, saying it twice is redundant *by
+   definition*, so the rule cannot drift from the pairing it mirrors. A drive
+   with **no declared type** has said nothing, so its category is still shown —
+   suppressing it there would hide the fact rather than de-duplicate it.
+2. **`asDriveType(raw)`** (`@domain/drive-type`) — screens read `drive_type` as
+   a plain string and were guessing at its wording. This is where the
+   lower-case `internship` and the never-chosen phrase `internship convertible`
+   came from. The record page now asks the domain and gets **Internship**,
+   **Internship → Full time**, **Full time**, with the right tone.
+3. **All three sites fixed together**, and the student card refactored to ask
+   the domain instead of holding its own copy.
+
+No migration — presentation only. Commit `12befe2`. Live asset
+`index-CLhD2TGs.js`, version `9a046eee`: verified to carry "Internship → Full
+time" and to contain **zero** occurrences of `replaceAll("_"," ")`.
+4025 tests green (+13), `pnpm check` exit 0.
+
+⚠️ **Found while verifying, NOT fixed — needs Karthik's word.** Three screens
+still print an **offer category** through the same `replaceAll("_", " ")`
+humaniser instead of `offerCategoryLabel`, so they say "super dream" and
+"internship" in lower case: `student/student-dashboard.tsx:353`,
+`cpc/drive-progress-page.tsx:174`, `dashboard/dashboard-page.tsx:400/448`.
+Same family as this bug, not the bug reported. Cheap to fix on a word.
+
+---
+
 ## ✅ SHIPPED 2026-08-27 (10) — drive-type filter and tags, the stipend at approval, and the Internship category
 
 Karthik (`docs/inbox/WhatsApp Image 2026-08-27 at 15.56.45.jpeg`): a filter and
