@@ -77,3 +77,17 @@ export function matchesDriveType(type: DriveType | null, filter: DriveTypeFilter
 export function asDriveTypeFilter(raw: string | null | undefined): DriveTypeFilter {
   return DRIVE_TYPES.find((type) => type === raw) ?? "";
 }
+
+/**
+ * Narrows a raw column value — anything unrecognised, including the empty
+ * string, is "no type declared".
+ *
+ * Screens that read a drive row hold `drive_type` as a plain string. Before
+ * this, the record page printed it with `replaceAll("_", " ")` and produced
+ * "internship" in lower case and "internship convertible" — two spellings
+ * this module exists to abolish. A screen with a string can now ask what it
+ * is instead of guessing.
+ */
+export function asDriveType(raw: string | null | undefined): DriveType | null {
+  return DRIVE_TYPES.find((type) => type === raw) ?? null;
+}

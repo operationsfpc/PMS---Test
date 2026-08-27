@@ -1,6 +1,7 @@
 import { Badge, Card, PageHeader } from "@components/ui";
 import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
-import { offerCategoryLabel } from "@domain/offer-category";
+import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
+import { offerCategoryLabel, offerCategoryRestatesType } from "@domain/offer-category";
 import type { AppRole } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -137,6 +138,7 @@ export function DriveRecordPage({
   }
 
   const staff = role !== "student";
+  const driveType = asDriveType(record.driveType);
 
   /**
    * C8 (2026-08-21, answer 5b): the list behind a clicked funnel number.
@@ -219,11 +221,16 @@ export function DriveRecordPage({
 
       <div className="mb-4 flex flex-wrap gap-2">
         <Badge tone="brand">{STATUS_LABEL[record.status] ?? record.status}</Badge>
-        {record.offerCategory !== null && (
-          <Badge tone="neutral">{offerCategoryLabel(record.offerCategory)}</Badge>
-        )}
-        {record.driveType !== "" && (
-          <Badge tone="neutral">{record.driveType.replaceAll("_", " ")}</Badge>
+        {/* UAT 2026-08-27: an internship's category IS its type. Two badges
+            reading "Internship" are one fact wearing two colours. */}
+        {record.offerCategory !== null &&
+          !offerCategoryRestatesType(driveType, record.offerCategory) && (
+            <Badge tone="neutral">{offerCategoryLabel(record.offerCategory)}</Badge>
+          )}
+        {/* The domain's words, not `replaceAll("_", " ")` — which is where
+            the lower-case "internship" in the screenshot came from. */}
+        {driveType !== null && (
+          <Badge tone={driveTypeTone(driveType)}>{driveTypeLabel(driveType)}</Badge>
         )}
       </div>
 

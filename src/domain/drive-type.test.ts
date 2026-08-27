@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  asDriveType,
   asDriveTypeFilter,
   DRIVE_TYPE_FILTERS,
   driveTypeLabel,
@@ -92,5 +93,28 @@ describe("asDriveTypeFilter", () => {
     expect(asDriveTypeFilter("nonsense")).toBe("");
     expect(asDriveTypeFilter(null)).toBe("");
     expect(asDriveTypeFilter(undefined)).toBe("");
+  });
+});
+
+/**
+ * The drive record page carries `driveType` as a plain string (it is read
+ * straight off the row), and printed it with `replaceAll("_", " ")` — which
+ * is how a badge came to read "internship" in lower case next to the
+ * category's "Internship". A screen holding a string needs a way to ask the
+ * domain what it is.
+ */
+describe("asDriveType", () => {
+  it("recognises every declared type", () => {
+    for (const type of DRIVE_TYPES) {
+      expect(asDriveType(type)).toBe(type);
+    }
+  });
+
+  it("answers null for anything that is not a type", () => {
+    expect(asDriveType("")).toBeNull();
+    expect(asDriveType("internship convertible")).toBeNull();
+    expect(asDriveType("nonsense")).toBeNull();
+    expect(asDriveType(null)).toBeNull();
+    expect(asDriveType(undefined)).toBeNull();
   });
 });

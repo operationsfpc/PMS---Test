@@ -111,6 +111,28 @@ export function requiredOfferCategoryFor(driveType: DriveType | null): OfferCate
 }
 
 /**
+ * Whether naming the category would only repeat the type tag beside it.
+ *
+ * UAT 2026-08-27 (`docs/inbox/WhatsApp Image 2026-08-27 at 17.40.11.jpeg`):
+ * the drive record page showed "Internship" and "internship" side by side —
+ * the category and the type, the same word twice. PB3 had already settled
+ * this for the student card, but it was settled *in the JSX*, as a literal
+ * `!== "internship"`. Every other screen that shows both facts kept the
+ * duplicate, because the rule was not anywhere they could reach.
+ *
+ * Derived from `requiredOfferCategoryFor` rather than tested against the
+ * literal: when a type dictates its category, saying it twice is the
+ * definition of redundant. A drive with no declared type has said nothing, so
+ * nothing is being repeated and the category still has to be shown.
+ */
+export function offerCategoryRestatesType(
+  driveType: DriveType | null,
+  category: OfferCategory | null,
+): boolean {
+  return category !== null && requiredOfferCategoryFor(driveType) === category;
+}
+
+/**
  * The pairing rule, mirroring the database's
  * `internship_carries_internship_category` constraint on both `drives` and
  * `offers`. Change both or neither.

@@ -1,8 +1,12 @@
 import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import type { DriveReadiness } from "@domain/drive-lifecycle";
-import { driveTypeLabel } from "@domain/drive-type";
+import { asDriveType, driveTypeLabel } from "@domain/drive-type";
 import type { EligibilityCriteria } from "@domain/eligibility";
-import { offerCategoryLabel } from "@domain/offer-category";
+import {
+  type OfferCategory,
+  offerCategoryLabel,
+  offerCategoryRestatesType,
+} from "@domain/offer-category";
 import type { Offer } from "@domain/offers";
 import type { AcademicProfile, DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -79,14 +83,19 @@ function ctcLabel(min: number | null, max: number | null): string | null {
 
 /** Everything under the drive title, assembled from what is actually set. */
 function subtitleFor(row: Record<string, unknown>): string {
+  const driveType = asDriveType(row.drive_type as string | null);
+  const category = (row.offer_category as OfferCategory | null) ?? null;
+
   return [
     row.role_title as string | null,
     // 2026-08-27: the domain's words, not a underscore-stripped enum value.
-    row.offer_category == null
+    // UAT the same day: and never twice — an internship's category is its
+    // type, so the subtitle read "… · Internship · … · Internship".
+    category === null || offerCategoryRestatesType(driveType, category)
       ? null
-      : offerCategoryLabel(row.offer_category as Parameters<typeof offerCategoryLabel>[0]),
+      : offerCategoryLabel(category),
     ctcLabel(row.ctc_min_lpa as number | null, row.ctc_max_lpa as number | null),
-    row.drive_type == null ? null : driveTypeLabel(row.drive_type as DriveType),
+    driveType === null ? null : driveTypeLabel(driveType),
   ]
     .filter((part): part is string => typeof part === "string" && part !== "")
     .join(" · ");

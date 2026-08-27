@@ -1,7 +1,11 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { applicationEvidenceProblems } from "@domain/application-snapshot";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
-import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
+import {
+  type OfferCategory,
+  offerCategoryLabel,
+  offerCategoryRestatesType,
+} from "@domain/offer-category";
 import { describeTimeLeft } from "@domain/student-drive-lists";
 import type { DriveType, RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
@@ -199,10 +203,13 @@ export function DrivesList({
                   )}
                   {/* PB3: an internship's CATEGORY is "Internship" and so is
                       its type tag. The same word twice, in two colours, says
-                      nothing the second time. */}
-                  {drive.offerCategory !== null && drive.offerCategory !== "internship" && (
-                    <Badge tone="brand">{offerCategoryLabel(drive.offerCategory)}</Badge>
-                  )}
+                      nothing the second time. The rule moved into the domain
+                      2026-08-27 — as a literal here, three other screens that
+                      show both facts never got it. */}
+                  {drive.offerCategory !== null &&
+                    !offerCategoryRestatesType(drive.driveType ?? null, drive.offerCategory) && (
+                      <Badge tone="brand">{offerCategoryLabel(drive.offerCategory)}</Badge>
+                    )}
                   {drive.applied && <Badge tone="success">Applied</Badge>}
                 </div>
                 <p className="text-sm text-ink-500">

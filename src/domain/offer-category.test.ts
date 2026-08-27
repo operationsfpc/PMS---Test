@@ -10,9 +10,11 @@ import {
   offerCategoryAllowedFor,
   offerCategoryLabel,
   offerCategoryRank,
+  offerCategoryRestatesType,
   requiredOfferCategoryFor,
   suggestOfferCategory,
 } from "./offer-category";
+import { DRIVE_TYPES } from "./types";
 
 /**
  * R1 — classifyOfferCategory
@@ -271,5 +273,49 @@ describe("compareOfferCategory", () => {
 
   it("returns a positive number when the first category is higher", () => {
     expect(compareOfferCategory("super_dream", "dream")).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * UAT 2026-08-27 (`docs/inbox/WhatsApp Image 2026-08-27 at 17.40.11.jpeg`):
+ * the drive record page showed "Internship" twice — once as the offer
+ * category, once as the drive type. PB3 answered this for the student card
+ * with a literal `!== "internship"` written into the JSX; every other screen
+ * that shows both facts kept the duplicate. The rule belongs here.
+ */
+describe("offerCategoryRestatesType", () => {
+  it("is true when the category only repeats what the type tag already said", () => {
+    expect(offerCategoryRestatesType("internship", "internship")).toBe(true);
+  });
+
+  it("is false for a rung, which the type never states", () => {
+    expect(offerCategoryRestatesType("placement", "regular")).toBe(false);
+    expect(offerCategoryRestatesType("placement", "dream")).toBe(false);
+    expect(offerCategoryRestatesType("internship_convertible", "super_dream")).toBe(false);
+  });
+
+  it("is false when there is no category to repeat", () => {
+    expect(offerCategoryRestatesType("internship", null)).toBe(false);
+    expect(offerCategoryRestatesType("placement", null)).toBe(false);
+  });
+
+  /**
+   * A drive with no declared type has said nothing, so the category is the
+   * only thing the reader has. Suppressing it there would hide the fact
+   * entirely rather than de-duplicate it.
+   */
+  it("is false when the drive never declared a type", () => {
+    expect(offerCategoryRestatesType(null, "internship")).toBe(false);
+  });
+
+  /** One rule, two callers: it must agree with the pairing it is derived from. */
+  it("agrees with requiredOfferCategoryFor for every type and category", () => {
+    for (const type of [...DRIVE_TYPES, null]) {
+      for (const category of OFFER_CATEGORIES) {
+        expect(offerCategoryRestatesType(type, category)).toBe(
+          requiredOfferCategoryFor(type) === category,
+        );
+      }
+    }
   });
 });

@@ -329,3 +329,69 @@ describe("the stage drill-through — edges", () => {
     expect(screen.queryByRole("region", { name: /stage/i })).toBeNull();
   });
 });
+
+/**
+ * UAT 2026-08-27 — `docs/inbox/WhatsApp Image 2026-08-27 at 17.40.11.jpeg`.
+ *
+ * "XYZ — Jr. Software engineer" carried three badges: "Approved — not yet
+ * published", "Internship", and "internship". The second is the offer
+ * category, the third is the drive type printed as a raw enum value. The same
+ * word, twice, one of them in the wrong case.
+ */
+describe("the badge row", () => {
+  const withType = (driveType: string, offerCategory: DriveRecord["offerCategory"]) =>
+    view({ ...RECORD, status: "approved", driveType, offerCategory });
+
+  it("names an internship once, in the domain's words", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={withType("internship", "internship")} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Approved — not yet published");
+    expect(screen.getAllByText("Internship")).toHaveLength(1);
+    expect(screen.queryByText("internship")).toBeNull();
+  });
+
+  it("keeps the rung, which the type never states", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={withType("placement", "super_dream")} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Approved — not yet published");
+    expect(screen.getByText("Super Dream")).toBeDefined();
+    expect(screen.getByText("Full time")).toBeDefined();
+  });
+
+  /** "internship convertible" was never a phrase anyone chose. */
+  it("never prints an underscore-stripped enum value", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={withType("internship_convertible", "dream")}
+          role={CENTRAL}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Approved — not yet published");
+    expect(screen.getByText("Internship → Full time")).toBeDefined();
+    expect(screen.queryByText("internship convertible")).toBeNull();
+  });
+
+  it("says nothing at all about a type the drive never declared", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={withType("", "regular")} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Approved — not yet published");
+    expect(screen.getByText("Regular")).toBeDefined();
+    expect(screen.queryByText("Type not set")).toBeNull();
+  });
+});

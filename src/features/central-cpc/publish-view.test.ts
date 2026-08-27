@@ -195,6 +195,34 @@ describe("loading the publish screen", () => {
     expect((await view().load()).drive.subtitle).not.toContain("₹");
   });
 
+  /**
+   * UAT 2026-08-27: an internship's category IS its type, so the subtitle read
+   * "… · Internship · … · Internship". Said twice, it looks like two facts.
+   */
+  it("names an internship once, and keeps the type", async () => {
+    stub({
+      drive: {
+        ...DRIVE,
+        drive_type: "internship",
+        offer_category: "internship",
+        ctc_min_lpa: null,
+        ctc_max_lpa: null,
+      },
+    });
+
+    const { subtitle } = (await view().load()).drive;
+    expect(subtitle).toBe("Member Technical Staff · Internship");
+  });
+
+  /** A rung is never a restatement — an internship-convertible keeps both. */
+  it("keeps the category when the type does not already state it", async () => {
+    stub({ drive: { ...DRIVE, drive_type: "internship_convertible" } });
+
+    expect((await view().load()).drive.subtitle).toBe(
+      "Member Technical Staff · Super Dream · ₹6.5–9 LPA · Internship → Full time",
+    );
+  });
+
   it("puts the rounds in sequence order", async () => {
     stub();
 
