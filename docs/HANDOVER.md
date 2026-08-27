@@ -4,6 +4,84 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (14) — an internship offer records a stipend, not a CTC
+
+Karthik: **"go with option 1"**, and "correct the two XYZ rows that are live
+now". Migration **0070**, pushed to Mumbai.
+
+### The defect
+
+P10 — resolved that morning — let a **drive** go live on a stipend alone. The
+**offer** at the end of that drive was never changed to match: `ctc_lpa` was
+NOT NULL and the declare screen refused anything ≤ 0. So the two offers already
+declared on the XYZ internship, a drive paying **₹15,000 a month**, were
+recorded at **₹10.00 and ₹12.00 LPA**. Nobody mistyped them; the box would take
+nothing else, and a coordinator with a student in front of them types
+something.
+
+### ⚠️ A correction to what I first told Karthik
+
+I said the executive dashboard's average package had moved from ₹6.97 to ₹7.51
+because of these two rows. **That was wrong** — it was my own ad-hoc SQL over
+the whole `offers` table, not what any screen computes. `placementOffers` has
+excluded plain internships from the placement record set since the beginning,
+so the invented figures never reached an average, a median or a highest
+package. The real harm was narrower and still worth fixing: the two screens
+that quote an offer's money **directly** — the student's own dashboard and the
+CPC's progress board — both told a student their ₹15,000-a-month internship was
+worth ₹10 LPA. And the stored data was false.
+
+### What shipped
+
+- **`@domain/offer-pay`** — `describeOfferPay`, `offerPayProblem`,
+  `offerCountsAsPackage`. One formatter, one guard.
+- **0070** — `offers.stipend_monthly`; `ctc_lpa` nullable;
+  `offer_records_what_it_pays`: a plain internship records a stipend, anything
+  else a CTC, **never both**. `internship_convertible` is salaried, the line
+  0067 already drew for drives.
+- **The declare screen asks for one figure**, chosen by the drive, pre-filled
+  from the drive's own stipend.
+- **`Offer.ctcLpa` is now `number | null`.** It was `number`, and
+  `Number(null)` made an internship worth **0** — a figure nobody chose sitting
+  in the same field as real salaries. `bestByCtc` skips a null instead of
+  reading it as zero, and a dead second null-check was deleted rather than left
+  as a branch no input can reach.
+
+### 🔴 The push that failed, and why the suite did not catch it
+
+The first `db:push` of 0070 **failed on the real database with 23502** and
+rolled back whole (verified: no column, no constraint, both rows untouched).
+The repair that clears an internship's CTC ran **before** `drop not null`.
+
+**The suite had passed.** A fresh PGlite database holds no legacy rows, so the
+repair matched nothing, ran clean, and proved only that it does no harm when
+there is nothing to do. I had named this exact trap in 0069 an hour earlier —
+*"a statement that runs once inside a migration runs before any test data
+exists and can only ever be proved by reading it"* — and then did not apply it
+here.
+
+Fixed properly: the order is corrected with the reason written beside it, the
+repair is a **function**, and four tests create the legacy shape on purpose —
+lifting the constraint to write a row the constraint exists to forbid, and
+putting it back, which also proves the repaired data satisfies it.
+
+**The rule for next time: a migration that repairs data must repair data in a
+test.** If the repair is a bare statement, it cannot.
+
+### Verified
+
+Commits `99b6759` · `dc07786` · `6ade342`. Live `8dd60689`, asset
+`index-Bkk55S3d.js` carries "Stipend (₹ / month)" and "Pay not recorded".
+Against Mumbai: **both XYZ rows now read `ctc_lpa NULL, stipend_monthly
+15000`**, matching what their drive records; re-inserting the old shape is
+refused with `offer_records_what_it_pays` and left 0 rows behind. The pre-push
+hook also caught a `noUncheckedIndexedAccess` error and refused the push —
+working exactly as intended. 4121 tests green, `pnpm check` exit 0.
+
+✅ **The `offers.ctc_lpa` NOT NULL item raised in (13) is CLOSED by this.**
+
+---
+
 ## ✅ SHIPPED 2026-08-27 (13) — the CSV waits for Save, and the offer letter reaches the student
 
 Four things Karthik asked to be folded into one piece. Migrations **0068 +
@@ -92,8 +170,8 @@ Internship, and hands back `mystery` untouched. 4078 tests green (+42),
 
 ⚠️ **Noticed, not fixed — worth a decision.** `offers.ctc_lpa` is **NOT NULL**,
 so a cap-only internship offer (the very shape 0056 and P10 exist for) must
-still be declared with a CTC. It cost nothing today — the test passes 0 — but
-it is the same contradiction P10 was about, one table further on.
+still be declared with a CTC. → Karthik: "go with option 1". **Fixed in (14)
+above, migration 0070.**
 
 ---
 
