@@ -4,7 +4,13 @@ import {
   compareOfferCategory,
   DEFAULT_OFFER_CATEGORY_BANDS,
   describeOfferCategoryBands,
+  LADDER_CATEGORIES,
+  OFFER_CATEGORIES,
+  offerCategoriesFor,
+  offerCategoryAllowedFor,
+  offerCategoryLabel,
   offerCategoryRank,
+  requiredOfferCategoryFor,
   suggestOfferCategory,
 } from "./offer-category";
 
@@ -107,6 +113,90 @@ describe("suggestOfferCategory", () => {
 
   it("honours retuned bands", () => {
     expect(suggestOfferCategory(6, { dreamMinLpa: 7, superDreamMinLpa: 14 })).toBe("regular");
+  });
+});
+
+/**
+ * Karthik, 2026-08-27: "when he approves, he has three categories only for
+ * placement (Regular, dream and super dream). add one more there, as
+ * Internship."
+ *
+ * The three are RUNGS on a ladder (`offerCategoryRank`) that decides which
+ * drives a placed student may still see (R5) and what counts as their
+ * placement (R9). Internship is not a rung — a plain internship has never
+ * been on that ladder (PRD §11). So it is a member of the enum and NOT a
+ * member of the ladder, and asking for its rank is a bug, not a number.
+ */
+describe("the ladder and the categories are not the same list", () => {
+  it("carries Internship as a storable category", () => {
+    expect(OFFER_CATEGORIES).toContain("internship");
+  });
+
+  it("keeps Internship off the ladder", () => {
+    expect(LADDER_CATEGORIES).toEqual(["regular", "dream", "super_dream"]);
+    expect(LADDER_CATEGORIES).not.toContain("internship");
+  });
+
+  it("refuses to rank Internship rather than ranking it lowest or highest", () => {
+    expect(() => offerCategoryRank("internship")).toThrow(/ladder/i);
+  });
+
+  it("never suggests Internship from a CTC — a band is not a drive type", () => {
+    expect(classifyOfferCategory(0.5)).not.toBe("internship");
+    expect(classifyOfferCategory(50)).not.toBe("internship");
+    expect(suggestOfferCategory(null)).toBeNull();
+  });
+
+  it("labels it", () => {
+    expect(offerCategoryLabel("internship")).toBe("Internship");
+  });
+});
+
+/**
+ * Answer 3 (2026-08-27): "only for internship". The Delivery Head is never
+ * offered a choice the database would refuse — an internship drive can carry
+ * only the internship category, and no other drive type can carry it at all.
+ */
+describe("offerCategoriesFor", () => {
+  it("offers an internship drive exactly one category", () => {
+    expect(offerCategoriesFor("internship")).toEqual(["internship"]);
+  });
+
+  it("offers the three rungs to a drive that sits on the ladder", () => {
+    expect(offerCategoriesFor("placement")).toEqual(LADDER_CATEGORIES);
+    expect(offerCategoriesFor("internship_convertible")).toEqual(LADDER_CATEGORIES);
+  });
+
+  it("offers the rungs when the type is not known yet — never the internship one", () => {
+    expect(offerCategoriesFor(null)).toEqual(LADDER_CATEGORIES);
+  });
+});
+
+describe("requiredOfferCategoryFor", () => {
+  it("an internship drive has no decision to make — its category is the type", () => {
+    expect(requiredOfferCategoryFor("internship")).toBe("internship");
+  });
+
+  it("every other type is the Delivery Head's judgement, not a derivation", () => {
+    expect(requiredOfferCategoryFor("placement")).toBeNull();
+    expect(requiredOfferCategoryFor("internship_convertible")).toBeNull();
+    expect(requiredOfferCategoryFor(null)).toBeNull();
+  });
+});
+
+describe("offerCategoryAllowedFor", () => {
+  it("mirrors the database constraint, so the screen never proposes a refusal", () => {
+    expect(offerCategoryAllowedFor("internship", "internship")).toBe(true);
+    expect(offerCategoryAllowedFor("internship", "dream")).toBe(false);
+    expect(offerCategoryAllowedFor("placement", "internship")).toBe(false);
+    expect(offerCategoryAllowedFor("placement", "dream")).toBe(true);
+    expect(offerCategoryAllowedFor("internship_convertible", "super_dream")).toBe(true);
+    expect(offerCategoryAllowedFor("internship_convertible", "internship")).toBe(false);
+  });
+
+  it("a drive with no type yet may not be given the internship category", () => {
+    expect(offerCategoryAllowedFor(null, "internship")).toBe(false);
+    expect(offerCategoryAllowedFor(null, "regular")).toBe(true);
   });
 });
 

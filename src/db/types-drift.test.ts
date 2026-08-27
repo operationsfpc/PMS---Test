@@ -31,6 +31,8 @@ describe("Postgres enums match the domain vocabularies", () => {
     ["drive_type", DRIVE_TYPES],
     ["drive_mode", DRIVE_MODES],
     ["arrear_policy", ARREAR_POLICIES],
+    // Membership must match; the ORDER deliberately does not — see the
+    // separate case below.
     ["offer_category", OFFER_CATEGORIES],
     ["srf_status", SRF_STATUSES],
     ["participation_status", PARTICIPATION_STATUSES],
@@ -63,8 +65,33 @@ describe("Postgres enums match the domain vocabularies", () => {
        where t.typname = $1 order by e.enumsortorder`,
         [pgType],
       );
-      expect(rows.map((r) => r.enumlabel)).toEqual([...tsValues]);
+      const labels = rows.map((r) => r.enumlabel);
+      if (pgType === "offer_category") {
+        // 2026-08-27 (PB1): 'internship' is declared FIRST in Postgres so that
+        // a stray `order by offer_category` treats it as the lowest value
+        // rather than above 'super_dream'. It is listed last in TypeScript,
+        // where order is only a dropdown's order and nothing compares by it.
+        // What must not drift is WHICH values exist.
+        expect([...labels].sort()).toEqual([...tsValues].sort());
+        return;
+      }
+      expect(labels).toEqual([...tsValues]);
     },
     60_000,
   );
+
+  /**
+   * The ordering itself, stated once so it cannot be "tidied" back.
+   * `src/db/internship-category-and-stipend.test.ts` proves the same thing
+   * from the migration's side.
+   */
+  it("declares the un-ranked internship category below every rung", async () => {
+    const { sql } = await createTestDb();
+    const rows = await sql(
+      `select e.enumlabel from pg_enum e
+       join pg_type t on t.oid = e.enumtypid
+       where t.typname = 'offer_category' order by e.enumsortorder`,
+    );
+    expect(rows.map((r) => r.enumlabel)).toEqual(["internship", "regular", "dream", "super_dream"]);
+  }, 60_000);
 });

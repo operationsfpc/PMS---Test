@@ -227,3 +227,37 @@ describe("cockpit disbarment reviews (R8)", () => {
     expect(review?.rollNumber).toBe("—");
   });
 });
+
+/**
+ * 2026-08-27: the cockpit filters and tags by drive type, and shows an
+ * internship's stipend, so the view has to fetch all three columns.
+ */
+describe("createSupabaseCockpitView — the drive type and the stipend", () => {
+  it("carries the type and the stipend through to the screen", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([
+          {
+            ...DRIVE,
+            drive_type: "internship",
+            stipend_min_monthly: 15000,
+            stipend_max_monthly: 20000,
+          },
+        ]),
+      ),
+    );
+
+    const [drive] = await createSupabaseCockpitView(client()).drives();
+    expect(drive?.driveType).toBe("internship");
+    expect(drive?.stipendMinMonthly).toBe(15000);
+    expect(drive?.stipendMaxMonthly).toBe(20000);
+  });
+
+  it("leaves them null when the drive records none", async () => {
+    server.use(http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json([DRIVE])));
+
+    const [drive] = await createSupabaseCockpitView(client()).drives();
+    expect(drive?.driveType ?? null).toBeNull();
+    expect(drive?.stipendMinMonthly ?? null).toBeNull();
+  });
+});

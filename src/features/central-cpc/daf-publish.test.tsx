@@ -65,6 +65,8 @@ const DRIVE: PublishDrive = {
   hasJobDescriptionFile: false,
   locations: ["Chennai"],
   ctcMinLpa: 6,
+  stipendMinMonthly: null,
+  stipendMaxMonthly: null,
   applicationStart: new Date("2026-08-01T00:00:00Z"),
   applicationEnd: new Date("2026-08-14T00:00:00Z"),
   onHold: false,

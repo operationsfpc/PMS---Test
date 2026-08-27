@@ -1,6 +1,6 @@
 import { Badge, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
-import { OFFER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
+import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import {
   type DirectoryFilter,
   type DirectoryStudent,
@@ -92,8 +92,13 @@ function browserDownload(filename: string, text: string): void {
 const isFilter = (value: string | null): value is DirectoryFilter =>
   FILTERS.some((f) => f.value === value);
 
+/**
+ * Only the LADDER is drillable here. A placement record is never a plain
+ * internship (R9), so `?category=internship` would draw a chip that can match
+ * nobody — an empty list that reads as a fault rather than as an answer.
+ */
 const isCategory = (value: string | null): value is OfferCategory =>
-  OFFER_CATEGORIES.some((c) => c === value);
+  LADDER_CATEGORIES.some((c) => c === value);
 
 /** A package figure from the URL. Nonsense is ignored, never shown as an empty list. */
 function parseCtc(value: string | null): number | undefined {

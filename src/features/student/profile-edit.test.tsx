@@ -97,13 +97,14 @@ describe("ProfileEditPage — drive type preferences", () => {
   it("shows the three types with the student's current choices ticked", async () => {
     renderPage(repo());
 
-    const placement = await screen.findByRole("checkbox", { name: /^placement$/i });
+    const placement = await screen.findByRole("checkbox", { name: /^full time$/i });
     expect((placement as HTMLInputElement).checked).toBe(true);
     expect(
       (screen.getByRole("checkbox", { name: /^internship$/i }) as HTMLInputElement).checked,
     ).toBe(false);
     expect(
-      (screen.getByRole("checkbox", { name: /convertible/i }) as HTMLInputElement).checked,
+      (screen.getByRole("checkbox", { name: /internship → full time/i }) as HTMLInputElement)
+        .checked,
     ).toBe(false);
   });
 
@@ -121,7 +122,7 @@ describe("ProfileEditPage — drive type preferences", () => {
 
   it("says the change applies forward only", async () => {
     renderPage(repo());
-    await screen.findByRole("checkbox", { name: /^placement$/i });
+    await screen.findByRole("checkbox", { name: /^full time$/i });
     expect(screen.getByText(/new drives from this point/i)).toBeDefined();
   });
 });

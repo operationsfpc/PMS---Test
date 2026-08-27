@@ -1,5 +1,12 @@
 import { Badge, Card, PageHeader } from "@components/ui";
 import { searchDrives } from "@domain/drive-portfolio";
+import {
+  DRIVE_TYPE_FILTERS,
+  type DriveTypeFilter as DriveTypeFilterValue,
+  driveTypeLabel,
+  driveTypeTone,
+  matchesDriveType,
+} from "@domain/drive-type";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import {
   CLOSING_FILTERS,
@@ -8,7 +15,7 @@ import {
   matchesLocation,
   parseLocations,
 } from "@domain/student-drive-lists";
-import type { RoleCategory } from "@domain/types";
+import type { DriveType, RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { DrivesList, type DrivesView, type OpenDrive } from "./drives-list";
@@ -19,6 +26,8 @@ export interface ProgressDriveRow {
   readonly companyName: string;
   readonly roleTitle: string;
   readonly roleCategory: RoleCategory;
+  /** 2026-08-27: filtered on, and tagged on every card. */
+  readonly driveType?: DriveType | null;
   readonly locations: string;
   readonly appliedAt: string;
   readonly progressLabel: string;
@@ -37,6 +46,8 @@ export interface ClosedDriveRow {
   readonly companyName: string;
   readonly roleTitle: string;
   readonly roleCategory: RoleCategory;
+  /** 2026-08-27: filtered on, and tagged on every card. */
+  readonly driveType?: DriveType | null;
   readonly ctcLabel: string;
   readonly locations: string;
   readonly closedOn: string;
@@ -121,6 +132,7 @@ export function DriveTabs({
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("");
   const [area, setArea] = useState<"" | RoleCategory>("");
+  const [type, setType] = useState<DriveTypeFilterValue>("");
   const [closing, setClosing] = useState<ClosingFilter>("any");
 
   const load = useCallback(async () => {
@@ -150,11 +162,21 @@ export function DriveTabs({
   }, [lists]);
 
   const matches = useCallback(
-    (row: { companyName: string; roleTitle: string; roleCategory: RoleCategory }, loc: string) =>
+    (
+      row: {
+        companyName: string;
+        roleTitle: string;
+        roleCategory: RoleCategory;
+        driveType?: DriveType | null;
+      },
+      loc: string,
+    ) =>
       searchDrives([row], query).length > 0 &&
       matchesLocation(loc, location) &&
-      (area === "" || row.roleCategory === area),
-    [query, location, area],
+      (area === "" || row.roleCategory === area) &&
+      // 2026-08-27 (Karthik): the same domain predicate the staff lists use.
+      matchesDriveType(row.driveType ?? null, type),
+    [query, location, area, type],
   );
 
   const filtered = useMemo(() => {
@@ -252,6 +274,20 @@ export function DriveTabs({
           {locationOptions.map((loc) => (
             <option key={loc} value={loc}>
               {loc}
+            </option>
+          ))}
+        </select>
+        {/* 2026-08-27: a dropdown, not chips — this row is already dropdowns,
+            and two filter idioms side by side read as two mechanisms. */}
+        <select
+          aria-label="Filter by drive type"
+          value={type}
+          onChange={(e) => setType(e.target.value as DriveTypeFilterValue)}
+          className="rounded-lg border border-line px-2 py-2 text-sm"
+        >
+          {DRIVE_TYPE_FILTERS.map((option) => (
+            <option key={option.value === "" ? "all" : option.value} value={option.value}>
+              {option.value === "" ? "All types" : option.label}
             </option>
           ))}
         </select>
@@ -363,11 +399,22 @@ export function DriveTabs({
 function RowHead({
   row,
 }: {
-  row: { companyName: string; roleTitle: string; roleCategory: RoleCategory };
+  row: {
+    companyName: string;
+    roleTitle: string;
+    roleCategory: RoleCategory;
+    driveType?: DriveType | null;
+  };
 }) {
   return (
     <>
-      <h2 className="font-[Raleway] text-lg font-bold text-ink-900">{row.companyName}</h2>
+      <h2 className="flex flex-wrap items-center gap-2 font-[Raleway] text-lg font-bold text-ink-900">
+        {row.companyName}
+        {/* 2026-08-27: the type, on every drive summary the student sees. */}
+        {row.driveType !== undefined && row.driveType !== null && (
+          <Badge tone={driveTypeTone(row.driveType)}>{driveTypeLabel(row.driveType)}</Badge>
+        )}
+      </h2>
       <p className="text-sm text-ink-500">
         {row.roleTitle} · {AREA_LABEL[row.roleCategory]}
       </p>

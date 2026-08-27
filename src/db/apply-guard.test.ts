@@ -200,9 +200,9 @@ describe("the category ladder, server-side (D5: self-placed offers count)", () =
     await giveOffer({
       company_name: "Intern Corp",
       drive_type: "internship",
-      offer_category: null,
+      offer_category: "internship",
     });
-    const drive = await makeDrive({ drive_type: "internship", offer_category: null });
+    const drive = await makeDrive({ drive_type: "internship", offer_category: "internship" });
     await t.expectRejection(() => apply(drive), /internship/i);
   });
 });
@@ -219,15 +219,30 @@ describe("a self-placed ladder offer must carry a category (D6)", () => {
     );
   });
 
-  it("still allows a self-placed internship without one — internships are never classified", async () => {
+  /**
+   * SPEC CHANGE 2026-08-27 (Karthik, approved — PB2): an internship offer used
+   * to carry NO category. It now carries its own, `internship`, so that "is
+   * this an internship?" has exactly one answer in the data rather than two
+   * spellings of the same fact.
+   *
+   * What has not changed, and is what this protects: an internship is on no
+   * rung of the ladder, so it can never be given one.
+   */
+  it("takes the internship category on a self-placed internship, and no rung", async () => {
     await t.sql(`delete from offers where student_id = $1`, [ids.arjun]);
     await giveOffer({
       student_id: ids.arjun,
       drive_type: "internship",
-      offer_category: null,
+      offer_category: "internship",
     });
     const rows = await t.sql(`select id from offers where student_id = $1`, [ids.arjun]);
     expect(rows).toHaveLength(1);
+
+    await t.sql(`delete from offers where student_id = $1`, [ids.arjun]);
+    await t.expectRejection(
+      () => giveOffer({ student_id: ids.arjun, drive_type: "internship", offer_category: "dream" }),
+      /internship_carries_internship_category/i,
+    );
   });
 });
 

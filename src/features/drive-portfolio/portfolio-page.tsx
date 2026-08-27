@@ -1,5 +1,6 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveSort } from "@components/drive-sort";
+import { DriveTypeFilter } from "@components/drive-type-filter";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
 import { type DriveOrder, orderDrives, partitionExpired } from "@domain/drive-aging";
@@ -13,8 +14,15 @@ import {
   searchDrives,
   summariseFunnel,
 } from "@domain/drive-portfolio";
+import {
+  DRIVE_TYPE_FILTERS,
+  type DriveTypeFilter as DriveTypeFilterValue,
+  driveTypeLabel,
+  driveTypeTone,
+  matchesDriveType,
+} from "@domain/drive-type";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
-import type { AppRole, DriveStatus } from "@domain/types";
+import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -34,6 +42,8 @@ export interface PortfolioDrive {
   readonly roleTitle: string;
   readonly status: DriveStatus;
   readonly onHold: boolean;
+  /** 2026-08-27: what the drive IS — filtered on, and tagged on every card. */
+  readonly driveType: DriveType | null;
   /** G5b (UAT 2026-08-20): role + CTC is what tells two same-company drives apart. */
   readonly ctcMinLpa: number | null;
   readonly ctcMaxLpa: number | null;
@@ -136,6 +146,7 @@ export function DrivePortfolioPage({
    * which is not what this list is.
    */
   const [order, setOrder] = useState<DriveOrder>("newest");
+  const [type, setType] = useState<DriveTypeFilterValue>("");
 
   useEffect(() => {
     let live = true;
@@ -165,10 +176,33 @@ export function DrivePortfolioPage({
     [drives, statuses],
   );
 
+  /**
+   * 2026-08-27 (Karthik): the type filter. It sits between the tab and the
+   * search for the same reason the tab does: it narrows WHICH drives, while
+   * the search narrows which of those you are looking for.
+   */
   const visible = useMemo(
-    () => orderDrives(searchDrives(inScope, query), order),
-    [inScope, query, order],
+    () =>
+      orderDrives(
+        searchDrives(
+          inScope.filter((drive) => matchesDriveType(drive.driveType, type)),
+          query,
+        ),
+        order,
+      ),
+    [inScope, query, order, type],
   );
+
+  /** What each chip is worth, counted before the search narrows anything. */
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { "": inScope.length };
+    for (const option of DRIVE_TYPE_FILTERS) {
+      if (option.value !== "") {
+        counts[option.value] = inScope.filter((d) => d.driveType === option.value).length;
+      }
+    }
+    return counts;
+  }, [inScope]);
 
   /**
    * G5c / G1d (UAT 2026-08-20, answer 1a): past-deadline drives collapse into
@@ -217,13 +251,18 @@ export function DrivePortfolioPage({
         <>
           <DriveSearch value={query} onChange={setQuery} />
 
+          <DriveTypeFilter value={type} onChange={setType} counts={typeCounts} />
+
           <div className="mb-3 flex justify-end">
             <DriveSort value={order} onChange={setOrder} />
           </div>
 
           {visible.length === 0 ? (
             <Card className="p-6">
-              <NoDriveMatches query={query} />
+              <NoDriveMatches
+                query={query}
+                {...(type === "" ? {} : { typeLabel: driveTypeLabel(type) })}
+              />
             </Card>
           ) : (
             <>
@@ -280,11 +319,15 @@ export function DrivePortfolioPage({
           <section aria-label={drive.companyName} className="p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-heading text-lg font-bold text-ink-900">
+                <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
                   {/* N1: the name is the door to the full record. */}
                   <Link to={`/drives/${drive.driveId}`} className="hover:underline">
                     {drive.companyName}
                   </Link>
+                  {/* 2026-08-27: the type, on every drive summary. */}
+                  <Badge tone={driveTypeTone(drive.driveType)}>
+                    {driveTypeLabel(drive.driveType)}
+                  </Badge>
                 </p>
                 <p className="text-sm text-ink-500">
                   {drive.roleTitle}

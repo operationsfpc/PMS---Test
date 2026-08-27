@@ -13,6 +13,9 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 const TONES = {
   neutral: "bg-surface-muted text-ink-700 border-line",
   brand: "bg-brand-50 text-brand-600 border-brand-200",
+  // 2026-08-27: the violet accent, for the drive-type tag that is neither a
+  // plain fact (neutral) nor a warning — "Internship → Full time".
+  accent: "bg-violet-50 text-violet-700 border-violet-300",
   success: "bg-success-50 text-success-500 border-success-500/30",
   warning: "bg-gold-50 text-gold-700 border-gold-300",
   danger: "bg-danger-50 text-danger-700 border-danger-500/30",

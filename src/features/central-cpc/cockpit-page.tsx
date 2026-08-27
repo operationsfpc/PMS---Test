@@ -1,4 +1,5 @@
 import { DriveSort } from "@components/drive-sort";
+import { DriveTypeFilter } from "@components/drive-type-filter";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
 import {
@@ -11,10 +12,22 @@ import {
 } from "@domain/drive-aging";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
+import {
+  type DriveTypeFilter as DriveTypeFilterValue,
+  driveTypeLabel,
+  driveTypeTone,
+  matchesDriveType,
+} from "@domain/drive-type";
 import { canEditDriveVenue, describeDriveVenue, driveVenueApplies } from "@domain/drive-venue";
 import type { OfferCategory } from "@domain/offer-category";
-import { OFFER_CATEGORIES, offerCategoryLabel, suggestOfferCategory } from "@domain/offer-category";
-import type { AppRole, DriveStatus } from "@domain/types";
+import {
+  offerCategoriesFor,
+  offerCategoryLabel,
+  requiredOfferCategoryFor,
+  suggestOfferCategory,
+} from "@domain/offer-category";
+import { describeStipendRange } from "@domain/stipend";
+import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -31,6 +44,11 @@ export interface DriveSummary {
   /** C3 (UAT 2026-08-19): role + CTC is what tells two same-company drives apart. */
   readonly ctcMinLpa: number | null;
   readonly ctcMaxLpa: number | null;
+  /** 2026-08-27: an internship pays this instead of a CTC. */
+  readonly stipendMinMonthly?: number | null;
+  readonly stipendMaxMonthly?: number | null;
+  /** 2026-08-27: filtered on, tagged on the card, and it fixes the category. */
+  readonly driveType?: DriveType | null;
   readonly status: DriveStatus;
   readonly onHold: boolean;
   readonly applicationCount: number;
@@ -149,6 +167,7 @@ export function CockpitPage({
    * click away; it is no longer what the reader is given unasked.
    */
   const [sort, setSort] = useState<DriveOrder>("newest");
+  const [type, setType] = useState<DriveTypeFilterValue>("");
   /** G1c: the pending decision, its category (approve) or reason (reject). */
   const [deciding, setDeciding] = useState<{
     drive: DriveSummary;
@@ -182,8 +201,22 @@ export function CockpitPage({
 
   // Not `compareOldestFirst` reversed: that made an undated drive the NEWEST,
   // which with newest-first as the default would head the queue with it.
-  const drives = inScope === null ? null : orderDrives(inScope, sort);
+  // 2026-08-27 (Karthik): the type filter, on every list of ongoing drives.
+  const typed =
+    inScope === null ? null : inScope.filter((d) => matchesDriveType(d.driveType ?? null, type));
+  const drives = typed === null ? null : orderDrives(typed, sort);
   const split = drives === null ? null : partitionExpired(drives, clock);
+
+  const typeCounts =
+    inScope === null
+      ? undefined
+      : {
+          "": inScope.length,
+          placement: inScope.filter((d) => d.driveType === "placement").length,
+          internship_convertible: inScope.filter((d) => d.driveType === "internship_convertible")
+            .length,
+          internship: inScope.filter((d) => d.driveType === "internship").length,
+        };
 
   /** Q5 (2026-08-21): the venue is the Central CPC's to record — nobody else's. */
   const mayRecordVenue = view.updateVenue !== undefined && canEditDriveVenue(role);
@@ -214,7 +247,10 @@ export function CockpitPage({
   function openDecision(drive: DriveSummary, kind: "approve" | "reject") {
     // UAT 2026-08-27: a cap-only internship (0056) has no CTC, and asking the
     // strict rule to classify nothing threw — here, inside the click.
-    setCategory(suggestOfferCategory(drive.ctcMaxLpa ?? drive.ctcMinLpa));
+    setCategory(
+      requiredOfferCategoryFor(drive.driveType ?? null) ??
+        suggestOfferCategory(drive.ctcMaxLpa ?? drive.ctcMinLpa),
+    );
     setReason("");
     setDecisionError(null);
     setDeciding({ drive, kind });
@@ -229,7 +265,7 @@ export function CockpitPage({
 
     // The same rule the repository and the database enforce — asked here so
     // the answer arrives without a round trip, never instead of them.
-    const check = decidePif("submitted", intent);
+    const check = decidePif("submitted", intent, deciding.drive.driveType ?? null);
     if (!check.ok) {
       setDecisionError(check.error);
       return;
@@ -287,6 +323,13 @@ export function CockpitPage({
         </Card>
       ) : (
         <>
+          {/* 2026-08-27 (Karthik): the type filter, above the list it filters. */}
+          <DriveTypeFilter
+            value={type}
+            onChange={setType}
+            {...(typeCounts === undefined ? {} : { counts: typeCounts })}
+          />
+
           {/* G1b (UAT 2026-08-20) put the order in the reader's hands; since
               2026-08-26 it starts at newest first, like every other list. */}
           <div className="mb-3 flex justify-end">
@@ -414,7 +457,7 @@ export function CockpitPage({
                   <option value="" disabled>
                     Choose a category…
                   </option>
-                  {OFFER_CATEGORIES.map((c) => (
+                  {offerCategoriesFor(deciding.drive.driveType ?? null).map((c) => (
                     <option key={c} value={c}>
                       {offerCategoryLabel(c)}
                     </option>
@@ -491,11 +534,26 @@ function DriveList({
             <li key={drive.driveId} className="p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-medium text-ink-900">{drive.companyName}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
+                    {drive.companyName}
+                    {/* 2026-08-27: the type, on every drive summary. */}
+                    <Badge tone={driveTypeTone(drive.driveType ?? null)}>
+                      {driveTypeLabel(drive.driveType ?? null)}
+                    </Badge>
+                  </p>
                   <p className="text-sm text-ink-500">
                     {drive.roleTitle ?? "Role not set"}
                     {describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa) !== null &&
-                      ` · ${describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa)}`}{" "}
+                      ` · ${describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa)}`}
+                    {/* An internship has no CTC — the stipend is the number. */}
+                    {describeStipendRange(
+                      drive.stipendMinMonthly ?? null,
+                      drive.stipendMaxMonthly ?? null,
+                    ) !== null &&
+                      ` · ${describeStipendRange(
+                        drive.stipendMinMonthly ?? null,
+                        drive.stipendMaxMonthly ?? null,
+                      )}`}{" "}
                     · {drive.applicationCount} applicants
                   </p>
                   {/* G1a: the age of the submission, stated on the card. */}

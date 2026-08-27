@@ -201,14 +201,33 @@ describe("drive lifecycle", () => {
     );
   });
 
-  it("forbids an offer category on a plain internship (PRD §11)", async () => {
+  /**
+   * SPEC CHANGE 2026-08-27 (Karthik, approved): a plain internship used to be
+   * required to carry NO category. It now carries its OWN — `internship` —
+   * which says the same thing in a value instead of in an absence.
+   *
+   * The rule underneath is unchanged and is what this still proves: an
+   * internship is not on the Regular → Dream → Super Dream ladder (PRD §11).
+   */
+  it("forbids a LADDER category on a plain internship (PRD §11)", async () => {
     await t.expectRejection(
       () =>
         t.sql(
           `insert into drives (company_name, drive_type, offer_category)
            values ('InternCo','internship','dream')`,
         ),
-      /internship_has_no_category/i,
+      /internship_carries_internship_category/i,
+    );
+  });
+
+  it("forbids the internship category on a drive that is not an internship", async () => {
+    await t.expectRejection(
+      () =>
+        t.sql(
+          `insert into drives (company_name, drive_type, offer_category)
+           values ('SalaryCo','placement','internship')`,
+        ),
+      /internship_carries_internship_category/i,
     );
   });
 

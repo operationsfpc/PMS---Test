@@ -1,4 +1,4 @@
-import type { AttendanceStatus, RoundResult } from "@domain/types";
+import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   DriveProgressEntry,
@@ -18,7 +18,7 @@ import type {
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PROGRESS_APPLICATION_COLUMNS =
   "id, student_id, drive_id, students(full_name, roll_number), shortlist_entries(included), " +
-  "drives(company_name, role_title, status)";
+  "drives(company_name, role_title, drive_type, status)";
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
@@ -92,9 +92,12 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
       const byDrive = new Map<string, DriveProgressEntry>();
       for (const row of rows) {
         const driveId = row.drive_id as string;
-        const drive = one<{ company_name?: string; role_title?: string | null; status?: string }>(
-          row.drives,
-        );
+        const drive = one<{
+          company_name?: string;
+          role_title?: string | null;
+          drive_type?: string | null;
+          status?: string;
+        }>(row.drives);
         const student = one<{ full_name?: string; roll_number?: string }>(row.students);
 
         const studentRounds = (attendanceByApplication.get(row.id as string) ?? [])
@@ -126,6 +129,8 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
             driveId,
             companyName: drive?.company_name ?? "Unknown company",
             roleTitle: drive?.role_title ?? null,
+            // 2026-08-27: filtered on, and tagged on every card.
+            driveType: (drive?.drive_type as DriveType | null) ?? null,
             status: drive?.status ?? "live",
             students: [entry],
           });

@@ -50,10 +50,16 @@ export function createSupabaseOffersRepository(
 
       // Mirrors the database's own constraints, so the message is useful
       // rather than a raw constraint name.
-      if (offer.driveType === "internship" && offer.offerCategory !== null) {
+      // 2026-08-27 (PB2): an internship offer carries the internship category
+      // — required, not optional, so "is this an internship?" has exactly one
+      // answer in the data. It is still on no rung of the ladder.
+      if (offer.driveType === "internship" && offer.offerCategory !== "internship") {
         throw new OffersError(
-          "A plain internship has no offer category — it sits outside the category ladder.",
+          "A plain internship is classified Internship — it sits outside the Regular/Dream/Super Dream ladder.",
         );
+      }
+      if (offer.driveType !== "internship" && offer.offerCategory === "internship") {
+        throw new OffersError("Only a plain internship can carry the Internship category.");
       }
       if (offer.driveType !== "internship" && offer.offerCategory === null) {
         throw new OffersError(

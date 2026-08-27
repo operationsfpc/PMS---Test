@@ -6,9 +6,32 @@
  * immutable thereafter (decision Q1) — this module only ever suggests.
  */
 
-export const OFFER_CATEGORIES = ["regular", "dream", "super_dream"] as const;
+import type { DriveType } from "./types";
+
+/**
+ * Every value the column may hold.
+ *
+ * `internship` was added 2026-08-27 (Karthik: "add one more there, as
+ * Internship"). It is a CATEGORY but **not a rung** — see `LADDER_CATEGORIES`.
+ * A plain internship has never been on the ladder (PRD §11), and the database
+ * enforces that a drive or offer may carry it only when its type is
+ * `internship`.
+ */
+export const OFFER_CATEGORIES = ["regular", "dream", "super_dream", "internship"] as const;
 
 export type OfferCategory = (typeof OFFER_CATEGORIES)[number];
+
+/**
+ * The rungs, lowest first — the only categories that can be COMPARED.
+ *
+ * R5 asks "is this drive strictly higher than what the student already
+ * holds?". That question has no answer for an internship, which is why
+ * `offerCategoryRank` refuses it rather than returning a number that would
+ * quietly place it above or below everything.
+ */
+export const LADDER_CATEGORIES = ["regular", "dream", "super_dream"] as const;
+
+export type LadderCategory = (typeof LADDER_CATEGORIES)[number];
 
 /**
  * Where each band STARTS, in lakhs per annum.
@@ -31,20 +54,72 @@ export const DEFAULT_OFFER_CATEGORY_BANDS: OfferCategoryBands = {
   superDreamMinLpa: 10,
 };
 
-const RANK: Readonly<Record<OfferCategory, number>> = {
+const RANK: Readonly<Record<LadderCategory, number>> = {
   regular: 1,
   dream: 2,
   super_dream: 3,
 };
 
-/** Position of a category on the ladder. Higher wins. */
+const isLadderCategory = (category: OfferCategory): category is LadderCategory =>
+  category !== "internship";
+
+/**
+ * Position of a category on the ladder. Higher wins.
+ *
+ * **Throws** for `internship`. Returning 0 (or 4) would be worse than an
+ * error: R5 would silently decide that an internship outranks — or is
+ * outranked by — a real offer, and a student would be shown, or refused, a
+ * drive on the strength of a number nobody chose. The database mirrors this
+ * by ranking with an explicit CASE that yields NULL for the same value.
+ */
 export function offerCategoryRank(category: OfferCategory): number {
+  if (!isLadderCategory(category)) {
+    throw new RangeError(
+      `"${category}" is not on the Regular → Dream → Super Dream ladder, so it has no rank.`,
+    );
+  }
   return RANK[category];
 }
 
 /** Ladder comparator: negative if `a` is lower, zero if equal, positive if higher. */
 export function compareOfferCategory(a: OfferCategory, b: OfferCategory): number {
   return offerCategoryRank(a) - offerCategoryRank(b);
+}
+
+/**
+ * Which categories a drive of this type may be given — answer 3, 2026-08-27:
+ * "only for internship".
+ *
+ * The Delivery Head is never shown a choice the database would refuse. An
+ * internship drive has exactly one category; everything else has the three
+ * rungs and never the internship one.
+ */
+export function offerCategoriesFor(driveType: DriveType | null): readonly OfferCategory[] {
+  return driveType === "internship" ? ["internship"] : LADDER_CATEGORIES;
+}
+
+/**
+ * The category this drive type DECIDES for itself, if any.
+ *
+ * An internship's category is not a judgement, it is a restatement of its
+ * type — so the screen fills it in and the Delivery Head is asked nothing.
+ * Every other type returns null: the rung is theirs to choose, and §3.3 makes
+ * it immutable, so nothing may choose it for them.
+ */
+export function requiredOfferCategoryFor(driveType: DriveType | null): OfferCategory | null {
+  return driveType === "internship" ? "internship" : null;
+}
+
+/**
+ * The pairing rule, mirroring the database's
+ * `internship_carries_internship_category` constraint on both `drives` and
+ * `offers`. Change both or neither.
+ */
+export function offerCategoryAllowedFor(
+  driveType: DriveType | null,
+  category: OfferCategory,
+): boolean {
+  return driveType === "internship" ? category === "internship" : category !== "internship";
 }
 
 /**
@@ -58,7 +133,7 @@ export function compareOfferCategory(a: OfferCategory, b: OfferCategory): number
 export function classifyOfferCategory(
   ctcLpa: number,
   bands: OfferCategoryBands = DEFAULT_OFFER_CATEGORY_BANDS,
-): OfferCategory {
+): LadderCategory {
   if (!Number.isFinite(ctcLpa) || ctcLpa <= 0) {
     throw new RangeError(`CTC must be a positive finite number in LPA, received: ${ctcLpa}`);
   }
@@ -88,7 +163,7 @@ export function classifyOfferCategory(
 export function suggestOfferCategory(
   ctcLpa: number | null | undefined,
   bands: OfferCategoryBands = DEFAULT_OFFER_CATEGORY_BANDS,
-): OfferCategory | null {
+): LadderCategory | null {
   if (ctcLpa === null || ctcLpa === undefined) return null;
   if (!Number.isFinite(ctcLpa) || ctcLpa <= 0) return null;
   return classifyOfferCategory(ctcLpa, bands);
@@ -116,6 +191,7 @@ const CATEGORY_LABEL: Readonly<Record<OfferCategory, string>> = {
   regular: "Regular",
   dream: "Dream",
   super_dream: "Super Dream",
+  internship: "Internship",
 };
 
 /** Human label for a category. One spelling, so no two screens disagree. */

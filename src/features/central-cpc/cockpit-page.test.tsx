@@ -697,3 +697,133 @@ describe("the off-campus venue on the cockpit", () => {
     expect(screen.queryByText(/venue/i)).toBeNull();
   });
 });
+
+/**
+ * Karthik, 2026-08-27: the type filter and the type tag belong on every list
+ * of ongoing drives — this is the Central CPC's "Yet to publish" queue.
+ */
+describe("CockpitPage — filtering and tagging by drive type", () => {
+  const DELIVERY_HEAD: AppRole = "delivery_head";
+  const base = APPROVED;
+  const FULL_TIME = {
+    ...base,
+    driveId: "t1",
+    companyName: "Zoho",
+    driveType: "placement" as const,
+  };
+  const CONVERTIBLE = {
+    ...base,
+    driveId: "t2",
+    companyName: "LTI Mindtree",
+    driveType: "internship_convertible" as const,
+  };
+  const INTERNSHIP = {
+    ...base,
+    driveId: "t3",
+    companyName: "ABCD Infosys",
+    driveType: "internship" as const,
+  };
+
+  const showTypes = () =>
+    render(
+      <MemoryRouter>
+        <CockpitPage view={view([FULL_TIME, CONVERTIBLE, INTERNSHIP])} role={DELIVERY_HEAD} />
+      </MemoryRouter>,
+    );
+
+  it("tags each drive with its type", async () => {
+    showTypes();
+    await screen.findByText("ABCD Infosys");
+
+    // The filter chips carry the same words, so the tags are looked for on
+    // the list itself rather than anywhere on the page.
+    const list = screen.getByRole("list");
+    expect(within(list).getByText("Internship → Full time")).toBeDefined();
+    expect(within(list).getByText("Full time")).toBeDefined();
+    expect(within(list).getByText("Internship")).toBeDefined();
+  });
+
+  it("narrows to the chosen type", async () => {
+    const user = userEvent.setup();
+    showTypes();
+    await screen.findByText("ABCD Infosys");
+
+    const filter = screen.getByRole("group", { name: /drive type/i });
+    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+
+    expect(screen.getByText("ABCD Infosys")).toBeDefined();
+    expect(screen.queryByText("Zoho")).toBeNull();
+    expect(screen.queryByText("LTI Mindtree")).toBeNull();
+  });
+
+  it("comes back to everything when All is clicked", async () => {
+    const user = userEvent.setup();
+    showTypes();
+    await screen.findByText("ABCD Infosys");
+    const filter = screen.getByRole("group", { name: /drive type/i });
+
+    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+    await user.click(within(filter).getByRole("button", { name: /^All \d+$/ }));
+
+    expect(screen.getByText("Zoho")).toBeDefined();
+  });
+});
+
+/**
+ * The stipend, on the surface where a Delivery Head approves from the list
+ * (G1c) — the same gap Karthik reported on the approval queue.
+ */
+describe("CockpitPage — approving an internship", () => {
+  const DELIVERY_HEAD: AppRole = "delivery_head";
+  const INTERN: DriveSummary = {
+    ...APPROVED,
+    status: "submitted",
+    driveId: "d-int",
+    companyName: "ABCD Infosys",
+    driveType: "internship" as const,
+    ctcMinLpa: null,
+    ctcMaxLpa: null,
+    stipendMinMonthly: 15000,
+    stipendMaxMonthly: 20000,
+  };
+
+  it("shows the stipend on the card, the only number it has", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage view={view([INTERN])} filter="yet-to-publish" role={DELIVERY_HEAD} />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/₹15,000–20,000 \/ month/)).toBeDefined();
+  });
+
+  it("approves it as an internship, offering no other category", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([INTERN])}
+          filter="yet-to-publish"
+          role={DELIVERY_HEAD}
+          decide={decide as never}
+        />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    const dialog = await screen.findByRole("alertdialog");
+
+    const select = within(dialog).getByLabelText(/offer category/i) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(["", "internship"]);
+    expect(select.value).toBe("internship");
+
+    await user.click(within(dialog).getByRole("button", { name: /confirm — approve/i }));
+    await waitFor(() =>
+      expect(decide).toHaveBeenCalledWith("d-int", "submitted", {
+        decision: "approve",
+        offerCategory: "internship",
+      }),
+    );
+  });
+});

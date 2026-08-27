@@ -1,8 +1,9 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { applicationEvidenceProblems } from "@domain/application-snapshot";
-import type { OfferCategory } from "@domain/offer-category";
+import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
+import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { describeTimeLeft } from "@domain/student-drive-lists";
-import type { RoleCategory } from "@domain/types";
+import type { DriveType, RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ApplyError } from "./apply-repository";
@@ -40,6 +41,8 @@ export interface OpenDrive {
   readonly roleTitle: string;
   /** N7: the four-list screen filters on it. */
   readonly roleCategory: RoleCategory;
+  /** 2026-08-27: filtered on, and tagged on every card. */
+  readonly driveType?: DriveType | null;
   readonly ctcLabel: string;
   readonly offerCategory: OfferCategory | null;
   readonly applicationEnd: string;
@@ -64,12 +67,6 @@ export interface DrivesView {
    */
   apply(driveId: string, resume: File | null): Promise<void>;
 }
-
-const CATEGORY_LABEL: Record<OfferCategory, string> = {
-  regular: "Regular",
-  dream: "Dream",
-  super_dream: "Super Dream",
-};
 
 const day = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -194,8 +191,17 @@ export function DrivesList({
                   <h2 className="font-[Raleway] text-lg font-bold text-ink-900">
                     {drive.companyName}
                   </h2>
-                  {drive.offerCategory !== null && (
-                    <Badge tone="brand">{CATEGORY_LABEL[drive.offerCategory]}</Badge>
+                  {/* 2026-08-27: the type tag. */}
+                  {drive.driveType !== undefined && drive.driveType !== null && (
+                    <Badge tone={driveTypeTone(drive.driveType)}>
+                      {driveTypeLabel(drive.driveType)}
+                    </Badge>
+                  )}
+                  {/* PB3: an internship's CATEGORY is "Internship" and so is
+                      its type tag. The same word twice, in two colours, says
+                      nothing the second time. */}
+                  {drive.offerCategory !== null && drive.offerCategory !== "internship" && (
+                    <Badge tone="brand">{offerCategoryLabel(drive.offerCategory)}</Badge>
                   )}
                   {drive.applied && <Badge tone="success">Applied</Badge>}
                 </div>

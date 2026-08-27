@@ -1,6 +1,8 @@
 import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import type { DriveReadiness } from "@domain/drive-lifecycle";
+import { driveTypeLabel } from "@domain/drive-type";
 import type { EligibilityCriteria } from "@domain/eligibility";
+import { offerCategoryLabel } from "@domain/offer-category";
 import type { Offer } from "@domain/offers";
 import type { AcademicProfile, DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -23,6 +25,7 @@ const name = (value: unknown): string => one<{ name: string }>(value)?.name ?? "
 export const PUBLISH_DRIVE_COLUMNS = `
   id, company_name, role_title, role_category, job_description, jd_storage_path, work_locations,
   status, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa,
+  stipend_min_monthly, stipend_max_monthly,
   application_start, application_end, on_hold,
   min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
   min_tenth_percentage, min_twelfth_percentage,
@@ -78,9 +81,12 @@ function ctcLabel(min: number | null, max: number | null): string | null {
 function subtitleFor(row: Record<string, unknown>): string {
   return [
     row.role_title as string | null,
-    (row.offer_category as string | null)?.replaceAll("_", " "),
+    // 2026-08-27: the domain's words, not a underscore-stripped enum value.
+    row.offer_category == null
+      ? null
+      : offerCategoryLabel(row.offer_category as Parameters<typeof offerCategoryLabel>[0]),
     ctcLabel(row.ctc_min_lpa as number | null, row.ctc_max_lpa as number | null),
-    (row.drive_type as string | null)?.replaceAll("_", " "),
+    row.drive_type == null ? null : driveTypeLabel(row.drive_type as DriveType),
   ]
     .filter((part): part is string => typeof part === "string" && part !== "")
     .join(" · ");
@@ -237,6 +243,9 @@ export function createSupabasePublishView(
             ? [row.work_locations]
             : [],
         ctcMinLpa: (row.ctc_min_lpa as number | null) ?? null,
+        // P10 (2026-08-27): an internship goes live on its stipend.
+        stipendMinMonthly: (row.stipend_min_monthly as number | null) ?? null,
+        stipendMaxMonthly: (row.stipend_max_monthly as number | null) ?? null,
         applicationStart:
           row.application_start === null ? null : new Date(row.application_start as string),
         applicationEnd:
@@ -391,6 +400,9 @@ export function createSupabasePublishView(
             ? [row.work_locations]
             : [],
         ctcMinLpa: (row.ctc_min_lpa as number | null) ?? null,
+        // P10 (2026-08-27): an internship goes live on its stipend.
+        stipendMinMonthly: (row.stipend_min_monthly as number | null) ?? null,
+        stipendMaxMonthly: (row.stipend_max_monthly as number | null) ?? null,
         driveType: (row.drive_type as DriveType | null) ?? null,
         offerCategory: (row.offer_category as DriveReadiness["offerCategory"]) ?? null,
         hasEligibilityCriteria: true,

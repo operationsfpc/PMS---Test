@@ -10,7 +10,7 @@
  */
 
 import { roundMoney } from "./math";
-import { OFFER_CATEGORIES, type OfferCategory } from "./offer-category";
+import { LADDER_CATEGORIES, type OfferCategory } from "./offer-category";
 
 export interface PlacementCtc {
   readonly studentId: string;
@@ -76,11 +76,14 @@ export interface CtcByCategory {
  *
  * A category nobody holds is omitted rather than shown as a row of dashes: an
  * empty row invites the reader to wonder whether it is a data problem.
- * Uncategorised placements — plain internships — are counted in the headline
- * and appear on no rung, because they are on no rung.
+ *
+ * Only the LADDER has rungs. Internships — whether they carry no category, as
+ * before 2026-08-27, or the `internship` one added that day — are counted in
+ * the headline and appear on no rung, because they are on no rung. A stipend
+ * and a salary do not belong in the same table.
  */
 export function summariseCtcByCategory(records: readonly PlacementCtc[]): readonly CtcByCategory[] {
-  return OFFER_CATEGORIES.flatMap((category) => {
+  return LADDER_CATEGORIES.flatMap((category) => {
     const inCategory = records.filter((r) => r.category === category);
     return inCategory.length === 0 ? [] : [{ category, stats: summariseCtc(inCategory) }];
   });

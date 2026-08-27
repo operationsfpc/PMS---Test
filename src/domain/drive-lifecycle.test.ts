@@ -25,6 +25,8 @@ const ready: DriveReadiness = {
   hasJobDescriptionFile: false,
   locations: ["Chennai"],
   ctcMinLpa: 6,
+  stipendMinMonthly: null,
+  stipendMaxMonthly: null,
   driveType: "placement",
   offerCategory: "dream",
   hasEligibilityCriteria: true,
@@ -33,6 +35,61 @@ const ready: DriveReadiness = {
   applicationEnd: "2026-09-10T00:00:00Z",
   onHold: false,
 };
+
+/**
+ * P10 / answer 8 (2026-08-27). This gate demanded `ctc_min_lpa` of every
+ * drive, but a plain internship pays a monthly STIPEND and has no CTC — so
+ * both internship drives in production could be approved and then never
+ * published. Karthik: "yes, relax it."
+ *
+ * The rule is now "a CTC **or** a stipend", and only an internship may lean on
+ * the stipend: a full-time role advertised with a stipend and no salary is a
+ * mistake worth catching, not a shape to accommodate.
+ */
+describe("missingBeforeGoLive — what an internship is paid", () => {
+  const internship: DriveReadiness = {
+    ...ready,
+    driveType: "internship",
+    offerCategory: "internship",
+    ctcMinLpa: null,
+    stipendMinMonthly: 15000,
+    stipendMaxMonthly: 20000,
+  };
+
+  it("lets an internship go live on its stipend alone", () => {
+    expect(missingBeforeGoLive(internship)).toEqual([]);
+  });
+
+  it("accepts a floor with no ceiling", () => {
+    expect(missingBeforeGoLive({ ...internship, stipendMaxMonthly: null })).toEqual([]);
+  });
+
+  it("still refuses an internship that records no pay at all", () => {
+    const unpaid = { ...internship, stipendMinMonthly: null, stipendMaxMonthly: null };
+    expect(missingBeforeGoLive(unpaid)).toContain("Minimum CTC (LPA), or a monthly stipend");
+  });
+
+  it("does NOT let a full-time drive lean on a stipend", () => {
+    const salaryless = {
+      ...ready,
+      ctcMinLpa: null,
+      stipendMinMonthly: 15000,
+      stipendMaxMonthly: 20000,
+    };
+    expect(missingBeforeGoLive(salaryless)).toContain("Minimum CTC (LPA)");
+  });
+
+  it("does not let a convertible drive lean on one either — it becomes a salary", () => {
+    const convertible = {
+      ...ready,
+      driveType: "internship_convertible" as const,
+      ctcMinLpa: null,
+      stipendMinMonthly: 15000,
+      stipendMaxMonthly: null,
+    };
+    expect(missingBeforeGoLive(convertible)).toContain("Minimum CTC (LPA)");
+  });
+});
 
 describe("missingBeforeGoLive", () => {
   it("reports nothing missing for a complete drive", () => {
@@ -119,6 +176,64 @@ describe("canGoLive", () => {
   });
 });
 
+/**
+ * 2026-08-27: the category and the drive type are now a PAIR, and the
+ * database refuses the wrong combinations outright
+ * (`internship_carries_internship_category`). The domain must refuse them
+ * first, so the Delivery Head gets a sentence instead of a constraint name.
+ */
+describe("decidePif — the category must suit the drive type", () => {
+  it("approves an internship classified as an internship", () => {
+    expect(
+      decidePif("submitted", { decision: "approve", offerCategory: "internship" }, "internship"),
+    ).toEqual({ ok: true, next: "approved" });
+  });
+
+  it("refuses to put an internship on a rung of the ladder", () => {
+    const result = decidePif(
+      "submitted",
+      { decision: "approve", offerCategory: "dream" },
+      "internship",
+    );
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/internship/i);
+  });
+
+  it("refuses to call a full-time drive an internship", () => {
+    const result = decidePif(
+      "submitted",
+      { decision: "approve", offerCategory: "internship" },
+      "placement",
+    );
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.error).toMatch(/internship/i);
+  });
+
+  it("refuses it for a convertible drive too — that one becomes a salary", () => {
+    const result = decidePif(
+      "submitted",
+      { decision: "approve", offerCategory: "internship" },
+      "internship_convertible",
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it("still judges a rejection without needing to know the type", () => {
+    expect(
+      decidePif("submitted", { decision: "reject", reason: "Duplicate" }, "internship"),
+    ).toEqual({ ok: true, next: "rejected" });
+  });
+
+  it("leaves the pairing unjudged when the type was not supplied", () => {
+    // Callers that do not know the type still get the old behaviour; the
+    // database remains the backstop.
+    expect(decidePif("submitted", { decision: "approve", offerCategory: "internship" })).toEqual({
+      ok: true,
+      next: "approved",
+    });
+  });
+});
+
 describe("decidePif", () => {
   it("approves a submitted PIF and records the Delivery Head's category", () => {
     expect(decidePif("submitted", { decision: "approve", offerCategory: "super_dream" })).toEqual({
@@ -173,6 +288,8 @@ describe("missingBeforeGoLive names every unset field", () => {
       hasJobDescriptionFile: false,
       locations: ["Chennai"],
       ctcMinLpa: 6,
+      stipendMinMonthly: null,
+      stipendMaxMonthly: null,
       driveType: "placement",
       offerCategory: "dream",
       hasEligibilityCriteria: true,
@@ -194,6 +311,8 @@ describe("missingBeforeGoLive names every unset field", () => {
       hasJobDescriptionFile: false,
       locations: ["Chennai"],
       ctcMinLpa: 6,
+      stipendMinMonthly: null,
+      stipendMaxMonthly: null,
       driveType: null,
       offerCategory: "dream",
       hasEligibilityCriteria: true,

@@ -1,0 +1,32 @@
+-- 0066 — Karthik, 2026-08-27: "when he approves, he has three categories only
+-- for placement (Regular, dream and super dream). add one more there, as
+-- Internship."
+--
+-- This migration adds the enum value AND NOTHING ELSE. Postgres refuses to
+-- USE a value added by ALTER TYPE inside the same transaction, so every
+-- constraint that mentions it lives in 0067.
+--
+-- ---------------------------------------------------------------------------
+-- WHY `before 'regular'` AND NOT AT THE END
+--
+-- An enum orders by declaration order. Appended (the default), 'internship'
+-- would sort ABOVE 'super_dream', and the first person to write
+-- `max(offer_category)` or `order by offer_category` in a report would make an
+-- internship outrank every real offer — silently blocking that student from
+-- every drive on the ladder (R5).
+--
+-- No code does that today: all four ladder computations (0041, 0050, 0054,
+-- 0056) rank with an explicit CASE and are restricted to
+-- `drive_type in ('placement','internship_convertible')` before they ever look
+-- at a category. This is insurance against the ladder being written a fifth
+-- time by someone who does not know that.
+--
+-- Placed first, an accidental ordering treats an internship as the LOWEST
+-- value, which fails safe: a student is shown too much rather than too little,
+-- and being shown a drive is reversible in a way that being hidden from one is
+-- not.
+--
+-- The true rule remains: 'internship' is not on the ladder at all.
+-- `offerCategoryRank` in src/domain/offer-category.ts THROWS for it.
+
+alter type offer_category add value if not exists 'internship' before 'regular';

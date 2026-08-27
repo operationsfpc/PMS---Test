@@ -50,11 +50,34 @@ export function DriveSearch({
   );
 }
 
-/** What every list says when a search matches nothing. One sentence, one place. */
-export function NoDriveMatches({ query }: { query: string }) {
+/**
+ * What every list says when nothing matches. One sentence, one place.
+ *
+ * 2026-08-27: it now names the TYPE filter too. "Nothing to show" over a
+ * filtered list reads as a broken screen, and the reader has no way to tell
+ * an empty bucket from a fault.
+ */
+export function NoDriveMatches({
+  query,
+  typeLabel,
+}: {
+  query: string;
+  /** The chosen drive type, in words. Omitted when the filter is on All. */
+  typeLabel?: string;
+}) {
+  if (query.trim() === "" && typeLabel !== undefined) {
+    return (
+      <p className="text-sm text-ink-700">
+        No {typeLabel.toLowerCase()} drives in this list. Choose “All” to see the whole list.
+      </p>
+    );
+  }
+
   return (
     <p className="text-sm text-ink-700">
-      No drives match “{query}”. Clear the search to see the whole list.
+      No drives match “{query}”
+      {typeLabel === undefined ? "" : ` among ${typeLabel.toLowerCase()} drives`}. Clear the search
+      to see the whole list.
     </p>
   );
 }

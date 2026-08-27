@@ -55,6 +55,9 @@ export interface PublishDrive {
   readonly hasJobDescriptionFile: boolean;
   readonly locations: readonly string[];
   readonly ctcMinLpa: number | null;
+  /** P10 (2026-08-27): an internship goes live on its stipend, not a CTC. */
+  readonly stipendMinMonthly: number | null;
+  readonly stipendMaxMonthly: number | null;
   readonly applicationStart: Date | null;
   readonly applicationEnd: Date | null;
   readonly onHold: boolean;
@@ -360,6 +363,8 @@ export function DafPublish({ view }: { view: PublishView }) {
           hasJobDescriptionFile: loadedDrive.hasJobDescriptionFile,
           locations: loadedDrive.locations,
           ctcMinLpa: loadedDrive.ctcMinLpa,
+          stipendMinMonthly: loadedDrive.stipendMinMonthly,
+          stipendMaxMonthly: loadedDrive.stipendMaxMonthly,
           driveType: loadedDrive.driveType,
           offerCategory: loadedDrive.offerCategory,
           hasEligibilityCriteria: true,

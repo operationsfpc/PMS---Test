@@ -26,6 +26,7 @@ const DRIVE: PortfolioDrive = {
   roleTitle: "Member Technical Staff",
   status: "in_rounds",
   onHold: false,
+  driveType: "placement",
   ctcMinLpa: null,
   ctcMaxLpa: null,
   createdBy: "ae-1",
@@ -392,6 +393,7 @@ describe("DrivePortfolioPage — one list, one status group", () => {
     companyName,
     roleTitle: "Jr. Developer",
     status,
+    driveType: "placement",
     onHold: false,
     createdAt: "2026-08-10T09:00:00.000Z",
     ctcMinLpa: null,
@@ -492,6 +494,7 @@ describe("DrivePortfolioPage — searching the list", () => {
     companyName,
     roleTitle,
     status: "live",
+    driveType: "placement",
     onHold: false,
     createdAt: "2026-08-10T09:00:00.000Z",
     ctcMinLpa: null,
@@ -720,5 +723,96 @@ describe("ordering the portfolio", () => {
     await screen.findByText(/no drives yet/i);
 
     expect(screen.queryByLabelText(/sort/i)).toBeNull();
+  });
+});
+
+/**
+ * Karthik, 2026-08-27: "let us add a filter on top of this page to select
+ * drives of a particular type … in each of these drive summaries also, show a
+ * small tag on the type."
+ */
+describe("DrivePortfolioPage — filtering and tagging by drive type", () => {
+  const FULL_TIME: PortfolioDrive = { ...DRIVE, driveType: "placement" };
+  const CONVERTIBLE: PortfolioDrive = {
+    ...OTHERS,
+    driveId: "d3",
+    companyName: "LTI Mindtree",
+    status: "live",
+    driveType: "internship_convertible",
+  };
+  const INTERNSHIP: PortfolioDrive = {
+    ...OTHERS,
+    driveId: "d4",
+    companyName: "ABCD Infosys",
+    status: "live",
+    driveType: "internship",
+  };
+  const all = view([FULL_TIME, CONVERTIBLE, INTERNSHIP]);
+
+  it("tags every drive with its type", async () => {
+    show({ view: all });
+
+    const internship = await screen.findByRole("region", { name: "ABCD Infosys" });
+    expect(within(internship).getByText("Internship")).toBeDefined();
+
+    const convertible = screen.getByRole("region", { name: "LTI Mindtree" });
+    expect(within(convertible).getByText("Internship → Full time")).toBeDefined();
+
+    const fullTime = screen.getByRole("region", { name: "Zoho Corporation" });
+    expect(within(fullTime).getByText("Full time")).toBeDefined();
+  });
+
+  it("shows every drive until a type is chosen", async () => {
+    show({ view: all });
+    expect(await screen.findByRole("region", { name: "ABCD Infosys" })).toBeDefined();
+    expect(screen.getByRole("region", { name: "Zoho Corporation" })).toBeDefined();
+  });
+
+  it("narrows to the chosen type, and nothing else", async () => {
+    const user = userEvent.setup();
+    show({ view: all });
+    await screen.findByRole("region", { name: "ABCD Infosys" });
+
+    const filter = screen.getByRole("group", { name: /drive type/i });
+    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+
+    expect(screen.getByRole("region", { name: "ABCD Infosys" })).toBeDefined();
+    expect(screen.queryByRole("region", { name: "Zoho Corporation" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "LTI Mindtree" })).toBeNull();
+  });
+
+  it("keeps convertible separate from internship — they are different promises", async () => {
+    const user = userEvent.setup();
+    show({ view: all });
+    await screen.findByRole("region", { name: "ABCD Infosys" });
+
+    const filter = screen.getByRole("group", { name: /drive type/i });
+    await user.click(within(filter).getByRole("button", { name: /^Internship → Full time \d+$/ }));
+
+    expect(screen.getByRole("region", { name: "LTI Mindtree" })).toBeDefined();
+    expect(screen.queryByRole("region", { name: "ABCD Infosys" })).toBeNull();
+  });
+
+  it("comes back to everything when All is clicked", async () => {
+    const user = userEvent.setup();
+    show({ view: all });
+    await screen.findByRole("region", { name: "ABCD Infosys" });
+    const filter = screen.getByRole("group", { name: /drive type/i });
+
+    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+    await user.click(within(filter).getByRole("button", { name: /^All \d+$/ }));
+
+    expect(screen.getByRole("region", { name: "Zoho Corporation" })).toBeDefined();
+  });
+
+  it("says which filter emptied the list, rather than a bare nothing-to-show", async () => {
+    const user = userEvent.setup();
+    show({ view: view([FULL_TIME]) });
+    await screen.findByRole("region", { name: "Zoho Corporation" });
+
+    const filter = screen.getByRole("group", { name: /drive type/i });
+    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+
+    expect(screen.getByText(/no internship drives/i)).toBeDefined();
   });
 });

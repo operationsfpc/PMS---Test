@@ -348,6 +348,21 @@ describe("arriving from the placement overview", () => {
   });
 
   /**
+   * 2026-08-27: `internship` became a storable offer category, so it became a
+   * spellable URL. A placement record is never an internship (R9), so the
+   * filter would draw a chip that can match nobody — a list that looks broken
+   * rather than empty. Only the ladder is drillable here.
+   */
+  it("ignores a category that no placement can ever carry", async () => {
+    show(EVERYONE, "/central/students?filter=placed&category=internship");
+    await screen.findByText("Thanush Krishna");
+
+    // Nothing was filtered out, and no drill-down chip was drawn.
+    expect(screen.getByText("Anjali Subramanian")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /clear the category filter/i })).toBeNull();
+  });
+
+  /**
    * A drill-down the reader cannot see is a list that looks wrong. Both of
    * these say what they are and clear themselves when pressed.
    */

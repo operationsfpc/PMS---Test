@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { describeFileSize } from "@domain/attachments";
+import { driveTypeLabel } from "@domain/drive-type";
 import { driveVenueApplies } from "@domain/drive-venue";
 import { JOINING_TIMELINES, joiningLabel } from "@domain/joining";
 import { MARKS_SCALES } from "@domain/marks";
@@ -40,11 +41,15 @@ const DRIVE_MODE_LABELS: Record<string, string> = {
   pooled: "Pooled drive",
 };
 
-const DRIVE_TYPE_LABELS: Record<string, string> = {
-  placement: "Placement",
-  internship_convertible: "Internship (convertible)",
-  internship: "Internship",
-};
+/**
+ * 2026-08-27: one spelling, from the domain. This map said "Placement" and
+ * "Internship (convertible)" while the publish view printed "internship
+ * convertible" and the cards printed the raw value — four spellings of three
+ * things.
+ */
+const DRIVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  DRIVE_TYPES.map((type) => [type, driveTypeLabel(type)]),
+);
 
 const ARREAR_LABELS: Record<string, string> = {
   flexible: "Flexible — arrears allowed",

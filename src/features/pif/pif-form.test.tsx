@@ -14,7 +14,7 @@ import { PIF_SECTIONS, PifForm } from "./pif-form";
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   // A1 (UAT 2026-08-19): the type comes FIRST — choosing it reveals the
   // compensation fields that belong to it.
-  await user.click(screen.getByRole("radio", { name: /^placement$/i }));
+  await user.click(screen.getByRole("radio", { name: /^full time$/i }));
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
   await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
   await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
@@ -560,7 +560,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
       expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
 
-      await user.click(screen.getByRole("radio", { name: /^placement$/i }));
+      await user.click(screen.getByRole("radio", { name: /^full time$/i }));
       await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
       await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
       await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
@@ -758,7 +758,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
     const user = userEvent.setup();
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
-    await user.click(screen.getByRole("radio", { name: /^placement$/i }));
+    await user.click(screen.getByRole("radio", { name: /^full time$/i }));
 
     expect(screen.getByLabelText(/minimum ctc/i)).toBeDefined();
     expect(screen.queryByLabelText(/stipend/i)).toBeNull();
@@ -778,7 +778,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
     const user = userEvent.setup();
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
-    await user.click(screen.getByRole("radio", { name: /convertible/i }));
+    await user.click(screen.getByRole("radio", { name: /internship → full time/i }));
 
     expect(screen.getByLabelText(/stipend minimum/i)).toBeDefined();
     expect(screen.getByLabelText(/minimum ctc/i)).toBeDefined();
@@ -896,7 +896,7 @@ describe("PifForm — required-field markers (G2)", () => {
     const user = userEvent.setup();
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
-    await user.click(screen.getByRole("radio", { name: /internship \(convertible\)/i }));
+    await user.click(screen.getByRole("radio", { name: /internship → full time/i }));
     expect(screen.getByLabelText(/minimum ctc \(lpa\) \*/i)).toBeDefined();
     expect(screen.getByLabelText(/stipend minimum \(₹ \/ month\) \*/i)).toBeDefined();
     // The maxima are genuinely optional and carry no marker.

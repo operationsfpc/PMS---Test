@@ -1,5 +1,5 @@
 import { countAbsences, needsDisbarmentReview } from "@domain/attendance";
-import type { AttendanceStatus, DriveStatus } from "@domain/types";
+import type { AttendanceStatus, DriveStatus, DriveType } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CockpitView, DisbarmentReview, DriveSummary } from "./cockpit-page";
 
@@ -18,7 +18,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
       const { data: drives } = await client
         .from("drives")
         .select(
-          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, on_hold, created_at, application_end, drive_mode, venue, drive_rounds(id, sequence, name)",
+          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, status, on_hold, created_at, application_end, drive_mode, venue, drive_rounds(id, sequence, name)",
         )
         .order("created_at", { ascending: false });
 
@@ -42,6 +42,13 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
             // Numerics arrive from PostgREST as strings.
             ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
             ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),
+            // 2026-08-27: an internship pays a stipend and has no CTC, and
+            // the Delivery Head approves from this list too (G1c).
+            stipendMinMonthly:
+              row.stipend_min_monthly == null ? null : Number(row.stipend_min_monthly),
+            stipendMaxMonthly:
+              row.stipend_max_monthly == null ? null : Number(row.stipend_max_monthly),
+            driveType: (row.drive_type as DriveType | null) ?? null,
             status: (row.status as DriveStatus | null) ?? "draft",
             onHold: (row.on_hold as boolean | null) ?? false,
             applicationCount: count ?? 0,

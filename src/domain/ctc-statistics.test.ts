@@ -137,6 +137,21 @@ describe("summariseCtcByCategory", () => {
   });
 
   /**
+   * 2026-08-27: `internship` became a storable category, so internship
+   * placements now arrive here carrying one. The breakdown is the LADDER, and
+   * an internship is on no rung of it — a "₹0 LPA Internship" row beside
+   * Super Dream would put a stipend and a salary in the same table.
+   */
+  it("gives the internship category no rung of its own", () => {
+    const byCategory = summariseCtcByCategory([
+      record("s1", 8, "dream"),
+      record("s2", 0.6, "internship"),
+    ]);
+
+    expect(byCategory.map((c) => c.category)).toEqual(["dream"]);
+  });
+
+  /**
    * A plain internship is not on the ladder and carries no category (PRD §11).
    * It is still a real placement, so it is counted in the headline and simply
    * has no category row.

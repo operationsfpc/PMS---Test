@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabasePortfolioView } from "./portfolio-view";
+import { createSupabasePortfolioView, PORTFOLIO_DRIVE_COLUMNS } from "./portfolio-view";
 
 /**
  * The owner's view of their drives, from live rows.
@@ -209,5 +209,35 @@ describe("createSupabasePortfolioView — the raised date", () => {
     const [drive] = await view().drives();
 
     expect(drive?.createdAt).toBeNull();
+  });
+});
+
+/**
+ * 2026-08-27: the list filters and tags by drive type, so the view has to
+ * fetch it. It did not before — the column was simply absent from the select.
+ */
+describe("createSupabasePortfolioView — the drive type", () => {
+  it("carries the type through to the screen", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([{ ...DRIVE, drive_type: "internship" }]),
+      ),
+    );
+
+    const [drive] = await createSupabasePortfolioView(client()).drives();
+    expect(drive?.driveType).toBe("internship");
+  });
+
+  it("asks the database for the column, rather than inventing a default", () => {
+    expect(PORTFOLIO_DRIVE_COLUMNS).toMatch(/\bdrive_type\b/);
+  });
+
+  it("reports a drive that never declared one as null, never as a guess", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json([{ ...DRIVE, drive_type: null }])),
+    );
+
+    const [drive] = await createSupabasePortfolioView(client()).drives();
+    expect(drive?.driveType).toBeNull();
   });
 });

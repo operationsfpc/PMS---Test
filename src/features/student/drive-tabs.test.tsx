@@ -239,3 +239,93 @@ describe("DriveTabs", () => {
     expect(screen.getByText("Nothing in progress right now.")).toBeDefined();
   });
 });
+
+/**
+ * Karthik, 2026-08-27: the drive-type filter belongs on the student's list
+ * too. This page already carries a row of dropdowns, so the filter joins them
+ * rather than arriving as a competing set of chips.
+ */
+describe("DriveTabs — filtering and tagging by drive type", () => {
+  const typed: StudentDriveLists = {
+    ...LISTS,
+    toApply: [
+      { ...openCard, id: "t1", companyName: "Zoho", driveType: "placement" },
+      {
+        ...openCard,
+        id: "t2",
+        companyName: "LTI Mindtree",
+        driveType: "internship_convertible",
+      },
+      {
+        ...openCard,
+        id: "t3",
+        companyName: "ABCD Infosys",
+        driveType: "internship",
+        offerCategory: "internship",
+      },
+    ],
+    inProgress: [],
+    notApplied: [],
+    appliedClosed: [],
+  };
+
+  it("tags each drive with its type", async () => {
+    render(<DriveTabs view={view(typed)} now={NOW} />);
+    await screen.findByText("ABCD Infosys");
+
+    // The filter dropdown carries the same words, so the tags are looked for
+    // on the cards rather than anywhere on the page.
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("Internship → Full time")).toBeDefined();
+    expect(within(panel).getByText("Full time")).toBeDefined();
+  });
+
+  it("narrows to the chosen type", async () => {
+    const user = userEvent.setup();
+    render(<DriveTabs view={view(typed)} now={NOW} />);
+    await screen.findByText("ABCD Infosys");
+
+    await user.selectOptions(screen.getByLabelText(/filter by drive type/i), "internship");
+
+    expect(screen.getByText("ABCD Infosys")).toBeDefined();
+    expect(screen.queryByText("Zoho")).toBeNull();
+    expect(screen.queryByText("LTI Mindtree")).toBeNull();
+  });
+
+  it("comes back to everything when All types is chosen", async () => {
+    const user = userEvent.setup();
+    render(<DriveTabs view={view(typed)} now={NOW} />);
+    await screen.findByText("ABCD Infosys");
+    const filter = screen.getByLabelText(/filter by drive type/i);
+
+    await user.selectOptions(filter, "internship");
+    await user.selectOptions(filter, "");
+
+    expect(screen.getByText("Zoho")).toBeDefined();
+  });
+
+  /**
+   * PB3 (2026-08-27): the offer category of an internship IS "Internship", and
+   * so is its type tag. Showing both puts the same word on the card twice, in
+   * two colours, saying nothing the second time.
+   */
+  it("does not print Internship twice on the same card", async () => {
+    render(
+      <DriveTabs view={view({ ...typed, toApply: [typed.toApply[2] as OpenDrive] })} now={NOW} />,
+    );
+    await screen.findByText("ABCD Infosys");
+
+    expect(within(screen.getByRole("tabpanel")).getAllByText("Internship")).toHaveLength(1);
+  });
+
+  it("still shows a full-time drive's category beside its type", async () => {
+    render(
+      <DriveTabs view={view({ ...typed, toApply: [typed.toApply[0] as OpenDrive] })} now={NOW} />,
+    );
+    await screen.findByText("Zoho");
+
+    const panel = screen.getByRole("tabpanel");
+    expect(within(panel).getByText("Dream")).toBeDefined();
+    expect(within(panel).getByText("Full time")).toBeDefined();
+  });
+});

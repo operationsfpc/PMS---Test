@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mockup — drive-type filter, type tags, stipend at approval</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Raleway:wght@500;600;700;800&family=Geist:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #3d3777;
+        --secondary: #ffb800;
+        --accent: #a46afc;
+        --accent-2: #1ee0e1;
+        --warning: #ff7200;
+        --destructive: #dd4820;
+        --line: #dadada;
+        --surface: #f5f5f5;
+        --ink-900: #1a1a2e;
+        --ink-700: #444;
+        --ink-500: #757585;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: Geist, system-ui, sans-serif;
+        background: var(--surface);
+        color: var(--ink-900);
+        margin: 0;
+        padding: 32px 24px 80px;
+      }
+      h1, h2, h3 { font-family: Raleway, sans-serif; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      .note { color: var(--ink-500); font-size: 13px; margin: 0 0 28px; }
+      .screen {
+        max-width: 980px;
+        margin: 0 auto 48px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 24px;
+      }
+      .screen > h2 { font-size: 20px; margin: 0 0 2px; }
+      .screen > .sub { color: var(--ink-500); font-size: 13px; margin: 0 0 20px; }
+      .label { font-size: 12px; font-weight: 600; color: var(--ink-500); display: block; margin-bottom: 6px; }
+      .searchrow { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 18px; }
+      input[type="text"], select {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font: inherit;
+        font-size: 14px;
+        background: #fff;
+      }
+      input[type="text"] { width: 420px; }
+      .btn {
+        background: var(--primary); color: #fff; border: 0;
+        border-radius: 10px; padding: 10px 18px; font: inherit;
+        font-weight: 600; font-size: 14px; cursor: pointer;
+      }
+
+      /* ---- the filter row ---- */
+      .filterrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+      .chip {
+        border: 1px solid var(--line); background: #fff; color: var(--ink-700);
+        border-radius: 999px; padding: 7px 16px; font: inherit; font-size: 13px;
+        font-weight: 600; cursor: pointer;
+      }
+      .chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+      .chip .count { opacity: .65; font-weight: 500; margin-left: 6px; }
+
+      /* ---- drive cards ---- */
+      .card { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; margin-bottom: 14px; }
+      .cardhead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .company { font-family: Raleway, sans-serif; font-size: 17px; font-weight: 700; }
+      .meta { color: var(--ink-500); font-size: 13px; margin: 6px 0 10px; }
+      .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+      .badge {
+        border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600;
+        border: 1px solid transparent;
+      }
+      .b-neutral { background: #ecf1f0; color: #40404f; border-color: #dadada; }
+      .b-accent  { background: rgba(164,106,252,.12); color: #6a3fc0; border-color: rgba(164,106,252,.45); }
+      .b-warning { background: rgba(255,114,0,.12); color: #b45200; border-color: rgba(255,114,0,.45); }
+      .b-open    { background: rgba(255,184,0,.16); color: #8a6300; border-color: rgba(255,184,0,.5); }
+      .b-soon    { background: rgba(221,72,32,.10); color: #b03a1a; border-color: rgba(221,72,32,.4); }
+      .stats { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+      .stat { border: 1px solid var(--line); border-radius: 10px; padding: 10px 18px; min-width: 108px; }
+      .stat .k { font-size: 11px; letter-spacing: .04em; color: var(--ink-500); text-transform: uppercase; }
+      .stat .v { font-size: 20px; font-weight: 700; margin-top: 2px; }
+
+      /* ---- approval card ---- */
+      .dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; background: var(--surface); border-radius: 10px; padding: 14px; margin-top: 14px; }
+      .dl .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-500); font-weight: 600; }
+      .dl .v { font-size: 14px; margin-top: 3px; }
+      .money { font-size: 14px; color: var(--ink-700); }
+      .money strong { color: var(--ink-900); }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 16px; }
+      .hint { font-size: 12px; margin-top: 5px; color: var(--warning); }
+      .hint.grey { color: var(--ink-500); }
+      select.full { width: 100%; }
+      .locked { background: #f0eef8; border-color: var(--primary); color: var(--primary); font-weight: 600; }
+      .actions { display: flex; gap: 10px; margin-top: 18px; }
+      .btn.secondary { background: #fff; color: var(--ink-700); border: 1px solid var(--line); }
+      .callout {
+        border-left: 3px solid var(--accent); background: rgba(164,106,252,.06);
+        padding: 10px 14px; font-size: 13px; color: var(--ink-700); margin: 18px 0 0; border-radius: 0 8px 8px 0;
+      }
+      .caption { font-size: 12px; color: var(--ink-500); margin: 6px 0 16px; }
+    </style>
+  </head>
+  <body>
+    <h1>Mockup — drive-type filter, type tags, stipend at approval</h1>
+    <p class="note">
+      2026-08-27 · against spec <code>docs/specs/2026-08-27-drive-type-filter-and-internship-category.md</code>.
+      Real brand tokens, real copy. Nothing here is wired up.
+    </p>
+
+    <!-- ============================================ 1. LIVE DRIVES -->
+    <section class="screen">
+      <h2>1 · Live &nbsp;<span style="font-size:13px;font-weight:400;color:var(--ink-500)">(Delivery Head · Central CPC · AE — and the same row on Yet to publish + Completed)</span></h2>
+      <p class="sub">Every drive I raise or approve — and what has become of it.</p>
+
+      <div class="searchrow">
+        <div>
+          <span class="label">Search drives</span>
+          <input type="text" placeholder="Company or role — e.g. HCL, or trainee" />
+        </div>
+        <button class="btn">Search</button>
+      </div>
+
+      <div class="filterrow">
+        <span class="label" style="margin:0 4px 0 0">Type</span>
+        <button class="chip" aria-pressed="true">All <span class="count">24</span></button>
+        <button class="chip" aria-pressed="false">Full time <span class="count">12</span></button>
+        <button class="chip" aria-pressed="false">Internship → Full time <span class="count">10</span></button>
+        <button class="chip" aria-pressed="false">Internship <span class="count">2</span></button>
+      </div>
+      <p class="caption">Single select · default All · remembered in the URL (<code>?type=internship</code>) so a filtered list can be shared.</p>
+
+      <div class="card">
+        <div class="cardhead">
+          <span class="company">ABCD Deloitte</span>
+          <span class="badge b-neutral">Full time</span>
+        </div>
+        <p class="meta">Junior Analyst · ₹8–12 LPA · applications close 29 Aug 2026</p>
+        <div class="badges">
+          <span class="badge b-accent">Approved by you</span>
+          <span class="badge b-open">Applications open</span>
+          <span class="badge b-soon">Closing soon</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="k">Applied</div><div class="v">2</div></div>
+          <div class="stat"><div class="k">Shortlisted</div><div class="v">0</div></div>
+          <div class="stat"><div class="k">In rounds</div><div class="v" style="color:var(--warning)">2</div></div>
+          <div class="stat"><div class="k">Offers</div><div class="v" style="color:#1a7f4b">0</div></div>
+          <div class="stat"><div class="k">Not selected</div><div class="v">0</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardhead">
+          <span class="company">ABCD Infosys</span>
+          <span class="badge b-warning">Internship</span>
+        </div>
+        <p class="meta">Junior Associate · ₹15,000–20,000 / month · applications close 05 Sep 2026</p>
+        <div class="badges">
+          <span class="badge b-open">Applications open</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="k">Applied</div><div class="v">0</div></div>
+          <div class="stat"><div class="k">Shortlisted</div><div class="v">0</div></div>
+          <div class="stat"><div class="k">In rounds</div><div class="v" style="color:var(--warning)">0</div></div>
+          <div class="stat"><div class="k">Offers</div><div class="v" style="color:#1a7f4b">0</div></div>
+          <div class="stat"><div class="k">Not selected</div><div class="v">0</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardhead">
+          <span class="company">LTI Mindtree</span>
+          <span class="badge b-accent">Internship → Full time</span>
+        </div>
+        <p class="meta">Jr. Software engineer · ₹4–5 LPA · stipend ₹12,000 / month · applications close 29 Aug 2026</p>
+        <div class="badges">
+          <span class="badge b-open">Applications open</span>
+          <span class="badge b-soon">Closing soon</span>
+        </div>
+      </div>
+
+      <p class="callout">
+        <strong>Empty state names the filter:</strong> “No <em>internship</em> drives here yet.” — never a bare
+        “Nothing to show”, which reads as a broken screen.
+      </p>
+    </section>
+
+    <!-- ============================================ 2. STUDENT -->
+    <section class="screen">
+      <h2>2 · Student — Drives</h2>
+      <p class="sub">This page already has a row of dropdowns, so the type filter joins them rather than fighting them.</p>
+      <div class="searchrow" style="flex-wrap:wrap">
+        <div><span class="label">Search</span><input type="text" style="width:240px" placeholder="Company or role" /></div>
+        <div><span class="label">Drive type</span>
+          <select><option>All types</option><option>Full time</option><option>Internship → Full time</option><option selected>Internship</option></select>
+        </div>
+        <div><span class="label">Location</span><select><option>Anywhere</option><option>Chennai</option></select></div>
+        <div><span class="label">Area</span><select><option>All areas</option><option>Software / Technical</option></select></div>
+        <div><span class="label">Closing</span><select><option>Any time</option><option>Within 3 days</option></select></div>
+      </div>
+      <div class="card">
+        <div class="cardhead">
+          <span class="company">ABCD Infosys</span>
+          <span class="badge b-warning">Internship</span>
+        </div>
+        <p class="meta">Junior Associate · ₹15,000–20,000 / month · closes 05 Sep 2026</p>
+        <button class="btn">Apply</button>
+      </div>
+    </section>
+
+    <!-- ============================================ 3. APPROVAL -->
+    <section class="screen">
+      <h2>3 · PIF approval — Delivery Head</h2>
+      <p class="sub">Approve or reject drive initiation forms raised by Account Executives.</p>
+
+      <div class="card">
+        <div class="cardhead">
+          <span class="company">ABCD Infosys</span>
+          <span class="badge b-warning">Internship</span>
+          <a href="#" style="font-size:12px;font-weight:600;color:var(--primary)">View the full drive</a>
+        </div>
+        <p class="meta">
+          Junior Associate ·
+          <span class="money"><strong>CTC not specified</strong></span> ·
+          <span class="money">Stipend <strong>₹15,000–20,000 / month</strong></span>
+        </p>
+
+        <div class="dl">
+          <div><div class="k">Shift</div><div class="v">Day shift</div></div>
+          <div><div class="k">Joining</div><div class="v">Immediate joining</div></div>
+          <div><div class="k">Job description</div><div class="v"><a href="#" style="color:var(--primary)">images (6).pdf</a></div></div>
+        </div>
+
+        <div class="grid2">
+          <div>
+            <span class="label" style="color:var(--ink-900);font-size:13px">Offer category</span>
+            <select class="full locked"><option selected>Internship</option></select>
+            <p class="hint">This drive is an internship, so Internship is the only category it can carry. This cannot be changed later.</p>
+          </div>
+          <div>
+            <span class="label" style="color:var(--ink-900);font-size:13px">Rejection reason</span>
+            <input type="text" style="width:100%" />
+            <p class="hint grey">Required to reject. Rejection is final.</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn">Approve</button>
+          <button class="btn secondary">Reject permanently</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardhead">
+          <span class="company">ABCD Wipro</span>
+          <span class="badge b-accent">Internship → Full time</span>
+        </div>
+        <p class="meta">
+          Jr. Software engineer ·
+          <span class="money"><strong>₹8–12 LPA</strong></span> ·
+          <span class="money">Stipend <strong>₹18,000 / month</strong></span>
+        </p>
+        <div class="grid2">
+          <div>
+            <span class="label" style="color:var(--ink-900);font-size:13px">Offer category</span>
+            <select class="full">
+              <option>Regular</option><option>Dream</option><option selected>Super Dream</option>
+            </select>
+            <p class="hint">Suggested from the CTC. This cannot be changed later.</p>
+          </div>
+          <div></div>
+        </div>
+      </div>
+
+      <p class="callout">
+        A convertible drive keeps the three rungs — it becomes a full-time offer, so it stays on the ladder.
+        <strong>Internship is offered only when the drive type is Internship</strong>, and the database refuses
+        any other combination.
+      </p>
+    </section>
+  </body>
+</html>

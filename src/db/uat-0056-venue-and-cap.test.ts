@@ -99,7 +99,8 @@ describe("item 1 — the cap refuses plain internships only (Q1b)", () => {
   it("still refuses them a PLAIN internship drive — the allowance is used", async () => {
     const internship = await makeDrive({
       drive_type: "internship",
-      offer_category: null,
+      // 2026-08-27: an internship carries its own category (PB2).
+      offer_category: "internship",
       stipend_min_monthly: 15000,
     });
     await t.expectRejection(() => applyAs(internship), /already accepted an internship/i);

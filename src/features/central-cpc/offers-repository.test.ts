@@ -59,11 +59,42 @@ describe("createSupabaseOffersRepository", () => {
     await expect(repo("account_executive").declareOffer(offer)).rejects.toBeInstanceOf(OffersError);
   });
 
-  it("refuses a plain internship carrying an offer category", async () => {
+  /**
+   * SPEC CHANGE 2026-08-27 (approved, PB2): an internship offer used to be
+   * required to carry NO category; it now carries its own. The rule that has
+   * not moved is that it may never carry a RUNG.
+   */
+  it("refuses a plain internship carrying a ladder category", async () => {
     // The database forbids it too; catching it here keeps the message useful.
     await expect(
       repo().declareOffer({ ...offer, driveType: "internship", offerCategory: "dream" }),
     ).rejects.toThrow(/internship/i);
+  });
+
+  it("requires the internship category on an internship offer", async () => {
+    await expect(
+      repo().declareOffer({ ...offer, driveType: "internship", offerCategory: null }),
+    ).rejects.toThrow(/internship/i);
+  });
+
+  it("refuses the internship category on a drive that is not an internship", async () => {
+    await expect(
+      repo().declareOffer({ ...offer, driveType: "placement", offerCategory: "internship" }),
+    ).rejects.toThrow(/internship/i);
+  });
+
+  it("accepts an internship offer classified as an internship", async () => {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/offers`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "o2" });
+      }),
+    );
+
+    await repo().declareOffer({ ...offer, driveType: "internship", offerCategory: "internship" });
+
+    expect(body.offer_category).toBe("internship");
   });
 
   it("requires a category for a ladder offer", async () => {

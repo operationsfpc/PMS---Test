@@ -6,6 +6,7 @@ import {
   certificateStanding,
   validateCertificates,
 } from "@domain/certificates";
+import { driveTypeLabel } from "@domain/drive-type";
 import {
   MAX_OTHER_PROFILES,
   normaliseProfileLinks,
@@ -269,9 +270,13 @@ export function ProfileEditPage({
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               {(
                 [
-                  { value: "placement", label: "Placement" },
-                  { value: "internship", label: "Internship" },
-                  { value: "internship_convertible", label: "Internship (convertible)" },
+                  // 2026-08-27: the same words the drive cards use.
+                  { value: "placement", label: driveTypeLabel("placement") },
+                  { value: "internship", label: driveTypeLabel("internship") },
+                  {
+                    value: "internship_convertible",
+                    label: driveTypeLabel("internship_convertible"),
+                  },
                 ] as const
               ).map((option) => (
                 <label key={option.value} className="flex items-center gap-2 text-sm">

@@ -1,5 +1,5 @@
 import type { ApplicantRound } from "@domain/student-progress";
-import type { AttendanceStatus, DriveStatus, RoundResult } from "@domain/types";
+import type { AttendanceStatus, DriveStatus, DriveType, RoundResult } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioApplicant, PortfolioDrive, PortfolioView } from "./portfolio-page";
 
@@ -23,7 +23,7 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
  */
 export const PORTFOLIO_DRIVE_COLUMNS = `
   id, company_name, role_title, status, on_hold, created_at,
-  ctc_min_lpa, ctc_max_lpa,
+  ctc_min_lpa, ctc_max_lpa, drive_type,
   created_by, approved_by, published_by,
   application_start, application_end,
   drive_rounds(
@@ -128,6 +128,10 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           // G5b: numerics arrive from PostgREST as strings.
           ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
           ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),
+          // 2026-08-27: filtered on, and tagged on every card. Null is a
+          // drive that never declared one, and stays null rather than
+          // defaulting into a bucket the data never named.
+          driveType: (row.drive_type as DriveType | null) ?? null,
           createdBy: (row.created_by as string | null) ?? null,
           approvedBy: (row.approved_by as string | null) ?? null,
           publishedBy: (row.published_by as string | null) ?? null,

@@ -1,14 +1,17 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
+import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import type { OfferCategory } from "@domain/offer-category";
 import {
   DEFAULT_OFFER_CATEGORY_BANDS,
   describeOfferCategoryBands,
-  OFFER_CATEGORIES,
+  offerCategoriesFor,
   offerCategoryLabel,
+  requiredOfferCategoryFor,
   suggestOfferCategory,
 } from "@domain/offer-category";
+import { describeStipendRange } from "@domain/stipend";
 import {
   ApprovalError,
   type ApprovalRepository,
@@ -86,10 +89,19 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
       // UAT 2026-08-27: a cap-only internship carries no CTC, and asking for
       // a suggestion used to THROW — one such PIF emptied the whole queue
       // behind "Could not load the queue". No suggestion is a valid answer.
+      // 2026-08-27: an internship's category is not a judgement, it is a
+      // restatement of its type, so it is filled in rather than asked for.
       setCategories(
         Object.fromEntries(
           pending
-            .map((p) => [p.id, suggestOfferCategory(p.ctcMaxLpa ?? p.ctcMinLpa)] as const)
+            .map(
+              (p) =>
+                [
+                  p.id,
+                  requiredOfferCategoryFor(p.driveType) ??
+                    suggestOfferCategory(p.ctcMaxLpa ?? p.ctcMinLpa),
+                ] as const,
+            )
             .filter((entry): entry is readonly [string, OfferCategory] => entry[1] !== null),
         ),
       );
@@ -112,7 +124,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
 
     // Same rule the repository and the database enforce - asked here only so
     // the Delivery Head gets the answer without a round trip. Not a copy of it.
-    const check = decidePif("submitted", intent);
+    const check = decidePif("submitted", intent, pif.driveType);
     if (!check.ok) {
       setError(check.error);
       return;
@@ -166,7 +178,18 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
           {rows.map((pif) => {
             // One formatter for every screen (C3) — the inline version here
             // printed "₹— LPA" for an internship that has no CTC at all.
-            const ctcLabel = describeCtcRange(pif.ctcMinLpa, pif.ctcMaxLpa) ?? "CTC not specified";
+            const ctc = describeCtcRange(pif.ctcMinLpa, pif.ctcMaxLpa);
+            const stipend = describeStipendRange(pif.stipendMinMonthly, pif.stipendMaxMonthly);
+            // Both are shown when both exist: a convertible drive is approved
+            // on its stipend AND on its eventual salary.
+            const pay =
+              ctc === null && stipend === null
+                ? "No CTC or stipend recorded"
+                : [ctc, stipend === null ? null : `Stipend ${stipend}`]
+                    .filter((part) => part !== null)
+                    .join(" · ");
+            const categoryOptions = offerCategoriesFor(pif.driveType);
+            const categoryIsFixed = requiredOfferCategoryFor(pif.driveType) !== null;
             const busy = busyId === pif.id;
 
             return (
@@ -175,6 +198,8 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                   <h2 className="font-[Raleway] text-lg font-bold text-ink-900">
                     {pif.companyName}
                   </h2>
+                  {/* 2026-08-27: the type, on every drive summary. */}
+                  <Badge tone={driveTypeTone(pif.driveType)}>{driveTypeLabel(pif.driveType)}</Badge>
                   {pif.onHold && <Badge tone="warning">On hold</Badge>}
                   {/* N1: "delivery head should be able to click and view all
                       relevant fields of the drive." */}
@@ -186,8 +211,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                   </Link>
                 </div>
                 <p className="text-sm text-ink-500">
-                  {pif.roleTitle ?? "Role not specified"} · {ctcLabel}
-                  {pif.driveType !== null && ` · ${pif.driveType.replaceAll("_", " ")}`}
+                  {pif.roleTitle ?? "Role not specified"} · {pay}
                 </p>
 
                 {/*
@@ -261,16 +285,18 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                       <option value="" disabled>
                         Choose a category…
                       </option>
-                      {OFFER_CATEGORIES.map((c) => (
+                      {categoryOptions.map((c) => (
                         <option key={c} value={c}>
                           {offerCategoryLabel(c)}
                         </option>
                       ))}
                     </select>
                     <p className="mt-1 text-xs text-[#FF7200]">
-                      {categories[pif.id] === undefined
-                        ? "No CTC on this PIF, so nothing is suggested — choose the category. This cannot be changed later."
-                        : "Suggested from the CTC. This cannot be changed later."}
+                      {categoryIsFixed
+                        ? "This drive is an internship, so Internship is the only category it can carry. This cannot be changed later."
+                        : categories[pif.id] === undefined
+                          ? "No CTC on this PIF, so nothing is suggested — choose the category. This cannot be changed later."
+                          : "Suggested from the CTC. This cannot be changed later."}
                     </p>
                   </div>
 

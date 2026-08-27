@@ -1,4 +1,5 @@
-import type { OfferCategory } from "./offer-category";
+import { type OfferCategory, offerCategoryAllowedFor } from "./offer-category";
+import { hasAnyPay } from "./stipend";
 import type { DriveStatus, DriveType, RoleCategory } from "./types";
 
 /**
@@ -22,6 +23,12 @@ export interface DriveReadiness {
   readonly hasJobDescriptionFile: boolean;
   readonly locations: readonly string[];
   readonly ctcMinLpa: number | null;
+  /**
+   * P10 (2026-08-27): a plain internship pays a monthly stipend and has no
+   * CTC, so the go-live gate had to be able to see one.
+   */
+  readonly stipendMinMonthly: number | null;
+  readonly stipendMaxMonthly: number | null;
   readonly driveType: DriveType | null;
   readonly offerCategory: OfferCategory | null;
   readonly hasEligibilityCriteria: boolean;
@@ -62,7 +69,19 @@ export function missingBeforeGoLive(drive: DriveReadiness): readonly string[] {
     missing.push("Job description");
   }
   if (drive.locations.length === 0) missing.push("At least one location");
-  if (drive.ctcMinLpa === null) missing.push("Minimum CTC (LPA)");
+
+  // P10 / answer 8 (2026-08-27). A drive must record what it PAYS. For an
+  // internship a stipend is that record; for anything full-time the CTC still
+  // is, because a salaried role advertised with only a monthly figure is a
+  // mistake worth catching rather than a shape to accommodate.
+  // Mirrored by `live_requires_complete_record` in 0067; change both or neither.
+  if (drive.driveType === "internship") {
+    if (!hasAnyPay(drive.ctcMinLpa, drive.stipendMinMonthly, drive.stipendMaxMonthly)) {
+      missing.push("Minimum CTC (LPA), or a monthly stipend");
+    }
+  } else if (drive.ctcMinLpa === null) {
+    missing.push("Minimum CTC (LPA)");
+  }
   if (drive.driveType === null) missing.push("Drive type");
   if (drive.offerCategory === null) missing.push("Offer category");
   if (!drive.hasEligibilityCriteria) missing.push("Eligibility criteria");
@@ -108,7 +127,16 @@ export function canGoLive(status: DriveStatus, drive: DriveReadiness): GoLiveRes
  * be classified. Rejection is terminal - a rejected PIF is never reopened, and
  * a fresh PIF must be raised instead.
  */
-export function decidePif(current: DriveStatus, decision: PifDecision): PifDecisionResult {
+export function decidePif(
+  current: DriveStatus,
+  decision: PifDecision,
+  /**
+   * 2026-08-27: the type and the category are a PAIR. Optional so callers
+   * that genuinely do not know the type keep their behaviour and the database
+   * stays the backstop — but every screen does know it, and passes it.
+   */
+  driveType?: DriveType | null,
+): PifDecisionResult {
   if (current !== "submitted") {
     return { ok: false, error: "Only a submitted PIF can be approved or rejected." };
   }
@@ -118,6 +146,17 @@ export function decidePif(current: DriveStatus, decision: PifDecision): PifDecis
       return {
         ok: false,
         error: "An offer category must be set at approval - it cannot be changed later.",
+      };
+    }
+    // Mirrors `internship_carries_internship_category` in 0067 — the Delivery
+    // Head gets a sentence rather than a constraint name.
+    if (driveType !== undefined && !offerCategoryAllowedFor(driveType, decision.offerCategory)) {
+      return {
+        ok: false,
+        error:
+          driveType === "internship"
+            ? "An internship is classified as Internship - it is not on the Regular/Dream/Super Dream ladder."
+            : "Only an internship drive can be classified as Internship.",
       };
     }
     return { ok: true, next: "approved" };

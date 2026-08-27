@@ -1,7 +1,14 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
+import { DriveTypeFilter } from "@components/drive-type-filter";
 import { Badge, Card, PageHeader } from "@components/ui";
 import { searchDrives } from "@domain/drive-portfolio";
-import type { AttendanceStatus, RoundResult } from "@domain/types";
+import {
+  type DriveTypeFilter as DriveTypeFilterValue,
+  driveTypeLabel,
+  driveTypeTone,
+  matchesDriveType,
+} from "@domain/drive-type";
+import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useEffect, useState } from "react";
 
 /**
@@ -33,6 +40,8 @@ export interface DriveProgressEntry {
   readonly driveId: string;
   readonly companyName: string;
   readonly roleTitle: string | null;
+  /** 2026-08-27: filtered on, and tagged on every card. */
+  readonly driveType?: DriveType | null;
   readonly status: string;
   readonly students: readonly DriveProgressStudent[];
 }
@@ -58,6 +67,7 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
    * rounds, so this is the longest scroll in the application.
    */
   const [query, setQuery] = useState("");
+  const [type, setType] = useState<DriveTypeFilterValue>("");
 
   useEffect(() => {
     void view.drives().then(setDrives);
@@ -65,7 +75,24 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
 
   // The domain's predicate, so "hcl" matches the same drives here as on every
   // other list.
-  const visible = drives === null ? [] : searchDrives(drives, query);
+  const visible =
+    drives === null
+      ? []
+      : searchDrives(
+          drives.filter((drive) => matchesDriveType(drive.driveType ?? null, type)),
+          query,
+        );
+
+  const typeCounts =
+    drives === null
+      ? undefined
+      : {
+          "": drives.length,
+          placement: drives.filter((d) => d.driveType === "placement").length,
+          internship_convertible: drives.filter((d) => d.driveType === "internship_convertible")
+            .length,
+          internship: drives.filter((d) => d.driveType === "internship").length,
+        };
 
   return (
     <div>
@@ -85,16 +112,30 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
       ) : (
         <>
           <DriveSearch value={query} onChange={setQuery} />
+          <DriveTypeFilter
+            value={type}
+            onChange={setType}
+            {...(typeCounts === undefined ? {} : { counts: typeCounts })}
+          />
           {visible.length === 0 ? (
             <Card className="p-6">
-              <NoDriveMatches query={query} />
+              <NoDriveMatches
+                query={query}
+                {...(type === "" ? {} : { typeLabel: driveTypeLabel(type) })}
+              />
             </Card>
           ) : null}
           {visible.map((drive) => (
             <Card key={drive.driveId} className="mb-6">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
                 <div className="min-w-0">
-                  <p className="font-heading text-lg font-bold text-ink-900">{drive.companyName}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
+                    {drive.companyName}
+                    {/* 2026-08-27: the type, on every drive summary. */}
+                    <Badge tone={driveTypeTone(drive.driveType ?? null)}>
+                      {driveTypeLabel(drive.driveType ?? null)}
+                    </Badge>
+                  </p>
                   <p className="text-sm text-ink-500">{drive.roleTitle ?? "Role not set"}</p>
                 </div>
                 <Badge tone="brand">{label(drive.status)}</Badge>

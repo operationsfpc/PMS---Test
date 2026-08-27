@@ -2,7 +2,7 @@ import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { describeJoining } from "@domain/joining";
 import { describeShift } from "@domain/shift";
-import type { DriveStatus } from "@domain/types";
+import type { DriveStatus, DriveType } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class ApprovalError extends Error {}
@@ -13,7 +13,14 @@ export interface PendingPif {
   readonly roleTitle: string | null;
   readonly ctcMinLpa: number | null;
   readonly ctcMaxLpa: number | null;
-  readonly driveType: string | null;
+  /**
+   * 2026-08-27: an internship pays a monthly stipend and has no CTC. The
+   * Delivery Head was approving the commercials of a role without being shown
+   * the only number it had.
+   */
+  readonly stipendMinMonthly: number | null;
+  readonly stipendMaxMonthly: number | null;
+  readonly driveType: DriveType | null;
   readonly onHold: boolean;
   readonly createdAt: string | null;
   /**
@@ -39,7 +46,7 @@ export type GetActorId = () => Promise<string | null>;
 // One string literal, deliberately: PostgREST infers the row type from the
 // literal, and a concatenation types every column as an error object.
 export const COLUMNS =
-  "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes";
+  "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes";
 
 /** Long enough to open and read the PDF, short enough not to be forwardable. */
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -103,7 +110,9 @@ export function createSupabaseApprovalRepository(
         roleTitle: (row.role_title as string | null) ?? null,
         ctcMinLpa: (row.ctc_min_lpa as number | null) ?? null,
         ctcMaxLpa: (row.ctc_max_lpa as number | null) ?? null,
-        driveType: (row.drive_type as string | null) ?? null,
+        stipendMinMonthly: (row.stipend_min_monthly as number | null) ?? null,
+        stipendMaxMonthly: (row.stipend_max_monthly as number | null) ?? null,
+        driveType: (row.drive_type as DriveType | null) ?? null,
         onHold: Boolean(row.on_hold),
         createdAt: (row.created_at as string | null) ?? null,
         jobDescriptionUrl: signed.get((row.jd_storage_path as string | null) ?? "") ?? null,

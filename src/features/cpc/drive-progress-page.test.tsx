@@ -94,7 +94,17 @@ describe("DriveProgressPage", () => {
     await screen.findByText("Zoho");
     expect(screen.queryByRole("checkbox")).toBeNull();
     expect(screen.queryByRole("combobox")).toBeNull();
-    expect(screen.getAllByRole("button").map((b) => b.textContent)).toEqual(["Search"]);
+
+    // 2026-08-27: the drive-type filter added four buttons. The rule this
+    // test protects is that nothing here WRITES — narrowing a list does not.
+    // Asserted as "no verb" rather than as an exact list, so the next
+    // read-only control does not look like a regression while a Save button
+    // still would.
+    const verbs = screen
+      .getAllByRole("button")
+      .map((b) => b.textContent ?? "")
+      .filter((text) => /save|record|mark|approve|reject|submit|declare|remove|delete/i.test(text));
+    expect(verbs).toEqual([]);
   });
 
   it("says so when no drive touches their campus yet", async () => {
@@ -155,5 +165,43 @@ describe("DriveProgressPage — searching", () => {
     await screen.findByText(/no drives involve your students yet/i);
 
     expect(screen.queryByRole("searchbox")).toBeNull();
+  });
+});
+
+/**
+ * Karthik, 2026-08-27: the filter and the tag belong on every list of ongoing
+ * drives — this is the campus coordinator's.
+ */
+describe("DriveProgressPage — filtering and tagging by drive type", () => {
+  const typed = [
+    { ...DRIVE, driveId: "p1", companyName: "Zoho", driveType: "placement" as const },
+    {
+      ...DRIVE,
+      driveId: "p2",
+      companyName: "ABCD Infosys",
+      driveType: "internship" as const,
+    },
+  ];
+
+  const showTyped = () => render(<DriveProgressPage view={{ drives: async () => typed }} />);
+
+  it("tags each drive with its type", async () => {
+    showTyped();
+    await screen.findByText("ABCD Infosys");
+
+    expect(screen.getAllByText("Internship").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Full time").length).toBeGreaterThan(0);
+  });
+
+  it("narrows to the chosen type", async () => {
+    const user = userEvent.setup();
+    showTyped();
+    await screen.findByText("ABCD Infosys");
+
+    const filter = screen.getByRole("group", { name: /drive type/i });
+    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+
+    expect(screen.getByText("ABCD Infosys")).toBeDefined();
+    expect(screen.queryByText("Zoho")).toBeNull();
   });
 });

@@ -28,6 +28,8 @@ const complete = {
   hasJobDescriptionFile: false,
   locations: ["Chennai"],
   ctcMinLpa: 6.5,
+  stipendMinMonthly: null,
+  stipendMaxMonthly: null,
   driveType: "placement" as const,
   offerCategory: "dream" as const,
   hasEligibilityCriteria: true,

@@ -25,7 +25,7 @@ const pif = {
   roleTitle: "Analyst",
   ctcMinLpa: 18,
   ctcMaxLpa: 22,
-  driveType: "placement",
+  driveType: "placement" as const,
   onHold: false,
   createdAt: "2026-08-01T09:00:00Z",
   // J1/J2/J3 (2026-08-18): what the Delivery Head is actually approving.
@@ -33,6 +33,9 @@ const pif = {
   jobDescriptionName: null as string | null,
   shift: "Day shift",
   joining: "Immediate joining",
+  // 2026-08-27: what an internship is paid.
+  stipendMinMonthly: null as number | null,
+  stipendMaxMonthly: null as number | null,
 };
 
 function repo(overrides: Partial<ApprovalRepository> = {}): ApprovalRepository {
@@ -159,7 +162,21 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
     roleTitle: "Junior Associate",
     ctcMinLpa: null,
     ctcMaxLpa: null,
-    driveType: "internship",
+    driveType: "internship" as const,
+  };
+
+  /**
+   * SPEC CHANGE 2026-08-27 (approved): an INTERNSHIP now classifies itself,
+   * so it is no longer an example of "nothing to suggest". The rule those
+   * cases prove — no silent default, because §3.3 makes the category
+   * immutable — is unchanged, and is proved here on the drive that still has
+   * nothing to suggest: a full-time PIF whose CTC the AE has not filled in.
+   */
+  const noCtcYet = {
+    ...capOnly,
+    id: "d3",
+    companyName: "ABCD Pending",
+    driveType: "placement" as const,
   };
 
   it("still loads the queue — the live bug", async () => {
@@ -177,7 +194,7 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
   });
 
   it("suggests nothing, rather than silently suggesting Regular for ever", async () => {
-    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly] })} />);
+    render(<PifApprovalQueue repository={repo({ pending: async () => [noCtcYet] })} />);
 
     const select = (await screen.findByLabelText(/offer category/i)) as HTMLSelectElement;
     expect(select.value).toBe("");
@@ -186,7 +203,7 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
   it("refuses to approve until a category is chosen, and says why", async () => {
     const decide = vi.fn();
     const user = userEvent.setup();
-    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly], decide })} />);
+    render(<PifApprovalQueue repository={repo({ pending: async () => [noCtcYet], decide })} />);
 
     await user.click(await screen.findByRole("button", { name: /approve/i }));
 
@@ -197,7 +214,7 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
   it("approves once the Delivery Head has chosen the category themselves", async () => {
     const decide = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly], decide })} />);
+    render(<PifApprovalQueue repository={repo({ pending: async () => [noCtcYet], decide })} />);
 
     await user.selectOptions(await screen.findByLabelText(/offer category/i), "regular");
     await user.click(screen.getByRole("button", { name: /approve/i }));
@@ -206,12 +223,105 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
     expect(decide.mock.calls[0]?.[2]).toEqual({ decision: "approve", offerCategory: "regular" });
   });
 
-  it("says the CTC is not specified instead of printing an empty range", async () => {
+  it("never prints an empty range where a number should be", async () => {
     render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly] })} />);
 
-    expect(await screen.findByText(/CTC not specified/i)).toBeDefined();
+    expect(await screen.findByText(/no CTC or stipend recorded/i)).toBeDefined();
     expect(screen.queryByText(/₹—/)).toBeNull();
     expect(screen.queryByText(/null/)).toBeNull();
+  });
+});
+
+/**
+ * Karthik, 2026-08-27: "while approving internship PIF, stipend mentioned has
+ * to be shown to delivery head. this is currently missing" and "add one more
+ * there, as Internship".
+ *
+ * The Delivery Head approves the COMMERCIALS of a role. For an internship the
+ * stipend is the only number there is, and it was not on the screen at all.
+ */
+describe("PifApprovalQueue — an internship", () => {
+  const intern = {
+    ...pif,
+    id: "d-int",
+    companyName: "ABCD Infosys",
+    driveType: "internship" as const,
+    ctcMinLpa: null,
+    ctcMaxLpa: null,
+    stipendMinMonthly: 15000,
+    stipendMaxMonthly: 20000,
+  };
+
+  it("shows the stipend — the only number an internship has", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [intern] })} />);
+    expect(await screen.findByText(/₹15,000–20,000 \/ month/)).toBeDefined();
+  });
+
+  it("tags the drive with its type", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [intern] })} />);
+    expect(await screen.findByText("Internship", { selector: "span" })).toBeDefined();
+  });
+
+  it("offers Internship as the only category it can carry", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [intern] })} />);
+
+    const select = (await screen.findByLabelText(/offer category/i)) as HTMLSelectElement;
+    const options = [...select.options].filter((o) => o.value !== "").map((o) => o.value);
+    expect(options).toEqual(["internship"]);
+    expect(select.value).toBe("internship");
+  });
+
+  it("approves it as an internship without asking the Delivery Head to choose", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ pending: async () => [intern], decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(decide.mock.calls[0]?.[2]).toEqual({
+      decision: "approve",
+      offerCategory: "internship",
+    });
+  });
+
+  it("never offers the internship category to a full-time drive", async () => {
+    render(<PifApprovalQueue repository={repo()} />);
+
+    const select = (await screen.findByLabelText(/offer category/i)) as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).not.toContain("internship");
+  });
+
+  it("shows a convertible drive both numbers — both are being approved", async () => {
+    render(
+      <PifApprovalQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...pif,
+              driveType: "internship_convertible" as const,
+              stipendMinMonthly: 18000,
+              stipendMaxMonthly: null,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/₹18,000 \/ month/)).toBeDefined();
+    expect(screen.getByText(/₹18–22 LPA/)).toBeDefined();
+  });
+
+  it("says so plainly when a drive records no pay at all", async () => {
+    render(
+      <PifApprovalQueue
+        repository={repo({
+          pending: async () => [{ ...intern, stipendMinMonthly: null, stipendMaxMonthly: null }],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/no CTC or stipend recorded/i)).toBeDefined();
   });
 });
 

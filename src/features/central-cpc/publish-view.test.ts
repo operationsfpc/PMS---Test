@@ -179,7 +179,7 @@ describe("loading the publish screen", () => {
     stub();
 
     expect((await view().load()).drive.subtitle).toBe(
-      "Member Technical Staff · super dream · ₹6.5–9 LPA · placement",
+      "Member Technical Staff · Super Dream · ₹6.5–9 LPA · Full time",
     );
   });
 
