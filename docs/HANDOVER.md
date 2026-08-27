@@ -4,6 +4,54 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (7) — meeting-link upload, its template, and the recruiter pack's Resume links
+
+Three live UAT reports (`docs/inbox/WhatsApp Image 2026-08-26 at 16.22.*.jpeg`,
+`…16.30.19.jpeg`, `…16.44.13.jpeg`).
+
+1. **"No participant in this round carries these roll numbers: 124,
+   BCA2023156"** — printed while the list underneath showed exactly those two.
+   `results-view` was re-deciding who was in the round via a nested embed
+   (`round_participants → applications → students`). Matching is now a domain
+   rule, `matchMeetingSlots`, run against the roster the SCREEN is rendering;
+   the view is handed application ids. Roll numbers compare normalised
+   (`normaliseRollNumber`: case, padding, Excel's quotes and BOM).
+2. **Silent success.** PostgREST answers an UPDATE that matched no row with
+   200 + empty body. `assignSlots` / `setParticipantSlot` counted that as
+   assigned. They now count rows actually written, and when a
+   `round_participants` row is missing they CREATE it and then UPDATE it —
+   the update is what fires 0054's `meeting_slot_reaches_student`.
+3. **"Download CSV template"** beside the upload — pre-filled with this
+   round's own roll numbers plus any link/slot already set. A downloaded,
+   filled-in file cannot mismatch.
+4. **Recruiter pack Resume links** ("Cannot open the specified file"): the
+   sheet's relationship target carried raw spaces —
+   `Target="resumes/124 - Thanush Krishna.pdf"`. Excel writes `%20` and cannot
+   follow anything else. Targets are percent-encoded (`resumeHyperlink`),
+   display text stays human, filenames are built by `resumePackFilename` (a
+   slash in a name can no longer become a folder), and a `README.txt` in the
+   zip says to EXTRACT before clicking — Windows opening the xlsx from inside
+   the zip breaks every relative link no matter how correct it is.
+
+Live `94df1150-e7bb-4441-9f5f-1cd2f1ecbb9d`, `index-RpfyVT7j.js` verified to
+carry all four. Commits `87aa587`, `275f33a`.
+
+### ⚠️ Open item — the test suite and this machine
+
+- **Fixed:** `results-view.test.ts` never stubbed `round_participants`, so with
+  `onUnhandledRequest: "error"` every test in it still went to the network and
+  waited ~7s. File went from minutes to **317ms** (`275f33a`). Worth grepping
+  other view tests for the same disease.
+- **Not fixed:** on 2026-08-27 the box (8 GB, load ~12, 2 GB swap in use,
+  Siri's `AssetMetricsExtension` at 44% CPU) made the full `pnpm check`
+  unreliable — PGlite hooks timing out, single jsdom tests taking minutes.
+  The same suite passed **twice, cleanly, exit 0 (3871 tests)** earlier the
+  same evening with the production code as committed. Next session: reboot,
+  then run `pnpm check` once before anything else. If it still drags, look at
+  sharing one PGlite instance across `src/db` files rather than 50 boots.
+
+---
+
 ## ✅ SHIPPED 2026-08-26 (6) — a shortlist that misses the recruiter's target must be acknowledged
 
 UAT (`docs/inbox/WhatsApp Image 2026-08-26 at 16.13.35.jpeg`): target set to 1,
