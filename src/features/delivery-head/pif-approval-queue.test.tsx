@@ -138,6 +138,84 @@ describe("PifApprovalQueue", () => {
 });
 
 /**
+ * UAT 2026-08-27 (live): the Delivery Head opened PIF approvals and got
+ * "Could not load the queue". Nothing had failed on the wire — one of the two
+ * waiting PIFs was a cap-only internship (0056) with no CTC, and suggesting a
+ * category for it threw, which took the ENTIRE queue down. Every other PIF in
+ * the organisation became un-approvable because of one row.
+ *
+ * Two rules come out of that, both tested here:
+ *   1. A PIF the screen cannot classify still LISTS — one unusual row must
+ *      never be able to hide the others.
+ *   2. With no CTC there is no suggestion, so the Delivery Head must choose.
+ *      Defaulting to Regular would have written an immutable (§3.3) category
+ *      that nobody actually decided.
+ */
+describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
+  const capOnly = {
+    ...pif,
+    id: "d2",
+    companyName: "ABCD Infosys",
+    roleTitle: "Junior Associate",
+    ctcMinLpa: null,
+    ctcMaxLpa: null,
+    driveType: "internship",
+  };
+
+  it("still loads the queue — the live bug", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly] })} />);
+
+    expect(await screen.findByText("ABCD Infosys")).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("does not let one unclassifiable PIF hide the rest of the queue", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly, pif] })} />);
+
+    expect(await screen.findByText("ABCD Infosys")).toBeDefined();
+    expect(screen.getByText("Goldman Sachs")).toBeDefined();
+  });
+
+  it("suggests nothing, rather than silently suggesting Regular for ever", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly] })} />);
+
+    const select = (await screen.findByLabelText(/offer category/i)) as HTMLSelectElement;
+    expect(select.value).toBe("");
+  });
+
+  it("refuses to approve until a category is chosen, and says why", async () => {
+    const decide = vi.fn();
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly], decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /approve/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/offer category must be set/i);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("approves once the Delivery Head has chosen the category themselves", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly], decide })} />);
+
+    await user.selectOptions(await screen.findByLabelText(/offer category/i), "regular");
+    await user.click(screen.getByRole("button", { name: /approve/i }));
+
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(decide.mock.calls[0]?.[2]).toEqual({ decision: "approve", offerCategory: "regular" });
+  });
+
+  it("says the CTC is not specified instead of printing an empty range", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [capOnly] })} />);
+
+    expect(await screen.findByText(/CTC not specified/i)).toBeDefined();
+    expect(screen.queryByText(/₹—/)).toBeNull();
+    expect(screen.queryByText(/null/)).toBeNull();
+  });
+});
+
+/**
  * J1/J2/J3 (2026-08-18), answer 10: the JD belongs on the screen where the
  * role is approved. Approving a drive from a company name and a CTC is
  * approving a job title.

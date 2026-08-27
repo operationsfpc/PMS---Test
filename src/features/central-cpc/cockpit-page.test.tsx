@@ -534,6 +534,39 @@ describe("the Delivery Head decides from the list (G1c)", () => {
     );
   });
 
+  /**
+   * UAT 2026-08-27 (live): the same throw that emptied the Delivery Head's
+   * approval queue is reachable here too — a cap-only internship (0056) has
+   * no CTC, and opening the approve dialog asked for a suggestion anyway.
+   * There it broke the list; here it would break the click.
+   */
+  it("opens the approve dialog for a PIF with no CTC, suggesting nothing", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={view([{ ...SUBMITTED, ctcMinLpa: null, ctcMaxLpa: null }])}
+          filter="yet-to-publish"
+          role={DELIVERY_HEAD}
+          decide={decide as never}
+        />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /approve/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    const select = within(dialog).getByLabelText(/offer category/i) as HTMLSelectElement;
+    expect(select.value).toBe("");
+
+    // Nothing chosen: the domain refuses before the network is asked, because
+    // §3.3 makes the category immutable once written.
+    await user.click(within(dialog).getByRole("button", { name: /confirm — approve/i }));
+    expect(decide).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert").textContent).toMatch(/offer category must be set/i);
+  });
+
   it("rejects from the list — with a required reason (Q3)", async () => {
     const decide = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();

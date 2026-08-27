@@ -70,6 +70,30 @@ export function classifyOfferCategory(
   return "super_dream";
 }
 
+/**
+ * The same rule, asked as a question rather than an instruction: "what would
+ * you suggest for this CTC, if anything?"
+ *
+ * UAT 2026-08-27 (live): the Delivery Head's approval queue died with "Could
+ * not load the queue" because one waiting PIF was a cap-only internship
+ * (0056), which legitimately has no CTC at all. `classifyOfferCategory` threw
+ * — correctly, it is asked to classify a number — and one unusual row took
+ * every pending approval in the organisation down with it.
+ *
+ * A missing CTC is an ABSENCE, not a programming error. The answer is "no
+ * suggestion", and the Delivery Head decides. `classifyOfferCategory` stays
+ * strict for callers that genuinely have a number and would rather hear about
+ * a bug than swallow it.
+ */
+export function suggestOfferCategory(
+  ctcLpa: number | null | undefined,
+  bands: OfferCategoryBands = DEFAULT_OFFER_CATEGORY_BANDS,
+): OfferCategory | null {
+  if (ctcLpa === null || ctcLpa === undefined) return null;
+  if (!Number.isFinite(ctcLpa) || ctcLpa <= 0) return null;
+  return classifyOfferCategory(ctcLpa, bands);
+}
+
 /** Nonsense bands classify nonsense, so they are refused rather than applied. */
 function assertAscending(bands: OfferCategoryBands): void {
   if (bands.dreamMinLpa >= bands.superDreamMinLpa) {

@@ -13,11 +13,7 @@ import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import { canEditDriveVenue, describeDriveVenue, driveVenueApplies } from "@domain/drive-venue";
 import type { OfferCategory } from "@domain/offer-category";
-import {
-  classifyOfferCategory,
-  OFFER_CATEGORIES,
-  offerCategoryLabel,
-} from "@domain/offer-category";
+import { OFFER_CATEGORIES, offerCategoryLabel, suggestOfferCategory } from "@domain/offer-category";
 import type { AppRole, DriveStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -158,7 +154,9 @@ export function CockpitPage({
     drive: DriveSummary;
     kind: "approve" | "reject";
   } | null>(null);
-  const [category, setCategory] = useState<OfferCategory>("regular");
+  // Empty means "nobody has chosen yet" — §3.3 makes the category immutable
+  // once written, so it must never arrive pre-chosen by a default.
+  const [category, setCategory] = useState<OfferCategory | null>(null);
   const [reason, setReason] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
   /** UAT 2026-08-21 item 2: the venue being recorded, and its text. */
@@ -214,7 +212,9 @@ export function CockpitPage({
   }
 
   function openDecision(drive: DriveSummary, kind: "approve" | "reject") {
-    setCategory(classifyOfferCategory(drive.ctcMaxLpa ?? drive.ctcMinLpa ?? 0));
+    // UAT 2026-08-27: a cap-only internship (0056) has no CTC, and asking the
+    // strict rule to classify nothing threw — here, inside the click.
+    setCategory(suggestOfferCategory(drive.ctcMaxLpa ?? drive.ctcMinLpa));
     setReason("");
     setDecisionError(null);
     setDeciding({ drive, kind });
@@ -407,10 +407,13 @@ export function CockpitPage({
                 </label>
                 <select
                   id="cockpit-category"
-                  value={category}
+                  value={category ?? ""}
                   onChange={(e) => setCategory(e.target.value as OfferCategory)}
                   className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
                 >
+                  <option value="" disabled>
+                    Choose a category…
+                  </option>
                   {OFFER_CATEGORIES.map((c) => (
                     <option key={c} value={c}>
                       {offerCategoryLabel(c)}
@@ -418,7 +421,9 @@ export function CockpitPage({
                   ))}
                 </select>
                 <p className="mt-1 text-xs text-warning">
-                  Suggested from the CTC. This cannot be changed later.
+                  {category === null
+                    ? "No CTC on this PIF, so nothing is suggested — choose the category. This cannot be changed later."
+                    : "Suggested from the CTC. This cannot be changed later."}
                 </p>
               </div>
             ) : (

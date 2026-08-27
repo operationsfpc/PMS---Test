@@ -1,12 +1,13 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { describeCtcRange } from "@domain/ctc";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import type { OfferCategory } from "@domain/offer-category";
 import {
-  classifyOfferCategory,
   DEFAULT_OFFER_CATEGORY_BANDS,
   describeOfferCategoryBands,
   OFFER_CATEGORIES,
   offerCategoryLabel,
+  suggestOfferCategory,
 } from "@domain/offer-category";
 import {
   ApprovalError,
@@ -82,9 +83,14 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
     try {
       const pending = await repo.pending();
       setRows(pending);
+      // UAT 2026-08-27: a cap-only internship carries no CTC, and asking for
+      // a suggestion used to THROW — one such PIF emptied the whole queue
+      // behind "Could not load the queue". No suggestion is a valid answer.
       setCategories(
         Object.fromEntries(
-          pending.map((p) => [p.id, classifyOfferCategory(p.ctcMaxLpa ?? p.ctcMinLpa ?? 0)]),
+          pending
+            .map((p) => [p.id, suggestOfferCategory(p.ctcMaxLpa ?? p.ctcMinLpa)] as const)
+            .filter((entry): entry is readonly [string, OfferCategory] => entry[1] !== null),
         ),
       );
       setError(null);
@@ -158,10 +164,9 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
       ) : (
         <div className="flex flex-col gap-4">
           {rows.map((pif) => {
-            const ctcLabel =
-              pif.ctcMaxLpa === null
-                ? `₹${pif.ctcMinLpa ?? "—"} LPA`
-                : `₹${pif.ctcMinLpa}–${pif.ctcMaxLpa} LPA`;
+            // One formatter for every screen (C3) — the inline version here
+            // printed "₹— LPA" for an internship that has no CTC at all.
+            const ctcLabel = describeCtcRange(pif.ctcMinLpa, pif.ctcMaxLpa) ?? "CTC not specified";
             const busy = busyId === pif.id;
 
             return (
@@ -240,7 +245,9 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                     <select
                       id={`cat-${pif.id}`}
                       className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-                      value={categories[pif.id] ?? "regular"}
+                      // Never a silent default: §3.3 makes this immutable, so
+                      // a category nobody chose must not be approvable.
+                      value={categories[pif.id] ?? ""}
                       onChange={(e) =>
                         setCategories((c) => ({
                           ...c,
@@ -251,6 +258,9 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                       {/* The banner above and this dropdown must not be able
                           to call the same category different things, so both
                           take their words from the domain. */}
+                      <option value="" disabled>
+                        Choose a category…
+                      </option>
                       {OFFER_CATEGORIES.map((c) => (
                         <option key={c} value={c}>
                           {offerCategoryLabel(c)}
@@ -258,7 +268,9 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                       ))}
                     </select>
                     <p className="mt-1 text-xs text-[#FF7200]">
-                      Suggested from the CTC. This cannot be changed later.
+                      {categories[pif.id] === undefined
+                        ? "No CTC on this PIF, so nothing is suggested — choose the category. This cannot be changed later."
+                        : "Suggested from the CTC. This cannot be changed later."}
                     </p>
                   </div>
 

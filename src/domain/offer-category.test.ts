@@ -5,6 +5,7 @@ import {
   DEFAULT_OFFER_CATEGORY_BANDS,
   describeOfferCategoryBands,
   offerCategoryRank,
+  suggestOfferCategory,
 } from "./offer-category";
 
 /**
@@ -75,6 +76,40 @@ describe("classifyOfferCategory", () => {
  * The category ladder (PRD §12). Ordering is the backbone of drive visibility:
  * a placed student only ever sees NEW drives ranked strictly higher.
  */
+/**
+ * UAT 2026-08-27 (live): the Delivery Head's PIF approval queue died with
+ * "Could not load the queue". No request had failed — one PIF in the queue
+ * was a **cap-only internship** (0056), which legitimately carries no CTC,
+ * and asking `classifyOfferCategory` to classify nothing threw a RangeError
+ * that took the whole screen down with it.
+ *
+ * Classifying nothing is not a programming error, it is an ABSENCE, and the
+ * answer to it is "no suggestion" — the Delivery Head chooses. So the strict
+ * function stays strict, and screens ask this one.
+ */
+describe("suggestOfferCategory", () => {
+  it("suggests nothing when there is no CTC to go on", () => {
+    expect(suggestOfferCategory(null)).toBeNull();
+    expect(suggestOfferCategory(undefined)).toBeNull();
+  });
+
+  it("suggests nothing for a CTC that cannot be classified", () => {
+    expect(suggestOfferCategory(0)).toBeNull();
+    expect(suggestOfferCategory(-1)).toBeNull();
+    expect(suggestOfferCategory(Number.NaN)).toBeNull();
+  });
+
+  it("agrees with the strict rule wherever the strict rule has an answer", () => {
+    expect(suggestOfferCategory(4.99)).toBe("regular");
+    expect(suggestOfferCategory(5)).toBe("dream");
+    expect(suggestOfferCategory(12)).toBe("super_dream");
+  });
+
+  it("honours retuned bands", () => {
+    expect(suggestOfferCategory(6, { dreamMinLpa: 7, superDreamMinLpa: 14 })).toBe("regular");
+  });
+});
+
 describe("offerCategoryRank", () => {
   it("ranks regular below dream below super_dream", () => {
     expect(offerCategoryRank("regular")).toBeLessThan(offerCategoryRank("dream"));
