@@ -153,10 +153,10 @@ describe("repairing the offers that were declared before this rule existed", () 
         [ids.arjun, internship, ids.centralUser],
       );
 
-      const [{ repair_internship_offer_pay: repaired }] = (await t.sql(
-        `select repair_internship_offer_pay()`,
-      )) as Array<{ repair_internship_offer_pay: number }>;
-      expect(repaired).toBeGreaterThanOrEqual(1);
+      const rows = (await t.sql(`select repair_internship_offer_pay()`)) as Array<{
+        repair_internship_offer_pay: number;
+      }>;
+      expect(rows[0]?.repair_internship_offer_pay ?? 0).toBeGreaterThanOrEqual(1);
 
       const [row] = await t.sql(
         `select ctc_lpa, stipend_monthly from offers
