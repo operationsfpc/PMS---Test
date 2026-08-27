@@ -9,7 +9,7 @@ Project instructions. Read this file completely at the start of every session.
 1. **Interview → Spec → Build.** For any new feature/module: ask numbered clarifying questions, write the agreed spec to a file, get explicit approval — only then build.
 2. **UI work: mockup first.** Show an HTML mockup or layout description and get approval before implementing any new screen or layout change.
 3. **Run to finish.** Once a task list is approved, work until complete. Never pause to ask "shall I continue?" — stop only for blocking questions or credentials.
-4. **Ship and verify.** After every change: deploy, verify the live URL serves it, and end the report with `SHIPPED: yes/no — <what> — <how verified>`. Karthik should never have to ask "is everything shipped?".
+4. **Ship and verify.** After every change: deploy, verify the live URL serves it, and end the report with `SHIPPED: yes/no — <what> — <how verified>`. Karthik should never have to ask "is everything shipped?". Shipping is three separate acts, none of which triggers the others: `git push origin main`, `pnpm db:push` (migrations), `pnpm deploy` (Cloudflare).
 5. **Files by exact name.** When Karthik says "latest download/screenshot", confirm the exact filename and copy the file into `docs/inbox/` so it is never lost.
 6. **Secrets never in chat.** Keys/tokens go into git-ignored `.env` (Karthik pastes them there himself). Never print secrets; never make passwords viewable in the app.
 7. **Numbered outputs.** Options, questions, and open items always carry serial numbers so Karthik can reply "1, 3, 5".
@@ -121,9 +121,9 @@ The test has been verified to fail on violation, not just to pass.
 | Hosting | Cloudflare Workers Static Assets |
 | Package manager | pnpm |
 | Lint / format | Biome |
-| Hooks | lefthook (pre-commit: format + lint; pre-push: full test suite) |
-| CI | GitHub Actions |
-| Repo | **Local only for now.** No remote. Commit locally. |
+| Hooks | lefthook (pre-commit: Biome on staged files; pre-push: typecheck + full coverage suite). **Not automatic — run `pnpm lefthook install` after every fresh clone.** |
+| CI | GitHub Actions — `.github/workflows/ci.yml` (lint · typecheck · coverage · architecture, plus Playwright). Runs on PRs to `main` and on `main`. ⚠️ It **cannot be made a required check**: branch protection and rulesets are unavailable on a private repo on the GitHub Free plan (API returns 403 "Upgrade to GitHub Pro"). CI is advisory until the repo moves to Pro/Team or an org. |
+| Repo | `origin` → `github.com/karthikraja-ship-it/fpc-pms` (**private** — verified 2026-08-27). Commit locally, **push `main` before the session closes**. |
 
 ---
 
@@ -191,11 +191,37 @@ pnpm test:cov       # Coverage, enforces gates
 pnpm check          # Biome + tsc + full coverage suite
 pnpm db:types       # Regenerate src/db/database.types.ts from migrations
 pnpm supabase ...   # Supabase CLI (project-local dev dependency)
-pnpm db:push        # supabase db push  — live; remote is at 0050
+pnpm db:push        # supabase db push  — live; remote is at 0065
+git push origin main # the GitHub remote — not automatic, and not done by deploy
 ```
 
 **Read `docs/HANDOVER.md` first.** It holds current state, every confirmed
 decision, and the exact next step.
+
+---
+
+## Collaborators
+
+`CONTRIBUTING.md` is the onboarding doc for anyone other than Karthik — setup,
+the TDD rule, architecture boundaries, branch/PR flow, conventions, security.
+Point every new collaborator at it and do not re-explain the rules in chat.
+
+Access is managed at **Settings → Collaborators** on the repo (personal account,
+so there are no teams). Rules:
+
+- Grant **`push` (Write)**, never `admin` — admin can delete the repo and change
+  its visibility.
+- Collaborators work on branches and open PRs. **Only Karthik pushes to `main`.**
+- Collaborators must **not** run `pnpm db:push` or `pnpm deploy` — both hit live
+  infrastructure.
+- A collaborator with `push` can read every Actions secret by editing a workflow.
+  Do not put production Supabase or Cloudflare credentials into repo-level Actions
+  secrets while outside collaborators have write access — use an **Environment**
+  with required reviewers, or keep deploys local to Karthik.
+- Because `main` cannot be technically protected on the current plan, the PR-only
+  rule is **convention, enforced by review**. If more than one person is
+  contributing regularly, upgrade to GitHub Pro or move the repo into a Focus4D
+  organisation and turn on a ruleset for `main`.
 
 ---
 
