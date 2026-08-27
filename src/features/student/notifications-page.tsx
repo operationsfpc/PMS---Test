@@ -1,4 +1,5 @@
 import { NotificationBody } from "@components/notification-body";
+import { OfferLetterLink } from "@components/offer-letter-link";
 import { Badge, Card, PageHeader } from "@components/ui";
 import {
   filterNotifications,
@@ -122,6 +123,10 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                     <p className="mt-0.5 text-sm text-ink-700">
                       <NotificationBody body={note.body} />
                     </p>
+                    {/* UAT 2026-08-27: the offer letter, under the message it
+                        belongs to. Which message that is, is the domain's
+                        call — see `notificationCarriesOfferLetter`. */}
+                    <OfferLetterLink url={note.letterUrl} name={note.letterName} className="mt-1" />
                     <p className="mt-1 text-xs text-ink-500">{onDate(note.createdAt)}</p>
                   </div>
                   {note.read ? (

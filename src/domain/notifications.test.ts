@@ -4,6 +4,7 @@ import {
   filterNotifications,
   linkifyBody,
   type NotificationItem,
+  notificationCarriesOfferLetter,
   sortNotifications,
 } from "./notifications";
 
@@ -175,5 +176,32 @@ describe("linkifyBody — a body that IS a link", () => {
       { kind: "link", text: "https://a.example" },
       { kind: "text", text: " rest" },
     ]);
+  });
+});
+
+/**
+ * UAT 2026-08-27 — `docs/inbox/WhatsApp Image 2026-08-27 at 18.18.49 (1).jpeg`:
+ * "Congratulations — XYZ has made you an internship offer." and nowhere to
+ * open the offer letter the CPC had attached. 0062 always intended the student
+ * to see it ("staff-who-can-read-the-offer + the student"); no student screen
+ * ever read the column.
+ */
+describe("notificationCarriesOfferLetter", () => {
+  it("is true for the offer notification — the one the letter belongs to", () => {
+    expect(notificationCarriesOfferLetter("offer")).toBe(true);
+  });
+
+  /**
+   * A student holding an offer from a drive is still sent round schedules for
+   * it. Hanging the letter off every notification for that drive would put
+   * "View offer letter" under "You cleared Round 3", which is a different
+   * message wearing the offer's clothes.
+   */
+  it("is false for every other kind, including ones about the same drive", () => {
+    expect(notificationCarriesOfferLetter("round_scheduled")).toBe(false);
+    expect(notificationCarriesOfferLetter("round_cleared")).toBe(false);
+    expect(notificationCarriesOfferLetter("shortlisted")).toBe(false);
+    expect(notificationCarriesOfferLetter("meeting_link")).toBe(false);
+    expect(notificationCarriesOfferLetter("")).toBe(false);
   });
 });

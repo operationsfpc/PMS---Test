@@ -318,6 +318,9 @@ describe("notifications", () => {
     );
 
     const notes = await view().notifications();
+    // 0068 (2026-08-27) added `driveId` and the offer letter's two halves to
+    // every row. The mapping this test exists to hold — one row in, one row
+    // out, in the order the database returned them — is unchanged.
     expect(notes).toEqual([
       {
         id: "n1",
@@ -326,6 +329,9 @@ describe("notifications", () => {
         body: "Round 1 is next.",
         createdAt: "2026-08-12T10:00:00Z",
         read: false,
+        driveId: null,
+        letterUrl: null,
+        letterName: null,
       },
       {
         id: "n2",
@@ -334,6 +340,9 @@ describe("notifications", () => {
         body: "Congratulations.",
         createdAt: "2026-08-11T10:00:00Z",
         read: true,
+        driveId: null,
+        letterUrl: null,
+        letterName: null,
       },
     ]);
   });
@@ -353,5 +362,142 @@ describe("notifications", () => {
     expect(patches).toHaveLength(1);
     expect(patches[0]?.url).toContain("id=eq.n1");
     expect((patches[0]?.body as Record<string, unknown> | undefined)?.read_at).toBeTruthy();
+  });
+});
+
+/**
+ * 🔴 UAT 2026-08-27 — `docs/inbox/WhatsApp Image 2026-08-27 at 18.18.49.jpeg`
+ * and `… (1).jpeg`: the CPC attaches an offer letter and the student can see
+ * it nowhere. `0062` always meant them to ("staff-who-can-read-the-offer + the
+ * student"), and the storage policy already admits them — no screen ever read
+ * the column.
+ */
+describe("the offer letter reaches the student it belongs to", () => {
+  const WITH_LETTER = {
+    id: "o1",
+    drive_id: "d1",
+    company_name: "Zoho Corporation",
+    role_title: "MTS",
+    ctc_lpa: "9.00",
+    offer_category: "dream",
+    declared_at: "2026-07-20T04:30:00Z",
+    source: "on_campus",
+    attachment_path: "s1/d1/offer.pdf",
+    attachment_name: "Zoho-offer.pdf",
+  };
+
+  const signing = (
+    body: Array<Record<string, unknown>> = [
+      { path: "s1/d1/offer.pdf", signedURL: "/signed/offer.pdf" },
+    ],
+  ) => http.post(`${BASE}/storage/v1/object/sign/offer-letters`, () => HttpResponse.json(body));
+
+  it("hands back a signed link and the letter's own filename", async () => {
+    stub({ offers: [WITH_LETTER] });
+    server.use(signing());
+
+    const [offer] = (await view().snapshot()).offers;
+
+    expect(offer?.letterName).toBe("Zoho-offer.pdf");
+    expect(offer?.letterUrl).toContain("/signed/offer.pdf");
+  });
+
+  it("says there is no letter rather than inventing an empty link", async () => {
+    stub({ offers: [{ ...WITH_LETTER, attachment_path: null, attachment_name: null }] });
+
+    const [offer] = (await view().snapshot()).offers;
+
+    expect(offer?.letterName).toBeNull();
+    expect(offer?.letterUrl).toBeNull();
+  });
+
+  /**
+   * A signed URL that failed to sign is not a link — it is a 400 the student
+   * cannot explain. The name goes with it.
+   */
+  it("offers nothing at all when the signing fails", async () => {
+    stub({ offers: [WITH_LETTER] });
+    server.use(
+      http.post(`${BASE}/storage/v1/object/sign/offer-letters`, () =>
+        HttpResponse.json({ message: "denied" }, { status: 400 }),
+      ),
+    );
+
+    const [offer] = (await view().snapshot()).offers;
+
+    expect(offer?.letterUrl).toBeNull();
+  });
+
+  it("carries the drive it belongs to, so a notification can find it", async () => {
+    stub({ offers: [WITH_LETTER] });
+    server.use(signing());
+
+    expect((await view().snapshot()).offers[0]?.driveId).toBe("d1");
+  });
+});
+
+describe("a notification can offer the letter its message is about", () => {
+  const OFFER_ROW = {
+    id: "o1",
+    drive_id: "d1",
+    company_name: "Zoho Corporation",
+    role_title: "MTS",
+    ctc_lpa: "9.00",
+    offer_category: "dream",
+    declared_at: "2026-07-20T04:30:00Z",
+    source: "on_campus",
+    attachment_path: "s1/d1/offer.pdf",
+    attachment_name: "Zoho-offer.pdf",
+  };
+
+  const notes = (rows: unknown[]) =>
+    server.use(
+      http.get(`${BASE}/rest/v1/notifications`, () => HttpResponse.json(rows)),
+      http.post(`${BASE}/storage/v1/object/sign/offer-letters`, () =>
+        HttpResponse.json([{ path: "s1/d1/offer.pdf", signedURL: "/signed/offer.pdf" }]),
+      ),
+    );
+
+  const note = (over: Record<string, unknown> = {}) => ({
+    id: "n1",
+    kind: "offer",
+    title: "Offer from Zoho Corporation",
+    body: "Congratulations.",
+    created_at: "2026-08-11T10:00:00Z",
+    read_at: null,
+    drive_id: "d1",
+    ...over,
+  });
+
+  it("attaches the letter to the offer notification for that drive", async () => {
+    stub({ offers: [OFFER_ROW] });
+    notes([note()]);
+
+    const [row] = await view().notifications();
+
+    expect(row?.letterName).toBe("Zoho-offer.pdf");
+    expect(row?.letterUrl).toContain("/signed/offer.pdf");
+  });
+
+  /** The domain rule, proved through the view that obeys it. */
+  it("attaches nothing to a round notification about the very same drive", async () => {
+    stub({ offers: [OFFER_ROW] });
+    notes([note({ id: "n2", kind: "round_scheduled", title: "Zoho — Round 1 schedule" })]);
+
+    expect((await view().notifications())[0]?.letterUrl).toBeNull();
+  });
+
+  it("attaches nothing when the notification names no drive", async () => {
+    stub({ offers: [OFFER_ROW] });
+    notes([note({ drive_id: null })]);
+
+    expect((await view().notifications())[0]?.letterUrl).toBeNull();
+  });
+
+  it("attaches nothing when the offer for that drive carries no letter", async () => {
+    stub({ offers: [{ ...OFFER_ROW, attachment_path: null, attachment_name: null }] });
+    notes([note()]);
+
+    expect((await view().notifications())[0]?.letterUrl).toBeNull();
   });
 });

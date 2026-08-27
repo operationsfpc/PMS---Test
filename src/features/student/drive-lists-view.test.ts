@@ -254,3 +254,57 @@ describe("lists — each drive lands in exactly one of the four", () => {
     ]);
   });
 });
+
+/**
+ * 🔴 UAT 2026-08-27: "the student is not able to view the offer letter
+ * attachment, attached by the CPC in both the drives and notifications
+ * section". This is the Drives half — the concluded row that already says
+ * "Offer received" and gave the student nothing to open.
+ */
+describe("the offer letter on the concluded drive", () => {
+  const won = (offerOver: Record<string, unknown> = {}) => ({
+    drives: [{ ...openDrive, status: "completed", application_end: "2026-09-02T00:00:00Z" }],
+    applications: [{ id: "a1", drive_id: "d1", applied_at: "2026-09-01T12:00:00Z" }],
+    offers: [
+      {
+        id: "o1",
+        drive_id: "d1",
+        drive_type: "placement",
+        offer_category: "dream",
+        ctc_lpa: 8,
+        declared_at: "2026-09-04T00:00:00Z",
+        source: "on_campus",
+        attachment_path: "s1/d1/offer.pdf",
+        attachment_name: "Zoho-offer.pdf",
+        ...offerOver,
+      },
+    ],
+  });
+
+  const signing = () =>
+    server.use(
+      http.post(`${BASE}/storage/v1/object/sign/offer-letters`, () =>
+        HttpResponse.json([{ path: "s1/d1/offer.pdf", signedURL: "/signed/offer.pdf" }]),
+      ),
+    );
+
+  it("carries the signed letter and its name on the row", async () => {
+    stub(won());
+    signing();
+
+    const [row] = (await view().lists()).appliedClosed;
+
+    expect(row?.outcomeLabel).toBe("Offer received");
+    expect(row?.offerLetterName).toBe("Zoho-offer.pdf");
+    expect(row?.offerLetterUrl).toContain("/signed/offer.pdf");
+  });
+
+  it("leaves the row alone when no letter was attached", async () => {
+    stub(won({ attachment_path: null, attachment_name: null }));
+
+    const [row] = (await view().lists()).appliedClosed;
+
+    expect(row?.offerLetterUrl).toBeNull();
+    expect(row?.offerLetterName).toBeNull();
+  });
+});

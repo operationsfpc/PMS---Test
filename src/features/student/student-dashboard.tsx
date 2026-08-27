@@ -1,4 +1,5 @@
 import { NotificationBody } from "@components/notification-body";
+import { OfferLetterLink } from "@components/offer-letter-link";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import {
   ABSENCE_LIMIT,
@@ -30,12 +31,21 @@ export interface StudentApplicationRow {
 
 export interface StudentOfferRow {
   readonly offerId: string;
+  /** Null for a self-placed offer, which belongs to no drive of ours. */
+  readonly driveId?: string | null;
   readonly companyName: string;
   readonly roleTitle: string | null;
   readonly ctcLpa: number;
   readonly offerCategory: OfferCategory | null;
   readonly declaredAt: string;
   readonly source: OfferSource;
+  /**
+   * UAT 2026-08-27: the letter the CPC attached (`0062`), signed and
+   * short-lived. Both halves travel together — a name with no URL is a link
+   * that opens nothing.
+   */
+  readonly letterUrl?: string | null;
+  readonly letterName?: string | null;
 }
 
 export interface StudentDashboardSnapshot {
@@ -66,6 +76,11 @@ export interface StudentNotificationRow {
   readonly body: string;
   readonly createdAt: string;
   readonly read: boolean;
+  /** 0068: the drive this message is about, when there is one. */
+  readonly driveId?: string | null;
+  /** Present only on the message the letter belongs under — see the domain. */
+  readonly letterUrl?: string | null;
+  readonly letterName?: string | null;
 }
 
 export interface StudentDashboardView {
@@ -360,6 +375,13 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                     <p className="mt-1 text-sm text-ink-700">
                       ₹{offer.ctcLpa} LPA · Declared {onDate(offer.declaredAt)}
                     </p>
+                    {/* UAT 2026-08-27: the letter the CPC attached. Filed
+                        since 0062, shown to the student since never. */}
+                    <OfferLetterLink
+                      url={offer.letterUrl}
+                      name={offer.letterName}
+                      className="mt-2"
+                    />
                   </div>
                 ))}
                 {/* R3 catches students by surprise otherwise: their drive list

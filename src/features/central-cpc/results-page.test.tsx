@@ -656,6 +656,11 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     );
     await user.upload(screen.getByLabelText(/per-student links/i), csv);
 
+    // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+    // sends it. WHAT gets matched and sent is unchanged, so every assertion
+    // below stands exactly as it did.
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
     await waitFor(() => expect(assignSlots).toHaveBeenCalled());
     const [roundId, assignments] = assignSlots.mock.calls[0] as [
       string,
@@ -1150,6 +1155,11 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
       ),
     );
 
+    // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+    // sends it. WHAT gets matched and sent is unchanged, so every assertion
+    // below stands exactly as it did.
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
     await waitFor(() => expect(assignSlots).toHaveBeenCalled());
     const [roundId, assignments] = assignSlots.mock.calls[0] as [
       string,
@@ -1185,6 +1195,11 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
       ),
     );
 
+    // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+    // sends it. WHAT gets matched and sent is unchanged, so every assertion
+    // below stands exactly as it did.
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
     await waitFor(() => expect(assignSlots).toHaveBeenCalled());
     const [, assignments] = assignSlots.mock.calls[0] as [string, { applicationId: string }[]];
     expect(assignments.map((a) => a.applicationId)).toEqual(["app-shash"]);
@@ -1202,6 +1217,11 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
         "roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,\n21CSE9999,https://meet.google.com/zzz,",
       ),
     );
+
+    // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+    // sends it. WHAT gets matched and sent is unchanged, so every assertion
+    // below stands exactly as it did.
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
 
     await waitFor(() => expect(assignSlots).toHaveBeenCalled());
     const [, assignments] = assignSlots.mock.calls[0] as [string, { applicationId: string }[]];
@@ -1234,6 +1254,10 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
       screen.getByLabelText(/per-student links/i),
       csv("roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,"),
     );
+    // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+    // sends it. A link the server accepts for nobody is still reported as
+    // exactly that, which is what this test exists to hold.
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/124/);
@@ -1266,6 +1290,11 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
         screen.getByLabelText(/per-student links/i),
         csv("roll_number,meeting_link,scheduled_at\n124, https://meet.google.com/def,1pm"),
       );
+
+      // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+      // sends it. WHAT gets matched and sent is unchanged, so every assertion
+      // below stands exactly as it did.
+      await user.click(screen.getByRole("button", { name: /save round details/i }));
 
       await waitFor(() => expect(assignSlots).toHaveBeenCalled());
       const [, assignments] = assignSlots.mock.calls[0] as [string, { scheduledAt: string }[]];
@@ -1308,9 +1337,172 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
         csv("roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,10:30"),
       );
 
+      // SPEC CHANGE 2026-08-27 (approved): the upload is STAGED; Save is what
+      // sends it. WHAT gets matched and sent is unchanged, so every assertion
+      // below stands exactly as it did.
+      await user.click(screen.getByRole("button", { name: /save round details/i }));
+
       await waitFor(() => expect(assignSlots).toHaveBeenCalled());
       const [, assignments] = assignSlots.mock.calls[0] as [string, { scheduledAt: string }[]];
       expect(assignments[0]?.scheduledAt).toBe("2026-09-04T10:30");
     });
+  });
+});
+
+/**
+ * 🔴 UAT 2026-08-27 — `docs/inbox/WhatsApp Image 2026-08-27 at 17.53.23.jpeg`.
+ *
+ * The banner read "2 links assigned and notified." while the round form was
+ * still open, its date still empty, and Save still unpressed. Choosing the
+ * file wrote the slots and fired `meeting_slot_reaches_student` (0054) — so
+ * students were told a time before the coordinator had committed to one, and
+ * the Cancel button two inches away could not take it back.
+ *
+ * SPEC CHANGE 2026-08-27 (approved, option 1): the upload is STAGED. Nothing
+ * is written and nobody is notified until "Save round details".
+ */
+describe("the CSV upload waits for Save", () => {
+  const ROUNDS = [
+    {
+      roundId: "r1",
+      sequence: 1,
+      name: "Aptitude",
+      mode: "virtual" as const,
+      scheduledAt: null,
+      interviewLink: null,
+      venue: null,
+    },
+  ];
+
+  const SHASH: RoundParticipant = {
+    applicationId: "app-shash",
+    studentName: "TestShash",
+    rollNumber: "BCA2023156",
+    attendance: "scheduled",
+    result: null,
+  };
+  const THANUSH: RoundParticipant = {
+    applicationId: "app-thanush",
+    studentName: "Thanush Krishna",
+    rollNumber: "124",
+    attendance: "scheduled",
+    result: null,
+  };
+
+  const view = (overrides: Partial<DriveRoundsView> = {}) =>
+    ({
+      participants: async () => [SHASH, THANUSH],
+      record: async () => undefined,
+      rounds: async () => ROUNDS,
+      advance: async () => 0,
+      addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
+      roundFacts: async () => new Map(),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
+      offerHolders: async () => new Set<string>(),
+      ...overrides,
+    }) as DriveRoundsView;
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+  const csv = (text: string) => new File([text], "slots.csv", { type: "text/csv" });
+  const GOOD = "roll_number,meeting_link,scheduled_at\nBCA2023156,https://meet.google.com/abc,\n";
+
+  const openAndUpload = async (v: DriveRoundsView, text = GOOD) => {
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={v} />);
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.upload(screen.getByLabelText(/per-student links/i), csv(text));
+    return user;
+  };
+
+  it("sends nothing when the file is chosen", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
+    await openAndUpload(view({ assignSlots }));
+
+    // The count is reported, so the coordinator knows the file was read…
+    expect((await screen.findByRole("status")).textContent).toMatch(/1 link ready/i);
+    // …and NOTHING has left the building.
+    expect(assignSlots).not.toHaveBeenCalled();
+  });
+
+  it("says plainly that saving is what sends them", async () => {
+    await openAndUpload(view());
+
+    expect((await screen.findByRole("status")).textContent).toMatch(
+      /nothing is sent until you save/i,
+    );
+  });
+
+  it("sends them on Save, after the round's own details", async () => {
+    const order: string[] = [];
+    const updateRound = vi.fn(async () => {
+      order.push("updateRound");
+    });
+    const assignSlots = vi.fn(async () => {
+      order.push("assignSlots");
+      return { matched: 1, unmatched: [] };
+    });
+    const user = await openAndUpload(view({ updateRound, assignSlots }));
+
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
+    await waitFor(() => expect(assignSlots).toHaveBeenCalledTimes(1));
+    // The round's mode and time must land BEFORE a student is told their slot,
+    // or the schedule notification describes a round that has none.
+    expect(order).toEqual(["updateRound", "assignSlots"]);
+  });
+
+  it("reports what was sent only once it has been sent", async () => {
+    const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
+    const user = await openAndUpload(view({ assignSlots }));
+
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
+    expect((await screen.findByRole("status")).textContent).toMatch(
+      /1 link assigned and notified/i,
+    );
+  });
+
+  /** The whole point: Cancel must be able to take it back. */
+  it("discards the staged links when the coordinator cancels", async () => {
+    const assignSlots = vi.fn();
+    const user = await openAndUpload(view({ assignSlots }));
+    await screen.findByRole("status");
+
+    await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
+    await waitFor(() => expect(screen.queryByRole("status")).not.toBeNull());
+    expect(assignSlots).not.toHaveBeenCalled();
+  });
+
+  it("stages nothing when the file cannot be read, and still names the line", async () => {
+    const assignSlots = vi.fn();
+    const user = await openAndUpload(
+      view({ assignSlots }),
+      "roll_number,meeting_link,date (dd-mm-yyyy),time (hh:mm)\nBCA2023156,https://meet.google.com/abc,,half past one\n",
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/line 2/i);
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+    expect(assignSlots).not.toHaveBeenCalled();
+  });
+
+  it("saves the round details even when no file was chosen", async () => {
+    const updateRound = vi.fn();
+    const assignSlots = vi.fn();
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={view({ updateRound, assignSlots })} />);
+    await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+    await user.click(screen.getByRole("button", { name: /save round details/i }));
+
+    await waitFor(() => expect(updateRound).toHaveBeenCalledTimes(1));
+    expect(assignSlots).not.toHaveBeenCalled();
   });
 });

@@ -43,7 +43,7 @@ export interface Enums {
   drive_type: "placement" | "internship_convertible" | "internship";
   joining_timeline: "immediate" | "later";
   marks_scale: "cgpa" | "percentage";
-  offer_category: "regular" | "dream" | "super_dream";
+  offer_category: "internship" | "regular" | "dream" | "super_dream";
   offer_source: "on_campus" | "self_placed";
   participation_status: "active" | "opted_out" | "disbarred";
   programme_level: "ug" | "pg";
@@ -317,6 +317,7 @@ export interface DrivesRow {
   stipend_min_monthly: number | null;
   stipend_max_monthly: number | null;
   venue: string | null;
+  completed_reason: string | null;
 }
 
 export type DrivesInsert = Pick<DrivesRow, "company_name"> &
@@ -380,6 +381,7 @@ export type DrivesInsert = Pick<DrivesRow, "company_name"> &
       | "stipend_min_monthly"
       | "stipend_max_monthly"
       | "venue"
+      | "completed_reason"
     >
   >;
 
@@ -409,10 +411,11 @@ export interface NotificationsRow {
   body: string;
   read_at: string | null;
   created_at: string;
+  drive_id: string | null;
 }
 
 export type NotificationsInsert = Pick<NotificationsRow, "student_id" | "kind" | "title" | "body"> &
-  Partial<Pick<NotificationsRow, "id" | "read_at" | "created_at">>;
+  Partial<Pick<NotificationsRow, "id" | "read_at" | "created_at" | "drive_id">>;
 
 export interface OffersRow {
   id: string;
@@ -429,6 +432,8 @@ export interface OffersRow {
   offer_letter_id: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  attachment_path: string | null;
+  attachment_name: string | null;
 }
 
 export type OffersInsert = Pick<
@@ -448,6 +453,8 @@ export type OffersInsert = Pick<
       | "offer_letter_id"
       | "approved_by"
       | "approved_at"
+      | "attachment_path"
+      | "attachment_name"
     >
   >;
 
@@ -718,6 +725,7 @@ export interface StudentSemestersRow {
   created_at: string;
   declared_marks: number | null;
   marks_scale: Enums["marks_scale"];
+  rejection_reason: string | null;
 }
 
 export type StudentSemestersInsert = Pick<
@@ -736,6 +744,7 @@ export type StudentSemestersInsert = Pick<
       | "created_at"
       | "declared_marks"
       | "marks_scale"
+      | "rejection_reason"
     >
   >;
 

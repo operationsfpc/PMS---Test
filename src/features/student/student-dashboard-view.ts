@@ -1,9 +1,11 @@
 import type { AttendanceRecord } from "@domain/attendance";
+import { notificationCarriesOfferLetter } from "@domain/notifications";
 import type { OfferCategory } from "@domain/offer-category";
 import type { ApplicantRound } from "@domain/student-progress";
 import type { AttendanceStatus, OfferSource, RoundResult } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseDrivesView } from "./drives-view";
+import { offerLettersByDrive, signOfferLetters } from "./offer-letters";
 import type {
   StudentApplicationRow,
   StudentDashboardSnapshot,
@@ -90,12 +92,7 @@ export function createSupabaseStudentDashboardView(
           .select(DASHBOARD_APPLICATION_COLUMNS)
           .eq("student_id", studentId)
           .order("applied_at", { ascending: false }),
-        client
-          .from("offers")
-          .select(
-            "id, drive_id, company_name, role_title, ctc_lpa, offer_category, declared_at, source",
-          )
-          .eq("student_id", studentId),
+        client.from("offers").select(STUDENT_OFFER_COLUMNS).eq("student_id", studentId),
         drivesView.openDrives(),
       ]);
 
@@ -144,6 +141,7 @@ export function createSupabaseStudentDashboardView(
       const wonDriveIds = new Set(
         offerRows.map((o) => o.drive_id).filter((id): id is string => typeof id === "string"),
       );
+      const letters = await signOfferLetters(client, offerRows);
 
       const applicationList: StudentApplicationRow[] = applicationRows.map((row) => {
         const applicationId = row.id as string;
@@ -198,15 +196,23 @@ export function createSupabaseStudentDashboardView(
           }))
           .sort((a, b) => a.semesterNumber - b.semesterNumber),
         applications: applicationList,
-        offers: offerRows.map((offer) => ({
-          offerId: offer.id as string,
-          companyName: (offer.company_name as string | null) ?? "Unnamed company",
-          roleTitle: (offer.role_title as string | null) ?? null,
-          ctcLpa: num(offer.ctc_lpa),
-          offerCategory: (offer.offer_category as OfferCategory | null) ?? null,
-          declaredAt: offer.declared_at as string,
-          source: (offer.source as OfferSource | null) ?? "on_campus",
-        })),
+        offers: offerRows.map((offer) => {
+          const letter = letters.get(offer.id as string) ?? null;
+          return {
+            offerId: offer.id as string,
+            driveId: (offer.drive_id as string | null) ?? null,
+            companyName: (offer.company_name as string | null) ?? "Unnamed company",
+            roleTitle: (offer.role_title as string | null) ?? null,
+            ctcLpa: num(offer.ctc_lpa),
+            offerCategory: (offer.offer_category as OfferCategory | null) ?? null,
+            declaredAt: offer.declared_at as string,
+            source: (offer.source as OfferSource | null) ?? "on_campus",
+            // UAT 2026-08-27: the letter the CPC attached, which the student
+            // could previously see nowhere at all.
+            letterUrl: letter?.url ?? null,
+            letterName: letter?.name ?? null,
+          };
+        }),
         attendance: attendanceRecords,
       };
     },
@@ -217,19 +223,45 @@ export function createSupabaseStudentDashboardView(
      * read to the student's own rows.
      */
     async notifications() {
-      const { data } = await client
-        .from("notifications")
-        .select(NOTIFICATION_COLUMNS)
-        .order("created_at", { ascending: false });
+      const [{ data }, { data: offers }] = await Promise.all([
+        client
+          .from("notifications")
+          .select(NOTIFICATION_COLUMNS)
+          .order("created_at", { ascending: false }),
+        // UAT 2026-08-27: the letter the message is about. Read here rather
+        // than joined, because RLS already scopes both to this student and a
+        // join would make one screen's failure the other's.
+        client.from("offers").select(STUDENT_OFFER_COLUMNS),
+      ]);
 
-      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-        id: row.id as string,
-        kind: row.kind as string,
-        title: row.title as string,
-        body: row.body as string,
-        createdAt: row.created_at as string,
-        read: row.read_at !== null,
-      }));
+      const offerRows = rows(offers);
+      const letterByDrive = offerLettersByDrive(
+        offerRows,
+        await signOfferLetters(client, offerRows),
+      );
+
+      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const driveId = (row.drive_id as string | null) ?? null;
+        const kind = row.kind as string;
+        // The domain decides WHICH message a letter belongs under — a placed
+        // student still gets round schedules for the same drive.
+        const letter =
+          driveId !== null && notificationCarriesOfferLetter(kind)
+            ? (letterByDrive.get(driveId) ?? null)
+            : null;
+
+        return {
+          id: row.id as string,
+          kind,
+          title: row.title as string,
+          body: row.body as string,
+          createdAt: row.created_at as string,
+          read: row.read_at !== null,
+          driveId,
+          letterUrl: letter?.url ?? null,
+          letterName: letter?.name ?? null,
+        };
+      });
     },
 
     async markRead(notificationId) {
@@ -243,4 +275,8 @@ export function createSupabaseStudentDashboardView(
 }
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
-export const NOTIFICATION_COLUMNS = "id, kind, title, body, created_at, read_at";
+export const NOTIFICATION_COLUMNS = "id, kind, title, body, created_at, read_at, drive_id";
+
+/** Exported for the same reason — the offer columns a student may read. */
+export const STUDENT_OFFER_COLUMNS =
+  "id, drive_id, company_name, role_title, ctc_lpa, offer_category, declared_at, source, attachment_path, attachment_name";

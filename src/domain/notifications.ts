@@ -96,3 +96,19 @@ export function linkifyBody(body: string): readonly BodySegment[] {
 
   return segments;
 }
+
+/**
+ * Whether this notification is the one an offer letter belongs under.
+ *
+ * UAT 2026-08-27: the CPC attaches the letter to the offer (`0062`), the
+ * student is notified of the offer — and had nowhere to open it. The letter is
+ * now offered on the notification itself.
+ *
+ * Only the offer's own kind qualifies. A placed student still receives round
+ * schedules for that same drive, and hanging the letter off anything that
+ * merely SHARES the drive would put "View offer letter" under "You cleared
+ * Round 3" — a different message wearing the offer's clothes.
+ */
+export function notificationCarriesOfferLetter(kind: string): boolean {
+  return kind === "offer";
+}

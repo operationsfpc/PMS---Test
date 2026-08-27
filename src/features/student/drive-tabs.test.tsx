@@ -329,3 +329,58 @@ describe("DriveTabs — filtering and tagging by drive type", () => {
     expect(within(panel).getByText("Full time")).toBeDefined();
   });
 });
+
+/**
+ * 🔴 UAT 2026-08-27 — the Drives half of "the student cannot see the offer
+ * letter". The concluded row already said "Offer received"; it now hands over
+ * the letter that says so.
+ */
+describe("the offer letter on a concluded drive", () => {
+  const concluded = (over: Record<string, unknown> = {}) => ({
+    id: "d9",
+    companyName: "XYZ",
+    roleTitle: "Jr. Software engineer",
+    roleCategory: "software_technical" as const,
+    driveType: "internship" as const,
+    locations: "Chennai",
+    appliedAt: "2026-08-20T04:30:00.000Z",
+    progressLabel: "Offer received",
+    roundsCleared: 3,
+    totalRounds: 3,
+    outcomeLabel: "Offer received",
+    offerLetterUrl: "https://signed.example/offer.pdf?token=abc",
+    offerLetterName: "XYZ-offer-letter.pdf",
+    ...over,
+  });
+
+  it("offers the letter by name from the Applied · closed tab", async () => {
+    const user = userEvent.setup();
+    render(<DriveTabs view={view({ ...LISTS, appliedClosed: [concluded()] })} now={NOW} />);
+
+    await user.click(await screen.findByRole("tab", { name: /^Applied · closed/ }));
+
+    const link = await screen.findByRole<HTMLAnchorElement>("link", {
+      name: /XYZ-offer-letter\.pdf/,
+    });
+    expect(link.href).toBe("https://signed.example/offer.pdf?token=abc");
+    expect(link.rel).toContain("noreferrer");
+  });
+
+  it("shows no link when no letter is attached", async () => {
+    const user = userEvent.setup();
+    render(
+      <DriveTabs
+        view={view({
+          ...LISTS,
+          appliedClosed: [concluded({ offerLetterUrl: null, offerLetterName: null })],
+        })}
+        now={NOW}
+      />,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: /^Applied · closed/ }));
+
+    expect(await screen.findByText("Offer received")).toBeDefined();
+    expect(screen.queryByRole("link", { name: /letter/i })).toBeNull();
+  });
+});

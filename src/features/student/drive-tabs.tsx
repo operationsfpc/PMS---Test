@@ -1,3 +1,4 @@
+import { OfferLetterLink } from "@components/offer-letter-link";
 import { Badge, Card, PageHeader } from "@components/ui";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
@@ -38,6 +39,12 @@ export interface ProgressDriveRow {
 /** Applied and concluded: the outcome is the headline. */
 export interface ConcludedDriveRow extends ProgressDriveRow {
   readonly outcomeLabel: string;
+  /**
+   * UAT 2026-08-27: the letter the CPC attached to the offer. Both halves
+   * travel together — a name with no URL opens nothing.
+   */
+  readonly offerLetterUrl?: string | null;
+  readonly offerLetterName?: string | null;
 }
 
 /** Never applied, chance gone: when it closed is the fact that matters. */
@@ -386,6 +393,14 @@ export function DriveTabs({
                   </Badge>
                 </p>
                 <p className="mt-0.5 text-xs text-ink-500">Applied {day(row.appliedAt)}</p>
+                {/* UAT 2026-08-27: "Offer received" now hands over the letter
+                    that says so. Filed by the CPC since 0062, shown to the
+                    student it belongs to since never. */}
+                <OfferLetterLink
+                  url={row.offerLetterUrl}
+                  name={row.offerLetterName}
+                  className="mt-2"
+                />
                 <FullRecordLink id={row.id} company={row.companyName} />
               </Card>
             ))

@@ -23,6 +23,7 @@ import type {
   StudentDriveListsView,
 } from "./drive-tabs";
 import type { OpenDrive } from "./drives-list";
+import { offerLettersByDrive, signOfferLetters } from "./offer-letters";
 
 /**
  * PostgREST returns an embedded to-one relation as an object, but the generated
@@ -53,7 +54,10 @@ const REFUSALS: Record<string, string> = {
  * "students can apply to any category" blocker reported on 2026-08-12.
  */
 export const OFFER_LADDER_COLUMNS =
-  "id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source";
+  // The attachment columns ride along with the ladder's: the same rows, one
+  // round trip. UAT 2026-08-27 — the concluded drive says "Offer received"
+  // and must be able to hand over the letter that says so.
+  "id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source, attachment_path, attachment_name";
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const STUDENT_COLUMNS = `
@@ -268,6 +272,9 @@ export function createSupabaseDrivesView(
       drives: (drives ?? []) as Array<Record<string, unknown>>,
       applications: applicationRows,
       appliedIds: applicationRows.map((a) => a.drive_id),
+      // The raw rows, kept alongside the domain `Offer`s: the ladder has no
+      // business knowing about storage paths, and the screen does.
+      offerRows: (offers ?? []) as Array<Record<string, unknown>>,
     };
   }
 
@@ -444,8 +451,14 @@ export function createSupabaseDrivesView(
      * drive the student is mid-interview with.
      */
     async lists(): Promise<StudentDriveLists> {
-      const { student, drives, applications, appliedIds } = await load();
+      const { student, drives, applications, appliedIds, offerRows } = await load();
       const now = clock();
+
+      // UAT 2026-08-27: the letter behind "Offer received".
+      const letterByDrive = offerLettersByDrive(
+        offerRows,
+        await signOfferLetters(client, offerRows),
+      );
 
       const applicationByDrive = new Map(applications.map((a) => [a.drive_id, a]));
       const applicationIds = applications.map((a) => a.id);
@@ -541,7 +554,13 @@ export function createSupabaseDrivesView(
           };
 
           if (list === "applied_closed") {
-            appliedClosed.push({ ...row, outcomeLabel: progress.label });
+            const letter = letterByDrive.get(drive.id) ?? null;
+            appliedClosed.push({
+              ...row,
+              outcomeLabel: progress.label,
+              offerLetterUrl: letter?.url ?? null,
+              offerLetterName: letter?.name ?? null,
+            });
           } else {
             inProgress.push(row);
           }

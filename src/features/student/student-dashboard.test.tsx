@@ -465,3 +465,46 @@ describe("the offer badge's spelling", () => {
     expect(within(offers).queryByText("internship")).toBeNull();
   });
 });
+
+/**
+ * 🔴 UAT 2026-08-27 — the same letter, on the student's own dashboard, where
+ * their offers are listed.
+ */
+describe("the offer letter on My offers", () => {
+  const withLetter = (over: Record<string, unknown> = {}) =>
+    view({
+      offers: [
+        {
+          offerId: "o-1",
+          driveId: "d1",
+          companyName: "XYZ",
+          roleTitle: null,
+          ctcLpa: 6,
+          offerCategory: "dream" as const,
+          declaredAt: "2026-08-27T04:30:00.000Z",
+          source: "on_campus" as const,
+          letterUrl: "https://signed.example/offer.pdf?token=abc",
+          letterName: "XYZ-offer-letter.pdf",
+          ...over,
+        },
+      ],
+    });
+
+  it("offers the letter the CPC attached, by name", async () => {
+    show(withLetter());
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    const link = within(offers).getByRole<HTMLAnchorElement>("link", {
+      name: /XYZ-offer-letter\.pdf/,
+    });
+    expect(link.href).toBe("https://signed.example/offer.pdf?token=abc");
+    expect(link.rel).toContain("noreferrer");
+  });
+
+  it("stays silent when no letter has been attached", async () => {
+    show(withLetter({ letterUrl: null, letterName: null }));
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    expect(within(offers).queryByRole("link", { name: /letter/i })).toBeNull();
+  });
+});

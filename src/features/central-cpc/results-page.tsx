@@ -462,6 +462,25 @@ function countAdvancing(participants: readonly RoundParticipant[] | null): numbe
  * numbered rounds, adding one, and pushing the selected into the next —
  * explicitly, so who advanced is a decision with an author, not a residue.
  */
+/**
+ * A CSV that has been read and matched but NOT yet sent.
+ *
+ * It carries the assignments, the roll numbers the file named that this round
+ * does not hold, and the count — everything needed to describe the file to
+ * the coordinator without touching the database.
+ */
+interface StagedSlots {
+  readonly assignments: readonly SlotAssignment[];
+  readonly unmatched: readonly string[];
+}
+
+/** One wording for "this round holds nobody by that roll number". */
+const missingRolls = (names: readonly string[]) =>
+  `No participant in this round carries these roll numbers: ${names.join(", ")}.`;
+
+/** "1 link" / "2 links" — counted in one place so no two sentences disagree. */
+const links = (count: number) => `${count} ${count === 1 ? "link" : "links"}`;
+
 /** Real downloads go through a Blob; tests hand in a spy. */
 function browserDownload(filename: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
@@ -502,6 +521,16 @@ export function DriveRoundsPage({
     interviewLink: null,
     venue: null,
   });
+  /**
+   * 🔴 UAT 2026-08-27 — the CSV waits here until Save.
+   *
+   * `docs/inbox/WhatsApp Image 2026-08-27 at 17.53.23.jpeg`: choosing the file
+   * used to write the slots immediately, firing `meeting_slot_reaches_student`
+   * (0054) while the round's own date was still empty and Save unpressed.
+   * Students were told a time nobody had committed to, and Cancel — two inches
+   * away — could not take it back, because a notification cannot be recalled.
+   */
+  const [staged, setStaged] = useState<StagedSlots | null>(null);
   /** F3: the advance waits behind a confirmation carrying the optional proof. */
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [proof, setProof] = useState<File | null>(null);
@@ -605,19 +634,70 @@ export function DriveRoundsPage({
       interviewLink: activeRound.interviewLink,
       venue: activeRound.venue,
     });
+    setStaged(null);
     setEditingDetails(true);
   }
 
+  /** Cancel means cancel — including the file that was chosen but never sent. */
+  function cancelDetails() {
+    setStaged(null);
+    setNotice(null);
+    setError(null);
+    setEditingDetails(false);
+  }
+
+  /**
+   * The one moment anything leaves the building.
+   *
+   * SPEC CHANGE 2026-08-27 (approved): the round's own details are written
+   * FIRST, then the per-student slots. That order is not cosmetic — a student
+   * told "your Round 1 slot is at 1pm" before the round has a mode is being
+   * told half a fact, and `round_details_reach_students` (0054) would describe
+   * a round that has none.
+   */
   async function saveDetails() {
     if (activeRound === null) return;
     setError(null);
+    setNotice(null);
+
     try {
       await view.updateRound(activeRound.roundId, detailsDraft);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save the round details.");
+      return;
+    }
+
+    // No file was chosen: the details are the whole of the news.
+    if (staged === null) {
       setEditingDetails(false);
       setNotice("Round details saved. Participating students are notified.");
       await loadRounds();
+      return;
+    }
+
+    try {
+      const { matched, unmatched: rejected } = await view.assignSlots(
+        activeRound.roundId,
+        staged.assignments,
+      );
+      const notAssigned = [...staged.unmatched, ...rejected];
+      setStaged(null);
+      setEditingDetails(false);
+      if (notAssigned.length > 0) {
+        setError(`${missingRolls(notAssigned)} ${links(matched)} assigned.`);
+      } else {
+        setNotice(`Round details saved. ${links(matched)} assigned and notified.`);
+      }
+      setReloadKey((k) => k + 1);
+      await loadRounds();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save the round details.");
+      // The details ARE saved; only the links failed. Say exactly that, so
+      // nobody re-enters a time that is already recorded.
+      setError(
+        cause instanceof Error
+          ? `Round details saved, but the links were not assigned. ${cause.message}`
+          : "Round details saved, but the links were not assigned.",
+      );
     }
   }
 
@@ -636,10 +716,12 @@ export function DriveRoundsPage({
    * of the round, and a time it cannot read is named by line before a single
    * link is sent.
    */
-  async function uploadSlots(file: File) {
+  async function stageSlots(file: File) {
     if (activeRound === null) return;
     setError(null);
     setNotice(null);
+    setStaged(null);
+
     const { slots, problems } = parseMeetingSlotsCsv(await file.text(), {
       roundDate: detailsDraft.scheduledAt ?? activeRound.scheduledAt,
     });
@@ -649,35 +731,17 @@ export function DriveRoundsPage({
     }
 
     const { assignments, unmatched } = matchMeetingSlots(slots, participants ?? []);
-    const missing = (names: readonly string[]) =>
-      `No participant in this round carries these roll numbers: ${names.join(", ")}.`;
 
     // Nothing to send: say so without troubling the server, and point at the
     // template — the file that cannot mismatch.
     if (assignments.length === 0) {
       setError(
-        `${missing(unmatched)} Download the template to get this round's roll numbers exactly as they are recorded.`,
+        `${missingRolls(unmatched)} Download the template to get this round's roll numbers exactly as they are recorded.`,
       );
       return;
     }
 
-    try {
-      const { matched, unmatched: rejected } = await view.assignSlots(
-        activeRound.roundId,
-        assignments,
-      );
-      const notAssigned = [...unmatched, ...rejected];
-      if (notAssigned.length > 0) {
-        setError(
-          `${missing(notAssigned)} ${matched} ${matched === 1 ? "link" : "links"} assigned.`,
-        );
-      } else {
-        setNotice(`${matched} ${matched === 1 ? "link" : "links"} assigned and notified.`);
-      }
-      setReloadKey((k) => k + 1);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not assign the links.");
-    }
+    setStaged({ assignments, unmatched });
   }
 
   /**
@@ -977,12 +1041,27 @@ export function DriveRoundsPage({
                         accept=".csv,text/csv"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file !== undefined) void uploadSlots(file);
+                          if (file !== undefined) void stageSlots(file);
                           e.target.value = "";
                         }}
                         className="text-sm"
                       />
                     </label>
+                    {/* 🔴 UAT 2026-08-27: the file is READ here and sent at
+                        Save. The sentence is not decoration — it is the only
+                        thing standing between a coordinator and a
+                        notification they cannot recall. */}
+                    {staged !== null && (
+                      <p role="status" className="text-xs font-medium text-[#3D3777]">
+                        {links(staged.assignments.length)} ready for{" "}
+                        {staged.assignments.length === 1
+                          ? "1 student"
+                          : `${staged.assignments.length} students`}
+                        {staged.unmatched.length > 0 &&
+                          ` · not in this round: ${staged.unmatched.join(", ")}`}
+                        . Nothing is sent until you save.
+                      </p>
+                    )}
                     {/* UAT 2026-08-26: "there's no sample to reference". This
                         one is better than a sample — it is this round's own
                         roll numbers, so a filled-in template always matches. */}
@@ -999,7 +1078,7 @@ export function DriveRoundsPage({
                     </span>
                   </div>
                   <span className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={() => setEditingDetails(false)}>
+                    <Button variant="secondary" size="sm" onClick={cancelDetails}>
                       Cancel
                     </Button>
                     <Button size="sm" onClick={() => void saveDetails()}>

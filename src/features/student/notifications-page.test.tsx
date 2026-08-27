@@ -131,3 +131,49 @@ describe("links in notification bodies", () => {
     expect(link.getAttribute("rel")).toContain("noopener");
   });
 });
+
+/**
+ * 🔴 UAT 2026-08-27 — `docs/inbox/WhatsApp Image 2026-08-27 at 18.18.49 (1).jpeg`:
+ * "Congratulations — XYZ has made you an internship offer." with no way to
+ * open the offer letter the CPC had attached.
+ */
+describe("the offer letter, under the message it belongs to", () => {
+  const OFFER = {
+    id: "n9",
+    kind: "offer",
+    title: "Offer from XYZ",
+    body: "Congratulations — XYZ has made you an internship offer.",
+    createdAt: "2026-08-27T10:00:00Z",
+    read: false,
+    driveId: "d1",
+    letterUrl: "https://signed.example/offer.pdf?token=abc",
+    letterName: "XYZ-offer-letter.pdf",
+  };
+
+  it("offers the letter by its own filename, opening in a new tab", async () => {
+    show(view({ notifications: async () => [OFFER] }));
+
+    const link = await screen.findByRole<HTMLAnchorElement>("link", {
+      name: /XYZ-offer-letter\.pdf/,
+    });
+    expect(link.href).toBe("https://signed.example/offer.pdf?token=abc");
+    expect(link.target).toBe("_blank");
+    // A signed URL handed to a third party is a leak with our name on it.
+    expect(link.rel).toContain("noreferrer");
+  });
+
+  it("says nothing about a letter when none is attached", async () => {
+    show(view({ notifications: async () => [{ ...OFFER, letterUrl: null, letterName: null }] }));
+
+    await screen.findByText(/made you an internship offer/);
+    expect(screen.queryByRole("link", { name: /offer letter/i })).toBeNull();
+  });
+
+  /** Both halves travel together (0051): a name with no URL opens nothing. */
+  it("shows no link when the URL failed to sign, even though the name survived", async () => {
+    show(view({ notifications: async () => [{ ...OFFER, letterUrl: null }] }));
+
+    await screen.findByText(/made you an internship offer/);
+    expect(screen.queryByRole("link", { name: /XYZ-offer-letter/ })).toBeNull();
+  });
+});
