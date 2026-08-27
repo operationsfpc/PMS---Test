@@ -121,7 +121,7 @@ The test has been verified to fail on violation, not just to pass.
 | Hosting | Cloudflare Workers Static Assets |
 | Package manager | pnpm |
 | Lint / format | Biome |
-| Hooks | lefthook (pre-commit: Biome on staged files; pre-push: typecheck + full coverage suite). **Not automatic — run `pnpm lefthook install` after every fresh clone.** |
+| Hooks | lefthook (pre-commit: Biome on staged files; pre-push: typecheck + `pnpm test:run`, ~3 min). Coverage gates live in CI and `pnpm check`, not in the hook — instrumentation doubles the run and races a `pnpm test` watcher over `coverage/.tmp`. **Not automatic — run `pnpm lefthook install` after every fresh clone.** |
 | CI | GitHub Actions — `.github/workflows/ci.yml` (lint · typecheck · coverage · architecture, plus Playwright). Runs on PRs to `main` and on `main`. ⚠️ It **cannot be made a required check**: branch protection and rulesets are unavailable on a private repo on the GitHub Free plan (API returns 403 "Upgrade to GitHub Pro"). CI is advisory until the repo moves to Pro/Team or an org. |
 | Repo | `origin` → `github.com/karthikraja-ship-it/fpc-pms` (**private** — verified 2026-08-27). Commit locally, **push `main` before the session closes**. |
 

@@ -11,11 +11,15 @@ pre-commit:
       run: pnpm biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
 
+# ~3 min. Deliberately NOT `pnpm test:cov`: coverage instrumentation doubles the
+# run to ~6 min, and it collides with a `pnpm test` watcher running in another
+# window (both write to coverage/.tmp). Coverage gates are enforced by CI and by
+# `pnpm check` before you open the PR.
 pre-push:
   parallel: false
   jobs:
     - name: typecheck
       run: pnpm typecheck
 
-    - name: tests + coverage gates
-      run: pnpm test:cov
+    - name: tests
+      run: pnpm test:run

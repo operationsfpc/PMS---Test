@@ -33,6 +33,18 @@ pnpm dev                  # runs against the MSW mock backend, no DB needed
 
 `pnpm lefthook install` is not automatic. If you skip it you will push red code.
 
+What the gates do:
+
+| Hook | Runs | Takes |
+|---|---|---|
+| `pre-commit` | Biome format + lint on staged files | instant |
+| `pre-push` | `pnpm typecheck` + `pnpm test:run` (3,900 tests) | ~3 min |
+| CI, on the PR | the above **plus coverage gates, architecture test, Playwright** | ~10 min |
+
+Coverage gates are deliberately not in `pre-push` — instrumentation doubles the
+run and collides with a `pnpm test` watcher in another window. Run `pnpm check`
+yourself before opening the PR.
+
 ---
 
 ## 2. The one rule that gets PRs rejected
