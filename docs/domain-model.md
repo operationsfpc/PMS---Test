@@ -141,10 +141,10 @@ PIF Q10 is free text; the domain needs numbers.
 
 | Field | Type | Purpose |
 |---|---|---|
-| `ctc_min_lpa` | `numeric` required | Range floor |
+| `ctc_min_lpa` | `numeric` **nullable** | Range floor. Null on a **cap-only internship**, which pays `stipend_min_monthly` / `stipend_max_monthly` and has no CTC at all (0053/0056). |
 | `ctc_max_lpa` | `numeric` nullable | Range ceiling; null ⇒ fixed CTC |
 | `ctc_breakup` | `text` | Free-text fixed/variable detail, display only |
-| `offer_category` | enum | **Delivery Head's** decision at approval; system *suggests* from `ctc_max_lpa ?? ctc_min_lpa`. Immutable thereafter. |
+| `offer_category` | enum | **Delivery Head's** decision at approval; the system *suggests* from `ctc_max_lpa ?? ctc_min_lpa` via **`suggestOfferCategory`**, which answers **null** when there is no CTC to go on. Immutable thereafter (§3.3), so a screen must never default it — with no suggestion the approver chooses. |
 | `open_to_all_override` | `boolean` | Central CPC's prestige-drive escape hatch — see R5a |
 
 Per-student actual offer CTC is captured separately at offer upload as `offer.ctc_lpa` — that is what drives the placement record.
@@ -152,6 +152,8 @@ Per-student actual offer CTC is captured separately at offer upload as `offer.ct
 ### 3.5 Mandatory before `live` (PRD §6.2)
 
 company · role title · role category · JD · location(s) · `ctc_min_lpa` · `drive_type` · `offer_category` · eligibility · ≥1 structured round · timeline · application start + end · `on_hold = false`
+
+⚠️ **OPEN — P10 (raised 2026-08-27, unanswered).** This gate demands `ctc_min_lpa`, but a plain `internship` pays a **monthly stipend** and has no CTC. Live: both `internship` drives carry `stipend_min_monthly` and a null CTC, so once approved **neither can ever be published**. Not resolved here — relaxing a go-live gate changes what students are shown. See `docs/PENDING-USER-ACTION.md` P10.
 
 ### 3.6 Edits after go-live
 
@@ -164,7 +166,14 @@ Do **not** re-run eligibility for existing applicants. Notification on change is
 Each is a **pure function**. No I/O, no clock, no randomness — `now: Date` is always passed in.
 
 ### R1 · `classifyOfferCategory(ctcLpa, bands) → OfferCategory`
-Suggestion only. Boundary cases are exact: ₹5.00 ⇒ `regular`, ₹5.01 ⇒ `dream`, ₹10.00 ⇒ `dream`, ₹10.01 ⇒ `super_dream`.
+Suggestion only. **SPEC CHANGE 2026-08-17 (Karthik): a band edge belongs to the band ABOVE it.** ₹4.99 ⇒ `regular`, **₹5.00 ⇒ `dream`**, ₹9.99 ⇒ `dream`, **₹10.00 ⇒ `super_dream`**. (This paragraph previously stated the old edges and disagreed with the code and its tests.)
+
+**Throws** on a CTC that is not a positive finite number — it is asked to classify a *number*, and swallowing nonsense would band a drive wrongly and immutably.
+
+### R1a · `suggestOfferCategory(ctcLpa | null, bands) → OfferCategory | null`
+The same rule asked as a question, for screens. **No CTC is an absence, not an error**: it answers `null`, and the Delivery Head chooses.
+
+Added after a live outage (2026-08-27): one cap-only internship with no CTC made `classifyOfferCategory` throw inside the PIF approval queue, and the screen's generic catch turned it into "Could not load the queue" — hiding *every* pending approval in the organisation. Screens call R1a; anything holding a real number calls R1 and still hears about a bug.
 
 ### R2 · `evaluateEligibility(snapshot, drive) → { eligible, failures[] }`
 Checks degree, branch, passing year, CGPA cutoff, 10th/12th cutoffs, arrear policy (`no_standing` / `no_history` / `flexible`), city, campus.
@@ -240,6 +249,34 @@ This preserves §7.2 (eligibility uses verified data only) while removing the un
 
 ### R11 · `rankApplicants(applications, drive, weights) → RankedApplicant[]`
 The MVP shortlisting provider: deterministic, weighted, **explainable**. Emits per-candidate reasoning derived from rule hits, satisfying PRD §13.1's audit requirement with zero AI cost. Inputs: CGPA, arrears, skill-repository scores, mandatory-skill match, role-preference match.
+
+### R12 · `src/domain/meeting-slots.ts` — the per-student meeting-link file
+
+A **file format is a contract with a human being holding Excel**, so it lives in the domain and is tested there, not parsed ad hoc in a screen.
+
+**Canonical header (checked by column name; the `(…)` hints are instructions to the reader, not part of the name):**
+
+```
+roll_number,meeting_link,date (dd-mm-yyyy),time (hh:mm)
+```
+
+The earlier three-column `roll_number,meeting_link,scheduled_at` file is still accepted — templates already downloaded must not stop working — but is never written.
+
+| Rule | Why |
+|---|---|
+| Header **required**, matched by name | A file with the columns swapped, read positionally, sends each student someone else's interview. |
+| Roll numbers compared **normalised** (`normaliseRollNumber`: case, padding, Excel's quotes, BOM) | Case and spacing are how it was *typed*; identity is what is left. |
+| An em dash / blank roll number **never matches** | `participants()` prints — for a missing roll number, and — matching — would hand one student another's link. |
+| Date read generously: `27-08-2026`, `27/08/2026`, `27.08.2026`, `2026-08-27`, `27 Aug 2026` | The header asks for one form; a coordinator who used another has not made a mistake worth refusing. |
+| **Two-digit years refused** | Guessing the century of an interview date is not this file's business. |
+| Calendar validity checked **by hand** (`Date` is banned in the domain) | `new Date("2026-02-30")` silently becomes 2 March. |
+| Time: `1pm`, `1:30 pm`, `13:42`, or a full date-and-time | What people actually type. A **bare number** (`13`) is refused — it could be an hour or a typo, and a guess books the wrong hour. |
+| **Blank date ⇒ the round's own day** | The common case is one column: the time. |
+| Everything unreadable is refused **by line number**, before anything is sent | See below. |
+
+**Why it is parsed here and not at the database.** UAT 2026-08-27: `1pm` reached Postgres as `1pm:00+05:30`, every write failed, and the upload screen's only wording for a failed write was *"No participant in this round carries these roll numbers"* — so two students plainly in the round were blamed for a malformed timestamp. `fromDatetimeLocal` now also refuses to stamp what it cannot store, so that mis-attribution cannot recur.
+
+`buildMeetingSlotsTemplate` emits **this round's own roster**, pre-filled, in the format the header asks for — a downloaded-then-uploaded file cannot produce a roll-number mismatch.
 
 ---
 

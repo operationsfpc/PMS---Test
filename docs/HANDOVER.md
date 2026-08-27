@@ -4,6 +4,87 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (9) — one CTC-less PIF took the whole approval queue down
+
+UAT (live): the Delivery Head opened PIF approvals and got **"Could not load
+the queue"**. The edge logs showed **no failed request at all** — the rows
+arrived and the failure was in the browser.
+
+Two PIFs were waiting. One (`ABCD Infosys · Junior Associate`) is an
+`internship` with **no CTC**, legitimate since 0056 (cap-only internships pay a
+stipend). The screen asked `classifyOfferCategory` to suggest a category for
+it; that function correctly refuses to classify nothing; the `RangeError` hit
+the queue's generic catch, which sets `rows` to `null`. **One unusual row made
+every pending approval in the organisation invisible.**
+
+1. **`suggestOfferCategory(ctc)`** (domain) — the same banding rule asked as a
+   question. No CTC, or a CTC that cannot be classified, answers *no
+   suggestion*. `classifyOfferCategory` stays strict for callers holding a real
+   number, so a genuine bug is still heard.
+2. **The Central CPC cockpit had the same throw** waiting inside the Approve
+   click, on the same drive. Same fix, own regression test.
+3. **No silent default.** Both dropdowns used to fall back to **Regular** when
+   there was no suggestion — and §3.3 makes the category **immutable**. They
+   now show "Choose a category…" and refuse approval until someone chooses.
+4. The queue's inline CTC text (which printed `₹— LPA`) now uses
+   `describeCtcRange`, falling back to "CTC not specified".
+
+Both PIFs are still `submitted` in production — nothing was lost. The Infosys
+one needs its category chosen by hand.
+
+Commit `89380ba`. Live `index-1v-5I-iN.js`, strings verified.
+
+⚠️ **Found while verifying, NOT fixed — new blocker P10.** `missingBeforeGoLive`
+requires `ctc_min_lpa`, so a cap-only internship cannot be published even once
+approved. Live: **both** `internship` drives have `stipend_min_monthly` set and
+`ctc_min_lpa` null. Approving them is now possible; publishing them is not.
+Relaxing a PRD §6.2 go-live gate changes what students see — Karthik's call.
+See `docs/PENDING-USER-ACTION.md` P10 and `docs/domain-model.md` §3.5.
+
+**Lesson worth keeping:** a screen-level `catch` that turns every throw into
+one sentence will eventually hide a domain rule doing its job. When a queue
+can be emptied by one row, the row is the bug — but so is the handler.
+
+---
+
+## ✅ SHIPPED 2026-08-27 (8) — the CSV time column, and a date column of its own
+
+UAT (`docs/inbox/WhatsApp Image 2026-08-27 at 13.51.34.jpeg`, file
+`docs/inbox/round-1-meeting-links.csv`): uploading per-student links with
+`1pm` in the time column answered **"No participant in this round carries these
+roll numbers: BCA2023156, 124. 0 links assigned."** Both students were in the
+round. Without the time column the same file worked.
+
+`1pm` was passed through untouched and stamped as `1pm:00+05:30`; Postgres
+refused every row; and the upload screen's only wording for a refused row is a
+roll-number mismatch — so it blamed the students for a malformed timestamp.
+
+1. **The time column is parsed in the domain**, before anything is sent:
+   `1pm`, `1:30 pm`, `13:42`, full date-and-time. Anything else is refused **by
+   line number** with the format spelled out.
+2. **The date has its own column** (Karthik's request), and the header carries
+   the format because the header is the only instruction that travels with the
+   file into Excel:
+   `roll_number,meeting_link,date (dd-mm-yyyy),time (hh:mm)`.
+   Day-first, ISO, slashes, dots and `1 Sep 2026` all read; a two-digit year is
+   refused rather than guessing the century; `30-02-2026` is refused rather
+   than rolling into March (`Date` is banned in the domain, so the calendar is
+   done by hand). **The old three-column `scheduled_at` file still uploads.**
+3. **A blank date means the round's own day**, taken from the form as it is
+   being typed — so the common case is one column: the time.
+4. **`fromDatetimeLocal` now refuses to stamp what it cannot store**, so a bad
+   timestamp can never again be reported as a roll-number mismatch.
+
+Karthik was offered "free-text date/time, no validation" and it was pushed
+back: `participant_scheduled_at` is `timestamptz`, so unvalidated text fails at
+write time — which *is* this bug. Format hint in the header + generous parsing
++ a line-numbered error was accepted instead.
+
+Commit `77f8e1f`. Live `index-1v-5I-iN.js`, header string verified.
+Example file: `docs/inbox/example-new-slots-template.csv`.
+
+---
+
 ## ✅ SHIPPED 2026-08-27 (7) — meeting-link upload, its template, and the recruiter pack's Resume links
 
 Three live UAT reports (`docs/inbox/WhatsApp Image 2026-08-26 at 16.22.*.jpeg`,
@@ -42,13 +123,12 @@ carry all four. Commits `87aa587`, `275f33a`.
   `onUnhandledRequest: "error"` every test in it still went to the network and
   waited ~7s. File went from minutes to **317ms** (`275f33a`). Worth grepping
   other view tests for the same disease.
-- **Not fixed:** on 2026-08-27 the box (8 GB, load ~12, 2 GB swap in use,
-  Siri's `AssetMetricsExtension` at 44% CPU) made the full `pnpm check`
-  unreliable — PGlite hooks timing out, single jsdom tests taking minutes.
-  The same suite passed **twice, cleanly, exit 0 (3871 tests)** earlier the
-  same evening with the production code as committed. Next session: reboot,
-  then run `pnpm check` once before anything else. If it still drags, look at
-  sharing one PGlite instance across `src/db` files rather than 50 boots.
+- **No longer reproducing:** on 2026-08-27 (evening) the box made the full
+  `pnpm check` unreliable — PGlite hooks timing out, single jsdom tests taking
+  minutes. On 2026-08-27 (later session) `pnpm check` ran clean four times,
+  **3908 tests in ~2 minutes**, coverage gates included. Treat it as machine
+  load, not the suite. If it drags again, look at sharing one PGlite instance
+  across `src/db` files rather than 50 boots.
 
 ---
 
@@ -2966,6 +3046,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 | **P2** | Approve a spreadsheet library (SheetJS/ExcelJS) for `.xlsx` roster import and the recruiter export |
 | **P3** | The skill-repository score schema (R11 ranking is invented — A12) |
 | **P7** | Google OAuth verification if >100 users are expected |
+| **P10** | **new 2026-08-27** — does a cap-only `internship` need a CTC to go live? `missingBeforeGoLive` demands `ctc_min_lpa`; both live internship drives have a stipend and no CTC, so once approved neither can be published. Blocks every internship drive |
 | **new** | A27: a PG student's UG aggregate is stored as **CGPA on the 10-point scale**, not a percentage. Cheap to reverse now |
 
 ---
@@ -2976,7 +3057,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 1695 passing across 114 files
+pnpm test:run        # expect 3908 passing across 200 files (~2 min)
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -3006,8 +3087,23 @@ rollback;
 window is short). `edge_logs` filtered to `status_code >= 400` named the
 PGRST201 outage in one query after a code review had missed it.
 
-Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). Both were
-run this session and both succeeded; **neither is automatic** — committing does
-not deploy. `pnpm supabase migration list --linked` is how you check.
+Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). **Neither
+is automatic** — committing does not deploy. `pnpm supabase migration list
+--linked` is how you check. Migrations are at **0065**.
 
-Git is **local only**, no remote. 106 commits, working tree clean.
+### Git — there IS a remote now (changed 2026-08-27)
+
+`origin` → `https://github.com/karthikraja-ship-it/fpc-pms.git`, and the repo is
+**private** (the GitHub API answers 404 unauthenticated — re-check with
+`curl -s -o /dev/null -w "%{http_code}" https://api.github.com/repos/karthikraja-ship-it/fpc-pms`
+before assuming it still is).
+
+This file said "local only, no remote" until 2026-08-27, which is why 28
+commits sat unpushed. **Push before the session closes:**
+
+```bash
+git push origin main
+git rev-list --left-right --count origin/main...HEAD   # expect "0	0"
+```
+
+219 commits, working tree clean, `origin/main` level with `main`.
