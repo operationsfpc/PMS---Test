@@ -191,7 +191,7 @@ pnpm test:cov       # Coverage, enforces gates
 pnpm check          # Biome + tsc + full coverage suite
 pnpm db:types       # Regenerate src/db/database.types.ts from migrations
 pnpm supabase ...   # Supabase CLI (project-local dev dependency)
-pnpm db:push        # supabase db push  — live; remote is at 0065
+pnpm db:push        # supabase db push  — live; remote is at 0067
 git push origin main # the GitHub remote — not automatic, and not done by deploy
 ```
 

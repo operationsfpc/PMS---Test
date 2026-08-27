@@ -4,6 +4,61 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (10) — drive-type filter and tags, the stipend at approval, and the Internship category
+
+Karthik (`docs/inbox/WhatsApp Image 2026-08-27 at 15.56.45.jpeg`): a filter and
+a tag by drive type on every list of ongoing drives; the stipend shown to the
+Delivery Head when approving an internship; and a fourth offer category,
+Internship.
+
+**Spec + mockup, both approved before any code:**
+`docs/specs/2026-08-27-drive-type-filter-and-internship-category.md` ·
+`docs/mockups/2026-08-27-drive-type-filter.html`
+
+### The four pushback decisions (Karthik agreed to all)
+
+| # | Decision |
+|---|---|
+| **PB1** | The enum value is added **`before 'regular'`**. Appended (the default) it would sort ABOVE `super_dream`, and the first `max(offer_category)` anyone writes would hide that student from every drive. Nothing exploits enum ordering today — all four SQL ladders use an explicit CASE and filter by `drive_type` first — this is insurance against the fifth. Lowest fails safe. |
+| **PB2** | `internship` is **mandatory**, not merely allowed, on both `drives` and `offers`. NULL previously meant "internship"; keeping both would leave one fact with two spellings for ever. Free exactly once — production had 13 offers and none was an internship. |
+| **PB3** | The student card suppresses the category badge when it merely repeats the type tag. No "Internship Internship". |
+| **PB4** | An internship offer's notification reads "…has made you an internship offer." |
+
+### What it cost, and what nearly went wrong
+
+- **`offerCategoryRank` THROWS for `internship`.** Returning 0 or 4 would let R5
+  silently decide an internship outranks a real offer. Adding the member to the
+  TypeScript union turned every ranking site into a **compile error** — that is
+  how they were found, not by grepping.
+- **A third constraint, under a name I had not assumed.** `0006` called the
+  offers one `internship_offer_has_no_category`, not
+  `internship_has_no_category`. Found by a failing test, not by reading.
+- **I nearly dropped the opted-out guard.** Rewriting `offer_reaches_student`
+  for PB4, the first draft omitted 0043's `participation_status = 'opted_out'`
+  check — which would have notified people who asked not to be. `CREATE OR
+  REPLACE` cannot patch a body; every line has to be carried across.
+- **Six existing tests encoded rules this change supersedes.** Each was
+  rewritten with an explicit `SPEC CHANGE 2026-08-27 (approved)` note rather
+  than deleted, and the rule underneath — *an internship is on no rung* — is
+  still proved by every one.
+- ⚠️ **A process failure worth not repeating:** migrations 0066/0067 were
+  written **before** their tests. Corrected by moving 0067 out of the folder and
+  re-running — 8 of 12 failed, then passed with it restored. The tests are
+  honest; the order was not.
+
+### ✅ P10 is CLOSED
+
+`missingBeforeGoLive` and `live_requires_complete_record` now accept **a CTC or
+a stipend**, and only an internship may lean on the stipend. Proved against
+production in rolled-back transactions: an internship with a stipend and no CTC
+can reach `live`; with no pay at all it still cannot.
+
+Commit `0cfea58`. Migrations **0066 + 0067** pushed to Mumbai. Live
+`fd031538`, asset `index-B4u-INOb.js` verified to carry the new strings.
+4012 tests green, `pnpm check` exit 0.
+
+---
+
 ## ✅ SHIPPED 2026-08-27 (9) — one CTC-less PIF took the whole approval queue down
 
 UAT (live): the Delivery Head opened PIF approvals and got **"Could not load
@@ -3046,7 +3101,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 | **P2** | Approve a spreadsheet library (SheetJS/ExcelJS) for `.xlsx` roster import and the recruiter export |
 | **P3** | The skill-repository score schema (R11 ranking is invented — A12) |
 | **P7** | Google OAuth verification if >100 users are expected |
-| **P10** | **new 2026-08-27** — does a cap-only `internship` need a CTC to go live? `missingBeforeGoLive` demands `ctc_min_lpa`; both live internship drives have a stipend and no CTC, so once approved neither can be published. Blocks every internship drive |
+| ~~**P10**~~ | ✅ **RESOLVED 2026-08-27** — Karthik: "yes, relax it". A drive must record a CTC **or** a stipend; only an internship may lean on the stipend. Domain + constraint changed together (0067) |
 | **new** | A27: a PG student's UG aggregate is stored as **CGPA on the 10-point scale**, not a percentage. Cheap to reverse now |
 
 ---
@@ -3057,7 +3112,7 @@ See `docs/PENDING-USER-ACTION.md`. Live blockers:
 cd ~/fpc-pms
 export PATH="$HOME/.npm-global/bin:$PATH"   # pnpm lives here
 pnpm install
-pnpm test:run        # expect 3908 passing across 200 files (~2 min)
+pnpm test:run        # expect 4012 passing across 204 files (~2 min)
 pnpm test:e2e        # expect 1 journey passing
 pnpm dev             # localhost:5173
 ```
@@ -3089,7 +3144,7 @@ PGRST201 outage in one query after a code review had missed it.
 
 Ship with `pnpm db:push` (migrations) then `pnpm deploy` (Cloudflare). **Neither
 is automatic** — committing does not deploy. `pnpm supabase migration list
---linked` is how you check. Migrations are at **0065**.
+--linked` is how you check. Migrations are at **0067**.
 
 ### Git — there IS a remote now (changed 2026-08-27)
 
@@ -3106,4 +3161,4 @@ git push origin main
 git rev-list --left-right --count origin/main...HEAD   # expect "0	0"
 ```
 
-219 commits, working tree clean, `origin/main` level with `main`.
+222 commits, working tree clean, `origin/main` level with `main`.
