@@ -4,6 +4,45 @@
 
 ---
 
+## ✅ SHIPPED 2026-08-27 (12) — one spelling for an offer category, everywhere
+
+The follow-up flagged in (11), approved on the spot. Three screens printed
+`offer_category` through their own local `replaceAll("_", " ")`, so a student
+read **"super dream"** on their own dashboard while every staff screen read
+**"Super Dream"** — and, since (10) made `internship` a category, **
+"internship"** in lower case.
+
+1. **`asOfferCategory(raw)` / `offerCategoryLabelOf(raw)`** — the counterparts
+   of `asDriveType`, for callers that legitimately hold a bare string off the
+   row. An unrecognised value is handed back **untouched**, never blanked: a
+   category nobody knows is a data problem, and an empty cell is how a data
+   problem goes unnoticed for a month.
+2. `student/student-dashboard.tsx` — the student's own offer badge. Its
+   `humanise` helper had no other caller and is gone.
+3. `cpc/drive-progress-page.tsx` — "Offer · ₹8 LPA · super dream". Its `label`
+   helper **stays**, for round results and attendance, which have no domain
+   wording of their own.
+4. `dashboard/dashboard-page.tsx` — "Offers by category" and "Package by
+   category" both leaned on a CSS **`capitalize`** to fix the case. That is a
+   stylesheet spelling a domain value: the DOM said "super dream" and only the
+   rendered pixels said otherwise. It would also never have rescued
+   "internship". Class dropped with the humaniser.
+
+**Left alone deliberately, and still true:** `capitalize` remains on staff
+roles (`admin/staff-page.tsx`) and on drive/round statuses
+(`dashboard-page.tsx:432`, `central-cpc/results-page.tsx`). Those are
+different enums with **no domain label function today** — `STATUS_LABEL` lives
+privately inside `drive-record/record-page.tsx`. If a fourth screen ever
+disagrees about a status's wording, that map is the thing to promote into the
+domain. Not done now because nothing has gone wrong yet.
+
+No migration — presentation only. Commit `3531b0c`. Live asset
+`index-LwnMeOUq.js`, version `16b425c1`: "Super Dream" present, zero
+`replaceAll("_"," ")`, and the single surviving `capitalize text-ink-700` is
+the drive-status one named above. 4036 tests green (+11), `pnpm check` exit 0.
+
+---
+
 ## ✅ SHIPPED 2026-08-27 (11) — an internship is named once, not twice
 
 UAT (`docs/inbox/WhatsApp Image 2026-08-27 at 17.40.11.jpeg`): the drive
@@ -37,12 +76,8 @@ No migration — presentation only. Commit `12befe2`. Live asset
 time" and to contain **zero** occurrences of `replaceAll("_"," ")`.
 4025 tests green (+13), `pnpm check` exit 0.
 
-⚠️ **Found while verifying, NOT fixed — needs Karthik's word.** Three screens
-still print an **offer category** through the same `replaceAll("_", " ")`
-humaniser instead of `offerCategoryLabel`, so they say "super dream" and
-"internship" in lower case: `student/student-dashboard.tsx:353`,
-`cpc/drive-progress-page.tsx:174`, `dashboard/dashboard-page.tsx:400/448`.
-Same family as this bug, not the bug reported. Cheap to fix on a word.
+⚠️ Found while verifying: three screens still printed an **offer category**
+through the same humaniser. Karthik: "yes, do it" — **fixed in (12) above**.
 
 ---
 
