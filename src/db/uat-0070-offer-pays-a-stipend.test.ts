@@ -111,3 +111,110 @@ describe("what an offer must record", () => {
     await expect(declare(internship, "internship", "internship", null, -500)).rejects.toThrow();
   });
 });
+
+/**
+ * 🔴 The half the first attempt did not test, and paid for.
+ *
+ * `0070` was pushed once with the repair placed BEFORE `drop not null`. It
+ * failed on the real database with 23502 and rolled back whole. The PGlite
+ * suite had passed, because a fresh test database holds no legacy rows for
+ * the UPDATE to touch — so the statement ran against nothing and the ordering
+ * bug was invisible.
+ *
+ * The repair is now a function, and these tests create the legacy shape on
+ * purpose. The constraint has to be lifted to write a row that the constraint
+ * exists to forbid; it is put back afterwards, which also proves the repaired
+ * data satisfies it.
+ */
+describe("repairing the offers that were declared before this rule existed", () => {
+  const withoutTheConstraint = async (body: () => Promise<void>) => {
+    await t.sql(`alter table offers drop constraint offer_records_what_it_pays`);
+    try {
+      await body();
+    } finally {
+      await t.sql(
+        `alter table offers add constraint offer_records_what_it_pays check (
+           case
+             when drive_type = 'internship'
+               then stipend_monthly is not null and ctc_lpa is null
+             else ctc_lpa is not null and stipend_monthly is null
+           end
+         )`,
+      );
+    }
+  };
+
+  it("moves the invented CTC onto the stipend the drive actually records", async () => {
+    await withoutTheConstraint(async () => {
+      await t.sql(
+        `insert into offers (student_id, drive_id, source, company_name, drive_type,
+                             offer_category, ctc_lpa, declared_by)
+         values ($1, $2, 'on_campus', 'XYZ', 'internship', 'internship', 10, $3)`,
+        [ids.arjun, internship, ids.centralUser],
+      );
+
+      const [{ repair_internship_offer_pay: repaired }] = (await t.sql(
+        `select repair_internship_offer_pay()`,
+      )) as Array<{ repair_internship_offer_pay: number }>;
+      expect(repaired).toBeGreaterThanOrEqual(1);
+
+      const [row] = await t.sql(
+        `select ctc_lpa, stipend_monthly from offers
+          where student_id = $1 and drive_type = 'internship'`,
+        [ids.arjun],
+      );
+      // The figure comes from the DRIVE, not from a constant in the migration.
+      expect(row?.stipend_monthly).toBe(15000);
+      expect(row?.ctc_lpa).toBeNull();
+    });
+  });
+
+  /** Re-adding the constraint above would have thrown if the repair missed a row. */
+  it("leaves the repaired rows satisfying the constraint that follows them", async () => {
+    const [row] = await t.sql(
+      `select count(*) as bad from offers
+        where drive_type = 'internship' and (ctc_lpa is not null or stipend_monthly is null)`,
+    );
+    expect(Number(row?.bad)).toBe(0);
+  });
+
+  it("does not touch an offer that already records its stipend", async () => {
+    const before = await t.sql(
+      `select id, stipend_monthly from offers where drive_type = 'internship'`,
+    );
+    await t.sql(`select repair_internship_offer_pay()`);
+    const after = await t.sql(
+      `select id, stipend_monthly from offers where drive_type = 'internship'`,
+    );
+    expect(after).toEqual(before);
+  });
+
+  it("leaves an internship offer alone when its drive records no stipend either", async () => {
+    const bare = (
+      await t.sql(
+        `insert into drives (company_name, status, drive_type, offer_category)
+         values ('No Stipend Ltd', 'draft', 'internship', 'internship') returning id`,
+      )
+    )[0]?.id as string;
+
+    await withoutTheConstraint(async () => {
+      await t.sql(
+        `insert into offers (student_id, drive_id, source, company_name, drive_type,
+                             offer_category, ctc_lpa, declared_by)
+         values ($1, $2, 'on_campus', 'No Stipend Ltd', 'internship', 'internship', 7, $3)`,
+        [ids.priya, bare, ids.centralUser],
+      );
+      await t.sql(`select repair_internship_offer_pay()`);
+
+      const [row] = await t.sql(`select ctc_lpa, stipend_monthly from offers where drive_id = $1`, [
+        bare,
+      ]);
+      // Guessing a stipend from nothing would be inventing the very figure
+      // this migration exists to remove. It is left for a person.
+      expect(row?.ctc_lpa).toBe("7.00");
+      expect(row?.stipend_monthly).toBeNull();
+
+      await t.sql(`delete from offers where drive_id = $1`, [bare]);
+    });
+  });
+});
