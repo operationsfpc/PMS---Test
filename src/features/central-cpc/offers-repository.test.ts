@@ -73,7 +73,13 @@ describe("createSupabaseOffersRepository", () => {
 
   it("requires the internship category on an internship offer", async () => {
     await expect(
-      repo().declareOffer({ ...offer, driveType: "internship", offerCategory: null }),
+      repo().declareOffer({
+        ...offer,
+        driveType: "internship",
+        offerCategory: null,
+        ctcLpa: null,
+        stipendMonthly: 15000,
+      }),
     ).rejects.toThrow(/internship/i);
   });
 
@@ -92,9 +98,20 @@ describe("createSupabaseOffersRepository", () => {
       }),
     );
 
-    await repo().declareOffer({ ...offer, driveType: "internship", offerCategory: "internship" });
+    // SPEC CHANGE 2026-08-27 (approved, "option 1"): an internship offer is
+    // paid a monthly stipend and carries no CTC at all. Declaring one with a
+    // CTC is now refused — which is the whole point of 0070.
+    await repo().declareOffer({
+      ...offer,
+      driveType: "internship",
+      offerCategory: "internship",
+      ctcLpa: null,
+      stipendMonthly: 15000,
+    });
 
     expect(body.offer_category).toBe("internship");
+    expect(body.stipend_monthly).toBe(15000);
+    expect(body.ctc_lpa).toBeNull();
   });
 
   it("requires a category for a ladder offer", async () => {

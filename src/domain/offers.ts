@@ -15,7 +15,14 @@ export interface Offer {
   readonly driveType: DriveType;
   /** Null for plain internships, which are not classified. */
   readonly offerCategory: OfferCategory | null;
-  readonly ctcLpa: number;
+  /**
+   * Null on a plain internship, which records a monthly stipend instead
+   * (0070, 2026-08-27). Before that this was `number` and `Number(null)` made
+   * an internship worth **0** — a figure nobody chose, in the same field as
+   * real salaries. The filters below meant it was never averaged, but a silent
+   * zero is the shape of the bug that put ₹10 LPA against ₹15,000 a month.
+   */
+  readonly ctcLpa: number | null;
   readonly declaredAt: Date;
   readonly source: OfferSource;
 }
@@ -45,9 +52,16 @@ export function placementOffers(offers: readonly Offer[]): readonly Offer[] {
 function bestByCtc(candidates: readonly Offer[]): Offer | null {
   let best: Offer | null = null;
   for (const offer of candidates) {
+    // An offer with no CTC cannot win a comparison of CTCs. It is skipped
+    // rather than read as zero, which would have it lose to everything and
+    // beat nothing — the right answer by accident, for the wrong reason.
+    if (offer.ctcLpa === null) continue;
+    // `best` only ever holds an offer that passed the guard above, so its CTC
+    // is never null here — no second check, which would be a branch no input
+    // can reach and no test can honestly cover.
     if (
       best === null ||
-      offer.ctcLpa > best.ctcLpa ||
+      (best.ctcLpa as number) < offer.ctcLpa ||
       (offer.ctcLpa === best.ctcLpa && offer.declaredAt < best.declaredAt)
     ) {
       best = offer;

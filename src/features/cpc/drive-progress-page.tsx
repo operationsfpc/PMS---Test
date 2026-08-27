@@ -9,6 +9,7 @@ import {
   matchesDriveType,
 } from "@domain/drive-type";
 import { offerCategoryLabelOf } from "@domain/offer-category";
+import { describeOfferPay } from "@domain/offer-pay";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useEffect, useState } from "react";
 
@@ -34,7 +35,13 @@ export interface DriveProgressStudent {
   readonly rollNumber: string;
   readonly shortlisted: boolean;
   readonly rounds: readonly StudentRoundProgress[];
-  readonly offer: { readonly ctcLpa: number; readonly offerCategory: string | null } | null;
+  readonly offer: {
+    /** 0070: null on a plain internship, which records a stipend instead. */
+    readonly ctcLpa: number | null;
+    readonly stipendMonthly?: number | null;
+    readonly driveType?: DriveType;
+    readonly offerCategory: string | null;
+  } | null;
 }
 
 export interface DriveProgressEntry {
@@ -170,7 +177,14 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                       )}
                       {student.offer !== null && (
                         <Badge tone="success">
-                          Offer · ₹{student.offer.ctcLpa} LPA
+                          {/* 2026-08-27: an internship is paid monthly. This
+                              read "Offer · ₹10 LPA" against ₹15,000 a month. */}
+                          Offer ·{" "}
+                          {describeOfferPay({
+                            driveType: student.offer.driveType ?? "placement",
+                            ctcLpa: student.offer.ctcLpa,
+                            stipendMonthly: student.offer.stipendMonthly ?? null,
+                          })}
                           {/* 2026-08-27: the domain's spelling, not the
                               round-status humaniser it happened to sit next
                               to. `label` still serves results and attendance,

@@ -242,3 +242,81 @@ describe("resolveDisplayedPlacement", () => {
     ).toBeNull();
   });
 });
+
+/**
+ * 0070 (2026-08-27): a plain internship offer carries no CTC at all.
+ *
+ * Before this, `Number(null)` made it `0` — a figure nobody chose, sitting in
+ * the same field as real salaries. The filters meant it was never actually
+ * averaged, but a silent 0 is exactly the shape of the bug that put ₹10 LPA
+ * against ₹15,000 a month, so the type now says what is true.
+ */
+describe("an offer that records no CTC", () => {
+  const internship = {
+    id: "o-int",
+    driveId: "d-int",
+    driveType: "internship" as const,
+    offerCategory: "internship" as const,
+    ctcLpa: null,
+    declaredAt: new Date("2026-08-27T00:00:00Z"),
+    source: "on_campus" as const,
+  };
+
+  const salaried = {
+    id: "o-1",
+    driveId: "d1",
+    driveType: "placement" as const,
+    offerCategory: "dream" as const,
+    ctcLpa: 8,
+    declaredAt: new Date("2026-08-20T00:00:00Z"),
+    source: "on_campus" as const,
+  };
+
+  it("is still never the placement record", () => {
+    expect(resolvePlacementRecord([internship, salaried])?.id).toBe("o-1");
+    expect(resolvePlacementRecord([internship])).toBeNull();
+  });
+
+  it("still consumes the one-internship allowance", () => {
+    expect(isInternshipCapConsumed([internship])).toBe(true);
+  });
+
+  it("is on no rung, so it changes no ladder position", () => {
+    expect(highestOfferCategory([internship])).toBeNull();
+  });
+
+  /** A CTC that does not exist cannot win a comparison against one that does. */
+  it("never outranks a real package by comparing as zero or as nothing", () => {
+    const cheap = { ...salaried, id: "o-cheap", ctcLpa: 3 };
+    expect(resolvePlacementRecord([internship, cheap])?.id).toBe("o-cheap");
+  });
+});
+
+/**
+ * The guard in `bestByCtc`, reached by the one route that can produce it: a
+ * SELF-PLACED ladder offer with no CTC. `0070`'s constraint forbids the shape
+ * in our database, but a self-placed row is transcribed from a student's own
+ * declaration, and the domain does not get to assume the database was there
+ * first.
+ */
+describe("a ladder offer that somehow records no CTC", () => {
+  const base = {
+    driveId: "d1",
+    driveType: "placement" as const,
+    offerCategory: "dream" as const,
+    declaredAt: new Date("2026-08-20T00:00:00Z"),
+    source: "self_placed" as const,
+  };
+
+  it("is passed over rather than treated as ₹0", () => {
+    const real = { ...base, id: "o-real", ctcLpa: 3 };
+    const missing = { ...base, id: "o-missing", ctcLpa: null };
+
+    expect(resolveDisplayedPlacement([missing, real])?.id).toBe("o-real");
+    expect(resolveDisplayedPlacement([real, missing])?.id).toBe("o-real");
+  });
+
+  it("is not offered as a placement when it is the only thing there", () => {
+    expect(resolveDisplayedPlacement([{ ...base, id: "o-missing", ctcLpa: null }])).toBeNull();
+  });
+});

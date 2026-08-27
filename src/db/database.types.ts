@@ -426,7 +426,7 @@ export interface OffersRow {
   role_title: string | null;
   drive_type: Enums["drive_type"];
   offer_category: Enums["offer_category"] | null;
-  ctc_lpa: number;
+  ctc_lpa: number | null;
   declared_at: string;
   declared_by: string | null;
   offer_letter_id: string | null;
@@ -434,12 +434,10 @@ export interface OffersRow {
   approved_at: string | null;
   attachment_path: string | null;
   attachment_name: string | null;
+  stipend_monthly: number | null;
 }
 
-export type OffersInsert = Pick<
-  OffersRow,
-  "student_id" | "company_name" | "drive_type" | "ctc_lpa"
-> &
+export type OffersInsert = Pick<OffersRow, "student_id" | "company_name" | "drive_type"> &
   Partial<
     Pick<
       OffersRow,
@@ -448,6 +446,7 @@ export type OffersInsert = Pick<
       | "source"
       | "role_title"
       | "offer_category"
+      | "ctc_lpa"
       | "declared_at"
       | "declared_by"
       | "offer_letter_id"
@@ -455,6 +454,7 @@ export type OffersInsert = Pick<
       | "approved_at"
       | "attachment_path"
       | "attachment_name"
+      | "stipend_monthly"
     >
   >;
 

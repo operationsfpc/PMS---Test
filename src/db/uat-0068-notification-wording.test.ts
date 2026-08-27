@@ -78,9 +78,11 @@ describe("the category is spelled by the domain's labels, not by replace()", () 
        values ('Infosys', 'draft', 'internship', 'internship', 15000) returning id`,
     );
     await t.sql(
+      // SPEC CHANGE 2026-08-27 (approved, 0070): an internship offer records
+      // a stipend, never a CTC — the `0` here was itself the defect.
       `insert into offers (student_id, drive_id, source, company_name, drive_type,
-                           offer_category, ctc_lpa, declared_by)
-       values ($1, $2, 'on_campus', 'Infosys', 'internship', 'internship', 0, $3)`,
+                           offer_category, ctc_lpa, stipend_monthly, declared_by)
+       values ($1, $2, 'on_campus', 'Infosys', 'internship', 'internship', null, 15000, $3)`,
       [ids.priya, second?.id, ids.centralUser],
     );
 

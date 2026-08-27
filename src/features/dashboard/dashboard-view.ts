@@ -307,6 +307,11 @@ export function createSupabaseDashboardView(
       for (const [studentId, held] of offersByStudent) {
         const record = resolvePlacementRecord(held);
         if (record === null) continue;
+        // A placement record is a ladder offer, so it always carries a CTC.
+        // If one ever does not, it is skipped rather than averaged as zero —
+        // a zero in the package figures is the board-meeting number that is
+        // wrong and looks deliberate (0070).
+        if (record.ctcLpa === null) continue;
         placements.push({ studentId, ctcLpa: record.ctcLpa, category: record.offerCategory });
       }
 

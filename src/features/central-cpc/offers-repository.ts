@@ -1,5 +1,6 @@
 import { OFFER_LETTER_BUCKET, offerLetterFileProblem } from "@domain/attachments";
 import type { OfferCategory } from "@domain/offer-category";
+import { offerPayProblem } from "@domain/offer-pay";
 import type { AppRole, DriveType } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -12,7 +13,10 @@ export interface DeclaredOffer {
   readonly roleTitle: string | null;
   readonly driveType: DriveType;
   readonly offerCategory: OfferCategory | null;
-  readonly ctcLpa: number;
+  /** Null on a plain internship, which is paid a stipend instead (0070). */
+  readonly ctcLpa: number | null;
+  /** Set on a plain internship only — the mirror of `ctcLpa`. */
+  readonly stipendMonthly?: number | null;
   /**
    * Spec B (approved 2026-08-24): the recruiter's letter, filed with the
    * declaration. Optional — a letter that arrives later is attached with
@@ -66,8 +70,17 @@ export function createSupabaseOffersRepository(
           "An offer category is required for a placement or convertible offer.",
         );
       }
-      if (offer.ctcLpa < 0) {
-        throw new OffersError("CTC cannot be negative.");
+      // 0070: an offer records what it PAYS — a plain internship a monthly
+      // stipend, everything else an annual CTC, and never both. The same
+      // guard the database enforces, so the caller hears a sentence rather
+      // than a constraint name.
+      const payProblem = offerPayProblem({
+        driveType: offer.driveType,
+        ctcLpa: offer.ctcLpa,
+        stipendMonthly: offer.stipendMonthly ?? null,
+      });
+      if (payProblem !== null) {
+        throw new OffersError(payProblem);
       }
 
       const actorId = await getActorId();
@@ -97,6 +110,7 @@ export function createSupabaseOffersRepository(
           drive_type: offer.driveType,
           offer_category: offer.offerCategory,
           ctc_lpa: offer.ctcLpa,
+          stipend_monthly: offer.stipendMonthly ?? null,
           declared_by: actorId,
         })
         .select("id")

@@ -197,10 +197,15 @@ describe("the category ladder, server-side (D5: self-placed offers count)", () =
   });
 
   it("a self-placed INTERNSHIP consumes the cap and blocks internship drives", async () => {
+    // SPEC CHANGE 2026-08-27 (approved, 0070): an internship offer records a
+    // stipend and no CTC. The rule under test — that it consumes the cap —
+    // is untouched.
     await giveOffer({
       company_name: "Intern Corp",
       drive_type: "internship",
       offer_category: "internship",
+      ctc_lpa: null,
+      stipend_monthly: 15000,
     });
     const drive = await makeDrive({ drive_type: "internship", offer_category: "internship" });
     await t.expectRejection(() => apply(drive), /internship/i);
@@ -234,13 +239,22 @@ describe("a self-placed ladder offer must carry a category (D6)", () => {
       student_id: ids.arjun,
       drive_type: "internship",
       offer_category: "internship",
+      ctc_lpa: null,
+      stipend_monthly: 15000,
     });
     const rows = await t.sql(`select id from offers where student_id = $1`, [ids.arjun]);
     expect(rows).toHaveLength(1);
 
     await t.sql(`delete from offers where student_id = $1`, [ids.arjun]);
     await t.expectRejection(
-      () => giveOffer({ student_id: ids.arjun, drive_type: "internship", offer_category: "dream" }),
+      () =>
+        giveOffer({
+          student_id: ids.arjun,
+          drive_type: "internship",
+          offer_category: "dream",
+          ctc_lpa: null,
+          stipend_monthly: 15000,
+        }),
       /internship_carries_internship_category/i,
     );
   });

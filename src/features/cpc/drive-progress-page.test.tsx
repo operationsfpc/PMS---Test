@@ -239,3 +239,59 @@ describe("the offer badge's spelling", () => {
     expect(await screen.findByText(/Offer · ₹12 LPA · Internship/)).toBeDefined();
   });
 });
+
+/**
+ * 🔴 2026-08-27, "option 1": the coordinator's board printed
+ * "Offer · ₹10 LPA" against an internship paying ₹15,000 a month.
+ */
+describe("what the board says an internship offer paid", () => {
+  const withOffer = (offer: Record<string, unknown>): readonly DriveProgressEntry[] => [
+    {
+      ...DRIVE,
+      students: [
+        {
+          applicationId: "a9",
+          studentName: "Nithya S",
+          rollNumber: "21CSE7777",
+          shortlisted: true,
+          rounds: [],
+          offer: offer as DriveProgressEntry["students"][number]["offer"],
+        },
+      ],
+    },
+  ];
+
+  it("quotes a stipend monthly, never as a package", async () => {
+    render(
+      <DriveProgressPage
+        view={view(
+          withOffer({
+            ctcLpa: null,
+            stipendMonthly: 15000,
+            driveType: "internship",
+            offerCategory: "internship",
+          }),
+        )}
+      />,
+    );
+
+    expect(await screen.findByText(/Offer · ₹15,000 \/ month · Internship/)).toBeDefined();
+  });
+
+  it("still quotes a salaried offer in LPA", async () => {
+    render(
+      <DriveProgressPage
+        view={view(
+          withOffer({
+            ctcLpa: 12,
+            stipendMonthly: null,
+            driveType: "placement",
+            offerCategory: "super_dream",
+          }),
+        )}
+      />,
+    );
+
+    expect(await screen.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
+  });
+});

@@ -41,7 +41,8 @@ export interface StudentRecordApplication {
 export interface StudentRecordPlacement {
   readonly companyName: string;
   readonly roleTitle: string | null;
-  readonly ctcLpa: number;
+  /** Null when the offer records no annual figure (0070). */
+  readonly ctcLpa: number | null;
   readonly offerCategory: OfferCategory | null;
   readonly source: OfferSource;
 }

@@ -80,6 +80,10 @@ describe("OfferPage", () => {
       driveType: "placement",
       offerCategory: "dream",
       ctcLpa: 9.25,
+      // SPEC CHANGE 2026-08-27 (approved): a declaration now states which of
+      // the two figures it carries. A salaried offer has no stipend, and says
+      // so rather than leaving the reader to infer it from an absence.
+      stipendMonthly: null,
       // Spec B (2026-08-24): the declaration carries the letter slot.
       letter: null,
     });
@@ -200,5 +204,81 @@ describe("OfferPage — the offer letter", () => {
     await user.upload(within(row).getByLabelText(/attach offer letter/i), letter);
 
     await waitFor(() => expect(attachLetter).toHaveBeenCalledWith("s2", "d1", letter));
+  });
+});
+
+/**
+ * 🔴 Karthik, 2026-08-27: "go with option 1" — an internship offer records a
+ * stipend, not a CTC.
+ *
+ * P10 let the DRIVE go live on a stipend alone. This screen still demanded
+ * "CTC (LPA)" and refused anything ≤ 0, so the two live offers on the XYZ
+ * internship — a drive paying ₹15,000 a month — were recorded at ₹10 and ₹12
+ * LPA. The coordinator did not mistype; the box would take nothing else.
+ */
+describe("declaring an offer on an internship drive", () => {
+  const INTERNSHIP = {
+    driveId: "d1",
+    companyName: "XYZ",
+    roleTitle: "Jr. Software engineer",
+    driveType: "internship" as const,
+    offerCategory: "internship" as const,
+    suggestedCtcLpa: 0,
+    suggestedStipendMonthly: 15000,
+  };
+
+  const internshipView = (overrides: Partial<OfferView> = {}): OfferView => ({
+    drive: async () => INTERNSHIP,
+    candidates: async () => CANDIDATES,
+    declare: async () => undefined,
+    ...overrides,
+  });
+
+  it("asks for a monthly stipend, never a CTC", async () => {
+    render(<OfferPage driveId="d1" view={internshipView()} />);
+
+    expect(await screen.findByLabelText(/stipend.*month/i)).toBeDefined();
+    expect(screen.queryByLabelText(/CTC/i)).toBeNull();
+  });
+
+  it("pre-fills the stipend the drive itself records", async () => {
+    render(<OfferPage driveId="d1" view={internshipView()} />);
+
+    const field = await screen.findByLabelText<HTMLInputElement>(/stipend.*month/i);
+    expect(field.value).toBe("15000");
+  });
+
+  it("declares the stipend and no CTC at all", async () => {
+    const declare = vi.fn();
+    const user = userEvent.setup();
+    render(<OfferPage driveId="d1" view={internshipView({ declare })} />);
+
+    await user.click(await screen.findByRole("button", { name: /declare selected/i }));
+
+    await waitFor(() => expect(declare).toHaveBeenCalled());
+    expect(declare.mock.calls[0]?.[0]).toMatchObject({
+      stipendMonthly: 15000,
+      ctcLpa: null,
+    });
+  });
+
+  it("refuses to declare an internship with no stipend, and says which figure", async () => {
+    const declare = vi.fn();
+    const user = userEvent.setup();
+    render(<OfferPage driveId="d1" view={internshipView({ declare })} />);
+
+    const field = await screen.findByLabelText(/stipend.*month/i);
+    await user.clear(field);
+    await user.click(screen.getByRole("button", { name: /declare selected/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/stipend/i);
+    expect(declare).not.toHaveBeenCalled();
+  });
+
+  it("still asks a salaried drive for a CTC", async () => {
+    render(<OfferPage driveId="d1" view={view()} />);
+
+    expect(await screen.findByLabelText(/CTC/i)).toBeDefined();
+    expect(screen.queryByLabelText(/stipend/i)).toBeNull();
   });
 });

@@ -82,7 +82,14 @@ describe("createSupabaseDriveProgressView", () => {
     const drives = await view().drives();
     const arjun = drives[0]?.students.find((s) => s.studentName === "Arjun Menon");
     const priya = drives[0]?.students.find((s) => s.studentName === "Priya Ramesh");
-    expect(arjun?.offer).toEqual({ ctcLpa: 8, offerCategory: "dream" });
+    // 0070 (2026-08-27): an offer now states WHICH figure it carries. The
+    // rule this test holds — that Arjun's offer is Arjun's — is untouched.
+    expect(arjun?.offer).toEqual({
+      ctcLpa: 8,
+      stipendMonthly: null,
+      driveType: "placement",
+      offerCategory: "dream",
+    });
     expect(priya?.offer).toBeNull();
   });
 

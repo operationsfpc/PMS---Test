@@ -508,3 +508,51 @@ describe("the offer letter on My offers", () => {
     expect(within(offers).queryByRole("link", { name: /letter/i })).toBeNull();
   });
 });
+
+/**
+ * 🔴 2026-08-27, "option 1": the student's own dashboard printed
+ * "₹{ctcLpa} LPA" for every offer — so an internship paying ₹15,000 a month
+ * was shown to the student as **₹10 LPA**, because that is what the declare
+ * screen had forced someone to type.
+ */
+describe("what an internship offer is said to pay", () => {
+  const offer = (over: Record<string, unknown>) =>
+    view({
+      offers: [
+        {
+          offerId: "o-1",
+          driveId: "d1",
+          companyName: "XYZ",
+          roleTitle: null,
+          ctcLpa: null,
+          offerCategory: null,
+          declaredAt: "2026-08-27T04:30:00.000Z",
+          source: "on_campus" as const,
+          ...over,
+        },
+      ],
+    });
+
+  it("quotes the monthly stipend, in rupees", async () => {
+    show(offer({ driveType: "internship", offerCategory: "internship", stipendMonthly: 15000 }));
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    expect(within(offers).getByText(/₹15,000 \/ month/)).toBeDefined();
+    expect(within(offers).queryByText(/LPA/)).toBeNull();
+  });
+
+  it("still quotes a salaried offer in LPA", async () => {
+    show(offer({ driveType: "placement", offerCategory: "dream", ctcLpa: 8 }));
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    expect(within(offers).getByText(/₹8 LPA/)).toBeDefined();
+  });
+
+  it("never prints ₹0 for an offer whose pay was never recorded", async () => {
+    show(offer({ driveType: "placement", offerCategory: "dream", ctcLpa: null }));
+
+    const offers = await screen.findByRole("region", { name: /my offers/i });
+    expect(within(offers).getByText(/Pay not recorded/)).toBeDefined();
+    expect(within(offers).queryByText(/₹0/)).toBeNull();
+  });
+});

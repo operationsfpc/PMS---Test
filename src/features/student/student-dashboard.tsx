@@ -9,8 +9,9 @@ import {
 } from "@domain/attendance";
 import { condenseNotifications } from "@domain/notifications";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
+import { describeOfferPay } from "@domain/offer-pay";
 import { type ApplicantRound, applicationProgress, studentPrompt } from "@domain/student-progress";
-import type { OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
+import type { DriveType, OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -31,11 +32,14 @@ export interface StudentApplicationRow {
 
 export interface StudentOfferRow {
   readonly offerId: string;
+  /** 0070: which of the two figures this offer carries depends on the type. */
+  readonly driveType?: DriveType;
+  readonly stipendMonthly?: number | null;
   /** Null for a self-placed offer, which belongs to no drive of ours. */
   readonly driveId?: string | null;
   readonly companyName: string;
   readonly roleTitle: string | null;
-  readonly ctcLpa: number;
+  readonly ctcLpa: number | null;
   readonly offerCategory: OfferCategory | null;
   readonly declaredAt: string;
   readonly source: OfferSource;
@@ -373,7 +377,16 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                       <p className="text-sm text-ink-500">{offer.roleTitle}</p>
                     )}
                     <p className="mt-1 text-sm text-ink-700">
-                      ₹{offer.ctcLpa} LPA · Declared {onDate(offer.declaredAt)}
+                      {/* 2026-08-27: an internship is paid monthly. This line
+                          told a student their ₹15,000-a-month internship was
+                          worth ₹10 LPA, because the declare box demanded a
+                          CTC and somebody had to type one. */}
+                      {describeOfferPay({
+                        driveType: offer.driveType ?? "placement",
+                        ctcLpa: offer.ctcLpa,
+                        stipendMonthly: offer.stipendMonthly ?? null,
+                      })}{" "}
+                      · Declared {onDate(offer.declaredAt)}
                     </p>
                     {/* UAT 2026-08-27: the letter the CPC attached. Filed
                         since 0062, shown to the student since never. */}

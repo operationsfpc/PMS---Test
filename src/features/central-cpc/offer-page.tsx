@@ -1,5 +1,6 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import type { OfferCategory } from "@domain/offer-category";
+import { offerCountsAsPackage, offerPayProblem } from "@domain/offer-pay";
 import type { DriveType } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import type { DeclaredOffer } from "./offers-repository";
@@ -12,6 +13,12 @@ export interface OfferDrive {
   readonly offerCategory: OfferCategory | null;
   /** The drive's ctc_max ?? ctc_min, used only to pre-fill (A16). */
   readonly suggestedCtcLpa: number;
+  /**
+   * The drive's stipend, used to pre-fill an INTERNSHIP offer (2026-08-27).
+   * A plain internship has no CTC to suggest, and the box that demanded one
+   * is what recorded ₹10 LPA against ₹15,000 a month.
+   */
+  readonly suggestedStipendMonthly?: number | null;
 }
 
 export interface OfferCandidate {
@@ -37,15 +44,19 @@ export interface OfferView {
 /**
  * Declaring the final selection.
  *
- * This is an explicit act, not an inference from the last round. The CTC is
+ * This is an explicit act, not an inference from the last round. The figure is
  * pre-filled from the drive but editable per student (A16), because the
  * per-student figure is what R9 uses to resolve the placement record - a range
  * on the PIF is not what the student was actually offered.
+ *
+ * WHICH figure depends on the drive (Karthik, 2026-08-27, "option 1"): a plain
+ * internship is paid a monthly stipend and everything else an annual CTC. The
+ * screen asks for one of them, never both, and the domain decides which.
  */
 export function OfferPage({ driveId, view }: { driveId: string; view: OfferView }) {
   const [drive, setDrive] = useState<OfferDrive | null>(null);
   const [candidates, setCandidates] = useState<readonly OfferCandidate[] | null>(null);
-  const [ctc, setCtc] = useState<Record<string, string>>({});
+  const [pay, setPay] = useState<Record<string, string>>({});
   const [letters, setLetters] = useState<Record<string, File | null>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -56,10 +67,14 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
     ]);
     setDrive(loadedDrive);
     setCandidates(loadedCandidates);
-    setCtc((current) => {
+    const salaried = offerCountsAsPackage(loadedDrive.driveType);
+    const suggestion = salaried
+      ? loadedDrive.suggestedCtcLpa
+      : (loadedDrive.suggestedStipendMonthly ?? 0);
+    setPay((current) => {
       const next = { ...current };
       for (const candidate of loadedCandidates) {
-        next[candidate.studentId] ??= String(loadedDrive.suggestedCtcLpa);
+        next[candidate.studentId] ??= suggestion > 0 ? String(suggestion) : "";
       }
       return next;
     });
@@ -73,9 +88,17 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
     if (drive === null) return;
     setError(null);
 
-    const value = Number(ctc[candidate.studentId] ?? "");
-    if (!Number.isFinite(value) || value <= 0) {
-      setError(`Enter a valid CTC in LPA for ${candidate.studentName}.`);
+    const salaried = offerCountsAsPackage(drive.driveType);
+    const typed = (pay[candidate.studentId] ?? "").trim();
+    const value = typed === "" ? null : Number(typed);
+    const ctcLpa = salaried ? value : null;
+    const stipendMonthly = salaried ? null : value;
+
+    // The domain's guard, which mirrors the database constraint. It names the
+    // figure that is missing rather than the one this screen happens to show.
+    const problem = offerPayProblem({ driveType: drive.driveType, ctcLpa, stipendMonthly });
+    if (problem !== null) {
+      setError(`${problem} (${candidate.studentName})`);
       return;
     }
 
@@ -87,7 +110,8 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
         roleTitle: drive.roleTitle,
         driveType: drive.driveType,
         offerCategory: drive.offerCategory,
-        ctcLpa: value,
+        ctcLpa,
+        stipendMonthly,
         // Spec B: the letter travels with the declaration when one was chosen.
         letter: letters[candidate.studentId] ?? null,
       });
@@ -203,18 +227,24 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                         }
                       />
                     </div>
+                    {/* 2026-08-27: one figure, chosen by the drive. An
+                        internship is paid monthly and a salary annually, and
+                        offering both boxes is how ₹10 LPA came to describe
+                        ₹15,000 a month. */}
                     <div>
                       <label
-                        htmlFor={`ctc-${candidate.studentId}`}
+                        htmlFor={`pay-${candidate.studentId}`}
                         className="mb-1 block text-xs font-medium text-ink-700"
                       >
-                        CTC (LPA)
+                        {drive !== null && offerCountsAsPackage(drive.driveType)
+                          ? "CTC (LPA)"
+                          : "Stipend (\u20b9 / month)"}
                       </label>
                       <input
-                        id={`ctc-${candidate.studentId}`}
+                        id={`pay-${candidate.studentId}`}
                         inputMode="decimal"
-                        value={ctc[candidate.studentId] ?? ""}
-                        onChange={(e) => setCtc({ ...ctc, [candidate.studentId]: e.target.value })}
+                        value={pay[candidate.studentId] ?? ""}
+                        onChange={(e) => setPay({ ...pay, [candidate.studentId]: e.target.value })}
                         className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm"
                       />
                     </div>

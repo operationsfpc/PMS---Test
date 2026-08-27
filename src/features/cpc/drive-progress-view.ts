@@ -56,7 +56,7 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
             .in("application_id", applicationIds),
           client
             .from("offers")
-            .select("student_id, drive_id, ctc_lpa, offer_category")
+            .select("student_id, drive_id, ctc_lpa, stipend_monthly, drive_type, offer_category")
             .in("student_id", studentIds),
         ]);
 
@@ -76,7 +76,9 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
         ((offers ?? []) as Array<Record<string, unknown>>).map((o) => [
           `${o.student_id}:${o.drive_id}`,
           {
-            ctcLpa: Number(o.ctc_lpa),
+            ctcLpa: (o.ctc_lpa as number | null) === null ? null : Number(o.ctc_lpa),
+            stipendMonthly: (o.stipend_monthly as number | null) ?? null,
+            driveType: (o.drive_type as DriveType | null) ?? "placement",
             offerCategory: (o.offer_category as string | null) ?? null,
           },
         ]),

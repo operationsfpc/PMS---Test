@@ -27,7 +27,7 @@ export function createSupabaseOfferView(
       const { data } = await client
         .from("drives")
         .select(
-          "id, company_name, role_title, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa",
+          "id, company_name, role_title, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly",
         )
         .eq("id", driveId)
         .single();
@@ -43,6 +43,12 @@ export function createSupabaseOfferView(
         // A16: pre-fill only. The per-student figure is what R9 reads.
         suggestedCtcLpa:
           (row.ctc_max_lpa as number | null) ?? (row.ctc_min_lpa as number | null) ?? 0,
+        // 0070: the same courtesy for an internship, which has no CTC to
+        // suggest and whose declare box used to insist on one anyway.
+        suggestedStipendMonthly:
+          (row.stipend_max_monthly as number | null) ??
+          (row.stipend_min_monthly as number | null) ??
+          null,
       } satisfies OfferDrive;
     },
 

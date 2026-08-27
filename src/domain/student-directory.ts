@@ -24,7 +24,8 @@ import type { OfferSource, ParticipationStatus, SrfStatus } from "./types";
 export interface DirectoryPlacement {
   readonly companyName: string;
   readonly roleTitle: string | null;
-  readonly ctcLpa: number;
+  /** Null when the offer records no annual figure (0070). */
+  readonly ctcLpa: number | null;
   readonly offerCategory: OfferCategory | null;
   /**
    * C1 (UAT 2026-08-19): a self-placed student IS placed here. The source is
@@ -184,7 +185,12 @@ export function filterDirectory(
     // An unplaced student holds no package and no category, so a drill-down
     // into either excludes them - never matches them on a missing value.
     if (ctc !== undefined) {
-      if (student.placement === null || !sameMoney(student.placement.ctcLpa, ctc)) return false;
+      // A placement with no annual figure (an internship's stipend, 0070)
+      // matches no CTC drill-down, for the same reason an unplaced student
+      // does not: there is no package to compare, and treating the absence as
+      // zero would file them under "₹0 LPA".
+      const held = student.placement?.ctcLpa ?? null;
+      if (held === null || !sameMoney(held, ctc)) return false;
     }
 
     if (category !== undefined) {

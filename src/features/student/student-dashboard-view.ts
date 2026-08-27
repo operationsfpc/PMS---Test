@@ -10,6 +10,7 @@ import type {
   StudentApplicationRow,
   StudentDashboardSnapshot,
   StudentDashboardView,
+  StudentOfferRow,
 } from "./student-dashboard";
 
 export class StudentDashboardError extends Error {}
@@ -203,7 +204,9 @@ export function createSupabaseStudentDashboardView(
             driveId: (offer.drive_id as string | null) ?? null,
             companyName: (offer.company_name as string | null) ?? "Unnamed company",
             roleTitle: (offer.role_title as string | null) ?? null,
-            ctcLpa: num(offer.ctc_lpa),
+            driveType: (offer.drive_type as StudentOfferRow["driveType"]) ?? "placement",
+            ctcLpa: (offer.ctc_lpa as number | null) === null ? null : num(offer.ctc_lpa),
+            stipendMonthly: (offer.stipend_monthly as number | null) ?? null,
             offerCategory: (offer.offer_category as OfferCategory | null) ?? null,
             declaredAt: offer.declared_at as string,
             source: (offer.source as OfferSource | null) ?? "on_campus",
@@ -279,4 +282,4 @@ export const NOTIFICATION_COLUMNS = "id, kind, title, body, created_at, read_at,
 
 /** Exported for the same reason — the offer columns a student may read. */
 export const STUDENT_OFFER_COLUMNS =
-  "id, drive_id, company_name, role_title, ctc_lpa, offer_category, declared_at, source, attachment_path, attachment_name";
+  "id, drive_id, company_name, role_title, ctc_lpa, stipend_monthly, drive_type, offer_category, declared_at, source, attachment_path, attachment_name";
