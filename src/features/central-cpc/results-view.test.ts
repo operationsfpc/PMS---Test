@@ -23,11 +23,27 @@ const attendee = (applicationId: string, name: string, roll: string, status = "p
   applications: { students: { full_name: name, roll_number: roll } },
 });
 
-function stub(opts: { attendance?: unknown[]; results?: unknown[]; recordFails?: boolean } = {}) {
+function stub(
+  opts: {
+    attendance?: unknown[];
+    results?: unknown[];
+    slots?: unknown[];
+    recordFails?: boolean;
+  } = {},
+) {
   const writes: unknown[] = [];
 
   server.use(
     http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
+    /**
+     * 2026-08-26: `participants()` has read `round_participants` since F5 gave
+     * each student their own slot, and this helper never answered it. With
+     * `onUnhandledRequest: "error"` the call still went out to the network and
+     * every test in this file paid ~7 SECONDS waiting for it — which is why
+     * the suite looked like it was hanging on a loaded machine. A test must
+     * not touch the network to pass.
+     */
+    http.get(`${BASE}/rest/v1/round_participants`, () => HttpResponse.json(opts.slots ?? [])),
     http.get(`${BASE}/rest/v1/round_results`, () => HttpResponse.json(opts.results ?? [])),
     http.post(`${BASE}/rest/v1/round_results`, async ({ request }) => {
       writes.push(await request.clone().json());
