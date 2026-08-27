@@ -91,11 +91,11 @@ const UNSAFE_IN_FILENAME = /[\\/:*?"<>|]/g;
  */
 const withoutControlCharacters = (raw: string) =>
   Array.from(raw)
-    .map((character) => {
-      const code = character.codePointAt(0) ?? 32;
-      if (code >= 32) return character;
-      return character === "\t" ? " " : "";
-    })
+    // A pasted tab becomes the space it looks like; every other control
+    // character is dropped. `Number(undefined)` is NaN, which is not >= 32,
+    // so no unreachable fallback has to be invented for an empty character.
+    .map((character) => (character === "\t" ? " " : character))
+    .filter((character) => Number(character.codePointAt(0)) >= 32)
     .join("");
 
 function safeSegment(raw: string, replacement: string): string {

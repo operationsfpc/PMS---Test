@@ -20,11 +20,27 @@ function toDatetimeLocal(iso: string | null): string | null {
   return ist.toISOString().slice(0, 16);
 }
 
-/** The reverse: what the input holds, stamped as IST. */
-const fromDatetimeLocal = (value: string | null): string | null =>
-  value === null || value === "" ? null : `${value}:00+05:30`;
-
 export class ResultsViewError extends Error {}
+
+/**
+ * The reverse: what the input holds, stamped as IST.
+ *
+ * UAT 2026-08-27 (live): a CSV time of `1pm` came through here untouched and
+ * was sent as `1pm:00+05:30`. Postgres refused every row, and the only
+ * wording the upload screen had for a refused row was "no participant carries
+ * these roll numbers" — so two students who were plainly in the round were
+ * blamed for a malformed timestamp. The shape is now checked before it is
+ * stamped: nothing is written, and the message names the real cause.
+ */
+const fromDatetimeLocal = (value: string | null): string | null => {
+  if (value === null || value === "") return null;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) {
+    throw new ResultsViewError(
+      `"${value}" is not a date and time this round can store. Write it as 2026-09-01 13:00.`,
+    );
+  }
+  return `${value}:00+05:30`;
+};
 
 /**
  * Feeds the round-results screen.

@@ -612,6 +612,23 @@ describe("assignSlots", () => {
     expect(inserted).toEqual([]);
     expect(updated).toEqual([]);
   });
+
+  /**
+   * UAT 2026-08-27 (live): `1pm` in the file was stamped as `1pm:00+05:30`,
+   * Postgres refused every row, and the screen — whose only wording for a
+   * refused write is a roll-number mismatch — accused two students of not
+   * being in their own round. The domain now parses that column, so a time
+   * arriving here unparsed is a programming error: say so, and write nothing.
+   */
+  it("refuses to send a time it cannot stamp, instead of blaming the student", async () => {
+    const { inserted, updated } = slotStub({ existing: ["a1"] });
+
+    await expect(
+      view().assignSlots("r1", [{ ...assignment("a1", "BCA2023156"), scheduledAt: "1pm" }]),
+    ).rejects.toThrow(/time/i);
+    expect(updated).toEqual([]);
+    expect(inserted).toEqual([]);
+  });
 });
 
 /**
@@ -653,5 +670,13 @@ describe("setParticipantSlot", () => {
     await view().setParticipantSlot("r1", "a-missing", "https://meet.google.com/abc", null);
 
     expect(inserted).toHaveLength(1);
+  });
+
+  it("refuses a time it cannot stamp, rather than sending Postgres nonsense", async () => {
+    stubSlot({ existing: ["a1"] });
+
+    await expect(
+      view().setParticipantSlot("r1", "a1", "https://meet.google.com/abc", "1pm"),
+    ).rejects.toThrow(/time/i);
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -1130,7 +1130,11 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
     expect(download).toHaveBeenCalledTimes(1);
     const [filename, text] = download.mock.calls[0] as [string, string];
     expect(filename).toMatch(/\.csv$/);
-    expect(text).toBe("roll_number,meeting_link,scheduled_at\nBCA2023156,,\n124,,\n");
+    // The header states the date format — the only instruction that travels
+    // with the file into Excel.
+    expect(text).toBe(
+      "roll_number,meeting_link,date (dd-mm-yyyy),time (hh:mm)\nBCA2023156,,,\n124,,,\n",
+    );
   });
 
   it("matches the roll numbers the screen is showing — the live bug", async () => {
@@ -1234,5 +1238,79 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/124/);
     expect(alert.textContent).toMatch(/0 links assigned/i);
+  });
+
+  /**
+   * UAT 2026-08-27 (live, `docs/inbox/WhatsApp Image 2026-08-27 at 13.51.34.jpeg`):
+   * the same file uploaded with `1pm` in the time column produced "No
+   * participant in this round carries these roll numbers: BCA2023156, 124. 0
+   * links assigned." — both were in the round. `1pm` reached Postgres as
+   * `1pm:00+05:30`; every write failed and the failure was reported as a
+   * roll-number mismatch. Without the time column the same file worked.
+   */
+  describe("the time column", () => {
+    const SCHEDULED = ROUNDS.map((round) => ({ ...round, scheduledAt: "2026-08-27T13:42" }));
+
+    it("reads a clock time against the round's own day", async () => {
+      const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
+      const user = userEvent.setup();
+      routed(
+        <DriveRoundsPage
+          driveId="d1"
+          view={detailView({ assignSlots, rounds: async () => SCHEDULED })}
+        />,
+      );
+
+      await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+      await user.upload(
+        screen.getByLabelText(/per-student links/i),
+        csv("roll_number,meeting_link,scheduled_at\n124, https://meet.google.com/def,1pm"),
+      );
+
+      await waitFor(() => expect(assignSlots).toHaveBeenCalled());
+      const [, assignments] = assignSlots.mock.calls[0] as [string, { scheduledAt: string }[]];
+      expect(assignments[0]?.scheduledAt).toBe("2026-08-27T13:00");
+    });
+
+    it("blames the time, not the students, when the time cannot be read", async () => {
+      const assignSlots = vi.fn();
+      const user = userEvent.setup();
+      routed(
+        <DriveRoundsPage
+          driveId="d1"
+          view={detailView({ assignSlots, rounds: async () => SCHEDULED })}
+        />,
+      );
+
+      await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+      await user.upload(
+        screen.getByLabelText(/per-student links/i),
+        csv("roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,after lunch"),
+      );
+
+      const alert = await screen.findByRole("alert");
+      expect(alert.textContent).toMatch(/line 2/i);
+      expect(alert.textContent).not.toMatch(/carries these roll numbers/i);
+      expect(assignSlots).not.toHaveBeenCalled();
+    });
+
+    it("uses the date being typed into the round, not only the saved one", async () => {
+      const assignSlots = vi.fn().mockResolvedValue({ matched: 1, unmatched: [] });
+      const user = userEvent.setup();
+      routed(<DriveRoundsPage driveId="d1" view={detailView({ assignSlots })} />);
+
+      await user.click(await screen.findByRole("button", { name: /edit round details/i }));
+      fireEvent.change(screen.getByLabelText(/scheduled at/i), {
+        target: { value: "2026-09-04T09:00" },
+      });
+      await user.upload(
+        screen.getByLabelText(/per-student links/i),
+        csv("roll_number,meeting_link,scheduled_at\n124,https://meet.google.com/def,10:30"),
+      );
+
+      await waitFor(() => expect(assignSlots).toHaveBeenCalled());
+      const [, assignments] = assignSlots.mock.calls[0] as [string, { scheduledAt: string }[]];
+      expect(assignments[0]?.scheduledAt).toBe("2026-09-04T10:30");
+    });
   });
 });

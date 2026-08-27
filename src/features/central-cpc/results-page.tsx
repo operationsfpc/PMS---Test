@@ -2,6 +2,7 @@ import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
 import {
   buildMeetingSlotsTemplate,
+  MEETING_SLOTS_HEADER,
   matchMeetingSlots,
   parseMeetingSlotsCsv,
   type SlotAssignment,
@@ -627,12 +628,21 @@ export function DriveRoundsPage({
    * that were printed on the screen underneath it. Matching now happens HERE,
    * against `participants` — the very list being rendered — so the screen and
    * the matcher cannot disagree again.
+   *
+   * UAT 2026-08-27 (live): the same file, with `1pm` in the time column, was
+   * refused with that same roll-number wording — the times were reaching
+   * Postgres unparsed. The parser is given the round's DAY (the one in the
+   * form, which may not be saved yet), so `1pm` means one o'clock on the day
+   * of the round, and a time it cannot read is named by line before a single
+   * link is sent.
    */
   async function uploadSlots(file: File) {
     if (activeRound === null) return;
     setError(null);
     setNotice(null);
-    const { slots, problems } = parseMeetingSlotsCsv(await file.text());
+    const { slots, problems } = parseMeetingSlotsCsv(await file.text(), {
+      roundDate: detailsDraft.scheduledAt ?? activeRound.scheduledAt,
+    });
     if (problems.length > 0) {
       setError(problems.join(" "));
       return;
@@ -961,7 +971,7 @@ export function DriveRoundsPage({
                 <div className="sm:col-span-3 flex flex-wrap items-end justify-between gap-3">
                   <div className="flex flex-col gap-2">
                     <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                      Upload per-student links (CSV: roll_number,meeting_link,scheduled_at)
+                      Upload per-student links (CSV: {MEETING_SLOTS_HEADER})
                       <input
                         type="file"
                         accept=".csv,text/csv"
@@ -982,8 +992,9 @@ export function DriveRoundsPage({
                       </Button>
                       <span className="text-xs text-ink-500">
                         Pre-filled with this round&rsquo;s {(participants ?? []).length}{" "}
-                        {(participants ?? []).length === 1 ? "student" : "students"} — add a link
-                        against each roll number and upload it back.
+                        {(participants ?? []).length === 1 ? "student" : "students"} — add a link, a
+                        date and a time against each roll number and upload it back. Leave the date
+                        blank to use this round&rsquo;s own date.
                       </span>
                     </span>
                   </div>
