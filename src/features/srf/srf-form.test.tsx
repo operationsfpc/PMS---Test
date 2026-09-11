@@ -786,3 +786,77 @@ describe("what the SRF does with preferences and resumes", () => {
     expect(await screen.findByText(/a sales resume is required/i)).toBeDefined();
   });
 });
+
+describe("dropdown synchronization and label validation", () => {
+  it("dropdown values correctly replace previously selected values and sanitize obsolete conditional fields", async () => {
+    signedIn();
+    const sent: unknown[] = [];
+    studentsPatch(async () =>
+      HttpResponse.json([{ student_id: "s1", srf_status: "srf_submitted" }]),
+    );
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, async ({ request }) => {
+        sent.push(await request.json());
+        return HttpResponse.json([{ student_id: "s1", srf_status: "srf_submitted" }]);
+      }),
+    );
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    // Switch to state board and pick Kerala
+    await user.selectOptions(screen.getByLabelText(/10th board/i), "state_board");
+    await user.selectOptions(screen.getByLabelText(/which state's board/i), "Kerala");
+
+    // Change mind and switch to CBSE - stale state must be removed
+    await user.selectOptions(screen.getByLabelText(/10th board/i), "cbse");
+    expect(screen.queryByLabelText(/which state's board/i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    await waitFor(() => expect(sent).toHaveLength(1));
+    const payload = (sent[0] as { p_student: Record<string, unknown> }).p_student;
+    expect(payload.tenth_board).toBe("cbse");
+    expect(payload.tenth_board_state).toBeNull();
+  });
+
+  it("highlights field label when invalid or empty and clears highlighting when corrected", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    const mobileInput = screen.getByLabelText(/mobile number/i);
+    const mobileLabel = mobileInput.closest("div")?.querySelector("label");
+    expect(mobileLabel?.className).toContain("text-danger-700");
+    expect(mobileLabel?.textContent).toContain("Invalid");
+
+    // Correcting the field clears the error and label styling
+    await user.type(mobileInput, "9876543210");
+    await waitFor(() => {
+      expect(mobileLabel?.className).not.toContain("text-danger-700");
+      expect(mobileLabel?.textContent).not.toContain("Invalid");
+    });
+  });
+
+  it("changing college marks scale immediately triggers revalidation", async () => {
+    const user = setup();
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} />);
+    await fillValidForm(user);
+
+    const semResult = screen.getByLabelText(/semester 1 result/i);
+    await user.clear(semResult);
+    await user.type(semResult, "85");
+
+    // Switch scale to percentage - 85 is valid
+    await user.selectOptions(screen.getByLabelText(/how does your college report marks/i), "percentage");
+    expect(screen.queryByText(/10-point scale/i)).toBeNull();
+
+    // Switch scale back to CGPA - 85 is immediately invalid and flagged
+    await user.selectOptions(screen.getByLabelText(/how does your college report marks/i), "cgpa");
+    const errorsFound = await screen.findAllByText(/10-point scale/i);
+    expect(errorsFound.length).toBeGreaterThan(0);
+  });
+});
+

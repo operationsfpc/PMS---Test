@@ -4,6 +4,7 @@ import {
   Field,
   FileField,
   FormSection as Section,
+  getControlClass,
   TextField,
 } from "@components/form";
 import { MAX_SEMESTERS } from "@domain/academics";
@@ -65,23 +66,43 @@ export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
  */
 const ScaleSelect = forwardRef<
   HTMLSelectElement,
-  { label: string } & SelectHTMLAttributes<HTMLSelectElement>
->(function ScaleSelect({ label, ...props }, ref) {
+  { label: string; error?: string | undefined } & SelectHTMLAttributes<HTMLSelectElement>
+>(function ScaleSelect({ label, error, ...props }, ref) {
   const id = useId();
+  const hasError = error !== undefined && error.trim() !== "";
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink-700">
-        {label}
+      <label
+        htmlFor={id}
+        className={`mb-1.5 block text-sm transition-colors ${
+          hasError ? "font-semibold text-danger-700" : "font-medium text-ink-700"
+        }`}
+      >
+        <span>{label}</span>
+        {hasError && (
+          <span
+            aria-hidden="true"
+            className="ml-2 inline-flex items-center rounded bg-danger-100 px-1.5 py-0.5 text-[11px] font-bold text-danger-800"
+          >
+            Invalid
+          </span>
+        )}
       </label>
       <select
         id={id}
         ref={ref}
-        className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-ink-900"
+        aria-invalid={hasError ? true : undefined}
+        className={getControlClass(hasError, "w-full rounded-lg px-3 py-2.5 text-sm")}
         {...props}
       >
         <option value="cgpa">CGPA (out of 10)</option>
         <option value="percentage">Cumulative percentage (%)</option>
       </select>
+      {hasError && (
+        <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
+          {error}
+        </p>
+      )}
     </div>
   );
 });
@@ -96,19 +117,49 @@ const ScaleSelect = forwardRef<
  */
 const BoardSelect = forwardRef<
   HTMLSelectElement,
-  { label: string; level: SchoolLevel } & SelectHTMLAttributes<HTMLSelectElement>
->(function BoardSelect({ label, level, ...props }, ref) {
+  {
+    label: string;
+    level: SchoolLevel;
+    error?: string | undefined;
+    required?: boolean | undefined;
+  } & SelectHTMLAttributes<HTMLSelectElement>
+>(function BoardSelect({ label, level, error, required = true, ...props }, ref) {
   const id = useId();
+  const hasError = error !== undefined && error.trim() !== "";
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-ink-700">
-        {label}
-        <span className="ml-0.5 text-danger-500" aria-hidden="true">
-          *
-        </span>
-        <span className="sr-only"> (required)</span>
+      <label
+        htmlFor={id}
+        className={`mb-1.5 block text-sm transition-colors ${
+          hasError ? "font-semibold text-danger-700" : "font-medium text-ink-700"
+        }`}
+      >
+        <span>{label}</span>
+        {required && (
+          <>
+            <span className="ml-0.5 text-danger-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </>
+        )}
+        {hasError && (
+          <span
+            aria-hidden="true"
+            className="ml-2 inline-flex items-center rounded bg-danger-100 px-1.5 py-0.5 text-[11px] font-bold text-danger-800"
+          >
+            Invalid
+          </span>
+        )}
       </label>
-      <select id={id} ref={ref} className={controlClass} {...props}>
+      <select
+        id={id}
+        ref={ref}
+        aria-required={required ? true : undefined}
+        aria-invalid={hasError ? true : undefined}
+        className={getControlClass(hasError)}
+        {...props}
+      >
         <option value="">Select…</option>
         {SCHOOL_BOARDS.map((board) => (
           <option key={board} value={board}>
@@ -116,6 +167,11 @@ const BoardSelect = forwardRef<
           </option>
         ))}
       </select>
+      {hasError && (
+        <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
+          {error}
+        </p>
+      )}
     </div>
   );
 });
@@ -194,6 +250,7 @@ export function SrfPage({
     watch,
     setValue,
     getValues,
+    trigger,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<SrfFormValues>({
     resolver: zodResolver(srfSchema),
@@ -253,6 +310,133 @@ export function SrfPage({
    */
   const tenthBoard = watch("tenthBoard");
   const twelfthBoard = watch("twelfthBoard");
+
+  const handleTenthBoardChange = (newBoard: string) => {
+    setValue("tenthBoard", newBoard, { shouldValidate: true, shouldDirty: true });
+    if (newBoard !== "state_board") {
+      setValue("tenthBoardState", "", { shouldValidate: true, shouldDirty: true });
+    }
+    if (newBoard !== "other") {
+      setValue("tenthBoardOther", "", { shouldValidate: true, shouldDirty: true });
+    }
+    if (newBoard !== "cambridge" && newBoard !== "other") {
+      setValue("tenthGrade", "", { shouldValidate: true, shouldDirty: true });
+    }
+    void trigger([
+      "tenthBoard",
+      "tenthBoardState",
+      "tenthBoardOther",
+      "tenthGrade",
+      "tenthPercentage",
+    ]);
+  };
+
+  const handleTwelfthBoardChange = (newBoard: string) => {
+    setValue("twelfthBoard", newBoard, { shouldValidate: true, shouldDirty: true });
+    if (newBoard !== "state_board") {
+      setValue("twelfthBoardState", "", { shouldValidate: true, shouldDirty: true });
+    }
+    if (newBoard !== "other") {
+      setValue("twelfthBoardOther", "", { shouldValidate: true, shouldDirty: true });
+    }
+    if (newBoard !== "cambridge" && newBoard !== "other") {
+      setValue("twelfthGrade", "", { shouldValidate: true, shouldDirty: true });
+    }
+    void trigger([
+      "twelfthBoard",
+      "twelfthBoardState",
+      "twelfthBoardOther",
+      "twelfthGrade",
+      "twelfthPercentage",
+    ]);
+  };
+
+  const handleProgrammeLevelChange = (value: "ug" | "pg") => {
+    setValue("programmeLevel", value, { shouldValidate: true, shouldDirty: true });
+    if (value === "ug") {
+      setValue("ugDegree", "", { shouldValidate: true, shouldDirty: true });
+      setValue("ugCollege", "", { shouldValidate: true, shouldDirty: true });
+      setValue("ugBranch", "", { shouldValidate: true, shouldDirty: true });
+      setValue("ugAggregate", null, { shouldValidate: true, shouldDirty: true });
+      setValue("ugAggregateScale", "cgpa", { shouldValidate: true, shouldDirty: true });
+      const currentSheets = (getValues("marksheets") as Record<string, File> | undefined) ?? {};
+      const nextSheets = { ...currentSheets };
+      delete nextSheets.ug_consolidated;
+      setValue("marksheets", nextSheets, { shouldValidate: true, shouldDirty: true });
+      setValue("semesters", semesters.slice(0, MAX_SEMESTERS.ug), {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+    } else {
+      const sliced = semesters.slice(0, MAX_SEMESTERS.pg);
+      setValue("semesters", sliced, { shouldValidate: true, shouldDirty: true });
+      const currentSheets = (getValues("marksheets") as Record<string, File> | undefined) ?? {};
+      const nextSheets = { ...currentSheets };
+      for (let i = MAX_SEMESTERS.pg + 1; i <= 10; i++) {
+        delete nextSheets[`semester-${i}`];
+      }
+      setValue("marksheets", nextSheets, { shouldValidate: true, shouldDirty: true });
+    }
+    void trigger([
+      "programmeLevel",
+      "ugDegree",
+      "ugCollege",
+      "ugBranch",
+      "ugAggregate",
+      "semesters",
+      "marksheets",
+    ]);
+  };
+
+  const handleCollegeMarksScaleChange = async (newScale: string) => {
+    setValue("collegeMarksScale", newScale as "cgpa" | "percentage", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    const currentSemesters = getValues("semesters") ?? [];
+    const marksFields = currentSemesters.map((_, i) => `semesters.${i}.marks` as const);
+    await trigger([...marksFields, "semesters"]);
+  };
+
+  const handleDiplomaMarksScaleChange = (newScale: string) => {
+    setValue("diplomaMarksScale", newScale as "cgpa" | "percentage", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    void trigger("diplomaMarks");
+  };
+
+  const handleUgAggregateScaleChange = (newScale: string) => {
+    setValue("ugAggregateScale", newScale as "cgpa" | "percentage", {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+    void trigger("ugAggregate");
+  };
+
+  const handleRemoveSemester = (index: number) => {
+    const currentSheets = (getValues("marksheets") as Record<string, File> | undefined) ?? {};
+    const updatedSemesters = semesters
+      .filter((_, i) => i !== index)
+      .map((s, i) => ({ ...s, semesterNumber: i + 1 }));
+    setValue("semesters", updatedSemesters, { shouldValidate: true, shouldDirty: true });
+
+    const nextSheets = { ...currentSheets };
+    delete nextSheets[`semester-${semesters.length}`];
+    for (let i = index; i < updatedSemesters.length; i++) {
+      const oldKey = `semester-${i + 2}`;
+      const newKey = `semester-${i + 1}`;
+      const oldVal = currentSheets[oldKey];
+      if (oldVal !== undefined) {
+        nextSheets[newKey] = oldVal;
+      } else {
+        delete nextSheets[newKey];
+      }
+    }
+    delete nextSheets[`semester-${semesters.length}`];
+    setValue("marksheets", nextSheets, { shouldValidate: true, shouldDirty: true });
+    void trigger(["semesters", "marksheets"]);
+  };
   const otherProfiles = useFieldArray({ control, name: "otherProfiles" });
   /**
    * F17: a certificate is a NAME and a FILE. The free-text "Certifications"
@@ -675,44 +859,53 @@ export function SrfPage({
               >
                 <div className={grid}>
                   <div>
-                    <TextField label="Full name" required {...register("fullName")} />
-                    <ErrorText>{errors.fullName?.message}</ErrorText>
+                    <TextField
+                      label="Full name"
+                      required
+                      error={errors.fullName?.message}
+                      {...register("fullName")}
+                    />
                   </div>
                   <div>
                     <TextField label="Roll number" required disabled {...register("rollNumber")} />
                   </div>
                   <div>
-                    <TextField label="Email ID" type="email" required {...register("email")} />
-                    <ErrorText>{errors.email?.message}</ErrorText>
+                    <TextField
+                      label="Email ID"
+                      type="email"
+                      required
+                      error={errors.email?.message}
+                      {...register("email")}
+                    />
                   </div>
                   <div>
                     <TextField
                       label="Mobile number"
                       type="tel"
                       required
+                      error={errors.mobile?.message}
                       placeholder="10-digit mobile"
                       {...register("mobile")}
                     />
-                    <ErrorText>{errors.mobile?.message}</ErrorText>
                   </div>
                   <div>
                     <TextField
                       label="WhatsApp number"
                       type="tel"
+                      error={errors.whatsapp?.message}
                       placeholder="If different"
                       {...register("whatsapp")}
                     />
-                    <ErrorText>{errors.whatsapp?.message}</ErrorText>
                   </div>
                   <div>
                     <TextField
                       label="Alternate contact number"
                       type="tel"
                       required
+                      error={errors.alternateContact?.message}
                       hint="A number that reaches you if your main one does not."
                       {...register("alternateContact")}
                     />
-                    <ErrorText>{errors.alternateContact?.message}</ErrorText>
                   </div>
                 </div>
               </Section>
@@ -733,26 +926,38 @@ export function SrfPage({
                       <TextField
                         label="10th school name"
                         required
+                        error={errors.tenthInstitution?.message}
                         placeholder="School you did your 10th at"
                         {...register("tenthInstitution")}
                       />
-                      <ErrorText>{errors.tenthInstitution?.message}</ErrorText>
                     </div>
                     {/* The board comes with the school that issued the marks
                     (2026-08-18), because a coordinator verifies both against
                     the one document. */}
                     <div>
-                      <BoardSelect label="10th board" level="tenth" {...register("tenthBoard")} />
-                      <ErrorText>{errors.tenthBoard?.message}</ErrorText>
+                      <BoardSelect
+                        label="10th board"
+                        level="tenth"
+                        error={errors.tenthBoard?.message}
+                        {...register("tenthBoard", {
+                          onChange: (e) => handleTenthBoardChange(e.target.value),
+                        })}
+                      />
                     </div>
                     {tenthBoard === "state_board" && (
                       <div>
-                        <Field label="Which state's board?" required>
+                        <Field
+                          label="Which state's board?"
+                          required
+                          error={errors.tenthBoardState?.message}
+                        >
                           {(id) => (
                             <select
                               id={id}
-                              className={controlClass}
-                              {...register("tenthBoardState")}
+                              className={getControlClass(Boolean(errors.tenthBoardState))}
+                              {...register("tenthBoardState", {
+                                onChange: () => void trigger("tenthBoardState"),
+                              })}
                             >
                               <option value="">Select…</option>
                               {INDIAN_STATES.map((state) => (
@@ -763,7 +968,6 @@ export function SrfPage({
                             </select>
                           )}
                         </Field>
-                        <ErrorText>{errors.tenthBoardState?.message}</ErrorText>
                       </div>
                     )}
                     {tenthBoard === "other" && (
@@ -771,10 +975,10 @@ export function SrfPage({
                         <TextField
                           label="Name the 10th board"
                           required
+                          error={errors.tenthBoardOther?.message}
                           placeholder="As it appears on the marksheet"
                           {...register("tenthBoardOther")}
                         />
-                        <ErrorText>{errors.tenthBoardOther?.message}</ErrorText>
                       </div>
                     )}
                     {(tenthBoard === "cambridge" || tenthBoard === "other") && (
@@ -782,10 +986,10 @@ export function SrfPage({
                         <TextField
                           label="10th grade"
                           required
+                          error={errors.tenthGrade?.message}
                           placeholder="e.g. A*, A, B"
                           {...register("tenthGrade")}
                         />
-                        <ErrorText>{errors.tenthGrade?.message}</ErrorText>
                       </div>
                     )}
                     <div>
@@ -798,10 +1002,10 @@ export function SrfPage({
                         type="number"
                         step="0.01"
                         required={tenthBoard !== "cambridge" && tenthBoard !== "other"}
+                        error={errors.tenthPercentage?.message}
                         placeholder="e.g. 91.4"
                         {...nullableNum("tenthPercentage")}
                       />
-                      <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
                     </div>
                     <FileField
                       label="10th marksheet"
@@ -819,27 +1023,35 @@ export function SrfPage({
                       <TextField
                         label="12th school name"
                         required
+                        error={errors.twelfthInstitution?.message}
                         placeholder="School you did your 12th at"
                         {...register("twelfthInstitution")}
                       />
-                      <ErrorText>{errors.twelfthInstitution?.message}</ErrorText>
                     </div>
                     <div>
                       <BoardSelect
                         label="12th board"
                         level="twelfth"
-                        {...register("twelfthBoard")}
+                        error={errors.twelfthBoard?.message}
+                        {...register("twelfthBoard", {
+                          onChange: (e) => handleTwelfthBoardChange(e.target.value),
+                        })}
                       />
-                      <ErrorText>{errors.twelfthBoard?.message}</ErrorText>
                     </div>
                     {twelfthBoard === "state_board" && (
                       <div>
-                        <Field label="Which state's board?" required>
+                        <Field
+                          label="Which state's board?"
+                          required
+                          error={errors.twelfthBoardState?.message}
+                        >
                           {(id) => (
                             <select
                               id={id}
-                              className={controlClass}
-                              {...register("twelfthBoardState")}
+                              className={getControlClass(Boolean(errors.twelfthBoardState))}
+                              {...register("twelfthBoardState", {
+                                onChange: () => void trigger("twelfthBoardState"),
+                              })}
                             >
                               <option value="">Select…</option>
                               {INDIAN_STATES.map((state) => (
@@ -850,7 +1062,6 @@ export function SrfPage({
                             </select>
                           )}
                         </Field>
-                        <ErrorText>{errors.twelfthBoardState?.message}</ErrorText>
                       </div>
                     )}
                     {twelfthBoard === "other" && (
@@ -858,10 +1069,10 @@ export function SrfPage({
                         <TextField
                           label="Name the 12th board"
                           required
+                          error={errors.twelfthBoardOther?.message}
                           placeholder="As it appears on the marksheet"
                           {...register("twelfthBoardOther")}
                         />
-                        <ErrorText>{errors.twelfthBoardOther?.message}</ErrorText>
                       </div>
                     )}
                     {(twelfthBoard === "cambridge" || twelfthBoard === "other") && (
@@ -869,10 +1080,10 @@ export function SrfPage({
                         <TextField
                           label="12th grade"
                           required
+                          error={errors.twelfthGrade?.message}
                           placeholder="e.g. A*, A, B"
                           {...register("twelfthGrade")}
                         />
-                        <ErrorText>{errors.twelfthGrade?.message}</ErrorText>
                       </div>
                     )}
                     <div>
@@ -885,10 +1096,10 @@ export function SrfPage({
                         type="number"
                         step="0.01"
                         required={twelfthBoard !== "cambridge" && twelfthBoard !== "other"}
+                        error={errors.twelfthPercentage?.message}
                         placeholder="e.g. 88.0"
                         {...nullableNum("twelfthPercentage")}
                       />
-                      <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
                     </div>
                     <FileField
                       label="12th marksheet"
@@ -914,10 +1125,10 @@ export function SrfPage({
                     <div>
                       <TextField
                         label="Diploma college"
+                        error={errors.diplomaInstitution?.message}
                         placeholder="College that issued it"
                         {...register("diplomaInstitution")}
                       />
-                      <ErrorText>{errors.diplomaInstitution?.message}</ErrorText>
                     </div>
                     {/* Who AWARDED it (2026-08-18). "University / Board" rather
                     than "University": many diplomas come from a state
@@ -926,29 +1137,36 @@ export function SrfPage({
                     <div>
                       <TextField
                         label="University / Board"
+                        error={errors.diplomaUniversity?.message}
                         placeholder="Who awarded it — e.g. Anna University, or DOTE"
                         {...register("diplomaUniversity")}
                       />
-                      <ErrorText>{errors.diplomaUniversity?.message}</ErrorText>
                     </div>
                     {/* Scale before marks: the scale tells the student what the
                     box below expects, so asking for the figure first invites
                     them to type it on the wrong one. */}
                     <div className="grid grid-cols-2 gap-2">
-                      <ScaleSelect label="Diploma scale" {...register("diplomaMarksScale")} />
+                      <ScaleSelect
+                        label="Diploma scale"
+                        error={errors.diplomaMarksScale?.message}
+                        {...register("diplomaMarksScale", {
+                          onChange: (e) => handleDiplomaMarksScaleChange(e.target.value),
+                        })}
+                      />
                       <TextField
                         label="Diploma marks"
                         type="number"
                         step="0.01"
+                        error={errors.diplomaMarks?.message}
                         {...nullableNum("diplomaMarks")}
                       />
                     </div>
-                    <ErrorText>{errors.diplomaMarks?.message}</ErrorText>
                     {/* Offered, not demanded (2026-08-06). No diploma figure feeds
                     an eligibility cutoff. */}
                     <FileField
                       label="Diploma marksheet"
                       hint="Optional."
+                      error={marksheetError("diploma")}
                       onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
                     />
                   </div>
@@ -958,12 +1176,26 @@ export function SrfPage({
                 after school and diploma, because everything below it means
                 something different depending on the answer. */}
                 <fieldset className="mt-6">
-                  <legend className="mb-2 text-sm font-medium text-ink-700">
-                    Which are you pursuing?
+                  <legend
+                    className={`mb-2 text-sm transition-colors ${
+                      errors.programmeLevel
+                        ? "font-semibold text-danger-700"
+                        : "font-medium text-ink-700"
+                    }`}
+                  >
+                    <span>Which are you pursuing?</span>
                     <span className="ml-0.5 text-danger-500" aria-hidden="true">
                       *
                     </span>
                     <span className="sr-only"> (required)</span>
+                    {errors.programmeLevel && (
+                      <span
+                        aria-hidden="true"
+                        className="ml-2 inline-flex items-center rounded bg-danger-100 px-1.5 py-0.5 text-[11px] font-bold text-danger-800"
+                      >
+                        Invalid
+                      </span>
+                    )}
                   </legend>
                   <div className="flex flex-wrap gap-4">
                     {(
@@ -977,12 +1209,7 @@ export function SrfPage({
                           type="radio"
                           value={value}
                           checked={programmeLevel === value}
-                          onChange={() => {
-                            setValue("programmeLevel", value, { shouldValidate: true });
-                            // Coming back from PG to UG must not leave a 5th line
-                            // behind that the cap would then reject on submit.
-                            setValue("semesters", semesters.slice(0, MAX_SEMESTERS[value]));
-                          }}
+                          onChange={() => handleProgrammeLevelChange(value)}
                         />
                         {label}
                       </label>
@@ -1002,7 +1229,10 @@ export function SrfPage({
                   <div className="mt-4 max-w-sm">
                     <ScaleSelect
                       label={marksScaleQuestion(programmeLevel)}
-                      {...register("collegeMarksScale")}
+                      error={errors.collegeMarksScale?.message}
+                      {...register("collegeMarksScale", {
+                        onChange: (e) => handleCollegeMarksScaleChange(e.target.value),
+                      })}
                     />
                     <p className="mt-1 text-xs text-ink-500">
                       Applies to every semester below
@@ -1024,46 +1254,50 @@ export function SrfPage({
                         <TextField
                           label="UG degree"
                           required
+                          error={errors.ugDegree?.message}
                           placeholder="e.g. B.Sc Computer Science"
                           {...register("ugDegree")}
                         />
-                        <ErrorText>{errors.ugDegree?.message}</ErrorText>
                       </div>
                       <div>
                         <TextField
                           label="UG college"
                           required
+                          error={errors.ugCollege?.message}
                           placeholder="College you graduated from"
                           {...register("ugCollege")}
                         />
-                        <ErrorText>{errors.ugCollege?.message}</ErrorText>
                       </div>
                       <div>
                         <TextField
                           label="UG branch"
                           required
+                          error={errors.ugBranch?.message}
                           placeholder="e.g. Computer Science"
                           {...register("ugBranch")}
                         />
-                        <ErrorText>{errors.ugBranch?.message}</ErrorText>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <ScaleSelect
                           label={UG_COLLEGE_MARKS_SCALE_QUESTION}
-                          {...register("ugAggregateScale")}
+                          error={errors.ugAggregateScale?.message}
+                          {...register("ugAggregateScale", {
+                            onChange: (e) => handleUgAggregateScaleChange(e.target.value),
+                          })}
                         />
                         <TextField
                           label="UG marks"
                           type="number"
                           step="0.01"
                           required
+                          error={errors.ugAggregate?.message}
                           {...nullableNum("ugAggregate")}
                         />
                       </div>
-                      <ErrorText>{errors.ugAggregate?.message}</ErrorText>
                       <FileField
                         label="Consolidated UG marksheet"
                         hint="Optional."
+                        error={marksheetError("ug_consolidated")}
                         onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
                       />
                     </div>
@@ -1085,8 +1319,13 @@ export function SrfPage({
                      * never run. Every eligibility rule then reads that pair.
                      */}
                     <div>
-                      <Field label="Degree and branch" required>
+                      <Field
+                        label="Degree and branch"
+                        required
+                        error={errors.degree?.message ?? errors.branch?.message}
+                      >
                         {(id) => {
+                          const hasError = Boolean(errors.degree || errors.branch);
                           const hasCustomCurrent =
                             degreeValue !== "" &&
                             !programmes.some(
@@ -1095,7 +1334,7 @@ export function SrfPage({
                           return (
                             <select
                               id={id}
-                              className={controlClass}
+                              className={getControlClass(hasError)}
                               value={programmeKey(degreeValue, branchValue)}
                               onChange={(e) => {
                                 const chosen = splitProgrammeKey(e.target.value);
@@ -1107,6 +1346,7 @@ export function SrfPage({
                                   shouldValidate: true,
                                   shouldDirty: true,
                                 });
+                                void trigger(["degree", "branch"]);
                               }}
                             >
                               <option value={programmeKey("", "")} disabled>
@@ -1135,17 +1375,16 @@ export function SrfPage({
                           coordinator — you cannot complete this section until they are.
                         </p>
                       )}
-                      <ErrorText>{errors.degree?.message ?? errors.branch?.message}</ErrorText>
                     </div>
                     <div>
                       <TextField
                         label="Passing year"
                         type="number"
                         required
+                        error={errors.passingYear?.message}
                         placeholder="e.g. 2026"
                         {...num("passingYear")}
                       />
-                      <ErrorText>{errors.passingYear?.message}</ErrorText>
                     </div>
                   </div>
                 </div>
@@ -1153,12 +1392,26 @@ export function SrfPage({
                 {/* SEMESTER-WISE. Eligibility reads the latest VERIFIED line, so
                 each one is entered, evidenced and checked separately. */}
                 <div className="mt-6">
-                  <p className="mb-2 text-sm font-medium text-ink-700">
-                    Semester results
+                  <p
+                    className={`mb-2 text-sm transition-colors ${
+                      errors.semesters
+                        ? "font-semibold text-danger-700"
+                        : "font-medium text-ink-700"
+                    }`}
+                  >
+                    <span>Semester results</span>
                     <span className="ml-0.5 text-danger-500" aria-hidden="true">
                       *
                     </span>
                     <span className="sr-only"> (required)</span>
+                    {errors.semesters && (
+                      <span
+                        aria-hidden="true"
+                        className="ml-2 inline-flex items-center rounded bg-danger-100 px-1.5 py-0.5 text-[11px] font-bold text-danger-800"
+                      >
+                        Invalid
+                      </span>
+                    )}
                   </p>
                   <p className="mb-3 text-xs text-ink-500">
                     Cumulative to the end of each semester. Choose the scale your college reports on
@@ -1177,6 +1430,7 @@ export function SrfPage({
                           type="number"
                           step="0.01"
                           required
+                          error={errors.semesters?.[index]?.marks?.message}
                           hint={
                             collegeMarksScale === "percentage" ? "Cumulative %" : "CGPA out of 10"
                           }
@@ -1197,32 +1451,22 @@ export function SrfPage({
                           label={`Semester ${semester.semesterNumber} standing arrears`}
                           type="number"
                           required
+                          error={errors.semesters?.[index]?.currentArrears?.message}
                           {...num(`semesters.${index}.currentArrears`)}
                         />
-                        <ErrorText>{errors.semesters?.[index]?.currentArrears?.message}</ErrorText>
                         <TextField
                           label={`Semester ${semester.semesterNumber} arrear history`}
                           type="number"
                           required
+                          error={errors.semesters?.[index]?.historyOfArrears?.message}
                           hint="Total arrears in your degree up to this semester (including cleared ones)."
                           {...num(`semesters.${index}.historyOfArrears`)}
                         />
-                        <ErrorText>{errors.semesters?.[index]?.historyOfArrears?.message}</ErrorText>
-                        <ErrorText>{errors.semesters?.[index]?.marks?.message}</ErrorText>
                         {semesters.length > 1 && (
                           <button
                             type="button"
                             aria-label={`Remove semester ${semester.semesterNumber}`}
-                            onClick={() =>
-                              setValue(
-                                "semesters",
-                                semesters
-                                  .filter((_, i) => i !== index)
-                                  // Numbers are positional, so close the gap.
-                                  .map((s, i) => ({ ...s, semesterNumber: i + 1 })),
-                                { shouldValidate: true },
-                              )
-                            }
+                            onClick={() => handleRemoveSemester(index)}
                             className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
                           >
                             Remove
@@ -1378,9 +1622,9 @@ export function SrfPage({
                         label={label}
                         type="url"
                         placeholder={placeholder}
+                        error={errors[name]?.message}
                         {...register(name)}
                       />
-                      <ErrorText>{errors[name]?.message}</ErrorText>
                     </div>
                   ))}
                 </div>
@@ -1410,11 +1654,13 @@ export function SrfPage({
                           <TextField
                             label={`Profile ${index + 1} name`}
                             placeholder="e.g. Kaggle"
+                            error={errors.otherProfiles?.[index]?.label?.message}
                             {...register(`otherProfiles.${index}.label`)}
                           />
                           <TextField
                             label={`Profile ${index + 1} link or username`}
                             placeholder="kaggle.com/asha  — or just asha_r"
+                            error={errors.otherProfiles?.[index]?.value?.message}
                             {...register(`otherProfiles.${index}.value`)}
                           />
                           <button
@@ -1458,24 +1704,32 @@ export function SrfPage({
                   <TextField
                     label="Technical skills"
                     placeholder="React, Python, SQL…"
+                    error={errors.technicalSkills?.message}
                     {...register("technicalSkills")}
                   />
                   <TextField
                     label="Areas of interest"
                     placeholder="Backend engineering, data…"
+                    error={errors.areasOfInterest?.message}
                     {...register("areasOfInterest")}
                   />
                   <TextField
                     label="Areas of expertise"
                     placeholder="Where you are genuinely strong"
+                    error={errors.areasOfExpertise?.message}
                     {...register("areasOfExpertise")}
                   />
                   <TextField
                     label="Projects"
                     placeholder="Title, stack, and what you built"
+                    error={errors.projects?.message}
                     {...register("projects")}
                   />
-                  <TextField label="Achievements" {...register("achievements")} />
+                  <TextField
+                    label="Achievements"
+                    error={errors.achievements?.message}
+                    {...register("achievements")}
+                  />
                 </div>
 
                 <div className="mt-6">
@@ -1496,6 +1750,7 @@ export function SrfPage({
                           <TextField
                             label={`Certificate ${index + 1} name`}
                             placeholder="e.g. AWS Cloud Practitioner"
+                            error={errors.certificates?.[index]?.name?.message}
                             {...register(`certificates.${index}.name`)}
                           />
                           <Controller
@@ -1568,7 +1823,19 @@ export function SrfPage({
               <Section id="consent" title="Consent and submission" step={6}>
                 <CheckboxField
                   required
-                  label="I consent to sharing my profile and resumes with recruiting companies"
+                  label={
+                    <span className={errors.consent ? "font-semibold text-danger-700" : ""}>
+                      I consent to sharing my profile and resumes with recruiting companies
+                      {errors.consent && (
+                        <span
+                          aria-hidden="true"
+                          className="ml-2 inline-flex items-center rounded bg-danger-100 px-1.5 py-0.5 text-[11px] font-bold text-danger-800"
+                        >
+                          Invalid
+                        </span>
+                      )}
+                    </span>
+                  }
                   description="Your profile, academic record and the relevant resume are shared with companies whose drives you apply to. Every share is logged."
                   {...register("consent")}
                 />

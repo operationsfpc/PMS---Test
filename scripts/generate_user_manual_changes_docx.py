@@ -38,50 +38,51 @@ def set_table_borders(table, color="D0D5DD"):
     )
     tblPr.append(borders)
 
-def build_simple_user_manual_changes_docx(output_path: Path):
+def build_date_wise_user_manual_changes_docx(output_path: Path):
     doc = Document()
 
-    # Set page margins
+    # Page Margins
     for section in doc.sections:
         section.top_margin = Inches(0.75)
         section.bottom_margin = Inches(0.75)
         section.left_margin = Inches(0.8)
         section.right_margin = Inches(0.8)
 
-        # Header / Footer
+        # Header
         header = section.header
         hp = header.paragraphs[0]
         hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        hrun = hp.add_run("FPC Placement Management System — Release Summary")
+        hrun = hp.add_run("FPC Placement Management System — September 2026 Release Changelog")
         hrun.font.name = "Segoe UI"
         hrun.font.size = Pt(8.5)
         hrun.font.color.rgb = RGBColor(150, 150, 150)
 
+        # Footer
         footer = section.footer
         fp = footer.paragraphs[0]
         fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        frun = fp.add_run("Confidential — Placement Operations Documentation — September 2026")
+        frun = fp.add_run("Confidential — Placement Operations Documentation — September 04 to September 11, 2026")
         frun.font.name = "Segoe UI"
         frun.font.size = Pt(8.5)
         frun.font.color.rgb = RGBColor(150, 150, 150)
 
-    # Brand Colors
+    # Palette
     PRIMARY = RGBColor(61, 55, 119)     # Deep Indigo #3D3777
     SECONDARY = RGBColor(217, 119, 6)   # Amber #D97706
     TEXT = RGBColor(40, 40, 40)         # Charcoal
     MUTED = RGBColor(100, 116, 139)     # Slate
 
-    # 1. Document Title
+    # Title Block
     p_title = doc.add_paragraph()
     p_title.paragraph_format.space_before = Pt(0)
     p_title.paragraph_format.space_after = Pt(2)
-    r_brand = p_title.add_run("FACE Prep Campus — PMS\n")
+    r_brand = p_title.add_run("FACE Prep Campus — Placement Management System\n")
     r_brand.font.name = "Segoe UI"
     r_brand.font.size = Pt(12)
     r_brand.font.bold = True
     r_brand.font.color.rgb = SECONDARY
 
-    r_main = p_title.add_run("Recent System Changes & User Manual Summary")
+    r_main = p_title.add_run("User Manual Updates & Release Changelog")
     r_main.font.name = "Segoe UI"
     r_main.font.size = Pt(18)
     r_main.font.bold = True
@@ -89,26 +90,32 @@ def build_simple_user_manual_changes_docx(output_path: Path):
 
     p_sub = doc.add_paragraph()
     p_sub.paragraph_format.space_after = Pt(14)
-    r_sub = p_sub.add_run("Key updates to Student Registration (SRF) and Coordinator Verification Queue")
+    r_sub = p_sub.add_run("Date-wise operational record of system enhancements, user manual adjustments, and bug fixes from September 04 to September 11, 2026.")
     r_sub.font.name = "Segoe UI"
     r_sub.font.size = Pt(10)
     r_sub.font.color.rgb = MUTED
 
-    # Helper functions
-    def add_heading(title):
+    def add_release_heading(date_str, title_str):
         p = doc.add_paragraph()
-        p.paragraph_format.space_before = Pt(12)
+        p.paragraph_format.space_before = Pt(14)
         p.paragraph_format.space_after = Pt(4)
-        run = p.add_run(title)
+        
+        r_badge = p.add_run(f"[{date_str}] ")
+        r_badge.font.name = "Segoe UI"
+        r_badge.font.size = Pt(12)
+        r_badge.font.bold = True
+        r_badge.font.color.rgb = SECONDARY
+        
+        run = p.add_run(title_str)
         run.font.name = "Segoe UI"
         run.font.size = Pt(12)
         run.font.bold = True
         run.font.color.rgb = PRIMARY
         return p
 
-    def add_point(bold_prefix, text):
+    def add_bullet(bold_prefix, text):
         p = doc.add_paragraph(style='List Bullet')
-        p.paragraph_format.space_before = Pt(1)
+        p.paragraph_format.space_before = Pt(1.5)
         p.paragraph_format.space_after = Pt(2)
         p.paragraph_format.line_spacing = 1.15
         r1 = p.add_run(bold_prefix)
@@ -122,58 +129,83 @@ def build_simple_user_manual_changes_docx(output_path: Path):
         r2.font.color.rgb = TEXT
         return p
 
-    # Section 1: SRF Changes
-    add_heading("1. Student Registration Form (SRF) — Board Grading & Usability")
-    add_point("Cambridge & Other Boards: ", "Grade field is mandatory (e.g. A*, A, B, 7). Marks percentage is optional.")
-    add_point("Standard Boards (CBSE / State / CISCE): ", "Marks percentage remains strictly mandatory (0–100%). Grade field is hidden.")
-    add_point("Board Name (Other): ", "When 'Other' is selected, entering the official board name remains required.")
-    add_point("Cumulative Arrear History & Inline Errors: ", "Inline validation error messages are now rendered under Standing Arrears and Arrear History. The hint explicitly clarifies that Arrear History is cumulative across the degree up to that semester.")
-    add_point("Non-Decreasing Arrear History Validation: ", "The system now validates across semesters that arrear history cannot decrease (e.g., entering 2 in Semester 1 and 1 in Semester 2 is prevented with a clear explanation).")
-    add_point("Step Completion Checkmarks (✓): ", "Top navigation pills now dynamically display a checkmark (e.g. '1. Personal Details ✓') as soon as required fields in that section are filled.")
-    add_point("Smart Mobile Number Sanitization: ", "Pasting phone numbers with country codes (+91, 91), leading zeros, spaces, or hyphens is automatically sanitized to 10 clean digits to prevent validation blocks.")
-    add_point("Submission Error Focus & Alert: ", "If required fields are missed on submit, an alert banner appears above the submit button and the page automatically scrolls to and focuses on the first invalid field.")
+    # -------------------------------------------------------------
+    # 1. September 11, 2026
+    # -------------------------------------------------------------
+    add_release_heading("September 11, 2026", "SRF Dropdown Synchronization, Conditional Field Sanitization & Label Validation")
+    add_bullet("Dropdown Value Replacement & State Sync: ",
+               "When modifying any dropdown selection in the Student Registration Form (such as school board, marks scale, or degree fork), previous values are cleanly replaced. Form state stays completely synchronized with what the student sees on screen.")
+    add_bullet("Automatic Obsolete Field Sanitization: ",
+               "Switching away from conditional options (e.g. from State Board to CBSE, or from PG to UG) immediately wipes obsolete child fields (State Board state, Other board name, Cambridge/Other grades, completed UG degree details, and consolidated marksheets) from both the active form state and saved drafts. This eliminates hidden validation blocks caused by lingering orphan data.")
+    add_bullet("Immediate Scale Switch Revalidation: ",
+               "Changing the College Marks Scale between CGPA (10-point scale) and Percentage immediately re-evaluates all semester figures in real time without requiring the student to click submit.")
+    add_bullet("Field Label Validation Highlighting (Red Labels & 'Invalid' Badge): ",
+               "Every required or invalid field now directly highlights its label in bold red (text-danger-700 font-semibold) with a clear, accessible 'Invalid' badge. Students can immediately see which exact field is missing or contains formatting errors.")
+    add_bullet("Real-Time Error Clearing: ",
+               "As soon as the user corrects an invalid input or selects a valid option, the red label styling, error badge, and red border clear instantly in real time.")
+    add_bullet("Consolidated Error Messaging: ",
+               "Removed duplicate alert nodes and standardized error rendering across all inputs, ensuring clean DOM structure and eliminating confusing repeated messages.")
 
-    # Section 2: Coordinator Verification Queue
-    add_heading("2. Coordinator Verification Queue (/cpc/verification)")
-    add_point("Grade Display for International Boards: ", "The 10th and 12th marks columns now display letter/scale grades (e.g. 'Grade: A*' or '91.4% (Grade: A*)') so coordinators can verify Cambridge/Other statements of results.")
-    add_point("Arrear History Consistency (2 vs 1 Fix): ", "The 'Arrear history' summary column now correctly evaluates the maximum cumulative arrear history across all declared semesters, eliminating discrepancies where a student who declared 2 arrears was displayed with 1.")
-    add_point("Standing Arrears Display & Auto-Sync: ", "The Standing Arrears column accurately reflects the student's declared arrears from their latest semester, automatically synchronized into the student record upon submission.")
-    add_point("School Marksheets Only: ", "The School Marksheets column displays only qualification marksheets (10th, 12th, Diploma, UG Consolidated). Certificates and resumes are kept in their own designated columns.")
-    add_point("Single Latest Scan: ", "If a student uploads a revised marksheet, only the latest active scan is shown. Stale duplicate links from previous attempts are filtered out.")
-    add_point("Label-Based File Display: ", "Documents appear as clean, clear labels ('10th marksheet', '12th marksheet', 'Diploma marksheet') rather than raw file names or storage paths.")
-    add_point("Certificate Names + Files: ", "In the Certificates column, both the declared certificate name and original file name are clearly shown: e.g. AWS Cloud Practitioner (aws_cert.pdf).")
-    add_point("Missing Documents Warning: ", "If a file is missing, an explicit warning badge ('None uploaded' / 'No marksheet') appears instead of dead links.")
-    add_point("Add Semester Arrears Guard: ", "The subsequent semester submission form now validates that standing and historical arrears are valid non-negative whole numbers and that history is not lower than standing arrears.")
-    add_point("Re-Verification Workflow: ", "Approved or rejected student records can be reset back to 'srf_submitted' (with semesters and certificates reset to 'pending') for complete re-verification.")
+    # -------------------------------------------------------------
+    # 2. September 10, 2026
+    # -------------------------------------------------------------
+    add_release_heading("September 10, 2026", "Coordinator Verification Queue Enhancements & Database Arrears Sync (Migrations 0071–0074)")
+    add_bullet("International Board Letter Grades Display: ",
+               "In the CPC verification queue (/cpc/verification), the 10th and 12th marks columns now display letter grades (e.g., 'Grade: A*' or '91.4% (Grade: A*)') so coordinators can easily verify Cambridge (IGCSE/A-Levels) and Other board results without confusion.")
+    add_bullet("Arrear History Discrepancy Resolution (2 vs 1): ",
+               "Fixed a bug where a student who declared 2 arrears across degree semesters showed only 1 in the coordinator queue. The queue now accurately evaluates the true cumulative maximum across all declared semesters.")
+    add_bullet("Automated Standing Arrears Synchronization: ",
+               "The student's declared standing arrears from their latest semester are automatically synchronized into the core students table on form submission (via Migration 0073), ensuring recruiter drive eligibility filters always read current academic data.")
+    add_bullet("School Marksheets Column Isolation: ",
+               "The verification queue 'School Marksheets' column is strictly isolated to educational qualification documents (10th, 12th, Diploma, Consolidated UG). Resumes and certificates are separated into their own designated columns.")
+    add_bullet("Active Marksheet Scan Deduplication: ",
+               "When a student re-uploads a corrected document, only the single latest active scan is displayed, preventing broken links and duplicate clutter.")
+    add_bullet("Staff & Mentor Password Management: ",
+               "Added secure database password reset capabilities for campus coordinators and placement mentors (Migration 0071).")
 
-    # Section 3: Summary Table
-    add_heading("3. Quick Comparison: Before vs. After")
+    # -------------------------------------------------------------
+    # 3. September 04, 2026
+    # -------------------------------------------------------------
+    add_release_heading("September 04, 2026", "Automated Email Notification System & Catalog Release")
+    add_bullet("Automated Transactional Email Triggers: ",
+               "Activated automated email dispatches for key placement milestones: SRF Approval Confirmation, SRF Rejection (with specific coordinator notes), New Placement Drive Announcements, Student Drive Registration Confirmation, and Shortlist Advancement Updates.")
+    add_bullet("Official Email Notification Catalog: ",
+               "Published comprehensive email catalog (docs/FACE_Prep_PMS_Email_Notification_Catalog.docx) detailing recipient rules, delivery triggers, dynamic template variables, and layout previews.")
+    add_bullet("Resilient Dispatch Architecture: ",
+               "Implemented decoupled email queue handling and background execution fallbacks so batch email operations never impede web interface responsiveness or core database transactions.")
+
+    # -------------------------------------------------------------
+    # 4. Chronological Summary Table (Sept 04 – Sept 11)
+    # -------------------------------------------------------------
+    p_tbl_heading = doc.add_paragraph()
+    p_tbl_heading.paragraph_format.space_before = Pt(16)
+    p_tbl_heading.paragraph_format.space_after = Pt(4)
+    r_th = p_tbl_heading.add_run("Date-Wise Summary: September 04 to September 11, 2026")
+    r_th.font.name = "Segoe UI"
+    r_th.font.size = Pt(12)
+    r_th.font.bold = True
+    r_th.font.color.rgb = PRIMARY
 
     table_data = [
-        ("Feature", "Before (Problem)", "Now (Simple & Clean)"),
-        ("Cambridge Board", "Mandatory 0–100% percentage. No grade field.", "Grade is mandatory (A*, A, B). Percentage is optional."),
-        ("Other Board", "Mandatory 0–100% percentage. No grade field.", "Grade is mandatory. Board name required. % is optional."),
-        ("Standard Boards", "Mandatory percentage (0–100%).", "Unchanged. Percentage remains mandatory (0–100%)."),
-        ("Verification Grades", "Only percentages displayed; Cambridge grades invisible.", "Displays letter grade (e.g. Grade: A*) alongside or in place of %."),
-        ("Arrear History Count", "Queue showed 1 arrear history when student entered 2 across semesters.", "Queue accurately evaluates cumulative arrear history (2) across all semesters."),
-        ("Arrears Field Errors", "No error text under Standing or History of Arrears inputs.", "Inline error text displayed directly beneath each arrears field."),
-        ("Arrear History Consistency", "Form allowed arrear history to drop in later semesters.", "Strict cross-semester check prevents arrear history from decreasing."),
-        ("Standing Arrears", "Queue showed 0 arrears despite semester declaration.", "Accurately displays standing arrears synced from latest semester."),
-        ("Step Navigation", "Numbered pills gave no indication of completed sections.", "Displays ✓ checkmark on completed steps (e.g. 1. Personal Details ✓)."),
-        ("Mobile Validation", "Failed validation on +91, spaces, or hyphens.", "Automatically strips +91, spaces, and hyphens to 10 digits."),
-        ("Submission Errors", "Silent validation block or confusion on missed fields.", "Shows red alert banner and smoothly scrolls to first invalid field."),
-        ("School Marksheets Column", "Cluttered with certificates, resumes, and offer letters.", "Shows strictly school marksheets (10th, 12th, Diploma, UG)."),
-        ("Resubmitted Scans", "Showed duplicate old links for every re-upload.", "Deduplicated: shows only the single latest active scan."),
-        ("Document Links", "Raw storage names / inconsistent tags.", "Standardized labels: '10th marksheet', '12th marksheet'."),
-        ("Certificates Display", "Generic label without file context.", "Shows Certificate Name + Original File Name."),
-        ("Re-Verification", "Approved records locked without queue re-entry.", "Resetting status returns record to queue for full coordinator re-check.")
+        ("Date", "Feature / Area", "Previous State (Problem)", "Updated Behavior (Proper Fix)"),
+        ("2026-09-11", "Dropdown Replacement", "Changing dropdowns left old data or orphan fields behind.", "Dropdown choices cleanly replace previous values and reset child fields."),
+        ("2026-09-11", "Conditional Sanitization", "Old state board states / PG entries persisted in drafts.", "Obsolete conditional values are automatically sanitized on live change and draft merge."),
+        ("2026-09-11", "Field Label Highlighting", "Labels remained plain grey when inputs were empty or invalid.", "Field labels highlight in bold red (text-danger-700) with an 'Invalid' badge."),
+        ("2026-09-11", "Real-Time Error Clearing", "Error indicators remained until full form submit.", "Label highlighting and invalid badge clear instantly as user types or picks value."),
+        ("2026-09-11", "Scale Switch Validation", "Toggling CGPA/Percentage scale did not revalidate marks.", "Immediately re-evaluates all semester marks upon scale change in real time."),
+        ("2026-09-10", "Verification Board Grades", "Cambridge/Other letter grades were invisible to CPCs.", "Displays letter grades (Grade: A*) alongside percentage in verification queue."),
+        ("2026-09-10", "Arrear History Accuracy", "Queue showed 1 arrear history when student entered 2.", "Accurately calculates cumulative maximum arrear history across all semesters."),
+        ("2026-09-10", "Database Arrears Sync", "Latest arrears were not synced to students table.", "Database trigger automatically synchronizes standing arrears on submission."),
+        ("2026-09-10", "Marksheet Isolation", "Queue marksheet column was cluttered with resumes and certs.", "Shows strictly educational marksheets; resumes and certs in dedicated columns."),
+        ("2026-09-04", "Email Notification Engine", "No automated email alerts sent to students or staff.", "Automated transactional emails for SRF approval, rejection, and drives."),
+        ("2026-09-04", "Notification Catalog", "No standardized documentation for email templates.", "Published official email notification catalog with triggers and templates.")
     ]
 
-    t = doc.add_table(rows=len(table_data), cols=3)
+    t = doc.add_table(rows=len(table_data), cols=4)
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
     set_table_borders(t)
 
-    col_widths = [Inches(1.8), Inches(2.5), Inches(2.5)]
+    col_widths = [Inches(1.0), Inches(1.8), Inches(2.1), Inches(2.3)]
 
     for r_idx, row in enumerate(table_data):
         is_hdr = (r_idx == 0)
@@ -200,14 +232,16 @@ def build_simple_user_manual_changes_docx(output_path: Path):
                 run.font.size = Pt(8.5)
                 if c_idx == 0:
                     run.font.bold = True
+                    run.font.color.rgb = SECONDARY
+                elif c_idx == 1:
+                    run.font.bold = True
                     run.font.color.rgb = PRIMARY
                 else:
                     run.font.color.rgb = TEXT
 
-    # Save
     doc.save(str(output_path))
-    print(f"Successfully generated clean docx at {output_path}")
+    print(f"Successfully generated clean date-wise docx (Sept 04-11) at {output_path}")
 
 if __name__ == "__main__":
     out_file = Path("docs/USER_MANUAL_CHANGES.docx")
-    build_simple_user_manual_changes_docx(out_file)
+    build_date_wise_user_manual_changes_docx(out_file)

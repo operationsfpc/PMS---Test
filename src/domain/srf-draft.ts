@@ -188,6 +188,52 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
+ * Sanitizes conditional fields so stale values from previous dropdown choices
+ * (e.g. State Board state when switched to CBSE, or PG degree when switched to UG)
+ * do not persist and trigger invisible validation failures.
+ */
+export function sanitizeConditionalSrfValues<TValues extends Record<string, unknown>>(
+  values: TValues,
+): TValues {
+  const result: Record<string, unknown> = { ...values };
+
+  // Tenth board conditional cleanup
+  const tenthBoard = String(result.tenthBoard ?? "");
+  if (tenthBoard !== "state_board") {
+    result.tenthBoardState = "";
+  }
+  if (tenthBoard !== "other") {
+    result.tenthBoardOther = "";
+  }
+  if (tenthBoard !== "cambridge" && tenthBoard !== "other") {
+    result.tenthGrade = "";
+  }
+
+  // Twelfth board conditional cleanup
+  const twelfthBoard = String(result.twelfthBoard ?? "");
+  if (twelfthBoard !== "state_board") {
+    result.twelfthBoardState = "";
+  }
+  if (twelfthBoard !== "other") {
+    result.twelfthBoardOther = "";
+  }
+  if (twelfthBoard !== "cambridge" && twelfthBoard !== "other") {
+    result.twelfthGrade = "";
+  }
+
+  // Programme level conditional cleanup
+  if (result.programmeLevel === "ug") {
+    result.ugDegree = "";
+    result.ugCollege = "";
+    result.ugBranch = "";
+    result.ugAggregate = null;
+    result.ugAggregateScale = "cgpa";
+  }
+
+  return result as TValues;
+}
+
+/**
  * The form state to open with.
  *
  * Unknown keys in the draft are dropped: a draft written by an older version
@@ -216,5 +262,5 @@ export function mergeSrfDraft<TValues extends Record<string, unknown>>(
     }
   }
 
-  return merged as TValues;
+  return sanitizeConditionalSrfValues(merged) as TValues;
 }

@@ -405,7 +405,7 @@ export const srfSchema = z
         ctx.addIssue({
           code: "custom",
           path: ["semesters", idx, "historyOfArrears"],
-          message: "History of arrears cannot be less than standing arrears",
+          message: "Cannot be less than standing arrears",
         });
       }
     });
