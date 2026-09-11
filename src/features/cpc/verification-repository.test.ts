@@ -226,6 +226,88 @@ describe("the evidence behind each declared figure", () => {
     expect(student?.documents.map((d) => d.label)).toEqual(["10th marksheet", "12th marksheet"]);
   });
 
+  it("excludes certificates from the school marksheets column even when present in student_documents", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json([
+          {
+            id: "s1",
+            full_name: "Subbulakshmi S",
+            roll_number: "21CSE045",
+            overall_cgpa: 8.9,
+            student_semesters: [],
+            student_certificates: [
+              {
+                id: "cert-1",
+                name: "Coursera",
+                status: "pending",
+                student_documents: { storage_path: "s1/cert-1.pdf" },
+              },
+            ],
+            student_documents: [
+              { kind: "tenth_marksheet", storage_path: "s1/tenth.pdf" },
+              { kind: "twelfth_marksheet", storage_path: "s1/twelfth.pdf" },
+              { kind: "certificate", storage_path: "s1/cert-1.pdf" },
+              { kind: "certificate", storage_path: "s1/cert-2.pdf" },
+            ],
+          },
+        ]),
+      ),
+    );
+
+    const [student] = await signing().pending();
+
+    expect(student?.documents.map((d) => d.label)).toEqual(["10th marksheet", "12th marksheet"]);
+    expect(student?.certificates).toHaveLength(1);
+    expect(student?.certificates[0]?.name).toBe("Coursera");
+  });
+
+  it("deduplicates school marksheets when a student resubmitted with new scans", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json([
+          {
+            id: "s1",
+            full_name: "Subbulakshmi S",
+            roll_number: "21CSE045",
+            overall_cgpa: 8.9,
+            student_semesters: [],
+            student_certificates: [],
+            student_documents: [
+              {
+                kind: "tenth_marksheet",
+                storage_path: "s1/tenth-old.pdf",
+                uploaded_at: "2026-08-01T10:00:00Z",
+              },
+              {
+                kind: "twelfth_marksheet",
+                storage_path: "s1/twelfth-old.pdf",
+                uploaded_at: "2026-08-01T10:00:00Z",
+              },
+              {
+                kind: "tenth_marksheet",
+                storage_path: "s1/tenth-new.pdf",
+                uploaded_at: "2026-08-05T10:00:00Z",
+              },
+              {
+                kind: "twelfth_marksheet",
+                storage_path: "s1/twelfth-new.pdf",
+                uploaded_at: "2026-08-05T10:00:00Z",
+              },
+            ],
+          },
+        ]),
+      ),
+    );
+
+    const [student] = await signing().pending();
+
+    expect(student?.documents).toHaveLength(2);
+    expect(student?.documents.map((d) => d.label)).toEqual(["10th marksheet", "12th marksheet"]);
+    expect(student?.documents[0]?.url).toContain("tenth-new.pdf");
+    expect(student?.documents[1]?.url).toContain("twelfth-new.pdf");
+  });
+
   it("asks the database for the semester lines and their marksheets in one query", async () => {
     let url = "";
     server.use(

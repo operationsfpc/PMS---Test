@@ -23,6 +23,7 @@ const AWS: PendingCertificate = {
   studentName: "Priya Ramesh",
   rollNumber: "21CSE1042",
   name: "AWS Cloud Practitioner",
+  fileName: "aws.pdf",
   uploadedAt: "2026-08-06T10:00:00Z",
   url: "/signed/aws.pdf",
 };
@@ -32,6 +33,7 @@ const AZURE: PendingCertificate = {
   studentName: "Arjun Menon",
   rollNumber: "21CSE9001",
   name: "Azure Fundamentals",
+  fileName: null,
   uploadedAt: "2026-08-06T11:00:00Z",
   url: null,
 };

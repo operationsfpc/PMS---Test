@@ -30,7 +30,10 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
   }, [refresh]);
 
   async function optOut() {
-    if (reason.trim() === "") return;
+    if (reason.trim() === "") {
+      setError("Give a reason for opting out.");
+      return;
+    }
 
     // The domain refuses without the declaration, so the screen and the
     // database refuse for the same reason and say the same thing.

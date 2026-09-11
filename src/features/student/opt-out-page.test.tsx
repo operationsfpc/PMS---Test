@@ -40,6 +40,7 @@ describe("OptOutPage", () => {
 
     await user.click(await screen.findByRole("button", { name: /request opt-out/i }));
     expect(requestOptOut).not.toHaveBeenCalled();
+    expect(await screen.findByText(/give a reason for opting out/i)).toBeDefined();
 
     await user.type(screen.getByLabelText(/why are you opting out/i), "Joining family business");
     await user.upload(

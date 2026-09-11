@@ -20,13 +20,51 @@ import { z } from "zod";
  * `@domain/srf-rules`. Zod owns structure; the domain owns meaning.
  */
 
-const percentage = z
-  .number({ error: "Enter a number" })
-  .refine(isValidPercentage, "Must be between 0 and 100");
+const schoolPercentage = z.preprocess(
+  (v) =>
+    v === "" || v === undefined || v === null || (typeof v === "number" && Number.isNaN(v))
+      ? null
+      : typeof v === "string"
+        ? Number(v)
+        : v,
+  z
+    .number({ error: "Enter a valid number" })
+    .nullable()
+    .refine((v) => v === null || isValidPercentage(v), "Must be between 0 and 100"),
+);
+
+export const cleanIndianMobile = (val: string): string => {
+  const cleaned = val.replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("+91")) return cleaned.slice(3);
+  if (cleaned.startsWith("91") && cleaned.length === 12) return cleaned.slice(2);
+  if (cleaned.startsWith("0") && cleaned.length === 11) return cleaned.slice(1);
+  return cleaned;
+};
+
+const sanitizedMobile = z
+  .string()
+  .transform(cleanIndianMobile)
+  .pipe(z.string().refine(isValidIndianMobile, "Enter a valid 10-digit mobile number"));
 
 const optionalMobile = z
   .string()
-  .refine((v) => v === "" || isValidIndianMobile(v), "Enter a valid 10-digit mobile number");
+  .transform(cleanIndianMobile)
+  .pipe(
+    z
+      .string()
+      .refine(
+        (v) => v === "" || isValidIndianMobile(v),
+        "Enter a valid 10-digit mobile number",
+      ),
+  );
+
+/** Maximum document size in bytes allowed by PostgreSQL student_documents check constraint (5MB). */
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
+const validUploadFile = z
+  .instanceof(File, { error: "Choose a file to upload" })
+  .refine((file) => file.size > 0, "File cannot be empty (0 bytes)")
+  .refine((file) => file.size <= MAX_DOCUMENT_BYTES, "File cannot exceed 5MB");
 
 export const srfSchema = z
   .object({
@@ -34,20 +72,21 @@ export const srfSchema = z
     fullName: z.string().min(2, "Enter your full name").max(100),
     rollNumber: z.string().min(1),
     email: z.email("Enter a valid email address"),
-    mobile: z.string().refine(isValidIndianMobile, "Enter a valid 10-digit mobile number"),
+    mobile: sanitizedMobile,
     whatsapp: optionalMobile,
     // Mandatory (requested 2026-08-04): a student who cannot be reached on
     // drive day loses the opportunity, and the college loses the recruiter.
     alternateContact: z
       .string()
       .min(1, "An alternate contact number is required.")
-      .refine(isValidIndianMobile, "Enter a valid 10-digit mobile number"),
+      .transform(cleanIndianMobile)
+      .pipe(z.string().refine(isValidIndianMobile, "Enter a valid 10-digit mobile number")),
 
     // ------------------------------------------------------------- school
     // The institution comes BEFORE the marks it issued (2026-08-06): a figure
     // with no school against it cannot be checked by anyone.
     tenthInstitution: z.string().min(1, "Enter the school you did your 10th at").max(160),
-    tenthPercentage: percentage,
+    tenthPercentage: schoolPercentage,
     /**
      * Which board issued the figure (2026-08-18). A select, not free text: the
      * rules that make (board, state, other) coherent are the domain's, checked
@@ -60,11 +99,15 @@ export const srfSchema = z
     tenthBoard: z.string().default(""),
     tenthBoardState: z.string().max(60).default(""),
     tenthBoardOther: z.string().max(120).default(""),
+    /** Grade is mandatory for Cambridge or Other board where percentage is optional. */
+    tenthGrade: z.string().max(20).default(""),
     twelfthInstitution: z.string().min(1, "Enter the school you did your 12th at").max(160),
-    twelfthPercentage: percentage,
+    twelfthPercentage: schoolPercentage,
     twelfthBoard: z.string().default(""),
     twelfthBoardState: z.string().max(60).default(""),
     twelfthBoardOther: z.string().max(120).default(""),
+    /** Grade is mandatory for Cambridge or Other board where percentage is optional. */
+    twelfthGrade: z.string().max(20).default(""),
 
     // ------------------------------------------------------------ diploma
     // Optional in full - many students have none - but all-or-nothing: a
@@ -81,7 +124,8 @@ export const srfSchema = z
 
     // --------------------------------------------- the programme they are on
     degree: z.string().min(1, "Select your degree"),
-    branch: z.string().min(1, "Select your branch"),
+    // Some degrees (BCA, MCA, MBA) legitimately have no branches.
+    branch: z.string().default(""),
     passingYear: z
       .number({ error: "Enter your passing year" })
       .refine((y) => isValidPassingYear(y, new Date()), "Enter a realistic passing year"),
@@ -116,8 +160,8 @@ export const srfSchema = z
         z.object({
           semesterNumber: z.number().int(),
           marks: z.number({ error: "Enter the marks for this semester" }),
-          currentArrears: z.number().int("Whole numbers only"),
-          historyOfArrears: z.number().int("Whole numbers only"),
+          currentArrears: z.number().int("Whole numbers only").nonnegative("Must be 0 or greater"),
+          historyOfArrears: z.number().int("Whole numbers only").nonnegative("Must be 0 or greater"),
         }),
       )
       .min(1, "Add at least one semester"),
@@ -131,7 +175,7 @@ export const srfSchema = z
      * against nothing. Carrying them in the submission is what makes
      * verification mean anything.
      */
-    marksheets: z.record(z.string(), z.instanceof(File, { error: "Choose a file to upload" })),
+    marksheets: z.record(z.string(), validUploadFile),
 
     // Preferences
     roleCategories: z.array(z.enum(ROLE_CATEGORIES)).min(1, "Select at least one role category"),
@@ -145,7 +189,7 @@ export const srfSchema = z
      * none of them. Same shape as `marksheets`, and for the same reason: what
      * is submitted has to be the thing itself.
      */
-    resumes: z.record(z.string(), z.instanceof(File, { error: "Choose a file to upload" })),
+    resumes: z.record(z.string(), validUploadFile),
 
     // Profiles
     /**
@@ -180,7 +224,7 @@ export const srfSchema = z
       .array(
         z.object({
           name: z.string().max(160),
-          file: z.instanceof(File).nullable().default(null),
+          file: validUploadFile.nullable().default(null),
         }),
       )
       .default([])
@@ -313,6 +357,59 @@ export const srfSchema = z
       }
     }
 
+    // 10th marks/grade: Cambridge and Other require Grade; percentage is optional.
+    // Standard boards require percentage.
+    const tenthIsGradeBoard = d.tenthBoard === "cambridge" || d.tenthBoard === "other";
+    if (tenthIsGradeBoard) {
+      if (d.tenthGrade.trim() === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tenthGrade"],
+          message: "Enter your 10th grade",
+        });
+      }
+    } else {
+      if (d.tenthPercentage === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["tenthPercentage"],
+          message: "Enter your 10th marks (%)",
+        });
+      }
+    }
+
+    // 12th marks/grade: Cambridge and Other require Grade; percentage is optional.
+    // Standard boards require percentage.
+    const twelfthIsGradeBoard = d.twelfthBoard === "cambridge" || d.twelfthBoard === "other";
+    if (twelfthIsGradeBoard) {
+      if (d.twelfthGrade.trim() === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["twelfthGrade"],
+          message: "Enter your 12th grade",
+        });
+      }
+    } else {
+      if (d.twelfthPercentage === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["twelfthPercentage"],
+          message: "Enter your 12th marks (%)",
+        });
+      }
+    }
+
+    // Arrears consistency: history of arrears cannot be less than standing arrears
+    d.semesters.forEach((sem, idx) => {
+      if (sem.historyOfArrears < sem.currentArrears) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["semesters", idx, "historyOfArrears"],
+          message: "History of arrears cannot be less than standing arrears",
+        });
+      }
+    });
+
     // Which documents are required is derived from what the student declared,
     // so adding a semester adds its marksheet. The message names each missing
     // one: "uploads are required" against six file inputs helps nobody.
@@ -391,15 +488,17 @@ export const SRF_DEFAULTS: SrfFormValues = {
   whatsapp: "",
   alternateContact: "",
   tenthInstitution: "",
-  tenthPercentage: Number.NaN,
+  tenthPercentage: null,
   tenthBoard: "",
   tenthBoardState: "",
   tenthBoardOther: "",
+  tenthGrade: "",
   twelfthInstitution: "",
-  twelfthPercentage: Number.NaN,
+  twelfthPercentage: null,
   twelfthBoard: "",
   twelfthBoardState: "",
   twelfthBoardOther: "",
+  twelfthGrade: "",
   diplomaInstitution: "",
   diplomaUniversity: "",
   diplomaMarks: null,

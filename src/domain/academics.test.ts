@@ -156,6 +156,17 @@ describe("validateSemesters", () => {
     ).toContain("Semester 1: history of arrears cannot be less than current arrears.");
   });
 
+  it("refuses a history of arrears that decreases from a previous semester", () => {
+    expect(
+      validateSemesters("ug", [
+        sem({ semesterNumber: 1, currentArrears: 0, historyOfArrears: 2 }),
+        sem({ semesterNumber: 2, currentArrears: 0, historyOfArrears: 1 }),
+      ]),
+    ).toContain(
+      "Semester 2: history of arrears (1) cannot be less than Semester 1 (2). Arrear history is cumulative.",
+    );
+  });
+
   it("reports every problem at once rather than one at a time", () => {
     const problems = validateSemesters("ug", [
       sem({ semesterNumber: 1, cgpa: 12 }),

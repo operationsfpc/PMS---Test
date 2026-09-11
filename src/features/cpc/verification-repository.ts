@@ -1,5 +1,6 @@
 import type { BoardSelection, SchoolBoard } from "@domain/boards";
 import { decideSrf, type SrfDecision } from "@domain/srf-decision";
+import { extractOriginalFilename, filenameToCertificateName } from "@domain/storage-path";
 import type { SrfStatus, VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -41,6 +42,7 @@ export interface DeclaredSemester {
 export interface DeclaredCertificate {
   readonly id: string;
   readonly name: string;
+  readonly fileName: string | null;
   /** Null when nothing could be signed. Never a dead link. */
   readonly url: string | null;
   readonly status: VerificationStatus;
@@ -62,6 +64,8 @@ export interface PendingSrf {
    */
   readonly tenthBoard: BoardSelection | null;
   readonly twelfthBoard: BoardSelection | null;
+  readonly tenthGrade: string | null;
+  readonly twelfthGrade: string | null;
   readonly submittedAt: string | null;
   /**
    * What this coordinator asked for last time, if they sent it back before.
@@ -79,7 +83,7 @@ export interface PendingSrf {
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
   tenth_marksheet: "10th marksheet",
   twelfth_marksheet: "12th marksheet",
-  semester_marksheet: "Semester marksheet",
+  diploma_marksheet: "Diploma marksheet",
   ug_consolidated_marksheet: "Consolidated UG marksheet",
 };
 
@@ -112,7 +116,7 @@ export type GetActorId = () => Promise<string | null>;
  * We want the documents BELONGING to the student, which is the first key.
  */
 export const VERIFICATION_QUEUE_COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, twelfth_board, twelfth_board_state, twelfth_board_other, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
+  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, tenth_grade, twelfth_board, twelfth_board_state, twelfth_board_other, twelfth_grade, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path, uploaded_at), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
 
 /**
  * Reads and decides the SRF verification queue.
@@ -198,13 +202,25 @@ async function signCertificates(
   );
 
   let next = 0;
-  return ordered.map((row, index) => ({
-    id: row.id as string,
-    name: (row.name as string | null) ?? "",
-    // A path we cannot sign reads as no evidence rather than a dead link.
-    url: paths[index] === undefined ? null : (signed[next++] ?? null),
-    status: ((row.status as string | null) ?? "pending") as VerificationStatus,
-  }));
+  return ordered.map((row, index) => {
+    const fileName = extractOriginalFilename(paths[index]);
+    const rawName = ((row.name as string | null) ?? "").trim();
+    const name =
+      rawName !== "" && rawName.toLowerCase() !== "e.g. aws cloud practitioner"
+        ? rawName
+        : fileName
+          ? filenameToCertificateName(fileName)
+          : "Certificate";
+
+    return {
+      id: row.id as string,
+      name,
+      fileName,
+      // A path we cannot sign reads as no evidence rather than a dead link.
+      url: paths[index] === undefined ? null : (signed[next++] ?? null),
+      status: ((row.status as string | null) ?? "pending") as VerificationStatus,
+    };
+  });
 }
 
 /**
@@ -223,12 +239,52 @@ function boardFrom(board: unknown, state: unknown, other: unknown): BoardSelecti
   };
 }
 
+const ALLOWED_SCHOOL_DOCUMENT_KINDS = new Set([
+  "tenth_marksheet",
+  "twelfth_marksheet",
+  "diploma_marksheet",
+  "ug_consolidated_marksheet",
+]);
+
+const KIND_ORDER: Readonly<Record<string, number>> = {
+  tenth_marksheet: 1,
+  twelfth_marksheet: 2,
+  diploma_marksheet: 3,
+  ug_consolidated_marksheet: 4,
+};
+
 async function signDocuments(
   client: SupabaseClient,
-  rows: Array<{ kind: string; storage_path: string }>,
+  rows: Array<{ kind: string; storage_path: string; uploaded_at?: string | null }>,
 ): Promise<readonly StudentDocument[]> {
-  // Semester marksheets are shown against their own line, not in this list.
-  const marksheets = rows.filter((d) => d.kind !== "resume" && d.kind !== "semester_marksheet");
+  // Only qualification marksheets belong in this column (PRD §4.2).
+  // Certificates belong to their own "Certificates" column, semester marksheets
+  // belong to "Declared semesters", and resumes / declarations are not marksheets.
+  // Deduplicate by kind, keeping the latest document for each kind so resubmissions
+  // don't stack duplicate obsolete marksheets.
+  const latestByKind = new Map<
+    string,
+    { kind: string; storage_path: string; uploaded_at?: string | null }
+  >();
+
+  for (const row of rows) {
+    if (!ALLOWED_SCHOOL_DOCUMENT_KINDS.has(row.kind)) continue;
+    const existing = latestByKind.get(row.kind);
+    if (!existing) {
+      latestByKind.set(row.kind, row);
+    } else if (row.uploaded_at && existing.uploaded_at) {
+      if (new Date(row.uploaded_at).getTime() >= new Date(existing.uploaded_at).getTime()) {
+        latestByKind.set(row.kind, row);
+      }
+    } else {
+      latestByKind.set(row.kind, row);
+    }
+  }
+
+  const marksheets = [...latestByKind.values()].sort(
+    (a, b) => (KIND_ORDER[a.kind] ?? 99) - (KIND_ORDER[b.kind] ?? 99),
+  );
+
   if (marksheets.length === 0) return [];
 
   const data = await sign(
@@ -265,36 +321,63 @@ export function createSupabaseVerificationRepository(
       }
 
       return await Promise.all(
-        (data ?? []).map(async (row) => ({
-          id: row.id as string,
-          fullName: row.full_name as string,
-          rollNumber: row.roll_number as string,
-          overallCgpa: (row.overall_cgpa as number | null) ?? null,
-          currentArrears: (row.current_arrears as number | null) ?? 0,
-          historyOfArrears: (row.history_of_arrears as number | null) ?? 0,
-          tenthPercentage: (row.tenth_percentage as number | null) ?? null,
-          twelfthPercentage: (row.twelfth_percentage as number | null) ?? null,
-          tenthBoard: boardFrom(row.tenth_board, row.tenth_board_state, row.tenth_board_other),
-          twelfthBoard: boardFrom(
-            row.twelfth_board,
-            row.twelfth_board_state,
-            row.twelfth_board_other,
-          ),
-          submittedAt: (row.srf_submitted_at as string | null) ?? null,
-          previousRejectionReason: (row.srf_rejection_reason as string | null) ?? null,
-          documents: await signDocuments(
-            client,
-            (row.student_documents ?? []) as Array<{ kind: string; storage_path: string }>,
-          ),
-          semesters: await signSemesters(
-            client,
-            (row.student_semesters ?? []) as Array<Record<string, unknown>>,
-          ),
-          certificates: await signCertificates(
-            client,
-            (row.student_certificates ?? []) as Array<Record<string, unknown>>,
-          ),
-        })),
+        (data ?? []).map(async (row) => {
+          const rawSemesters = (row.student_semesters ?? []) as Array<Record<string, unknown>>;
+          // Standing arrears: derive from the highest declared semester, falling back to students table
+          let currentArrears = (row.current_arrears as number | null) ?? 0;
+          let historyOfArrears = (row.history_of_arrears as number | null) ?? 0;
+          if (rawSemesters.length > 0) {
+            const sorted = [...rawSemesters].sort(
+              (a, b) => Number(b.semester_number ?? 0) - Number(a.semester_number ?? 0),
+            );
+            const latest = sorted[0];
+            if (latest) {
+              currentArrears = Number(latest.current_arrears ?? 0);
+              const maxDeclaredHistory = Math.max(
+                ...rawSemesters.map((s) => Number(s.history_of_arrears ?? 0)),
+              );
+              historyOfArrears = Math.max(
+                Number(latest.history_of_arrears ?? 0),
+                maxDeclaredHistory,
+                historyOfArrears,
+              );
+            }
+          }
+
+          return {
+            id: row.id as string,
+            fullName: row.full_name as string,
+            rollNumber: row.roll_number as string,
+            overallCgpa: (row.overall_cgpa as number | null) ?? null,
+            currentArrears,
+            historyOfArrears,
+            tenthPercentage: (row.tenth_percentage as number | null) ?? null,
+            twelfthPercentage: (row.twelfth_percentage as number | null) ?? null,
+            tenthBoard: boardFrom(row.tenth_board, row.tenth_board_state, row.tenth_board_other),
+            twelfthBoard: boardFrom(
+              row.twelfth_board,
+              row.twelfth_board_state,
+              row.twelfth_board_other,
+            ),
+            tenthGrade: (row.tenth_grade as string | null) ?? null,
+            twelfthGrade: (row.twelfth_grade as string | null) ?? null,
+            submittedAt: (row.srf_submitted_at as string | null) ?? null,
+            previousRejectionReason: (row.srf_rejection_reason as string | null) ?? null,
+            documents: await signDocuments(
+              client,
+              (row.student_documents ?? []) as Array<{
+                kind: string;
+                storage_path: string;
+                uploaded_at?: string | null;
+              }>,
+            ),
+            semesters: await signSemesters(client, rawSemesters),
+            certificates: await signCertificates(
+              client,
+              (row.student_certificates ?? []) as Array<Record<string, unknown>>,
+            ),
+          };
+        }),
       );
     },
 

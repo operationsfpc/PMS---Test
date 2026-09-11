@@ -1,4 +1,5 @@
 import { type CertificateDecision, decideCertificate } from "@domain/certificates";
+import { extractOriginalFilename, filenameToCertificateName } from "@domain/storage-path";
 import type { VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -18,6 +19,7 @@ export interface PendingCertificate {
   readonly rollNumber: string;
   /** The certificate's name, as the student gave it. */
   readonly name: string;
+  readonly fileName: string | null;
   readonly uploadedAt: string | null;
   /** Short-lived signed URL. Null when one could not be produced. */
   readonly url: string | null;
@@ -96,11 +98,21 @@ export function createSupabaseCertificateQueueRepository(
         const document = one<{ storage_path?: string }>(row.student_documents);
         const path = document?.storage_path;
 
+        const fileName = extractOriginalFilename(path);
+        const rawName = ((row.name as string | null) ?? "").trim();
+        const name =
+          rawName !== "" && rawName.toLowerCase() !== "e.g. aws cloud practitioner"
+            ? rawName
+            : fileName
+              ? filenameToCertificateName(fileName)
+              : "Certificate";
+
         return {
           id: row.id as string,
           studentName: student?.full_name ?? "Unknown student",
           rollNumber: student?.roll_number ?? "—",
-          name: row.name as string,
+          name,
+          fileName,
           uploadedAt: (row.created_at as string | null) ?? null,
           url: path === undefined ? null : (urlByPath.get(path) ?? null),
         };

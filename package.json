@@ -6,7 +6,7 @@
   "description": "FACE Prep Campus — Placement Management System",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",

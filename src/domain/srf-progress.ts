@@ -23,7 +23,8 @@ export interface SrfProgressInput {
   readonly alternateContact: string;
   /** The school each school figure came from; asked before the marks. */
   readonly tenthInstitution: string;
-  readonly tenthPercentage: number;
+  readonly tenthPercentage?: number | null;
+  readonly tenthGrade?: string;
   /**
    * And the board that issued it (2026-08-18). Mandatory for every student, so
    * the tracker must not read 100% while it is empty.
@@ -32,12 +33,14 @@ export interface SrfProgressInput {
   readonly tenthBoardState: string | null;
   readonly tenthBoardOther: string | null;
   readonly twelfthInstitution: string;
-  readonly twelfthPercentage: number;
+  readonly twelfthPercentage?: number | null;
+  readonly twelfthGrade?: string;
   readonly twelfthBoard: SchoolBoard | string | null;
   readonly twelfthBoardState: string | null;
   readonly twelfthBoardOther: string | null;
   /** Optional to declare; once declared it must be evidenced like any mark. */
   readonly hasDiplomaMarks: boolean;
+  readonly degree?: string;
   readonly programmeLevel: "ug" | "pg";
   readonly ugAggregateCgpa: number | null;
   readonly semesters: readonly {
@@ -69,7 +72,8 @@ export interface SrfSectionState {
 /** A number the student typed, as opposed to an empty box. */
 const given = (value: number) => Number.isFinite(value);
 
-const filled = (value: string) => value.trim() !== "";
+const filled = (value: string | null | undefined): boolean =>
+  typeof value === "string" && value.trim() !== "";
 
 export function srfSectionProgress(input: SrfProgressInput): readonly SrfSectionState[] {
   // Both are mandatory: a student who cannot be reached on drive day loses the
@@ -105,12 +109,27 @@ export function srfSectionProgress(input: SrfProgressInput): readonly SrfSection
       other,
     }).length === 0;
 
+  const tenthIsGrade = input.tenthBoard === "cambridge" || input.tenthBoard === "other";
+  const tenthMarkGiven = tenthIsGrade
+    ? filled(input.tenthGrade ?? "")
+    : input.tenthPercentage !== null &&
+      input.tenthPercentage !== undefined &&
+      given(input.tenthPercentage);
+
+  const twelfthIsGrade = input.twelfthBoard === "cambridge" || input.twelfthBoard === "other";
+  const twelfthMarkGiven = twelfthIsGrade
+    ? filled(input.twelfthGrade ?? "")
+    : input.twelfthPercentage !== null &&
+      input.twelfthPercentage !== undefined &&
+      given(input.twelfthPercentage);
+
   const academic =
+    (input.degree === undefined || filled(input.degree)) &&
     filled(input.tenthInstitution) &&
-    given(input.tenthPercentage) &&
+    tenthMarkGiven &&
     boardAnswered(input.tenthBoard, input.tenthBoardState, input.tenthBoardOther) &&
     filled(input.twelfthInstitution) &&
-    given(input.twelfthPercentage) &&
+    twelfthMarkGiven &&
     boardAnswered(input.twelfthBoard, input.twelfthBoardState, input.twelfthBoardOther) &&
     semestersEntered &&
     (input.programmeLevel === "ug" || input.ugAggregateCgpa !== null) &&

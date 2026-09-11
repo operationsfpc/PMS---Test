@@ -15,12 +15,13 @@ import { programmeKey, programmeLabel, splitProgrammeKey } from "@domain/program
 import { srfAccess } from "@domain/srf-access";
 import { mergeSrfDraft, srfValuesFromSubmitted } from "@domain/srf-draft";
 import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
+import { filenameToCertificateName } from "@domain/storage-path";
 import type { SrfStatus } from "@domain/types";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useState } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { Controller, type FieldErrors, useFieldArray, useForm } from "react-hook-form";
 import { Link } from "react-router";
 import type { AddSemesterView } from "./add-semester";
 import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
@@ -192,6 +193,7 @@ export function SrfPage({
     control,
     watch,
     setValue,
+    getValues,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<SrfFormValues>({
     resolver: zodResolver(srfSchema),
@@ -235,8 +237,8 @@ export function SrfPage({
   // F6: one control, two stored fields. Students still carry a degree and a
   // branch - every eligibility rule and every drive targeting table reads
   // them - so the single choice is split back apart on selection.
-  const degreeValue = watch("degree");
-  const branchValue = watch("branch");
+  const degreeValue = watch("degree") ?? "";
+  const branchValue = watch("branch") ?? "";
   /**
    * Stable row identity, so removing the second profile does not leave React
    * carrying its input state over to the third. An array index as a key does
@@ -300,10 +302,16 @@ export function SrfPage({
    */
   const slotFor = (key: string) => requiredSheets.find((s) => s.key === key);
 
-  const marksheetError = (key: string) =>
-    errors.marksheets !== undefined && marksheets[key] === undefined
-      ? `${slotFor(key)?.label ?? "This marksheet"} is required.`
-      : undefined;
+  const marksheetError = (key: string) => {
+    const slotErr = (
+      errors.marksheets as Record<string, { message?: string } | undefined> | undefined
+    )?.[key];
+    if (slotErr?.message) return slotErr.message;
+    if (errors.marksheets !== undefined && marksheets[key] === undefined) {
+      return `${slotFor(key)?.label ?? "This marksheet"} is required.`;
+    }
+    return undefined;
+  };
 
   const chooseMarksheet = (key: string, file: File | undefined) => {
     const next = { ...marksheets };
@@ -315,16 +323,26 @@ export function SrfPage({
     setValue("marksheets", next, { shouldValidate: true, shouldDirty: true });
   };
 
+  const rawTenth = watch("tenthPercentage");
+  const rawTwelfth = watch("twelfthPercentage");
+  const tenthPercentage: number | null =
+    typeof rawTenth === "number" && !Number.isNaN(rawTenth) ? rawTenth : null;
+  const twelfthPercentage: number | null =
+    typeof rawTwelfth === "number" && !Number.isNaN(rawTwelfth) ? rawTwelfth : null;
+
   const progressInput = {
-    mobile: watch("mobile"),
-    alternateContact: watch("alternateContact"),
-    tenthPercentage: watch("tenthPercentage"),
-    twelfthPercentage: watch("twelfthPercentage"),
+    mobile: watch("mobile") ?? "",
+    alternateContact: watch("alternateContact") ?? "",
+    tenthPercentage,
+    tenthGrade: watch("tenthGrade") ?? "",
+    twelfthPercentage,
+    twelfthGrade: watch("twelfthGrade") ?? "",
+    degree: degreeValue,
     programmeLevel,
     // The field is optional in the form's input type, but "not yet entered"
     // and "deliberately none" are the same thing to the tracker.
-    tenthInstitution: watch("tenthInstitution"),
-    twelfthInstitution: watch("twelfthInstitution"),
+    tenthInstitution: watch("tenthInstitution") ?? "",
+    twelfthInstitution: watch("twelfthInstitution") ?? "",
     // Mandatory since 2026-08-18, so the tracker must not read 100% without it.
     tenthBoard: unanswered(tenthBoard),
     tenthBoardState: unanswered(watch("tenthBoardState")),
@@ -338,11 +356,28 @@ export function SrfPage({
       semesterNumber: s.semesterNumber,
       cgpa: s.marks,
     })),
-    marksheets: Object.keys(marksheets),
+    marksheets: Object.keys(marksheets ?? {}),
     roleCategories: selectedCategories,
     resumeCategories,
     consent: watch("consent") === true,
   };
+
+  const hasProfiles = Boolean(
+    (watch("linkedin") ?? "").trim() !== "" ||
+    (watch("github") ?? "").trim() !== "" ||
+    (watch("leetcode") ?? "").trim() !== "" ||
+    (watch("hackerrank") ?? "").trim() !== "" ||
+    ((watch("otherProfiles") ?? []).some((p) => (p.label ?? "").trim() !== "" || (p.value ?? "").trim() !== ""))
+  );
+
+  const hasAdditional = Boolean(
+    (watch("technicalSkills") ?? "").trim() !== "" ||
+    (watch("areasOfInterest") ?? "").trim() !== "" ||
+    (watch("areasOfExpertise") ?? "").trim() !== "" ||
+    (watch("projects") ?? "").trim() !== "" ||
+    (watch("achievements") ?? "").trim() !== "" ||
+    ((watch("certificates") ?? []).some((c) => (c.name ?? "").trim() !== "" || c.file !== null))
+  );
 
   /**
    * Auto-save (UAT 2026-08-05).
@@ -423,7 +458,25 @@ export function SrfPage({
   const progress = srfSectionProgress(progressInput);
   const completion = srfCompletion(progressInput);
 
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const onInvalid = (fieldErrors: FieldErrors<SrfFormValues>) => {
+    setSubmitAttempted(true);
+    const firstKey = Object.keys(fieldErrors)[0];
+    if (firstKey) {
+      const el =
+        document.querySelector(`[name="${firstKey}"]`) ||
+        document.getElementById(firstKey) ||
+        document.querySelector(`#${firstKey}`);
+      if (el) {
+        el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+        (el as HTMLElement).focus?.();
+      }
+    }
+  };
+
   const onSubmit = handleSubmit(async (values) => {
+    setSubmitAttempted(false);
     setServerError(null);
     try {
       await submitSrf(values as SrfSubmission);
@@ -433,7 +486,7 @@ export function SrfPage({
         error instanceof SrfSubmitError ? error.message : "Something went wrong. Please try again.",
       );
     }
-  });
+  }, onInvalid);
 
   const num = (name: Parameters<typeof register>[0]) =>
     register(name, { setValueAs: (v) => (v === "" ? Number.NaN : Number(v)) });
@@ -560,23 +613,31 @@ export function SrfPage({
             section - the student had no way to review what they had entered. */}
             <nav aria-label="Form progress" className="mb-6">
               <ol className="flex flex-wrap gap-1.5">
-                {progress.map((s) => (
-                  <li key={s.id} className="min-w-9 flex-1">
-                    <a
-                      href={`#${s.id}`}
-                      aria-current={s.complete && !s.optional ? "step" : undefined}
-                      aria-label={`${s.title}${s.complete && !s.optional ? " — done" : ""}`}
-                      title={s.title}
-                      className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
-                        s.complete && !s.optional
-                          ? "bg-brand-500 text-white"
-                          : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
-                      }`}
-                    >
-                      {s.complete && !s.optional ? "\u2713" : s.step}
-                    </a>
-                  </li>
-                ))}
+                {progress.map((s) => {
+                  const isComplete =
+                    s.optional
+                      ? (s.id === "profiles" && hasProfiles) ||
+                        (s.id === "additional" && hasAdditional)
+                      : s.complete;
+
+                  return (
+                    <li key={s.id} className="min-w-9 flex-1">
+                      <a
+                        href={`#${s.id}`}
+                        aria-current={isComplete ? "step" : undefined}
+                        aria-label={`${s.title}${isComplete ? " — done" : ""}`}
+                        title={s.title}
+                        className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
+                          isComplete
+                            ? "bg-brand-500 text-white"
+                            : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
+                        }`}
+                      >
+                        {isComplete ? "\u2713" : s.step}
+                      </a>
+                    </li>
+                  );
+                })}
               </ol>
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-ink-500">
@@ -716,14 +777,29 @@ export function SrfPage({
                         <ErrorText>{errors.tenthBoardOther?.message}</ErrorText>
                       </div>
                     )}
+                    {(tenthBoard === "cambridge" || tenthBoard === "other") && (
+                      <div>
+                        <TextField
+                          label="10th grade"
+                          required
+                          placeholder="e.g. A*, A, B"
+                          {...register("tenthGrade")}
+                        />
+                        <ErrorText>{errors.tenthGrade?.message}</ErrorText>
+                      </div>
+                    )}
                     <div>
                       <TextField
-                        label="10th marks (%)"
+                        label={
+                          tenthBoard === "cambridge" || tenthBoard === "other"
+                            ? "10th marks (%) (optional)"
+                            : "10th marks (%)"
+                        }
                         type="number"
                         step="0.01"
-                        required
+                        required={tenthBoard !== "cambridge" && tenthBoard !== "other"}
                         placeholder="e.g. 91.4"
-                        {...num("tenthPercentage")}
+                        {...nullableNum("tenthPercentage")}
                       />
                       <ErrorText>{errors.tenthPercentage?.message}</ErrorText>
                     </div>
@@ -788,14 +864,29 @@ export function SrfPage({
                         <ErrorText>{errors.twelfthBoardOther?.message}</ErrorText>
                       </div>
                     )}
+                    {(twelfthBoard === "cambridge" || twelfthBoard === "other") && (
+                      <div>
+                        <TextField
+                          label="12th grade"
+                          required
+                          placeholder="e.g. A*, A, B"
+                          {...register("twelfthGrade")}
+                        />
+                        <ErrorText>{errors.twelfthGrade?.message}</ErrorText>
+                      </div>
+                    )}
                     <div>
                       <TextField
-                        label="12th marks (%)"
+                        label={
+                          twelfthBoard === "cambridge" || twelfthBoard === "other"
+                            ? "12th marks (%) (optional)"
+                            : "12th marks (%)"
+                        }
                         type="number"
                         step="0.01"
-                        required
+                        required={twelfthBoard !== "cambridge" && twelfthBoard !== "other"}
                         placeholder="e.g. 88.0"
-                        {...num("twelfthPercentage")}
+                        {...nullableNum("twelfthPercentage")}
                       />
                       <ErrorText>{errors.twelfthPercentage?.message}</ErrorText>
                     </div>
@@ -995,30 +1086,48 @@ export function SrfPage({
                      */}
                     <div>
                       <Field label="Degree and branch" required>
-                        {(id) => (
-                          <select
-                            id={id}
-                            className={controlClass}
-                            value={programmeKey(degreeValue, branchValue)}
-                            onChange={(e) => {
-                              const chosen = splitProgrammeKey(e.target.value);
-                              setValue("degree", chosen.degree, { shouldValidate: true });
-                              setValue("branch", chosen.branch, { shouldValidate: true });
-                            }}
-                          >
-                            <option value={programmeKey("", "")} disabled>
-                              Select…
-                            </option>
-                            {programmes.map((p) => (
-                              <option
-                                key={programmeKey(p.degree, p.branch)}
-                                value={programmeKey(p.degree, p.branch)}
-                              >
-                                {programmeLabel(p.degree, p.branch)}
+                        {(id) => {
+                          const hasCustomCurrent =
+                            degreeValue !== "" &&
+                            !programmes.some(
+                              (p) => p.degree === degreeValue && p.branch === branchValue,
+                            );
+                          return (
+                            <select
+                              id={id}
+                              className={controlClass}
+                              value={programmeKey(degreeValue, branchValue)}
+                              onChange={(e) => {
+                                const chosen = splitProgrammeKey(e.target.value);
+                                setValue("degree", chosen.degree, {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                                setValue("branch", chosen.branch, {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                              }}
+                            >
+                              <option value={programmeKey("", "")} disabled>
+                                Select…
                               </option>
-                            ))}
-                          </select>
-                        )}
+                              {hasCustomCurrent && (
+                                <option value={programmeKey(degreeValue, branchValue)}>
+                                  {programmeLabel(degreeValue, branchValue)}
+                                </option>
+                              )}
+                              {programmes.map((p) => (
+                                <option
+                                  key={programmeKey(p.degree, p.branch)}
+                                  value={programmeKey(p.degree, p.branch)}
+                                >
+                                  {programmeLabel(p.degree, p.branch)}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        }}
                       </Field>
                       {programmes.length === 0 && (
                         <p className="mt-1 text-xs text-destructive">
@@ -1090,13 +1199,15 @@ export function SrfPage({
                           required
                           {...num(`semesters.${index}.currentArrears`)}
                         />
+                        <ErrorText>{errors.semesters?.[index]?.currentArrears?.message}</ErrorText>
                         <TextField
                           label={`Semester ${semester.semesterNumber} arrear history`}
                           type="number"
                           required
-                          hint="Including cleared ones."
+                          hint="Total arrears in your degree up to this semester (including cleared ones)."
                           {...num(`semesters.${index}.historyOfArrears`)}
                         />
+                        <ErrorText>{errors.semesters?.[index]?.historyOfArrears?.message}</ErrorText>
                         <ErrorText>{errors.semesters?.[index]?.marks?.message}</ErrorText>
                         {semesters.length > 1 && (
                           <button
@@ -1216,9 +1327,14 @@ export function SrfPage({
                           // when several are on screen, so the reason goes on the
                           // field that is actually empty.
                           error={
-                            errors.resumes !== undefined && !resumeCategories.includes(category)
+                            (
+                              errors.resumes as
+                                | Record<string, { message?: string } | undefined>
+                                | undefined
+                            )?.[category]?.message ??
+                            (errors.resumes !== undefined && !resumeCategories.includes(category)
                               ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
-                              : undefined
+                              : undefined)
                           }
                           onChange={(e) => {
                             const file = e.target.files?.[0];
@@ -1397,7 +1513,25 @@ export function SrfPage({
                                   id={`certificate-file-${index}`}
                                   type="file"
                                   accept="application/pdf,image/*"
-                                  onChange={(e) => file.onChange(e.target.files?.[0] ?? null)}
+                                  onChange={(e) => {
+                                    const fileSelected = e.target.files?.[0] ?? null;
+                                    file.onChange(fileSelected);
+                                    if (fileSelected !== null) {
+                                      const currentName = getValues(`certificates.${index}.name`);
+                                      if (
+                                        !currentName ||
+                                        currentName.trim() === "" ||
+                                        currentName.trim().toLowerCase() ===
+                                          "e.g. aws cloud practitioner"
+                                      ) {
+                                        setValue(
+                                          `certificates.${index}.name`,
+                                          filenameToCertificateName(fileSelected.name),
+                                          { shouldValidate: true, shouldDirty: true },
+                                        );
+                                      }
+                                    }
+                                  }}
                                   className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                                 />
                               </div>
@@ -1447,6 +1581,20 @@ export function SrfPage({
                   >
                     {serverError}
                   </p>
+                )}
+
+                {submitAttempted && Object.keys(errors).length > 0 && (
+                  <div
+                    role="alert"
+                    className="mt-4 rounded-lg border border-danger-500/40 bg-danger-50 p-4 text-sm text-danger-900"
+                  >
+                    <p className="font-semibold text-danger-900">
+                      Cannot submit yet. Please fix the highlighted errors in the form above.
+                    </p>
+                    <p className="mt-1 text-xs text-danger-800">
+                      Check your personal details, academic record, marksheet uploads, or required consent.
+                    </p>
+                  </div>
                 )}
 
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">

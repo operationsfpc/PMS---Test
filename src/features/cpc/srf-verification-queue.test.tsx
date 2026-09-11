@@ -17,13 +17,15 @@ const row = {
   fullName: "Asha Ramanathan",
   rollNumber: "TEC001",
   overallCgpa: 8.2,
-  currentArrears: 0,
-  historyOfArrears: 1,
+  currentArrears: 1,
+  historyOfArrears: 2,
   tenthPercentage: 91.4,
   twelfthPercentage: 88,
   // The board is verified against the same document as the marks (2026-08-18).
   tenthBoard: { board: "state_board" as const, state: "Tamil Nadu", other: null },
   twelfthBoard: { board: "cbse" as const, state: null, other: null },
+  tenthGrade: null,
+  twelfthGrade: null,
   submittedAt: "2026-08-01T10:00:00Z",
   /** Non-null only on a form this coordinator has already sent back once. */
   previousRejectionReason: null,
@@ -35,10 +37,11 @@ const row = {
     {
       id: "c1",
       name: "AWS Cloud Practitioner",
+      fileName: null,
       url: "https://signed/aws",
       status: "pending" as const,
     },
-    { id: "c2", name: "NPTEL Data Structures", url: null, status: "pending" as const },
+    { id: "c2", name: "NPTEL Data Structures", fileName: null, url: null, status: "pending" as const },
   ],
   semesters: [
     {
@@ -251,7 +254,13 @@ describe("SrfVerificationQueue — certificates", () => {
             {
               ...row,
               certificates: [
-                { id: "c1", name: "AWS Cloud Practitioner", url: null, status: "pending" as const },
+                {
+                  id: "c1",
+                  name: "AWS Cloud Practitioner",
+                  fileName: null,
+                  url: null,
+                  status: "pending" as const,
+                },
               ],
             },
           ],
@@ -284,6 +293,7 @@ describe("SrfVerificationQueue — certificates", () => {
                 {
                   id: "c1",
                   name: "AWS Cloud Practitioner",
+                  fileName: null,
                   url: null,
                   status: "verified" as const,
                 },
@@ -431,5 +441,46 @@ describe("what the coordinator is shown before deciding", () => {
 
     await screen.findByText("Asha Ramanathan");
     expect(screen.queryByText(/resubmitted/i)).toBeNull();
+  });
+
+  it("displays Cambridge / IGCSE grades for coordinator verification", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...row,
+              tenthPercentage: null,
+              tenthGrade: "A*",
+              tenthBoard: { board: "cambridge" as const, state: null, other: null },
+              twelfthPercentage: 89,
+              twelfthGrade: "A",
+              twelfthBoard: { board: "cambridge" as const, state: null, other: null },
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText("Grade: A*")).toBeDefined();
+    expect(screen.getByText("89% (Grade: A)")).toBeDefined();
+  });
+
+  it("displays standing arrears from declared semesters", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...row,
+              currentArrears: 3,
+              historyOfArrears: 5,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText("3")).toBeDefined();
   });
 });

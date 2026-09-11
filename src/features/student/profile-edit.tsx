@@ -13,6 +13,7 @@ import {
   type ProfileLink,
   validateProfileLinks,
 } from "@domain/profile-links";
+import { filenameToCertificateName } from "@domain/storage-path";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import type {
@@ -431,7 +432,17 @@ export function ProfileEditPage({
                 // The same list the SRF accepts: a certificate is as likely to
                 // be photographed as scanned.
                 accept="application/pdf,image/*"
-                onChange={(e) => setCertificateFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  const selected = e.target.files?.[0] ?? null;
+                  setCertificateFile(selected);
+                  if (
+                    selected !== null &&
+                    (certificateName.trim() === "" ||
+                      certificateName.trim().toLowerCase() === "e.g. aws cloud practitioner")
+                  ) {
+                    setCertificateName(filenameToCertificateName(selected.name));
+                  }
+                }}
                 className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-sm"
               />
             </div>

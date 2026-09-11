@@ -111,6 +111,9 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
                     <p className="font-[Raleway] text-base font-bold text-ink-900">
                       {certificate.name}
                     </p>
+                    {certificate.fileName !== null && (
+                      <p className="text-xs text-ink-500 font-mono">({certificate.fileName})</p>
+                    )}
                     <p className="mt-0.5 text-sm text-ink-700">{certificate.studentName}</p>
                     <p className="text-xs text-ink-500">{certificate.rollNumber}</p>
                   </div>

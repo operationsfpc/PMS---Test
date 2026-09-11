@@ -81,6 +81,8 @@ describe("SrfVerificationQueue", () => {
         twelfthPercentage: 88,
         tenthBoard: { board: "cbse" as const, state: null, other: null },
         twelfthBoard: { board: "cbse" as const, state: null, other: null },
+        tenthGrade: null,
+        twelfthGrade: null,
         submittedAt: "2026-08-01T10:00:00Z",
         previousRejectionReason: null,
         documents: [{ kind: "tenth_marksheet", label: "10th marksheet", url: "https://signed/10" }],
@@ -92,6 +94,7 @@ describe("SrfVerificationQueue", () => {
           {
             id: "c1",
             name: "AWS Cloud Practitioner",
+            fileName: null,
             url: "https://signed/aws",
             status: "pending" as const,
           },

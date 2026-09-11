@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>FACE Prep Campus — Email Template Previewer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #sidebar {
+      width: 320px;
+      background: #1e293b;
+      border-right: 1px solid #334155;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    #sidebar-header {
+      padding: 20px;
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+    }
+    #sidebar-header h2 {
+      margin: 0 0 6px 0;
+      font-size: 16px;
+      color: #38bdf8;
+    }
+    #sidebar-header p {
+      margin: 0;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    #template-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+    .template-btn {
+      width: 100%;
+      text-align: left;
+      background: #1e293b;
+      border: 1px solid #334155;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      color: #e2e8f0;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .template-btn:hover {
+      background: #334155;
+      border-color: #64748b;
+    }
+    .template-btn.active {
+      background: #3d3777;
+      border-color: #ffb800;
+      color: #ffffff;
+      font-weight: 600;
+    }
+    .template-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #0f172a;
+      color: #ffb800;
+      margin-right: 6px;
+    }
+    #preview-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #cbd5e1;
+    }
+    #topbar {
+      height: 52px;
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    #topbar strong {
+      color: #f8fafc;
+    }
+    #iframe-container {
+      flex: 1;
+      padding: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      overflow-y: auto;
+    }
+    iframe {
+      width: 640px;
+      height: 750px;
+      background: #ffffff;
+      border: 1px solid #94a3b8;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2>FACE Prep Campus</h2>
+      <p>Live Email Notification Template Preview</p>
+    </div>
+    <div id="template-list">
+      <button class="template-btn active" onclick="load(0)"><span class="template-tag">S1</span>Welcome & SRF Invite</button>
+      <button class="template-btn" onclick="load(1)"><span class="template-tag">S2</span>Drive Published</button>
+      <button class="template-btn" onclick="load(2)"><span class="template-tag">S3</span>Shortlist Round 1</button>
+      <button class="template-btn" onclick="load(3)"><span class="template-tag">S4</span>Round Schedule & Venue</button>
+      <button class="template-btn" onclick="load(4)"><span class="template-tag">S5</span>Personal Interview Slot</button>
+      <button class="template-btn" onclick="load(5)"><span class="template-tag">S6</span>Round Cleared / Selected</button>
+      <button class="template-btn" onclick="load(6)"><span class="template-tag">S8</span>Offer Letter Declared</button>
+      <button class="template-btn" onclick="load(7)"><span class="template-tag">S9</span>Attendance Warning (Absent)</button>
+      <button class="template-btn" onclick="load(8)"><span class="template-tag">M1</span>Staff Onboarding Invite</button>
+    </div>
+  </div>
+  <div id="preview-area">
+    <div id="topbar">
+      <div>Subject: <strong id="subject-display">Welcome to FACE Prep Campus Placements — Complete Your Profile</strong></div>
+      <div>Header: <strong>Light Logo &bull; Vibrant Brand Bar &bull; Indigo Card</strong></div>
+    </div>
+    <div id="iframe-container">
+      <iframe id="preview-frame" frameborder="0"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const templates = [
+      {
+        subject: "Welcome to FACE Prep Campus Placements — Complete Your Profile",
+        title: "Welcome to FACE Prep Campus Placements — Complete Your Profile",
+        body: "Your placement account for Kamaraj College is now active on the FACE Prep Campus Placement Management System (PMS).\n\nTo participate in upcoming campus placement and internship drives, you must complete and submit your Student Registration Form (SRF). This includes verifying your academic records and uploading your semester marksheets.\n\nYour Details on Record:\n• Roll Number: 2026CS101\n• Degree & Branch: B.E. Computer Science & Engineering\n• Passing Year: 2026\n\nPlease sign in using your registered Google account and complete your profile before the registration deadline.",
+        btn: "Complete Registration Form",
+        url: "https://faceprepcampus.com/student/srf"
+      },
+      {
+        subject: "New Drive: Zoho Corporation is hiring for Software Engineer",
+        title: "New Drive: Zoho Corporation is hiring for Software Engineer",
+        body: "A new placement drive has been announced for your cohort:\n\n==================================================\nCompany:         Zoho Corporation\nRole:            Software Development Engineer\nDrive Type:      Placement\nCategory:        Super Dream\nCompensation:    ₹8.50 LPA\nApplication Due: 10 Sep 2026, 06:00 PM IST\n==================================================\n\nEligibility Criteria:\n• Minimum CGPA: 7.50\n• Maximum Backlogs: 0\n• Targeted Campuses: Kamaraj College, SDNB Vaishnav\n\nPlease review the job description, bond terms, and shift requirements carefully before applying.",
+        btn: "View Drive & Apply",
+        url: "https://faceprepcampus.com/student/drives/d1"
+      },
+      {
+        subject: "Shortlisted: You are shortlisted for Zoho Corporation",
+        title: "Shortlisted: You are shortlisted for Zoho Corporation",
+        body: "Congratulations! You have been shortlisted for the Zoho Corporation placement drive (Software Development Engineer).\n\nRound 1 is next. You are expected to attend every scheduled round for this drive. Details regarding date, time, and venue/meeting links will follow shortly.\n\nDrive Summary:\n• Company: Zoho Corporation\n• Role: Software Development Engineer\n• Drive Type: Placement",
+        btn: "View Application Status",
+        url: "https://faceprepcampus.com/student/drives/d1"
+      },
+      {
+        subject: "Zoho Corporation — Technical Assessment Round 1 Schedule",
+        title: "Zoho Corporation — Technical Assessment Round 1 Schedule",
+        body: "The schedule for Round 1 of Zoho Corporation has been published:\n\n• Round:        Technical Assessment (Round 1)\n• Date & Time:  12 Sep 2026, 10:00 AM IST\n• Mode:         Physical (On Campus)\n• Venue:        Main Academic Block, Computer Lab 3\n• Instructions: Please arrive 15 minutes before the scheduled time with your college ID card and resume copy.",
+        btn: "View Drive Dashboard",
+        url: "https://faceprepcampus.com/student/drives/d1"
+      },
+      {
+        subject: "Zoho Corporation — Your Technical Interview Slot",
+        title: "Zoho Corporation — Your Technical Interview Slot",
+        body: "Your individual interview slot for Round 2 of Zoho Corporation has been scheduled:\n\n• Date & Time:  12 Sep 2026, 02:30 PM IST\n• Meeting Link: https://meet.google.com/xyz-face-prep\n• Round:        Technical Interview\n\nPlease join the link 5 minutes prior to your time slot with your college ID card ready.",
+        btn: "Join Interview Room",
+        url: "https://meet.google.com/xyz-face-prep"
+      },
+      {
+        subject: "Well done — You cleared Round 1 of Zoho Corporation",
+        title: "Well done — You cleared Round 1 of Zoho Corporation",
+        body: "Great news! You have successfully cleared Round 1 (Technical Assessment) of the Zoho Corporation placement drive.\n\nYou are advancing to Round 2 (Technical Interview). The schedule and room link will be shared shortly on your student dashboard.\n\nKeep up the great performance!",
+        btn: "View Drive Progress",
+        url: "https://faceprepcampus.com/student/drives/d1"
+      },
+      {
+        subject: "Congratulations — Offer from Zoho Corporation (Super Dream)!",
+        title: "Congratulations — Offer from Zoho Corporation (Super Dream)!",
+        body: "Heartiest congratulations!\n\nZoho Corporation has formally extended you an offer for the position of Software Development Engineer.\n\nOffer Details:\n• Company:        Zoho Corporation\n• Role:           Software Development Engineer\n• Offer Category: Super Dream\n• CTC:            ₹8.50 LPA\n• Date Declared:  04 Sep 2026\n\nYour official offer letter has been uploaded to your PMS portal. This is a testament to your hard work and dedication. We wish you immense success in your professional career!",
+        btn: "View Offer & Download Letter",
+        url: "https://faceprepcampus.com/student/notifications"
+      },
+      {
+        subject: "Urgent: Attendance Notice for Zoho Corporation Drive",
+        title: "Urgent: Attendance Notice for Zoho Corporation Drive",
+        body: "You were recorded as ABSENT for Round 1 of the Zoho Corporation placement drive held on 12 Sep 2026.\n\nUnder placement policy guidelines:\n• Attendance in all scheduled rounds is mandatory once shortlisted.\n• Unexcused absences across drives are audited and accumulated.\n• Repeated absences lead to immediate review and potential disbarment from future campus drives.\n\nIf you believe this record is an error or had an approved exemption, please contact your Campus Placement Coordinator immediately.",
+        btn: "Contact Coordinator",
+        url: "https://faceprepcampus.com/student/dashboard"
+      },
+      {
+        subject: "Invitation to FACE Prep Campus PMS as Campus Placement Coordinator",
+        title: "Welcome to the Team, Dr. K. Ramanathan",
+        body: "You have been invited to join the FACE Prep Campus Placement Management System (PMS) as:\n\n• Assigned Role: Campus Placement Coordinator\n• Assigned Campus: Kamaraj College\n• Authorized Login Email: cpc@kamarajcollege.edu\n\nYour PMS account allows you to manage drives, verify student credentials, and oversee placement operations according to your role permissions.",
+        btn: "Sign In with Google",
+        url: "https://faceprepcampus.com/login"
+      }
+    ];
+
+    function buildHtml(item) {
+      return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+</head>
+<body style="margin: 0; padding: 0; background-color: #F1F5F9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #0F172A;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F1F5F9; padding: 24px 12px;">
+    <tr>
+      <td align="center">
+        <!-- Main Card (600px) -->
+        <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); max-width: 100%;">
+          <!-- Top Vibrant Brand Stripe -->
+          <tr>
+            <td height="4" style="background: linear-gradient(90deg, #3D3777 0%, #A46AFC 50%, #FFB800 100%); line-height: 4px; font-size: 4px;">&nbsp;</td>
+          </tr>
+          <!-- Header with Logo -->
+          <tr>
+            <td style="background-color: #3D3777; padding: 22px 28px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="left" valign="middle">
+                    <img src="https://fpc-pms.faceprep.workers.dev/brand/faceprep-campus-light.png" alt="FACE Prep Campus" height="32" style="height: 32px; width: auto; max-height: 32px; display: block; border: 0;" />
+                    <div style="font-size: 11px; font-weight: 600; color: #E0E7FF; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 5px;">Placement Management System</div>
+                  </td>
+                  <td align="right" valign="middle">
+                    <span style="display: inline-block; background-color: rgba(255, 255, 255, 0.12); color: #FFB800; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; padding: 4px 10px; border-radius: 12px; text-transform: uppercase; border: 1px solid rgba(255, 184, 0, 0.3);">Official Notice</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 32px 28px;">
+              <h1 style="margin: 0 0 16px 0; font-size: 19px; color: #1E1B4B; font-weight: 700; line-height: 1.3;">${item.title}</h1>
+              <p style="font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 18px 0;">Dear <strong style="color: #0F172A;">Asha Devi</strong>,</p>
+              
+              <!-- Styled Message Box -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #3D3777; border-radius: 6px; margin: 18px 0 24px 0;">
+                <tr>
+                  <td style="padding: 16px 18px; font-size: 14px; line-height: 1.65; color: #334155; white-space: pre-line;">
+${item.body}
+                  </td>
+                </tr>
+              </table>
+
+              <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 8px; margin-bottom: 8px;">
+                <tr>
+                  <td align="center" bgcolor="#3D3777" style="border-radius: 6px;">
+                    <a href="${item.url}" target="_blank" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; display: inline-block; padding: 12px 26px; letter-spacing: 0.2px;">
+                      ${item.btn} &rarr;
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size: 13px; line-height: 1.5; color: #64748B; margin: 24px 0 0 0;">
+                Please ensure you review all drive requirements and schedules on your student dashboard.
+              </p>
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #F8FAFC; padding: 20px 28px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; line-height: 1.6;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="left">
+                    <p style="margin: 0 0 4px 0; font-weight: 600; color: #334155;">FACE Prep Campus &bull; Focus 4D Career Education Pvt Ltd</p>
+                    <p style="margin: 0;">For questions, contact your coordinator or write to <a href="mailto:hello@faceprep.in" style="color: #3D3777; font-weight: 600; text-decoration: underline;">hello@faceprep.in</a></p>
+                  </td>
+                  <td align="right" valign="top">
+                    <span style="font-size: 11px; color: #94A3B8;">Confidential</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body></html>`;
+    }
+
+    function load(index) {
+      document.querySelectorAll('.template-btn').forEach((b, i) => {
+        b.classList.toggle('active', i === index);
+      });
+      const t = templates[index];
+      document.getElementById('subject-display').innerText = t.subject;
+      const frame = document.getElementById('preview-frame');
+      frame.srcdoc = buildHtml(t);
+    }
+
+    load(0);
+  </script>
+</body>
+</html>

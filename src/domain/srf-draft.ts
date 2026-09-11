@@ -55,11 +55,13 @@ export interface SubmittedSrfRecord {
   readonly tenthBoard?: string | null;
   readonly tenthBoardState?: string | null;
   readonly tenthBoardOther?: string | null;
+  readonly tenthGrade?: string | null;
   readonly twelfthInstitution?: string | null;
   readonly twelfthPercentage?: number | null;
   readonly twelfthBoard?: string | null;
   readonly twelfthBoardState?: string | null;
   readonly twelfthBoardOther?: string | null;
+  readonly twelfthGrade?: string | null;
   readonly diplomaInstitution?: string | null;
   readonly diplomaUniversity?: string | null;
   readonly diplomaMarks?: number | null;
@@ -139,11 +141,13 @@ export function srfValuesFromSubmitted(record: SubmittedSrfRecord): Record<strin
     tenthBoard: str(record.tenthBoard),
     tenthBoardState: str(record.tenthBoardState),
     tenthBoardOther: str(record.tenthBoardOther),
+    tenthGrade: str(record.tenthGrade),
     twelfthInstitution: str(record.twelfthInstitution),
     twelfthPercentage: orNull(record.twelfthPercentage),
     twelfthBoard: str(record.twelfthBoard),
     twelfthBoardState: str(record.twelfthBoardState),
     twelfthBoardOther: str(record.twelfthBoardOther),
+    twelfthGrade: str(record.twelfthGrade),
 
     diplomaInstitution: str(record.diplomaInstitution),
     diplomaUniversity: str(record.diplomaUniversity),

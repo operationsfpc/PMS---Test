@@ -277,9 +277,11 @@ export function createSupabaseSrfRepository(
           tenth_board: values.tenthBoard,
           tenth_board_state: orNull(values.tenthBoardState),
           tenth_board_other: orNull(values.tenthBoardOther),
+          tenth_grade: values.tenthGrade === "" ? null : values.tenthGrade,
           twelfth_board: values.twelfthBoard,
           twelfth_board_state: orNull(values.twelfthBoardState),
           twelfth_board_other: orNull(values.twelfthBoardOther),
+          twelfth_grade: values.twelfthGrade === "" ? null : values.twelfthGrade,
           // All-or-nothing, enforced by the DB too (0024): a declared figure
           // with no college and no marksheet is a mark nobody can verify.
           diploma_institution:
@@ -362,6 +364,7 @@ export function createSupabaseSrfRepository(
       });
 
       if (error !== null) {
+        console.error("submit_srf failed:", error);
         throw new SrfSubmitError(translate(error.code, error.message));
       }
 
@@ -409,6 +412,9 @@ export function createSupabaseSrfRepository(
  * can actually cause; keep everything else generic so we never leak internals.
  */
 function translate(code: string | undefined, message: string): string {
+  if (code === "23514" && (/size_bytes/.test(message) || /student_documents/.test(message))) {
+    return "One or more uploaded files are empty (0 bytes) or exceed the 5MB size limit. Please check your uploaded marksheets, resumes, and certificates.";
+  }
   if (code === "23514" && /arrears_consistent/.test(message)) {
     return "Your arrear history cannot be lower than your standing arrears.";
   }

@@ -97,6 +97,33 @@ describe("SrfPage", () => {
       expect(screen.getByLabelText(/semester 1 standing arrears/i)).toBeDefined();
       expect(screen.getByLabelText(/semester 1 arrear history/i)).toBeDefined();
     });
+
+    it("renders grade input and makes percentage optional when Cambridge is selected", async () => {
+      render(<SrfPage />);
+      expect(screen.queryByLabelText(/10th grade/i)).toBeNull();
+
+      const tenthBoardSelect = screen.getByLabelText(/10th board/i);
+      await userEvent.selectOptions(tenthBoardSelect, "cambridge");
+
+      expect(screen.getByLabelText(/10th grade/i)).toBeDefined();
+      expect(screen.getByLabelText(/10th marks \(%\) \(optional\)/i)).toBeDefined();
+
+      const twelfthBoardSelect = screen.getByLabelText(/12th board/i);
+      await userEvent.selectOptions(twelfthBoardSelect, "cambridge");
+
+      expect(screen.getByLabelText(/12th grade/i)).toBeDefined();
+      expect(screen.getByLabelText(/12th marks \(%\) \(optional\)/i)).toBeDefined();
+    });
+
+    it("renders grade input and makes percentage optional when Other board is selected", async () => {
+      render(<SrfPage />);
+      const tenthBoardSelect = screen.getByLabelText(/10th board/i);
+      await userEvent.selectOptions(tenthBoardSelect, "other");
+
+      expect(screen.getByLabelText(/name the 10th board/i)).toBeDefined();
+      expect(screen.getByLabelText(/10th grade/i)).toBeDefined();
+      expect(screen.getByLabelText(/10th marks \(%\) \(optional\)/i)).toBeDefined();
+    });
   });
 
   describe("role preferences", () => {
@@ -808,5 +835,27 @@ describe("SrfPage — what the student sees of semester verification", () => {
 
     // Semester 3 was rejected, so it is the next one addable — not 4.
     expect(screen.getByRole("button", { name: /add semester 3/i })).toBeDefined();
+  });
+});
+
+describe("degree and branch dropdown", () => {
+  it("displays and retains a branchless degree like BCA", () => {
+    render(
+      <SrfPage
+        profile={{ ...ROSTER, degree: "BCA", branch: "" }}
+        programmes={[{ degree: "BCA", branch: "" }]}
+      />,
+    );
+
+    const select = screen.getByLabelText(/degree and branch/i) as HTMLSelectElement;
+    expect(select.value).toContain("BCA");
+    expect(screen.queryByText(/select your branch/i)).toBeNull();
+  });
+
+  it("retains prefilled degree even if not yet in programmes list", () => {
+    render(<SrfPage profile={{ ...ROSTER, degree: "BCA", branch: "" }} programmes={[]} />);
+
+    const select = screen.getByLabelText(/degree and branch/i) as HTMLSelectElement;
+    expect(select.value).toContain("BCA");
   });
 });

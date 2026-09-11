@@ -143,6 +143,18 @@ export function AddSemester({
           `${label}: upload the marksheet for this semester. Your coordinator verifies against it.`,
         );
       }
+
+      const standing = Number(row.standing === "" ? 0 : row.standing);
+      const history = Number(row.history === "" ? 0 : row.history);
+
+      if (!Number.isInteger(standing) || standing < 0) {
+        found.push(`${label}: standing arrears must be a non-negative whole number.`);
+      }
+      if (!Number.isInteger(history) || history < 0) {
+        found.push(`${label}: arrear history must be a non-negative whole number.`);
+      } else if (history < standing) {
+        found.push(`${label}: arrear history cannot be less than standing arrears.`);
+      }
     }
 
     return found;

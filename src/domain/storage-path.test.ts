@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { objectKeyIn } from "./storage-path";
+import { extractOriginalFilename, filenameToCertificateName, objectKeyIn } from "./storage-path";
 
 /**
  * 2026-08-26 — the recruiter export failed for every drive with
@@ -55,5 +55,40 @@ describe("objectKeyIn", () => {
 
   it("passes an empty path straight through rather than inventing one", () => {
     expect(objectKeyIn("resumes", "")).toBe("");
+  });
+});
+
+describe("extractOriginalFilename", () => {
+  it("extracts filename from SRF certificate path with slot and timestamp", () => {
+    expect(
+      extractOriginalFilename("student-1/certificate-0-1787027936502-AWS_Cloud_Practitioner.pdf"),
+    ).toBe("AWS_Cloud_Practitioner.pdf");
+  });
+
+  it("extracts filename from profile certificate path with timestamp", () => {
+    expect(
+      extractOriginalFilename("student-1/certificate-1787027936502-Python_Certificate.png"),
+    ).toBe("Python_Certificate.png");
+  });
+
+  it("extracts filename from bare timestamp path", () => {
+    expect(extractOriginalFilename("student-1/1787027936502-my certificate (1).pdf")).toBe(
+      "my certificate (1).pdf",
+    );
+  });
+
+  it("returns null for null, undefined, or empty path", () => {
+    expect(extractOriginalFilename(null)).toBeNull();
+    expect(extractOriginalFilename(undefined)).toBeNull();
+    expect(extractOriginalFilename("")).toBeNull();
+  });
+});
+
+describe("filenameToCertificateName", () => {
+  it("formats filename into readable certificate title", () => {
+    expect(filenameToCertificateName("AWS_Cloud_Practitioner.pdf")).toBe("AWS Cloud Practitioner");
+    expect(filenameToCertificateName("python-masterclass-2026.png")).toBe(
+      "python masterclass 2026",
+    );
   });
 });

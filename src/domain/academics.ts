@@ -83,10 +83,15 @@ export function academicStandingFrom(
   const latest = latestVerifiedSemester(semesters);
   if (latest === null) return null;
 
+  const maxHistory = Math.max(
+    latest.historyOfArrears,
+    ...semesters.filter((s) => s.verified).map((s) => s.historyOfArrears),
+  );
+
   return {
     cgpa: latest.cgpa,
     currentArrears: latest.currentArrears,
-    historyOfArrears: latest.historyOfArrears,
+    historyOfArrears: maxHistory,
   };
 }
 
@@ -123,6 +128,23 @@ export function validateSemesters(
     } else if (semester.historyOfArrears < semester.currentArrears) {
       // History includes cleared backlogs, so it can never be the smaller number.
       problems.push(`Semester ${n}: history of arrears cannot be less than current arrears.`);
+    }
+  }
+
+  const sortedBySem = [...semesters].sort((a, b) => a.semesterNumber - b.semesterNumber);
+  for (let i = 1; i < sortedBySem.length; i++) {
+    const prev = sortedBySem[i - 1];
+    const curr = sortedBySem[i];
+    if (
+      curr &&
+      prev &&
+      curr.historyOfArrears >= 0 &&
+      prev.historyOfArrears >= 0 &&
+      curr.historyOfArrears < prev.historyOfArrears
+    ) {
+      problems.push(
+        `Semester ${curr.semesterNumber}: history of arrears (${curr.historyOfArrears}) cannot be less than Semester ${prev.semesterNumber} (${prev.historyOfArrears}). Arrear history is cumulative.`,
+      );
     }
   }
 

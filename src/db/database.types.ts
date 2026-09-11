@@ -6,40 +6,12 @@
 export type Json = string | number | boolean | null | { [k: string]: Json } | Json[];
 
 export interface Enums {
-  app_role:
-    | "admin"
-    | "student"
-    | "campus_placement_coordinator"
-    | "campus_manager"
-    | "account_executive"
-    | "delivery_head"
-    | "central_placement_coordinator"
-    | "key_account_manager"
-    | "enterprise_relations"
-    | "er_head"
-    | "ceo";
+  app_role: "admin" | "student" | "campus_placement_coordinator" | "campus_manager" | "account_executive" | "delivery_head" | "central_placement_coordinator" | "key_account_manager" | "enterprise_relations" | "er_head" | "ceo";
   arrear_policy: "no_standing" | "no_history" | "flexible";
   attendance_status: "scheduled" | "present" | "absent" | "provisional";
-  document_kind:
-    | "tenth_marksheet"
-    | "twelfth_marksheet"
-    | "semester_marksheet"
-    | "resume"
-    | "offer_letter"
-    | "opt_out_declaration"
-    | "ug_consolidated_marksheet"
-    | "diploma_marksheet"
-    | "certificate";
+  document_kind: "tenth_marksheet" | "twelfth_marksheet" | "semester_marksheet" | "resume" | "offer_letter" | "opt_out_declaration" | "ug_consolidated_marksheet" | "diploma_marksheet" | "certificate";
   drive_mode: "on_campus" | "physical_outside_campus" | "virtual" | "pooled";
-  drive_status:
-    | "draft"
-    | "submitted"
-    | "approved"
-    | "live"
-    | "applications_closed"
-    | "in_rounds"
-    | "completed"
-    | "rejected";
+  drive_status: "draft" | "submitted" | "approved" | "live" | "applications_closed" | "in_rounds" | "completed" | "rejected";
   drive_type: "placement" | "internship_convertible" | "internship";
   joining_timeline: "immediate" | "later";
   marks_scale: "cgpa" | "percentage";
@@ -47,12 +19,7 @@ export interface Enums {
   offer_source: "on_campus" | "self_placed";
   participation_status: "active" | "opted_out" | "disbarred";
   programme_level: "ug" | "pg";
-  role_category:
-    | "software_technical"
-    | "technical_support_it_ops"
-    | "digital_marketing"
-    | "sales"
-    | "operations_business";
+  role_category: "software_technical" | "technical_support_it_ops" | "digital_marketing" | "sales" | "operations_business";
   round_result: "selected" | "rejected" | "waitlisted" | "on_hold";
   school_board: "state_board" | "cbse" | "cisce" | "nios" | "ib" | "cambridge" | "other";
   srf_status: "invited" | "registered" | "srf_submitted" | "srf_approved" | "srf_rejected";
@@ -68,11 +35,7 @@ export interface ApplicationsRow {
   resume_id: string | null;
 }
 
-export type ApplicationsInsert = Pick<
-  ApplicationsRow,
-  "drive_id" | "student_id" | "profile_snapshot"
-> &
-  Partial<Pick<ApplicationsRow, "id" | "applied_at" | "resume_id">>;
+export type ApplicationsInsert = Pick<ApplicationsRow, "drive_id" | "student_id" | "profile_snapshot"> & Partial<Pick<ApplicationsRow, "id" | "applied_at" | "resume_id">>;
 
 export interface AttendanceRow {
   id: string;
@@ -84,8 +47,7 @@ export interface AttendanceRow {
   confirmed_by: string | null;
 }
 
-export type AttendanceInsert = Pick<AttendanceRow, "round_id" | "application_id"> &
-  Partial<Pick<AttendanceRow, "id" | "status" | "marked_by" | "marked_at" | "confirmed_by">>;
+export type AttendanceInsert = Pick<AttendanceRow, "round_id" | "application_id"> & Partial<Pick<AttendanceRow, "id" | "status" | "marked_by" | "marked_at" | "confirmed_by">>;
 
 export interface AuditLogRow {
   id: number;
@@ -99,10 +61,7 @@ export interface AuditLogRow {
   created_at: string;
 }
 
-export type AuditLogInsert = Pick<AuditLogRow, "entity_table" | "entity_id" | "action"> &
-  Partial<
-    Pick<AuditLogRow, "id" | "actor_id" | "before_data" | "after_data" | "reason" | "created_at">
-  >;
+export type AuditLogInsert = Pick<AuditLogRow, "entity_table" | "entity_id" | "action"> & Partial<Pick<AuditLogRow, "id" | "actor_id" | "before_data" | "after_data" | "reason" | "created_at">>;
 
 export interface BranchesRow {
   id: string;
@@ -111,8 +70,7 @@ export interface BranchesRow {
   is_active: boolean;
 }
 
-export type BranchesInsert = Pick<BranchesRow, "degree_id" | "name"> &
-  Partial<Pick<BranchesRow, "id" | "is_active">>;
+export type BranchesInsert = Pick<BranchesRow, "degree_id" | "name"> & Partial<Pick<BranchesRow, "id" | "is_active">>;
 
 export interface CampusDegreesRow {
   campus_id: string;
@@ -130,11 +88,7 @@ export interface CampusProgrammesRow {
   created_at: string;
 }
 
-export type CampusProgrammesInsert = Pick<
-  CampusProgrammesRow,
-  "campus_id" | "degree_id" | "passing_year"
-> &
-  Partial<Pick<CampusProgrammesRow, "id" | "branch_id" | "created_at">>;
+export type CampusProgrammesInsert = Pick<CampusProgrammesRow, "campus_id" | "degree_id" | "passing_year"> & Partial<Pick<CampusProgrammesRow, "id" | "branch_id" | "created_at">>;
 
 export interface CampusesRow {
   id: string;
@@ -149,17 +103,7 @@ export interface CampusesRow {
   is_active: boolean;
 }
 
-export type CampusesInsert = Pick<
-  CampusesRow,
-  | "name"
-  | "city_id"
-  | "code"
-  | "address"
-  | "primary_contact_name"
-  | "primary_contact_email"
-  | "primary_contact_phone"
-> &
-  Partial<Pick<CampusesRow, "id" | "created_at" | "is_active">>;
+export type CampusesInsert = Pick<CampusesRow, "name" | "city_id" | "code" | "address" | "primary_contact_name" | "primary_contact_email" | "primary_contact_phone"> & Partial<Pick<CampusesRow, "id" | "created_at" | "is_active">>;
 
 export interface CitiesRow {
   id: string;
@@ -186,11 +130,7 @@ export interface DisbarmentDecisionsRow {
   decided_at: string;
 }
 
-export type DisbarmentDecisionsInsert = Pick<
-  DisbarmentDecisionsRow,
-  "student_id" | "disbarred" | "reason" | "absence_count" | "decided_by"
-> &
-  Partial<Pick<DisbarmentDecisionsRow, "id" | "decided_at">>;
+export type DisbarmentDecisionsInsert = Pick<DisbarmentDecisionsRow, "student_id" | "disbarred" | "reason" | "absence_count" | "decided_by"> & Partial<Pick<DisbarmentDecisionsRow, "id" | "decided_at">>;
 
 export interface DriveContactsRow {
   drive_id: string;
@@ -201,8 +141,7 @@ export interface DriveContactsRow {
   phone: string | null;
 }
 
-export type DriveContactsInsert = Pick<DriveContactsRow, "drive_id" | "sequence"> &
-  Partial<Pick<DriveContactsRow, "name" | "designation" | "email" | "phone">>;
+export type DriveContactsInsert = Pick<DriveContactsRow, "drive_id" | "sequence"> & Partial<Pick<DriveContactsRow, "name" | "designation" | "email" | "phone">>;
 
 export interface DriveEligibleBranchesRow {
   drive_id: string;
@@ -234,22 +173,7 @@ export interface DriveRoundsRow {
   advance_proof_path: string | null;
 }
 
-export type DriveRoundsInsert = Pick<DriveRoundsRow, "drive_id" | "sequence" | "name"> &
-  Partial<
-    Pick<
-      DriveRoundsRow,
-      | "id"
-      | "scheduled_at"
-      | "venue"
-      | "online_link"
-      | "instructions"
-      | "created_at"
-      | "round_mode"
-      | "round_scheduled_at"
-      | "round_interview_link"
-      | "advance_proof_path"
-    >
-  >;
+export type DriveRoundsInsert = Pick<DriveRoundsRow, "drive_id" | "sequence" | "name"> & Partial<Pick<DriveRoundsRow, "id" | "scheduled_at" | "venue" | "online_link" | "instructions" | "created_at" | "round_mode" | "round_scheduled_at" | "round_interview_link" | "advance_proof_path">>;
 
 export interface DriveTargetCampusesRow {
   drive_id: string;
@@ -320,70 +244,7 @@ export interface DrivesRow {
   completed_reason: string | null;
 }
 
-export type DrivesInsert = Pick<DrivesRow, "company_name"> &
-  Partial<
-    Pick<
-      DrivesRow,
-      | "id"
-      | "industry"
-      | "company_website"
-      | "spoc_name"
-      | "spoc_designation"
-      | "spoc_email"
-      | "spoc_phone"
-      | "role_title"
-      | "role_category"
-      | "job_description"
-      | "openings"
-      | "work_locations"
-      | "ctc_min_lpa"
-      | "ctc_max_lpa"
-      | "ctc_breakup"
-      | "shift_type"
-      | "bond_details"
-      | "min_overall_cgpa"
-      | "min_tenth_percentage"
-      | "min_twelfth_percentage"
-      | "arrears_policy"
-      | "eligible_passing_years"
-      | "mandatory_skills"
-      | "drive_mode"
-      | "tentative_date"
-      | "timeline_notes"
-      | "drive_type"
-      | "offer_category"
-      | "status"
-      | "on_hold"
-      | "on_hold_reason"
-      | "open_to_all_override"
-      | "open_to_all_reason"
-      | "application_start"
-      | "application_end"
-      | "created_by"
-      | "approved_by"
-      | "approved_at"
-      | "rejection_reason"
-      | "published_by"
-      | "published_at"
-      | "created_at"
-      | "updated_at"
-      | "additional_designations"
-      | "round_count"
-      | "min_overall_marks"
-      | "min_overall_cgpa_scale"
-      | "jd_storage_path"
-      | "jd_file_name"
-      | "jd_size_bytes"
-      | "shift_night_timing"
-      | "joining_timeline"
-      | "joining_immediate_notes"
-      | "joining_later_notes"
-      | "stipend_min_monthly"
-      | "stipend_max_monthly"
-      | "venue"
-      | "completed_reason"
-    >
-  >;
+export type DrivesInsert = Pick<DrivesRow, "company_name"> & Partial<Pick<DrivesRow, "id" | "industry" | "company_website" | "spoc_name" | "spoc_designation" | "spoc_email" | "spoc_phone" | "role_title" | "role_category" | "job_description" | "openings" | "work_locations" | "ctc_min_lpa" | "ctc_max_lpa" | "ctc_breakup" | "shift_type" | "bond_details" | "min_overall_cgpa" | "min_tenth_percentage" | "min_twelfth_percentage" | "arrears_policy" | "eligible_passing_years" | "mandatory_skills" | "drive_mode" | "tentative_date" | "timeline_notes" | "drive_type" | "offer_category" | "status" | "on_hold" | "on_hold_reason" | "open_to_all_override" | "open_to_all_reason" | "application_start" | "application_end" | "created_by" | "approved_by" | "approved_at" | "rejection_reason" | "published_by" | "published_at" | "created_at" | "updated_at" | "additional_designations" | "round_count" | "min_overall_marks" | "min_overall_cgpa_scale" | "jd_storage_path" | "jd_file_name" | "jd_size_bytes" | "shift_night_timing" | "joining_timeline" | "joining_immediate_notes" | "joining_later_notes" | "stipend_min_monthly" | "stipend_max_monthly" | "venue" | "completed_reason">>;
 
 export interface EmailDeliveriesRow {
   id: string;
@@ -395,13 +256,7 @@ export interface EmailDeliveriesRow {
   updated_at: string;
 }
 
-export type EmailDeliveriesInsert = Pick<
-  EmailDeliveriesRow,
-  "notification_id" | "recipient_email"
-> &
-  Partial<
-    Pick<EmailDeliveriesRow, "id" | "provider_message_id" | "status" | "error" | "updated_at">
-  >;
+export type EmailDeliveriesInsert = Pick<EmailDeliveriesRow, "notification_id" | "recipient_email"> & Partial<Pick<EmailDeliveriesRow, "id" | "provider_message_id" | "status" | "error" | "updated_at">>;
 
 export interface NotificationsRow {
   id: string;
@@ -414,8 +269,7 @@ export interface NotificationsRow {
   drive_id: string | null;
 }
 
-export type NotificationsInsert = Pick<NotificationsRow, "student_id" | "kind" | "title" | "body"> &
-  Partial<Pick<NotificationsRow, "id" | "read_at" | "created_at" | "drive_id">>;
+export type NotificationsInsert = Pick<NotificationsRow, "student_id" | "kind" | "title" | "body"> & Partial<Pick<NotificationsRow, "id" | "read_at" | "created_at" | "drive_id">>;
 
 export interface OffersRow {
   id: string;
@@ -437,26 +291,7 @@ export interface OffersRow {
   stipend_monthly: number | null;
 }
 
-export type OffersInsert = Pick<OffersRow, "student_id" | "company_name" | "drive_type"> &
-  Partial<
-    Pick<
-      OffersRow,
-      | "id"
-      | "drive_id"
-      | "source"
-      | "role_title"
-      | "offer_category"
-      | "ctc_lpa"
-      | "declared_at"
-      | "declared_by"
-      | "offer_letter_id"
-      | "approved_by"
-      | "approved_at"
-      | "attachment_path"
-      | "attachment_name"
-      | "stipend_monthly"
-    >
-  >;
+export type OffersInsert = Pick<OffersRow, "student_id" | "company_name" | "drive_type"> & Partial<Pick<OffersRow, "id" | "drive_id" | "source" | "role_title" | "offer_category" | "ctc_lpa" | "declared_at" | "declared_by" | "offer_letter_id" | "approved_by" | "approved_at" | "attachment_path" | "attachment_name" | "stipend_monthly">>;
 
 export interface OptOutRequestsRow {
   id: string;
@@ -470,19 +305,7 @@ export interface OptOutRequestsRow {
   decision_reason: string | null;
 }
 
-export type OptOutRequestsInsert = Pick<OptOutRequestsRow, "student_id" | "reason"> &
-  Partial<
-    Pick<
-      OptOutRequestsRow,
-      | "id"
-      | "status"
-      | "decided_by"
-      | "decided_at"
-      | "created_at"
-      | "declaration_id"
-      | "decision_reason"
-    >
-  >;
+export type OptOutRequestsInsert = Pick<OptOutRequestsRow, "student_id" | "reason"> & Partial<Pick<OptOutRequestsRow, "id" | "status" | "decided_by" | "decided_at" | "created_at" | "declaration_id" | "decision_reason">>;
 
 export interface PlacementRecordOverridesRow {
   student_id: string;
@@ -492,11 +315,7 @@ export interface PlacementRecordOverridesRow {
   set_at: string;
 }
 
-export type PlacementRecordOverridesInsert = Pick<
-  PlacementRecordOverridesRow,
-  "student_id" | "offer_id" | "reason" | "set_by"
-> &
-  Partial<Pick<PlacementRecordOverridesRow, "set_at">>;
+export type PlacementRecordOverridesInsert = Pick<PlacementRecordOverridesRow, "student_id" | "offer_id" | "reason" | "set_by"> & Partial<Pick<PlacementRecordOverridesRow, "set_at">>;
 
 export interface ProfilesRow {
   id: string;
@@ -507,8 +326,7 @@ export interface ProfilesRow {
   created_at: string;
 }
 
-export type ProfilesInsert = Pick<ProfilesRow, "id" | "email" | "full_name" | "role"> &
-  Partial<Pick<ProfilesRow, "is_active" | "created_at">>;
+export type ProfilesInsert = Pick<ProfilesRow, "id" | "email" | "full_name" | "role"> & Partial<Pick<ProfilesRow, "is_active" | "created_at">>;
 
 export interface RecruiterExportsRow {
   id: string;
@@ -519,11 +337,7 @@ export interface RecruiterExportsRow {
   student_count: number;
 }
 
-export type RecruiterExportsInsert = Pick<
-  RecruiterExportsRow,
-  "drive_id" | "exported_by" | "columns" | "student_count"
-> &
-  Partial<Pick<RecruiterExportsRow, "id" | "exported_at">>;
+export type RecruiterExportsInsert = Pick<RecruiterExportsRow, "drive_id" | "exported_by" | "columns" | "student_count"> & Partial<Pick<RecruiterExportsRow, "id" | "exported_at">>;
 
 export interface RoundParticipantsRow {
   id: string;
@@ -535,13 +349,7 @@ export interface RoundParticipantsRow {
   participant_scheduled_at: string | null;
 }
 
-export type RoundParticipantsInsert = Pick<RoundParticipantsRow, "round_id" | "application_id"> &
-  Partial<
-    Pick<
-      RoundParticipantsRow,
-      "id" | "added_by" | "added_at" | "meeting_link" | "participant_scheduled_at"
-    >
-  >;
+export type RoundParticipantsInsert = Pick<RoundParticipantsRow, "round_id" | "application_id"> & Partial<Pick<RoundParticipantsRow, "id" | "added_by" | "added_at" | "meeting_link" | "participant_scheduled_at">>;
 
 export interface RoundResultsRow {
   id: string;
@@ -552,8 +360,7 @@ export interface RoundResultsRow {
   declared_at: string;
 }
 
-export type RoundResultsInsert = Pick<RoundResultsRow, "round_id" | "application_id" | "result"> &
-  Partial<Pick<RoundResultsRow, "id" | "declared_by" | "declared_at">>;
+export type RoundResultsInsert = Pick<RoundResultsRow, "round_id" | "application_id" | "result"> & Partial<Pick<RoundResultsRow, "id" | "declared_by" | "declared_at">>;
 
 export interface SelfPlacementRequestsRow {
   id: string;
@@ -569,23 +376,7 @@ export interface SelfPlacementRequestsRow {
   decision_reason: string | null;
 }
 
-export type SelfPlacementRequestsInsert = Pick<
-  SelfPlacementRequestsRow,
-  "student_id" | "company_name" | "ctc_lpa"
-> &
-  Partial<
-    Pick<
-      SelfPlacementRequestsRow,
-      | "id"
-      | "role_title"
-      | "offer_letter_id"
-      | "status"
-      | "decided_by"
-      | "decided_at"
-      | "created_at"
-      | "decision_reason"
-    >
-  >;
+export type SelfPlacementRequestsInsert = Pick<SelfPlacementRequestsRow, "student_id" | "company_name" | "ctc_lpa"> & Partial<Pick<SelfPlacementRequestsRow, "id" | "role_title" | "offer_letter_id" | "status" | "decided_by" | "decided_at" | "created_at" | "decision_reason">>;
 
 export interface SettingsRow {
   key: string;
@@ -593,8 +384,7 @@ export interface SettingsRow {
   updated_at: string;
 }
 
-export type SettingsInsert = Pick<SettingsRow, "key" | "value"> &
-  Partial<Pick<SettingsRow, "updated_at">>;
+export type SettingsInsert = Pick<SettingsRow, "key" | "value"> & Partial<Pick<SettingsRow, "updated_at">>;
 
 export interface ShortlistEntriesRow {
   id: string;
@@ -608,20 +398,7 @@ export interface ShortlistEntriesRow {
   opt_out_override_reason: string | null;
 }
 
-export type ShortlistEntriesInsert = Pick<ShortlistEntriesRow, "application_id"> &
-  Partial<
-    Pick<
-      ShortlistEntriesRow,
-      | "id"
-      | "included"
-      | "rank"
-      | "score"
-      | "rationale"
-      | "decided_by"
-      | "decided_at"
-      | "opt_out_override_reason"
-    >
-  >;
+export type ShortlistEntriesInsert = Pick<ShortlistEntriesRow, "application_id"> & Partial<Pick<ShortlistEntriesRow, "id" | "included" | "rank" | "score" | "rationale" | "decided_by" | "decided_at" | "opt_out_override_reason">>;
 
 export interface SkillAreasRow {
   id: string;
@@ -629,18 +406,14 @@ export interface SkillAreasRow {
   created_at: string;
 }
 
-export type SkillAreasInsert = Pick<SkillAreasRow, "name"> &
-  Partial<Pick<SkillAreasRow, "id" | "created_at">>;
+export type SkillAreasInsert = Pick<SkillAreasRow, "name"> & Partial<Pick<SkillAreasRow, "id" | "created_at">>;
 
 export interface StaffCampusAssignmentsRow {
   profile_id: string;
   campus_id: string;
 }
 
-export type StaffCampusAssignmentsInsert = Pick<
-  StaffCampusAssignmentsRow,
-  "profile_id" | "campus_id"
->;
+export type StaffCampusAssignmentsInsert = Pick<StaffCampusAssignmentsRow, "profile_id" | "campus_id">;
 
 export interface StaffCampusInvitationsRow {
   email: string;
@@ -658,8 +431,7 @@ export interface StaffInvitationsRow {
   accepted_at: string | null;
 }
 
-export type StaffInvitationsInsert = Pick<StaffInvitationsRow, "email" | "full_name" | "role"> &
-  Partial<Pick<StaffInvitationsRow, "invited_by" | "created_at" | "accepted_at">>;
+export type StaffInvitationsInsert = Pick<StaffInvitationsRow, "email" | "full_name" | "role"> & Partial<Pick<StaffInvitationsRow, "invited_by" | "created_at" | "accepted_at">>;
 
 export interface StudentCertificatesRow {
   id: string;
@@ -673,16 +445,7 @@ export interface StudentCertificatesRow {
   rejection_reason: string | null;
 }
 
-export type StudentCertificatesInsert = Pick<
-  StudentCertificatesRow,
-  "student_id" | "name" | "document_id"
-> &
-  Partial<
-    Pick<
-      StudentCertificatesRow,
-      "id" | "created_at" | "status" | "verified_by" | "verified_at" | "rejection_reason"
-    >
-  >;
+export type StudentCertificatesInsert = Pick<StudentCertificatesRow, "student_id" | "name" | "document_id"> & Partial<Pick<StudentCertificatesRow, "id" | "created_at" | "status" | "verified_by" | "verified_at" | "rejection_reason">>;
 
 export interface StudentDocumentsRow {
   id: string;
@@ -695,21 +458,14 @@ export interface StudentDocumentsRow {
   drive_id: string | null;
 }
 
-export type StudentDocumentsInsert = Pick<
-  StudentDocumentsRow,
-  "student_id" | "kind" | "storage_path" | "size_bytes"
-> &
-  Partial<Pick<StudentDocumentsRow, "id" | "role_category" | "uploaded_at" | "drive_id">>;
+export type StudentDocumentsInsert = Pick<StudentDocumentsRow, "student_id" | "kind" | "storage_path" | "size_bytes"> & Partial<Pick<StudentDocumentsRow, "id" | "role_category" | "uploaded_at" | "drive_id">>;
 
 export interface StudentRolePreferencesRow {
   student_id: string;
   category: Enums["role_category"];
 }
 
-export type StudentRolePreferencesInsert = Pick<
-  StudentRolePreferencesRow,
-  "student_id" | "category"
->;
+export type StudentRolePreferencesInsert = Pick<StudentRolePreferencesRow, "student_id" | "category">;
 
 export interface StudentSemestersRow {
   id: string;
@@ -728,25 +484,7 @@ export interface StudentSemestersRow {
   rejection_reason: string | null;
 }
 
-export type StudentSemestersInsert = Pick<
-  StudentSemestersRow,
-  "student_id" | "semester_number" | "cgpa" | "marksheet_id"
-> &
-  Partial<
-    Pick<
-      StudentSemestersRow,
-      | "id"
-      | "current_arrears"
-      | "history_of_arrears"
-      | "status"
-      | "verified_by"
-      | "verified_at"
-      | "created_at"
-      | "declared_marks"
-      | "marks_scale"
-      | "rejection_reason"
-    >
-  >;
+export type StudentSemestersInsert = Pick<StudentSemestersRow, "student_id" | "semester_number" | "cgpa" | "marksheet_id"> & Partial<Pick<StudentSemestersRow, "id" | "current_arrears" | "history_of_arrears" | "status" | "verified_by" | "verified_at" | "created_at" | "declared_marks" | "marks_scale" | "rejection_reason">>;
 
 export interface StudentSkillScoresRow {
   id: string;
@@ -757,11 +495,7 @@ export interface StudentSkillScoresRow {
   recorded_at: string;
 }
 
-export type StudentSkillScoresInsert = Pick<
-  StudentSkillScoresRow,
-  "student_id" | "skill_area_id" | "score"
-> &
-  Partial<Pick<StudentSkillScoresRow, "id" | "recorded_by" | "recorded_at">>;
+export type StudentSkillScoresInsert = Pick<StudentSkillScoresRow, "student_id" | "skill_area_id" | "score"> & Partial<Pick<StudentSkillScoresRow, "id" | "recorded_by" | "recorded_at">>;
 
 export interface StudentsRow {
   id: string;
@@ -827,67 +561,5 @@ export interface StudentsRow {
   drive_type_preferences: unknown;
 }
 
-export type StudentsInsert = Pick<
-  StudentsRow,
-  "campus_id" | "degree_id" | "roll_number" | "full_name" | "email" | "passing_year"
-> &
-  Partial<
-    Pick<
-      StudentsRow,
-      | "id"
-      | "auth_user_id"
-      | "branch_id"
-      | "mobile"
-      | "whatsapp"
-      | "alternate_contact"
-      | "srf_status"
-      | "participation_status"
-      | "tenth_percentage"
-      | "twelfth_percentage"
-      | "overall_cgpa"
-      | "current_arrears"
-      | "history_of_arrears"
-      | "technical_skills"
-      | "areas_of_interest"
-      | "areas_of_expertise"
-      | "projects"
-      | "certifications"
-      | "achievements"
-      | "linkedin_url"
-      | "github_url"
-      | "leetcode_url"
-      | "hackerrank_url"
-      | "consent_given_at"
-      | "srf_submitted_at"
-      | "srf_decided_at"
-      | "srf_decided_by"
-      | "srf_rejection_reason"
-      | "created_at"
-      | "updated_at"
-      | "programme_level"
-      | "ug_aggregate_cgpa"
-      | "srf_draft"
-      | "srf_draft_saved_at"
-      | "ug_marksheet_id"
-      | "tenth_institution"
-      | "twelfth_institution"
-      | "diploma_institution"
-      | "diploma_marks"
-      | "diploma_marks_scale"
-      | "diploma_marksheet_id"
-      | "ug_degree"
-      | "ug_college"
-      | "ug_branch"
-      | "ug_aggregate_declared"
-      | "ug_aggregate_scale"
-      | "other_profiles"
-      | "tenth_board"
-      | "tenth_board_state"
-      | "tenth_board_other"
-      | "twelfth_board"
-      | "twelfth_board_state"
-      | "twelfth_board_other"
-      | "diploma_university"
-      | "drive_type_preferences"
-    >
-  >;
+export type StudentsInsert = Pick<StudentsRow, "campus_id" | "degree_id" | "roll_number" | "full_name" | "email" | "passing_year"> & Partial<Pick<StudentsRow, "id" | "auth_user_id" | "branch_id" | "mobile" | "whatsapp" | "alternate_contact" | "srf_status" | "participation_status" | "tenth_percentage" | "twelfth_percentage" | "overall_cgpa" | "current_arrears" | "history_of_arrears" | "technical_skills" | "areas_of_interest" | "areas_of_expertise" | "projects" | "certifications" | "achievements" | "linkedin_url" | "github_url" | "leetcode_url" | "hackerrank_url" | "consent_given_at" | "srf_submitted_at" | "srf_decided_at" | "srf_decided_by" | "srf_rejection_reason" | "created_at" | "updated_at" | "programme_level" | "ug_aggregate_cgpa" | "srf_draft" | "srf_draft_saved_at" | "ug_marksheet_id" | "tenth_institution" | "twelfth_institution" | "diploma_institution" | "diploma_marks" | "diploma_marks_scale" | "diploma_marksheet_id" | "ug_degree" | "ug_college" | "ug_branch" | "ug_aggregate_declared" | "ug_aggregate_scale" | "other_profiles" | "tenth_board" | "tenth_board_state" | "tenth_board_other" | "twelfth_board" | "twelfth_board_state" | "twelfth_board_other" | "diploma_university" | "drive_type_preferences">>;
+

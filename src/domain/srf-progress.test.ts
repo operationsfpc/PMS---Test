@@ -179,6 +179,30 @@ describe("srfSectionProgress", () => {
     );
   });
 
+  it("completes academic record for Cambridge / IGCSE student using letter grades", () => {
+    const cambridgeStudent: SrfProgressInput = {
+      ...FILLED,
+      tenthBoard: "cambridge",
+      tenthGrade: "A*",
+      tenthPercentage: null,
+      tenthBoardState: null,
+      tenthBoardOther: null,
+      twelfthBoard: "cambridge",
+      twelfthGrade: "A",
+      twelfthPercentage: null,
+      twelfthBoardState: null,
+      twelfthBoardOther: null,
+    };
+
+    expect(section(cambridgeStudent, "academic")?.complete).toBe(true);
+
+    const missingGrade = {
+      ...cambridgeStudent,
+      tenthGrade: "",
+    };
+    expect(section(missingGrade, "academic")?.complete).toBe(false);
+  });
+
   /** The school name sits before the marks it belongs to (2026-08-06). */
   it("needs the school each figure came from", () => {
     expect(section({ ...FILLED, tenthInstitution: "" }, "academic")?.complete).toBe(false);
@@ -288,6 +312,45 @@ describe("the board each school figure came from", () => {
       ...COMPLETE,
       twelfthBoard: "other",
       twelfthBoardOther: null,
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(false);
+  });
+
+  it("holds it back when a degree is empty", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      degree: "",
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(false);
+  });
+
+  it("marks it complete when degree is selected", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      degree: "BCA",
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(true);
+  });
+
+  it("marks academic complete for Cambridge board when grade is provided without percentage", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      tenthBoard: "cambridge",
+      tenthGrade: "A*",
+      tenthPercentage: null,
+      twelfthBoard: "cambridge",
+      twelfthGrade: "A",
+      twelfthPercentage: null,
+    }).find((s) => s.id === "academic");
+    expect(section?.complete).toBe(true);
+  });
+
+  it("holds academic back for Cambridge board when grade is empty", () => {
+    const section = srfSectionProgress({
+      ...COMPLETE,
+      tenthBoard: "cambridge",
+      tenthGrade: "",
+      tenthPercentage: null,
     }).find((s) => s.id === "academic");
     expect(section?.complete).toBe(false);
   });

@@ -20,6 +20,18 @@ import {
  * The transition itself is a domain rule; this screen only asks for it and
  * reports what came back.
  */
+function formatScoreWithGrade(
+  percentage: number | null | undefined,
+  grade: string | null | undefined,
+): string {
+  const hasPct = percentage !== null && percentage !== undefined;
+  const hasGrade = grade !== null && grade !== undefined && grade.trim() !== "";
+  if (hasPct && hasGrade) return `${percentage}% (Grade: ${grade.trim()})`;
+  if (hasPct) return `${percentage}%`;
+  if (hasGrade) return `Grade: ${grade.trim()}`;
+  return "—";
+}
+
 export function SrfVerificationQueue({ repository }: { repository?: VerificationRepository }) {
   const [rows, setRows] = useState<readonly PendingSrf[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,13 +190,13 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                   {/* The figure and the board that issued it, together: they are
                       checked against the one document. */}
                   <td className="px-3 py-2 text-sm">
-                    {student.tenthPercentage ?? "—"}
+                    {formatScoreWithGrade(student.tenthPercentage, student.tenthGrade)}
                     <span className="block text-xs text-ink-500">
                       {describeBoard(student.tenthBoard, "tenth")}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-sm">
-                    {student.twelfthPercentage ?? "—"}
+                    {formatScoreWithGrade(student.twelfthPercentage, student.twelfthGrade)}
                     <span className="block text-xs text-ink-500">
                       {describeBoard(student.twelfthBoard, "twelfth")}
                     </span>
@@ -276,6 +288,9 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                             className="flex flex-wrap items-baseline gap-x-2"
                           >
                             <span className="font-medium">{certificate.name}</span>
+                            {certificate.fileName !== null && (
+                              <span className="text-xs text-ink-500">({certificate.fileName})</span>
+                            )}
                             {certificate.status === "pending" ? (
                               certificate.url === null ? (
                                 <span className="text-xs text-[#DD4820]">No document</span>

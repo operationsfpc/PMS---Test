@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { server } from "../../mocks/node";
 import { createSupabaseRosterRepository, RosterError } from "./roster-repository";
 
@@ -30,6 +30,12 @@ const students = [
     passingYear: 2027,
   },
 ];
+
+beforeEach(() => {
+  server.use(
+    http.post(`${BASE}/rest/v1/rpc/backfill_campus_programmes`, () => HttpResponse.json(0)),
+  );
+});
 
 describe("createSupabaseRosterRepository", () => {
   it("inserts students as invited, against the chosen campus", async () => {

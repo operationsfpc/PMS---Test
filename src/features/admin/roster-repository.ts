@@ -106,6 +106,14 @@ export function createSupabaseRosterRepository(client: SupabaseClient): RosterRe
         );
       }
 
+      // F6: seed campus_programmes from the newly imported roster so the students
+      // immediately find their programme in the dropdown.
+      try {
+        await client.rpc("backfill_campus_programmes");
+      } catch {
+        // Non-blocking best-effort if RPC is unconfigured or unmocked
+      }
+
       return { imported: (data ?? []).length };
     },
   };

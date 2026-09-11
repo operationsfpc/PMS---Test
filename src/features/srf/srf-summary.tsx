@@ -122,7 +122,10 @@ export function SrfSummary({
               "tenth",
             )}
           />
-          <Row label="10th percentage" value={shown(profile.tenthPercentage)} />
+          {profile.tenthGrade ? <Row label="10th grade" value={profile.tenthGrade} /> : null}
+          {profile.tenthPercentage != null || !profile.tenthGrade ? (
+            <Row label="10th percentage" value={shown(profile.tenthPercentage)} />
+          ) : null}
           <Row label="12th school" value={shown(profile.twelfthInstitution)} />
           <Row
             label="12th board"
@@ -133,7 +136,10 @@ export function SrfSummary({
               "twelfth",
             )}
           />
-          <Row label="12th percentage" value={shown(profile.twelfthPercentage)} />
+          {profile.twelfthGrade ? <Row label="12th grade" value={profile.twelfthGrade} /> : null}
+          {profile.twelfthPercentage != null || !profile.twelfthGrade ? (
+            <Row label="12th percentage" value={shown(profile.twelfthPercentage)} />
+          ) : null}
           {/* Only when there is a diploma at all: most students have none, and
               three dashes in a row is not information. */}
           {profile.diplomaMarks !== null && profile.diplomaMarks !== undefined && (

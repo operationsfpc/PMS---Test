@@ -55,11 +55,13 @@ export interface SrfProfile {
   readonly tenthBoard?: string | null;
   readonly tenthBoardState?: string | null;
   readonly tenthBoardOther?: string | null;
+  readonly tenthGrade?: string | null;
   readonly twelfthInstitution?: string | null;
   readonly twelfthPercentage?: number | null;
   readonly twelfthBoard?: string | null;
   readonly twelfthBoardState?: string | null;
   readonly twelfthBoardOther?: string | null;
+  readonly twelfthGrade?: string | null;
   /**
    * The diploma, and everything a REJECTED form has to hand back so the student
    * corrects rather than retypes. Every field below is read for that reason.
@@ -233,11 +235,13 @@ export function createSupabaseSrfProfile(client: SupabaseClient) {
       tenthBoard: text(row.tenth_board),
       tenthBoardState: text(row.tenth_board_state),
       tenthBoardOther: text(row.tenth_board_other),
+      tenthGrade: text((row as Record<string, unknown>).tenth_grade),
       twelfthInstitution: text(row.twelfth_institution),
       twelfthPercentage: num(row.twelfth_percentage),
       twelfthBoard: text(row.twelfth_board),
       twelfthBoardState: text(row.twelfth_board_state),
       twelfthBoardOther: text(row.twelfth_board_other),
+      twelfthGrade: text((row as Record<string, unknown>).twelfth_grade),
       diplomaInstitution: text(row.diploma_institution),
       diplomaUniversity: text(row.diploma_university),
       diplomaMarks: num(row.diploma_marks),

@@ -39,3 +39,35 @@ export function objectKeyIn(bucket: string, storagePath: string): string {
   // root and read as a mystery rather than as the malformed row it is.
   return key === "" ? storagePath : key;
 }
+
+/**
+ * Extracts the original uploaded filename from a stored path.
+ *
+ * Stored paths typically follow:
+ *   `<student>/<slot>-<timestamp>-<originalFilename>`
+ *   `<student>/certificate-<timestamp>-<originalFilename>`
+ *   or `<bucket>/<student>/<timestamp>-<originalFilename>`
+ */
+export function extractOriginalFilename(storagePath: string | null | undefined): string | null {
+  if (storagePath === null || storagePath === undefined || storagePath.trim() === "") {
+    return null;
+  }
+
+  const basename = storagePath.split("/").pop() ?? "";
+  if (basename === "") return null;
+
+  // Match prefixes like `certificate-0-1787027936502-`, `certificate-1787027936502-`, or `1787027936502-`
+  const match = /^(?:[a-zA-Z0-9_]+-)*\d{10,}-(.+)$/.exec(basename);
+  return match?.[1] ?? basename;
+}
+
+/**
+ * Derives a readable certificate name from an uploaded file name.
+ *
+ * Strips the extension and replaces underscores/dashes with spaces.
+ * e.g. "AWS_Cloud_Practitioner.pdf" -> "AWS Cloud Practitioner"
+ */
+export function filenameToCertificateName(filename: string): string {
+  const withoutExt = filename.replace(/\.[^/.]+$/, "");
+  return withoutExt.replaceAll(/[-_]+/g, " ").trim();
+}

@@ -573,3 +573,172 @@ describe("diploma university or board", () => {
     expect(errorsFor({ diplomaUniversity: "" }).diplomaUniversity).toBeUndefined();
   });
 });
+
+describe("degrees without a branch (BCA, MCA, MBA)", () => {
+  it("accepts a degree with an empty branch", () => {
+    const bcaStudent = {
+      ...valid,
+      degree: "BCA",
+      branch: "",
+    };
+    expect(srfSchema.safeParse(bcaStudent).success).toBe(true);
+  });
+
+  it("still demands a degree when degree is empty", () => {
+    const noDegree = {
+      ...valid,
+      degree: "",
+      branch: "",
+    };
+    expect(errorsFor(noDegree).degree).toMatch(/degree/i);
+  });
+});
+
+describe("file size validation", () => {
+  it("rejects an empty file (0 bytes)", () => {
+    const emptyFile = new File([], "empty.pdf", { type: "application/pdf" });
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      marksheets: { ...valid.marksheets, tenth: emptyFile },
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      const fieldError = parsed.error.format().marksheets?.tenth?._errors?.[0];
+      expect(fieldError).toMatch(/cannot be empty/i);
+    }
+  });
+
+  it("rejects a file exceeding 5MB", () => {
+    const largeBlob = new Uint8Array(5 * 1024 * 1024 + 1);
+    const largeFile = new File([largeBlob], "huge.pdf", { type: "application/pdf" });
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      marksheets: { ...valid.marksheets, tenth: largeFile },
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      const fieldError = parsed.error.format().marksheets?.tenth?._errors?.[0];
+      expect(fieldError).toMatch(/5MB/i);
+    }
+  });
+});
+
+describe("Cambridge and Other school boards grade vs percentage validation", () => {
+  it("accepts 10th Cambridge board with grade and without percentage", () => {
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      tenthBoard: "cambridge",
+      tenthGrade: "A*",
+      tenthPercentage: null,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("accepts 10th Cambridge board with both grade and optional percentage", () => {
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      tenthBoard: "cambridge",
+      tenthGrade: "A*",
+      tenthPercentage: 92.5,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("requires 10th grade when Cambridge board is selected", () => {
+    const errors = errorsFor({
+      tenthBoard: "cambridge",
+      tenthGrade: "",
+      tenthPercentage: null,
+    });
+    expect(errors.tenthGrade).toMatch(/enter your 10th grade/i);
+    expect(errors.tenthPercentage).toBeUndefined();
+  });
+
+  it("accepts 10th Other board with board name, grade and without percentage", () => {
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      tenthBoard: "other",
+      tenthBoardOther: "International Baccalaureate",
+      tenthGrade: "7",
+      tenthPercentage: null,
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("requires 10th grade when Other board is selected", () => {
+    const errors = errorsFor({
+      tenthBoard: "other",
+      tenthBoardOther: "International Baccalaureate",
+      tenthGrade: "",
+      tenthPercentage: null,
+    });
+    expect(errors.tenthGrade).toMatch(/enter your 10th grade/i);
+    expect(errors.tenthPercentage).toBeUndefined();
+  });
+
+  it("requires 10th percentage when a standard board (CBSE) is selected", () => {
+    const errors = errorsFor({
+      tenthBoard: "cbse",
+      tenthPercentage: null,
+      tenthGrade: "A",
+    });
+    expect(errors.tenthPercentage).toMatch(/enter your 10th marks/i);
+    expect(errors.tenthGrade).toBeUndefined();
+  });
+
+  it("accepts 12th Cambridge board with grade and without percentage", () => {
+    const parsed = srfSchema.safeParse({
+      ...valid,
+      twelfthBoard: "cambridge",
+      twelfthGrade: "A",
+      twelfthPercentage: null,
+      twelfthBoardState: "",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("requires 12th grade when Cambridge board is selected", () => {
+    const errors = errorsFor({
+      twelfthBoard: "cambridge",
+      twelfthGrade: "",
+      twelfthPercentage: null,
+      twelfthBoardState: "",
+    });
+    expect(errors.twelfthGrade).toMatch(/enter your 12th grade/i);
+    expect(errors.twelfthPercentage).toBeUndefined();
+  });
+
+  it("requires 12th percentage when a standard board (State Board) is selected", () => {
+    const errors = errorsFor({
+      twelfthBoard: "state_board",
+      twelfthBoardState: "Tamil Nadu",
+      twelfthPercentage: null,
+      twelfthGrade: "A",
+    });
+    expect(errors.twelfthPercentage).toMatch(/enter your 12th marks/i);
+    expect(errors.twelfthGrade).toBeUndefined();
+  });
+
+  describe("mobile number sanitization", () => {
+    it.each([
+      "+91 9876543210",
+      "+91-9876543210",
+      "98765 43210",
+      "09876543210",
+      "919876543210",
+    ])("sanitizes mobile '%s' into 10 digits", (inputMobile) => {
+      const parsed = srfSchema.safeParse({
+        ...valid,
+        mobile: inputMobile,
+        alternateContact: inputMobile,
+        whatsapp: inputMobile,
+      });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.mobile).toBe("9876543210");
+        expect(parsed.data.alternateContact).toBe("9876543210");
+        expect(parsed.data.whatsapp).toBe("9876543210");
+      }
+    });
+  });
+});
