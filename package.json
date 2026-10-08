@@ -17,6 +17,7 @@
     "lint:fix": "biome check --write .",
     "typecheck": "tsc -b --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm test:cov",
+    "seed": "node --experimental-strip-types seed.ts",
     "db:types": "node --experimental-strip-types scripts/gen-types.mjs",
     "db:setup": "node --experimental-strip-types scripts/setup-database.ts",
     "db:bundle": "node --experimental-strip-types scripts/setup-database.ts --bundle-only",
