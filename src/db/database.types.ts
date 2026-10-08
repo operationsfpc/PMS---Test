@@ -248,15 +248,17 @@ export type DrivesInsert = Pick<DrivesRow, "company_name"> & Partial<Pick<Drives
 
 export interface EmailDeliveriesRow {
   id: string;
-  notification_id: string;
+  notification_id: string | null;
   recipient_email: string;
   provider_message_id: string | null;
   status: string;
   error: string | null;
   updated_at: string;
+  subject: string | null;
+  html_body: string | null;
 }
 
-export type EmailDeliveriesInsert = Pick<EmailDeliveriesRow, "notification_id" | "recipient_email"> & Partial<Pick<EmailDeliveriesRow, "id" | "provider_message_id" | "status" | "error" | "updated_at">>;
+export type EmailDeliveriesInsert = Pick<EmailDeliveriesRow, "recipient_email"> & Partial<Pick<EmailDeliveriesRow, "id" | "notification_id" | "provider_message_id" | "status" | "error" | "updated_at" | "subject" | "html_body">>;
 
 export interface NotificationsRow {
   id: string;
@@ -559,7 +561,9 @@ export interface StudentsRow {
   twelfth_board_other: string | null;
   diploma_university: string | null;
   drive_type_preferences: unknown;
+  tenth_grade: string | null;
+  twelfth_grade: string | null;
 }
 
-export type StudentsInsert = Pick<StudentsRow, "campus_id" | "degree_id" | "roll_number" | "full_name" | "email" | "passing_year"> & Partial<Pick<StudentsRow, "id" | "auth_user_id" | "branch_id" | "mobile" | "whatsapp" | "alternate_contact" | "srf_status" | "participation_status" | "tenth_percentage" | "twelfth_percentage" | "overall_cgpa" | "current_arrears" | "history_of_arrears" | "technical_skills" | "areas_of_interest" | "areas_of_expertise" | "projects" | "certifications" | "achievements" | "linkedin_url" | "github_url" | "leetcode_url" | "hackerrank_url" | "consent_given_at" | "srf_submitted_at" | "srf_decided_at" | "srf_decided_by" | "srf_rejection_reason" | "created_at" | "updated_at" | "programme_level" | "ug_aggregate_cgpa" | "srf_draft" | "srf_draft_saved_at" | "ug_marksheet_id" | "tenth_institution" | "twelfth_institution" | "diploma_institution" | "diploma_marks" | "diploma_marks_scale" | "diploma_marksheet_id" | "ug_degree" | "ug_college" | "ug_branch" | "ug_aggregate_declared" | "ug_aggregate_scale" | "other_profiles" | "tenth_board" | "tenth_board_state" | "tenth_board_other" | "twelfth_board" | "twelfth_board_state" | "twelfth_board_other" | "diploma_university" | "drive_type_preferences">>;
+export type StudentsInsert = Pick<StudentsRow, "campus_id" | "degree_id" | "roll_number" | "full_name" | "email" | "passing_year"> & Partial<Pick<StudentsRow, "id" | "auth_user_id" | "branch_id" | "mobile" | "whatsapp" | "alternate_contact" | "srf_status" | "participation_status" | "tenth_percentage" | "twelfth_percentage" | "overall_cgpa" | "current_arrears" | "history_of_arrears" | "technical_skills" | "areas_of_interest" | "areas_of_expertise" | "projects" | "certifications" | "achievements" | "linkedin_url" | "github_url" | "leetcode_url" | "hackerrank_url" | "consent_given_at" | "srf_submitted_at" | "srf_decided_at" | "srf_decided_by" | "srf_rejection_reason" | "created_at" | "updated_at" | "programme_level" | "ug_aggregate_cgpa" | "srf_draft" | "srf_draft_saved_at" | "ug_marksheet_id" | "tenth_institution" | "twelfth_institution" | "diploma_institution" | "diploma_marks" | "diploma_marks_scale" | "diploma_marksheet_id" | "ug_degree" | "ug_college" | "ug_branch" | "ug_aggregate_declared" | "ug_aggregate_scale" | "other_profiles" | "tenth_board" | "tenth_board_state" | "tenth_board_other" | "twelfth_board" | "twelfth_board_state" | "twelfth_board_other" | "diploma_university" | "drive_type_preferences" | "tenth_grade" | "twelfth_grade">>;
 

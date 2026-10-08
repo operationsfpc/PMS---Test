@@ -43,6 +43,20 @@ const row = {
     },
     { id: "c2", name: "NPTEL Data Structures", fileName: null, url: null, status: "pending" as const },
   ],
+  resumes: [
+    {
+      roleCategory: "software_technical" as const,
+      label: "Software / Technical",
+      fileName: "software-cv.pdf",
+      url: "https://signed/sw-resume",
+    },
+    {
+      roleCategory: "sales" as const,
+      label: "Sales",
+      fileName: null,
+      url: "https://signed/sales-resume",
+    },
+  ],
   semesters: [
     {
       semesterNumber: 1,
@@ -116,6 +130,31 @@ describe("SrfVerificationQueue", () => {
 
     expect(await screen.findByRole("link", { name: /10th marksheet/i })).toBeDefined();
     expect(screen.getByRole("link", { name: /12th marksheet/i })).toBeDefined();
+  });
+
+  it("links each uploaded category resume so the coordinator can review it", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    const swResume = await screen.findByRole("link", {
+      name: /open software \/ technical resume for asha ramanathan/i,
+    });
+    expect(swResume.getAttribute("href")).toBe("https://signed/sw-resume");
+    expect(screen.getByText("(software-cv.pdf)")).toBeDefined();
+
+    const salesResume = screen.getByRole("link", {
+      name: /open sales resume for asha ramanathan/i,
+    });
+    expect(salesResume.getAttribute("href")).toBe("https://signed/sales-resume");
+  });
+
+  it("flags a student with no uploaded resumes", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({ pending: async () => [{ ...row, resumes: [] }] })}
+      />,
+    );
+
+    expect(await screen.findByText(/no resume uploaded/i)).toBeDefined();
   });
 
   it("flags a student who uploaded nothing, rather than showing a blank cell", async () => {

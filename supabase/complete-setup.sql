@@ -8680,3 +8680,351 @@ create trigger notify_cpc_on_student_offer
   after insert on offers
   for each row execute function notify_cpc_on_student_offer();
 
+
+
+-- =============================================================================
+-- Master Reference Data & Seed
+-- =============================================================================
+
+-- =============================================================================
+-- FACE Prep Campus — Placement Management System (PMS)
+-- Complete Reference Data & Master Seed Script
+-- Idempotent: Safe to run on fresh or existing databases.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- 1. Master Cities
+-- -----------------------------------------------------------------------------
+insert into public.cities (name, state) values
+  ('Bengaluru', 'Karnataka'),
+  ('Chennai', 'Tamil Nadu'),
+  ('Coimbatore', 'Tamil Nadu'),
+  ('Erode', 'Tamil Nadu'),
+  ('Thoothukudi', 'Tamil Nadu'),
+  ('Madurai', 'Tamil Nadu'),
+  ('Pollachi', 'Tamil Nadu'),
+  ('Karur', 'Tamil Nadu'),
+  ('Tindivanam', 'Tamil Nadu'),
+  ('Tiruppur', 'Tamil Nadu'),
+  ('Thiruvallur', 'Tamil Nadu')
+on conflict (name) do nothing;
+
+-- -----------------------------------------------------------------------------
+-- 2. Master Degrees (Full-Form & PIF Standards)
+-- -----------------------------------------------------------------------------
+insert into public.degrees (name) values
+  ('B.E / B.Tech (CSE / IT / allied)'),
+  ('BCA'),
+  ('BCA (Hons.)'),
+  ('B.Sc CS / CT'),
+  ('B.Sc Computer Science with Artificial Intelligence'),
+  ('B.Sc Artificial Intelligence and Machine Learning'),
+  ('B.Sc Artificial Intelligence'),
+  ('B.Sc Information Technology'),
+  ('B.Sc Computer Technology'),
+  ('MCA'),
+  ('M.Sc CS')
+on conflict (name) do nothing;
+
+-- -----------------------------------------------------------------------------
+-- 3. Master Partner Campuses (12 Active Campuses)
+-- -----------------------------------------------------------------------------
+insert into public.campuses (
+  name, city_id, code, address, primary_contact_name, primary_contact_email, primary_contact_phone, is_active
+)
+values
+  (
+    'Alliance University',
+    (select id from public.cities where name = 'Bengaluru' limit 1),
+    'AU',
+    'Chandapura-Anekal Main Road, Anekal, Bengaluru, Karnataka 562106',
+    'Praveen Ramesh',
+    'praveen@faceprep.in',
+    '9840000001',
+    true
+  ),
+  (
+    'AMET University',
+    (select id from public.cities where name = 'Chennai' limit 1),
+    'AMET',
+    '135, East Coast Road, Kanathur, Chennai, Tamil Nadu 603112',
+    'Shyam Kumar A K',
+    'shyam.kumar@faceprep.in',
+    '9840000002',
+    true
+  ),
+  (
+    'Bharathidasan College Of Arts & Science',
+    (select id from public.cities where name = 'Erode' limit 1),
+    'BCAS',
+    'Ellispettai, Pallapalayam, Erode, Tamil Nadu 638116',
+    'Guna Karthick',
+    'karthick@faceprep.in',
+    '9840000003',
+    true
+  ),
+  (
+    'Kamaraj College',
+    (select id from public.cities where name = 'Thoothukudi' limit 1),
+    'KMJ',
+    '492C+93W, Tiruchendur Road, Thoothukudi, Tamil Nadu 628003',
+    'Guna Karthick',
+    'karthick@faceprep.in',
+    '9840000004',
+    true
+  ),
+  (
+    'Nagarathinam Angalammal Arts and Science college',
+    (select id from public.cities where name = 'Madurai' limit 1),
+    'NAAS',
+    'Pottapalayam, Sivagangai / Madurai, Tamil Nadu 630612',
+    'Guna Karthick',
+    'karthick@faceprep.in',
+    '9840000005',
+    true
+  ),
+  (
+    'S-VYASA University',
+    (select id from public.cities where name = 'Bengaluru' limit 1),
+    'SVU',
+    'Prashanti Kutiram, Gundanahalli, Kalluballu Post, Anekal, Bengaluru 560105',
+    'Praveen Ramesh',
+    'praveen@faceprep.in',
+    '9840000006',
+    true
+  ),
+  (
+    'SDNB Vaishnav College for Women',
+    (select id from public.cities where name = 'Chennai' limit 1),
+    'SDNB',
+    'Vaishnava College Road, Shanthi Nagar, Chromepet, Chennai, Tamil Nadu 600044',
+    'Shyam Kumar A K',
+    'shyam.kumar@faceprep.in',
+    '9840000007',
+    true
+  ),
+  (
+    'Sree Saraswathi Thyagaraja College',
+    (select id from public.cities where name = 'Pollachi' limit 1),
+    'STC',
+    'Palani Road, Thippampatti, Pollachi, Tamil Nadu 642107',
+    'Guna Karthick',
+    'karthick@faceprep.in',
+    '9840000008',
+    true
+  ),
+  (
+    'Sri Amaraavathi College of Arts & Science',
+    (select id from public.cities where name = 'Karur' limit 1),
+    'SACAS',
+    'Thiruvalluvar Nagar, Karur - Trichy Main Road, Karur, Tamil Nadu 639005',
+    'Guna Karthick',
+    'karthick@faceprep.in',
+    '9840000009',
+    true
+  ),
+  (
+    'Takshashila University',
+    (select id from public.cities where name = 'Tindivanam' limit 1),
+    'TU',
+    'Ongur, Tindivanam Taluk, Villupuram Dist, Tamil Nadu 604305',
+    'Shyam Kumar A K',
+    'shyam.kumar@faceprep.in',
+    '9840000010',
+    true
+  ),
+  (
+    'TERF''s College of Arts and Science',
+    (select id from public.cities where name = 'Tiruppur' limit 1),
+    'TERF',
+    'Kovilpalayam Pudur, Avinashipalayam, Tiruppur, Tamil Nadu 641666',
+    'Guna Karthick',
+    'karthick@faceprep.in',
+    '9840000011',
+    true
+  ),
+  (
+    'TJS College of Arts and Science',
+    (select id from public.cities where name = 'Thiruvallur' limit 1),
+    'TJS',
+    'T.J.S. Nagar, Peruvoyal, Near Kavaraipettai, Gummidipoondi, Thiruvallur 601206',
+    'Shyam Kumar A K',
+    'shyam.kumar@faceprep.in',
+    '9840000012',
+    true
+  )
+on conflict (code) do update
+  set name = excluded.name,
+      city_id = excluded.city_id,
+      address = excluded.address,
+      primary_contact_name = excluded.primary_contact_name,
+      primary_contact_email = excluded.primary_contact_email,
+      primary_contact_phone = excluded.primary_contact_phone,
+      is_active = true;
+
+-- -----------------------------------------------------------------------------
+-- 4. Campus-Degree Associations (campus_degrees)
+-- -----------------------------------------------------------------------------
+insert into public.campus_degrees (campus_id, degree_id)
+select c.id, d.id
+from public.campuses c
+cross join public.degrees d
+where (
+  (c.code = 'AU'   and d.name in ('MCA', 'BCA (Hons.)')) or
+  (c.code = 'AMET' and d.name = 'B.Sc Artificial Intelligence and Machine Learning') or
+  (c.code = 'BCAS' and d.name = 'B.Sc Computer Technology') or
+  (c.code = 'KMJ'  and d.name = 'BCA') or
+  (c.code = 'NAAS' and d.name = 'B.Sc Artificial Intelligence') or
+  (c.code = 'SVU'  and d.name = 'BCA') or
+  (c.code = 'SDNB' and d.name = 'B.Sc Computer Science with Artificial Intelligence') or
+  (c.code = 'STC'  and d.name = 'MCA') or
+  (c.code = 'SACAS' and d.name = 'BCA') or
+  (c.code = 'TU'   and d.name = 'B.Sc Artificial Intelligence and Machine Learning') or
+  (c.code = 'TERF' and d.name = 'B.Sc Information Technology') or
+  (c.code = 'TJS'  and d.name = 'B.Sc Computer Science with Artificial Intelligence')
+)
+on conflict do nothing;
+
+-- -----------------------------------------------------------------------------
+-- 5. Master Campus Programmes (Active Cohorts 2026 / 2027)
+-- -----------------------------------------------------------------------------
+insert into public.campus_programmes (campus_id, degree_id, branch_id, passing_year)
+select c.id, d.id, null, y.year
+from (values
+  ('AU',   'MCA', 2027),
+  ('AU',   'BCA (Hons.)', 2027),
+  ('AU',   'BCA', 2026),
+  ('AMET', 'B.Sc Artificial Intelligence and Machine Learning', 2027),
+  ('BCAS', 'B.Sc Computer Technology', 2027),
+  ('KMJ',  'BCA', 2027),
+  ('NAAS', 'B.Sc Artificial Intelligence', 2027),
+  ('SVU',  'BCA', 2027),
+  ('SDNB', 'B.Sc Computer Science with Artificial Intelligence', 2027),
+  ('STC',  'MCA', 2027),
+  ('SACAS','BCA', 2027),
+  ('TU',   'B.Sc Artificial Intelligence and Machine Learning', 2027),
+  ('TERF', 'B.Sc Information Technology', 2027),
+  ('TJS',  'B.Sc Computer Science with Artificial Intelligence', 2027)
+) as y(code, deg_name, year)
+join public.campuses c on c.code = y.code
+join public.degrees d on d.name = y.deg_name
+on conflict do nothing;
+
+-- -----------------------------------------------------------------------------
+-- 6. Institutional Skill Repository (PRD §5)
+-- -----------------------------------------------------------------------------
+insert into public.skill_areas (name) values
+  ('Aptitude'),
+  ('Communication skills'),
+  ('Fundamentals of Programming'),
+  ('Data Structures and Algorithms'),
+  ('GitHub strength'),
+  ('Programming skills'),
+  ('AI skills'),
+  ('AI-assisted Full Stack Development')
+on conflict do nothing;
+
+-- -----------------------------------------------------------------------------
+-- 7. System Settings & Policies
+-- -----------------------------------------------------------------------------
+insert into public.settings (key, value) values
+  ('offer_category_bands', '{"regularMaxLpa": 5, "dreamMaxLpa": 10}'::jsonb),
+  ('absence_limit', '3'::jsonb),
+  ('max_upload_bytes', '5242880'::jsonb),
+  ('email_dispatcher_enabled', 'true'::jsonb),
+  ('email_batch_size', '50'::jsonb)
+on conflict (key) do update
+  set value = excluded.value,
+      updated_at = now();
+
+-- -----------------------------------------------------------------------------
+-- 8. Seed Founding Admins & Operations Staff
+-- -----------------------------------------------------------------------------
+insert into public.staff_invitations (email, full_name, role) values
+  ('thanush@faceprep.in', 'Thanush Krishna', 'admin'),
+  ('karthikraja@faceprep.in', 'Karthik Raja', 'admin'),
+  ('admin@faceprep.in', 'System Admin', 'admin'),
+  ('radhika@faceprep.in', 'Radhika C M', 'central_placement_coordinator'),
+  ('radhikacmsai@gmail.com', 'Radhika AE', 'account_executive'),
+  ('karthick@faceprep.in', 'Guna Karthick', 'key_account_manager'),
+  ('shyam.kumar@faceprep.in', 'Shyam Kumar A K', 'key_account_manager'),
+  ('praveen@faceprep.in', 'Praveen Ramesh', 'campus_manager'),
+  ('abhishek@faceprep.in', 'Abhishek', 'er_head'),
+  ('armaan@faceprep.in', 'Armaan', 'account_executive')
+on conflict (email) do update
+  set role = excluded.role,
+      full_name = excluded.full_name;
+
+-- Seed Campus Placement Coordinators and Campus Managers
+insert into public.staff_invitations (email, full_name, role) values
+  ('janerhinu@gmail.com', 'Jhane Rhinu', 'campus_placement_coordinator'),
+  ('dunominejeyaraj@gmail.com', 'Dunomine Jeyaraj', 'campus_manager'),
+  ('geethaaa701@gmail.com', 'Geetha D', 'campus_placement_coordinator'),
+  ('tamilarasand2400@gmail.com', 'Tamilarasan D', 'campus_placement_coordinator'),
+  ('syedfaceprep@gmail.com', 'Syed Asrar Ahmed U', 'campus_manager'),
+  ('ldharmaprakash2002@gmail.com', 'Dharmaprakash L', 'campus_placement_coordinator'),
+  ('priyadharshini07082002@gmail.com', 'Priyadharshini P', 'campus_manager'),
+  ('nivethapoopathi@gmail.com', 'Nivetha R P', 'campus_placement_coordinator'),
+  ('mohanasree2101@gmail.com', 'Mohana Sree', 'campus_placement_coordinator'),
+  ('ajithk455@gmail.com', 'Ajith Kumar', 'campus_manager'),
+  ('ramalakshmi.b.faceprep@gmail.com', 'Ramalakshmi B', 'campus_placement_coordinator'),
+  ('snegha2019@gmail.com', 'Sneha G', 'campus_placement_coordinator'),
+  ('gayat1206@gmail.com', 'Gayathri K', 'campus_manager'),
+  ('shabeebshab96@gmail.com', 'Shabeeb', 'campus_placement_coordinator'),
+  ('vrrpathi@gmail.com', 'Kapila L', 'campus_placement_coordinator'),
+  ('aarthiravichandranr@gmail.com', 'Aarthi R', 'campus_placement_coordinator'),
+  ('ajiithpandian8799@gmail.com', 'AjiithPandian', 'campus_placement_coordinator')
+on conflict (email) do update
+  set role = excluded.role,
+      full_name = excluded.full_name;
+
+-- -----------------------------------------------------------------------------
+-- 9. Staff Campus Stage Invitations (staff_campus_invitations)
+-- -----------------------------------------------------------------------------
+insert into public.staff_campus_invitations (email, campus_id)
+select inv.email, c.id
+from (values
+  ('janerhinu@gmail.com', 'KMJ'),
+  ('dunominejeyaraj@gmail.com', 'KMJ'),
+  ('geethaaa701@gmail.com', 'SDNB'),
+  ('tamilarasand2400@gmail.com', 'AMET'),
+  ('syedfaceprep@gmail.com', 'AMET'),
+  ('ldharmaprakash2002@gmail.com', 'BCAS'),
+  ('priyadharshini07082002@gmail.com', 'BCAS'),
+  ('nivethapoopathi@gmail.com', 'SACAS'),
+  ('mohanasree2101@gmail.com', 'NAAS'),
+  ('ajithk455@gmail.com', 'NAAS'),
+  ('ramalakshmi.b.faceprep@gmail.com', 'SVU'),
+  ('snegha2019@gmail.com', 'STC'),
+  ('gayat1206@gmail.com', 'STC'),
+  ('shabeebshab96@gmail.com', 'TU'),
+  ('vrrpathi@gmail.com', 'TERF'),
+  ('aarthiravichandranr@gmail.com', 'TJS'),
+  ('ajiithpandian8799@gmail.com', 'AU')
+) as inv(email, code)
+join public.campuses c on c.code = inv.code
+on conflict do nothing;
+
+-- -----------------------------------------------------------------------------
+-- 10. Automatically sync profiles for existing auth.users
+-- -----------------------------------------------------------------------------
+insert into public.profiles (id, email, full_name, role, is_active)
+select 
+  u.id,
+  lower(u.email),
+  coalesce(inv.full_name, 'Staff Member'),
+  coalesce(inv.role, 'campus_placement_coordinator'::public.app_role),
+  true
+from auth.users u
+join public.staff_invitations inv on lower(inv.email) = lower(u.email)
+on conflict (id) do update
+  set role = excluded.role,
+      full_name = excluded.full_name,
+      is_active = true;
+
+-- Sync staff campus assignments for existing active profiles
+insert into public.staff_campus_assignments (profile_id, campus_id)
+select p.id, sci.campus_id
+from public.profiles p
+join public.staff_campus_invitations sci on lower(sci.email) = lower(p.email)
+on conflict do nothing;

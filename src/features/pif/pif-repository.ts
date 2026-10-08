@@ -3,6 +3,7 @@ import { driveVenueApplies } from "@domain/drive-venue";
 import { joiningNotesFor } from "@domain/joining";
 import { normaliseToCgpa } from "@domain/marks";
 import { nightTimingFor } from "@domain/shift";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PifFormValues } from "./pif-schema";
 
@@ -196,7 +197,7 @@ export function createSupabasePifRepository(
    */
   async function uploadJobDescription(driveId: string, file: File): Promise<JobDescriptionUpload> {
     // Timestamped so replacing the JD cannot collide with the file it replaces.
-    const path = `${driveId}/jd-${Date.now()}-${file.name}`;
+    const path = `${driveId}/jd-${Date.now()}-${sanitizeStorageFileName(file.name)}`;
     const { error } = await client.storage
       .from(JOB_DESCRIPTION_BUCKET)
       .upload(path, file, { contentType: "application/pdf" });

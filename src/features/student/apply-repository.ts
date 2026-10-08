@@ -1,5 +1,6 @@
 import { buildApplicationSnapshot, type SnapshotStudent } from "@domain/application-snapshot";
 import type { Offer } from "@domain/offers";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { AcademicProfile, ParticipationStatus, RoleCategory, SrfStatus } from "@domain/types";
 import { canApply, type VisibleDrive } from "@domain/visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -101,7 +102,7 @@ export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepo
         // Namespaced by student, which is exactly what the storage policy
         // checks; timestamped so re-applying never collides with an earlier
         // file, since storage_path is unique.
-        const path = `${student.id}/${drive.id}-${Date.now()}-${driveResume.name}`;
+        const path = `${student.id}/${drive.id}-${Date.now()}-${sanitizeStorageFileName(driveResume.name)}`;
 
         const { error: uploadError } = await client.storage
           .from(RESUME_BUCKET)

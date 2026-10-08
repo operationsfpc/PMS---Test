@@ -224,10 +224,32 @@ export function createSupabaseStaffRepository(
       const permission = canInviteRole((await getActor()).role, invitation.role);
       if (!permission.allowed) throw new StaffError(permission.reason);
 
+      const email = invitation.email.trim().toLowerCase();
+
+      // Stage campus assignments first so that if the user already has an
+      // auth.users row, the `accept_invitation_for_existing_account` trigger
+      // finds their staged campuses immediately.
+      if (invitation.campusIds.length > 0) {
+        const { error: stagedError } = await client
+          .from("staff_campus_invitations")
+          .insert(
+            invitation.campusIds.map((campusId) => ({
+              email,
+              campus_id: campusId,
+            })),
+          );
+
+        if (stagedError !== null && stagedError.code !== "23505") {
+          throw new StaffError(
+            "The invitation was sent, but the campus assignment failed. Please set it again.",
+          );
+        }
+      }
+
       const { error } = await client
         .from("staff_invitations")
         .insert({
-          email: invitation.email.trim().toLowerCase(),
+          email,
           full_name: invitation.fullName.trim(),
           role: invitation.role,
         })
@@ -235,6 +257,10 @@ export function createSupabaseStaffRepository(
         .single();
 
       if (error !== null) {
+        if (invitation.campusIds.length > 0) {
+          await client.from("staff_campus_invitations").delete().eq("email", email);
+        }
+
         // 0040 refuses an address already on the student roster, and names it.
         // Reporting that as "already been invited" would be a lie - nobody
         // invited them - and would send an administrator hunting through the
@@ -247,26 +273,6 @@ export function createSupabaseStaffRepository(
           error.code === "23505"
             ? "That email has already been invited."
             : "Could not send the invitation. Please try again.",
-        );
-      }
-
-      if (invitation.campusIds.length === 0) return;
-
-      // The profile does not exist until first sign-in, so the assignment is
-      // staged against the invited email and applied when they arrive.
-      const { error: assignmentError } = await client
-        .from("staff_campus_invitations")
-        .insert(
-          invitation.campusIds.map((campusId) => ({
-            email: invitation.email.trim().toLowerCase(),
-            campus_id: campusId,
-          })),
-        )
-        .select("campus_id");
-
-      if (assignmentError !== null) {
-        throw new StaffError(
-          "The invitation was sent, but the campus assignment failed. Please set it again.",
         );
       }
     },

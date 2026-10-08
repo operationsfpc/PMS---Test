@@ -1,9 +1,10 @@
+import { landingRouteForRole } from "@domain/auth-routing";
 import { openGroupHeadings } from "@domain/navigation";
 import { campusScopeFor } from "@domain/staff";
-import type { AppRole } from "@domain/types";
+import { APP_ROLES, type AppRole } from "@domain/types";
 import { useAuth, useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useState } from "react";
-import { NavLink, useLocation } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router";
 
 /**
  * Application shell: brand header, role-scoped navigation.
@@ -152,6 +153,11 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   ],
   campus_manager: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
+    DRIVES,
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+    },
     // 2026-08-24 (Karthik): view-only student details, campus-scoped by RLS.
     {
       heading: "Student details",
@@ -163,6 +169,11 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   ],
   key_account_manager: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Account overview" }] },
+    DRIVES,
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+    },
     // 2026-08-24 (Karthik): view-only student details for their campuses.
     {
       heading: "Student details",
@@ -172,9 +183,30 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       ],
     },
   ],
-  enterprise_relations: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] }],
-  er_head: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] }],
-  ceo: [{ heading: "Overview", items: [{ to: "/dashboard", label: "Executive overview" }] }],
+  enterprise_relations: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] },
+    DRIVES,
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+    },
+  ],
+  er_head: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] },
+    DRIVES,
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+    },
+  ],
+  ceo: [
+    { heading: "Overview", items: [{ to: "/dashboard", label: "Executive overview" }] },
+    DRIVES,
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+    },
+  ],
   // Approving a PIF used to be the end of the Delivery Head's visibility.
   delivery_head: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
@@ -191,6 +223,10 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       ],
     },
     DRIVES,
+    {
+      heading: "Drives in progress",
+      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+    },
   ],
   central_placement_coordinator: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
@@ -233,6 +269,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     {
       heading: "Drives in progress",
       items: [
+        { to: "/cpc/drives", label: "Drive progress" },
         { to: "/central/shortlisting", label: "Shortlisting" },
         { to: "/central/results", label: "Rounds & results" },
         { to: "/cpc/attendance", label: "Attendance" },
@@ -271,13 +308,7 @@ export function navItemsFor(role: AppRole): readonly NavItem[] {
 }
 
 /** Labels for the development-only preview switcher. */
-const PREVIEW_ROLES: readonly AppRole[] = [
-  "student",
-  "campus_placement_coordinator",
-  "account_executive",
-  "delivery_head",
-  "central_placement_coordinator",
-];
+const PREVIEW_ROLES: readonly AppRole[] = APP_ROLES;
 
 function Logo() {
   return (
@@ -296,19 +327,20 @@ function initialsOf(email: string): string {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const navigate = useNavigate();
   const auth = useAuth();
-  const { signOut } = useAuthActions();
+  const { signOut, setPreviewRole } = useAuthActions();
   const signedInRole = auth.status === "signed-in" ? auth.role : "student";
+  const actualRole = auth.status === "signed-in" ? (auth.actualRole ?? auth.role) : "student";
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
   const campuses = auth.status === "signed-in" ? auth.campuses : [];
 
-  // Development only: lets screens be reviewed without a database. Never
-  // shipped - see app-shell.test.tsx.
-  const previewable = import.meta.env.DEV;
-  const [preview, setPreview] = useState<AppRole | null>(null);
+  // Role switcher is exclusively for local development testing, never shown in production
+  const previewable = Boolean(import.meta.env.DEV);
+  const [localPreview, setLocalPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const role = previewable && preview !== null ? preview : signedInRole;
+  const role = auth.status === "signed-in" ? auth.role : (localPreview ?? "student");
   const groups = ROLE_NAVS[role] ?? [];
 
   /**
@@ -379,9 +411,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                     near the fold flaky in the student journey (2026-08-19). */}
                 <select
                   id="role-switch"
-                  className="hidden rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none sm:block"
-                  value={preview ?? signedInRole}
-                  onChange={(e) => setPreview(e.target.value as AppRole)}
+                  className="hidden rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none sm:block cursor-pointer"
+                  value={role}
+                  onChange={(e) => {
+                    const next = e.target.value as AppRole;
+                    setLocalPreview(next);
+                    if (setPreviewRole) {
+                      setPreviewRole(next === actualRole ? null : next);
+                    }
+                    navigate(landingRouteForRole(next));
+                  }}
                 >
                   {PREVIEW_ROLES.map((r) => (
                     <option key={r} value={r}>
@@ -427,6 +466,7 @@ export function AppShell({ children }: { children: ReactNode }) {
            * so it says so outright.
            */}
           {campusScopeFor(role) !== "none" &&
+            role !== "key_account_manager" &&
             (campuses.length > 0 ? (
               <p className="px-3 text-sm font-medium text-ink-700">{campuses.join(" · ")}</p>
             ) : (

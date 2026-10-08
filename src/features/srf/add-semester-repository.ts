@@ -1,4 +1,5 @@
 import { type MarksScale, normaliseToCgpa } from "@domain/marks";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AddSemesterView } from "./add-semester";
 
@@ -36,9 +37,9 @@ export function createSupabaseAddSemesterView(
 
       // Namespaced by student id because that is exactly what the storage
       // policy checks, and stamped so a re-upload never collides.
-      const path = `${studentId}/semester-${semester.semesterNumber}-${Date.now()}-${
-        semester.marksheet.name
-      }`;
+      const path = `${studentId}/semester-${semester.semesterNumber}-${Date.now()}-${sanitizeStorageFileName(
+        semester.marksheet.name,
+      )}`;
 
       const { error: uploadError } = await client.storage
         .from(MARKSHEET_BUCKET)

@@ -308,6 +308,86 @@ describe("the evidence behind each declared figure", () => {
     expect(student?.documents[1]?.url).toContain("twelfth-new.pdf");
   });
 
+  it("returns each declared role-category resume with the signed link from the resumes bucket", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json([
+          {
+            id: "s1",
+            full_name: "Asha R",
+            roll_number: "TEC001",
+            overall_cgpa: 8.2,
+            student_semesters: [],
+            student_certificates: [],
+            student_documents: [
+              {
+                kind: "resume",
+                role_category: "software_technical",
+                storage_path: "s1/profile-sw-1234567890-software-cv.pdf",
+              },
+              {
+                kind: "resume",
+                role_category: "sales",
+                storage_path: "resumes/s1/profile-sales-1234567890-sales-cv.pdf",
+              },
+            ],
+          },
+        ]),
+      ),
+    );
+
+    const [student] = await signing().pending();
+
+    expect(student?.resumes).toHaveLength(2);
+    expect(student?.resumes.map((r) => r.roleCategory)).toEqual(["software_technical", "sales"]);
+    expect(student?.resumes[0]).toMatchObject({
+      roleCategory: "software_technical",
+      label: "Software / Technical",
+      url: "https://signed/resumes/s1/profile-sw-1234567890-software-cv.pdf",
+    });
+    expect(student?.resumes[1]).toMatchObject({
+      roleCategory: "sales",
+      label: "Sales",
+      url: "https://signed/resumes/s1/profile-sales-1234567890-sales-cv.pdf",
+    });
+  });
+
+  it("deduplicates resumes per category taking the latest upload", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json([
+          {
+            id: "s1",
+            full_name: "Asha R",
+            roll_number: "TEC001",
+            overall_cgpa: 8.2,
+            student_semesters: [],
+            student_certificates: [],
+            student_documents: [
+              {
+                kind: "resume",
+                role_category: "software_technical",
+                storage_path: "s1/sw-old.pdf",
+                uploaded_at: "2026-08-01T10:00:00Z",
+              },
+              {
+                kind: "resume",
+                role_category: "software_technical",
+                storage_path: "s1/sw-new.pdf",
+                uploaded_at: "2026-08-05T10:00:00Z",
+              },
+            ],
+          },
+        ]),
+      ),
+    );
+
+    const [student] = await signing().pending();
+
+    expect(student?.resumes).toHaveLength(1);
+    expect(student?.resumes[0]?.url).toContain("sw-new.pdf");
+  });
+
   it("asks the database for the semester lines and their marksheets in one query", async () => {
     let url = "";
     server.use(

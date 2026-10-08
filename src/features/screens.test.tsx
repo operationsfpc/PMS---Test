@@ -109,6 +109,7 @@ describe("SrfVerificationQueue", () => {
             marksheetUrl: "https://signed/sem1",
           },
         ],
+        resumes: [],
       },
     ],
     decide: async () => undefined,

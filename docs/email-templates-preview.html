@@ -1,310 +1,410 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>FACE Prep Campus — Email Template Previewer</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FACE Prep Campus — Email template preview</title>
   <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0f172a;
-      color: #f8fafc;
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
+      min-height: 100vh;
+      font-family: Geist, Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #151228;
+      color: #f8f7ff;
     }
-    #sidebar {
-      width: 320px;
-      background: #1e293b;
-      border-right: 1px solid #334155;
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 19.5rem minmax(0, 1fr);
+    }
+
+    .sidebar {
       display: flex;
       flex-direction: column;
-      flex-shrink: 0;
+      min-height: 0;
+      border-right: 1px solid #3f3d56;
+      background: #1f1b3c;
     }
-    #sidebar-header {
-      padding: 20px;
-      background: #0f172a;
-      border-bottom: 1px solid #334155;
+
+    .brand {
+      padding: 1.5rem;
+      border-bottom: 1px solid #3f3d56;
     }
-    #sidebar-header h2 {
-      margin: 0 0 6px 0;
-      font-size: 16px;
-      color: #38bdf8;
+
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      font-family: Raleway, ui-sans-serif, system-ui, sans-serif;
+      font-weight: 800;
+      font-size: 1.05rem;
     }
-    #sidebar-header p {
-      margin: 0;
-      font-size: 12px;
-      color: #94a3b8;
+
+    .brand-mark::before {
+      content: "";
+      width: .7rem;
+      height: .7rem;
+      border-radius: 50%;
+      background: #ffb800;
+      box-shadow: 1rem 0 0 #a46afc;
     }
-    #template-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
+
+    .brand p {
+      margin: .65rem 0 0;
+      color: #c6c4d3;
+      font-size: .8125rem;
+      line-height: 1.5;
     }
-    .template-btn {
-      width: 100%;
-      text-align: left;
-      background: #1e293b;
-      border: 1px solid #334155;
-      padding: 10px 14px;
-      margin-bottom: 8px;
-      border-radius: 6px;
-      color: #e2e8f0;
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.2s;
+
+    .template-list {
+      overflow: auto;
+      padding: 1rem;
     }
-    .template-btn:hover {
-      background: #334155;
-      border-color: #64748b;
-    }
-    .template-btn.active {
-      background: #3d3777;
-      border-color: #ffb800;
-      color: #ffffff;
-      font-weight: 600;
-    }
-    .template-tag {
-      display: inline-block;
-      font-size: 10px;
+
+    .list-label {
+      margin: .25rem .5rem .6rem;
+      color: #c6c4d3;
+      font-size: .75rem;
       font-weight: 700;
-      padding: 2px 6px;
-      border-radius: 4px;
-      background: #0f172a;
-      color: #ffb800;
-      margin-right: 6px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
     }
-    #preview-area {
-      flex: 1;
+
+    .template-button {
+      display: flex;
+      align-items: center;
+      gap: .65rem;
+      width: 100%;
+      margin: 0 0 .35rem;
+      padding: .75rem;
+      border: 1px solid transparent;
+      border-radius: .55rem;
+      background: transparent;
+      color: #e9e8f0;
+      cursor: pointer;
+      font: inherit;
+      font-size: .875rem;
+      line-height: 1.25;
+      text-align: left;
+      transition: background-color .18s ease, border-color .18s ease;
+    }
+
+    .template-button:hover {
+      background: #2a2551;
+    }
+
+    .template-button[aria-current="true"] {
+      border-color: #6f61b0;
+      background: #3d3777;
+      color: #fff;
+    }
+
+    .code {
+      flex: 0 0 auto;
+      min-width: 2.15rem;
+      padding: .2rem .35rem;
+      border-radius: .3rem;
+      background: #151228;
+      color: #ffd463;
+      font-size: .6875rem;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .template-button[aria-current="true"] .code {
+      background: rgba(21, 18, 40, .5);
+      color: #fff;
+    }
+
+    .status {
+      margin-left: auto;
+      padding: .18rem .38rem;
+      border-radius: 999px;
+      font-size: .625rem;
+      font-weight: 800;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .status-live {
+      background: #e6f7f0;
+      color: #006b45;
+    }
+
+    .status-planned {
+      background: #fff8e6;
+      color: #7a5600;
+    }
+
+    .workspace {
+      min-width: 0;
       display: flex;
       flex-direction: column;
-      background: #cbd5e1;
+      background: #e2e0ea;
     }
-    #topbar {
-      height: 52px;
-      background: #1e293b;
-      border-bottom: 1px solid #334155;
+
+    .toolbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 24px;
-      font-size: 13px;
-      color: #94a3b8;
+      gap: 1rem;
+      min-height: 4.75rem;
+      padding: .9rem 1.5rem;
+      border-bottom: 1px solid #c8c5d5;
+      background: #fff;
+      color: #3f3d56;
     }
-    #topbar strong {
-      color: #f8fafc;
+
+    .toolbar-label {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
     }
-    #iframe-container {
+
+    .subject {
+      margin-top: .25rem;
+      max-width: 58rem;
+      overflow: hidden;
+      color: #151228;
+      font-size: .95rem;
+      font-weight: 650;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .preview-badge {
+      flex: 0 0 auto;
+      padding: .4rem .6rem;
+      border: 1px solid #bdb4e2;
+      border-radius: 999px;
+      background: #f2f0fa;
+      color: #352f66;
+      font-size: .75rem;
+      font-weight: 700;
+    }
+
+    .preview-stage {
       flex: 1;
-      padding: 24px;
-      display: flex;
-      justify-content: center;
-      align-items: flex-start;
-      overflow-y: auto;
+      overflow: auto;
+      padding: 2rem;
     }
+
+    .frame-wrap {
+      width: min(100%, 42rem);
+      margin: 0 auto;
+      border: 1px solid #a8a6b8;
+      border-radius: .75rem;
+      overflow: hidden;
+      background: #fff;
+      box-shadow: 0 .4rem 1rem rgba(21, 18, 40, .16);
+    }
+
     iframe {
-      width: 640px;
-      height: 750px;
-      background: #ffffff;
-      border: 1px solid #94a3b8;
-      border-radius: 8px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+      display: block;
+      width: 100%;
+      height: 49rem;
+      border: 0;
+      background: #f7f6fb;
+    }
+
+    .note {
+      width: min(100%, 42rem);
+      margin: .8rem auto 0;
+      color: #3f3d56;
+      font-size: .75rem;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    button:focus-visible {
+      outline: 3px solid #a46afc;
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 780px) {
+      .shell {
+        display: block;
+      }
+
+      .sidebar {
+        border-right: 0;
+        border-bottom: 1px solid #3f3d56;
+      }
+
+      .brand {
+        padding: 1rem;
+      }
+
+      .template-list {
+        display: flex;
+        gap: .45rem;
+        padding: .75rem 1rem;
+        overflow-x: auto;
+      }
+
+      .list-label {
+        display: none;
+      }
+
+      .template-button {
+        width: auto;
+        min-width: max-content;
+        margin: 0;
+      }
+
+      .toolbar {
+        padding: .85rem 1rem;
+      }
+
+      .preview-badge {
+        display: none;
+      }
+
+      .preview-stage {
+        padding: 1rem;
+      }
+
+      iframe {
+        height: 48rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .template-button {
+        transition: none;
+      }
     }
   </style>
 </head>
+
 <body>
-  <div id="sidebar">
-    <div id="sidebar-header">
-      <h2>FACE Prep Campus</h2>
-      <p>Live Email Notification Template Preview</p>
-    </div>
-    <div id="template-list">
-      <button class="template-btn active" onclick="load(0)"><span class="template-tag">S1</span>Welcome & SRF Invite</button>
-      <button class="template-btn" onclick="load(1)"><span class="template-tag">S2</span>Drive Published</button>
-      <button class="template-btn" onclick="load(2)"><span class="template-tag">S3</span>Shortlist Round 1</button>
-      <button class="template-btn" onclick="load(3)"><span class="template-tag">S4</span>Round Schedule & Venue</button>
-      <button class="template-btn" onclick="load(4)"><span class="template-tag">S5</span>Personal Interview Slot</button>
-      <button class="template-btn" onclick="load(5)"><span class="template-tag">S6</span>Round Cleared / Selected</button>
-      <button class="template-btn" onclick="load(6)"><span class="template-tag">S8</span>Offer Letter Declared</button>
-      <button class="template-btn" onclick="load(7)"><span class="template-tag">S9</span>Attendance Warning (Absent)</button>
-      <button class="template-btn" onclick="load(8)"><span class="template-tag">M1</span>Staff Onboarding Invite</button>
-    </div>
-  </div>
-  <div id="preview-area">
-    <div id="topbar">
-      <div>Subject: <strong id="subject-display">Welcome to FACE Prep Campus Placements — Complete Your Profile</strong></div>
-      <div>Header: <strong>Light Logo &bull; Vibrant Brand Bar &bull; Indigo Card</strong></div>
-    </div>
-    <div id="iframe-container">
-      <iframe id="preview-frame" frameborder="0"></iframe>
-    </div>
-  </div>
-
+  <main class="shell">
+    <aside class="sidebar" aria-label="Email template catalogue">
+      <div class="brand">
+        <div class="brand-mark">FACE Prep Campus</div>
+        <p>Transactional email catalogue<br>Preview data only — no emails are sent.</p>
+      </div>
+      <nav id="template-list" class="template-list" aria-label="Choose an email template"></nav>
+    </aside>
+    <section class="workspace" aria-label="Selected email preview">
+      <header class="toolbar">
+        <div>
+          <div class="toolbar-label">Email subject</div>
+          <div id="subject-display" class="subject"></div>
+        </div><span id="delivery-status" class="preview-badge">Preview only</span>
+      </header>
+      <div class="preview-stage">
+        <div class="frame-wrap"><iframe id="preview-frame" title="Selected email template preview"></iframe></div>
+        <p class="note">“Website trigger” uses the current notification wording. This visual email frame is preview-only
+          until the dispatcher is wired to it.</p>
+      </div>
+    </section>
+  </main>
   <script>
+    // Canonical PMS portal origin (Cloudflare deployment):
+    const portal = (typeof window !== "undefined" && window.location.origin.startsWith("http") && !window.location.origin.includes("file:"))
+      ? window.location.origin
+      : "https://pms.faceprepcampus.com";
     const templates = [
-      {
-        subject: "Welcome to FACE Prep Campus Placements — Complete Your Profile",
-        title: "Welcome to FACE Prep Campus Placements — Complete Your Profile",
-        body: "Your placement account for Kamaraj College is now active on the FACE Prep Campus Placement Management System (PMS).\n\nTo participate in upcoming campus placement and internship drives, you must complete and submit your Student Registration Form (SRF). This includes verifying your academic records and uploading your semester marksheets.\n\nYour Details on Record:\n• Roll Number: 2026CS101\n• Degree & Branch: B.E. Computer Science & Engineering\n• Passing Year: 2026\n\nPlease sign in using your registered Google account and complete your profile before the registration deadline.",
-        btn: "Complete Registration Form",
-        url: "https://faceprepcampus.com/student/srf"
-      },
-      {
-        subject: "New Drive: Zoho Corporation is hiring for Software Engineer",
-        title: "New Drive: Zoho Corporation is hiring for Software Engineer",
-        body: "A new placement drive has been announced for your cohort:\n\n==================================================\nCompany:         Zoho Corporation\nRole:            Software Development Engineer\nDrive Type:      Placement\nCategory:        Super Dream\nCompensation:    ₹8.50 LPA\nApplication Due: 10 Sep 2026, 06:00 PM IST\n==================================================\n\nEligibility Criteria:\n• Minimum CGPA: 7.50\n• Maximum Backlogs: 0\n• Targeted Campuses: Kamaraj College, SDNB Vaishnav\n\nPlease review the job description, bond terms, and shift requirements carefully before applying.",
-        btn: "View Drive & Apply",
-        url: "https://faceprepcampus.com/student/drives/d1"
-      },
-      {
-        subject: "Shortlisted: You are shortlisted for Zoho Corporation",
-        title: "Shortlisted: You are shortlisted for Zoho Corporation",
-        body: "Congratulations! You have been shortlisted for the Zoho Corporation placement drive (Software Development Engineer).\n\nRound 1 is next. You are expected to attend every scheduled round for this drive. Details regarding date, time, and venue/meeting links will follow shortly.\n\nDrive Summary:\n• Company: Zoho Corporation\n• Role: Software Development Engineer\n• Drive Type: Placement",
-        btn: "View Application Status",
-        url: "https://faceprepcampus.com/student/drives/d1"
-      },
-      {
-        subject: "Zoho Corporation — Technical Assessment Round 1 Schedule",
-        title: "Zoho Corporation — Technical Assessment Round 1 Schedule",
-        body: "The schedule for Round 1 of Zoho Corporation has been published:\n\n• Round:        Technical Assessment (Round 1)\n• Date & Time:  12 Sep 2026, 10:00 AM IST\n• Mode:         Physical (On Campus)\n• Venue:        Main Academic Block, Computer Lab 3\n• Instructions: Please arrive 15 minutes before the scheduled time with your college ID card and resume copy.",
-        btn: "View Drive Dashboard",
-        url: "https://faceprepcampus.com/student/drives/d1"
-      },
-      {
-        subject: "Zoho Corporation — Your Technical Interview Slot",
-        title: "Zoho Corporation — Your Technical Interview Slot",
-        body: "Your individual interview slot for Round 2 of Zoho Corporation has been scheduled:\n\n• Date & Time:  12 Sep 2026, 02:30 PM IST\n• Meeting Link: https://meet.google.com/xyz-face-prep\n• Round:        Technical Interview\n\nPlease join the link 5 minutes prior to your time slot with your college ID card ready.",
-        btn: "Join Interview Room",
-        url: "https://meet.google.com/xyz-face-prep"
-      },
-      {
-        subject: "Well done — You cleared Round 1 of Zoho Corporation",
-        title: "Well done — You cleared Round 1 of Zoho Corporation",
-        body: "Great news! You have successfully cleared Round 1 (Technical Assessment) of the Zoho Corporation placement drive.\n\nYou are advancing to Round 2 (Technical Interview). The schedule and room link will be shared shortly on your student dashboard.\n\nKeep up the great performance!",
-        btn: "View Drive Progress",
-        url: "https://faceprepcampus.com/student/drives/d1"
-      },
-      {
-        subject: "Congratulations — Offer from Zoho Corporation (Super Dream)!",
-        title: "Congratulations — Offer from Zoho Corporation (Super Dream)!",
-        body: "Heartiest congratulations!\n\nZoho Corporation has formally extended you an offer for the position of Software Development Engineer.\n\nOffer Details:\n• Company:        Zoho Corporation\n• Role:           Software Development Engineer\n• Offer Category: Super Dream\n• CTC:            ₹8.50 LPA\n• Date Declared:  04 Sep 2026\n\nYour official offer letter has been uploaded to your PMS portal. This is a testament to your hard work and dedication. We wish you immense success in your professional career!",
-        btn: "View Offer & Download Letter",
-        url: "https://faceprepcampus.com/student/notifications"
-      },
-      {
-        subject: "Urgent: Attendance Notice for Zoho Corporation Drive",
-        title: "Urgent: Attendance Notice for Zoho Corporation Drive",
-        body: "You were recorded as ABSENT for Round 1 of the Zoho Corporation placement drive held on 12 Sep 2026.\n\nUnder placement policy guidelines:\n• Attendance in all scheduled rounds is mandatory once shortlisted.\n• Unexcused absences across drives are audited and accumulated.\n• Repeated absences lead to immediate review and potential disbarment from future campus drives.\n\nIf you believe this record is an error or had an approved exemption, please contact your Campus Placement Coordinator immediately.",
-        btn: "Contact Coordinator",
-        url: "https://faceprepcampus.com/student/dashboard"
-      },
-      {
-        subject: "Invitation to FACE Prep Campus PMS as Campus Placement Coordinator",
-        title: "Welcome to the Team, Dr. K. Ramanathan",
-        body: "You have been invited to join the FACE Prep Campus Placement Management System (PMS) as:\n\n• Assigned Role: Campus Placement Coordinator\n• Assigned Campus: Kamaraj College\n• Authorized Login Email: cpc@kamarajcollege.edu\n\nYour PMS account allows you to manage drives, verify student credentials, and oversee placement operations according to your role permissions.",
-        btn: "Sign In with Google",
-        url: "https://faceprepcampus.com/login"
-      }
+      // -----------------------------------------------------------------------
+      // 1. STUDENT COMMUNICATIONS
+      // -----------------------------------------------------------------------
+      { code: "S1", group: "Student", state: "planned", label: "Welcome & Registration", subject: "Welcome to FACE Prep Campus Placements — Complete Your Profile", title: "Complete Your Placement Profile", subtitle: "Please fill in all the required details to complete your placement profile.", body: "Your placement account for **Kamaraj College** is now active on the FACE Prep Campus Placement Management System.\n\nTo participate in upcoming placement and internship drives, please complete your Student Registration Form (SRF) and upload your verified academic records.\n\n**Your Record**\n• **Roll Number:** 2026CS101\n• **Degree & Branch:** B.E. Computer Science & Engineering\n• **Passing Year:** 2026\n\nPlease sign in with your registered Google account to complete your profile.", button: "Complete Registration", url: `${portal}/srf`, recipient: "Asha Devi" },
+      { code: "S2", group: "Student", state: "planned", label: "New Drive Announced", subject: "New Drive: Zoho Corporation is Hiring for Software Development Engineer", title: "New Placement Drive Announced", body: "**Zoho Corporation** is hiring for **Software Development Engineer**.\n\n**Drive Details**\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Drive Type:** Full-time Placement (Super Dream)\n• **Compensation:** ₹8.50 LPA\n• **Application Deadline:** 10 Sep 2026, 6:00 PM IST\n\nPlease review the job description, eligibility criteria, and application process carefully before applying.", button: "View Drive & Apply", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S3", group: "Student", state: "live", label: "Shortlisted Candidates", subject: "Shortlisted: Zoho Corporation — Software Development Engineer", title: "You Are Shortlisted", body: "Congratulations! Your application for **Zoho Corporation** (**Software Development Engineer**) has been shortlisted.\n\nYou will be notified soon with the details of the upcoming round.", button: "View Application Status", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S4", group: "Student", state: "live", label: "Round Schedule", subject: "Zoho Corporation — Round 1 Schedule & Venue", title: "Round Schedule Released", body: "The schedule for **Round 1 — Technical Assessment** of **Zoho Corporation** has been confirmed.\n\n**Round Details**\n• **Round 1:** Technical Assessment\n• **Date & Time:** 12 Sep 2026, 10:00 AM IST\n• **Mode:** In person\n• **Venue:** Main Academic Block, Computer Lab 3", button: "View Drive Dashboard", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S5", group: "Student", state: "live", label: "Interview Slot", subject: "Zoho Corporation — Your Round 2 Interview Slot", title: "Interview Slot Scheduled", body: "Your individual interview slot for **Round 2 — Technical Interview** of **Zoho Corporation** has been scheduled.\n\n**Slot Details**\n• **Date & Time:** 12 Sep 2026, 2:30 PM IST\n• **Mode:** Online Virtual Meeting\n• **Meeting Link:** https://meet.google.com/xyz-face-prep", button: "Join Interview Room", url: "https://meet.google.com/xyz-face-prep", recipient: "Asha Devi" },
+      { code: "S6", group: "Student", state: "live", label: "Round Cleared", subject: "Congratulations: You Cleared Round 1 of Zoho Corporation", title: "Round 1 Cleared", body: "Well done! You have successfully cleared **Round 1 — Technical Assessment** for **Zoho Corporation**.\n\nYou have advanced to **Round 2 — Technical Interview**.\n\nYou will be notified soon with the details of the upcoming round.", button: "View Drive Progress", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S7", group: "Student", state: "live", label: "Round Outcome", subject: "Application Update: Zoho Corporation — Round 1", title: "Application Status Update", body: "Thank you for participating in **Round 1 — Technical Assessment** of **Zoho Corporation**.\n\nYou were not selected to advance in this drive. Your placement status remains active for upcoming opportunities matching your profile.\n\nWe encourage you to explore and apply for upcoming drives on your dashboard.", button: "Explore Open Drives", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S8", group: "Student", state: "live", label: "Offer Declared", subject: "Offer Extended by Zoho Corporation", title: "Placement Offer Extended", body: "Heartiest congratulations!\n\n**Zoho Corporation** has extended you an offer for the position of **Software Development Engineer** (**Super Dream** category, **₹8.50 LPA**).\n\nYour formal offer letter has been uploaded to your PMS account and is ready for download.", button: "View Offer & Letter", url: `${portal}/student/notifications`, recipient: "Asha Devi" },
+      { code: "S9", group: "Student", state: "live", label: "Attendance Notice", subject: "Attendance Notice: Marked Absent — Zoho Corporation", title: "Absence Recorded", body: "You were marked absent for **Technical Assessment (Round 1)** in the **Zoho Corporation** placement drive.\n\nAttendance in all scheduled rounds is mandatory. If you believe this record is incorrect, please contact your Campus Placement Coordinator immediately.", button: "View Attendance Record", url: `${portal}/student`, recipient: "Asha Devi" },
+      { code: "S10", group: "Student", state: "live", label: "Registration Feedback", subject: "Action Required: Registration Form Requires Changes", title: "Registration Form Requires Changes", body: "Your Campus Placement Coordinator has reviewed your Student Registration Form (SRF) and requested revisions before approval.\n\nPlease open your registration form, review the feedback remarks, make the required corrections, and submit it again.", button: "Open Registration Form", url: `${portal}/srf`, recipient: "Asha Devi" },
+      { code: "S11", group: "Student", state: "planned", label: "Application Confirmed", subject: "Application Confirmed: Zoho Corporation — Software Development Engineer", title: "Application Successfully Submitted", body: "Your application for **Zoho Corporation** (**Software Development Engineer**) has been successfully recorded.\n\n**Application Summary**\n• **Drive:** Zoho Corporation — Software Development Engineer\n• **Drive Type:** Full-time Placement (Super Dream, ₹8.50 LPA)\n• **Verified Profile Snapshot:** Locked and submitted\n• **Resume on Record:** Verified technical resume attached\n\nYour profile is now under evaluation by the placement cell. You will be notified once candidate shortlisting is published.", button: "View Application Status", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S12", group: "Student", state: "planned", label: "Deadline Reminder", subject: "Closing Soon: Applications for Zoho Corporation Close in 24 Hours", title: "Placement Drive Closing Soon", body: "This is a reminder that applications for **Zoho Corporation** (**Software Development Engineer**) will close tomorrow at **6:00 PM IST**.\n\n**Drive Highlights**\n• **Role:** Software Development Engineer\n• **Compensation:** ₹8.50 LPA (Super Dream)\n• **Application Deadline:** 10 Sep 2026, 6:00 PM IST\n\nIf you meet the eligibility criteria and wish to participate, please complete your application before the window closes.", button: "Apply to Drive", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S13", group: "Student", state: "planned", label: "Interview Day Reminder", subject: "Reminder: Your Technical Assessment for Zoho Corporation Starts at 10:00 AM", title: "Interview Day Reminder", body: "Your scheduled round for **Zoho Corporation** takes place today.\n\n**Schedule Details**\n• **Round:** Round 1 — Technical Assessment\n• **Date & Time:** 12 Sep 2026, 10:00 AM IST\n• **Mode:** In person\n• **Venue:** Main Academic Block, Computer Lab 3\n\nPlease report on time with your college ID card and student credentials ready.", button: "View Drive Details", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S14", group: "Student", state: "planned", label: "Profile Approved", subject: "Profile Verified: You Are Now Eligible for Placement Drives", title: "Placement Profile Approved", body: "Great news! Your Student Registration Form (SRF) and uploaded marksheets have been verified and approved by your Campus Placement Coordinator.\n\n**Verified Academic Record**\n• **Status:** Active & Eligible\n• **Verified Aggregate CGPA:** 8.42\n• **Standing Backlogs:** 0\n\nYou are now eligible to participate in upcoming campus placement and internship drives matching your profile.", button: "Explore Open Drives", url: `${portal}/student/drives`, recipient: "Asha Devi" },
+      { code: "S15", group: "Student", state: "planned", label: "Offer Decision Recorded", subject: "Offer Decision Confirmed: Zoho Corporation — Software Development Engineer", title: "Offer Decision Recorded", body: "Your decision regarding the placement offer from **Zoho Corporation** has been officially recorded in the Placement Management System.\n\n**Decision Summary**\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Decision:** Offer Accepted\n• **Compensation:** ₹8.50 LPA (Super Dream)\n\nCongratulations on this milestone! Your placement coordinator will share further onboarding and joining instructions.", button: "View Placement Record", url: `${portal}/student/notifications`, recipient: "Asha Devi" },
+      { code: "S16", group: "Student", state: "planned", label: "Opt-Out Confirmed", subject: "Placement Opt-Out Confirmed — FACE Prep Campus", title: "Placement Opt-Out Acknowledged", body: "Your request to opt out of campus recruitment drives has been processed and confirmed.\n\n**Status Update**\n• **Participation Status:** Opted Out\n• **Campus:** Kamaraj College\n• **Active Applications:** Withdrawn from active screening\n\nPer placement policy, opted-out candidates will no longer receive drive notifications or round schedules. If this was done in error, please contact your Campus Placement Coordinator promptly.", button: "View Profile", url: `${portal}/student/profile`, recipient: "Asha Devi" },
+
+      // -----------------------------------------------------------------------
+      // 2. CAMPUS PLACEMENT COORDINATOR (CAMPUS CPC)
+      // -----------------------------------------------------------------------
+      { code: "C1", group: "Campus Coordinator", state: "planned", label: "Campus Drive Alert", subject: "New Drive Live for Kamaraj College: Zoho Corporation (Software Development Engineer)", title: "New Campus Placement Drive Active", body: "A new placement drive has been published that targets eligible candidates from **Kamaraj College**.\n\n**Drive Overview**\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Compensation:** ₹8.50 LPA (Super Dream)\n• **Eligible Cohort:** B.E. CSE, ECE (2026 Batch)\n• **Eligible Campus Count:** 84 students\n\nPlease encourage eligible candidates on your campus to review the terms and apply before the application deadline.", button: "View Drive Cohort", url: `${portal}/cpc/drives`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+      { code: "C2", group: "Campus Coordinator", state: "planned", label: "Campus Shortlist Ready", subject: "Shortlist Published: 28 Students from Kamaraj College Selected for Zoho Corporation", title: "Campus Candidate Shortlist Released", body: "The candidate shortlist for **Zoho Corporation** (**Software Development Engineer**) has been finalized and locked by Central Placements.\n\n**Shortlist Summary**\n• **Campus:** Kamaraj College\n• **Shortlisted Count:** 28 students\n• **Next Stage:** Round 1 — Technical Assessment\n\nPlease coordinate local venue preparations and ensure shortlisted candidates are informed.", button: "View Shortlisted Roster", url: `${portal}/cpc/drives`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+      { code: "C3", group: "Campus Coordinator", state: "planned", label: "Verification Queue Digest", subject: "Verification Queue: 22 Student Profiles Awaiting Approval", title: "Student Profiles Pending Verification", body: "There are currently student registration forms awaiting academic verification on your campus portal.\n\n• **Campus:** Kamaraj College\n• **Pending Profiles:** 22 students\n• **Pending Checks:** 10th/12th marks, semester CGPA, and marksheet uploads\n\nPrompt verification ensures these students become eligible for recruitment drives.", button: "Open Verification Queue", url: `${portal}/cpc/verification`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+      { code: "C4", group: "Campus Coordinator", state: "planned", label: "Semester Pending Verification", subject: "New Semester Added: Keerthana S (E24AI020) Pending Verification", title: "Semester Record Pending Verification", body: "A student has uploaded a new semester academic record and marksheet for verification.\n\n• **Student Name:** Keerthana S\n• **Roll Number:** E24AI020\n• **Semester:** Semester 4\n• **Declared CGPA:** 8.32\n\nPlease verify the declared score against the uploaded marksheet document.", button: "Verify Semester Record", url: `${portal}/cpc/semesters`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+      { code: "C5", group: "Campus Coordinator", state: "planned", label: "Attendance Pending", subject: "Action Required: Mark Attendance for Zoho Corporation (Round 1)", title: "Round Attendance Pending Submission", body: "Round 1 of **Zoho Corporation** has commenced on your campus. Attendance records must be submitted.\n\n• **Drive:** Zoho Corporation — Technical Assessment\n• **Scheduled Candidates:** 28 students\n• **Campus Venue:** Main Academic Block, Computer Lab 3\n\nPlease mark present and absent candidates on the attendance console to allow results processing.", button: "Mark Round Attendance", url: `${portal}/cpc/attendance`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+      { code: "C6", group: "Campus Coordinator", state: "planned", label: "Campus Student Placed", subject: "Placement Success: Keerthana S Placed at Zoho Corporation (₹8.50 LPA)", title: "Campus Student Placement", body: "Congratulations! A candidate from your campus has secured a placement offer.\n\n**Placement Summary**\n• **Student:** Keerthana S (E24AI020)\n• **Degree & Branch:** B.Sc Computer Science with AI\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Offer Category:** Super Dream (₹8.50 LPA)", button: "View Drive Progress", url: `${portal}/cpc/drives`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+      { code: "C7", group: "Campus Coordinator", state: "planned", label: "Off-Campus Offer Proof", subject: "Action Required: Off-Campus Placement Proof Submitted by Asha Devi", title: "Off-Campus Offer Verification Required", body: "A student has submitted an external off-campus placement offer letter for institutional verification.\n\n• **Student:** Asha Devi (2026CS101)\n• **Company:** Freshworks Inc\n• **Declared Role:** Product Operations Associate\n• **Declared CTC:** ₹6.50 LPA\n\nPlease inspect the uploaded offer letter and complete submission.", button: "Review Off-Campus Queue", url: `${portal}/cpc/off-campus`, recipient: "Dr. K. Ramanathan (Campus CPC)" },
+
+      // -----------------------------------------------------------------------
+      // 3. CENTRAL PLACEMENT COORDINATOR (CENTRAL CPC)
+      // -----------------------------------------------------------------------
+      { code: "CP1", group: "Central Coordinator", state: "planned", label: "Drive Ready to Publish", subject: "Drive Approved: Zoho Corporation — Ready for Round Setup & Publishing", title: "Placement Drive Approved", body: "The PIF for **Zoho Corporation** (**Software Development Engineer**) has been approved by the Delivery Head.\n\n**Approved Parameters**\n• **Category:** Super Dream\n• **CTC:** ₹8.50 LPA\n• **Approved By:** Delivery Head\n\nYou can now configure interview rounds, confirm campus eligibility criteria, and publish the drive live.", button: "Configure & Publish", url: `${portal}/central/drives/yet-to-publish`, recipient: "Central Placement Coordinator" },
+      { code: "CP2", group: "Central Coordinator", state: "planned", label: "Applications Closed", subject: "Applications Closed: Zoho Corporation — 148 Candidates Ready for Shortlisting", title: "Drive Applications Closed", body: "The student application deadline for **Zoho Corporation** (**Software Development Engineer**) has passed.\n\n**Application Summary**\n• **Total Applicants:** 148 candidates\n• **Campus Breakdown:**\n  – Kamaraj College: 84 applicants\n  – SDNB Vaishnav College: 64 applicants\n• **Drive Category:** Super Dream (₹8.50 LPA)\n• **Next Step:** Review criteria, filter candidates, and lock shortlist\n\nPlease proceed to candidate screening to generate the verified shortlist.", button: "Open Shortlisting Console", url: `${portal}/central/shortlisting`, recipient: "Central Placement Coordinator" },
+      { code: "CP3", group: "Central Coordinator", state: "planned", label: "Attendance Finalized", subject: "Attendance Finalized: Zoho Corporation — Round 1 Technical Assessment", title: "Round Attendance Finalized", body: "Campus coordinators have completed attendance marking for **Round 1 — Technical Assessment** of **Zoho Corporation**.\n\n**Attendance Summary**\n• **Total Scheduled:** 42 candidates\n• **Present:** 40 candidates\n• **Absent:** 2 candidates\n\nThe round is now open for evaluator scores and round advancement results entry.", button: "Enter Round Results", url: `${portal}/central/results`, recipient: "Central Placement Coordinator" },
+      { code: "CP4", group: "Central Coordinator", state: "planned", label: "All Rounds Completed", subject: "All Rounds Concluded: Zoho Corporation — Ready for Offer Issuance", title: "Placement Drive Completed", body: "All scheduled interview rounds for **Zoho Corporation** (**Software Development Engineer**) have concluded.\n\n**Selection Summary**\n• **Total Rounds Completed:** 3 rounds\n• **Selected Candidates:** 6 candidates\n• **Next Step:** Upload formal offer letters and release offers to students\n\nPlease review the final select list and issue offers.", button: "Issue Placement Offers", url: `${portal}/central/offers`, recipient: "Central Placement Coordinator" },
+
+      // -----------------------------------------------------------------------
+      // 4. ACCOUNT EXECUTIVE (AE)
+      // -----------------------------------------------------------------------
+      { code: "A1", group: "Account Executive", state: "planned", label: "PIF Approved", subject: "Good News: PIF for Zoho Corporation Approved as Super Dream", title: "Placement Initiation Form Approved", body: "The Placement Initiation Form (PIF) you drafted for **Zoho Corporation** has been reviewed and approved by the Delivery Head.\n\n**Approved Details**\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Category Assigned:** Super Dream (₹8.50 LPA)\n• **Next Stage:** Central CPC is configuring rounds and targeting\n\nThe account is progressing to live candidate sourcing.", button: "View Sourced Drives", url: `${portal}/my-drives`, recipient: "Anil Kumar (Account Executive)" },
+      { code: "A2", group: "Account Executive", state: "planned", label: "PIF Revision Requested", subject: "Action Required: PIF Revision Requested for Zoho Corporation", title: "PIF Requires Changes", body: "The Delivery Head has reviewed the Placement Initiation Form (PIF) for **Zoho Corporation** and requested clarifications before approval.\n\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Feedback Remarks:** Clarify service bond period and confirm internship stipend terms.\n\nPlease update the submission with required details and resubmit for approval.", button: "Revise PIF Details", url: `${portal}/ae/pif`, recipient: "Anil Kumar (Account Executive)" },
+      { code: "A3", group: "Account Executive", state: "planned", label: "Drive Live to Students", subject: "Your Account is Live: Zoho Corporation Published to 320 Eligible Candidates", title: "Placement Drive Published", body: "The recruitment drive for **Zoho Corporation** (**Software Development Engineer**) is now live across campuses.\n\n• **Eligible Cohort:** 320 candidates across 2 institutions\n• **Application Window:** Closes 10 Sep 2026, 6:00 PM IST\n\nYou can track applicant inflow and corporate milestones from your AE Overview.", button: "View Account Overview", url: `${portal}/ae/overview`, recipient: "Anil Kumar (Account Executive)" },
+      { code: "A4", group: "Account Executive", state: "planned", label: "Drive Offers Milestone", subject: "Placement Success: Zoho Corporation Drive Concluded with 6 Offers", title: "Drive Concluded Successfully", body: "Congratulations! The placement drive for your corporate account **Zoho Corporation** has concluded with confirmed offers.\n\n**Milestone Highlights**\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Total Offers Extended:** 6 candidates\n• **Total Realized CTC:** ₹51.00 LPA\n\nCorporate relationship summaries and candidate manifests are available on your console.", button: "View Account Performance", url: `${portal}/ae/overview`, recipient: "Anil Kumar (Account Executive)" },
+
+      // -----------------------------------------------------------------------
+      // 5. DELIVERY HEAD
+      // -----------------------------------------------------------------------
+      { code: "DH1", group: "Delivery Head", state: "planned", label: "PIF Submitted", subject: "Action Required: PIF Submitted for Zoho Corporation by Anil Kumar", title: "Placement Initiation Form Under Review", body: "A new Placement Initiation Form (PIF) has been submitted and is ready for governance review.\n\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Drive Type:** Full-time Placement\n• **Declared CTC:** ₹8.50 LPA\n• **Submitted By:** Anil Kumar\n\nPlease inspect recruiter terms, compensation structure, and job description to approve or return the PIF.", button: "Open PIF Approvals", url: `${portal}/delivery-head/pif-approvals`, recipient: "Delivery Head" },
+      { code: "DH2", group: "Delivery Head", state: "planned", label: "Policy Override Alert", subject: "Governance Alert: Placement Policy Override Requested for Zoho Corporation", title: "Placement Policy Override Request", body: "A placement policy override has been requested for candidate eligibility.\n\n• **Drive:** Zoho Corporation (Software Development Engineer)\n• **Requested By:** Central Placement Coordinator\n• **Override Type:** Open-to-all override / Category ladder exemption\n• **Justification:** Specialized niche skills assessment required by employer.\n\nPlease review and approve or decline the policy override.", button: "Review Policy Override", url: `${portal}/delivery-head/pif-approvals`, recipient: "Delivery Head" },
+      { code: "DH3", group: "Delivery Head", state: "planned", label: "Weekly Operations Digest", subject: "Weekly Placement Operations Summary: 12 Active Drives, 42 Offers Extended", title: "Weekly Placement Operations Summary", body: "Here is the weekly executive operations summary across all institutions for the week ending 15 Sep 2026.\n\n**Key Operational Metrics**\n• **Active Sourcing Drives:** 12 drives live\n• **Drives in Assessment:** 5 drives conducting interview rounds\n• **Offers Extended This Week:** 42 confirmed offers\n• **Average Realized CTC:** ₹6.40 LPA\n\nDetailed operational metrics and campus distributions are available on your executive cockpit.", button: "Open Operations Cockpit", url: `${portal}/dashboard`, recipient: "Delivery Head" },
+
+      // -----------------------------------------------------------------------
+      // 6. CAMPUS LEADERSHIP (PRINCIPAL / DEAN)
+      // -----------------------------------------------------------------------
+      { code: "L1", group: "Leadership", state: "planned", label: "Weekly Placement Digest", subject: "Weekly Placement Report: Kamaraj College — 42 Offers Secured to Date", title: "Weekly Campus Placement Executive Summary", body: "Here is the weekly placement performance report for **Kamaraj College** for the week ending 15 Sep 2026.\n\n**Institutional Highlights**\n• **Total Offers to Date:** 42 placement offers\n• **Overall Placement Rate:** 68% of verified eligible cohort\n• **Highest CTC:** ₹12.00 LPA (Amazon)\n• **Average CTC:** ₹6.40 LPA\n• **Partner Companies Visited:** 14 organizations\n\nA detailed departmental breakdown is accessible on the institutional dashboard.", button: "Open Leadership Dashboard", url: `${portal}/dashboard`, recipient: "College Principal / Dean" },
+      { code: "L2", group: "Leadership", state: "planned", label: "Super Dream Milestone", subject: "Placement Milestone: Keerthana S Secures Super Dream Offer at Zoho Corporation", title: "Marquee Placement Success Milestone", body: "We are proud to share a marquee placement milestone from **Kamaraj College**.\n\n**Student Achievement**\n• **Candidate:** Keerthana S (Roll No: E24AI020)\n• **Department:** B.Sc Computer Science with Artificial Intelligence\n• **Hiring Organization:** Zoho Corporation\n• **Designation:** Software Development Engineer\n• **Offer Category:** Super Dream (₹8.50 LPA)\n\nCongratulations to the candidate, faculty, and campus placement cell on this accomplishment.", button: "View Placement Statistics", url: `${portal}/dashboard`, recipient: "College Principal / Dean" },
+
+      // -----------------------------------------------------------------------
+      // 7. CORPORATE RECRUITERS & EMPLOYERS
+      // -----------------------------------------------------------------------
+      { code: "R1", group: "Recruiter", state: "planned", label: "Candidate Shortlist", subject: "Candidate Shortlist & Resume Pack — Zoho Corporation Drive | FACE Prep Campus", title: "Candidate Shortlist & Resume Pack", body: "Thank you for partnering with FACE Prep Campus.\n\nThe official candidate shortlist for **Software Development Engineer** contains 42 verified candidates from Kamaraj College and SDNB Vaishnav College. The secure export includes the candidate manifest and verified resume bundle.\n\nFor scheduling support, reply to this email and the Central Placement Cell will assist you.", button: "Open Candidate Pack", url: `${portal}/login`, recipient: "Priya Sharma (Zoho TA)" },
+      { code: "R2", group: "Recruiter", state: "planned", label: "Drive Sourcing Kickoff", subject: "Placement Drive Active: Applications Open for Zoho Corporation", title: "Your Campus Drive Is Live", body: "We are pleased to inform you that your campus recruitment drive for **Zoho Corporation** (**Software Development Engineer**) is now active across targeted partner campuses.\n\n**Sourcing Parameters**\n• **Target Institutions:** Kamaraj College, SDNB Vaishnav College\n• **Eligible Candidate Pool:** 320 pre-screened students\n• **Application Deadline:** 10 Sep 2026, 6:00 PM IST\n\nYou will receive the complete candidate manifest immediately following application closure.", button: "View Drive Status", url: `${portal}/login`, recipient: "Priya Sharma (Zoho TA)" },
+      { code: "R3", group: "Recruiter", state: "planned", label: "Interview Schedule & Roster", subject: "Confirmed Interview Schedule & Candidate Roster — Zoho Corporation Round 1", title: "Interview Schedule & Candidate Roster", body: "The candidate schedule and venue logistics for **Round 1 — Technical Assessment** of **Zoho Corporation** have been locked.\n\n**Schedule Summary**\n• **Date & Time:** 12 Sep 2026, 10:00 AM IST\n• **Mode:** In person\n• **Venue:** Main Academic Block, Computer Lab 3\n• **Confirmed Candidates:** 42 students\n\nThe candidate dossier, evaluation sheets, and attendance tracker are prepared for your team.", button: "Access Interview Dossier", url: `${portal}/login`, recipient: "Priya Sharma (Zoho TA)" },
+      { code: "R4", group: "Recruiter", state: "planned", label: "Drive Concluded Summary", subject: "Campus Recruitment Concluded: Final Summary for Zoho Corporation", title: "Campus Drive Concluded", body: "Thank you for conducting your campus recruitment drive with FACE Prep Campus.\n\n**Drive Completion Summary**\n• **Company:** Zoho Corporation\n• **Role:** Software Development Engineer\n• **Offers Extended:** 6 candidates\n• **Candidate Acceptances Recorded:** 6 / 6 confirmed\n\nCandidate acceptance confirmations, verified profiles, and onboarding documentation are ready for download.", button: "Download Placements Package", url: `${portal}/login`, recipient: "Priya Sharma (Zoho TA)" },
+
+      // -----------------------------------------------------------------------
+      // 8. SYSTEM ADMINISTRATOR & OPERATIONS
+      // -----------------------------------------------------------------------
+      { code: "AD1", group: "Administrator", state: "planned", label: "Staff Invitation", subject: "Invitation to FACE Prep Campus PMS as Campus Placement Coordinator", title: "Welcome to the Team", body: "You have been invited to join the FACE Prep Campus Placement Management System (PMS).\n\n**Your Access**\n• **Role:** Campus Placement Coordinator\n• **Campus:** Kamaraj College\n• **Account Email:** cpc@kamarajcollege.edu\n\nPlease sign in using the Google account registered to this email address.", button: "Sign In to PMS", url: `${portal}/login`, recipient: "Dr. K. Ramanathan" },
+      { code: "AD2", group: "Administrator", state: "planned", label: "Roster Import Complete", subject: "Roster Import Complete: 56 Students Uploaded for Kamaraj College", title: "Roster Import Complete", body: "The student cohort roster upload has been processed successfully.\n\n**Import Summary**\n• **Campus:** Kamaraj College\n• **Degree & Branch:** B.Sc Computer Science with Artificial Intelligence\n• **Passing Year:** 2027\n• **Imported Records:** 56 students provisioned with 'invited' status\n\nStudents can now sign in using their registered Google accounts to complete their registration forms.", button: "View Student Directory", url: `${portal}/central/students`, recipient: "System Administrator" },
+      { code: "AD3", group: "Administrator", state: "planned", label: "Email Delivery Alert", subject: "System Alert: 3 Placement Email Deliveries Bounced or Failed", title: "Email Delivery Exception Alert", body: "The automated email delivery outbox has encountered transmission exceptions.\n\n**Delivery Diagnostics**\n• **Failed Dispatches:** 3 emails\n• **Provider Status:** Bounced / Mailbox full\n• **Affected Cohort:** SDNB Vaishnav College\n\nPlease inspect the delivery logs in the administration console to review recipient addresses.", button: "Review Delivery Logs", url: `${portal}/dashboard`, recipient: "System Administrator" }
     ];
+    const escapeHtml = (value) => String(value).replace(/[&<>'"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[character]));
+    const bodyHtml = (body) => escapeHtml(body)
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #151228;">$1</strong>')
+      .replace(/\n/g, "<br>");
 
-    function buildHtml(item) {
-      return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-</head>
-<body style="margin: 0; padding: 0; background-color: #F1F5F9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #0F172A;">
-  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F1F5F9; padding: 24px 12px;">
-    <tr>
-      <td align="center">
-        <!-- Main Card (600px) -->
-        <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #E2E8F0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); max-width: 100%;">
-          <!-- Top Vibrant Brand Stripe -->
-          <tr>
-            <td height="4" style="background: linear-gradient(90deg, #3D3777 0%, #A46AFC 50%, #FFB800 100%); line-height: 4px; font-size: 4px;">&nbsp;</td>
-          </tr>
-          <!-- Header with Logo -->
-          <tr>
-            <td style="background-color: #3D3777; padding: 22px 28px;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td align="left" valign="middle">
-                    <img src="https://fpc-pms.faceprep.workers.dev/brand/faceprep-campus-light.png" alt="FACE Prep Campus" height="32" style="height: 32px; width: auto; max-height: 32px; display: block; border: 0;" />
-                    <div style="font-size: 11px; font-weight: 600; color: #E0E7FF; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 5px;">Placement Management System</div>
-                  </td>
-                  <td align="right" valign="middle">
-                    <span style="display: inline-block; background-color: rgba(255, 255, 255, 0.12); color: #FFB800; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; padding: 4px 10px; border-radius: 12px; text-transform: uppercase; border: 1px solid rgba(255, 184, 0, 0.3);">Official Notice</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-          <!-- Main Content -->
-          <tr>
-            <td style="padding: 32px 28px;">
-              <h1 style="margin: 0 0 16px 0; font-size: 19px; color: #1E1B4B; font-weight: 700; line-height: 1.3;">${item.title}</h1>
-              <p style="font-size: 15px; line-height: 1.6; color: #334155; margin: 0 0 18px 0;">Dear <strong style="color: #0F172A;">Asha Devi</strong>,</p>
-              
-              <!-- Styled Message Box -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #3D3777; border-radius: 6px; margin: 18px 0 24px 0;">
-                <tr>
-                  <td style="padding: 16px 18px; font-size: 14px; line-height: 1.65; color: #334155; white-space: pre-line;">
-${item.body}
-                  </td>
-                </tr>
-              </table>
-
-              <table border="0" cellpadding="0" cellspacing="0" style="margin-top: 8px; margin-bottom: 8px;">
-                <tr>
-                  <td align="center" bgcolor="#3D3777" style="border-radius: 6px;">
-                    <a href="${item.url}" target="_blank" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; color: #ffffff; text-decoration: none; display: inline-block; padding: 12px 26px; letter-spacing: 0.2px;">
-                      ${item.btn} &rarr;
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="font-size: 13px; line-height: 1.5; color: #64748B; margin: 24px 0 0 0;">
-                Please ensure you review all drive requirements and schedules on your student dashboard.
-              </p>
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #F8FAFC; padding: 20px 28px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; line-height: 1.6;">
-              <table border="0" cellpadding="0" cellspacing="0" width="100%">
-                <tr>
-                  <td align="left">
-                    <p style="margin: 0 0 4px 0; font-weight: 600; color: #334155;">FACE Prep Campus &bull; Focus 4D Career Education Pvt Ltd</p>
-                    <p style="margin: 0;">For questions, contact your coordinator or write to <a href="mailto:hello@faceprep.in" style="color: #3D3777; font-weight: 600; text-decoration: underline;">hello@faceprep.in</a></p>
-                  </td>
-                  <td align="right" valign="top">
-                    <span style="font-size: 11px; color: #94A3B8;">Confidential</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body></html>`;
+    function buildEmail(item) {
+      const safe = { ...item, subject: escapeHtml(item.subject), title: escapeHtml(item.title), subtitle: item.subtitle ? escapeHtml(item.subtitle) : "", recipient: escapeHtml(item.recipient), url: escapeHtml(item.url), button: escapeHtml(item.button) };
+      return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>${safe.subject}</title><style>@media screen and (max-width:620px){.email-shell{width:100%!important}.email-padding{padding-left:22px!important;padding-right:22px!important}}</style></head><body style="margin:0;padding:0;background:#f7f6fb;color:#151228;font-family:Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${safe.title} — view this update in your FACE Prep Campus portal.</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f7f6fb;"><tr><td align="center" style="padding:28px 12px;"><table role="presentation" class="email-shell" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:100%;background:#fff;border:1px solid #e2e0ea;border-radius:10px;overflow:hidden;"><tr><td style="height:4px;background:#ffb800;font-size:4px;line-height:4px;">&nbsp;</td></tr><tr><td class="email-padding" style="padding:24px 32px;background:#3d3777;"><div style="width:170px;max-width:100%;"><img src="https://pms.faceprepcampus.com/brand/faceprep-campus-light.png" width="170" alt="FACE Prep Campus" style="display:block;width:170px;max-width:100%;height:auto;border:0;"><p style="margin:8px 0 0;color:#ddd8f0;font-size:11px;font-weight:600;width:170px;letter-spacing:0.2px;line-height:1.2;text-transform:none;">Placement Management System</p></div></td></tr><tr><td class="email-padding" style="padding:34px 32px 28px;"><h1 style="margin:0 0 6px;color:#151228;font-size:22px;font-weight:700;line-height:1.3;">${safe.title}</h1>${safe.subtitle ? `<p style="margin:0 0 18px;color:#64748b;font-size:14.5px;line-height:1.5;">${safe.subtitle}</p>` : ''}<p style="margin:0 0 18px;color:#3f3d56;font-size:16px;line-height:1.55;">Dear <strong style="color:#151228;">${safe.recipient}</strong>,</p><p style="margin:0;color:#3f3d56;font-size:15px;line-height:1.65;">${bodyHtml(item.body)}</p><table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-top:26px;"><tr><td bgcolor="#3d3777" style="border-radius:6px;"><a href="${safe.url}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:14px 22px;color:#fff;font-size:15px;font-weight:bold;line-height:1;text-decoration:none;">${safe.button} &rarr;</a></td></tr></table><p style="margin:28px 0 0;color:#3f3d56;font-size:15px;line-height:1.55;">Warm regards,<br><strong style="color:#151228;">Placement Cell,</strong><br><strong style="color:#151228;">FACE Prep Campus</strong></p></td></tr><tr><td class="email-padding" style="padding:22px 32px;background:#f8fafc;border-top:1px solid #e2e0ea;font-size:12px;color:#64748b;line-height:1.6;"><p style="margin:0 0 4px 0;font-weight:600;color:#334155;">FACE Prep Campus &bull; Focus 4D Career Education Pvt Ltd</p><p style="margin:0;">For questions, contact your coordinator or write to <a href="mailto:hello@faceprep.in" style="color:#3d3777;font-weight:600;text-decoration:underline;">hello@faceprep.in</a></p></td></tr></table></td></tr></table></body></html>`;
     }
-
-    function load(index) {
-      document.querySelectorAll('.template-btn').forEach((b, i) => {
-        b.classList.toggle('active', i === index);
-      });
-      const t = templates[index];
-      document.getElementById('subject-display').innerText = t.subject;
-      const frame = document.getElementById('preview-frame');
-      frame.srcdoc = buildHtml(t);
-    }
-
-    load(0);
+    function renderList() { const list = document.getElementById("template-list"); let currentGroup = ""; for (const [index, item] of templates.entries()) { if (item.group !== currentGroup) { currentGroup = item.group; const label = document.createElement("p"); label.className = "list-label"; label.textContent = `${item.group} messages`; list.append(label); } const button = document.createElement("button"); button.className = "template-button"; button.type = "button"; button.dataset.index = index; const code = document.createElement("span"); code.className = "code"; code.textContent = item.code; const label = document.createElement("span"); label.textContent = item.label; const status = document.createElement("span"); status.className = `status status-${item.state}`; status.textContent = item.state === "live" ? "Trigger" : "Planned"; button.append(code, label, status); button.addEventListener("click", () => load(index)); list.append(button); } }
+    function load(index) { const item = templates[index]; document.querySelectorAll(".template-button").forEach((button) => button.setAttribute("aria-current", String(Number(button.dataset.index) === index))); document.getElementById("subject-display").textContent = item.subject; const status = document.getElementById("delivery-status"); status.textContent = item.state === "live" ? "Website trigger" : "Catalogue only"; status.className = `preview-badge status-${item.state}`; document.getElementById("preview-frame").srcdoc = buildEmail(item); }
+    renderList(); load(0);
   </script>
 </body>
+
 </html>

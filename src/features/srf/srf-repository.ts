@@ -6,6 +6,7 @@ import {
   missingMarksheets,
 } from "@domain/marksheets";
 import { normaliseProfileLinks } from "@domain/profile-links";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Enums } from "../../db/database.types";
 import type { SrfSubmission } from "./srf-schema";
@@ -102,7 +103,7 @@ async function uploadMarksheets(
     // one - storage_path is unique, and a student correcting a bad scan is
     // normal. The slot key is in the name so a coordinator reading the bucket
     // can tell which figure the file belongs to.
-    const path = `${studentId}/${slot.key}-${Date.now()}-${file.name}`;
+    const path = `${studentId}/${slot.key}-${Date.now()}-${sanitizeStorageFileName(file.name)}`;
 
     const { error } = await client.storage
       .from(MARKSHEET_BUCKET)
@@ -129,7 +130,7 @@ async function uploadMarksheets(
     if (certificate.file === null) continue;
 
     const slot = CERTIFICATE_SLOT(index);
-    const path = `${studentId}/${slot}-${Date.now()}-${certificate.file.name}`;
+    const path = `${studentId}/${slot}-${Date.now()}-${sanitizeStorageFileName(certificate.file.name)}`;
 
     const { error } = await client.storage
       .from(MARKSHEET_BUCKET)
@@ -176,7 +177,7 @@ async function uploadResumes(
   const uploaded: Array<{ role_category: string; storage_path: string; size_bytes: number }> = [];
 
   for (const [category, file] of Object.entries(values.resumes)) {
-    const path = `${studentId}/profile-${category}-${crypto.randomUUID()}-${file.name}`;
+    const path = `${studentId}/profile-${category}-${crypto.randomUUID()}-${sanitizeStorageFileName(file.name)}`;
     const { error } = await client.storage.from(RESUME_BUCKET).upload(path, file);
 
     if (error !== null) {

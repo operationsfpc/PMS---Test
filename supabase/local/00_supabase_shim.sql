@@ -25,3 +25,12 @@ exception when duplicate_object then null; end $$;
 
 grant usage on schema auth, public to anon, authenticated, service_role;
 grant execute on function auth.uid() to anon, authenticated, service_role;
+
+-- Mock pg_cron and pg_net for local PGlite test environment
+create schema if not exists cron;
+create schema if not exists net;
+
+create or replace function cron.schedule(job_name text, schedule text, command text) returns bigint language sql as $$ select 1::bigint $$;
+create or replace function cron.unschedule(job_name text) returns boolean language sql as $$ select true $$;
+create or replace function net.http_post(url text, body jsonb default '{}'::jsonb, params jsonb default '{}'::jsonb, headers jsonb default '{}'::jsonb, timeout_milliseconds integer default 5000) returns bigint language sql as $$ select 1::bigint $$;
+

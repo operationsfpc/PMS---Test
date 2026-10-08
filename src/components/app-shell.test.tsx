@@ -645,6 +645,7 @@ describe("the Drives group is the same for every staff role", () => {
     "delivery_head",
     "central_placement_coordinator",
     "campus_placement_coordinator",
+    "key_account_manager",
     "admin",
   ];
 
@@ -736,5 +737,18 @@ describe("the Account Executive's landing page", () => {
       expect(screen.queryByRole("link", { name: /my overview/i })).toBeNull();
       unmount();
     }
+  });
+});
+
+describe("campus name display in sidebar", () => {
+  it("shows the campus name for campus placement coordinator", () => {
+    shellFor(signedIn("campus_placement_coordinator", ["Alliance University"]));
+    expect(screen.getByText("Alliance University")).toBeDefined();
+  });
+
+  it("does not list the campus name below the role name for key account manager", () => {
+    shellFor(signedIn("key_account_manager", ["Alliance University"]));
+    expect(screen.queryByText("Alliance University")).toBeNull();
+    expect(screen.queryByText(/no campus mapped/i)).toBeNull();
   });
 });

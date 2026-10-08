@@ -151,7 +151,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
             </p>
           </Card>
 
-          <Card className="p-2">
+          <Card className="overflow-hidden p-0">
             <DataTable
               caption="Registration forms awaiting verification"
               columns={[
@@ -165,161 +165,211 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                 "School marksheets",
                 "Declared semesters",
                 "Certificates",
+                "Resumes",
                 "Decision",
               ]}
             >
               {rows.map((student) => (
-                <tr key={student.id} className="border-t border-neutral-200">
-                  <td className="px-3 py-2 text-sm font-medium">
-                    {student.fullName}
+                <tr
+                  key={student.id}
+                  className="border-t border-line hover:bg-surface-muted/30 transition-colors"
+                >
+                  <td className="align-top px-3 py-3 text-sm min-w-[160px]">
+                    <div className="font-semibold text-ink-900">{student.fullName}</div>
                     {/* A resubmission is not a fresh form. Repeating what was
                         asked for is what stops the same defect being missed
                         twice - and the student has already been told it. */}
                     {student.previousRejectionReason !== null &&
                       student.previousRejectionReason.trim() !== "" && (
-                        <span className="mt-1 block">
+                        <div className="mt-1.5 rounded bg-[#FFF0EC] border border-[#DD4820]/30 p-1.5 text-xs">
                           <Badge tone="warning">Resubmitted</Badge>
-                          <span className="mt-1 block text-xs font-normal text-ink-500">
+                          <span className="mt-1 block text-xs font-normal text-ink-700">
                             You sent this back: “{student.previousRejectionReason}”
                           </span>
-                        </span>
+                        </div>
                       )}
                   </td>
-                  <td className="px-3 py-2 text-sm">{student.rollNumber}</td>
-                  <td className="px-3 py-2 text-sm">{student.overallCgpa ?? "—"}</td>
+                  <td className="align-top px-3 py-3 text-sm font-mono text-ink-700 whitespace-nowrap">
+                    {student.rollNumber}
+                  </td>
+                  <td className="align-top px-3 py-3 text-sm whitespace-nowrap font-medium text-ink-900">
+                    {student.overallCgpa ?? "—"}
+                  </td>
                   {/* The figure and the board that issued it, together: they are
                       checked against the one document. */}
-                  <td className="px-3 py-2 text-sm">
-                    {formatScoreWithGrade(student.tenthPercentage, student.tenthGrade)}
+                  <td className="align-top px-3 py-3 text-sm whitespace-nowrap">
+                    <span className="font-medium text-ink-900">
+                      {formatScoreWithGrade(student.tenthPercentage, student.tenthGrade)}
+                    </span>
                     <span className="block text-xs text-ink-500">
                       {describeBoard(student.tenthBoard, "tenth")}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-sm">
-                    {formatScoreWithGrade(student.twelfthPercentage, student.twelfthGrade)}
+                  <td className="align-top px-3 py-3 text-sm whitespace-nowrap">
+                    <span className="font-medium text-ink-900">
+                      {formatScoreWithGrade(student.twelfthPercentage, student.twelfthGrade)}
+                    </span>
                     <span className="block text-xs text-ink-500">
                       {describeBoard(student.twelfthBoard, "twelfth")}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-sm">{student.currentArrears}</td>
-                  <td className="px-3 py-2 text-sm">
+                  <td className="align-top px-3 py-3 text-sm text-center whitespace-nowrap">
+                    {student.currentArrears > 0 ? (
+                      <Badge tone="danger">{student.currentArrears}</Badge>
+                    ) : (
+                      <span className="text-ink-500">0</span>
+                    )}
+                  </td>
+                  <td className="align-top px-3 py-3 text-sm text-center whitespace-nowrap">
                     {student.historyOfArrears > 0 ? (
                       <Badge tone="warning">{student.historyOfArrears}</Badge>
                     ) : (
-                      0
+                      <span className="text-ink-500">0</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-sm">
+                  <td className="align-top px-3 py-3 text-sm min-w-[140px]">
                     {student.documents.length === 0 ? (
-                      <span className="text-[#DD4820]">None uploaded</span>
+                      <span className="text-xs text-[#DD4820] font-medium">None uploaded</span>
                     ) : (
-                      <span className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-1.5">
                         {student.documents.map((doc) => (
                           <a
                             key={doc.url}
                             href={doc.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-[#3D3777] underline"
+                            className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline hover:text-ink-900"
                           >
-                            {doc.label}
+                            📄 {doc.label}
                           </a>
                         ))}
-                      </span>
+                      </div>
                     )}
                   </td>
                   {/* The reason this screen exists: every declared figure
-                      beside the document that proves it. Until the SRF
-                      actually stored the uploads, this cell could not exist -
-                      a coordinator saw a CGPA and had nothing to check it
-                      against, and a VERIFIED semester is what decides whether
-                      the student may apply to a drive (R5). */}
-                  <td className="px-3 py-2 text-sm">
+                      beside the document that proves it. */}
+                  <td className="align-top px-3 py-3 text-sm min-w-[180px]">
                     {student.semesters.length === 0 ? (
-                      <span className="text-[#DD4820]">No semesters declared</span>
+                      <span className="text-xs text-[#DD4820] font-medium">No semesters declared</span>
                     ) : (
-                      <ul className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1.5">
                         {student.semesters.map((semester) => (
-                          <li
+                          <div
                             key={semester.semesterNumber}
-                            className="flex flex-wrap items-baseline gap-x-2"
+                            className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
                           >
-                            <span className="text-ink-500">Semester {semester.semesterNumber}</span>
-                            <strong className="font-semibold">{semester.cgpa}</strong>
-                            <span className="text-xs text-ink-500">
-                              {semester.currentArrears} standing, {semester.historyOfArrears} in
-                              history
-                            </span>
-                            {semester.marksheetUrl === null ? (
-                              // Never a dead link: a coordinator must not be
-                              // left to assume they checked something.
-                              <span className="text-xs text-[#DD4820]">No marksheet</span>
-                            ) : (
-                              <a
-                                href={semester.marksheetUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                // Named per student: several rows carry a
-                                // "Semester 1 marksheet" and an accessible
-                                // name has to identify one of them.
-                                aria-label={`Semester ${semester.semesterNumber} marksheet for ${student.fullName}`}
-                                className="text-xs text-[#3D3777] underline"
-                              >
-                                Marksheet
-                              </a>
-                            )}
-                          </li>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-medium text-ink-700">Semester {semester.semesterNumber}</span>
+                              <strong className="font-semibold text-ink-900">{semester.cgpa}</strong>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between text-[11px] text-ink-500">
+                              <span>
+                                {semester.currentArrears} standing, {semester.historyOfArrears} in history
+                              </span>
+                              {semester.marksheetUrl === null ? (
+                                <span className="text-[#DD4820]">No marksheet</span>
+                              ) : (
+                                <a
+                                  href={semester.marksheetUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  aria-label={`Semester ${semester.semesterNumber} marksheet for ${student.fullName}`}
+                                  className="text-[#3D3777] font-medium underline"
+                                >
+                                  Marksheet
+                                </a>
+                              )}
+                            </div>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </td>
-                  {/* 0039: approving the form verifies these too, so the
-                      document behind each one is on screen BEFORE the button
-                      that commits to it. Without that, one click would
-                      certify files the coordinator was never shown. */}
-                  <td className="px-3 py-2 text-sm">
+                  {/* Certificates column */}
+                  <td className="align-top px-3 py-3 text-sm min-w-[160px]">
                     {student.certificates.length === 0 ? (
-                      <span className="text-ink-500">No certificates uploaded</span>
+                      <span className="text-xs text-ink-500">No certificates uploaded</span>
                     ) : (
-                      <ul className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1.5">
                         {student.certificates.map((certificate) => (
-                          <li
+                          <div
                             key={certificate.id}
-                            className="flex flex-wrap items-baseline gap-x-2"
+                            className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
                           >
-                            <span className="font-medium">{certificate.name}</span>
+                            <div className="font-medium text-ink-900">{certificate.name}</div>
                             {certificate.fileName !== null && (
-                              <span className="text-xs text-ink-500">({certificate.fileName})</span>
+                              <div className="text-[11px] text-ink-500 truncate max-w-[150px]">
+                                {certificate.fileName}
+                              </div>
                             )}
-                            {certificate.status === "pending" ? (
-                              certificate.url === null ? (
+                            <div className="mt-1 flex items-center justify-between">
+                              {certificate.status === "pending" ? (
+                                certificate.url === null ? (
+                                  <span className="text-xs text-[#DD4820]">No document</span>
+                                ) : (
+                                  <a
+                                    href={certificate.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-label={`Open ${certificate.name} for ${student.fullName}`}
+                                    className="text-xs text-[#3D3777] font-medium underline"
+                                  >
+                                    Open
+                                  </a>
+                                )
+                              ) : (
+                                <Badge tone={certificate.status === "verified" ? "success" : "neutral"}>
+                                  {certificate.status === "verified" ? "Verified" : "Not accepted"}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  {/* Resumes column: direct review of category-specific resumes */}
+                  <td className="align-top px-3 py-3 text-sm min-w-[170px]">
+                    {student.resumes.length === 0 ? (
+                      <span className="text-xs text-[#DD4820] font-medium">No resume uploaded</span>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        {student.resumes.map((resume) => (
+                          <div
+                            key={resume.roleCategory}
+                            className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
+                          >
+                            <div className="font-medium text-ink-900">{resume.label}</div>
+                            {resume.fileName !== null && (
+                              <div className="text-[11px] text-ink-500 truncate max-w-[150px]">
+                                ({resume.fileName})
+                              </div>
+                            )}
+                            <div className="mt-1">
+                              {resume.url === null ? (
                                 <span className="text-xs text-[#DD4820]">No document</span>
                               ) : (
                                 <a
-                                  href={certificate.url}
+                                  href={resume.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  aria-label={`Open ${certificate.name} for ${student.fullName}`}
-                                  className="text-xs text-[#3D3777] underline"
+                                  aria-label={`Open ${resume.label} resume for ${student.fullName}`}
+                                  className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline"
                                 >
-                                  Open
+                                  Review
                                 </a>
-                              )
-                            ) : (
-                              <span className="text-xs text-ink-500">
-                                {certificate.status === "verified" ? "Verified" : "Not accepted"}
-                              </span>
-                            )}
-                          </li>
+                              )}
+                            </div>
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </td>
-                  <td className="px-3 py-2">
-                    {/* Says what the button commits them to, because it now
-                        commits them to more than the marks. */}
+                  {/* Decision column */}
+                  <td className="align-top px-3 py-3 min-w-[200px]">
+                    {/* Says what the button commits them to */}
                     {student.certificates.some((c) => c.status === "pending") && (
-                      <p className="mb-1 text-xs text-ink-500">
+                      <p className="mb-2 text-xs text-ink-500 leading-tight">
                         {(() => {
                           const n = student.certificates.filter(
                             (c) => c.status === "pending",
@@ -341,7 +391,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                           rows={3}
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          className="w-64 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                          className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-[#3D3777] focus:outline-none focus:ring-1 focus:ring-[#3D3777]"
                           placeholder="Name what is wrong, and what to change."
                         />
                         <div className="flex flex-wrap gap-2">
@@ -367,7 +417,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-col gap-2">
                         <Button
                           size="sm"
                           disabled={busyId === student.id}
@@ -376,8 +426,6 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                         >
                           {busyId === student.id ? "Saving…" : "Approve"}
                         </Button>
-                        {/* The other half of PRD §4.2, which no screen has ever
-                            offered: a form can be sent back, with comments. */}
                         <Button
                           size="sm"
                           variant="secondary"

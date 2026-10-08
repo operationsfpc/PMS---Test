@@ -71,3 +71,22 @@ export function filenameToCertificateName(filename: string): string {
   const withoutExt = filename.replace(/\.[^/.]+$/, "");
   return withoutExt.replaceAll(/[-_]+/g, " ").trim();
 }
+
+/**
+ * Sanitizes a filename for use in Supabase Storage object keys.
+ *
+ * Supabase Storage rejects object keys containing square brackets, curly braces,
+ * double quotes, percent signs, control characters, or non-ASCII characters with 400 Bad Request.
+ */
+export function sanitizeStorageFileName(filename: string): string {
+  if (!filename) return "file";
+  return filename
+    .replace(/[\[{]/g, "(")
+    .replace(/[\]}]/g, ")")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/["%\\^`|<>\/]/g, "_")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+

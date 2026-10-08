@@ -27,6 +27,8 @@ export type AuthState =
   | {
       readonly status: "signed-in";
       readonly role: AppRole;
+      readonly actualRole?: AppRole;
+      readonly previewRole?: AppRole | null;
       readonly email: string;
       /**
        * The campuses a staff member is mapped to, by name. Empty for students
@@ -59,10 +61,12 @@ export function useAuth(): AuthState {
  */
 export interface AuthActions {
   signOut(): Promise<void>;
+  setPreviewRole?(role: AppRole | null): void;
 }
 
 export const AuthActionsContext = createContext<AuthActions>({
   signOut: async () => {},
+  setPreviewRole: () => {},
 });
 
 export function useAuthActions(): AuthActions {

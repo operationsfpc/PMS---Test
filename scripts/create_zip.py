@@ -32,6 +32,7 @@ def create_zip(source_dir: Path, output_zip: Path):
         ".gemini",
         ".system_generated",
         ".pnpm-store",
+        "scratch",
     }
 
     exclude_extensions = {

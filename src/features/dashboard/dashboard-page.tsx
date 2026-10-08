@@ -147,22 +147,54 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
   const campusName =
     snapshot?.campuses.find((c) => c.campusId === campusId)?.campusName ?? "All campuses";
 
-  /** Every college any drive was opened to, for the drive box's filter. */
-  const colleges = useMemo(
+  /** All unique drive names available for the drive name filter */
+  const driveNames = useMemo(
     () =>
-      [...new Set((snapshot?.driveProgress ?? []).flatMap((d) => d.campusNames))].sort((a, b) =>
+      [...new Set((snapshot?.driveProgress ?? []).map((d) => d.driveName))].sort((a, b) =>
         a.localeCompare(b),
       ),
     [snapshot],
   );
 
+  /** Every college any drive was opened to or on roster, for the drive box's filter. */
+  const colleges = useMemo(
+    () =>
+      [
+        ...new Set([
+          ...(snapshot?.campuses ?? []).map((c) => c.campusName),
+          ...(snapshot?.driveProgress ?? []).flatMap((d) => d.campusNames),
+        ]),
+      ].sort((a, b) => a.localeCompare(b)),
+    [snapshot],
+  );
+
+  const [drivePage, setDrivePage] = useState(1);
+  const [expandedDriveId, setExpandedDriveId] = useState<string | null>(null);
+  const DRIVES_PAGE_SIZE = 5;
+
   const drives = useMemo(() => {
     const query = driveQuery.trim().toLowerCase();
     return (snapshot?.driveProgress ?? [])
-      .filter((d) => query === "" || d.driveName.toLowerCase().includes(query))
-      .filter((d) => collegeFilter === "" || d.campusNames.includes(collegeFilter))
+      .filter(
+        (d) =>
+          query === "" ||
+          d.driveName.toLowerCase().includes(query) ||
+          d.driveName === driveQuery,
+      )
+      .filter(
+        (d) =>
+          collegeFilter === "" ||
+          d.campusNames.length === 0 ||
+          d.campusNames.includes(collegeFilter),
+      )
       .map((d) => ({ ...d, funnel: driveFunnel(d.participation) }));
   }, [snapshot, driveQuery, collegeFilter]);
+
+  const totalDrivePages = Math.max(1, Math.ceil(drives.length / DRIVES_PAGE_SIZE));
+  const paginatedDrives = useMemo(
+    () => drives.slice((drivePage - 1) * DRIVES_PAGE_SIZE, drivePage * DRIVES_PAGE_SIZE),
+    [drives, drivePage],
+  );
 
   const packages = useMemo(
     () => (snapshot === null ? null : summariseCtc(snapshot.placements)),
@@ -533,13 +565,23 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
            */}
           <Card className="mt-6 p-5">
             <section aria-label="Drive progress">
-              <h2 className="text-lg text-ink-900">Drive progress</h2>
-              <p className="mt-1 mb-4 text-sm text-ink-500">
-                Eligible students, applications, and attendance and clearance in each round through
-                to the final offer.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg text-ink-900">Drive progress</h2>
+                  <p className="mt-1 text-sm text-ink-500">
+                    Eligible students, applications, and attendance and clearance in each round through
+                    to the final offer.
+                  </p>
+                </div>
+                {drives.length > 0 && (
+                  <span className="text-xs font-medium text-ink-500">
+                    Showing {Math.min((drivePage - 1) * DRIVES_PAGE_SIZE + 1, drives.length)}–
+                    {Math.min(drivePage * DRIVES_PAGE_SIZE, drives.length)} of {drives.length} drives
+                  </span>
+                )}
+              </div>
 
-              <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 mb-5 grid gap-3 sm:grid-cols-2">
                 <div>
                   <label
                     htmlFor="drive-name-filter"
@@ -547,13 +589,22 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                   >
                     Drive name
                   </label>
-                  <input
+                  <select
                     id="drive-name-filter"
                     value={driveQuery}
-                    onChange={(e) => setDriveQuery(e.target.value)}
-                    placeholder="All drives"
-                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-                  />
+                    onChange={(e) => {
+                      setDriveQuery(e.target.value);
+                      setDrivePage(1);
+                    }}
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-none"
+                  >
+                    <option value="">All drives</option>
+                    {driveNames.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label
@@ -565,8 +616,11 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                   <select
                     id="drive-college-filter"
                     value={collegeFilter}
-                    onChange={(e) => setCollegeFilter(e.target.value)}
-                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+                    onChange={(e) => {
+                      setCollegeFilter(e.target.value);
+                      setDrivePage(1);
+                    }}
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-none"
                   >
                     <option value="">All colleges</option>
                     {colleges.map((college) => (
@@ -579,48 +633,141 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               </div>
 
               {drives.length === 0 ? (
-                <p className="text-sm text-ink-700">
-                  No drives match these filters yet. Published drives appear here as students become
-                  eligible for them.
-                </p>
+                <div className="rounded-lg border border-dashed border-line p-6 text-center">
+                  <p className="text-sm text-ink-700">
+                    No drives match these filters yet. Published drives appear here as students become
+                    eligible for them.
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-5">
-                  {drives.map((drive) => (
-                    <div key={drive.driveId} className="rounded-lg border border-line p-4">
-                      <p className="font-semibold text-ink-900">{drive.driveName}</p>
-                      <p className="text-xs text-ink-500">
-                        {drive.campusNames.length === 0
-                          ? "Open to every campus"
-                          : drive.campusNames.join(" · ")}
-                      </p>
+                <div className="space-y-4">
+                  {paginatedDrives.map((drive) => (
+                    <div
+                      key={drive.driveId}
+                      className="rounded-xl border border-line bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm"
+                    >
+                      <header className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-line/60">
+                        <section className="min-w-0">
+                          <Link
+                            to={`/drives/${drive.driveId}`}
+                            className="font-semibold text-ink-900 text-base hover:text-brand-600 hover:underline transition-colors block"
+                          >
+                            {drive.driveName}
+                          </Link>
+                          <p className="mt-0.5 text-xs text-ink-500">
+                            {drive.campusNames.length === 0
+                              ? "Open to every campus"
+                              : drive.campusNames.join(" · ")}
+                          </p>
+                        </section>
+                        <section className="flex items-center gap-2">
+                          <span className="rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                            {drive.funnel.stages.length} Funnel Stages
+                          </span>
+                        </section>
+                      </header>
 
-                      <ol className="mt-3 space-y-2">
-                        {drive.funnel.stages.map((stage) => {
-                          const round = drive.funnel.rounds.find((r) => r.roundId === stage.key);
-                          return (
-                            <li key={stage.key}>
-                              <div className="flex items-baseline justify-between gap-3 text-sm">
-                                <span className="text-ink-700">{stage.label}</span>
-                                <span className="font-semibold text-ink-900">{stage.count}</span>
-                              </div>
-                              {round !== undefined && (
-                                <p className="mt-0.5 text-xs text-ink-500">
-                                  <span>
-                                    {round.present} of {round.scheduled} attended
-                                  </span>{" "}
-                                  · <span>{round.cleared} cleared</span> ·{" "}
-                                  <span>{round.clearanceRate}% clearance</span>
-                                  {round.unconfirmed > 0 && (
-                                    <span> · {round.unconfirmed} unconfirmed</span>
-                                  )}
-                                </p>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ol>
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="text-xs font-semibold uppercase tracking-wider text-ink-500 border-b border-line/40">
+                              <th className="pb-2 font-medium">Stage</th>
+                              <th className="pb-2 font-medium text-right pr-4">Count</th>
+                              <th className="pb-2 font-medium">Performance / Attendance</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-line/40">
+                            {drive.funnel.stages.map((stage) => {
+                              const round = drive.funnel.rounds.find((r) => r.roundId === stage.key);
+                              return (
+                                <tr key={stage.key} className="hover:bg-surface-muted/30">
+                                  <td className="py-2.5 pr-3 font-medium text-ink-800 text-xs sm:text-sm">
+                                    <li className="list-none">
+                                      <span className="text-ink-700">{stage.label}</span>
+                                      {round !== undefined && (
+                                        <p className="mt-0.5 text-xs text-ink-500">
+                                          <span>
+                                            {round.present} of {round.scheduled} attended
+                                          </span>{" "}
+                                          · <span>{round.cleared} cleared</span> ·{" "}
+                                          <span>{round.clearanceRate}% clearance</span>
+                                          {round.unconfirmed > 0 && (
+                                            <span> · {round.unconfirmed} unconfirmed</span>
+                                          )}
+                                        </p>
+                                      )}
+                                    </li>
+                                  </td>
+                                  <td className="py-2.5 pr-4 text-right font-semibold text-ink-900 text-xs sm:text-sm">
+                                    {stage.count}
+                                  </td>
+                                  <td className="py-2.5 text-xs text-ink-500">
+                                    {round !== undefined ? (
+                                      <div className="flex items-center gap-2">
+                                        <div className="h-1.5 w-20 sm:w-28 overflow-hidden rounded-full bg-surface-muted">
+                                          <div
+                                            className="h-full bg-brand-500"
+                                            style={{ width: `${round.clearanceRate}%` }}
+                                          />
+                                        </div>
+                                        <span className="font-medium text-ink-700">
+                                          {round.clearanceRate}%
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-ink-400">—</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   ))}
+
+                  {/* Pagination Controls */}
+                  {totalDrivePages > 1 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-line">
+                      <p className="text-xs text-ink-500">
+                        Page <span className="font-semibold text-ink-900">{drivePage}</span> of{" "}
+                        <span className="font-semibold text-ink-900">{totalDrivePages}</span>
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setDrivePage((p) => Math.max(1, p - 1))}
+                          disabled={drivePage <= 1}
+                          className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Previous
+                        </button>
+                        {Array.from({ length: totalDrivePages }, (_, i) => i + 1).map((p) => (
+                          <button
+                            key={p}
+                            type="button"
+                            onClick={() => setDrivePage(p)}
+                            className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                              p === drivePage
+                                ? "bg-brand-500 text-white"
+                                : "border border-line text-ink-700 hover:bg-surface-muted"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setDrivePage((p) => Math.min(totalDrivePages, p + 1))}
+                          disabled={drivePage >= totalDrivePages}
+                          className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

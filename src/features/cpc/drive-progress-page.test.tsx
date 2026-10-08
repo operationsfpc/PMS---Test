@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import {
   type DriveProgressEntry,
   DriveProgressPage,
   type DriveProgressView,
 } from "./drive-progress-page";
+
+const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * D10 (2026-08-12): the campus placement coordinator follows their students
@@ -293,5 +297,73 @@ describe("what the board says an internship offer paid", () => {
     );
 
     expect(await screen.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
+  });
+});
+
+describe("DriveProgressPage — college-wise breakdown cards", () => {
+  const multiCollegeDrive: DriveProgressEntry = {
+    driveId: "d1",
+    companyName: "Zoho",
+    roleTitle: "Software Engineer",
+    status: "in_rounds",
+    students: [
+      {
+        applicationId: "a1",
+        studentName: "Priya Ramesh",
+        rollNumber: "21CSE1042",
+        campusName: "Alliance University",
+        shortlisted: true,
+        rounds: [{ sequence: 1, name: "Aptitude", attendance: "present", result: "selected" }],
+        offer: { ctcLpa: 8, offerCategory: "dream" },
+      },
+      {
+        applicationId: "a2",
+        studentName: "Arjun Menon",
+        rollNumber: "21CSE9001",
+        campusName: "VIT Bangalore",
+        shortlisted: true,
+        rounds: [{ sequence: 1, name: "Aptitude", attendance: "present", result: null }],
+        offer: null,
+      },
+      {
+        applicationId: "a3",
+        studentName: "Meena V",
+        rollNumber: "21CSE5555",
+        campusName: "Alliance University",
+        shortlisted: false,
+        rounds: [],
+        offer: null,
+      },
+    ],
+  };
+
+  it("shows clickable college breakdown cards with counts", async () => {
+    render(<DriveProgressPage view={view([multiCollegeDrive])} />);
+
+    expect((await screen.findAllByText("Alliance University")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("VIT Bangalore")).length).toBeGreaterThan(0);
+    expect(screen.getByText("All Colleges")).toBeDefined();
+  });
+
+  it("filters students when a college card is clicked and resets on All Colleges", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={view([multiCollegeDrive])} />);
+
+    await screen.findAllByText("Alliance University");
+
+    // Click VIT Bangalore card
+    const vitButton = screen.getByRole("button", { name: /vit bangalore/i });
+    await user.click(vitButton);
+
+    expect(screen.getByText("Arjun Menon")).toBeDefined();
+    expect(screen.queryByText("Priya Ramesh")).toBeNull();
+    expect(screen.queryByText("Meena V")).toBeNull();
+
+    // Click All Colleges
+    const allCollegesButton = screen.getByRole("button", { name: /all colleges/i });
+    await user.click(allCollegesButton);
+
+    expect(screen.getByText("Priya Ramesh")).toBeDefined();
+    expect(screen.getByText("Arjun Menon")).toBeDefined();
   });
 });

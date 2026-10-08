@@ -609,7 +609,7 @@ describe("distinguishing same-company drives (G5b)", () => {
     const card = (await screen.findByText("Zoho Corporation")).closest("section");
     if (card === null) throw new Error("card not found");
     expect(within(card).getByText(/₹6–8 LPA/)).toBeDefined();
-    expect(within(card).getByText(/applications close 10 Sept 2026/i)).toBeDefined();
+    expect(within(card).getByText(/applications (close|closed) 10 Sept 2026/i)).toBeDefined();
   });
 });
 

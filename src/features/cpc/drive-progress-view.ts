@@ -17,7 +17,7 @@ import type {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PROGRESS_APPLICATION_COLUMNS =
-  "id, student_id, drive_id, students(full_name, roll_number), shortlist_entries(included), " +
+  "id, student_id, drive_id, students(full_name, roll_number, campuses(name)), shortlist_entries(included), " +
   "drives(company_name, role_title, drive_type, status)";
 
 const one = <T>(value: unknown): T | null =>
@@ -100,7 +100,10 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
           drive_type?: string | null;
           status?: string;
         }>(row.drives);
-        const student = one<{ full_name?: string; roll_number?: string }>(row.students);
+        const student = one<{ full_name?: string; roll_number?: string; campuses?: unknown }>(
+          row.students,
+        );
+        const campusName = one<{ name?: string }>(student?.campuses)?.name;
 
         const studentRounds = (attendanceByApplication.get(row.id as string) ?? [])
           .map((att) => {
@@ -120,6 +123,7 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
           applicationId: row.id as string,
           studentName: student?.full_name ?? "Unknown student",
           rollNumber: student?.roll_number ?? "—",
+          campusName,
           shortlisted: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
           rounds: studentRounds,
           offer: offerByKey.get(`${row.student_id}:${driveId}`) ?? null,

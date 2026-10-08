@@ -36,6 +36,15 @@ function fakeClient(opts: {
                   error: null,
                 }),
               },
+        or: () => ({
+          maybeSingle: async () => ({
+            data: opts.student ?? null,
+            error: null,
+          }),
+        }),
+      }),
+      update: () => ({
+        eq: () => Promise.resolve({ data: null, error: null }),
       }),
     }),
   } as unknown as SupabaseClient;

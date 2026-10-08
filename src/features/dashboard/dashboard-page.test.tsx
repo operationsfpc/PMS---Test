@@ -483,8 +483,8 @@ describe("the drive-specific box", () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     const section = await box();
-    const zoho = within(section).getByText(/zoho/i).closest("div");
-    if (zoho === null) throw new Error("drive not found");
+    const zoho = within(section).getByRole("link", { name: /zoho/i }).closest("div");
+    if (!zoho) throw new Error("drive not found");
 
     for (const stage of ["Eligible", "Applied", "Shortlisted", "1. Aptitude", "Final offer"]) {
       expect(within(zoho).getByText(stage)).toBeDefined();
@@ -507,11 +507,11 @@ describe("the drive-specific box", () => {
     const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    await user.type(await screen.findByLabelText(/drive name/i), "freshworks");
+    await user.selectOptions(await screen.findByLabelText(/drive name/i), "Freshworks — SDE");
 
     const section = await box();
-    expect(within(section).getByText(/freshworks/i)).toBeDefined();
-    expect(within(section).queryByText(/zoho/i)).toBeNull();
+    expect(within(section).getByRole("link", { name: /freshworks/i })).toBeDefined();
+    expect(within(section).queryByRole("link", { name: /zoho/i })).toBeNull();
   });
 
   it("filters by college name", async () => {
@@ -521,15 +521,17 @@ describe("the drive-specific box", () => {
     await user.selectOptions(await screen.findByLabelText(/college/i), "VIT Bangalore");
 
     const section = await box();
-    expect(within(section).getByText(/freshworks/i)).toBeDefined();
-    expect(within(section).queryByText(/zoho/i)).toBeNull();
+    expect(within(section).getByRole("link", { name: /freshworks/i })).toBeDefined();
+    expect(within(section).queryByRole("link", { name: /zoho/i })).toBeNull();
   });
 
   it("says so when the filters match no drive at all", async () => {
-    const user = userEvent.setup();
-    render(<DashboardPage view={view()} title="Placement overview" />);
-
-    await user.type(await screen.findByLabelText(/drive name/i), "nobody");
+    render(
+      <DashboardPage
+        view={view({ ...SNAPSHOT, driveProgress: [] })}
+        title="Placement overview"
+      />,
+    );
 
     expect(within(await box()).getByText(/no drives match/i)).toBeDefined();
   });
@@ -538,7 +540,7 @@ describe("the drive-specific box", () => {
     const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    await user.type(await screen.findByLabelText(/drive name/i), "freshworks");
+    await user.selectOptions(await screen.findByLabelText(/drive name/i), "Freshworks — SDE");
 
     const section = await box();
     expect(within(section).getByText("Eligible")).toBeDefined();

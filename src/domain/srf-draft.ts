@@ -230,6 +230,14 @@ export function sanitizeConditionalSrfValues<TValues extends Record<string, unkn
     result.ugAggregateScale = "cgpa";
   }
 
+  // Certificates: File objects become `{}` during JSON serialization. Ensure any non-File value is sanitized to null.
+  if (Array.isArray(result.certificates)) {
+    result.certificates = (result.certificates as Array<Record<string, unknown>>).map((c) => ({
+      ...c,
+      file: c && typeof c === "object" && c.file instanceof File ? c.file : null,
+    }));
+  }
+
   return result as TValues;
 }
 

@@ -1,6 +1,7 @@
 import { completionReadiness } from "@domain/drive-completion";
 import type { SlotAssignment } from "@domain/meeting-slots";
 import { type RoundFacts, renumberRounds } from "@domain/round-editing";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import { applicationProgress } from "@domain/student-progress";
 import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -81,13 +82,17 @@ export function createSupabaseResultsView(
 
     /** F4 (UAT 2026-08-19): the round's details, edited after creation. */
     async updateRound(roundId, details) {
+      const isVirtual = details.mode === "virtual";
+      const isPhysical =
+        details.mode === "on_campus" || details.mode === "physical_outside_campus";
+
       const { error } = await client
         .from("drive_rounds")
         .update({
           round_mode: details.mode,
           round_scheduled_at: fromDatetimeLocal(details.scheduledAt),
-          round_interview_link: details.interviewLink,
-          venue: details.venue,
+          round_interview_link: isVirtual ? details.interviewLink : null,
+          venue: isPhysical ? details.venue : null,
         })
         .eq("id", roundId)
         .select("id")
@@ -252,7 +257,7 @@ export function createSupabaseResultsView(
        * thing the coordinator came to do.
        */
       if (proof !== null && proof !== undefined) {
-        const path = `${fromRoundId}/proof-${Date.now()}-${proof.name}`;
+        const path = `${fromRoundId}/proof-${Date.now()}-${sanitizeStorageFileName(proof.name)}`;
         const { error: uploadError } = await client.storage
           .from(ADVANCE_PROOF_BUCKET)
           .upload(path, proof, { contentType: proof.type });

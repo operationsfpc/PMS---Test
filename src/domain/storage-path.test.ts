@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { extractOriginalFilename, filenameToCertificateName, objectKeyIn } from "./storage-path";
+import {
+  extractOriginalFilename,
+  filenameToCertificateName,
+  objectKeyIn,
+  sanitizeStorageFileName,
+} from "./storage-path";
 
 /**
  * 2026-08-26 — the recruiter export failed for every drive with
@@ -92,3 +97,25 @@ describe("filenameToCertificateName", () => {
     );
   });
 });
+
+describe("sanitizeStorageFileName", () => {
+  it("converts square brackets and curly braces to parentheses", () => {
+    expect(sanitizeStorageFileName("Osheen Avinash Kumar[10th]_compressed.pdf")).toBe(
+      "Osheen Avinash Kumar(10th)_compressed.pdf",
+    );
+    expect(sanitizeStorageFileName("marksheet{sem1}.pdf")).toBe("marksheet(sem1).pdf");
+  });
+
+  it("removes unsafe characters for Supabase storage keys", () => {
+    expect(sanitizeStorageFileName('my"file%name^<>.pdf')).toBe("my_file_name___.pdf");
+  });
+
+  it("normalizes unicode / non-ascii characters", () => {
+    expect(sanitizeStorageFileName("Marksheet–2026.pdf")).toBe("Marksheet2026.pdf");
+  });
+
+  it("handles empty string gracefully", () => {
+    expect(sanitizeStorageFileName("")).toBe("file");
+  });
+});
+

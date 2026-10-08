@@ -1,4 +1,5 @@
 import { canRecordSelfPlacement, canRequestOptOut } from "@domain/participation";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { ParticipationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -35,7 +36,7 @@ async function uploadEvidence(
 ): Promise<string> {
   // The name is prefixed so re-uploading never collides with an earlier one;
   // storage_path is unique, and a student correcting a bad photo is normal.
-  const path = `${studentId}/${Date.now()}-${file.name}`;
+  const path = `${studentId}/${Date.now()}-${sanitizeStorageFileName(file.name)}`;
 
   const { error: uploadError } = await client.storage
     .from(BUCKETS[kind])

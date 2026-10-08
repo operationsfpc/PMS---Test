@@ -1,7 +1,11 @@
 import type { BoardSelection, SchoolBoard } from "@domain/boards";
 import { decideSrf, type SrfDecision } from "@domain/srf-decision";
-import { extractOriginalFilename, filenameToCertificateName } from "@domain/storage-path";
-import type { SrfStatus, VerificationStatus } from "@domain/types";
+import {
+  extractOriginalFilename,
+  filenameToCertificateName,
+  objectKeyIn,
+} from "@domain/storage-path";
+import { ROLE_CATEGORIES, type RoleCategory, type SrfStatus, type VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class VerificationError extends Error {}
@@ -12,6 +16,20 @@ export interface StudentDocument {
   readonly label: string;
   /** Short-lived signed URL. Buckets are private; nothing is ever public. */
   readonly url: string;
+}
+
+/**
+ * A resume uploaded per role category (P10), beside the signed document.
+ *
+ * Shown so the coordinator can catch and correct manual upload errors,
+ * wrong files, and format issues before approving the student for drives.
+ */
+export interface DeclaredResume {
+  readonly roleCategory: RoleCategory;
+  readonly label: string;
+  readonly fileName: string | null;
+  /** Null when nothing could be signed. Never a dead link. */
+  readonly url: string | null;
 }
 
 /**
@@ -78,6 +96,8 @@ export interface PendingSrf {
   readonly semesters: readonly DeclaredSemester[];
   /** 0039: approving the form confirms these. */
   readonly certificates: readonly DeclaredCertificate[];
+  /** P10: role-category resumes uploaded during SRF registration. */
+  readonly resumes: readonly DeclaredResume[];
 }
 
 const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
@@ -87,8 +107,17 @@ const DOCUMENT_LABELS: Readonly<Record<string, string>> = {
   ug_consolidated_marksheet: "Consolidated UG marksheet",
 };
 
+export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
+  software_technical: "Software / Technical",
+  technical_support_it_ops: "Technical Support / IT Operations",
+  digital_marketing: "Digital Marketing",
+  sales: "Sales",
+  operations_business: "Operations and Business Roles",
+};
+
 /** Signed URLs expire; 10 minutes is ample for a verification pass. */
 const SIGNED_URL_TTL_SECONDS = 600;
+const RESUME_BUCKET = "resumes";
 
 export interface VerificationRepository {
   pending(): Promise<readonly PendingSrf[]>;
@@ -116,7 +145,7 @@ export type GetActorId = () => Promise<string | null>;
  * We want the documents BELONGING to the student, which is the first key.
  */
 export const VERIFICATION_QUEUE_COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, tenth_grade, twelfth_board, twelfth_board_state, twelfth_board_other, twelfth_grade, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, storage_path, uploaded_at), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
+  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, tenth_grade, twelfth_board, twelfth_board_state, twelfth_board_other, twelfth_grade, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, role_category, storage_path, uploaded_at), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
 
 /**
  * Reads and decides the SRF verification queue.
@@ -301,6 +330,68 @@ async function signDocuments(
   });
 }
 
+async function signResumes(
+  client: SupabaseClient,
+  rows: Array<{
+    kind: string;
+    role_category?: string | null;
+    storage_path: string;
+    uploaded_at?: string | null;
+  }>,
+): Promise<readonly DeclaredResume[]> {
+  const resumeRows = rows.filter((r) => r.kind === "resume" && r.role_category);
+
+  // Deduplicate by role_category, keeping the latest document for each category
+  const latestByCategory = new Map<
+    string,
+    { kind: string; role_category: string; storage_path: string; uploaded_at?: string | null }
+  >();
+
+  for (const row of resumeRows) {
+    const category = row.role_category!;
+    const existing = latestByCategory.get(category);
+    if (!existing) {
+      latestByCategory.set(category, { ...row, role_category: category });
+    } else if (row.uploaded_at && existing.uploaded_at) {
+      if (new Date(row.uploaded_at).getTime() >= new Date(existing.uploaded_at).getTime()) {
+        latestByCategory.set(category, { ...row, role_category: category });
+      }
+    } else {
+      latestByCategory.set(category, { ...row, role_category: category });
+    }
+  }
+
+  const categoryOrder: Readonly<Record<string, number>> = Object.fromEntries(
+    ROLE_CATEGORIES.map((cat, idx) => [cat, idx + 1]),
+  );
+
+  const resumes = [...latestByCategory.values()].sort(
+    (a, b) => (categoryOrder[a.role_category] ?? 99) - (categoryOrder[b.role_category] ?? 99),
+  );
+
+  if (resumes.length === 0) return [];
+
+  const pathsToSign = resumes.map((r) => objectKeyIn(RESUME_BUCKET, r.storage_path));
+  const { data } = await client.storage
+    .from(RESUME_BUCKET)
+    .createSignedUrls(pathsToSign, SIGNED_URL_TTL_SECONDS);
+
+  const signedUrls = (data ?? []).map((entry) => entry?.signedUrl ?? undefined);
+
+  return resumes.map((r, index) => {
+    const fileName = extractOriginalFilename(r.storage_path);
+    const categoryLabel =
+      ROLE_CATEGORY_LABELS[r.role_category as RoleCategory] ??
+      r.role_category.replaceAll("_", " ");
+    return {
+      roleCategory: r.role_category as RoleCategory,
+      label: categoryLabel,
+      fileName,
+      url: signedUrls[index] ?? null,
+    };
+  });
+}
+
 export function createSupabaseVerificationRepository(
   client: SupabaseClient,
   getActorId: GetActorId = async () => {
@@ -323,6 +414,12 @@ export function createSupabaseVerificationRepository(
       return await Promise.all(
         (data ?? []).map(async (row) => {
           const rawSemesters = (row.student_semesters ?? []) as Array<Record<string, unknown>>;
+          const rawDocuments = (row.student_documents ?? []) as Array<{
+            kind: string;
+            role_category?: string | null;
+            storage_path: string;
+            uploaded_at?: string | null;
+          }>;
           // Standing arrears: derive from the highest declared semester, falling back to students table
           let currentArrears = (row.current_arrears as number | null) ?? 0;
           let historyOfArrears = (row.history_of_arrears as number | null) ?? 0;
@@ -363,19 +460,13 @@ export function createSupabaseVerificationRepository(
             twelfthGrade: (row.twelfth_grade as string | null) ?? null,
             submittedAt: (row.srf_submitted_at as string | null) ?? null,
             previousRejectionReason: (row.srf_rejection_reason as string | null) ?? null,
-            documents: await signDocuments(
-              client,
-              (row.student_documents ?? []) as Array<{
-                kind: string;
-                storage_path: string;
-                uploaded_at?: string | null;
-              }>,
-            ),
+            documents: await signDocuments(client, rawDocuments),
             semesters: await signSemesters(client, rawSemesters),
             certificates: await signCertificates(
               client,
               (row.student_certificates ?? []) as Array<Record<string, unknown>>,
             ),
+            resumes: await signResumes(client, rawDocuments),
           };
         }),
       );

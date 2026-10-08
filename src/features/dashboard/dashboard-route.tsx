@@ -1,6 +1,7 @@
 import { useAuth } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { useState } from "react";
+import { Navigate } from "react-router";
 import { DashboardPage } from "./dashboard-page";
 import { createSupabaseDashboardView } from "./dashboard-view";
 
@@ -28,6 +29,14 @@ const TITLES: Record<string, string> = {
 export function DashboardRoute() {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : "student";
+
+  if (role === "student") {
+    return <Navigate to="/student" replace />;
+  }
+  if (role === "account_executive") {
+    return <Navigate to="/ae/overview" replace />;
+  }
+
   const [view] = useState(() => createSupabaseDashboardView(supabase()));
 
   return <DashboardPage view={view} title={TITLES[role] ?? "Overview"} />;

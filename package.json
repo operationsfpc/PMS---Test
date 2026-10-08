@@ -18,9 +18,13 @@
     "typecheck": "tsc -b --noEmit",
     "check": "pnpm lint && pnpm typecheck && pnpm test:cov",
     "db:types": "node --experimental-strip-types scripts/gen-types.mjs",
+    "db:setup": "node --experimental-strip-types scripts/setup-database.ts",
+    "db:bundle": "node --experimental-strip-types scripts/setup-database.ts --bundle-only",
     "db:push": "supabase db push",
     "cf:dev": "pnpm build && wrangler dev",
-    "deploy": "pnpm build && wrangler deploy"
+    "deploy": "pnpm build && wrangler deploy",
+    "build:test": "vite build --mode test",
+    "deploy:test": "pnpm build:test && wrangler deploy --env test"
   },
   "engines": {
     "node": ">=22"

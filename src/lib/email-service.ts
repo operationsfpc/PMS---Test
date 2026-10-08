@@ -32,7 +32,7 @@ export interface ResendEmailProviderOptions {
   readonly fetchFn?: typeof fetch | undefined;
 }
 
-export const DEFAULT_RESEND_FROM = "FACE Prep Campus <placements@email.faceprep.in>";
+export const DEFAULT_RESEND_FROM = "FACE Prep Campus <pms@faceprepcampus.com>";
 export const DEFAULT_RESEND_DEV_FROM = "onboarding@resend.dev";
 export const DEFAULT_RESEND_REPLY_TO = "placements@faceprep.in";
 

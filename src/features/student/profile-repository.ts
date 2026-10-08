@@ -1,4 +1,5 @@
 import { normaliseProfileLinks, type ProfileLink } from "@domain/profile-links";
+import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { DriveType, VerificationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -266,7 +267,7 @@ export function createSupabaseStudentCertificates(
 
       // Namespaced by student id because that is exactly what the storage
       // policy checks (0022), and stamped so a re-upload never collides.
-      const path = `${studentId}/certificate-${Date.now()}-${file.name}`;
+      const path = `${studentId}/certificate-${Date.now()}-${sanitizeStorageFileName(file.name)}`;
 
       const { error: uploadError } = await client.storage
         .from(CERTIFICATE_BUCKET)
