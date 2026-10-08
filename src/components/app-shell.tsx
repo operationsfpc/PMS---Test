@@ -2,7 +2,7 @@ import { landingRouteForRole } from "@domain/auth-routing";
 import { openGroupHeadings } from "@domain/navigation";
 import { campusScopeFor } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
-import { useAuth, useAuthActions } from "@lib/auth-context";
+import { isTestPreviewAllowed, useAuth, useAuthActions } from "@lib/auth-context";
 import { type ReactNode, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 
@@ -335,8 +335,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
   const campuses = auth.status === "signed-in" ? auth.campuses : [];
 
-  // Role switcher is exclusively for local development testing, never shown in production
-  const previewable = Boolean(import.meta.env.DEV);
+  // Role switcher is enabled for local DEV or for test users specifically on pms-test-gamma.vercel.app
+  const previewable = isTestPreviewAllowed(signedInEmail);
   const [localPreview, setLocalPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 

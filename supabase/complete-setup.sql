@@ -24,7 +24,10 @@ create type drive_mode as enum ('on_campus', 'physical_outside_campus', 'virtual
 
 create type arrear_policy as enum ('no_standing', 'no_history', 'flexible');
 
-create type offer_category as enum ('regular', 'dream', 'super_dream');
+-- 'internship' is placed BEFORE 'regular' so that enum ordering treats it as
+-- the lowest value — safe-fail insurance if anyone accidentally does MAX/ORDER BY.
+-- It is not on the R3/R5 ladder; offerCategoryRank() in src/domain/offer-category.ts throws for it.
+create type offer_category as enum ('internship', 'regular', 'dream', 'super_dream');
 
 create type srf_status as enum (
   'invited', 'registered', 'srf_submitted', 'srf_approved', 'srf_rejected'
@@ -6453,9 +6456,9 @@ revoke all on function placement_totals() from anon;
 -- not.
 --
 -- The true rule remains: 'internship' is not on the ladder at all.
--- `offerCategoryRank` in src/domain/offer-category.ts THROWS for it.
-
-alter type offer_category add value if not exists 'internship' before 'regular';
+-- Note: 'internship' is already declared in the initial CREATE TYPE offer_category in 0001_enums.sql.
+-- Commented out below to avoid PostgreSQL ERROR 55P04 in single-transaction execution:
+-- alter type offer_category add value if not exists 'internship' before 'regular';
 
 -- =============================================================================
 -- Migration: 0067_internship_category_and_stipend_go_live.sql
@@ -8683,7 +8686,7 @@ create trigger notify_cpc_on_student_offer
 
 
 -- =============================================================================
--- Master Reference Data & Seed
+-- Master Reference Data & Seed Setup
 -- =============================================================================
 
 -- =============================================================================
@@ -9028,3 +9031,39 @@ select p.id, sci.campus_id
 from public.profiles p
 join public.staff_campus_invitations sci on lower(sci.email) = lower(p.email)
 on conflict do nothing;
+
+-- =============================================================================
+-- Founding Admin Bootstrap: thanush@faceprep.in
+-- =============================================================================
+
+delete from public.students 
+where lower(btrim(email)) = 'thanush@faceprep.in';
+
+insert into public.staff_invitations (email, full_name, role)
+values ('thanush@faceprep.in', 'Thanush Krishna', 'admin')
+on conflict (email) do update
+  set role = 'admin',
+      full_name = 'Thanush Krishna';
+
+insert into public.profiles (id, email, full_name, role, is_active)
+select 
+  u.id,
+  'thanush@faceprep.in',
+  'Thanush Krishna',
+  'admin'::public.app_role,
+  true
+from auth.users u
+where lower(btrim(u.email)) = 'thanush@faceprep.in'
+on conflict (id) do update
+  set role = 'admin'::public.app_role,
+      full_name = 'Thanush Krishna',
+      is_active = true;
+
+update public.staff_invitations
+   set accepted_at = coalesce(accepted_at, now())
+ where lower(btrim(email)) = 'thanush@faceprep.in'
+   and exists (
+     select 1 from public.profiles 
+     where lower(btrim(email)) = 'thanush@faceprep.in'
+   );
+

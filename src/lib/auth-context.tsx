@@ -72,3 +72,32 @@ export const AuthActionsContext = createContext<AuthActions>({
 export function useAuthActions(): AuthActions {
   return useContext(AuthActionsContext);
 }
+
+/**
+ * Test role preview switcher and route bypass are active ONLY on
+ * https://pms-test-gamma.vercel.app for testing users (radhika@faceprep.in, thanush@faceprep.in)
+ * or in local DEV environments.
+ * It is strictly INACTIVE on real production domains.
+ */
+export function isTestPreviewAllowed(email?: string): boolean {
+  if (Boolean(import.meta.env.DEV)) return true;
+  if (!email) return false;
+
+  const normalized = email.toLowerCase().trim();
+  const isAllowedUser =
+    normalized === "radhika@faceprep.in" || normalized === "thanush@faceprep.in";
+  if (!isAllowedUser) return false;
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.toLowerCase();
+    return (
+      host === "pms-test-gamma.vercel.app" ||
+      (host.endsWith(".vercel.app") && host.includes("pms-test")) ||
+      host === "localhost" ||
+      host === "127.0.0.1"
+    );
+  }
+
+  return false;
+}
+

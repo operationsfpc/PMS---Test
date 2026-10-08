@@ -1,5 +1,5 @@
 import type { AppRole } from "@domain/types";
-import { type AuthActions, AuthActionsContext } from "@lib/auth-context";
+import { type AuthActions, AuthActionsContext, isTestPreviewAllowed } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { AuthContext, type AuthState } from "./require-auth";
@@ -57,7 +57,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
 
   const effectiveState = useMemo<AuthState>(() => {
     if (state.status !== "signed-in") return state;
-    const canPreview = Boolean(import.meta.env.DEV);
+    const canPreview = isTestPreviewAllowed(state.email);
     if (!canPreview || !previewRole) return state;
 
     return {

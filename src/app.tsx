@@ -40,7 +40,7 @@ import {
   StudentNotificationsRoute,
 } from "@features/student/student-dashboard-route";
 import { StudentRecordRoute } from "@features/student-record/student-record-route";
-import { useAuth } from "@lib/auth-context";
+import { isTestPreviewAllowed, useAuth } from "@lib/auth-context";
 import type { ReactNode } from "react";
 import { Route, Routes } from "react-router";
 
@@ -52,8 +52,9 @@ import { Route, Routes } from "react-router";
 function CampusCpcOnly({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : null;
+  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
 
-  if (role !== null && role !== "campus_placement_coordinator") {
+  if (!isBypassed && role !== null && role !== "campus_placement_coordinator") {
     return (
       <p className="p-8 text-sm text-ink-700">
         This queue belongs to the campus placement coordinator. Registration forms and certificates
@@ -77,8 +78,9 @@ function CampusCpcOnly({ children }: { children: ReactNode }) {
 function ShortlistersOnly({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : null;
+  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
 
-  if (role !== null && !canShortlistFromPortfolio(role)) {
+  if (!isBypassed && role !== null && !canShortlistFromPortfolio(role)) {
     return (
       <p className="p-8 text-sm text-ink-700">
         Shortlisting belongs to the placement coordinators. Choosing which students a recruiter sees
@@ -102,8 +104,9 @@ function ShortlistersOnly({ children }: { children: ReactNode }) {
 function RaisersOnly({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : null;
+  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
 
-  if (role !== null && !canRaiseDrive(role)) {
+  if (!isBypassed && role !== null && !canRaiseDrive(role)) {
     return (
       <p className="p-8 text-sm text-ink-700">
         Only an Account Executive raises a drive. They own the recruiter’s brief, and keeping that
@@ -119,8 +122,9 @@ function RaisersOnly({ children }: { children: ReactNode }) {
 function ApproversOnly({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : null;
+  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
 
-  if (role !== null && !canApproveDrive(role)) {
+  if (!isBypassed && role !== null && !canApproveDrive(role)) {
     return (
       <p className="p-8 text-sm text-ink-700">
         Approving a drive belongs to the Delivery Head. They check the commercial terms the Account
@@ -136,8 +140,9 @@ function ApproversOnly({ children }: { children: ReactNode }) {
 function PublishersOnly({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : null;
+  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
 
-  if (role !== null && !canPublishDrive(role)) {
+  if (!isBypassed && role !== null && !canPublishDrive(role)) {
     return (
       <p className="p-8 text-sm text-ink-700">
         Publishing a drive belongs to the central placement coordinator. Raising and approving a
