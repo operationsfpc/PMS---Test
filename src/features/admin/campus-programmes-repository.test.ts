@@ -23,14 +23,30 @@ function stub(
 ) {
   const writes: Array<{ table: string; method: string; body: unknown; search: string }> = [];
 
+  // The catalogue is mutable because adding a programme now creates catalogue
+  // rows it needs, and the code re-reads after creating.
+  const degreeRows = [...(opts.degrees ?? [{ id: "d1", name: "B.E" }])];
+  const branchRows = [...(opts.branches ?? [{ id: "b1", degree_id: "d1", name: "CSE" }])];
+  let nextId = 0;
+
   server.use(
     http.get(`${BASE}/rest/v1/campus_programmes`, () => HttpResponse.json(opts.programmes ?? [])),
-    http.get(`${BASE}/rest/v1/degrees`, () =>
-      HttpResponse.json(opts.degrees ?? [{ id: "d1", name: "B.E" }]),
-    ),
-    http.get(`${BASE}/rest/v1/branches`, () =>
-      HttpResponse.json(opts.branches ?? [{ id: "b1", degree_id: "d1", name: "CSE" }]),
-    ),
+    http.get(`${BASE}/rest/v1/degrees`, () => HttpResponse.json(degreeRows)),
+    http.get(`${BASE}/rest/v1/branches`, () => HttpResponse.json(branchRows)),
+    http.post(`${BASE}/rest/v1/degrees`, async ({ request }) => {
+      const body = (await request.json()) as { name: string };
+      writes.push({ table: "degrees", method: "POST", body, search: "" });
+      const row = { id: `d-new-${++nextId}`, name: body.name };
+      degreeRows.push(row);
+      return HttpResponse.json([], { status: 201 });
+    }),
+    http.post(`${BASE}/rest/v1/branches`, async ({ request }) => {
+      const body = (await request.json()) as { degree_id: string; name: string };
+      writes.push({ table: "branches", method: "POST", body, search: "" });
+      const row = { id: `b-new-${++nextId}`, degree_id: body.degree_id, name: body.name };
+      branchRows.push(row);
+      return HttpResponse.json([], { status: 201 });
+    }),
     http.post(`${BASE}/rest/v1/campus_programmes`, async ({ request }) => {
       writes.push({
         table: "campus_programmes",
@@ -126,13 +142,41 @@ describe("createSupabaseCampusProgrammesView", () => {
     expect(writes[0]?.body).toMatchObject({ degree_id: "d2", branch_id: null });
   });
 
-  /** A name that is not in the catalogue is a mistake, not something to create. */
-  it("refuses a degree the catalogue does not have", async () => {
-    stub();
+  /** A name that is not in the catalogue is created, not refused. */
+  it("creates a degree the catalogue does not have, then links it", async () => {
+    const { writes } = stub();
 
-    await expect(
-      view().add({ campusId: "c1", degree: "B.Arch", branch: "", passingYear: 2028 }),
-    ).rejects.toThrow(/B\.Arch/);
+    await view().add({ campusId: "c1", degree: "B.Arch", branch: "", passingYear: 2028 });
+
+    expect(writes[0]).toMatchObject({ table: "degrees", body: { name: "B.Arch" } });
+    expect(writes[1]?.body).toMatchObject({
+      campus_id: "c1",
+      degree_id: "d-new-1",
+      branch_id: null,
+      passing_year: 2028,
+    });
+  });
+
+  it("creates a branch under the degree it belongs to", async () => {
+    const { writes } = stub();
+
+    await view().add({ campusId: "c1", degree: "B.E", branch: "AI & DS", passingYear: 2028 });
+
+    expect(writes[0]).toMatchObject({
+      table: "branches",
+      body: { degree_id: "d1", name: "AI & DS" },
+    });
+    expect(writes[1]?.body).toMatchObject({ degree_id: "d1", branch_id: "b-new-1" });
+  });
+
+  /** "b.e" must resolve to the existing "B.E", not seed a near-duplicate. */
+  it("matches catalogue names case-insensitively without creating anything", async () => {
+    const { writes } = stub();
+
+    await view().add({ campusId: "c1", degree: "b.e", branch: "cse", passingYear: 2028 });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.body).toMatchObject({ degree_id: "d1", branch_id: "b1" });
   });
 
   it("says plainly when the college already runs that programme", async () => {

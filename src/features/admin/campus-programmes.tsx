@@ -70,8 +70,9 @@ export function CampusProgrammes({
     void view.options().then(setOptions);
   }, [refresh, view]);
 
-  /** Only this degree's branches: the pair has to be one that exists. */
-  const branches = options.find((o) => o.degree === degree)?.branches ?? [];
+  /** Only this degree's branches — matched loosely, since the field is typed. */
+  const branchSuggestions =
+    options.find((o) => o.degree.toLowerCase() === degree.trim().toLowerCase())?.branches ?? [];
 
   const byYear = useMemo(() => {
     const groups = new Map<number, ProgrammeRow[]>();
@@ -94,8 +95,8 @@ export function CampusProgrammes({
   async function add() {
     const programme: NewProgramme = {
       campusId,
-      degree,
-      branch,
+      degree: degree.trim(),
+      branch: branch.trim(),
       passingYear: Number(year),
     };
 
@@ -193,8 +194,9 @@ export function CampusProgrammes({
           >
             Degree
           </label>
-          <select
+          <input
             id={`degree-${campusId}`}
+            list={`degree-options-${campusId}`}
             value={degree}
             onChange={(e) => {
               setDegree(e.target.value);
@@ -202,15 +204,14 @@ export function CampusProgrammes({
               // never went together.
               setBranch("");
             }}
+            placeholder="Pick or type a new one"
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-          >
-            <option value="">Select…</option>
+          />
+          <datalist id={`degree-options-${campusId}`}>
             {options.map((option) => (
-              <option key={option.degree} value={option.degree}>
-                {option.degree}
-              </option>
+              <option key={option.degree} value={option.degree} />
             ))}
-          </select>
+          </datalist>
         </div>
 
         <div>
@@ -220,20 +221,19 @@ export function CampusProgrammes({
           >
             Branch
           </label>
-          <select
+          <input
             id={`branch-${campusId}`}
+            list={`branch-options-${campusId}`}
             value={branch}
             onChange={(e) => setBranch(e.target.value)}
+            placeholder="No branch, or pick / type one"
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-          >
-            {/* An MBA genuinely has none, so "no branch" is a real answer. */}
-            <option value="">No branch</option>
-            {branches.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
+          />
+          <datalist id={`branch-options-${campusId}`}>
+            {branchSuggestions.map((name) => (
+              <option key={name} value={name} />
             ))}
-          </select>
+          </datalist>
         </div>
 
         <div>

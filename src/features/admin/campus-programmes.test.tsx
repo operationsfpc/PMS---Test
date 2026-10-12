@@ -85,8 +85,8 @@ describe("CampusProgrammes", () => {
     const user = userEvent.setup();
     render(<CampusProgrammes campusId="c1" campusName="Alliance" view={view({ add })} />);
 
-    await user.selectOptions(await screen.findByLabelText(/degree/i), "B.E");
-    await user.selectOptions(screen.getByLabelText(/branch/i), "Mechanical");
+    await user.type(await screen.findByLabelText(/degree/i), "B.E");
+    await user.type(screen.getByLabelText(/branch/i), "Mechanical");
     await user.clear(screen.getByLabelText(/year of passing/i));
     await user.type(screen.getByLabelText(/year of passing/i), "2028");
     await user.click(screen.getByRole("button", { name: /add programme/i }));
@@ -101,15 +101,48 @@ describe("CampusProgrammes", () => {
     );
   });
 
+  /** The catalogue is a suggestion, not a gate: a typed name must pass through. */
+  it("adds a programme with a degree typed outside the catalogue", async () => {
+    const add = vi.fn();
+    const user = userEvent.setup();
+    render(<CampusProgrammes campusId="c1" campusName="Alliance" view={view({ add })} />);
+
+    await user.type(await screen.findByLabelText(/degree/i), "B.Arch");
+    await user.type(screen.getByLabelText(/branch/i), "Design");
+    await user.clear(screen.getByLabelText(/year of passing/i));
+    await user.type(screen.getByLabelText(/year of passing/i), "2028");
+    await user.click(screen.getByRole("button", { name: /add programme/i }));
+
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith({
+        campusId: "c1",
+        degree: "B.Arch",
+        branch: "Design",
+        passingYear: 2028,
+      }),
+    );
+  });
+
   /** The branches offered must be the chosen degree's, or the pair is nonsense. */
-  it("offers only the branches that belong to the chosen degree", async () => {
+  it("suggests only the branches that belong to the chosen degree", async () => {
     const user = userEvent.setup();
     show();
 
-    await user.selectOptions(await screen.findByLabelText(/degree/i), "MBA");
+    const branchListId = () =>
+      (screen.getByLabelText(/branch/i) as HTMLInputElement).getAttribute("list") ?? "";
+    await user.type(await screen.findByLabelText(/degree/i), "B.E");
 
-    const branch = screen.getByLabelText(/branch/i) as HTMLSelectElement;
-    expect(within(branch).queryByRole("option", { name: "CSE" })).toBeNull();
+    const suggestions = () => {
+      const list = document.getElementById(branchListId());
+      if (list === null) throw new Error("branch datalist not found");
+      return Array.from(list.querySelectorAll("option")).map((o) => o.value);
+    };
+
+    expect(suggestions()).toContain("CSE");
+
+    await user.clear(screen.getByLabelText(/degree/i));
+    await user.type(screen.getByLabelText(/degree/i), "MBA");
+    expect(suggestions()).not.toContain("CSE");
   });
 
   it("refuses to add a programme with no degree, in the domain's words", async () => {
@@ -131,7 +164,7 @@ describe("CampusProgrammes", () => {
     const user = userEvent.setup();
     render(<CampusProgrammes campusId="c1" campusName="Alliance" view={view({ add })} />);
 
-    await user.selectOptions(await screen.findByLabelText(/degree/i), "B.E");
+    await user.type(await screen.findByLabelText(/degree/i), "B.E");
     await user.clear(screen.getByLabelText(/year of passing/i));
     await user.type(screen.getByLabelText(/year of passing/i), "1900");
     await user.click(screen.getByRole("button", { name: /add programme/i }));

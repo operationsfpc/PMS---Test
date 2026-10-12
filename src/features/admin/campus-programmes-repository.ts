@@ -22,9 +22,12 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
  * job — and getting it wrong pairs a degree with another degree's branch,
  * which 0036's trigger then refuses, correctly but unhelpfully.
  *
- * A name that is not in the catalogue is a MISTAKE, not something to create on
- * the fly: silently inserting "B.Arch" because somebody typed it is how the
- * global catalogue filled up with near-duplicates in the first place.
+ * A name that is not in the catalogue is created here, scoped where it
+ * belongs: a new degree joins the catalogue, a new branch joins its degree.
+ * The old separate catalogue screen is gone (F6), so refusing a typed name
+ * would leave an Admin with nowhere to add it at all. Matching is
+ * case-insensitive on the trimmed name — "b.e" resolves to the existing
+ * "B.E" instead of seeding a near-duplicate.
  */
 export function createSupabaseCampusProgrammesView(client: SupabaseClient): CampusProgrammesView {
   async function catalogue() {
@@ -69,32 +72,60 @@ export function createSupabaseCampusProgrammesView(client: SupabaseClient): Camp
     },
 
     async add(programme) {
-      const { degrees, branches } = await catalogue();
+      const degreeName = programme.degree.trim();
+      const branchName = programme.branch.trim();
+      const sameName = (a: unknown, b: string) =>
+        String(a ?? "").trim().toLowerCase() === b.toLowerCase();
 
-      const degree = degrees.find((d) => d.name === programme.degree);
+      let { degrees, branches } = await catalogue();
+
+      let degree = degrees.find((d) => sameName(d.name, degreeName));
       if (degree === undefined) {
-        throw new CampusProgrammeError(
-          `${programme.degree} is not in the degree list. Add it there first.`,
-        );
+        // A 23505 here means a concurrent Admin just created it — re-reading
+        // resolves the id in either case.
+        const { error } = await client.from("degrees").insert({ name: degreeName });
+        if (error !== null && error.code !== "23505") {
+          throw new CampusProgrammeError(`Could not add the degree ${degreeName}: ${error.message}`);
+        }
+        ({ degrees } = await catalogue());
+        degree = degrees.find((d) => sameName(d.name, degreeName));
+        if (degree === undefined) {
+          throw new CampusProgrammeError(`Could not add the degree ${degreeName}.`);
+        }
       }
 
       // Looked up WITHIN the degree, so a branch name shared by two degrees
       // cannot resolve to the wrong one.
-      const branch =
-        programme.branch === ""
+      let branch =
+        branchName === ""
           ? null
-          : branches.find((b) => b.degree_id === degree.id && b.name === programme.branch);
+          : (branches.find(
+              (b) => b.degree_id === degree?.id && sameName(b.name, branchName),
+            ) ?? null);
 
-      if (programme.branch !== "" && branch === undefined) {
-        throw new CampusProgrammeError(
-          `${programme.branch} is not a branch of ${programme.degree}.`,
-        );
+      if (branchName !== "" && branch === null) {
+        const { error } = await client
+          .from("branches")
+          .insert({ degree_id: degree.id, name: branchName });
+        if (error !== null && error.code !== "23505") {
+          throw new CampusProgrammeError(
+            `Could not add the branch ${branchName}: ${error.message}`,
+          );
+        }
+        ({ branches } = await catalogue());
+        branch =
+          branches.find(
+            (b) => b.degree_id === degree?.id && sameName(b.name, branchName),
+          ) ?? null;
+        if (branch === null) {
+          throw new CampusProgrammeError(`Could not add the branch ${branchName}.`);
+        }
       }
 
       const { error } = await client.from("campus_programmes").insert({
         campus_id: programme.campusId,
         degree_id: degree.id as string,
-        branch_id: branch === null || branch === undefined ? null : (branch.id as string),
+        branch_id: branch === null ? null : (branch.id as string),
         passing_year: programme.passingYear,
       });
 
