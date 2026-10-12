@@ -195,7 +195,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
             return (
               <Card key={pif.id} className="p-5">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <h2 className="font-[Raleway] text-lg font-bold text-ink-900">
+                  <h2 className="max-w-[300px] truncate font-[Raleway] text-lg font-bold text-ink-900">
                     {pif.companyName}
                   </h2>
                   {/* 2026-08-27: the type, on every drive summary. */}

@@ -1,13 +1,15 @@
-// @ts-nocheck
 // Supabase Edge Function: email-dispatch
-// Dispatches queued email_deliveries via Resend API using the canonical HTML template
+// Dispatches email_deliveries via Resend API using the canonical HTML template
 // defined in docs/email-templates-preview.html.
+// Concurrency-safe: claims rows atomically via claim_email_deliveries() RPC
+// (FOR UPDATE SKIP LOCKED), so overlapping invocations never duplicate sends.
+// Retryable failures (429/5xx/network) are requeued up to 3 attempts.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "re_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp";
-const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "FACE Prep Campus <pms@faceprepcampus.com>";
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
+const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "FACE Prep Campus <placements@email.faceprep.in>";
 const EMAIL_OVERRIDE_RECIPIENT = Deno.env.get("EMAIL_OVERRIDE_RECIPIENT") || "";
 const PORTAL_URL = Deno.env.get("PORTAL_URL") || "https://pms.faceprepcampus.com";
 
@@ -96,19 +98,71 @@ function buildCanonicalHtml(item: {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>${safeSubject}</title><style>@media screen and (max-width:620px){.email-shell{width:100%!important}.email-padding{padding-left:22px!important;padding-right:22px!important}}</style></head><body style="margin:0;padding:0;background:#f7f6fb;color:#151228;font-family:Arial,Helvetica,sans-serif;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${safeTitle} — view this update in your FACE Prep Campus portal.</div><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f7f6fb;"><tr><td align="center" style="padding:28px 12px;"><table role="presentation" class="email-shell" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:100%;background:#fff;border:1px solid #e2e0ea;border-radius:10px;overflow:hidden;"><tr><td style="height:4px;background:#ffb800;font-size:4px;line-height:4px;">&nbsp;</td></tr><tr><td class="email-padding" style="padding:24px 32px;background:#3d3777;"><div style="width:170px;max-width:100%;"><img src="https://pms.faceprepcampus.com/brand/faceprep-campus-light.png" width="170" alt="FACE Prep Campus" style="display:block;width:170px;max-width:100%;height:auto;border:0;"><p style="margin:8px 0 0;color:#ddd8f0;font-size:11px;font-weight:600;width:170px;letter-spacing:0.2px;line-height:1.2;text-transform:none;">Placement Management System</p></div></td></tr><tr><td class="email-padding" style="padding:34px 32px 28px;">${routingNoticeHtml}<h1 style="margin:0 0 6px;color:#151228;font-size:22px;font-weight:700;line-height:1.3;">${safeTitle}</h1>${subtitleHtml}<p style="margin:0 0 18px;color:#3f3d56;font-size:16px;line-height:1.55;">Dear <strong style="color:#151228;">${safeRecipient}</strong>,</p><p style="margin:0;color:#3f3d56;font-size:15px;line-height:1.65;">${formatBodyHtml(item.body)}</p>${buttonHtml}<p style="margin:28px 0 0;color:#3f3d56;font-size:15px;line-height:1.55;">Warm regards,<br><strong style="color:#151228;">Placement Cell,</strong><br><strong style="color:#151228;">FACE Prep Campus</strong></p></td></tr><tr><td class="email-padding" style="padding:22px 32px;background:#f8fafc;border-top:1px solid #e2e0ea;font-size:12px;color:#64748b;line-height:1.6;"><p style="margin:0 0 4px 0;font-weight:600;color:#334155;">FACE Prep Campus &bull; Focus 4D Career Education Pvt Ltd</p><p style="margin:0;">For questions, contact your coordinator or write to <a href="mailto:hello@faceprep.in" style="color:#3d3777;font-weight:600;text-decoration:underline;">hello@faceprep.in</a></p></td></tr></table></td></tr></table></body></html>`;
 }
 
+function isAuthorized(token: string): boolean {
+  if (!token) return false;
+  if (SUPABASE_SERVICE_ROLE_KEY && token === SUPABASE_SERVICE_ROLE_KEY) return true;
+  // JWT-format keys: the API gateway already verified the signature before the
+  // request reached us, so checking the service_role claim is sufficient.
+  const parts = token.split(".");
+  if (parts.length === 3) {
+    try {
+      const payload = JSON.parse(
+        atob(parts[1].replaceAll("-", "+").replaceAll("_", "/")),
+      );
+      return payload?.role === "service_role";
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 serve(async (req: Request) => {
   if (req.method !== "POST" && req.method !== "GET") {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!isAuthorized(token)) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  // 1. Fetch up to 100 queued email_deliveries joining notifications
+  // 1. Atomically claim up to 100 queued deliveries (queued -> processing).
+  // FOR UPDATE SKIP LOCKED inside the RPC guarantees concurrent invocations
+  // never hold the same row, preventing duplicate sends.
+  const { data: claimedIds, error: claimError } = await supabase
+    .rpc("claim_email_deliveries", { p_limit: 100 });
+
+  if (claimError) {
+    return new Response(JSON.stringify({ error: claimError.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const claimed = (claimedIds ?? []) as string[];
+  if (claimed.length === 0) {
+    return new Response(JSON.stringify({ message: "No queued deliveries to process." }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // 2. Fetch claimed rows joining notifications for rendering
   const { data: deliveries, error: fetchError } = await supabase
     .from("email_deliveries")
     .select(`
       id,
       recipient_email,
+      subject,
+      html_body,
+      attempts,
       notification:notifications(
         id,
         kind,
@@ -118,10 +172,10 @@ serve(async (req: Request) => {
         student:students(full_name)
       )
     `)
-    .eq("status", "queued")
-    .limit(100);
+    .in("id", claimed);
 
   if (fetchError) {
+    // Rows remain 'processing' and will be recovered by the stale-claim cron
     return new Response(JSON.stringify({ error: fetchError.message }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
@@ -161,9 +215,36 @@ serve(async (req: Request) => {
   }
 
   const results = [];
+  const batchItems: { deliveryId: string; originalEmail: string; finalRecipient: string; payload: Record<string, unknown> }[] = [];
 
-  // 2. Dispatch each delivery via Resend
+  // 3. Build payloads for each delivery
   for (const delivery of deliveries) {
+    const customHtml = (delivery as any).html_body as string | null;
+    const customSubject = (delivery as any).subject as string | null;
+
+    const originalEmail = delivery.recipient_email?.trim() || "";
+
+    // Custom HTML bypass: staff invitations and other direct emails carry
+    // pre-built HTML with no notification_id.
+    if (customHtml && customHtml.trim()) {
+      const isOverridden = Boolean(EMAIL_OVERRIDE_RECIPIENT && EMAIL_OVERRIDE_RECIPIENT !== originalEmail);
+      const finalRecipient = isOverridden ? EMAIL_OVERRIDE_RECIPIENT : originalEmail;
+
+      batchItems.push({
+        deliveryId: delivery.id,
+        originalEmail,
+        finalRecipient,
+        payload: {
+          from: RESEND_FROM_EMAIL,
+          to: [finalRecipient],
+          reply_to: "placements@faceprep.in",
+          subject: customSubject ?? "FACE Prep Campus",
+          html: customHtml,
+        },
+      });
+      continue;
+    }
+
     const notif = delivery.notification as {
       id?: string;
       kind?: string;
@@ -173,7 +254,6 @@ serve(async (req: Request) => {
       student?: { full_name?: string } | null;
     } | null;
 
-    const originalEmail = delivery.recipient_email?.trim() || "";
     let recipientDisplayName = notif?.student?.full_name?.trim();
     if (!recipientDisplayName && originalEmail) {
       const profile = profileMap.get(originalEmail.toLowerCase());
@@ -426,6 +506,105 @@ serve(async (req: Request) => {
         buttonLabel = "View Account Overview";
         targetUrl = `${PORTAL_URL}/ae/overview`;
         break;
+      // A4: Account Executive — Drive Offers Milestone
+      case "drive_offers_milestone":
+      case "ae_drive_concluded":
+        subject = notificationTitle || "Placement Success: Drive Concluded with Offers";
+        templateTitle = "Drive Concluded Successfully";
+        buttonLabel = "View Account Performance";
+        targetUrl = `${PORTAL_URL}/ae/overview`;
+        break;
+      // DH1: Delivery Head — PIF Submitted
+      case "pif_submitted":
+      case "dh_pif_submitted":
+      case "pif_under_review":
+        subject = notificationTitle || "Action Required: PIF Submitted for Review";
+        templateTitle = "Placement Initiation Form Under Review";
+        buttonLabel = "Open PIF Approvals";
+        targetUrl = `${PORTAL_URL}/delivery-head/pif-approvals`;
+        break;
+      // DH2: Delivery Head — Policy Override Alert
+      case "policy_override_requested":
+      case "policy_override":
+      case "dh_policy_override":
+        subject = notificationTitle || "Governance Alert: Placement Policy Override Requested";
+        templateTitle = "Placement Policy Override Request";
+        buttonLabel = "Review Policy Override";
+        targetUrl = `${PORTAL_URL}/delivery-head/pif-approvals`;
+        break;
+      // DH3: Delivery Head — Weekly Operations Digest
+      case "weekly_operations_digest":
+      case "dh_weekly_digest":
+      case "operations_digest":
+        subject = notificationTitle || "Weekly Placement Operations Summary";
+        templateTitle = "Weekly Placement Operations Summary";
+        buttonLabel = "Open Operations Cockpit";
+        targetUrl = `${PORTAL_URL}/dashboard`;
+        break;
+      // L1: Leadership — Weekly Placement Digest
+      case "weekly_leadership_digest":
+      case "leadership_weekly":
+        subject = notificationTitle || "Weekly Campus Placement Executive Summary";
+        templateTitle = "Weekly Campus Placement Executive Summary";
+        buttonLabel = "Open Leadership Dashboard";
+        targetUrl = `${PORTAL_URL}/dashboard`;
+        break;
+      // L2: Leadership — Super Dream Milestone
+      case "super_dream_milestone":
+      case "leadership_milestone":
+        subject = notificationTitle || "Marquee Placement Success Milestone";
+        templateTitle = "Marquee Placement Success Milestone";
+        buttonLabel = "View Placement Statistics";
+        targetUrl = `${PORTAL_URL}/dashboard`;
+        break;
+      // R1: Recruiter — Candidate Shortlist
+      case "recruiter_shortlist":
+      case "candidate_shortlist_pack":
+        subject = notificationTitle || "Candidate Shortlist & Resume Pack";
+        templateTitle = "Candidate Shortlist & Resume Pack";
+        buttonLabel = "Open Candidate Pack";
+        targetUrl = `${PORTAL_URL}/login`;
+        break;
+      // R2: Recruiter — Drive Sourcing Kickoff
+      case "recruiter_drive_live":
+      case "drive_sourcing_kickoff":
+        subject = notificationTitle || "Your Campus Drive Is Live";
+        templateTitle = "Your Campus Drive Is Live";
+        buttonLabel = "View Drive Status";
+        targetUrl = `${PORTAL_URL}/login`;
+        break;
+      // R3: Recruiter — Interview Schedule & Roster
+      case "recruiter_interview_schedule":
+      case "interview_roster":
+        subject = notificationTitle || "Interview Schedule & Candidate Roster";
+        templateTitle = "Interview Schedule & Candidate Roster";
+        buttonLabel = "Access Interview Dossier";
+        targetUrl = `${PORTAL_URL}/login`;
+        break;
+      // R4: Recruiter — Drive Concluded Summary
+      case "recruiter_drive_concluded":
+      case "drive_concluded_summary":
+        subject = notificationTitle || "Campus Drive Concluded";
+        templateTitle = "Campus Drive Concluded";
+        buttonLabel = "Download Placements Package";
+        targetUrl = `${PORTAL_URL}/login`;
+        break;
+      // AD2: Administrator — Roster Import Complete
+      case "roster_import_complete":
+      case "admin_roster_import":
+        subject = notificationTitle || "Roster Import Complete";
+        templateTitle = "Roster Import Complete";
+        buttonLabel = "View Student Directory";
+        targetUrl = `${PORTAL_URL}/central/students`;
+        break;
+      // AD3: Administrator — Email Delivery Alert
+      case "email_delivery_alert":
+      case "admin_delivery_alert":
+        subject = notificationTitle || "Email Delivery Exception Alert";
+        templateTitle = "Email Delivery Exception Alert";
+        buttonLabel = "Review Delivery Logs";
+        targetUrl = `${PORTAL_URL}/dashboard`;
+        break;
       default:
         templateTitle = notificationTitle;
         buttonLabel = "View on PMS Portal";
@@ -453,63 +632,91 @@ serve(async (req: Request) => {
     const routingPrefix = isOverridden ? `[Dev Routing Note: Intended for ${originalEmail}]\n\n` : "";
     const textBody = `${routingPrefix}Dear ${recipientDisplayName},\n\n${plainBody}\n\n${buttonLabel}: ${targetUrl}\n\nWarm regards,\nPlacement Cell,\nFACE Prep Campus\n\nNeed help? Contact hello@faceprep.in`;
 
-    const emailPayload = {
-      from: RESEND_FROM_EMAIL,
-      to: [finalRecipient],
-      reply_to: "placements@faceprep.in",
-      subject,
-      text: textBody,
-      html: htmlBody,
-    };
+    batchItems.push({
+      deliveryId: delivery.id,
+      originalEmail,
+      finalRecipient,
+      payload: {
+        from: RESEND_FROM_EMAIL,
+        to: [finalRecipient],
+        reply_to: "placements@faceprep.in",
+        subject,
+        text: textBody,
+        html: htmlBody,
+      },
+    });
+  }
+
+  // 4. Send in batches of 100 via Resend batch API
+  for (let i = 0; i < batchItems.length; i += 100) {
+    const chunk = batchItems.slice(i, i + 100);
+    const payloads = chunk.map((item) => item.payload);
 
     try {
-      const res = await fetch("https://api.resend.com/emails", {
+      const res = await fetch("https://api.resend.com/emails/batch", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${RESEND_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(emailPayload),
+        body: JSON.stringify(payloads),
       });
 
       const resData = await res.json().catch(() => ({}));
 
-      if (res.ok && resData?.id) {
-        await supabase
-          .from("email_deliveries")
-          .update({
-            status: "sent",
-            provider_message_id: resData.id,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", delivery.id);
+      if (res.ok && Array.isArray(resData?.data)) {
+        const resArray = resData.data as { id?: string }[];
+        for (let j = 0; j < chunk.length; j++) {
+          const item = chunk[j]!;
+          const itemRes = resArray[j];
+          await supabase
+            .from("email_deliveries")
+            .update({
+              status: "sent",
+              provider_message_id: itemRes?.id || null,
+              error: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", item.deliveryId);
 
-        results.push({ id: delivery.id, status: "sent", messageId: resData.id, recipient: finalRecipient });
+          results.push({ id: item.deliveryId, status: "sent", messageId: itemRes?.id, recipient: item.finalRecipient });
+        }
       } else {
         const errorMsg = resData?.message || `HTTP ${res.status}`;
-        await supabase
-          .from("email_deliveries")
-          .update({
-            status: "failed",
-            error: errorMsg,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", delivery.id);
+        // Retry transient failures (rate limit / provider outage) up to 3 attempts;
+        // 4xx validation/auth errors are permanent.
+        const retryable = res.status === 429 || res.status >= 500;
+        for (const item of chunk) {
+          const delivery = deliveries.find((d: any) => d.id === item.deliveryId);
+          const willRetry = retryable && ((delivery as any)?.attempts ?? 1) < 3;
+          await supabase
+            .from("email_deliveries")
+            .update({
+              status: willRetry ? "queued" : "failed",
+              error: errorMsg,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", item.deliveryId);
 
-        results.push({ id: delivery.id, status: "failed", error: errorMsg, recipient: finalRecipient });
+          results.push({ id: item.deliveryId, status: willRetry ? "requeued" : "failed", error: errorMsg, recipient: item.finalRecipient });
+        }
       }
     } catch (sendErr: unknown) {
       const errorMessage = sendErr instanceof Error ? sendErr.message : String(sendErr);
-      await supabase
-        .from("email_deliveries")
-        .update({
-          status: "failed",
-          error: errorMessage,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", delivery.id);
+      for (const item of chunk) {
+        const delivery = deliveries.find((d: any) => d.id === item.deliveryId);
+        const willRetry = ((delivery as any)?.attempts ?? 1) < 3;
+        await supabase
+          .from("email_deliveries")
+          .update({
+            status: willRetry ? "queued" : "failed",
+            error: errorMessage,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", item.deliveryId);
 
-      results.push({ id: delivery.id, status: "failed", error: errorMessage, recipient: finalRecipient });
+        results.push({ id: item.deliveryId, status: willRetry ? "requeued" : "failed", error: errorMessage, recipient: item.finalRecipient });
+      }
     }
   }
 

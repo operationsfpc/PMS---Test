@@ -35,6 +35,7 @@ function view(overrides: Partial<AttendanceView> = {}): AttendanceView {
   return {
     scheduled: async () => scheduled,
     mark: async () => undefined,
+    markBatch: async () => undefined,
     ...overrides,
   };
 }

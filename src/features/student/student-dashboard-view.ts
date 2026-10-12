@@ -32,7 +32,7 @@ const num = (value: unknown): number => Number(value ?? 0);
 export const DASHBOARD_STUDENT_COLUMNS = `
   id, full_name, roll_number, passing_year, srf_status, srf_rejection_reason,
   participation_status,
-  degrees(name), branches(name), campuses(name),
+  degrees(name), branches(name), campuses(name, cities(name)),
   student_semesters(semester_number, cgpa, status)
 `;
 
@@ -171,8 +171,15 @@ export function createSupabaseStudentDashboardView(
         };
       });
 
+      const appToDrive = new Map(
+        applicationRows.map((a) => [
+          a.id as string,
+          (a.drives as Record<string, unknown> | null)?.id as string | undefined,
+        ]),
+      );
+
       const attendanceRecords: AttendanceRecord[] = rows(attendance).map((a) => ({
-        driveId: "",
+        driveId: appToDrive.get(a.application_id as string) ?? "",
         roundId: a.round_id as string,
         status: a.status as AttendanceStatus,
       }));
@@ -206,7 +213,7 @@ export function createSupabaseStudentDashboardView(
             roleTitle: (offer.role_title as string | null) ?? null,
             driveType: (offer.drive_type as StudentOfferRow["driveType"]) ?? "placement",
             ctcLpa: (offer.ctc_lpa as number | null) === null ? null : num(offer.ctc_lpa),
-            stipendMonthly: (offer.stipend_monthly as number | null) ?? null,
+            stipendMonthly: (offer.stipend_monthly as number | null) === null ? null : num(offer.stipend_monthly),
             offerCategory: (offer.offer_category as OfferCategory | null) ?? null,
             declaredAt: offer.declared_at as string,
             source: (offer.source as OfferSource | null) ?? "on_campus",
@@ -268,11 +275,15 @@ export function createSupabaseStudentDashboardView(
     },
 
     async markRead(notificationId) {
-      await client
+      const { error } = await client
         .from("notifications")
         .update({ read_at: new Date().toISOString() })
         .eq("id", notificationId)
-        .select("id");
+        .select("id")
+        .maybeSingle();
+      if (error !== null) {
+        throw new StudentDashboardError("Could not mark the notification as read.");
+      }
     },
   };
 }

@@ -57,7 +57,7 @@ export const OFFER_LADDER_COLUMNS =
   // The attachment columns ride along with the ladder's: the same rows, one
   // round trip. UAT 2026-08-27 — the concluded drive says "Offer received"
   // and must be able to hand over the letter that says so.
-  "id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source, attachment_path, attachment_name";
+  "id, drive_id, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, source, attachment_path, attachment_name";
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const STUDENT_COLUMNS = `
@@ -291,11 +291,11 @@ export function createSupabaseDrivesView(
       criteria: {
         eligibleDegrees: linkedNames(raw.drive_eligible_degrees, "degrees"),
         eligibleBranches: linkedNames(raw.drive_eligible_branches, "branches"),
-        eligiblePassingYears: (raw.eligible_passing_years as number[]) ?? [],
+        eligiblePassingYears: ((raw.eligible_passing_years as unknown[]) ?? []).map(Number),
         minOverallCgpa: (raw.min_overall_cgpa as number | null) ?? null,
         minTenthPercentage: (raw.min_tenth_percentage as number | null) ?? null,
         minTwelfthPercentage: (raw.min_twelfth_percentage as number | null) ?? null,
-        arrearPolicy: (raw.arrears_policy as "flexible") ?? "flexible",
+        arrearPolicy: (raw.arrears_policy as "flexible" | "no_standing" | "no_history") ?? "flexible",
         targetCities: targetedCities(raw.drive_target_campuses),
         targetCampuses: linkedNames(raw.drive_target_campuses, "campuses"),
       },
@@ -336,100 +336,94 @@ export function createSupabaseDrivesView(
     return links;
   }
 
+  async function buildOpenCards(
+    student: ApplyStudent,
+    drives: Array<Record<string, unknown>>,
+    appliedIds: string[],
+    now: Date,
+  ): Promise<readonly OpenDrive[]> {
+    const jdLinks = await signJobDescriptions(drives);
+
+    return drives.flatMap((raw) => {
+      const drive = toDrive(raw);
+      const verdict = canApply(
+        {
+          srfStatus: student.srfStatus,
+          participationStatus: student.participationStatus,
+          academics: student.academics,
+          offers: student.offers,
+          roleCategories: student.roleCategories,
+          driveTypePreferences: student.driveTypePreferences,
+        },
+        drive,
+        now,
+        appliedIds,
+      );
+
+      const hidden =
+        !verdict.allowed &&
+        !["window_not_open", "window_closed", "already_applied"].includes(verdict.reason);
+      if (hidden) return [];
+
+      const min = raw.ctc_min_lpa as number | null;
+      const max = raw.ctc_max_lpa as number | null;
+
+      return [
+        {
+          id: drive.id,
+          companyName: raw.company_name as string,
+          roleTitle: (raw.role_title as string | null) ?? "Role not specified",
+          roleCategory: drive.roleCategory,
+          driveType: drive.driveType,
+          ctcLabel: max === null ? `₹${min ?? "—"} LPA` : `₹${min}–${max} LPA`,
+          offerCategory: drive.offerCategory,
+          applicationEnd: raw.application_end as string,
+          canApply: verdict.allowed,
+          refusal: verdict.allowed ? null : (REFUSALS[verdict.reason] ?? "Not open to you."),
+          applied: appliedIds.includes(drive.id),
+          profileResumeName: student.resumeNames[drive.roleCategory] ?? null,
+          details: {
+            jobDescription: text(raw.job_description),
+            designations: (raw.additional_designations as string[] | null) ?? [],
+            locations: text(raw.work_locations),
+            openings: (raw.openings as number | null) ?? null,
+            ctcBreakup: text(raw.ctc_breakup),
+            bondDetails: text(raw.bond_details),
+            shift: describeShift(
+              raw.shift_type as string | null,
+              raw.shift_night_timing as string | null,
+            ),
+            joining: describeJoining(
+              raw.joining_timeline as string | null,
+              ((raw.joining_immediate_notes ?? raw.joining_later_notes) as string | null) ??
+                (raw.timeline_notes as string | null),
+            ),
+            jobDescriptionUrl: jdLinks.get((raw.jd_storage_path as string | null) ?? "") ?? null,
+            jobDescriptionName: (raw.jd_file_name as string | null) ?? null,
+            mandatorySkills: text(raw.mandatory_skills),
+            driveMode: text(raw.drive_mode),
+            venue:
+              describeDriveVenue(
+                (raw.drive_mode as Parameters<typeof describeDriveVenue>[0]) ?? null,
+                (raw.venue as string | null) ?? null,
+              ) ?? "",
+            applicationStart: (raw.application_start as string | null) ?? null,
+            rounds: (Array.isArray(raw.drive_rounds) ? raw.drive_rounds : [])
+              .map((r) => ({
+                sequence: Number((r as Record<string, unknown>).sequence ?? 0),
+                name: String((r as Record<string, unknown>).name ?? "Round"),
+              }))
+              .sort((a, b) => a.sequence - b.sequence),
+          },
+        },
+      ];
+    });
+  }
+
   return {
     async openDrives(): Promise<readonly OpenDrive[]> {
       const { student, drives, appliedIds } = await load();
-      const now = clock();
-      const jdLinks = await signJobDescriptions(drives);
-
-      return drives.flatMap((raw) => {
-        const drive = toDrive(raw);
-        const verdict = canApply(
-          {
-            srfStatus: student.srfStatus,
-            participationStatus: student.participationStatus,
-            academics: student.academics,
-            offers: student.offers,
-            roleCategories: student.roleCategories,
-            driveTypePreferences: student.driveTypePreferences,
-          },
-          drive,
-          now,
-          appliedIds,
-        );
-
-        // Hidden by R5 - not merely unapplyable. Drop it entirely.
-        const hidden =
-          !verdict.allowed &&
-          !["window_not_open", "window_closed", "already_applied"].includes(verdict.reason);
-        if (hidden) return [];
-
-        const min = raw.ctc_min_lpa as number | null;
-        const max = raw.ctc_max_lpa as number | null;
-
-        return [
-          {
-            id: drive.id,
-            companyName: raw.company_name as string,
-            roleTitle: (raw.role_title as string | null) ?? "Role not specified",
-            roleCategory: drive.roleCategory,
-            // 2026-08-27: filtered on, and tagged on every card.
-            driveType: drive.driveType,
-            ctcLabel: max === null ? `₹${min ?? "—"} LPA` : `₹${min}–${max} LPA`,
-            offerCategory: drive.offerCategory,
-            applicationEnd: raw.application_end as string,
-            canApply: verdict.allowed,
-            refusal: verdict.allowed ? null : (REFUSALS[verdict.reason] ?? "Not open to you."),
-            applied: appliedIds.includes(drive.id),
-            // D2: the saved per-area resume that auto-fetches at apply time.
-            profileResumeName: student.resumeNames[drive.roleCategory] ?? null,
-            // F14: everything behind "View more". A student is about to
-            // promise to attend every round of this drive and to accept an
-            // offer from it; a company name and a CTC is not enough to decide
-            // that on.
-            details: {
-              jobDescription: text(raw.job_description),
-              designations: (raw.additional_designations as string[] | null) ?? [],
-              locations: text(raw.work_locations),
-              openings: (raw.openings as number | null) ?? null,
-              ctcBreakup: text(raw.ctc_breakup),
-              bondDetails: text(raw.bond_details),
-              // J2/J3 (2026-08-18): worded by the domain, so the card and the
-              // approver's queue cannot describe the same drive differently.
-              shift: describeShift(
-                raw.shift_type as string | null,
-                raw.shift_night_timing as string | null,
-              ),
-              joining: describeJoining(
-                raw.joining_timeline as string | null,
-                ((raw.joining_immediate_notes ?? raw.joining_later_notes) as string | null) ??
-                  (raw.timeline_notes as string | null),
-              ),
-              // J1 (answers 3 and 4): the student downloads what the recruiter
-              // actually wrote, not the AE's one-line summary of it.
-              jobDescriptionUrl: jdLinks.get((raw.jd_storage_path as string | null) ?? "") ?? null,
-              jobDescriptionName: (raw.jd_file_name as string | null) ?? null,
-              mandatorySkills: text(raw.mandatory_skills),
-              driveMode: text(raw.drive_mode),
-              // UAT 2026-08-21 item 2: worded by the domain — named when
-              // recorded, "Venue to be confirmed" when the mode is off-campus
-              // and the CPC has not recorded it yet. "" hides the row.
-              venue:
-                describeDriveVenue(
-                  (raw.drive_mode as Parameters<typeof describeDriveVenue>[0]) ?? null,
-                  (raw.venue as string | null) ?? null,
-                ) ?? "",
-              applicationStart: (raw.application_start as string | null) ?? null,
-              rounds: (Array.isArray(raw.drive_rounds) ? raw.drive_rounds : [])
-                .map((r) => ({
-                  sequence: Number((r as Record<string, unknown>).sequence ?? 0),
-                  name: String((r as Record<string, unknown>).name ?? "Round"),
-                }))
-                .sort((a, b) => a.sequence - b.sequence),
-            },
-          },
-        ];
-      });
+      return buildOpenCards(student, drives, appliedIds, clock());
     },
 
     async apply(driveId, resume) {
@@ -613,7 +607,8 @@ export function createSupabaseDrivesView(
 
       // The open cards go through the SAME builder as `openDrives`, so the
       // To-apply tab and the old list cannot describe a drive differently.
-      const openCards = await this.openDrives();
+      // Reuses the already-loaded data instead of calling openDrives() again.
+      const openCards = await buildOpenCards(student, drives, appliedIds, now);
 
       return {
         toApply: openCards.filter((card) => toApplyIds.has(card.id)),

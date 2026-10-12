@@ -393,14 +393,14 @@ export function ProfileEditPage({
                         coordinator's record of having checked it. Enforced
                         by RLS in 0038; hidden here so it is not offered. */}
                     {canRemoveCertificate(certificate.status).allowed && (
-                      <button
-                        type="button"
+                      <Button
+                        variant="danger"
+                        size="sm"
                         aria-label={`Remove ${certificate.name}`}
                         onClick={() => void removeCertificate(certificate.id)}
-                        className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-danger-700 hover:bg-danger-50"
                       >
                         Remove
-                      </button>
+                      </Button>
                     )}
                   </span>
                 </li>
@@ -491,16 +491,19 @@ export function ProfileEditPage({
                       value={profile.value}
                       onChange={(e) => setProfile(index, { value: e.target.value })}
                     />
-                    <button
-                      type="button"
-                      aria-label={`Remove profile ${index + 1}`}
-                      onClick={() =>
-                        setProfiles((current) => current.filter((_, i) => i !== index))
-                      }
-                      className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                    >
-                      Remove
-                    </button>
+                    <div className="self-end">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        type="button"
+                        aria-label={`Remove profile ${index + 1}`}
+                        onClick={() =>
+                          setProfiles((current) => current.filter((_, i) => i !== index))
+                        }
+                      >
+                        Remove
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>

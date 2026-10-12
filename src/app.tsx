@@ -1,10 +1,15 @@
 import { AppShell } from "@components/app-shell";
+import { RoleGuard } from "@components/role-guard";
 import {
-  canApproveDrive,
-  canPublishDrive,
-  canRaiseDrive,
-  canShortlistFromPortfolio,
-} from "@domain/drive-portfolio";
+  canAccessAdmin,
+  canAccessCampusCpc,
+  canAccessCentral,
+  canAccessPifApproval,
+  canAccessPifCreation,
+  canAccessPublish,
+  canAccessShortlisting,
+  canViewDriveProgress,
+} from "@domain/route-access";
 import { AdminCampusRoute } from "@features/admin/campus-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
@@ -40,119 +45,7 @@ import {
   StudentNotificationsRoute,
 } from "@features/student/student-dashboard-route";
 import { StudentRecordRoute } from "@features/student-record/student-record-route";
-import { isTestPreviewAllowed, useAuth } from "@lib/auth-context";
-import type { ReactNode } from "react";
 import { Route, Routes } from "react-router";
-
-/**
- * D3 (2026-08-12): verification is the campus placement coordinator's alone.
- * The database refuses everyone else's decisions (0042); this refuses them at
- * the door instead of rendering a queue whose buttons fail.
- */
-function CampusCpcOnly({ children }: { children: ReactNode }) {
-  const auth = useAuth();
-  const role = auth.status === "signed-in" ? auth.role : null;
-  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
-
-  if (!isBypassed && role !== null && role !== "campus_placement_coordinator") {
-    return (
-      <p className="p-8 text-sm text-ink-700">
-        This queue belongs to the campus placement coordinator. Registration forms and certificates
-        are verified at the campus, not centrally.
-      </p>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-/**
- * 2026-08-17 (Karthik): "the AE should only be able to view the students
- * shortlisted or selected or their drive status and results. They should not
- * be able to publish drives or shortlist students."
- *
- * Taking the links out of the sidebar is presentation, not access control: a
- * bookmark from before the change still resolves. These shut the door, and
- * they ask the domain who may come through rather than listing roles again.
- */
-function ShortlistersOnly({ children }: { children: ReactNode }) {
-  const auth = useAuth();
-  const role = auth.status === "signed-in" ? auth.role : null;
-  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
-
-  if (!isBypassed && role !== null && !canShortlistFromPortfolio(role)) {
-    return (
-      <p className="p-8 text-sm text-ink-700">
-        Shortlisting belongs to the placement coordinators. Choosing which students a recruiter sees
-        is their decision — you can follow this drive, and its results, under “My drives”.
-      </p>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-/**
- * The drive lifecycle is three verbs held by three different roles — raise,
- * approve, publish — and 2026-08-17 made that explicit: "AE can only raise
- * drives (no one else can raise a drive). Delivery head can only approve.
- * ... Central PC cannot raise or approve a drive."
- *
- * These guards are the doors. The separation is worth nothing if the PIF form
- * is reachable by the person who would later approve it.
- */
-function RaisersOnly({ children }: { children: ReactNode }) {
-  const auth = useAuth();
-  const role = auth.status === "signed-in" ? auth.role : null;
-  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
-
-  if (!isBypassed && role !== null && !canRaiseDrive(role)) {
-    return (
-      <p className="p-8 text-sm text-ink-700">
-        Only an Account Executive raises a drive. They own the recruiter’s brief, and keeping that
-        separate from approving and publishing it is what makes each step a real check.
-      </p>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-/** Approving is the Delivery Head's alone — see `canApproveDrive`. */
-function ApproversOnly({ children }: { children: ReactNode }) {
-  const auth = useAuth();
-  const role = auth.status === "signed-in" ? auth.role : null;
-  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
-
-  if (!isBypassed && role !== null && !canApproveDrive(role)) {
-    return (
-      <p className="p-8 text-sm text-ink-700">
-        Approving a drive belongs to the Delivery Head. They check the commercial terms the Account
-        Executive agreed, which is not a check if the same person did both.
-      </p>
-    );
-  }
-
-  return <>{children}</>;
-}
-
-/** Publishing announces a drive to students. Central CPC only — see `canPublishDrive`. */
-function PublishersOnly({ children }: { children: ReactNode }) {
-  const auth = useAuth();
-  const role = auth.status === "signed-in" ? auth.role : null;
-  const isBypassed = auth.status === "signed-in" && isTestPreviewAllowed(auth.email);
-
-  if (!isBypassed && role !== null && !canPublishDrive(role)) {
-    return (
-      <p className="p-8 text-sm text-ink-700">
-        Publishing a drive belongs to the central placement coordinator. Raising and approving a
-        drive is not the same as announcing it to students.
-      </p>
-    );
-  }
-
-  return <>{children}</>;
-}
 
 export function App() {
   return (
@@ -179,11 +72,32 @@ export function App() {
                 {/* Post-login routing is a domain rule, not a hardcoded path. */}
                 <Route path="/" element={<RoleLanding />} />
                 <Route path="/dashboard" element={<DashboardRoute />} />
-                <Route path="/admin/campuses" element={<AdminCampusRoute />} />
-                <Route path="/admin/staff" element={<AdminStaffRoute />} />
+                <Route
+                  path="/admin/campuses"
+                  element={
+                    <RoleGuard allow={canAccessAdmin} reason="Organisation setup is for administrators only. Campus staff manage their campus under /cpc.">
+                      <AdminCampusRoute />
+                    </RoleGuard>
+                  }
+                />
+                <Route
+                  path="/admin/staff"
+                  element={
+                    <RoleGuard allow={canAccessAdmin} reason="Organisation setup is for administrators only. Campus staff manage their campus under /cpc.">
+                      <AdminStaffRoute />
+                    </RoleGuard>
+                  }
+                />
                 {/* F6: degrees and branches are no longer a page. They belong
                     to a college, for a passing year, under /admin/campuses. */}
-                <Route path="/admin/roster" element={<AdminRosterPage />} />
+                <Route
+                  path="/admin/roster"
+                  element={
+                    <RoleGuard allow={canAccessAdmin} reason="Organisation setup is for administrators only. Campus staff manage their campus under /cpc.">
+                      <AdminRosterPage />
+                    </RoleGuard>
+                  }
+                />
                 <Route path="/student" element={<StudentDashboardRoute />} />
                 <Route path="/student/notifications" element={<StudentNotificationsRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
@@ -199,21 +113,38 @@ export function App() {
                 <Route
                   path="/cpc/verification"
                   element={
-                    <CampusCpcOnly>
+                    <RoleGuard allow={canAccessCampusCpc} reason="This queue belongs to the campus placement coordinator. Registration forms and certificates are verified at the campus, not centrally.">
                       <SrfVerificationQueue />
-                    </CampusCpcOnly>
+                    </RoleGuard>
                   }
                 />
-                <Route path="/cpc/attendance" element={<AttendanceRoute />} />
-                {/* D10: the campus CPC follows the whole cycle, read-only. */}
-                <Route path="/cpc/drives" element={<DriveProgressRoute />} />
+                <Route
+                  path="/cpc/attendance"
+                  element={
+                    <RoleGuard allow={canAccessCampusCpc} reason="This queue belongs to the campus placement coordinator. Registration forms and certificates are verified at the campus, not centrally.">
+                      <AttendanceRoute />
+                    </RoleGuard>
+                  }
+                />
+                {/* D10: drive progress is visible to every role that follows
+                    students through rounds — not only the campus CPC. The
+                    sidebar shows this link for eight roles; the guard now
+                    agrees instead of blocking seven of them. */}
+                <Route
+                  path="/cpc/drives"
+                  element={
+                    <RoleGuard allow={canViewDriveProgress} reason="Drive progress is available to placement coordinators, the delivery head, account executives and leadership.">
+                      <DriveProgressRoute />
+                    </RoleGuard>
+                  }
+                />
                 {/* 2026-08-06: certificates are verified like a CGPA. */}
                 <Route
                   path="/cpc/certificates"
                   element={
-                    <CampusCpcOnly>
+                    <RoleGuard allow={canAccessCampusCpc} reason="This queue belongs to the campus placement coordinator. Registration forms and certificates are verified at the campus, not centrally.">
                       <CertificateQueue />
-                    </CampusCpcOnly>
+                    </RoleGuard>
                   }
                 />
                 {/* 2026-08-24: …and a CGPA is finally verified like a
@@ -221,13 +152,27 @@ export function App() {
                 <Route
                   path="/cpc/semesters"
                   element={
-                    <CampusCpcOnly>
+                    <RoleGuard allow={canAccessCampusCpc} reason="This queue belongs to the campus placement coordinator. Registration forms and certificates are verified at the campus, not centrally.">
                       <SemesterQueue />
-                    </CampusCpcOnly>
+                    </RoleGuard>
                   }
                 />
-                <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
-                <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
+                <Route
+                  path="/cpc/opt-outs"
+                  element={
+                    <RoleGuard allow={canAccessCampusCpc} reason="This queue belongs to the campus placement coordinator. Registration forms and certificates are verified at the campus, not centrally.">
+                      <OptOutQueueRoute />
+                    </RoleGuard>
+                  }
+                />
+                <Route
+                  path="/cpc/off-campus"
+                  element={
+                    <RoleGuard allow={canAccessCampusCpc} reason="This queue belongs to the campus placement coordinator. Registration forms and certificates are verified at the campus, not centrally.">
+                      <OffCampusQueueRoute />
+                    </RoleGuard>
+                  }
+                />
                 {/* 2026-08-26: the AE's landing page. Their own drives and
                     the organisation's aggregate figures (0064) - never the
                     roster dashboard, which they cannot read. */}
@@ -235,35 +180,56 @@ export function App() {
                 <Route
                   path="/ae/pif"
                   element={
-                    <RaisersOnly>
+                    <RoleGuard allow={canAccessPifCreation} reason="Only an Account Executive raises a drive. They own the recruiter's brief, and keeping that separate from approving and publishing it is what makes each step a real check.">
                       <PifPage />
-                    </RaisersOnly>
+                    </RoleGuard>
                   }
                 />
                 <Route path="/my-drives" element={<DrivePortfolioRoute />} />
                 <Route
                   path="/delivery-head/pif-approvals"
                   element={
-                    <ApproversOnly>
+                    <RoleGuard allow={canAccessPifApproval} reason="Approving a drive belongs to the Delivery Head. They check the commercial terms the Account Executive agreed, which is not a check if the same person did both.">
                       <PifApprovalQueue />
-                    </ApproversOnly>
+                    </RoleGuard>
                   }
                 />
                 <Route
                   path="/central/shortlisting"
                   element={
-                    <ShortlistersOnly>
+                    <RoleGuard allow={canAccessShortlisting} reason="Shortlisting belongs to the placement coordinators. Choosing which students a recruiter sees is their decision — you can follow this drive, and its results, under &quot;My drives&quot;.">
                       <ShortlistRoute />
-                    </ShortlistersOnly>
+                    </RoleGuard>
                   }
                 />
                 {/* PRD §5: the Central Student Skill Repository. */}
-                <Route path="/central/skills" element={<SkillsRoute />} />
+                <Route
+                  path="/central/skills"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <SkillsRoute />
+                    </RoleGuard>
+                  }
+                />
                 {/* 2026-08-24 (1a/2a/3a): the assessed-skills master list. */}
-                <Route path="/central/skills-assessed" element={<SkillsAssessedRoute />} />
+                <Route
+                  path="/central/skills-assessed"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <SkillsAssessedRoute />
+                    </RoleGuard>
+                  }
+                />
                 {/* Every student in the placement process. Also the
                     destination of the Placed count on the overview. */}
-                <Route path="/central/students" element={<StudentDirectoryRoute />} />
+                <Route
+                  path="/central/students"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <StudentDirectoryRoute />
+                    </RoleGuard>
+                  }
+                />
                 {/*
                  * Three tabs, 2026-08-18: approved = Yet to publish, Live,
                  * Completed. Drafts are gone from this coordinator's screens.
@@ -276,31 +242,71 @@ export function App() {
                  */}
                 <Route
                   path="/central/drives/yet-to-publish"
-                  element={<CockpitRoute filter="yet-to-publish" />}
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <CockpitRoute filter="yet-to-publish" />
+                    </RoleGuard>
+                  }
                 />
-                <Route path="/central/drives/live" element={<DrivePortfolioRoute tab="live" />} />
+                <Route
+                  path="/central/drives/live"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <DrivePortfolioRoute tab="live" />
+                    </RoleGuard>
+                  }
+                />
                 <Route
                   path="/central/drives/completed"
-                  element={<DrivePortfolioRoute tab="completed" />}
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <DrivePortfolioRoute tab="completed" />
+                    </RoleGuard>
+                  }
                 />
                 {/* Both old links still answer, pointing at what replaced them:
                     /central/drives was the cockpit and /central/drives/published
                     was the list that is now called Live. */}
-                <Route path="/central/drives" element={<DrivePortfolioRoute tab="live" />} />
+                <Route
+                  path="/central/drives"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <DrivePortfolioRoute tab="live" />
+                    </RoleGuard>
+                  }
+                />
                 <Route
                   path="/central/drives/published"
-                  element={<DrivePortfolioRoute tab="live" />}
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <DrivePortfolioRoute tab="live" />
+                    </RoleGuard>
+                  }
                 />
                 <Route
                   path="/central/publish"
                   element={
-                    <PublishersOnly>
+                    <RoleGuard allow={canAccessPublish} reason="Publishing a drive belongs to the central placement coordinator. Raising and approving a drive is not the same as announcing it to students.">
                       <PublishRoute />
-                    </PublishersOnly>
+                    </RoleGuard>
                   }
                 />
-                <Route path="/central/results" element={<ResultsRoute />} />
-                <Route path="/central/offers" element={<OfferRoute />} />
+                <Route
+                  path="/central/results"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <ResultsRoute />
+                    </RoleGuard>
+                  }
+                />
+                <Route
+                  path="/central/offers"
+                  element={
+                    <RoleGuard allow={canAccessCentral} reason="This area is for the central placement coordinator. Campus coordination happens under /cpc, and student views are under /student.">
+                      <OfferRoute />
+                    </RoleGuard>
+                  }
+                />
               </Routes>
             </AppShell>
           </RequireAuth>

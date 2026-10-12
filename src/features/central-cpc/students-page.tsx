@@ -1,4 +1,4 @@
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import {
@@ -221,13 +221,9 @@ export function StudentDirectoryPage({
         actions={
           students !== null &&
           students.length > 0 && (
-            <button
-              type="button"
-              onClick={exportCsv}
-              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-ink-700 hover:border-brand-300"
-            >
+            <Button variant="secondary" size="sm" onClick={exportCsv}>
               Export {visible.length} to CSV
-            </button>
+            </Button>
           )
         }
       />
@@ -251,10 +247,10 @@ export function StudentDirectoryPage({
                 {FILTERS.map((option) => (
                   <label
                     key={option.value}
-                    className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                    className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
                       filter === option.value
-                        ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-line bg-surface text-ink-700 hover:border-brand-300"
+                        ? "border-[#3D3777] bg-[#3D3777] text-white"
+                        : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
                     }`}
                   >
                     <input
@@ -359,7 +355,7 @@ export function StudentDirectoryPage({
             </Card>
           ) : (
             <Card className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[640px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                   <tr>
                     <th className="px-4 py-3">Student</th>
@@ -410,7 +406,7 @@ export function StudentDirectoryPage({
                           <span className="text-ink-500">Not placed</span>
                         ) : (
                           <>
-                            <p className="font-medium text-ink-900">
+                            <p className="max-w-[200px] truncate font-medium text-ink-900">
                               {student.placement.companyName}
                               {student.placement.source === "self_placed" && (
                                 <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
@@ -418,7 +414,7 @@ export function StudentDirectoryPage({
                                 </span>
                               )}
                             </p>
-                            <p className="text-xs text-ink-500">
+                            <p className="max-w-[200px] truncate text-xs text-ink-500">
                               {student.placement.roleTitle ?? "Role not recorded"} · ₹
                               {student.placement.ctcLpa} LPA
                               {student.placement.offerCategory !== null &&

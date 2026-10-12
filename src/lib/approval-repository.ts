@@ -38,7 +38,7 @@ export interface PendingPif {
 
 export interface ApprovalRepository {
   pending(): Promise<readonly PendingPif[]>;
-  decide(driveId: string, current: DriveStatus, decision: PifDecision): Promise<void>;
+  decide(driveId: string, current: DriveStatus, decision: PifDecision, driveType?: DriveType | null): Promise<void>;
 }
 
 export type GetActorId = () => Promise<string | null>;
@@ -131,8 +131,8 @@ export function createSupabaseApprovalRepository(
       }));
     },
 
-    async decide(driveId, current, decision) {
-      const outcome = decidePif(current, decision);
+    async decide(driveId, current, decision, driveType) {
+      const outcome = decidePif(current, decision, driveType);
       if (!outcome.ok) throw new ApprovalError(outcome.error);
 
       const actorId = await getActorId();
@@ -156,15 +156,22 @@ export function createSupabaseApprovalRepository(
               approved_at: new Date().toISOString(),
             };
 
-      const { error } = await client
+      const { data, error } = await client
         .from("drives")
         .update(patch)
         .eq("id", driveId)
+        .eq("status", current)
         .select("id, status")
-        .single();
+        .maybeSingle();
 
       if (error !== null) {
         throw new ApprovalError("Could not save the decision. Please try again.");
+      }
+
+      if (data === null || data === undefined) {
+        throw new ApprovalError(
+          "Someone else has already made a decision on this drive. Refresh the page and try again.",
+        );
       }
     },
   };

@@ -72,5 +72,9 @@ export function createSupabaseAttendanceView(
       // for scheduled participants.
       await rounds.markAttendance(roundId, applicationId, status, true);
     },
+
+    async markBatch(roundId, entries) {
+      await rounds.markBatchAttendance(roundId, entries, true);
+    },
   };
 }

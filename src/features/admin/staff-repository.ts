@@ -188,21 +188,16 @@ export function createSupabaseStaffRepository(
       const address = email.trim().toLowerCase();
       const profileId = await profileIdFor(address);
 
-      // Replaced wholesale, so the mapping on screen is the mapping stored.
-      // Applied where they have signed in, staged where they have not.
-      const table = profileId === null ? "staff_campus_invitations" : "staff_campus_assignments";
-      const column = profileId === null ? "email" : "profile_id";
+      // Atomic replacement: 0098's function deletes and inserts in one
+      // transaction, so a failure leaves the old mapping intact rather than
+      // empty. Applied where they have signed in, staged where they have not.
+      const fn = profileId === null ? "set_staff_campus_invitations" : "set_staff_campus_assignments";
       const key = profileId ?? address;
 
-      const { error: clearError } = await client.from(table).delete().eq(column, key);
-      if (clearError !== null) {
-        throw new StaffError("Could not change that campus mapping. Please try again.");
-      }
-
-      const { error } = await client
-        .from(table)
-        .insert(campusIds.map((campusId) => ({ [column]: key, campus_id: campusId })))
-        .select("campus_id");
+      const { error } = await client.rpc(fn, {
+        [profileId === null ? "p_email" : "p_profile_id"]: key,
+        p_campus_ids: campusIds,
+      });
 
       if (error !== null) {
         throw new StaffError("Could not change that campus mapping. Please try again.");
@@ -293,20 +288,10 @@ export function createSupabaseStaffRepository(
 
       const target = email.trim().toLowerCase();
 
-      // The invitation carries the role materialised on first sign-in, so it
-      // has to move too - otherwise anyone who has not signed in yet arrives
-      // with the old role and nobody can see why.
-      const { error: inviteError } = await client
-        .from("staff_invitations")
-        .update({ role: newRole })
-        .eq("email", target)
-        .select("email");
-
-      if (inviteError !== null) {
-        throw new StaffError("Could not change that role. Please try again.");
-      }
-
-      // No profile exists until first sign-in; updating nothing is correct then.
+      // Profile first: it is what the live session reads, so a failure here
+      // leaves nothing half-changed. The invitation follows because it is the
+      // role materialised on first sign-in - anyone who has not signed in yet
+      // would otherwise arrive with the old role.
       const { error: profileError } = await client
         .from("profiles")
         .update({ role: newRole })
@@ -314,8 +299,19 @@ export function createSupabaseStaffRepository(
         .select("email");
 
       if (profileError !== null) {
+        throw new StaffError("Could not change that role. Please try again.");
+      }
+
+      // No profile exists until first sign-in; updating nothing is correct then.
+      const { error: inviteError } = await client
+        .from("staff_invitations")
+        .update({ role: newRole })
+        .eq("email", target)
+        .select("email");
+
+      if (inviteError !== null) {
         throw new StaffError(
-          "The invitation was updated, but their signed-in role was not. Please try again.",
+          "Their signed-in role was changed, but the invitation was not. Please try again.",
         );
       }
     },

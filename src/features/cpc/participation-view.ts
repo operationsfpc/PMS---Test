@@ -131,29 +131,13 @@ export function createSupabaseParticipationQueueView(
     async approveOptOut(requestId) {
       const actorId = await approver();
 
-      const { data, error } = await client
-        .from("opt_out_requests")
-        .update({ status: "verified", decided_by: actorId, decided_at: new Date().toISOString() })
-        .eq("id", requestId)
-        .select("student_id")
-        .single();
+      const { data, error } = await client.rpc("approve_opt_out_atomic", {
+        request_id: requestId,
+        actor_id: actorId,
+      });
 
       if (error !== null || data === null) {
         throw new ParticipationQueueError("Could not approve the request.");
-      }
-
-      // Irreversible from here: 0009 refuses any move away from opted_out.
-      const { error: studentError } = await client
-        .from("students")
-        .update({ participation_status: "opted_out" })
-        .eq("id", data.student_id as string)
-        .select("id")
-        .single();
-
-      if (studentError !== null) {
-        throw new ParticipationQueueError(
-          "The request was approved but the student's status did not change. Please retry.",
-        );
       }
     },
 
@@ -214,13 +198,14 @@ export function createSupabaseParticipationQueueView(
         .from("self_placement_requests")
         .update({ status: "verified", decided_by: actorId, decided_at: now })
         .eq("id", requestId)
-        .select("student_id, company_name, role_title, ctc_lpa")
+        .select("student_id, company_name, role_title, ctc_lpa, stipend_monthly")
         .single();
 
       if (error !== null || data === null) {
         throw new ParticipationQueueError("Could not approve the offer.");
       }
 
+      const isInternship = classification.driveType === "internship";
       const { error: offerError } = await client
         .from("offers")
         .insert({
@@ -230,9 +215,9 @@ export function createSupabaseParticipationQueueView(
           company_name: data.company_name as string,
           role_title: (data.role_title as string | null) ?? null,
           drive_type: classification.driveType,
-          offer_category:
-            classification.driveType === "internship" ? null : classification.offerCategory,
-          ctc_lpa: data.ctc_lpa as number,
+          offer_category: isInternship ? "internship" : classification.offerCategory,
+          ctc_lpa: isInternship ? null : (data.ctc_lpa as number),
+          stipend_monthly: isInternship ? (data.stipend_monthly as number ?? classification.stipendMonthly ?? null) : null,
           declared_by: actorId,
           approved_by: actorId,
           approved_at: now,

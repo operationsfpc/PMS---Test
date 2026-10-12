@@ -1,6 +1,6 @@
 import { completionReadiness } from "@domain/drive-completion";
 import type { SlotAssignment } from "@domain/meeting-slots";
-import { type RoundFacts, renumberRounds } from "@domain/round-editing";
+import { type RoundFacts } from "@domain/round-editing";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import { applicationProgress } from "@domain/student-progress";
 import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
@@ -311,33 +311,13 @@ export function createSupabaseResultsView(
     },
 
     /** Delete, then renumber ascending — sequences only ever shift DOWN. */
-    async removeRound(driveId, roundId) {
-      const { data } = await client
-        .from("drive_rounds")
-        .select("id, sequence, name")
-        .eq("drive_id", driveId)
-        .order("sequence");
-
-      const before = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-        roundId: row.id as string,
-        sequence: Number(row.sequence),
-        name: (row.name as string | null) ?? "",
-      }));
-
-      const { error } = await client.from("drive_rounds").delete().eq("id", roundId);
+    async removeRound(_driveId, roundId) {
+      // 0099: a single function deletes and renumbers in one transaction, so
+      // two coordinators removing rounds at the same time cannot produce
+      // conflicting sequences.
+      const { error } = await client.rpc("remove_drive_round", { p_round_id: roundId });
       if (error !== null) {
         throw new ResultsViewError(error.message || "Could not remove the round.");
-      }
-
-      // The domain owns the renumbering rule; this loop only persists it.
-      for (const round of renumberRounds(before, roundId)) {
-        const current = before.find((b) => b.roundId === round.roundId);
-        if (current !== undefined && current.sequence !== round.sequence) {
-          await client
-            .from("drive_rounds")
-            .update({ sequence: round.sequence })
-            .eq("id", round.roundId);
-        }
       }
     },
 

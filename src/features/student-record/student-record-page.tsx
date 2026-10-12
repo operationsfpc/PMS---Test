@@ -163,12 +163,12 @@ export function StudentRecordPage({
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-ink-500">Email</dt>
-                <dd className="text-ink-900">{record.email}</dd>
+                <dt className="shrink-0 text-ink-500">Email</dt>
+                <dd className="truncate text-right text-ink-900">{record.email}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-ink-500">Mobile</dt>
-                <dd className="text-ink-900">{record.mobile ?? "Not recorded"}</dd>
+                <dt className="shrink-0 text-ink-500">Mobile</dt>
+                <dd className="truncate text-right text-ink-900">{record.mobile ?? "Not recorded"}</dd>
               </div>
             </dl>
           </Card>
@@ -247,7 +247,7 @@ export function StudentRecordPage({
                 {record.skills.map(({ skill, score }) => (
                   <span
                     key={skill}
-                    className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
+                    className="whitespace-nowrap rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
                   >
                     {skill} {score}/{SKILL_SCORE_MAX}
                   </span>

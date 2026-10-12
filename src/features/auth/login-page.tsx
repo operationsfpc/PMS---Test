@@ -33,14 +33,18 @@ export function LoginPage() {
   // Two different refusals land here. One never got a session at all (the
   // allowlist fired before the account was created); the other has a perfectly
   // good Google session that matches nobody in this system, and without a way
-  // to end it they cannot even try another account.
+  // to end it they cannot even try another account. A third has a profile but
+  // an admin deactivated it - they need to know who to contact.
   const stranded = auth.status === "unrecognised";
+  const deactivated = auth.status === "deactivated";
 
-  const message = stranded
-    ? `You are signed in to Google as ${auth.email}, but that address is not set up for placements. Write to ${SUPPORT_EMAIL} to get invited, or sign out and use the account your college has on record.`
-    : error === null
-      ? null
-      : refusalMessage(params.get("error_description") ?? "");
+  const message = deactivated
+    ? `The account ${auth.email} has been deactivated. Write to ${SUPPORT_EMAIL} or contact your administrator to restore access.`
+    : stranded
+      ? `You are signed in to Google as ${auth.email}, but that address is not set up for placements. Write to ${SUPPORT_EMAIL} to get invited, or sign out and use the account your college has on record.`
+      : error === null
+        ? null
+        : refusalMessage(params.get("error_description") ?? "");
 
   async function signIn() {
     await supabase().auth.signInWithOAuth({
@@ -69,7 +73,7 @@ export function LoginPage() {
           </p>
         )}
 
-        {stranded ? (
+        {stranded || deactivated ? (
           <Button className="mt-6 w-full" onClick={() => void signOut()}>
             Use a different account
           </Button>

@@ -53,7 +53,7 @@ async function uploadEvidence(
     .insert({
       student_id: studentId,
       kind,
-      storage_path: `${BUCKETS[kind]}/${path}`,
+      storage_path: path,
       size_bytes: file.size,
     })
     .select("id")

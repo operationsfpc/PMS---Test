@@ -19,6 +19,7 @@ import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { filenameToCertificateName } from "@domain/storage-path";
 import type { SrfStatus } from "@domain/types";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
+import { Button } from "@components/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useState } from "react";
@@ -725,13 +726,9 @@ export function SrfPage({
             </Link>
             {/* This screen has its own chrome, so it needs its own way out.
                 For a student it is the first screen they ever see. */}
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted"
-            >
+            <Button variant="secondary" size="sm" type="button" onClick={() => void signOut()}>
               Sign out
-            </button>
+            </Button>
           </div>
         </div>
       </header>
@@ -1466,14 +1463,17 @@ export function SrfPage({
                           {...num(`semesters.${index}.historyOfArrears`)}
                         />
                         {semesters.length > 1 && (
-                          <button
-                            type="button"
-                            aria-label={`Remove semester ${semester.semesterNumber}`}
-                            onClick={() => handleRemoveSemester(index)}
-                            className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                          >
-                            Remove
-                          </button>
+                          <div className="self-end">
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              type="button"
+                              aria-label={`Remove semester ${semester.semesterNumber}`}
+                              onClick={() => handleRemoveSemester(index)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -1666,14 +1666,17 @@ export function SrfPage({
                             error={errors.otherProfiles?.[index]?.value?.message}
                             {...register(`otherProfiles.${index}.value`)}
                           />
-                          <button
-                            type="button"
-                            aria-label={`Remove profile ${index + 1}`}
-                            onClick={() => otherProfiles.remove(index)}
-                            className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                          >
-                            Remove
-                          </button>
+                          <div className="self-end">
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              type="button"
+                              aria-label={`Remove profile ${index + 1}`}
+                              onClick={() => otherProfiles.remove(index)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1798,14 +1801,17 @@ export function SrfPage({
                               </div>
                             )}
                           />
-                          <button
-                            type="button"
-                            aria-label={`Remove certificate ${index + 1}`}
-                            onClick={() => certificates.remove(index)}
-                            className="self-end rounded-lg border border-line px-3 py-2.5 text-sm font-medium text-danger-700 hover:bg-danger-50"
-                          >
-                            Remove
-                          </button>
+                          <div className="self-end">
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              type="button"
+                              aria-label={`Remove certificate ${index + 1}`}
+                              onClick={() => certificates.remove(index)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1871,23 +1877,17 @@ export function SrfPage({
                 )}
 
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="rounded-lg bg-brand-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-600 disabled:opacity-60 sm:px-6"
-                  >
+                  <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Submitting…" : "Submit for verification"}
-                  </button>
-                  {/* This button existed and did NOTHING - the form advertised
-                  draft saving it had never implemented. */}
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => void saveNow()}
                     disabled={draftState === "saving"}
-                    className="rounded-lg border border-line bg-surface px-5 py-3 text-sm font-semibold text-ink-700 transition-colors hover:border-brand-300 disabled:opacity-60"
                   >
                     {draftState === "saving" ? "Saving…" : "Save draft"}
-                  </button>
+                  </Button>
                 </div>
               </Section>
             </form>

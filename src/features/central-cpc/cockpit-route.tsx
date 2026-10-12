@@ -25,7 +25,8 @@ export function CockpitRoute({ filter }: { filter?: CockpitFilter } = {}) {
           driveId: string,
           current: Parameters<typeof approvals.decide>[1],
           decision: Parameters<typeof approvals.decide>[2],
-        ) => approvals.decide(driveId, current, decision)
+          driveType?: Parameters<typeof approvals.decide>[3],
+        ) => approvals.decide(driveId, current, decision, driveType)
       : undefined;
 
   return (

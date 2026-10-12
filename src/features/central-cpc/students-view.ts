@@ -59,7 +59,7 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
             // company_name and role_title live on the OFFER for a self-placed
             // one (drive_id is null there) — C1's Thanush had both and the
             // view never asked for them.
-            "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at, company_name, role_title",
+            "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, company_name, role_title",
           )
           .in("student_id", studentIds),
         client.from("applications").select("id, student_id").in("student_id", studentIds),

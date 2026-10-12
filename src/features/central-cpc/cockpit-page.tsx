@@ -151,7 +151,7 @@ export function CockpitPage({
    * drive from THIS list. Wired by the route for the delivery head alone —
    * absent, the buttons do not exist.
    */
-  decide?: (driveId: string, current: DriveStatus, decision: PifDecision) => Promise<void>;
+  decide?: (driveId: string, current: DriveStatus, decision: PifDecision, driveType?: DriveType | null) => Promise<void>;
 }) {
   // 2026-08-17 (Karthik): the AE views drive status and results; they neither
   // publish nor shortlist. The domain owns both answers - this screen only asks.
@@ -272,7 +272,7 @@ export function CockpitPage({
     }
 
     try {
-      await decide(deciding.drive.driveId, "submitted", intent);
+      await decide(deciding.drive.driveId, "submitted", intent, deciding.drive.driveType ?? null);
       setDeciding(null);
       load();
     } catch (cause) {

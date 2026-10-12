@@ -30,9 +30,13 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     const client = supabase();
 
     const refresh = () => {
-      void resolveAuthState(client).then((next) => {
-        if (active) setState(next);
-      });
+      resolveAuthState(client)
+        .then((next) => {
+          if (active) setState(next);
+        })
+        .catch(() => {
+          if (active) setState({ status: "signed-out" });
+        });
     };
 
     refresh();

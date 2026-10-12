@@ -17,9 +17,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     );
   }
 
-  // An unrecognised account is authenticated but belongs to nobody here. The
-  // login screen is where that gets explained, so both go to the same place.
-  if (auth.status === "signed-out" || auth.status === "unrecognised") {
+  // An unrecognised account is authenticated but belongs to nobody here. A
+  // deactivated one has a profile but an admin turned it off. Both need the
+  // login screen to explain what happened.
+  if (auth.status === "signed-out" || auth.status === "unrecognised" || auth.status === "deactivated") {
     return <Navigate to="/login" replace />;
   }
 

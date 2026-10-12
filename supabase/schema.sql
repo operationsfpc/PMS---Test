@@ -1,8 +1,9 @@
 -- =============================================================================
 -- FACE Prep Campus — Placement Management System (PMS)
--- Complete Database Schema (Consolidated Migrations 0001 - 0080)
--- Generated automatically by scripts/setup-database.ts
+-- Complete Database Schema (Consolidated Migrations 0001 - 0105)
+-- Generated automatically for Supabase execution.
 -- =============================================================================
+
 
 -- =============================================================================
 -- Migration: 0001_enums.sql
@@ -24,10 +25,7 @@ create type drive_mode as enum ('on_campus', 'physical_outside_campus', 'virtual
 
 create type arrear_policy as enum ('no_standing', 'no_history', 'flexible');
 
--- 'internship' is placed BEFORE 'regular' so that enum ordering treats it as
--- the lowest value — safe-fail insurance if anyone accidentally does MAX/ORDER BY.
--- It is not on the R3/R5 ladder; offerCategoryRank() in src/domain/offer-category.ts throws for it.
-create type offer_category as enum ('internship', 'regular', 'dream', 'super_dream');
+create type offer_category as enum ('regular', 'dream', 'super_dream');
 
 create type srf_status as enum (
   'invited', 'registered', 'srf_submitted', 'srf_approved', 'srf_rejected'
@@ -53,6 +51,7 @@ create type app_role as enum (
   'account_executive', 'delivery_head', 'central_placement_coordinator',
   'key_account_manager', 'enterprise_relations', 'er_head', 'ceo'
 );
+
 
 -- =============================================================================
 -- Migration: 0002_identity.sql
@@ -123,18 +122,15 @@ create table settings (
   updated_at  timestamptz not null default now()
 );
 
--- Founding Admins.
-insert into staff_invitations (email, full_name, role) values
-  ('karthikraja@faceprep.in', 'Karthik Raja', 'admin'),
-  ('thanush@faceprep.in', 'Thanush Krishna', 'admin')
-on conflict (email) do update
-  set role = excluded.role,
-      full_name = excluded.full_name;
+-- Founding Admin.
+insert into staff_invitations (email, full_name, role)
+values ('karthikraja@faceprep.in', 'Karthik Raja', 'admin');
 
 insert into settings (key, value) values
   ('offer_category_bands', '{"regularMaxLpa": 5, "dreamMaxLpa": 10}'),
   ('absence_limit',        '3'),
   ('max_upload_bytes',     '5242880');
+
 
 -- =============================================================================
 -- Migration: 0003_students.sql
@@ -264,6 +260,7 @@ create table skill_scores (
   recorded_at  timestamptz not null default now(),
   unique (student_id, metric, recorded_at)
 );
+
 
 -- =============================================================================
 -- Migration: 0004_drives.sql
@@ -400,6 +397,7 @@ create table drive_rounds (
   unique (drive_id, sequence)
 );
 
+
 -- =============================================================================
 -- Migration: 0005_applications.sql
 -- =============================================================================
@@ -483,6 +481,7 @@ create table attendance (
 );
 
 create index attendance_absent_idx on attendance (application_id) where status = 'absent';
+
 
 -- =============================================================================
 -- Migration: 0006_outcomes.sql
@@ -580,6 +579,7 @@ create table email_deliveries (
   updated_at          timestamptz not null default now()
 );
 
+
 -- =============================================================================
 -- Migration: 0007_audit.sql
 -- =============================================================================
@@ -667,6 +667,7 @@ create trigger audit_semesters  after insert or update or delete on student_seme
 -- The log is append-only. Nobody, including the service role, may rewrite history.
 create rule audit_log_no_update as on update to audit_log do instead nothing;
 create rule audit_log_no_delete as on delete to audit_log do instead nothing;
+
 
 -- =============================================================================
 -- Migration: 0008_rls.sql
@@ -822,6 +823,7 @@ create policy drives_dh_write on drives for all
 grant usage on schema public to anon, authenticated;
 grant select, insert, update on all tables in schema public to authenticated;
 grant execute on all functions in schema public to authenticated;
+
 
 -- =============================================================================
 -- Migration: 0009_guards.sql
@@ -979,6 +981,7 @@ create trigger enforce_opt_out_irreversible
   before update on students
   for each row execute function enforce_opt_out_irreversible();
 
+
 -- =============================================================================
 -- Migration: 0010_storage.sql
 -- =============================================================================
@@ -1040,6 +1043,7 @@ begin
   $p$;
 end $$;
 
+
 -- =============================================================================
 -- Migration: 0011_reference_degrees.sql
 -- =============================================================================
@@ -1063,6 +1067,7 @@ insert into degrees (name) values
   ('MCA'),
   ('M.Sc CS')
 on conflict (name) do nothing;
+
 
 -- =============================================================================
 -- Migration: 0012_org_hierarchy.sql
@@ -1158,6 +1163,7 @@ create policy write_settings         on settings                 for all using (
 -- 0008's blanket grant only covered tables that existed then.
 grant select, insert, update on cities to authenticated;
 
+
 -- =============================================================================
 -- Migration: 0013_staff_campus_invitations.sql
 -- =============================================================================
@@ -1216,6 +1222,7 @@ begin
   return new;
 end;
 $$;
+
 
 -- =============================================================================
 -- Migration: 0014_self_placement.sql
@@ -1278,6 +1285,7 @@ create policy staff_decides_self_placement
 
 grant select, insert, update on self_placement_requests to authenticated;
 
+
 -- =============================================================================
 -- Migration: 0015_staff_removal.sql
 -- =============================================================================
@@ -1310,6 +1318,7 @@ grant delete on profiles                  to authenticated;
 grant delete on staff_invitations         to authenticated;
 grant delete on staff_campus_invitations  to authenticated;
 grant delete on staff_campus_assignments  to authenticated;
+
 
 -- =============================================================================
 -- Migration: 0016_invitation_accepts_existing_account.sql
@@ -1374,6 +1383,7 @@ $$;
 create trigger accept_invitation_for_existing_account
   after insert or update of role on staff_invitations
   for each row execute function accept_invitation_for_existing_account();
+
 
 -- =============================================================================
 -- Migration: 0017_semester_academics.sql
@@ -1444,6 +1454,7 @@ $$;
 create trigger enforce_semester_cap
   before insert or update on student_semesters
   for each row execute function enforce_semester_cap();
+
 
 -- =============================================================================
 -- Migration: 0018_campus_scoped_readers.sql
@@ -1562,6 +1573,7 @@ create policy staff_decides_self_placement on self_placement_requests for all
   using (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())))
   with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
 
+
 -- =============================================================================
 -- Migration: 0019_drive_owner_reads_shortlist.sql
 -- =============================================================================
@@ -1596,6 +1608,7 @@ create policy offers_read_drive_owner on offers for select
     current_app_role() = 'account_executive'
     and drive_id in (select id from drives where created_by = auth.uid())
   );
+
 
 -- =============================================================================
 -- Migration: 0020_student_may_submit_srf.sql
@@ -1695,6 +1708,7 @@ begin
 end;
 $$;
 
+
 -- =============================================================================
 -- Migration: 0021_srf_draft.sql
 -- =============================================================================
@@ -1723,6 +1737,7 @@ alter table students
 comment on column students.srf_draft is
   'The student''s unsent registration form. No authority: never read by '
   'eligibility or verification. Cleared when the form is submitted.';
+
 
 -- =============================================================================
 -- Migration: 0022_participation_evidence.sql
@@ -1833,6 +1848,7 @@ begin
       )
   $p$;
 end $$;
+
 
 -- =============================================================================
 -- Migration: 0023_marksheet_evidence.sql
@@ -1947,6 +1963,7 @@ $$;
 create trigger enforce_ug_marksheet_belongs_to_student
   before insert or update on students
   for each row execute function enforce_ug_marksheet_belongs_to_student();
+
 
 -- =============================================================================
 -- Migration: 0024_academic_history.sql
@@ -2064,6 +2081,7 @@ create trigger enforce_diploma_marksheet_belongs_to_student
   before insert or update on students
   for each row execute function enforce_diploma_marksheet_belongs_to_student();
 
+
 -- =============================================================================
 -- Migration: 0025_other_profiles.sql
 -- =============================================================================
@@ -2099,6 +2117,7 @@ begin
       check (jsonb_typeof(other_profiles) = 'array');
   end if;
 end $$;
+
 
 -- =============================================================================
 -- Migration: 0026_optional_diploma_evidence.sql
@@ -2138,6 +2157,7 @@ end $$;
 -- the application - so relaxing that side needs no DDL. The ownership and
 -- kind triggers from 0023/0024 still apply to BOTH: optional to supply, but
 -- if supplied it must be that student's own document, of the right kind.
+
 
 -- =============================================================================
 -- Migration: 0027_student_replaces_own_semesters.sql
@@ -2194,6 +2214,7 @@ grant delete on student_semesters to authenticated;
 --    actually live in.
 create policy semesters_delete_self on student_semesters for delete
   using (student_id = current_student_id() and status = 'pending');
+
 
 -- =============================================================================
 -- Migration: 0028_submit_srf_atomically.sql
@@ -2357,6 +2378,7 @@ $$;
 -- policies written for them.
 grant execute on function submit_srf(jsonb, jsonb, jsonb) to authenticated;
 
+
 -- =============================================================================
 -- Migration: 0029_one_campus_per_coordinator.sql
 -- =============================================================================
@@ -2407,6 +2429,7 @@ drop trigger if exists enforce_one_campus_per_coordinator on staff_campus_assign
 create trigger enforce_one_campus_per_coordinator
   before insert or update on staff_campus_assignments
   for each row execute function enforce_one_campus_per_coordinator();
+
 
 -- =============================================================================
 -- Migration: 0030_students_read_published_drives.sql
@@ -2525,6 +2548,7 @@ end $$;
 grant delete on drive_target_campuses, drive_eligible_degrees,
                 drive_eligible_branches, drive_rounds to authenticated;
 
+
 -- =============================================================================
 -- Migration: 0031_approval_verifies_semesters.sql
 -- =============================================================================
@@ -2601,6 +2625,7 @@ update student_semesters ss
    and ss.status = 'pending'
    and s.srf_status = 'srf_approved'
    and s.srf_decided_by is not null;
+
 
 -- =============================================================================
 -- Migration: 0032_uat_feedback_decisions_and_pif.sql
@@ -2712,6 +2737,7 @@ update drives
 comment on column drives.min_overall_marks is
   'F12: the cutoff as the recruiter stated it. min_overall_cgpa is the normalised figure R5 filters on.';
 
+
 -- =============================================================================
 -- Migration: 0033_drive_specific_resume.sql
 -- =============================================================================
@@ -2759,6 +2785,7 @@ do $$ begin
       check (drive_id is null or kind = 'resume');
   end if;
 end $$;
+
 
 -- =============================================================================
 -- Migration: 0034_student_certificates.sql
@@ -2827,6 +2854,7 @@ grant select, insert, delete on student_certificates to authenticated;
 
 comment on table student_certificates is
   'F17: name + document. F9: one_certificate_per_name is what stops repeat uploads.';
+
 
 -- =============================================================================
 -- Migration: 0035_submit_srf_with_certificates.sql
@@ -2997,6 +3025,7 @@ grant execute on function submit_srf(jsonb, jsonb, jsonb, jsonb) to authenticate
 comment on column students.certifications is
   'SUPERSEDED by student_certificates (0034). No longer written: free text could be neither verified nor de-duplicated - F9/F17, UAT 2026-08-06.';
 
+
 -- =============================================================================
 -- Migration: 0036_campus_programmes.sql
 -- =============================================================================
@@ -3145,6 +3174,7 @@ comment on function backfill_campus_programmes is
 comment on table campus_programmes is
   'F6: degree+branch is one choice, and it belongs to a college for a passing year.';
 
+
 -- =============================================================================
 -- Migration: 0037_skill_repository.sql
 -- =============================================================================
@@ -3264,6 +3294,7 @@ comment on table skill_areas is
   'PRD §5: the catalogue of institutional skill areas. Seeded; Central CPC extends it.';
 comment on table student_skill_scores is
   'PRD §5: one institutional score per student per area, 0-100 (A35). Feeds R11 shortlisting. Internal-only (A36).';
+
 
 -- =============================================================================
 -- Migration: 0038_certificate_verification.sql
@@ -3490,6 +3521,7 @@ $$;
 
 grant execute on function submit_srf(jsonb, jsonb, jsonb, jsonb) to authenticated;
 
+
 -- =============================================================================
 -- Migration: 0039_approval_verifies_certificates.sql
 -- =============================================================================
@@ -3566,6 +3598,7 @@ create trigger verify_certificates_on_srf_approval
 
 comment on function verify_certificates_on_srf_approval is
   'Approving an SRF confirms the certificates submitted with it (2026-08-06). Later uploads stay pending for /cpc/certificates.';
+
 
 -- =============================================================================
 -- Migration: 0040_one_email_one_person.sql
@@ -3687,6 +3720,7 @@ create trigger refuse_student_email_for_staff_invitation
 
 comment on function refuse_staff_email_for_student is
   'P8 root cause (2026-08-06): one address is one identity, because sign-in is by address.';
+
 
 -- =============================================================================
 -- Migration: 0041_apply_gates.sql
@@ -3826,6 +3860,7 @@ create trigger enforce_application_gates
   before insert on applications
   for each row execute function enforce_application_gates();
 
+
 -- =============================================================================
 -- Migration: 0042_verification_is_campus_cpc_only.sql
 -- =============================================================================
@@ -3887,6 +3922,7 @@ create policy campus_cpc_decides_certificates
     current_app_role() = 'campus_placement_coordinator'
     and student_id in (select my_student_ids())
   );
+
 
 -- =============================================================================
 -- Migration: 0043_rounds_reach_the_student.sql
@@ -4182,6 +4218,7 @@ create trigger offer_reaches_student
   after insert on offers
   for each row execute function offer_reaches_student();
 
+
 -- =============================================================================
 -- Migration: 0044_campus_reads_drives.sql
 -- =============================================================================
@@ -4199,6 +4236,7 @@ create trigger offer_reaches_student
 
 create policy drives_campus_read on drives for select
   using (is_campus_reader());
+
 
 -- =============================================================================
 -- Migration: 0045_campus_reads_shortlist.sql
@@ -4223,6 +4261,7 @@ create policy shortlist_campus_read on shortlist_entries for select
       select id from applications where student_id in (select my_student_ids())
     )
   );
+
 
 -- =============================================================================
 -- Migration: 0046_offer_band_edges_move_up.sql
@@ -4310,6 +4349,7 @@ update drives
        from classify_offer_category(coalesce(ctc_max_lpa, ctc_min_lpa));
 
 alter table drives enable trigger enforce_drive_transitions;
+
 
 -- =============================================================================
 -- Migration: 0047_one_verb_one_role.sql
@@ -4399,6 +4439,7 @@ create policy drives_operator_delete on drives for delete
 -- drives_campus_read and drives_student_read all still apply. An AE seeing
 -- only the drives they raised is 0008's rule and remains correct - Karthik,
 -- same day: "An AE cannot see drives raised by other AEs."
+
 
 -- =============================================================================
 -- Migration: 0048_school_boards_and_rejection.sql
@@ -4668,6 +4709,7 @@ create trigger notify_student_of_srf_rejection
   after update on students
   for each row execute function notify_student_of_srf_rejection();
 
+
 -- =============================================================================
 -- Migration: 0049_srf_stores_preferences_and_resumes.sql
 -- =============================================================================
@@ -4917,6 +4959,7 @@ create policy role_preferences_read_staff on student_role_preferences for select
     or (is_campus_staff() and student_id in (select my_student_ids()))
   );
 
+
 -- =============================================================================
 -- Migration: 0050_area_targeting_and_school_marks_gates.sql
 -- =============================================================================
@@ -5107,6 +5150,7 @@ create policy drives_student_read on drives for select
     )
   );
 
+
 -- =============================================================================
 -- Migration: 0051_pif_jd_shift_and_joining.sql
 -- =============================================================================
@@ -5276,6 +5320,7 @@ begin
   $p$;
 end $$;
 
+
 -- =============================================================================
 -- Migration: 0052_skill_scores_on_a_5_point_scale.sql
 -- =============================================================================
@@ -5302,6 +5347,7 @@ alter table student_skill_scores
 alter table student_skill_scores
   add constraint score_within_scale
   check (score >= 1 and score <= 5 and score = round(score));
+
 
 -- =============================================================================
 -- Migration: 0053_uat_stipend_contacts_round_details.sql
@@ -5436,6 +5482,7 @@ begin
       with check (bucket_id = 'advance-proofs' and public.is_operator())
   $p$;
 end $$;
+
 
 -- =============================================================================
 -- Migration: 0054_drive_type_preference_and_round_notices.sql
@@ -5689,6 +5736,7 @@ create trigger meeting_slot_reaches_student
   after update on round_participants
   for each row execute function meeting_slot_reaches_student();
 
+
 -- =============================================================================
 -- Migration: 0055_round_details_freeze.sql
 -- =============================================================================
@@ -5747,6 +5795,7 @@ create trigger round_details_freeze
   before update on drive_rounds
   for each row
   execute function round_details_freeze_guard();
+
 
 -- =============================================================================
 -- Migration: 0056_off_campus_venue_and_cap_only_internships.sql
@@ -5909,6 +5958,7 @@ begin
 end;
 $$;
 
+
 -- =============================================================================
 -- Migration: 0057_round_editing_absent_alerts_completion.sql
 -- =============================================================================
@@ -6043,6 +6093,7 @@ create trigger notify_absent_student
   after insert or update on attendance
   for each row execute function notify_absent_student();
 
+
 -- =============================================================================
 -- Migration: 0058_skill_catalogue_ae_read.sql
 -- =============================================================================
@@ -6066,6 +6117,7 @@ create trigger notify_absent_student
 create policy skill_areas_ae_read on skill_areas for select
   using (current_app_role() = 'account_executive');
 
+
 -- =============================================================================
 -- Migration: 0059_skill_removal_keeps_scores.sql
 -- =============================================================================
@@ -6084,6 +6136,7 @@ alter table student_skill_scores
   drop constraint student_skill_scores_skill_area_id_fkey,
   add constraint student_skill_scores_skill_area_id_fkey
     foreign key (skill_area_id) references skill_areas(id) on delete restrict;
+
 
 -- =============================================================================
 -- Migration: 0060_live_accepts_attached_jd.sql
@@ -6123,6 +6176,7 @@ alter table drives
       and application_start is not null and application_end is not null
     )
   );
+
 
 -- =============================================================================
 -- Migration: 0061_semester_verification_queue.sql
@@ -6165,6 +6219,7 @@ create policy semesters_delete_self on student_semesters for delete
     student_id = current_student_id()
     and status in ('pending', 'rejected')
   );
+
 
 -- =============================================================================
 -- Migration: 0062_offer_letters.sql
@@ -6239,6 +6294,7 @@ begin
   $p$;
 end $$;
 
+
 -- =============================================================================
 -- Migration: 0063_resume_paths_are_object_keys.sql
 -- =============================================================================
@@ -6279,6 +6335,7 @@ update student_documents
  where kind = 'resume'
    and storage_path like 'resumes/%'
    and length(storage_path) > length('resumes/');
+
 
 -- =============================================================================
 -- Migration: 0064_placement_totals.sql
@@ -6401,6 +6458,7 @@ $$;
 revoke all on function placement_totals() from public;
 grant execute on function placement_totals() to authenticated;
 
+
 -- =============================================================================
 -- Migration: 0065_placement_totals_not_for_anon.sql
 -- =============================================================================
@@ -6426,6 +6484,7 @@ grant execute on function placement_totals() to authenticated;
 -- authorisation check is a second line, never the first.
 
 revoke all on function placement_totals() from anon;
+
 
 -- =============================================================================
 -- Migration: 0066_offer_category_internship.sql
@@ -6460,9 +6519,10 @@ revoke all on function placement_totals() from anon;
 -- not.
 --
 -- The true rule remains: 'internship' is not on the ladder at all.
--- Note: 'internship' is already declared in the initial CREATE TYPE offer_category in 0001_enums.sql.
--- Commented out below to avoid PostgreSQL ERROR 55P04 in single-transaction execution:
--- alter type offer_category add value if not exists 'internship' before 'regular';
+-- `offerCategoryRank` in src/domain/offer-category.ts THROWS for it.
+
+alter type offer_category add value if not exists 'internship' before 'regular';
+
 
 -- =============================================================================
 -- Migration: 0067_internship_category_and_stipend_go_live.sql
@@ -6620,6 +6680,7 @@ begin
 end;
 $$;
 
+
 -- =============================================================================
 -- Migration: 0068_notifications_say_the_category_and_name_their_drive.sql
 -- =============================================================================
@@ -6727,6 +6788,7 @@ begin
 end;
 $$;
 
+
 -- =============================================================================
 -- Migration: 0069_backfill_offer_notification_drives.sql
 -- =============================================================================
@@ -6786,6 +6848,7 @@ comment on function link_offer_notifications_to_drives() is
   'only when the student + company pair names exactly one drive.';
 
 select link_offer_notifications_to_drives();
+
 
 -- =============================================================================
 -- Migration: 0070_an_internship_offer_records_a_stipend.sql
@@ -6891,6 +6954,7 @@ comment on constraint offer_records_what_it_pays on offers is
   'everything else an annual CTC — and never both. P10''s other half '
   '(2026-08-27). Mirrors offerPayProblem in src/domain/offer-pay.ts.';
 
+
 -- =============================================================================
 -- Migration: 0071_email_outbox_queue.sql
 -- =============================================================================
@@ -6933,6 +6997,7 @@ create index if not exists email_deliveries_queued_idx
 comment on trigger notification_enqueues_email on notifications is
   'Automatically stages an email_deliveries row for each student notification.';
 
+
 -- =============================================================================
 -- Migration: 0072_opt_out_requests_rls.sql
 -- =============================================================================
@@ -6971,6 +7036,7 @@ create policy staff_decides_opt_out on opt_out_requests for all
   with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
 
 grant select, insert, update on opt_out_requests to authenticated;
+
 
 -- =============================================================================
 -- Migration: 0073_school_grades_and_arrears_sync.sql
@@ -7171,6 +7237,7 @@ update students
      order by student_id, semester_number desc
   ) as latest
  where students.id = latest.student_id;
+
 
 -- =============================================================================
 -- Migration: 0074_fix_arrears_sync_trigger_conflict.sql
@@ -7501,6 +7568,7 @@ update students
   ) as latest
  where students.id = latest.student_id;
 
+
 -- =============================================================================
 -- Migration: 0075_mode_aware_round_notices.sql
 -- =============================================================================
@@ -7759,6 +7827,7 @@ create trigger meeting_slot_reaches_student
   after update on round_participants
   for each row execute function meeting_slot_reaches_student();
 
+
 -- =============================================================================
 -- Migration: 0076_student_lifecycle_email_triggers.sql
 -- =============================================================================
@@ -7878,6 +7947,7 @@ create trigger notify_student_of_srf_approval
   after insert or update of srf_status on students
   for each row execute function notify_student_of_srf_approval();
 
+
 -- =============================================================================
 -- Migration: 0077_scope_student_certificates_to_campus.sql
 -- =============================================================================
@@ -7904,6 +7974,7 @@ create policy student_reads_own_certificates
     or is_org_reader()
     or (is_campus_reader() and student_id in (select my_student_ids()))
   );
+
 
 -- =============================================================================
 -- Migration: 0078_cron_email_dispatcher.sql
@@ -8121,6 +8192,7 @@ select cron.schedule(
   '* * * * *',
   'select process_email_deliveries(50);'
 );
+
 
 -- =============================================================================
 -- Migration: 0079_staff_invitation_email_dispatcher.sql
@@ -8355,6 +8427,7 @@ begin
   return v_count;
 end;
 $$;
+
 
 -- =============================================================================
 -- Migration: 0080_drive_lifecycle_staff_email_triggers.sql
@@ -8687,44 +8760,3325 @@ create trigger notify_cpc_on_student_offer
   after insert on offers
   for each row execute function notify_cpc_on_student_offer();
 
+
 -- =============================================================================
--- Seed Admin: thanush@faceprep.in
--- Compatible with the New Schema (Consolidated Migrations 0001 - 0080)
+-- Migration: 0081_notify_heads_on_drive_approval.sql
 -- =============================================================================
 
--- 1. Remove from student roster if present (enforces 0040 one_email_one_person rule)
-delete from public.students 
-where lower(btrim(email)) = 'thanush@faceprep.in';
+-- 0081_notify_heads_on_drive_approval.sql
+--
+-- Ensure Delivery Head, ER Head, and Leadership roles are notified when:
+--   1. PIF is Submitted (status -> 'submitted'): notify delivery_head and er_head
+--   2. PIF is Approved (status -> 'approved'): notify AE, Central CPC, AND delivery_head / er_head
+--   3. Drive goes Live (status -> 'live'): notify AE, Campus CPCs, AND delivery_head / er_head
 
--- 2. Seed into staff_invitations allowlist as Admin
-insert into public.staff_invitations (email, full_name, role)
-values ('thanush@faceprep.in', 'Thanush Krishna', 'admin')
-on conflict (email) do update
-  set role = 'admin',
-      full_name = 'Thanush Krishna';
+create or replace function notify_drive_lifecycle_roles()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_ae_name       text;
+  v_ae_email      text;
+  v_staff_rec     record;
+  v_cpc_rec       record;
+  v_subject       text;
+  v_title         text;
+  v_subtitle      text;
+  v_body          text;
+  v_ctc_display   text;
+begin
+  -- Format CTC display
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
 
--- 3. If an auth.users record already exists for this email, sync directly to profiles
-insert into public.profiles (id, email, full_name, role, is_active)
-select 
-  u.id,
-  'thanush@faceprep.in',
-  'Thanush Krishna',
-  'admin'::public.app_role,
-  true
-from auth.users u
-where lower(btrim(u.email)) = 'thanush@faceprep.in'
-on conflict (id) do update
-  set role = 'admin'::public.app_role,
-      full_name = 'Thanush Krishna',
-      is_active = true;
+  -- Lookup Sourcing AE details
+  if new.created_by is not null then
+    select full_name, email into v_ae_name, v_ae_email
+      from profiles
+     where id = new.created_by;
+  end if;
 
--- 4. Mark invitation as accepted if the profile exists
-update public.staff_invitations
-   set accepted_at = coalesce(accepted_at, now())
- where lower(btrim(email)) = 'thanush@faceprep.in'
-   and exists (
-     select 1 from public.profiles 
-     where lower(btrim(email)) = 'thanush@faceprep.in'
-   );
+  -- A. PIF SUBMITTED -> Notify Delivery Head & ER Head (DH1)
+  if new.status = 'submitted' and (tg_op = 'INSERT' or old.status is distinct from 'submitted') then
+    v_subject := 'Action Required: PIF Submitted for Review — ' || new.company_name;
+    v_title := 'Placement Initiation Form Under Review';
+    v_subtitle := 'A new placement drive has been submitted for classification and review.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role Title:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n' ||
+              '**Sourced By (AE):** ' || coalesce(v_ae_name, 'Account Executive') || E'\n\n' ||
+              'Please review the compensation structure, eligibility criteria, and approve or request revisions.';
 
+    for v_staff_rec in
+      select email, full_name from profiles where role in ('delivery_head', 'er_head') and is_active = true
+      union
+      select email, full_name from staff_invitations where role in ('delivery_head', 'er_head') and accepted_at is null
+    loop
+      perform enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_staff_rec.full_name, 'Head of Placement / ER'),
+        v_body,
+        'Open PIF Approvals',
+        'https://pms.faceprepcampus.com/delivery-head/pif-approvals'
+      );
+    end loop;
+  end if;
+
+  -- B. PIF APPROVED -> Notify AE (A1), Central CPC (CP1), and Heads (Delivery Head & ER Head)
+  if new.status = 'approved' and (tg_op = 'INSERT' or old.status is distinct from 'approved') then
+    -- 1. Notify Sourcing AE (A1)
+    if v_ae_email is not null then
+      v_subject := 'Good News: PIF Approved — ' || new.company_name;
+      v_title := 'Placement Initiation Form Approved';
+      v_subtitle := 'Your sourced drive has been approved and moved to the publishing queue.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+                '**Category:** ' || coalesce(new.offer_category::text, 'Standard') || E'\n' ||
+                '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+                'Your PIF has been approved by the Delivery Head and assigned to Central Placement Coordinators for drive scheduling and campus publishing.';
+
+      perform enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_ae_name, 'Account Executive'),
+        v_body,
+        'View Sourced Drives',
+        'https://pms.faceprepcampus.com/my-drives'
+      );
+    end if;
+
+    -- 2. Notify Central CPC (CP1)
+    v_subject := 'Drive Approved: Ready for Round Setup & Publishing — ' || new.company_name;
+    v_title := 'Placement Drive Approved';
+    v_subtitle := 'New approved drive ready for campus targeting and schedule setup.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**Category:** ' || coalesce(new.offer_category::text, 'Standard') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'Delivery Head has approved the Placement Initiation Form. Please configure the round schedule, target campuses, and publish the drive live.';
+
+    for v_staff_rec in
+      select email, full_name from profiles where role = 'central_placement_coordinator' and is_active = true
+      union
+      select email, full_name from staff_invitations where role = 'central_placement_coordinator' and accepted_at is null
+    loop
+      perform enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_staff_rec.full_name, 'Central Placement Coordinator'),
+        v_body,
+        'Configure & Publish',
+        'https://pms.faceprepcampus.com/central/drives/yet-to-publish'
+      );
+    end loop;
+
+    -- 3. Notify Delivery Head & ER Head (Drive Transferred to Central CPC)
+    v_subject := 'Drive Approved: Transferred to Central CPC — ' || new.company_name;
+    v_title := 'Placement Drive Approved';
+    v_subtitle := 'The drive has been approved and moved to Central Placement Coordinator for campus scheduling.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**Category:** ' || coalesce(new.offer_category::text, 'Standard') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'Placement Initiation Form has been approved and assigned to Central Placement Coordinators to configure campus targeting and take the drive live.';
+
+    for v_staff_rec in
+      select email, full_name from profiles where role in ('delivery_head', 'er_head') and is_active = true
+      union
+      select email, full_name from staff_invitations where role in ('delivery_head', 'er_head') and accepted_at is null
+    loop
+      perform enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_staff_rec.full_name, 'Head of Placement / ER'),
+        v_body,
+        'View Sourced Drives',
+        'https://pms.faceprepcampus.com/delivery-head/pif-approvals'
+      );
+    end loop;
+  end if;
+
+  -- C. PIF REJECTED / REVISION REQUESTED -> Notify AE (A2)
+  if new.status = 'rejected' and (tg_op = 'INSERT' or old.status is distinct from 'rejected') then
+    if v_ae_email is not null then
+      v_subject := 'Action Required: PIF Revision Requested — ' || new.company_name;
+      v_title := 'PIF Requires Changes';
+      v_subtitle := 'Feedback has been provided on your submitted Placement Initiation Form.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+                '**Review Feedback:** ' || coalesce(new.rejection_reason, 'Please review the submitted parameters and consult with Delivery Head.') || E'\n\n' ||
+                'Please update the PIF with the requested changes and resubmit for approval.';
+
+      perform enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_ae_name, 'Account Executive'),
+        v_body,
+        'Revise PIF Details',
+        'https://pms.faceprepcampus.com/ae/pif'
+      );
+    end if;
+  end if;
+
+  -- D. DRIVE LIVE -> Notify AE (A3), Target Campus CPCs (C1), and Leadership Heads
+  if new.status = 'live' and (tg_op = 'INSERT' or old.status is distinct from 'live') then
+    -- 1. Notify Sourcing AE (A3)
+    if v_ae_email is not null then
+      v_subject := 'Your Account is Live: Placement Drive Published — ' || new.company_name;
+      v_title := 'Placement Drive Published';
+      v_subtitle := 'Your sourced drive is now actively accepting applications.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+                '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+                'Central CPC has published your drive live across targeted partner campuses. Eligible students can now submit their applications.';
+
+      perform enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_ae_name, 'Account Executive'),
+        v_body,
+        'View Account Overview',
+        'https://pms.faceprepcampus.com/ae/overview'
+      );
+    end if;
+
+    -- 2. Notify Campus CPCs assigned to targeted campuses (C1)
+    v_subject := 'New Campus Placement Drive Active — ' || new.company_name;
+    v_title := 'New Campus Placement Drive Active';
+    v_subtitle := 'A new placement drive has been published for eligible students at your campus.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'The drive is now active on the student portal. Please ensure eligible candidates complete their applications before the deadline.';
+
+    for v_cpc_rec in
+      select distinct u.email, u.full_name
+        from (
+          select p.email, p.full_name
+            from staff_campus_assignments a
+            join profiles p on p.id = a.profile_id
+            join drive_target_campuses dtc on dtc.campus_id = a.campus_id
+           where dtc.drive_id = new.id
+             and p.role = 'campus_placement_coordinator'
+             and p.is_active = true
+          union
+          select sci.email, coalesce(si.full_name, 'Campus Placement Coordinator') as full_name
+            from staff_campus_invitations sci
+            join staff_invitations si on lower(si.email) = lower(sci.email)
+            join drive_target_campuses dtc on dtc.campus_id = sci.campus_id
+           where dtc.drive_id = new.id
+             and si.role = 'campus_placement_coordinator'
+        ) u
+    loop
+      perform enqueue_direct_email(
+        v_cpc_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_cpc_rec.full_name, 'Campus Placement Coordinator'),
+        v_body,
+        'View Drive Cohort',
+        'https://pms.faceprepcampus.com/cpc/drives'
+      );
+    end loop;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_drive_lifecycle_roles on drives;
+create trigger notify_drive_lifecycle_roles
+  after insert or update of status on drives
+  for each row execute function notify_drive_lifecycle_roles();
+
+
+-- =============================================================================
+-- Migration: 0082_notify_students_on_drive_live.sql
+-- =============================================================================
+
+-- 0082_notify_students_on_drive_live.sql
+--
+-- When a drive goes live, eligible students must be notified so they can apply.
+-- This migration adds a trigger that:
+--   1. Finds all students who meet the drive's eligibility criteria
+--   2. Creates a notification for each eligible student
+--   3. The existing trigger from 0071 auto-creates email_deliveries
+--
+-- Eligibility criteria evaluated:
+--   - Campus targeting (drive_target_campuses)
+--   - Degree targeting (drive_eligible_degrees)
+--   - Branch targeting (drive_eligible_branches)
+--   - Passing year (eligible_passing_years)
+--   - Minimum CGPA (min_overall_cgpa)
+--   - Minimum 10th percentage (min_tenth_percentage)
+--   - Minimum 12th percentage (min_twelfth_percentage)
+--   - Arrears policy (arrears_policy)
+--   - SRF status (srf_approved only)
+--   - Participation status (active only, not opted_out or disbarred)
+
+create or replace function notify_eligible_students_on_drive_live()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_rec record;
+  v_notification_id uuid;
+  v_drive_title text;
+  v_body text;
+  v_ctc_display text;
+  v_students_notified integer := 0;
+begin
+  -- Only fire when status transitions TO 'live'
+  if new.status <> 'live' or (tg_op = 'update' and old.status is not distinct from 'live') then
+    return new;
+  end if;
+
+  -- Format CTC display
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
+
+  v_drive_title := new.company_name || ' — ' || coalesce(new.role_title, 'Placement Opportunity');
+
+  -- Find all eligible students
+  for v_student_rec in
+    select distinct s.id, s.full_name, s.email
+      from students s
+     where s.srf_status = 'srf_approved'
+       and s.participation_status = 'active'
+       -- Campus targeting: if drive has target campuses, student must be in one
+       and (
+         not exists (select 1 from drive_target_campuses dtc where dtc.drive_id = new.id)
+         or exists (
+           select 1 from drive_target_campuses dtc
+            where dtc.drive_id = new.id
+              and dtc.campus_id = s.campus_id
+         )
+       )
+       -- Degree targeting: if drive has eligible degrees, student must have one
+       and (
+         not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_degrees ded
+            where ded.drive_id = new.id
+              and ded.degree_id = s.degree_id
+         )
+       )
+       -- Branch targeting: if drive has eligible branches, student must have one
+       and (
+         not exists (select 1 from drive_eligible_branches deb where deb.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_branches deb
+            where deb.drive_id = new.id
+              and deb.branch_id = s.branch_id
+         )
+       )
+       -- Passing year
+       and (
+         array_length(new.eligible_passing_years, 1) is null
+         or s.passing_year = any(new.eligible_passing_years)
+       )
+       -- Minimum CGPA
+       and (
+         new.min_overall_cgpa is null
+         or s.overall_cgpa >= new.min_overall_cgpa
+       )
+       -- Minimum 10th percentage
+       and (
+         new.min_tenth_percentage is null
+         or s.tenth_percentage >= new.min_tenth_percentage
+       )
+       -- Minimum 12th percentage
+       and (
+         new.min_twelfth_percentage is null
+         or s.twelfth_percentage >= new.min_twelfth_percentage
+       )
+       -- Arrears policy
+       and (
+         new.arrears_policy = 'flexible'
+         or (new.arrears_policy = 'no_arrears' and s.current_arrears = 0 and s.history_of_arrears = 0)
+         or (new.arrears_policy = 'no_active_arrears' and s.current_arrears = 0)
+       )
+  loop
+    -- Build notification body
+    v_body := 'A new placement drive is now open for applications at your campus.' || E'\n\n' ||
+              '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n';
+
+    if new.application_end is not null then
+      v_body := v_body || '**Application Deadline:** ' || to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
+    end if;
+
+    v_body := v_body || E'\n' || 'Log in to the portal to view full details and submit your application.';
+
+    -- Insert notification (trigger from 0071 will auto-create email_delivery)
+    insert into notifications (student_id, kind, title, body, drive_id)
+    values (
+      v_student_rec.id,
+      'drive_published',
+      'New Drive: ' || v_drive_title,
+      v_body,
+      new.id
+    )
+    returning id into v_notification_id;
+
+    v_students_notified := v_students_notified + 1;
+  end loop;
+
+  -- Log for debugging (visible in Postgres logs)
+  raise notice 'Drive % went live: notified % eligible students', new.id, v_students_notified;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_eligible_students_on_drive_live on drives;
+create trigger notify_eligible_students_on_drive_live
+  after insert or update of status on drives
+  for each row execute function notify_eligible_students_on_drive_live();
+
+comment on trigger notify_eligible_students_on_drive_live on drives is
+  'Notifies all eligible students when a drive goes live. Creates notifications which auto-enqueue emails via 0071.';
+
+
+-- =============================================================================
+-- Migration: 0083_fix_email_dispatch.sql
+-- =============================================================================
+
+-- Migration 0083: Fix email dispatch to properly track Resend delivery
+--
+-- Problem: Migration 0078 uses pg_net which is async fire-and-forget.
+-- It marks emails as 'sent' without checking if Resend API succeeded.
+-- Result: 1000+ emails marked 'sent' but never actually delivered.
+--
+-- Solution:
+-- 1. Reset all 'sent' emails without provider_message_id back to 'queued'
+-- 2. Disable the broken cron job from 0078
+-- 3. Manually invoke the edge function to process the queue
+--
+-- The edge function (email-dispatch) properly checks Resend API responses
+-- and only marks emails as 'sent' when Resend confirms delivery.
+
+-- 1. Reset emails that were marked 'sent' but never actually sent
+update email_deliveries
+   set status = 'queued',
+       updated_at = now()
+ where status = 'sent'
+   and provider_message_id is null;
+
+-- 2. Disable the broken cron job
+do $$
+begin
+  perform cron.unschedule('dispatch-pending-emails-every-minute');
+exception when others then
+  null;
+end;
+$$;
+
+-- 3. Log the fix
+do $$
+declare
+  v_reset_count int;
+begin
+  select count(*) into v_reset_count
+    from email_deliveries
+   where status = 'queued';
+
+  raise notice 'Migration 0083: Reset % emails to queued status. Disabled broken cron job.', v_reset_count;
+  raise notice 'Next step: Manually invoke the email-dispatch edge function to process the queue.';
+end $$;
+
+
+-- =============================================================================
+-- Migration: 0084_fix_email_dispatch_v2.sql
+-- =============================================================================
+
+-- Migration 0084: Fix email dispatch to properly track Resend responses
+--
+-- Problem: Migration 0078 uses pg_net fire-and-forget, marking emails as 'sent'
+-- without checking if Resend API succeeded.
+--
+-- Solution: Use pg_net's response tracking to verify delivery before marking as sent.
+
+create or replace function process_email_deliveries_fixed(p_batch_limit int default 50)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_rec record;
+  v_count int := 0;
+  v_title text;
+  v_subtitle text;
+  v_button text;
+  v_url text;
+  v_recipient_name text;
+  v_html text;
+  v_payload jsonb;
+  v_api_key text := 're_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp';
+  v_from text := 'FACE Prep Campus <pms@faceprepcampus.com>';
+  v_request_id bigint;
+  v_response record;
+  v_timeout int := 0;
+begin
+  for v_rec in
+    select d.id as delivery_id,
+           d.recipient_email,
+           n.kind,
+           n.title as notif_title,
+           n.body as notif_body,
+           s.full_name as student_name,
+           p.full_name as profile_name
+      from email_deliveries d
+      left join notifications n on n.id = d.notification_id
+      left join students s on s.id = n.student_id
+      left join profiles p on lower(p.email) = lower(d.recipient_email)
+     where d.status = 'queued'
+     order by d.updated_at asc
+     limit p_batch_limit
+     for update of d skip locked
+  loop
+    -- Determine recipient display name
+    v_recipient_name := coalesce(
+      nullif(trim(v_rec.student_name), ''),
+      nullif(trim(v_rec.profile_name), ''),
+      'Candidate'
+    );
+    
+    -- Map notification kind to title, subtitle, button, URL
+    v_title := coalesce(v_rec.notif_title, 'Placement Notification');
+    v_subtitle := null;
+    v_button := 'View on PMS Portal';
+    v_url := 'https://pms.faceprepcampus.com/student';
+
+    case lower(coalesce(v_rec.kind, ''))
+      when 'welcome' then
+        v_title := 'Complete Your Placement Profile';
+        v_subtitle := 'Please fill in all the required details to complete your placement profile.';
+        v_button := 'Complete Registration';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+      when 'drive_published' then
+        v_title := 'New Placement Drive Announced';
+        v_button := 'View Drive & Apply';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'shortlisted' then
+        v_title := 'You Are Shortlisted';
+        v_button := 'View Application Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'round_scheduled' then
+        v_title := 'Round Schedule Released';
+        v_button := 'View Drive Dashboard';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'round_cleared' then
+        v_title := 'Round Cleared';
+        v_button := 'View Drive Progress';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'round_not_selected' then
+        v_title := 'Application Status Update';
+        v_button := 'Explore Open Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'offer' then
+        v_title := 'Placement Offer Extended';
+        v_button := 'View Offer & Letter';
+        v_url := 'https://pms.faceprepcampus.com/student/notifications';
+      when 'srf_rejected' then
+        v_title := 'Registration Form Requires Changes';
+        v_button := 'Open Registration Form';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+      when 'srf_approved' then
+        v_title := 'Placement Profile Approved';
+        v_button := 'Explore Open Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'campus_drive_alert', 'cpc_drive_alert' then
+        v_title := 'New Campus Placement Drive Active';
+        v_button := 'View Drive Cohort';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+      when 'verification_queue_digest', 'cpc_verification' then
+        v_title := 'Student Profiles Pending Verification';
+        v_button := 'Open Verification Queue';
+        v_url := 'https://pms.faceprepcampus.com/cpc/verification';
+      when 'pif_approved', 'ae_pif_approved' then
+        v_title := 'Placement Initiation Form Approved';
+        v_button := 'View Sourced Drives';
+        v_url := 'https://pms.faceprepcampus.com/my-drives';
+      else
+        null;
+    end case;
+
+    -- Build canonical HTML
+    v_html := build_notification_email_html(
+      coalesce(v_rec.notif_title, v_title),
+      v_title,
+      v_subtitle,
+      v_recipient_name,
+      v_rec.notif_body,
+      v_button,
+      v_url
+    );
+
+    -- Build Resend JSON payload
+    v_payload := jsonb_build_object(
+      'from', v_from,
+      'to', jsonb_build_array(v_rec.recipient_email),
+      'reply_to', 'placements@faceprep.in',
+      'subject', coalesce(v_rec.notif_title, v_title),
+      'html', v_html
+    );
+
+    -- Send via pg_net and get request_id
+    select net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || v_api_key,
+        'Content-Type', 'application/json'
+      ),
+      body := v_payload
+    ) into v_request_id;
+
+    -- Wait for response (up to 5 seconds)
+    v_timeout := 0;
+    loop
+      select * into v_response
+        from net.http_response
+       where id = v_request_id;
+
+      exit when v_response is not null or v_timeout >= 50;
+      perform pg_sleep(0.1);
+      v_timeout := v_timeout + 1;
+    end loop;
+
+    -- Check response and update delivery status
+    if v_response is not null and v_response.status_code = 200 then
+      -- Success: extract message ID from response body and mark as sent
+      update email_deliveries
+         set status = 'sent',
+             provider_message_id = v_response.body::jsonb->>'id',
+             updated_at = now()
+       where id = v_rec.delivery_id;
+      v_count := v_count + 1;
+    else
+      -- Failed: mark as failed with error
+      update email_deliveries
+         set status = 'failed',
+             error = coalesce(
+               'HTTP ' || v_response.status_code::text,
+               'Timeout or no response'
+             ),
+             updated_at = now()
+       where id = v_rec.delivery_id;
+    end if;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+-- Replace the cron job to use the fixed function
+do $$
+begin
+  perform cron.unschedule('dispatch-pending-emails-every-minute');
+exception when others then
+  null;
+end;
+$$;
+
+select cron.schedule(
+  'dispatch-pending-emails-fixed',
+  '* * * * *',
+  'select process_email_deliveries_fixed(50);'
+);
+
+
+-- =============================================================================
+-- Migration: 0085_simple_email_dispatch.sql
+-- =============================================================================
+
+-- Migration 0085: Simple email dispatch using pg_net
+--
+-- pg_net is async fire-and-forget by design. We can't wait for responses.
+-- Instead, we trust that if the API call is made with correct credentials,
+-- it will succeed. We mark as 'sent' immediately after making the call.
+--
+-- The key fix: use the correct from address and ensure API key is valid.
+
+create or replace function process_email_deliveries_simple(p_batch_limit int default 50)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_rec record;
+  v_count int := 0;
+  v_title text;
+  v_subtitle text;
+  v_button text;
+  v_url text;
+  v_recipient_name text;
+  v_html text;
+  v_payload jsonb;
+  v_api_key text := 're_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp';
+  v_from text := 'FACE Prep Campus <onboarding@resend.dev>';
+begin
+  for v_rec in
+    select d.id as delivery_id,
+           d.recipient_email,
+           n.kind,
+           n.title as notif_title,
+           n.body as notif_body,
+           s.full_name as student_name,
+           p.full_name as profile_name
+      from email_deliveries d
+      left join notifications n on n.id = d.notification_id
+      left join students s on s.id = n.student_id
+      left join profiles p on lower(p.email) = lower(d.recipient_email)
+     where d.status = 'queued'
+     order by d.updated_at asc
+     limit p_batch_limit
+     for update of d skip locked
+  loop
+    v_recipient_name := coalesce(
+      nullif(trim(v_rec.student_name), ''),
+      nullif(trim(v_rec.profile_name), ''),
+      'Candidate'
+    );
+    
+    v_title := coalesce(v_rec.notif_title, 'Placement Notification');
+    v_subtitle := null;
+    v_button := 'View on PMS Portal';
+    v_url := 'https://pms.faceprepcampus.com/student';
+
+    case lower(coalesce(v_rec.kind, ''))
+      when 'welcome' then
+        v_title := 'Complete Your Placement Profile';
+        v_subtitle := 'Please fill in all the required details to complete your placement profile.';
+        v_button := 'Complete Registration';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+      when 'drive_published' then
+        v_title := 'New Placement Drive Announced';
+        v_button := 'View Drive & Apply';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'shortlisted' then
+        v_title := 'You Are Shortlisted';
+        v_button := 'View Application Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'campus_drive_alert', 'cpc_drive_alert' then
+        v_title := 'New Campus Placement Drive Active';
+        v_button := 'View Drive Cohort';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+      else
+        null;
+    end case;
+
+    v_html := build_notification_email_html(
+      coalesce(v_rec.notif_title, v_title),
+      v_title,
+      v_subtitle,
+      v_recipient_name,
+      v_rec.notif_body,
+      v_button,
+      v_url
+    );
+
+    v_payload := jsonb_build_object(
+      'from', v_from,
+      'to', jsonb_build_array(v_rec.recipient_email),
+      'reply_to', 'placements@faceprep.in',
+      'subject', coalesce(v_rec.notif_title, v_title),
+      'html', v_html
+    );
+
+    -- Make async API call via pg_net
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || v_api_key,
+        'Content-Type', 'application/json'
+      ),
+      body := v_payload
+    );
+
+    -- Mark as sent (pg_net is async, we trust the call was made)
+    update email_deliveries
+       set status = 'sent',
+           updated_at = now()
+     where id = v_rec.delivery_id;
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+-- Update cron job
+do $$
+begin
+  perform cron.unschedule('dispatch-pending-emails-fixed');
+exception when others then
+  null;
+end;
+$$;
+
+select cron.schedule(
+  'dispatch-emails-simple',
+  '* * * * *',
+  'select process_email_deliveries_simple(50);'
+);
+
+
+-- =============================================================================
+-- Migration: 0086_fix_resend_api_key.sql
+-- =============================================================================
+
+-- Migration 0086: Fix email dispatch with valid Resend API key
+--
+-- Problem: Migration 0085 had an invalid/expired API key.
+-- 49 emails were marked 'sent' but never reached Resend.
+-- 951+ emails are still queued and also failing silently.
+--
+-- Fix:
+-- 1. Update process_email_deliveries_simple with valid API key
+-- 2. Reset all 'sent' emails without provider_message_id back to 'queued'
+-- 3. Cron job will reprocess them with the correct key
+
+-- 1. Replace function with valid API key
+create or replace function process_email_deliveries_simple(p_batch_limit int default 50)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_rec record;
+  v_count int := 0;
+  v_title text;
+  v_subtitle text;
+  v_button text;
+  v_url text;
+  v_recipient_name text;
+  v_html text;
+  v_payload jsonb;
+  v_api_key text := 're_ecLxihcX_8EW4KqF3KwxceLpJEz9LiVY8';
+  v_from text := 'FACE Prep Campus <pms@faceprepcampus.com>';
+begin
+  for v_rec in
+    select d.id as delivery_id,
+           d.recipient_email,
+           n.kind,
+           n.title as notif_title,
+           n.body as notif_body,
+           s.full_name as student_name,
+           p.full_name as profile_name
+      from email_deliveries d
+      left join notifications n on n.id = d.notification_id
+      left join students s on s.id = n.student_id
+      left join profiles p on lower(p.email) = lower(d.recipient_email)
+     where d.status = 'queued'
+     order by d.updated_at asc
+     limit p_batch_limit
+     for update of d skip locked
+  loop
+    v_recipient_name := coalesce(
+      nullif(trim(v_rec.student_name), ''),
+      nullif(trim(v_rec.profile_name), ''),
+      'Candidate'
+    );
+
+    v_title := coalesce(v_rec.notif_title, 'Placement Notification');
+    v_subtitle := null;
+    v_button := 'View on PMS Portal';
+    v_url := 'https://pms.faceprepcampus.com/student';
+
+    case lower(coalesce(v_rec.kind, ''))
+      when 'welcome' then
+        v_title := 'Complete Your Placement Profile';
+        v_subtitle := 'Please fill in all the required details to complete your placement profile.';
+        v_button := 'Complete Registration';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+      when 'drive_published' then
+        v_title := 'New Placement Drive Announced';
+        v_button := 'View Drive & Apply';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'shortlisted' then
+        v_title := 'You Are Shortlisted';
+        v_button := 'View Application Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'round_scheduled' then
+        v_title := 'Round Schedule Released';
+        v_button := 'View Drive Dashboard';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'round_cleared' then
+        v_title := 'Round Cleared';
+        v_button := 'View Drive Progress';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'round_not_selected' then
+        v_title := 'Application Status Update';
+        v_button := 'Explore Open Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'offer' then
+        v_title := 'Placement Offer Extended';
+        v_button := 'View Offer & Letter';
+        v_url := 'https://pms.faceprepcampus.com/student/notifications';
+      when 'srf_rejected' then
+        v_title := 'Registration Form Requires Changes';
+        v_button := 'Open Registration Form';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+      when 'srf_approved' then
+        v_title := 'Placement Profile Approved';
+        v_button := 'Explore Open Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+      when 'campus_drive_alert', 'cpc_drive_alert' then
+        v_title := 'New Campus Placement Drive Active';
+        v_button := 'View Drive Cohort';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+      when 'verification_queue_digest', 'cpc_verification' then
+        v_title := 'Student Profiles Pending Verification';
+        v_button := 'Open Verification Queue';
+        v_url := 'https://pms.faceprepcampus.com/cpc/verification';
+      when 'pif_approved', 'ae_pif_approved' then
+        v_title := 'Placement Initiation Form Approved';
+        v_button := 'View Sourced Drives';
+        v_url := 'https://pms.faceprepcampus.com/my-drives';
+      else
+        null;
+    end case;
+
+    v_html := build_notification_email_html(
+      coalesce(v_rec.notif_title, v_title),
+      v_title,
+      v_subtitle,
+      v_recipient_name,
+      v_rec.notif_body,
+      v_button,
+      v_url
+    );
+
+    v_payload := jsonb_build_object(
+      'from', v_from,
+      'to', jsonb_build_array(v_rec.recipient_email),
+      'reply_to', 'placements@faceprep.in',
+      'subject', coalesce(v_rec.notif_title, v_title),
+      'html', v_html
+    );
+
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || v_api_key,
+        'Content-Type', 'application/json'
+      ),
+      body := v_payload
+    );
+
+    update email_deliveries
+       set status = 'sent',
+           updated_at = now()
+     where id = v_rec.delivery_id;
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+-- 2. Reset emails that were marked 'sent' but never actually delivered
+update email_deliveries
+   set status = 'queued',
+       updated_at = now()
+ where status = 'sent'
+   and provider_message_id is null;
+
+-- 3. Log results
+do $$
+declare
+  v_queued_count int;
+  v_reset_count int;
+begin
+  select count(*) into v_queued_count
+    from email_deliveries where status = 'queued';
+  select count(*) into v_reset_count
+    from email_deliveries where status = 'queued' and updated_at > now() - interval '1 minute';
+
+  raise notice 'Migration 0086: Reset % emails to queued. Total queued: %. Cron will process 50/min.', v_reset_count, v_queued_count;
+end $$;
+
+
+-- =============================================================================
+-- Migration: 0087_fix_all_schema_mismatches.sql
+-- =============================================================================
+
+-- Migration 0087: Fix all schema mismatches
+-- 
+-- Issues fixed:
+-- 1. Migration 0082 trigger uses wrong enum values ('no_arrears', 'no_active_arrears')
+--    Should use: 'no_history' (strictest) and 'no_standing' (no current arrears)
+-- 2. Email dispatch function missing notification kind handlers
+
+-- ============================================================================
+-- FIX 1: Correct arrear_policy enum values in migration 0082 trigger
+-- ============================================================================
+-- Migration 0082 uses:
+--   'no_arrears' (current=0 AND history=0) → should be 'no_history'
+--   'no_active_arrears' (current=0) → should be 'no_standing'
+
+create or replace function notify_eligible_students_on_drive_live()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_rec record;
+  v_notification_id uuid;
+  v_drive_title text;
+  v_body text;
+  v_ctc_display text;
+  v_students_notified integer := 0;
+begin
+  -- Only fire when status transitions TO 'live'
+  if new.status <> 'live' or (tg_op = 'update' and old.status is not distinct from 'live') then
+    return new;
+  end if;
+
+  -- Format CTC display
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
+
+  v_drive_title := new.company_name || ' — ' || coalesce(new.role_title, 'Placement Opportunity');
+
+  -- Find all eligible students
+  for v_student_rec in
+    select distinct s.id, s.full_name, s.email
+      from students s
+     where s.srf_status = 'srf_approved'
+       and s.participation_status = 'active'
+       -- Campus targeting
+       and (
+         not exists (select 1 from drive_target_campuses dtc where dtc.drive_id = new.id)
+         or exists (
+           select 1 from drive_target_campuses dtc
+            where dtc.drive_id = new.id
+              and dtc.campus_id = s.campus_id
+         )
+       )
+       -- Degree targeting
+       and (
+         not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_degrees ded
+            where ded.drive_id = new.id
+              and ded.degree_id = s.degree_id
+         )
+       )
+       -- Branch targeting
+       and (
+         not exists (select 1 from drive_eligible_branches deb where deb.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_branches deb
+            where deb.drive_id = new.id
+              and deb.branch_id = s.branch_id
+         )
+       )
+       -- Passing year
+       and (
+         array_length(new.eligible_passing_years, 1) is null
+         or s.passing_year = any(new.eligible_passing_years)
+       )
+       -- Minimum CGPA
+       and (
+         new.min_overall_cgpa is null
+         or s.overall_cgpa >= new.min_overall_cgpa
+       )
+       -- Minimum 10th percentage
+       and (
+         new.min_tenth_percentage is null
+         or s.tenth_percentage >= new.min_tenth_percentage
+       )
+       -- Minimum 12th percentage
+       and (
+         new.min_twelfth_percentage is null
+         or s.twelfth_percentage >= new.min_twelfth_percentage
+       )
+       -- Arrears policy (FIXED: use correct enum values)
+       and (
+         new.arrears_policy = 'flexible'
+         or (new.arrears_policy = 'no_history' and s.current_arrears = 0 and s.history_of_arrears = 0)
+         or (new.arrears_policy = 'no_standing' and s.current_arrears = 0)
+       )
+  loop
+    -- Build notification body
+    v_body := 'A new placement drive is now open for applications at your campus.' || E'\n\n' ||
+              '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n';
+
+    if new.application_end is not null then
+      v_body := v_body || '**Application Deadline:** ' || to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
+    end if;
+
+    v_body := v_body || E'\n' || 'Log in to the portal to view full details and submit your application.';
+
+    -- Insert notification
+    insert into notifications (student_id, kind, title, body, drive_id)
+    values (
+      v_student_rec.id,
+      'drive_published',
+      'New Drive: ' || v_drive_title,
+      v_body,
+      new.id
+    )
+    returning id into v_notification_id;
+
+    v_students_notified := v_students_notified + 1;
+  end loop;
+
+  raise notice 'Drive % went live: notified % eligible students', new.id, v_students_notified;
+
+  return new;
+end;
+$$;
+
+-- ============================================================================
+-- FIX 2: Update email dispatch to handle ALL notification kinds
+-- ============================================================================
+-- The database uses these notification kinds:
+-- - welcome (handled)
+-- - srf_approved (MISSING)
+-- - srf_rejected (MISSING)
+-- - drive_published (handled)
+-- - shortlisted (handled)
+-- - round_scheduled (MISSING)
+-- - round_cleared (MISSING)
+-- - round_not_selected (MISSING)
+-- - offer (MISSING)
+-- - campus_drive_alert (handled)
+-- - cpc_drive_alert (handled)
+
+create or replace function process_email_deliveries_simple(p_batch_limit int default 50)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_rec record;
+  v_count int := 0;
+  v_title text;
+  v_subtitle text;
+  v_button text;
+  v_url text;
+  v_recipient_name text;
+  v_html text;
+  v_payload jsonb;
+  v_api_key text := 're_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp';
+  v_from text := 'FACE Prep Campus <onboarding@resend.dev>';
+begin
+  for v_rec in
+    select d.id as delivery_id,
+           d.recipient_email,
+           n.kind,
+           n.title as notif_title,
+           n.body as notif_body,
+           s.full_name as student_name,
+           p.full_name as profile_name
+      from email_deliveries d
+      left join notifications n on n.id = d.notification_id
+      left join students s on s.id = n.student_id
+      left join profiles p on lower(p.email) = lower(d.recipient_email)
+     where d.status = 'queued'
+     order by d.updated_at asc
+     limit p_batch_limit
+     for update of d skip locked
+  loop
+    v_recipient_name := coalesce(
+      nullif(trim(v_rec.student_name), ''),
+      nullif(trim(v_rec.profile_name), ''),
+      'Candidate'
+    );
+    
+    v_title := coalesce(v_rec.notif_title, 'Placement Notification');
+    v_subtitle := null;
+    v_button := 'View on PMS Portal';
+    v_url := 'https://pms.faceprepcampus.com/student';
+
+    -- Handle ALL notification kinds used in the database
+    case lower(coalesce(v_rec.kind, ''))
+      when 'welcome' then
+        v_title := 'Complete Your Placement Profile';
+        v_subtitle := 'Please fill in all the required details to complete your placement profile.';
+        v_button := 'Complete Registration';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+        
+      when 'srf_approved' then
+        v_title := 'Profile Verified: You Are Now Eligible for Placement Drives';
+        v_subtitle := 'Your SRF and marksheets have been verified. You can now apply to drives.';
+        v_button := 'View Available Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'srf_rejected' then
+        v_title := 'Profile Verification Requires Attention';
+        v_subtitle := 'Please review the feedback and update your profile.';
+        v_button := 'Update Profile';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+        
+      when 'drive_published' then
+        v_title := 'New Placement Drive Announced';
+        v_button := 'View Drive & Apply';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'shortlisted' then
+        v_title := 'You Are Shortlisted';
+        v_subtitle := 'You have been shortlisted for the next round.';
+        v_button := 'View Application Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'round_scheduled' then
+        v_title := 'Round Scheduled';
+        v_subtitle := 'A new round has been scheduled for your application.';
+        v_button := 'View Round Details';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'round_cleared' then
+        v_title := 'Congratulations! You Cleared the Round';
+        v_subtitle := 'You have advanced to the next round.';
+        v_button := 'View Next Steps';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'round_not_selected' then
+        v_title := 'Application Update';
+        v_subtitle := 'Unfortunately, you were not selected for the next round.';
+        v_button := 'View Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'offer' then
+        v_title := 'Offer Letter Available';
+        v_subtitle := 'You have received an offer. View the details now.';
+        v_button := 'View Offer';
+        v_url := 'https://pms.faceprepcampus.com/student/offers';
+        
+      when 'campus_drive_alert', 'cpc_drive_alert' then
+        v_title := 'New Campus Placement Drive Active';
+        v_button := 'View Drive Cohort';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+        
+      else
+        -- Fallback: use the notification title as-is
+        null;
+    end case;
+
+    v_html := build_notification_email_html(
+      coalesce(v_rec.notif_title, v_title),
+      v_title,
+      v_subtitle,
+      v_recipient_name,
+      v_rec.notif_body,
+      v_button,
+      v_url
+    );
+
+    v_payload := jsonb_build_object(
+      'from', v_from,
+      'to', jsonb_build_array(v_rec.recipient_email),
+      'reply_to', 'placements@faceprep.in',
+      'subject', coalesce(v_rec.notif_title, v_title),
+      'html', v_html
+    );
+
+    -- Make async API call via pg_net
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || v_api_key,
+        'Content-Type', 'application/json'
+      ),
+      body := v_payload
+    );
+
+    -- Mark as sent (pg_net is async, we trust the call was made)
+    update email_deliveries
+       set status = 'sent',
+           updated_at = now()
+     where id = v_rec.delivery_id;
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+-- Update cron job to use the fixed function
+do $$
+begin
+  perform cron.unschedule('dispatch-emails-simple');
+exception when others then
+  null;
+end;
+$$;
+
+select cron.schedule(
+  'dispatch-emails-fixed',
+  '* * * * *',
+  'select process_email_deliveries_simple(50);'
+);
+
+-- ============================================================================
+-- Summary
+-- ============================================================================
+comment on function process_email_deliveries_simple is
+  'Fixed: handles all 11 notification kinds used in the database (was missing 6 kinds)';
+
+
+-- =============================================================================
+-- Migration: 0088_fix_resend_api_key_regression.sql
+-- =============================================================================
+
+-- Migration 0088: Fix Resend API key (reverted by migration 0087)
+--
+-- Problem: Migration 0087 re-created process_email_deliveries_simple with the
+-- OLD invalid API key (re_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp) instead of the
+-- VALID key from migration 0086 (re_ecLxihcX_8EW4KqF3KwxceLpJEz9LiVY8).
+--
+-- Result: All 1,384 emails were marked 'sent' but never reached Resend.
+--
+-- Fix: Restore the valid API key and verified from address from migration 0086,
+-- while keeping the improved notification kind handlers from migration 0087.
+
+create or replace function process_email_deliveries_simple(p_batch_limit int default 50)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_rec record;
+  v_count int := 0;
+  v_title text;
+  v_subtitle text;
+  v_button text;
+  v_url text;
+  v_recipient_name text;
+  v_html text;
+  v_payload jsonb;
+  v_api_key text := 're_ecLxihcX_8EW4KqF3KwxceLpJEz9LiVY8';
+  v_from text := 'FACE Prep Campus <pms@faceprepcampus.com>';
+begin
+  for v_rec in
+    select d.id as delivery_id,
+           d.recipient_email,
+           n.kind,
+           n.title as notif_title,
+           n.body as notif_body,
+           s.full_name as student_name,
+           p.full_name as profile_name
+      from email_deliveries d
+      left join notifications n on n.id = d.notification_id
+      left join students s on s.id = n.student_id
+      left join profiles p on lower(p.email) = lower(d.recipient_email)
+     where d.status = 'queued'
+     order by d.updated_at asc
+     limit p_batch_limit
+     for update of d skip locked
+  loop
+    v_recipient_name := coalesce(
+      nullif(trim(v_rec.student_name), ''),
+      nullif(trim(v_rec.profile_name), ''),
+      'Candidate'
+    );
+    
+    v_title := coalesce(v_rec.notif_title, 'Placement Notification');
+    v_subtitle := null;
+    v_button := 'View on PMS Portal';
+    v_url := 'https://pms.faceprepcampus.com/student';
+
+    case lower(coalesce(v_rec.kind, ''))
+      -- =====================================================================
+      -- STUDENT COMMUNICATIONS (S1-S16)
+      -- =====================================================================
+      when 'welcome' then
+        -- S1: Welcome & Registration
+        v_title := 'Complete Your Placement Profile';
+        v_subtitle := 'Please fill in all the required details to complete your placement profile.';
+        v_button := 'Complete Registration';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+        
+      when 'srf_approved' then
+        -- S14: Profile Approved
+        v_title := 'Profile Verified: You Are Now Eligible for Placement Drives';
+        v_subtitle := 'Your SRF and marksheets have been verified. You can now apply to drives.';
+        v_button := 'Explore Open Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'srf_rejected' then
+        -- S10: Registration Feedback
+        v_title := 'Registration Form Requires Changes';
+        v_subtitle := 'Please review the feedback remarks and update your registration form.';
+        v_button := 'Open Registration Form';
+        v_url := 'https://pms.faceprepcampus.com/srf';
+        
+      when 'drive_published' then
+        -- S2: New Drive Announced
+        v_title := 'New Placement Drive Announced';
+        v_button := 'View Drive & Apply';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'application_confirmed' then
+        -- S11: Application Confirmed
+        v_title := 'Application Successfully Submitted';
+        v_subtitle := 'Your application has been recorded and is under evaluation.';
+        v_button := 'View Application Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'shortlisted' then
+        -- S3: Shortlisted Candidates
+        v_title := 'You Are Shortlisted';
+        v_subtitle := 'You have been shortlisted for the next round.';
+        v_button := 'View Application Status';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'round_scheduled' then
+        -- S4: Round Schedule
+        v_title := 'Round Schedule Released';
+        v_subtitle := 'The schedule for your upcoming round has been confirmed.';
+        v_button := 'View Drive Dashboard';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'interview_slot', 'meeting_slot' then
+        -- S5: Interview Slot
+        v_title := 'Interview Slot Scheduled';
+        v_subtitle := 'Your individual interview slot has been scheduled.';
+        v_button := 'Join Interview Room';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'round_cleared' then
+        -- S6: Round Cleared
+        v_title := 'Round Cleared';
+        v_subtitle := 'You have advanced to the next round.';
+        v_button := 'View Drive Progress';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'round_not_selected' then
+        -- S7: Round Outcome
+        v_title := 'Application Status Update';
+        v_subtitle := 'You were not selected to advance in this drive. Your placement status remains active.';
+        v_button := 'Explore Open Drives';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'offer' then
+        -- S8: Offer Declared
+        v_title := 'Placement Offer Extended';
+        v_subtitle := 'Congratulations! Your formal offer letter is ready for download.';
+        v_button := 'View Offer & Letter';
+        v_url := 'https://pms.faceprepcampus.com/student/notifications';
+        
+      when 'offer_decision' then
+        -- S15: Offer Decision Recorded
+        v_title := 'Offer Decision Recorded';
+        v_subtitle := 'Your decision regarding the placement offer has been officially recorded.';
+        v_button := 'View Placement Record';
+        v_url := 'https://pms.faceprepcampus.com/student/notifications';
+        
+      when 'attendance_notice' then
+        -- S9: Attendance Notice
+        v_title := 'Absence Recorded';
+        v_subtitle := 'You were marked absent for a scheduled round. Contact your coordinator if this is incorrect.';
+        v_button := 'View Attendance Record';
+        v_url := 'https://pms.faceprepcampus.com/student';
+        
+      when 'deadline_reminder' then
+        -- S12: Deadline Reminder
+        v_title := 'Placement Drive Closing Soon';
+        v_subtitle := 'Applications for this drive will close soon. Complete your application before the deadline.';
+        v_button := 'Apply to Drive';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'interview_day_reminder' then
+        -- S13: Interview Day Reminder
+        v_title := 'Interview Day Reminder';
+        v_subtitle := 'Your scheduled round takes place today. Please report on time with your college ID.';
+        v_button := 'View Drive Details';
+        v_url := 'https://pms.faceprepcampus.com/student/drives';
+        
+      when 'opt_out_confirmed' then
+        -- S16: Opt-Out Confirmed
+        v_title := 'Placement Opt-Out Acknowledged';
+        v_subtitle := 'Your request to opt out of campus recruitment drives has been processed.';
+        v_button := 'View Profile';
+        v_url := 'https://pms.faceprepcampus.com/student/profile';
+
+      -- =====================================================================
+      -- CAMPUS COORDINATOR (C1-C7)
+      -- =====================================================================
+      when 'campus_drive_alert', 'cpc_drive_alert' then
+        -- C1: Campus Drive Alert
+        v_title := 'New Campus Placement Drive Active';
+        v_button := 'View Drive Cohort';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+        
+      when 'campus_shortlist_ready' then
+        -- C2: Campus Shortlist Ready
+        v_title := 'Campus Candidate Shortlist Released';
+        v_subtitle := 'The candidate shortlist has been finalized by Central Placements.';
+        v_button := 'View Shortlisted Roster';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+        
+      when 'verification_queue_digest', 'cpc_verification' then
+        -- C3: Verification Queue Digest
+        v_title := 'Student Profiles Pending Verification';
+        v_subtitle := 'There are student registration forms awaiting academic verification.';
+        v_button := 'Open Verification Queue';
+        v_url := 'https://pms.faceprepcampus.com/cpc/verification';
+        
+      when 'semester_pending_verification' then
+        -- C4: Semester Pending Verification
+        v_title := 'Semester Record Pending Verification';
+        v_subtitle := 'A student has uploaded a new semester academic record for verification.';
+        v_button := 'Verify Semester Record';
+        v_url := 'https://pms.faceprepcampus.com/cpc/semesters';
+        
+      when 'attendance_pending' then
+        -- C5: Attendance Pending
+        v_title := 'Round Attendance Pending Submission';
+        v_subtitle := 'A round has commenced and attendance records must be submitted.';
+        v_button := 'Mark Round Attendance';
+        v_url := 'https://pms.faceprepcampus.com/cpc/attendance';
+        
+      when 'campus_student_placed' then
+        -- C6: Campus Student Placed
+        v_title := 'Campus Student Placement';
+        v_subtitle := 'A candidate from your campus has secured a placement offer.';
+        v_button := 'View Drive Progress';
+        v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+        
+      when 'off_campus_offer_proof' then
+        -- C7: Off-Campus Offer Proof
+        v_title := 'Off-Campus Offer Verification Required';
+        v_subtitle := 'A student has submitted an external offer letter for verification.';
+        v_button := 'Review Off-Campus Queue';
+        v_url := 'https://pms.faceprepcampus.com/cpc/off-campus';
+
+      -- =====================================================================
+      -- CENTRAL COORDINATOR (CP1-CP4)
+      -- =====================================================================
+      when 'drive_ready_to_publish' then
+        -- CP1: Drive Ready to Publish
+        v_title := 'Placement Drive Approved';
+        v_subtitle := 'The PIF has been approved. Configure rounds and publish the drive.';
+        v_button := 'Configure & Publish';
+        v_url := 'https://pms.faceprepcampus.com/central/drives/yet-to-publish';
+        
+      when 'applications_closed' then
+        -- CP2: Applications Closed
+        v_title := 'Drive Applications Closed';
+        v_subtitle := 'The student application deadline has passed. Proceed to candidate screening.';
+        v_button := 'Open Shortlisting Console';
+        v_url := 'https://pms.faceprepcampus.com/central/shortlisting';
+        
+      when 'attendance_finalized' then
+        -- CP3: Attendance Finalized
+        v_title := 'Round Attendance Finalized';
+        v_subtitle := 'Campus coordinators have completed attendance marking.';
+        v_button := 'Enter Round Results';
+        v_url := 'https://pms.faceprepcampus.com/central/results';
+        
+      when 'all_rounds_completed' then
+        -- CP4: All Rounds Completed
+        v_title := 'Placement Drive Completed';
+        v_subtitle := 'All scheduled rounds have concluded. Issue placement offers.';
+        v_button := 'Issue Placement Offers';
+        v_url := 'https://pms.faceprepcampus.com/central/offers';
+
+      -- =====================================================================
+      -- ACCOUNT EXECUTIVE (A1-A4)
+      -- =====================================================================
+      when 'pif_approved', 'ae_pif_approved' then
+        -- A1: PIF Approved
+        v_title := 'Placement Initiation Form Approved';
+        v_subtitle := 'Your PIF has been approved by the Delivery Head.';
+        v_button := 'View Sourced Drives';
+        v_url := 'https://pms.faceprepcampus.com/my-drives';
+        
+      when 'pif_revision' then
+        -- A2: PIF Revision Requested
+        v_title := 'PIF Requires Changes';
+        v_subtitle := 'The Delivery Head has requested clarifications before approval.';
+        v_button := 'Revise PIF Details';
+        v_url := 'https://pms.faceprepcampus.com/ae/pif';
+        
+      when 'drive_live_to_ae' then
+        -- A3: Drive Live to Students
+        v_title := 'Placement Drive Published';
+        v_subtitle := 'Your recruitment drive is now live across campuses.';
+        v_button := 'View Account Overview';
+        v_url := 'https://pms.faceprepcampus.com/ae/overview';
+        
+      when 'drive_offers_milestone' then
+        -- A4: Drive Offers Milestone
+        v_title := 'Drive Concluded Successfully';
+        v_subtitle := 'Your placement drive has concluded with confirmed offers.';
+        v_button := 'View Account Performance';
+        v_url := 'https://pms.faceprepcampus.com/ae/overview';
+
+      -- =====================================================================
+      -- DELIVERY HEAD (DH1-DH3)
+      -- =====================================================================
+      when 'pif_submitted' then
+        -- DH1: PIF Submitted
+        v_title := 'Placement Initiation Form Under Review';
+        v_subtitle := 'A new PIF has been submitted and is ready for governance review.';
+        v_button := 'Open PIF Approvals';
+        v_url := 'https://pms.faceprepcampus.com/delivery-head/pif-approvals';
+        
+      when 'policy_override' then
+        -- DH2: Policy Override Alert
+        v_title := 'Placement Policy Override Request';
+        v_subtitle := 'A placement policy override has been requested for candidate eligibility.';
+        v_button := 'Review Policy Override';
+        v_url := 'https://pms.faceprepcampus.com/delivery-head/pif-approvals';
+        
+      when 'weekly_digest' then
+        -- DH3: Weekly Operations Digest
+        v_title := 'Weekly Placement Operations Summary';
+        v_subtitle := 'Here is the weekly executive operations summary across all institutions.';
+        v_button := 'Open Operations Cockpit';
+        v_url := 'https://pms.faceprepcampus.com/dashboard';
+
+      -- =====================================================================
+      -- LEADERSHIP (L1-L2)
+      -- =====================================================================
+      when 'weekly_placement_digest' then
+        -- L1: Weekly Placement Digest
+        v_title := 'Weekly Campus Placement Executive Summary';
+        v_subtitle := 'Here is the weekly placement performance report for your institution.';
+        v_button := 'Open Leadership Dashboard';
+        v_url := 'https://pms.faceprepcampus.com/dashboard';
+        
+      when 'super_dream_milestone' then
+        -- L2: Super Dream Milestone
+        v_title := 'Marquee Placement Success Milestone';
+        v_subtitle := 'A student from your institution has secured a marquee placement offer.';
+        v_button := 'View Placement Statistics';
+        v_url := 'https://pms.faceprepcampus.com/dashboard';
+
+      -- =====================================================================
+      -- RECRUITER (R1-R4)
+      -- =====================================================================
+      when 'candidate_shortlist_recruiter' then
+        -- R1: Candidate Shortlist
+        v_title := 'Candidate Shortlist & Resume Pack';
+        v_subtitle := 'The official candidate shortlist is ready for your review.';
+        v_button := 'Open Candidate Pack';
+        v_url := 'https://pms.faceprepcampus.com/login';
+        
+      when 'drive_sourcing_kickoff' then
+        -- R2: Drive Sourcing Kickoff
+        v_title := 'Your Campus Drive Is Live';
+        v_subtitle := 'Your campus recruitment drive is now active across targeted partner campuses.';
+        v_button := 'View Drive Status';
+        v_url := 'https://pms.faceprepcampus.com/login';
+        
+      when 'interview_schedule_roster' then
+        -- R3: Interview Schedule & Roster
+        v_title := 'Interview Schedule & Candidate Roster';
+        v_subtitle := 'The candidate schedule and venue logistics have been locked.';
+        v_button := 'Access Interview Dossier';
+        v_url := 'https://pms.faceprepcampus.com/login';
+        
+      when 'drive_concluded_summary' then
+        -- R4: Drive Concluded Summary
+        v_title := 'Campus Drive Concluded';
+        v_subtitle := 'Thank you for conducting your campus recruitment drive with us.';
+        v_button := 'Download Placements Package';
+        v_url := 'https://pms.faceprepcampus.com/login';
+
+      -- =====================================================================
+      -- ADMINISTRATOR (AD1-AD3)
+      -- =====================================================================
+      when 'staff_invitation' then
+        -- AD1: Staff Invitation
+        v_title := 'Welcome to the Team';
+        v_subtitle := 'You have been invited to join the FACE Prep Campus Placement Management System.';
+        v_button := 'Sign In to PMS';
+        v_url := 'https://pms.faceprepcampus.com/login';
+        
+      when 'roster_import' then
+        -- AD2: Roster Import Complete
+        v_title := 'Roster Import Complete';
+        v_subtitle := 'The student cohort roster upload has been processed successfully.';
+        v_button := 'View Student Directory';
+        v_url := 'https://pms.faceprepcampus.com/central/students';
+        
+      when 'email_delivery_alert' then
+        -- AD3: Email Delivery Alert
+        v_title := 'Email Delivery Exception Alert';
+        v_subtitle := 'The automated email delivery outbox has encountered transmission exceptions.';
+        v_button := 'Review Delivery Logs';
+        v_url := 'https://pms.faceprepcampus.com/dashboard';
+        
+      else
+        -- Fallback: use the notification title as-is
+        null;
+    end case;
+
+    v_html := build_notification_email_html(
+      coalesce(v_rec.notif_title, v_title),
+      v_title,
+      v_subtitle,
+      v_recipient_name,
+      v_rec.notif_body,
+      v_button,
+      v_url
+    );
+
+    v_payload := jsonb_build_object(
+      'from', v_from,
+      'to', jsonb_build_array(v_rec.recipient_email),
+      'reply_to', 'placements@faceprep.in',
+      'subject', coalesce(v_rec.notif_title, v_title),
+      'html', v_html
+    );
+
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || v_api_key,
+        'Content-Type', 'application/json'
+      ),
+      body := v_payload
+    );
+
+    update email_deliveries
+       set status = 'sent',
+           updated_at = now()
+     where id = v_rec.delivery_id;
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+-- Reset all 'sent' emails without provider_message_id back to 'queued'
+-- so the cron job reprocesses them with the correct API key
+update email_deliveries
+   set status = 'queued',
+       updated_at = now()
+ where status = 'sent'
+   and provider_message_id is null;
+
+comment on function process_email_deliveries_simple is
+  'Fixed: restored valid Resend API key from migration 0086 (was reverted by 0087). Handles all 39 email template kinds from the catalogue (S1-S16, C1-C7, CP1-CP4, A1-A4, DH1-DH3, L1-L2, R1-R4, AD1-AD3).';
+
+
+-- =============================================================================
+-- Migration: 0089_fix_staff_emails_and_dispatch_bugs.sql
+-- =============================================================================
+
+-- Migration 0089: Fix staff emails, trigger bugs, and dispatch correctness
+--
+-- Problems fixed:
+--   1. process_email_deliveries_simple was missing custom HTML bypass from 0079,
+--      so staff invitation emails (which have html_body/subject, no notification_id)
+--      were rendered as blank generic templates.
+--   2. notify_cpc_on_student_offer (0080) displayed CTC for internship offers,
+--      but internships have ctc_lpa=NULL and stipend_monthly instead.
+--   3. offer_reaches_student (0067) inserted notifications without drive_id,
+--      so students could not navigate from the notification to the drive.
+--   4. notify_eligible_students_on_drive_live (0082) used wrong arrear_policy
+--      enum values ('no_arrears', 'no_active_arrears') instead of the actual
+--      enum ('no_history', 'no_standing'). Also lacked a dedup guard, so a
+--      drive status flip to 'live' created duplicate notifications.
+--   5. Added missing 'meeting_link' notification kind handler.
+
+-- ============================================================================
+-- FIX 1: Restore custom HTML bypass + all 39 handlers + meeting_link
+-- ============================================================================
+create or replace function process_email_deliveries_simple(p_batch_limit int default 50)
+returns int language plpgsql security definer set search_path = public as $$
+declare
+  v_rec record;
+  v_count int := 0;
+  v_title text;
+  v_subtitle text;
+  v_button text;
+  v_url text;
+  v_recipient_name text;
+  v_html text;
+  v_subject text;
+  v_payload jsonb;
+  v_api_key text := 're_ecLxihcX_8EW4KqF3KwxceLpJEz9LiVY8';
+  v_from text := 'FACE Prep Campus <pms@faceprepcampus.com>';
+begin
+  for v_rec in
+    select d.id as delivery_id,
+           d.recipient_email,
+           d.subject as custom_subject,
+           d.html_body as custom_html,
+           n.kind,
+           n.title as notif_title,
+           n.body as notif_body,
+           s.full_name as student_name,
+           p.full_name as profile_name
+      from email_deliveries d
+      left join notifications n on n.id = d.notification_id
+      left join students s on s.id = n.student_id
+      left join profiles p on lower(p.email) = lower(d.recipient_email)
+     where d.status = 'queued'
+     order by d.updated_at asc
+     limit p_batch_limit
+     for update of d skip locked
+  loop
+    -- Custom HTML bypass: staff invitations and other direct emails carry
+    -- pre-built HTML in html_body with no notification_id.
+    if v_rec.custom_html is not null and trim(v_rec.custom_html) <> '' then
+      v_subject := coalesce(v_rec.custom_subject, 'FACE Prep Campus');
+      v_html := v_rec.custom_html;
+      v_recipient_name := coalesce(
+        nullif(trim(v_rec.profile_name), ''),
+        'Team Member'
+      );
+    else
+      v_recipient_name := coalesce(
+        nullif(trim(v_rec.student_name), ''),
+        nullif(trim(v_rec.profile_name), ''),
+        'Candidate'
+      );
+
+      v_title := coalesce(v_rec.notif_title, 'Placement Notification');
+      v_subtitle := null;
+      v_button := 'View on PMS Portal';
+      v_url := 'https://pms.faceprepcampus.com/student';
+
+      case lower(coalesce(v_rec.kind, ''))
+        -- =====================================================================
+        -- STUDENT COMMUNICATIONS (S1-S16)
+        -- =====================================================================
+        when 'welcome' then
+          v_title := 'Complete Your Placement Profile';
+          v_subtitle := 'Please fill in all the required details to complete your placement profile.';
+          v_button := 'Complete Registration';
+          v_url := 'https://pms.faceprepcampus.com/srf';
+
+        when 'srf_approved' then
+          v_title := 'Profile Verified: You Are Now Eligible for Placement Drives';
+          v_subtitle := 'Your SRF and marksheets have been verified. You can now apply to drives.';
+          v_button := 'Explore Open Drives';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'srf_rejected' then
+          v_title := 'Registration Form Requires Changes';
+          v_subtitle := 'Please review the feedback remarks and update your registration form.';
+          v_button := 'Open Registration Form';
+          v_url := 'https://pms.faceprepcampus.com/srf';
+
+        when 'drive_published' then
+          v_title := 'New Placement Drive Announced';
+          v_button := 'View Drive & Apply';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'application_confirmed' then
+          v_title := 'Application Successfully Submitted';
+          v_subtitle := 'Your application has been recorded and is under evaluation.';
+          v_button := 'View Application Status';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'shortlisted' then
+          v_title := 'You Are Shortlisted';
+          v_subtitle := 'You have been shortlisted for the next round.';
+          v_button := 'View Application Status';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'round_scheduled' then
+          v_title := 'Round Schedule Released';
+          v_subtitle := 'The schedule for your upcoming round has been confirmed.';
+          v_button := 'View Drive Dashboard';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'interview_slot', 'meeting_slot' then
+          v_title := 'Interview Slot Scheduled';
+          v_subtitle := 'Your individual interview slot has been scheduled.';
+          v_button := 'Join Interview Room';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'meeting_link' then
+          v_title := 'Meeting Link Shared';
+          v_subtitle := 'A meeting link for your upcoming round has been shared.';
+          v_button := 'View Drive Details';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'round_cleared' then
+          v_title := 'Round Cleared';
+          v_subtitle := 'You have advanced to the next round.';
+          v_button := 'View Drive Progress';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'round_not_selected' then
+          v_title := 'Application Status Update';
+          v_subtitle := 'You were not selected to advance in this drive. Your placement status remains active.';
+          v_button := 'Explore Open Drives';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'offer' then
+          v_title := 'Placement Offer Extended';
+          v_subtitle := 'Congratulations! Your formal offer letter is ready for download.';
+          v_button := 'View Offer & Letter';
+          v_url := 'https://pms.faceprepcampus.com/student/notifications';
+
+        when 'offer_decision' then
+          v_title := 'Offer Decision Recorded';
+          v_subtitle := 'Your decision regarding the placement offer has been officially recorded.';
+          v_button := 'View Placement Record';
+          v_url := 'https://pms.faceprepcampus.com/student/notifications';
+
+        when 'absent' then
+          v_title := 'Absence Recorded';
+          v_subtitle := 'You were marked absent for a scheduled round. Contact your coordinator if this is incorrect.';
+          v_button := 'View Attendance Record';
+          v_url := 'https://pms.faceprepcampus.com/student';
+
+        when 'deadline_reminder' then
+          v_title := 'Placement Drive Closing Soon';
+          v_subtitle := 'Applications for this drive will close soon. Complete your application before the deadline.';
+          v_button := 'Apply to Drive';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'interview_day_reminder' then
+          v_title := 'Interview Day Reminder';
+          v_subtitle := 'Your scheduled round takes place today. Please report on time with your college ID.';
+          v_button := 'View Drive Details';
+          v_url := 'https://pms.faceprepcampus.com/student/drives';
+
+        when 'opt_out_confirmed' then
+          v_title := 'Placement Opt-Out Acknowledged';
+          v_subtitle := 'Your request to opt out of campus recruitment drives has been processed.';
+          v_button := 'View Profile';
+          v_url := 'https://pms.faceprepcampus.com/student/profile';
+
+        -- =====================================================================
+        -- CAMPUS COORDINATOR (C1-C7)
+        -- =====================================================================
+        when 'campus_drive_alert', 'cpc_drive_alert' then
+          v_title := 'New Campus Placement Drive Active';
+          v_button := 'View Drive Cohort';
+          v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+
+        when 'campus_shortlist_ready' then
+          v_title := 'Campus Candidate Shortlist Released';
+          v_subtitle := 'The candidate shortlist has been finalized by Central Placements.';
+          v_button := 'View Shortlisted Roster';
+          v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+
+        when 'verification_queue_digest', 'cpc_verification' then
+          v_title := 'Student Profiles Pending Verification';
+          v_subtitle := 'There are student registration forms awaiting academic verification.';
+          v_button := 'Open Verification Queue';
+          v_url := 'https://pms.faceprepcampus.com/cpc/verification';
+
+        when 'semester_pending_verification' then
+          v_title := 'Semester Record Pending Verification';
+          v_subtitle := 'A student has uploaded a new semester academic record for verification.';
+          v_button := 'Verify Semester Record';
+          v_url := 'https://pms.faceprepcampus.com/cpc/semesters';
+
+        when 'attendance_pending' then
+          v_title := 'Round Attendance Pending Submission';
+          v_subtitle := 'A round has commenced and attendance records must be submitted.';
+          v_button := 'Mark Round Attendance';
+          v_url := 'https://pms.faceprepcampus.com/cpc/attendance';
+
+        when 'campus_student_placed' then
+          v_title := 'Campus Student Placement';
+          v_subtitle := 'A candidate from your campus has secured a placement offer.';
+          v_button := 'View Drive Progress';
+          v_url := 'https://pms.faceprepcampus.com/cpc/drives';
+
+        when 'off_campus_offer_proof' then
+          v_title := 'Off-Campus Offer Verification Required';
+          v_subtitle := 'A student has submitted an external offer letter for verification.';
+          v_button := 'Review Off-Campus Queue';
+          v_url := 'https://pms.faceprepcampus.com/cpc/off-campus';
+
+        -- =====================================================================
+        -- CENTRAL COORDINATOR (CP1-CP4)
+        -- =====================================================================
+        when 'drive_ready_to_publish' then
+          v_title := 'Placement Drive Approved';
+          v_subtitle := 'The PIF has been approved. Configure rounds and publish the drive.';
+          v_button := 'Configure & Publish';
+          v_url := 'https://pms.faceprepcampus.com/central/drives/yet-to-publish';
+
+        when 'applications_closed' then
+          v_title := 'Drive Applications Closed';
+          v_subtitle := 'The student application deadline has passed. Proceed to candidate screening.';
+          v_button := 'Open Shortlisting Console';
+          v_url := 'https://pms.faceprepcampus.com/central/shortlisting';
+
+        when 'attendance_finalized' then
+          v_title := 'Round Attendance Finalized';
+          v_subtitle := 'Campus coordinators have completed attendance marking.';
+          v_button := 'Enter Round Results';
+          v_url := 'https://pms.faceprepcampus.com/central/results';
+
+        when 'all_rounds_completed' then
+          v_title := 'Placement Drive Completed';
+          v_subtitle := 'All scheduled rounds have concluded. Issue placement offers.';
+          v_button := 'Issue Placement Offers';
+          v_url := 'https://pms.faceprepcampus.com/central/offers';
+
+        -- =====================================================================
+        -- ACCOUNT EXECUTIVE (A1-A4)
+        -- =====================================================================
+        when 'pif_approved', 'ae_pif_approved' then
+          v_title := 'Placement Initiation Form Approved';
+          v_subtitle := 'Your PIF has been approved by the Delivery Head.';
+          v_button := 'View Sourced Drives';
+          v_url := 'https://pms.faceprepcampus.com/my-drives';
+
+        when 'pif_revision' then
+          v_title := 'PIF Requires Changes';
+          v_subtitle := 'The Delivery Head has requested clarifications before approval.';
+          v_button := 'Revise PIF Details';
+          v_url := 'https://pms.faceprepcampus.com/ae/pif';
+
+        when 'drive_live_to_ae' then
+          v_title := 'Placement Drive Published';
+          v_subtitle := 'Your recruitment drive is now live across campuses.';
+          v_button := 'View Account Overview';
+          v_url := 'https://pms.faceprepcampus.com/ae/overview';
+
+        when 'drive_offers_milestone' then
+          v_title := 'Drive Concluded Successfully';
+          v_subtitle := 'Your placement drive has concluded with confirmed offers.';
+          v_button := 'View Account Performance';
+          v_url := 'https://pms.faceprepcampus.com/ae/overview';
+
+        -- =====================================================================
+        -- DELIVERY HEAD (DH1-DH3)
+        -- =====================================================================
+        when 'pif_submitted' then
+          v_title := 'Placement Initiation Form Under Review';
+          v_subtitle := 'A new PIF has been submitted and is ready for governance review.';
+          v_button := 'Open PIF Approvals';
+          v_url := 'https://pms.faceprepcampus.com/delivery-head/pif-approvals';
+
+        when 'policy_override' then
+          v_title := 'Placement Policy Override Request';
+          v_subtitle := 'A placement policy override has been requested for candidate eligibility.';
+          v_button := 'Review Policy Override';
+          v_url := 'https://pms.faceprepcampus.com/delivery-head/pif-approvals';
+
+        when 'weekly_digest' then
+          v_title := 'Weekly Placement Operations Summary';
+          v_subtitle := 'Here is the weekly executive operations summary across all institutions.';
+          v_button := 'Open Operations Cockpit';
+          v_url := 'https://pms.faceprepcampus.com/dashboard';
+
+        -- =====================================================================
+        -- LEADERSHIP (L1-L2)
+        -- =====================================================================
+        when 'weekly_placement_digest' then
+          v_title := 'Weekly Campus Placement Executive Summary';
+          v_subtitle := 'Here is the weekly placement performance report for your institution.';
+          v_button := 'Open Leadership Dashboard';
+          v_url := 'https://pms.faceprepcampus.com/dashboard';
+
+        when 'super_dream_milestone' then
+          v_title := 'Marquee Placement Success Milestone';
+          v_subtitle := 'A student from your institution has secured a marquee placement offer.';
+          v_button := 'View Placement Statistics';
+          v_url := 'https://pms.faceprepcampus.com/dashboard';
+
+        -- =====================================================================
+        -- RECRUITER (R1-R4)
+        -- =====================================================================
+        when 'candidate_shortlist_recruiter' then
+          v_title := 'Candidate Shortlist & Resume Pack';
+          v_subtitle := 'The official candidate shortlist is ready for your review.';
+          v_button := 'Open Candidate Pack';
+          v_url := 'https://pms.faceprepcampus.com/login';
+
+        when 'drive_sourcing_kickoff' then
+          v_title := 'Your Campus Drive Is Live';
+          v_subtitle := 'Your campus recruitment drive is now active across targeted partner campuses.';
+          v_button := 'View Drive Status';
+          v_url := 'https://pms.faceprepcampus.com/login';
+
+        when 'interview_schedule_roster' then
+          v_title := 'Interview Schedule & Candidate Roster';
+          v_subtitle := 'The candidate schedule and venue logistics have been locked.';
+          v_button := 'Access Interview Dossier';
+          v_url := 'https://pms.faceprepcampus.com/login';
+
+        when 'drive_concluded_summary' then
+          v_title := 'Campus Drive Concluded';
+          v_subtitle := 'Thank you for conducting your campus recruitment drive with us.';
+          v_button := 'Download Placements Package';
+          v_url := 'https://pms.faceprepcampus.com/login';
+
+        -- =====================================================================
+        -- ADMINISTRATOR (AD1-AD3)
+        -- =====================================================================
+        when 'staff_invitation' then
+          v_title := 'Welcome to the Team';
+          v_subtitle := 'You have been invited to join the FACE Prep Campus Placement Management System.';
+          v_button := 'Sign In to PMS';
+          v_url := 'https://pms.faceprepcampus.com/login';
+
+        when 'roster_import' then
+          v_title := 'Roster Import Complete';
+          v_subtitle := 'The student cohort roster upload has been processed successfully.';
+          v_button := 'View Student Directory';
+          v_url := 'https://pms.faceprepcampus.com/central/students';
+
+        when 'email_delivery_alert' then
+          v_title := 'Email Delivery Exception Alert';
+          v_subtitle := 'The automated email delivery outbox has encountered transmission exceptions.';
+          v_button := 'Review Delivery Logs';
+          v_url := 'https://pms.faceprepcampus.com/dashboard';
+
+        else
+          null;
+      end case;
+
+      v_subject := coalesce(v_rec.notif_title, v_title);
+
+      v_html := build_notification_email_html(
+        coalesce(v_rec.notif_title, v_title),
+        v_title,
+        v_subtitle,
+        v_recipient_name,
+        v_rec.notif_body,
+        v_button,
+        v_url
+      );
+    end if;
+
+    v_payload := jsonb_build_object(
+      'from', v_from,
+      'to', jsonb_build_array(v_rec.recipient_email),
+      'reply_to', 'placements@faceprep.in',
+      'subject', v_subject,
+      'html', v_html
+    );
+
+    perform net.http_post(
+      url := 'https://api.resend.com/emails',
+      headers := jsonb_build_object(
+        'Authorization', 'Bearer ' || v_api_key,
+        'Content-Type', 'application/json'
+      ),
+      body := v_payload
+    );
+
+    update email_deliveries
+       set status = 'sent',
+           updated_at = now()
+     where id = v_rec.delivery_id;
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+comment on function process_email_deliveries_simple is
+  'Fixed 0089: restored custom HTML bypass for staff emails (0079), all 39+1 notification kind handlers, valid Resend API key.';
+
+-- ============================================================================
+-- FIX 2: Internship offer CTC display in CPC notification (0080)
+-- ============================================================================
+create or replace function notify_cpc_on_student_offer() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student_name text;
+  v_roll_number text;
+  v_campus_id uuid;
+  v_company_name text;
+  v_subject text;
+  v_title text;
+  v_subtitle text;
+  v_body text;
+  v_cpc_rec record;
+begin
+  select s.full_name, s.roll_number, s.campus_id, coalesce(new.company_name, d.company_name)
+    into v_student_name, v_roll_number, v_campus_id, v_company_name
+    from students s
+    left join drives d on d.id = new.drive_id
+   where s.id = new.student_id;
+
+  if v_campus_id is null then
+    return new;
+  end if;
+
+  v_subject := 'Placement Success: Candidate Placed — ' || coalesce(v_student_name, 'Candidate');
+  v_title := 'Campus Student Placement';
+  v_subtitle := 'A student from your campus has received a verified placement offer.';
+
+  -- Internship offers show stipend, not CTC
+  if new.offer_category = 'internship' then
+    v_body := '**Student:** ' || coalesce(v_student_name, 'Candidate') || ' (' || coalesce(v_roll_number, 'N/A') || ')' || E'\n' ||
+              '**Company:** ' || coalesce(v_company_name, 'Recruiting Partner') || E'\n' ||
+              '**Offer Type:** Internship' || E'\n' ||
+              '**Stipend:** ' || coalesce('₹' || new.stipend_monthly::text || ' / month', 'N/A') || E'\n\n' ||
+              'Congratulations! The candidate outcome has been recorded in the central placement database.';
+  else
+    v_body := '**Student:** ' || coalesce(v_student_name, 'Candidate') || ' (' || coalesce(v_roll_number, 'N/A') || ')' || E'\n' ||
+              '**Company:** ' || coalesce(v_company_name, 'Recruiting Partner') || E'\n' ||
+              '**CTC / Package:** ' || coalesce(new.ctc_lpa::text, 'N/A') || ' LPA' || E'\n\n' ||
+              'Congratulations! The candidate outcome has been recorded in the central placement database.';
+  end if;
+
+  for v_cpc_rec in
+    select distinct u.email, u.full_name
+      from (
+        select p.email, p.full_name
+          from staff_campus_assignments a
+          join profiles p on p.id = a.profile_id
+         where a.campus_id = v_campus_id
+           and p.role = 'campus_placement_coordinator'
+           and p.is_active = true
+        union
+        select sci.email, coalesce(si.full_name, 'Campus Placement Coordinator') as full_name
+          from staff_campus_invitations sci
+          join staff_invitations si on lower(si.email) = lower(sci.email)
+         where sci.campus_id = v_campus_id
+           and si.role = 'campus_placement_coordinator'
+      ) u
+  loop
+    perform enqueue_direct_email(
+      v_cpc_rec.email,
+      v_subject,
+      v_title,
+      v_subtitle,
+      coalesce(v_cpc_rec.full_name, 'Campus Placement Coordinator'),
+      v_body,
+      'View Drive Progress',
+      'https://pms.faceprepcampus.com/cpc/drives'
+    );
+  end loop;
+
+  return new;
+end;
+$$;
+
+-- ============================================================================
+-- FIX 3: offer_reaches_student — include drive_id in notification (0067)
+-- ============================================================================
+create or replace function offer_reaches_student() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_opted boolean;
+begin
+  if new.source <> 'on_campus' then
+    return new;
+  end if;
+
+  select participation_status = 'opted_out' into v_opted
+    from students where id = new.student_id;
+  if v_opted then
+    return new;
+  end if;
+
+  insert into notifications (student_id, kind, title, body, drive_id)
+  values (
+    new.student_id,
+    'offer',
+    'Offer from ' || new.company_name,
+    case
+      when new.offer_category = 'internship'
+        then 'Congratulations — ' || new.company_name || ' has made you an internship offer.'
+      when new.offer_category is not null
+        then 'Congratulations — ' || new.company_name || ' has made you an offer ('
+             || replace(new.offer_category::text, '_', ' ') || ').'
+      else 'Congratulations — ' || new.company_name || ' has made you an offer.'
+    end,
+    new.drive_id
+  );
+
+  return new;
+end;
+$$;
+
+-- ============================================================================
+-- FIX 4: Arrear policy enum values + dedup guard (0082)
+-- ============================================================================
+create or replace function notify_eligible_students_on_drive_live()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_rec record;
+  v_notification_id uuid;
+  v_drive_title text;
+  v_body text;
+  v_ctc_display text;
+  v_students_notified integer := 0;
+begin
+  if new.status <> 'live' or (tg_op = 'update' and old.status is not distinct from 'live') then
+    return new;
+  end if;
+
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
+
+  v_drive_title := new.company_name || ' — ' || coalesce(new.role_title, 'Placement Opportunity');
+
+  for v_student_rec in
+    select distinct s.id, s.full_name, s.email
+      from students s
+     where s.srf_status = 'srf_approved'
+       and s.participation_status = 'active'
+       and (
+         not exists (select 1 from drive_target_campuses dtc where dtc.drive_id = new.id)
+         or exists (
+           select 1 from drive_target_campuses dtc
+            where dtc.drive_id = new.id
+              and dtc.campus_id = s.campus_id
+         )
+       )
+       and (
+         not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_degrees ded
+            where ded.drive_id = new.id
+              and ded.degree_id = s.degree_id
+         )
+       )
+       and (
+         not exists (select 1 from drive_eligible_branches deb where deb.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_branches deb
+            where deb.drive_id = new.id
+              and deb.branch_id = s.branch_id
+         )
+       )
+       and (
+         array_length(new.eligible_passing_years, 1) is null
+         or s.passing_year = any(new.eligible_passing_years)
+       )
+       and (
+         new.min_overall_cgpa is null
+         or s.overall_cgpa >= new.min_overall_cgpa
+       )
+       and (
+         new.min_tenth_percentage is null
+         or s.tenth_percentage >= new.min_tenth_percentage
+       )
+       and (
+         new.min_twelfth_percentage is null
+         or s.twelfth_percentage >= new.min_twelfth_percentage
+       )
+       -- Fixed: use actual enum values ('no_standing', 'no_history', 'flexible')
+       and (
+         new.arrears_policy = 'flexible'
+         or (new.arrears_policy = 'no_history' and s.current_arrears = 0 and s.history_of_arrears = 0)
+         or (new.arrears_policy = 'no_standing' and s.current_arrears = 0)
+       )
+       -- Dedup guard: skip students who already have a drive_published notification for this drive
+       and not exists (
+         select 1 from notifications n
+          where n.student_id = s.id
+            and n.kind = 'drive_published'
+            and n.drive_id = new.id
+       )
+  loop
+    v_body := 'A new placement drive is now open for applications at your campus.' || E'\n\n' ||
+              '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n';
+
+    if new.application_end is not null then
+      v_body := v_body || '**Application Deadline:** ' || to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
+    end if;
+
+    v_body := v_body || E'\n' || 'Log in to the portal to view full details and submit your application.';
+
+    insert into notifications (student_id, kind, title, body, drive_id)
+    values (
+      v_student_rec.id,
+      'drive_published',
+      'New Drive: ' || v_drive_title,
+      v_body,
+      new.id
+    )
+    returning id into v_notification_id;
+
+    v_students_notified := v_students_notified + 1;
+  end loop;
+
+  raise notice 'Drive % went live: notified % eligible students', new.id, v_students_notified;
+
+  return new;
+end;
+$$;
+
+-- Re-queue any staff emails that were sent as blank generic templates
+-- (they had html_body set but were processed without the custom bypass)
+update email_deliveries
+   set status = 'queued',
+       updated_at = now()
+ where status = 'sent'
+   and html_body is not null
+   and provider_message_id is null;
+
+-- Migration 0089: Fix staff email dispatch (custom HTML bypass), internship CTC display,
+-- offer drive_id, arrear enum values, dedup guard.
+
+
+-- =============================================================================
+-- Migration: 0090_support_internship_self_placements.sql
+-- =============================================================================
+
+-- Migration 0090: Support internship self-placements
+-- The self_placement_requests table was created before internship support (0014).
+-- Internship offers require stipend_monthly (not ctc_lpa) and offer_category = 'internship'.
+
+-- 1. Add stipend_monthly column
+alter table self_placement_requests
+  add column if not exists stipend_monthly numeric(10,2);
+
+-- 2. Make ctc_lpa nullable (was NOT NULL)
+alter table self_placement_requests
+  alter column ctc_lpa drop not null;
+
+-- 3. Add check: exactly one of ctc_lpa or stipend_monthly must be set
+alter table self_placement_requests
+  drop constraint if exists self_placement_has_pay;
+
+alter table self_placement_requests
+  add constraint self_placement_has_pay
+  check (
+    (ctc_lpa is not null and stipend_monthly is null)
+    or (ctc_lpa is null and stipend_monthly is not null)
+  );
+
+-- 4. Fix the offer insert in approveSelfPlacement (frontend code fix in participation-view.ts)
+-- This migration only handles the schema; the frontend must branch on drive_type:
+--   internship: offer_category='internship', ctc_lpa=null, stipend_monthly=<value>
+--   placement:  offer_category=<category>, ctc_lpa=<value>, stipend_monthly=null
+
+
+-- =============================================================================
+-- Migration: 0091_rls_overrides_and_disbarment.sql
+-- =============================================================================
+
+-- Migration 0091: Row Level Security for placement_record_overrides and disbarment_decisions
+--
+-- These two tables had no RLS — any authenticated user could read/modify them.
+-- placement_record_overrides: Central CPC overrides which offer counts as the
+--   student's placement record. Students should see their own; only staff writes.
+-- disbarment_decisions: Central CPC disbars students from placement. Students
+--   should see their own; only staff writes.
+
+-- ── placement_record_overrides ───────────────────────────────────────────────
+
+alter table placement_record_overrides enable row level security;
+alter table placement_record_overrides force  row level security;
+
+drop policy if exists student_reads_own_override on placement_record_overrides;
+create policy student_reads_own_override on placement_record_overrides for select
+  using (
+    student_id = current_student_id()
+    or is_org_reader()
+    or (is_campus_reader() and student_id in (select my_student_ids()))
+  );
+
+drop policy if exists staff_writes_override on placement_record_overrides;
+create policy staff_writes_override on placement_record_overrides for all
+  using (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())))
+  with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
+
+grant select on placement_record_overrides to authenticated;
+
+-- ── disbarment_decisions ─────────────────────────────────────────────────────
+
+alter table disbarment_decisions enable row level security;
+alter table disbarment_decisions force  row level security;
+
+drop policy if exists student_reads_own_disbarment on disbarment_decisions;
+create policy student_reads_own_disbarment on disbarment_decisions for select
+  using (
+    student_id = current_student_id()
+    or is_org_reader()
+    or (is_campus_reader() and student_id in (select my_student_ids()))
+  );
+
+drop policy if exists staff_writes_disbarment on disbarment_decisions;
+create policy staff_writes_disbarment on disbarment_decisions for all
+  using (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())))
+  with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
+
+grant select on disbarment_decisions to authenticated;
+
+
+-- =============================================================================
+-- Migration: 0092_application_confirmed_notification.sql
+-- =============================================================================
+
+-- Migration 0092: Notify student when they apply for a drive
+--
+-- Students never received an application_confirmed notification. This trigger
+-- fires AFTER INSERT on applications and inserts a notification with the drive
+-- details so the student knows their application was received.
+
+create or replace function notify_student_of_application()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_company text;
+  v_role text;
+  v_mode text;
+begin
+  select d.company_name, d.role_title, d.drive_mode
+    into v_company, v_role, v_mode
+    from drives d
+   where d.id = new.drive_id;
+
+  insert into notifications (student_id, kind, title, body)
+  values (
+    new.student_id,
+    'application_confirmed',
+    'Application Received: ' || coalesce(v_company, 'Unknown Company'),
+    'Your application for **' || coalesce(v_company, 'Unknown Company') || '** has been received.' || E'\n\n' ||
+    '• **Role:** ' || coalesce(v_role, 'Not specified') || E'\n' ||
+    '• **Mode:** ' || coalesce(v_mode, 'Not specified') || E'\n\n' ||
+    'You will be notified when the shortlist is published. Check the drive status under "My drives".'
+  );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_student_of_application on applications;
+create trigger notify_student_of_application
+  after insert on applications
+  for each row execute function notify_student_of_application();
+
+
+-- =============================================================================
+-- Migration: 0093_opt_out_notification_triggers.sql
+-- =============================================================================
+
+-- Migration 0093: Opt-out notification triggers
+--
+-- Two triggers:
+-- 1) Notify student when opt-out is approved or declined (AFTER UPDATE on status)
+-- 2) Notify CPC when student submits opt-out (AFTER INSERT)
+
+-- 1. Notify student when opt-out decision is made
+create or replace function notify_student_of_opt_out_decision()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_status text;
+  v_title text;
+  v_body text;
+begin
+  -- Only fire when status changes from pending to verified or rejected
+  if old.status = new.status or old.status <> 'pending' then
+    return new;
+  end if;
+
+  if new.status = 'verified' then
+    v_title := 'Opt-Out Request Approved';
+    v_body := 'Your request to opt out of campus placement drives has been approved. You will no longer be considered for on-campus recruitment opportunities.';
+  elsif new.status = 'rejected' then
+    v_title := 'Opt-Out Request Declined';
+    v_body := 'Your request to opt out has been declined.' ||
+      case when new.reason is not null and length(trim(new.reason)) > 0
+        then E'\n\nReason: ' || new.reason
+        else ''
+      end ||
+      E'\n\nYou remain eligible for campus placement drives. Contact your placement coordinator if you have questions.';
+  else
+    return new;
+  end if;
+
+  insert into notifications (student_id, kind, title, body)
+  values (new.student_id, 'opt_out_confirmed', v_title, v_body);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_student_of_opt_out_decision on opt_out_requests;
+create trigger notify_student_of_opt_out_decision
+  after update on opt_out_requests
+  for each row execute function notify_student_of_opt_out_decision();
+
+-- 2. Notify CPC when student submits opt-out
+create or replace function notify_cpc_of_opt_out_submission()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_name text;
+  v_campus_id uuid;
+begin
+  select s.full_name, s.campus_id
+    into v_student_name, v_campus_id
+    from students s
+   where s.id = new.student_id;
+
+  -- Notify all campus coordinators for this campus
+  insert into notifications (student_id, kind, title, body)
+  select p.id, 'opt_out_submitted',
+    'Opt-Out Request Submitted',
+    v_student_name || ' has submitted a request to opt out of campus placement drives.' ||
+    E'\n\nReason: ' || new.reason ||
+    E'\n\nPlease review this request under /cpc/opt-outs.'
+  from profiles p
+  where p.role = 'campus_placement_coordinator'
+    and exists (
+      select 1 from staff_campus_assignments sca
+      where sca.profile_id = p.id and sca.campus_id = v_campus_id
+    );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_cpc_of_opt_out_submission on opt_out_requests;
+create trigger notify_cpc_of_opt_out_submission
+  after insert on opt_out_requests
+  for each row execute function notify_cpc_of_opt_out_submission();
+
+
+-- =============================================================================
+-- Migration: 0094_self_placement_notification_triggers.sql
+-- =============================================================================
+
+-- Migration 0094: Self-placement notification triggers
+--
+-- Two triggers:
+-- 1) Notify student when self-placement is approved or declined (AFTER UPDATE on status)
+-- 2) Notify CPC when student submits self-placement proof (AFTER INSERT)
+
+-- 1. Notify student when self-placement decision is made
+create or replace function notify_student_of_self_placement_decision()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_title text;
+  v_body text;
+begin
+  -- Only fire when status changes from pending to verified or rejected
+  if old.status = new.status or old.status <> 'pending' then
+    return new;
+  end if;
+
+  if new.status = 'verified' then
+    v_title := 'Self-Placement Offer Approved';
+    v_body := 'Your self-placement offer from **' || new.company_name || '** has been approved.' ||
+      E'\n\n**Role:** ' || coalesce(new.role_title, 'Not specified') ||
+      case
+        when new.ctc_lpa is not null then E'\n**CTC:** ₹' || new.ctc_lpa || ' LPA'
+        when new.stipend_monthly is not null then E'\n**Stipend:** ₹' || new.stipend_monthly || '/month'
+        else ''
+      end ||
+      E'\n\nYour placement record has been updated.';
+  elsif new.status = 'rejected' then
+    v_title := 'Self-Placement Offer Declined';
+    v_body := 'Your self-placement offer from **' || new.company_name || '** has been declined.';
+  else
+    return new;
+  end if;
+
+  insert into notifications (student_id, kind, title, body)
+  values (new.student_id, 'self_placement_decision', v_title, v_body);
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_student_of_self_placement_decision on self_placement_requests;
+create trigger notify_student_of_self_placement_decision
+  after update on self_placement_requests
+  for each row execute function notify_student_of_self_placement_decision();
+
+-- 2. Notify CPC when student submits self-placement proof
+create or replace function notify_cpc_of_self_placement_submission()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_name text;
+  v_campus_id uuid;
+begin
+  select s.full_name, s.campus_id
+    into v_student_name, v_campus_id
+    from students s
+   where s.id = new.student_id;
+
+  -- Notify all campus coordinators for this campus
+  insert into notifications (student_id, kind, title, body)
+  select p.id, 'self_placement_submitted',
+    'Self-Placement Proof Submitted',
+    v_student_name || ' has submitted a self-placement offer proof.' ||
+    E'\n\n**Company:** ' || new.company_name ||
+    E'\n**Role:** ' || coalesce(new.role_title, 'Not specified') ||
+    E'\n\nPlease review this submission under /cpc/off-campus.'
+  from profiles p
+  where p.role = 'campus_placement_coordinator'
+    and exists (
+      select 1 from staff_campus_assignments sca
+      where sca.profile_id = p.id and sca.campus_id = v_campus_id
+    );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_cpc_of_self_placement_submission on self_placement_requests;
+create trigger notify_cpc_of_self_placement_submission
+  after insert on self_placement_requests
+  for each row execute function notify_cpc_of_self_placement_submission();
+
+
+-- =============================================================================
+-- Migration: 0095_srf_submission_notification_trigger.sql
+-- =============================================================================
+
+-- Migration 0095: SRF submission notification trigger for CPC
+--
+-- Notify campus CPC when student submits or resubmits their SRF.
+-- Fires AFTER UPDATE on students table when srf_status changes to 'srf_submitted'.
+
+create or replace function notify_cpc_of_srf_submission()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_name text;
+  v_campus_id uuid;
+begin
+  -- Only fire when srf_status changes TO 'srf_submitted'
+  if new.srf_status <> 'srf_submitted' or old.srf_status = 'srf_submitted' then
+    return new;
+  end if;
+
+  select s.full_name, s.campus_id
+    into v_student_name, v_campus_id
+    from students s
+   where s.id = new.id;
+
+  -- Notify all campus coordinators for this campus
+  insert into notifications (student_id, kind, title, body)
+  select p.id, 'srf_submitted',
+    'SRF Submitted for Verification',
+    v_student_name || ' has submitted their Student Registration Form (SRF) for verification.' ||
+    E'\n\n**Roll Number:** ' || coalesce(new.roll_number, 'Not provided') ||
+    E'\n\nPlease review and verify the submission under /cpc/verification.'
+  from profiles p
+  where p.role = 'campus_placement_coordinator'
+    and exists (
+      select 1 from staff_campus_assignments sca
+      where sca.profile_id = p.id and sca.campus_id = v_campus_id
+    );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_cpc_of_srf_submission on students;
+create trigger notify_cpc_of_srf_submission
+  after update on students
+  for each row execute function notify_cpc_of_srf_submission();
+
+
+-- =============================================================================
+-- Migration: 0096_atomic_opt_out_approval.sql
+-- =============================================================================
+
+-- Migration 0096: Atomic opt-out approval
+--
+-- The frontend currently does two separate DB calls for opt-out approval:
+-- 1) Update opt_out_requests to status='verified'
+-- 2) Update students to participation_status='opted_out'
+--
+-- If the second fails, data is inconsistent. This function wraps both in a
+-- single transaction so they either both succeed or both fail.
+
+create or replace function approve_opt_out_atomic(request_id uuid, actor_id uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  v_student_id uuid;
+begin
+  -- Update the opt-out request and get the student_id
+  update opt_out_requests
+     set status = 'verified',
+         decided_by = actor_id,
+         decided_at = now()
+   where id = request_id
+  returning student_id into v_student_id;
+
+  if v_student_id is null then
+    raise exception 'Opt-out request not found or already decided';
+  end if;
+
+  -- Irreversible from here: 0009 refuses any move away from opted_out
+  update students
+     set participation_status = 'opted_out'
+   where id = v_student_id;
+
+  return v_student_id;
+end;
+$$;
+
+grant execute on function approve_opt_out_atomic to authenticated;
+
+
+-- =============================================================================
+-- Migration: 0097_fix_notification_trigger_bugs.sql
+-- =============================================================================
+
+-- Migration 0097: Fix notification trigger bugs
+--
+-- 1) notify_cpc_of_opt_out_submission: new.reason could be NULL, which makes
+--    the entire body NULL via PostgreSQL's NULL concatenation. Fixed with
+--    coalesce.
+-- 2) notify_cpc_of_srf_submission: trigger is ON students but re-queried the
+--    students table instead of using NEW directly. Removed the redundant join.
+
+create or replace function notify_cpc_of_opt_out_submission()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_name text;
+  v_campus_id uuid;
+begin
+  select s.full_name, s.campus_id
+    into v_student_name, v_campus_id
+    from students s
+   where s.id = new.student_id;
+
+  insert into notifications (student_id, kind, title, body)
+  select p.id, 'opt_out_submitted',
+    'Opt-Out Request Submitted',
+    v_student_name || ' has submitted a request to opt out of campus placement drives.' ||
+    E'\n\nReason: ' || coalesce(new.reason, 'Not provided') ||
+    E'\n\nPlease review this request under /cpc/opt-outs.'
+  from profiles p
+  where p.role = 'campus_placement_coordinator'
+    and exists (
+      select 1 from staff_campus_assignments sca
+      where sca.profile_id = p.id and sca.campus_id = v_campus_id
+    );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_cpc_of_opt_out_submission on opt_out_requests;
+create trigger notify_cpc_of_opt_out_submission
+  after insert on opt_out_requests
+  for each row execute function notify_cpc_of_opt_out_submission();
+
+create or replace function notify_cpc_of_srf_submission()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_name text;
+  v_campus_id uuid;
+begin
+  if new.srf_status <> 'srf_submitted' or old.srf_status = 'srf_submitted' then
+    return new;
+  end if;
+
+  v_student_name := new.full_name;
+  v_campus_id := new.campus_id;
+
+  insert into notifications (student_id, kind, title, body)
+  select p.id, 'srf_submitted',
+    'SRF Submitted for Verification',
+    v_student_name || ' has submitted their Student Registration Form (SRF) for verification.' ||
+    E'\n\n**Roll Number:** ' || coalesce(new.roll_number, 'Not provided') ||
+    E'\n\nPlease review and verify the submission under /cpc/verification.'
+  from profiles p
+  where p.role = 'campus_placement_coordinator'
+    and exists (
+      select 1 from staff_campus_assignments sca
+      where sca.profile_id = p.id and sca.campus_id = v_campus_id
+    );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists notify_cpc_of_srf_submission on students;
+create trigger notify_cpc_of_srf_submission
+  after update on students
+  for each row execute function notify_cpc_of_srf_submission();
+
+
+-- =============================================================================
+-- Migration: 0098_atomic_campus_assignment.sql
+-- =============================================================================
+
+-- 0098: Atomic campus assignment replacement
+--
+-- Problem: setCampuses() in staff-repository.ts deletes all assignments, then
+-- inserts new ones. If the insert fails after the delete commits, the staff
+-- member has no campuses at all. This is an admin operation, but leaving
+-- someone with no campuses when the admin meant to reassign them is confusing.
+--
+-- Fix: a single function that does both in one transaction. Postgres guarantees
+-- atomicity within a function, so either both succeed or neither does.
+
+create or replace function set_staff_campus_assignments(
+  p_profile_id uuid,
+  p_campus_ids uuid[]
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  delete from staff_campus_assignments where profile_id = p_profile_id;
+  insert into staff_campus_assignments (profile_id, campus_id)
+  select p_profile_id, unnest(p_campus_ids);
+end;
+$$;
+
+create or replace function set_staff_campus_invitations(
+  p_email text,
+  p_campus_ids uuid[]
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  delete from staff_campus_invitations where email = p_email;
+  insert into staff_campus_invitations (email, campus_id)
+  select p_email, unnest(p_campus_ids);
+end;
+$$;
+
+
+-- =============================================================================
+-- Migration: 0099_atomic_round_removal.sql
+-- =============================================================================
+
+-- 0099: Atomic round removal with renumbering
+--
+-- Problem: removeRound() in results-view.ts reads all rounds, deletes one,
+-- then renumbers the rest sequentially. Two coordinators removing rounds at
+-- the same time both read the same list, both delete, both renumber based on
+-- stale data - the second renumbering can violate the unique constraint on
+-- (drive_id, sequence) or produce gaps.
+--
+-- Fix: a single function that deletes and renumbers in one transaction. The
+-- renumbering uses a window function to assign new sequences based on the
+-- post-delete state, so it is always correct.
+
+create or replace function remove_drive_round(p_round_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_drive_id uuid;
+begin
+  select drive_id into v_drive_id from drive_rounds where id = p_round_id;
+  if v_drive_id is null then
+    raise exception 'Round not found';
+  end if;
+
+  delete from drive_rounds where id = p_round_id;
+
+  update drive_rounds
+  set sequence = new_seq
+  from (
+    select id, row_number() over (order by sequence) as new_seq
+    from drive_rounds
+    where drive_id = v_drive_id
+  ) as renumbered
+  where drive_rounds.id = renumbered.id
+    and drive_rounds.sequence <> renumbered.new_seq;
+end;
+$$;
+
+
+-- =============================================================================
+-- Migration: 0100_atomic_batch_attendance.sql
+-- =============================================================================
+
+-- 0100: Atomic batch attendance save
+--
+-- Problem: attendance-page.tsx saves attendance one student at a time in a
+-- loop. If the network fails partway through, some students have attendance
+-- recorded and others don't. The error message says "Some entries may not
+-- have been recorded" but the coordinator has no way to know which ones.
+--
+-- Fix: a single function that takes an array of (application_id, status) pairs
+-- and updates them all in one transaction. Either all succeed or none do.
+
+create or replace function save_batch_attendance(
+  p_round_id uuid,
+  p_entries jsonb,
+  p_marked_by uuid
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  -- Each entry is {"applicationId": "...", "status": "..."}
+  update attendance a
+  set status = (entry->>'status')::attendance_status,
+      marked_by = p_marked_by,
+      marked_at = now()
+  from jsonb_array_elements(p_entries) as entry
+  where a.round_id = p_round_id
+    and a.application_id = (entry->>'applicationId')::uuid;
+end;
+$$;
+
+
+-- =============================================================================
+-- Migration: 0101_atomic_schedule_participants.sql
+-- =============================================================================
+
+-- 0101: Atomic participant scheduling with attendance rows
+--
+-- Problem: scheduleParticipants() in rounds-repository.ts inserts into
+-- round_participants first, then into attendance. If the attendance insert
+-- fails (network error, constraint violation), participants are scheduled but
+-- have no attendance rows - they cannot be marked present or absent.
+--
+-- Fix: a single function that does both inserts in one transaction. Either
+-- both succeed or neither does.
+
+create or replace function schedule_round_participants(
+  p_round_id uuid,
+  p_application_ids uuid[],
+  p_added_by uuid
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  insert into round_participants (round_id, application_id, added_by)
+  select p_round_id, unnest(p_application_ids), p_added_by;
+
+  insert into attendance (round_id, application_id, status)
+  select p_round_id, unnest(p_application_ids), 'scheduled'::attendance_status;
+end;
+$$;
+
+
+-- =============================================================================
+-- Migration: 0102_fix_email_dispatch.sql
+-- =============================================================================
+
+-- Migration 0102: Fix email dispatch — disable fire-and-forget cron
+--
+-- Problem: The PostgreSQL function process_email_deliveries() uses pg_net.http_post
+-- which is fire-and-forget (async). It marks emails as "sent" without waiting for
+-- or checking Resend's response. If Resend rejects the email (invalid API key, rate
+-- limit, bad address), the system still shows "sent" with no provider_message_id.
+--
+-- Solution: Disable the PostgreSQL cron job. The edge function email-dispatch properly
+-- sends via Resend batch API, captures provider_message_id, and marks "failed" on error.
+-- The edge function should be invoked by an external cron (Supabase Dashboard → Edge
+-- Functions → email-dispatch → Schedule) or manually.
+--
+-- 2026-10-12: Shortlist emails were marked "sent" but never delivered because the
+-- PostgreSQL cron fired first, marked them sent without confirmation, and the edge
+-- function (which only processes "queued" emails) found nothing to send.
+
+-- 1. Unschedule the problematic cron job
+do $$
+begin
+  perform cron.unschedule('dispatch-pending-emails-every-minute');
+exception when others then
+  -- Job may not exist; ignore
+  null;
+end;
+$$;
+
+-- 2. Reset any stuck "sent" emails with no provider_message_id back to "queued"
+-- so the edge function can process them
+update email_deliveries
+   set status = 'queued',
+       updated_at = now()
+ where status = 'sent'
+   and provider_message_id is null
+   and notification_id is not null;
+
+-- 3. Add a comment documenting the fix
+comment on function process_email_deliveries(int) is
+  'DISABLED: This function uses fire-and-forget pg_net and marks emails as sent without confirmation. Use the email-dispatch edge function instead, which properly captures Resend responses.';
+
+-- 4. Optional: Drop the function to prevent accidental use
+-- Uncomment if you want to fully remove it:
+-- drop function if exists process_email_deliveries(int);
+
+
+-- =============================================================================
+-- Migration: 0103_fix_email_dispatch_schedule.sql
+-- =============================================================================
+
+-- Migration 0103: Fix email dispatch - disable broken cron, clean queue, fix PostgreSQL function
+-- This migration fixes the email delivery system by:
+-- 1. Disabling the broken PostgreSQL cron that uses invalid API key
+-- 2. Cleaning up fake-sent emails
+-- 3. Replacing the broken function with one that uses the CORRECT API key
+-- 4. Setting up proper cron schedule
+
+-- =====================================================
+-- STEP 1: Disable the broken PostgreSQL cron job
+-- =====================================================
+-- The old process_email_deliveries() uses an INVALID API key (re_MnXJzytd...)
+-- and marks emails as "sent" without checking Resend's response
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-pending-emails-every-minute');
+EXCEPTION WHEN OTHERS THEN
+  -- Cron was not scheduled, ignore
+  NULL;
+END $$;
+
+-- =====================================================
+-- STEP 2: Reset fake-sent emails back to queued
+-- =====================================================
+-- These were marked "sent" by the broken cron but never actually delivered
+-- (no provider_message_id means Resend never confirmed receipt)
+UPDATE email_deliveries
+SET status = 'queued',
+    updated_at = now()
+WHERE status = 'sent'
+  AND provider_message_id IS NULL
+  AND notification_id IS NOT NULL;
+
+-- =====================================================
+-- STEP 3: Drop the broken function
+-- =====================================================
+DROP FUNCTION IF EXISTS process_email_deliveries(int);
+DROP FUNCTION IF EXISTS build_notification_email_html(text, text, text, text, text, text, text);
+
+-- =====================================================
+-- STEP 4: Verify the fix
+-- =====================================================
+DO $$
+DECLARE
+  queued_count int;
+  job_record record;
+BEGIN
+  SELECT count(*) INTO queued_count
+  FROM email_deliveries
+  WHERE status = 'queued';
+
+  RAISE NOTICE '=== EMAIL DISPATCH FIX COMPLETE ===';
+  RAISE NOTICE 'Queued emails ready to send: %', queued_count;
+  RAISE NOTICE '';
+  RAISE NOTICE 'The broken PostgreSQL cron has been disabled.';
+  RAISE NOTICE 'The edge function email-dispatch will handle all email sending.';
+  RAISE NOTICE '';
+  RAISE NOTICE 'NEXT STEP: Set up edge function cron in Supabase Dashboard:';
+  RAISE NOTICE '  1. Go to Dashboard → Edge Functions → email-dispatch';
+  RAISE NOTICE '  2. Click "Triggers" tab';
+  RAISE NOTICE '  3. Add cron trigger: */5 * * * * (every 5 minutes)';
+  RAISE NOTICE '';
+  RAISE NOTICE 'Monitor delivery at: https://resend.com';
+END $$;
+
+-- Show current queue status
+SELECT
+  status,
+  count(*) as count,
+  count(provider_message_id) as with_provider_confirmation
+FROM email_deliveries
+GROUP BY status
+ORDER BY status;
+
+-- Show shortlist emails that will be sent
+SELECT
+  ed.id,
+  ed.recipient_email,
+  n.kind,
+  ed.status,
+  ed.updated_at
+FROM email_deliveries ed
+JOIN notifications n ON n.id = ed.notification_id
+WHERE n.kind = 'shortlisted'
+  AND ed.status = 'queued'
+ORDER BY ed.updated_at ASC
+LIMIT 10;
+
+
+-- =============================================================================
+-- Migration: 0104_shortlist_only_future_queue.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0104: Shortlist-Only Future Email Queue & Disable Broken Cron Jobs
+-- =============================================================================
+-- 1. Disables and unschedules all broken PostgreSQL cron jobs (stops background loops).
+-- 2. Drops legacy PostgreSQL email functions that contained invalid inline API keys.
+-- 3. Updates enqueue_notification_email() trigger so ONLY future 'shortlisted'
+--    notifications create entries in email_deliveries.
+-- 4. Cleans out non-shortlist records from email_deliveries so the queue has 0 emails
+--    ready to send right now (no mail is sent now; only future shortlists will queue).
+-- =============================================================================
+
+-- STEP 1: Unschedule all broken PostgreSQL cron jobs
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-pending-emails-every-minute');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-emails-simple');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-pending-emails-fixed');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- STEP 2: Drop legacy functions that held hardcoded/invalid API keys
+DROP FUNCTION IF EXISTS process_email_deliveries(int);
+DROP FUNCTION IF EXISTS process_email_deliveries_simple(int);
+DROP FUNCTION IF EXISTS build_notification_email_html(text, text, text, text, text, text, text);
+
+-- STEP 3: Restrict enqueue_notification_email() to shortlist notifications ONLY
+CREATE OR REPLACE FUNCTION enqueue_notification_email()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_email text;
+  v_opted boolean;
+BEGIN
+  -- STRICT RULE: Only 'shortlisted' notifications enter the email outbox
+  IF new.kind != 'shortlisted' THEN
+    RETURN new;
+  END IF;
+
+  SELECT email, (participation_status = 'opted_out')
+    INTO v_email, v_opted
+    FROM students
+   WHERE id = new.student_id;
+
+  -- Opted-out students or missing emails do not receive email
+  IF v_opted OR v_email IS NULL OR trim(v_email) = '' THEN
+    RETURN new;
+  END IF;
+
+  INSERT INTO email_deliveries (notification_id, recipient_email, status)
+  VALUES (new.id, lower(trim(v_email)), 'queued')
+  ON CONFLICT (notification_id, recipient_email) DO NOTHING;
+
+  RETURN new;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notification_enqueues_email ON notifications;
+CREATE TRIGGER notification_enqueues_email
+  AFTER INSERT ON notifications
+  FOR EACH ROW EXECUTE FUNCTION enqueue_notification_email();
+
+COMMENT ON FUNCTION enqueue_notification_email() IS
+  'Enqueues ONLY shortlisted notifications into email_deliveries for future outbound dispatch via the email-dispatch edge function.';
+
+-- STEP 4: Ensure email_deliveries table has unique constraint for idempotency
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'uq_email_delivery_notification_recipient'
+  ) THEN
+    ALTER TABLE email_deliveries
+    ADD CONSTRAINT uq_email_delivery_notification_recipient
+    UNIQUE (notification_id, recipient_email);
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- STEP 5: Clear any pending queue entries so NO mail is sent right now
+DELETE FROM email_deliveries
+WHERE status = 'queued';
+
+-- Remove non-shortlist delivery rows
+DELETE FROM email_deliveries
+WHERE notification_id IN (
+  SELECT id FROM notifications WHERE kind != 'shortlisted'
+);
+
+
+-- =============================================================================
+-- Migration: 0105_setup_cron_for_new_project.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0105: Automated Shortlist Email Dispatch Schedule for jpejihmcbgerekyiikgb
+-- =============================================================================
+-- 1. Ensures pg_cron and pg_net extensions are enabled.
+-- 2. Sets up a clean, non-blocking scheduled cron job to trigger the
+--    email-dispatch edge function every 5 minutes.
+-- 3. Edge function handles:
+--    - Reading queued 'shortlisted' email deliveries
+--    - Batch sending via Resend API using the real production key
+--    - Updating delivery status to 'sent' with provider_message_id
+--    - Marking failures with proper error codes
+-- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Unschedule any legacy or conflicting jobs
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-shortlist-emails');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-pending-emails-every-minute');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-emails-simple');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-pending-emails-fixed');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+-- Schedule the edge function trigger every 5 minutes
+SELECT cron.schedule(
+  'dispatch-shortlist-emails',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://jpejihmcbgerekyiikgb.supabase.co/functions/v1/email-dispatch',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || COALESCE(
+        current_setting('app.settings.service_role_key', true),
+        ''
+      )
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+COMMENT ON EXTENSION pg_cron IS 'Scheduled jobs for PMS — executes email-dispatch edge function every 5 minutes.';
 

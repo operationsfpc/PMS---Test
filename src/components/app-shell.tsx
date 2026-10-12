@@ -299,6 +299,25 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         { to: "/admin/roster", label: "Add students" },
       ],
     },
+    // 2026-10-12: admin can access /central/* routes (canAccessCentral), so
+    // the sidebar surfaces them. Without these links the routes were reachable
+    // only by bookmark — the guard allowed entry but the nav never pointed.
+    {
+      heading: "Student details",
+      items: [
+        { to: "/central/students", label: "All students" },
+        { to: "/central/skills", label: "Skill repository" },
+        { to: "/central/skills-assessed", label: "Skills assessed" },
+      ],
+    },
+    {
+      heading: "Drives in progress",
+      items: [
+        { to: "/central/shortlisting", label: "Shortlisting" },
+        { to: "/central/results", label: "Rounds & results" },
+        { to: "/central/offers", label: "Final selection" },
+      ],
+    },
   ],
 };
 
@@ -372,7 +391,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     setOverrides({ path: pathname, open: { ...effective, [heading]: !isOpen(heading) } });
 
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
-    `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+    `block truncate rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
       isActive ? "bg-brand-500 text-white" : "text-ink-700 hover:bg-brand-50 hover:text-brand-600"
     }`;
 

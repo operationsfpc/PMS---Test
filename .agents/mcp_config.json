@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "supabase": {
+      "serverUrl": "https://mcp.supabase.com/mcp?project_ref=jpejihmcbgerekyiikgb&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
+    },
+    "supabase-active-pms": {
+      "serverUrl": "https://mcp.supabase.com/mcp?project_ref=apzsuclpydjkmaffppmr&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions%2Cbranching"
+    }
+  }
+}

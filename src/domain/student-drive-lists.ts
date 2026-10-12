@@ -59,8 +59,32 @@ const DAY = 24 * HOUR;
  * "4 days left to apply" — shown on every To-apply card (Karthik: closing
  * time SHOWN, not merely filterable). Days while there are at least two,
  * hours inside that, minutes inside the final hour; never "0" of anything.
+ *
+ * When the window has not opened yet (`applicationStart` is in the future),
+ * the label flips to "Opens in X days" so the chip and the refusal message
+ * ("Applications for this drive have not opened yet.") tell the same story.
  */
-export function describeTimeLeft(applicationEnd: Date, now: Date): TimeLeft {
+export function describeTimeLeft(
+  applicationEnd: Date,
+  now: Date,
+  applicationStart?: Date | null,
+): TimeLeft {
+  if (applicationStart != null && now.getTime() < applicationStart.getTime()) {
+    const until = applicationStart.getTime() - now.getTime();
+    if (until >= 2 * DAY) {
+      return { label: `Opens in ${Math.floor(until / DAY)} days`, urgent: false };
+    }
+    if (until >= HOUR) {
+      const hours = Math.floor(until / HOUR);
+      return { label: `Opens in ${hours} ${hours === 1 ? "hour" : "hours"}`, urgent: false };
+    }
+    const minutes = Math.max(1, Math.floor(until / MINUTE));
+    return {
+      label: `Opens in ${minutes} ${minutes === 1 ? "minute" : "minutes"}`,
+      urgent: true,
+    };
+  }
+
   const left = applicationEnd.getTime() - now.getTime();
   if (left <= 0) return { label: "Applications closed", urgent: false };
 

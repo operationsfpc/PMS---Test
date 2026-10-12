@@ -15,6 +15,11 @@ export interface ScheduledStudent {
 export interface AttendanceView {
   scheduled(roundId: string): Promise<readonly ScheduledStudent[]>;
   mark(roundId: string, applicationId: string, status: AttendanceStatus): Promise<void>;
+  /** 0100: saves the whole round's attendance in one transaction. */
+  markBatch(
+    roundId: string,
+    entries: readonly { applicationId: string; status: AttendanceStatus }[],
+  ): Promise<void>;
 }
 
 /**
@@ -62,18 +67,20 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
     setError(null);
     setSaved(false);
     try {
-      // Everyone scheduled gets an explicit mark. Leaving someone unmarked
-      // would be indistinguishable from "not yet taken".
-      for (const student of rows) {
-        await view.mark(
-          roundId,
-          student.applicationId,
-          present.includes(student.applicationId) ? "present" : "absent",
-        );
-      }
+      // 0100: one transaction for the whole round. A failure leaves the old
+      // attendance intact rather than half-saved.
+      await view.markBatch(
+        roundId,
+        rows.map((student) => ({
+          applicationId: student.applicationId,
+          status: present.includes(student.applicationId)
+            ? ("present" as const)
+            : ("absent" as const),
+        })),
+      );
       setSaved(true);
     } catch {
-      setError("Could not save attendance. Nothing has been recorded — please try again.");
+      setError("Could not save attendance. No entries were recorded — please try again.");
     } finally {
       setBusy(false);
     }

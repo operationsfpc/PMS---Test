@@ -24,6 +24,13 @@ export type AuthState =
    * to /login, Google signs them in again, and nothing ever says why.
    */
   | { readonly status: "unrecognised"; readonly email: string }
+  /**
+   * An admin deactivated this account (is_active = false). The database still
+   * recognises them, but current_app_role() returns NULL so every RLS policy
+   * blocks them. Without this status they saw a signed-in shell with empty
+   * screens and no explanation.
+   */
+  | { readonly status: "deactivated"; readonly email: string }
   | {
       readonly status: "signed-in";
       readonly role: AppRole;

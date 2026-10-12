@@ -135,6 +135,40 @@ describe("describeTimeLeft", () => {
   it("says closed once the moment has passed", () => {
     expect(describeTimeLeft(past, now)).toEqual({ label: "Applications closed", urgent: false });
   });
+
+  it("says 'Opens in X days' when the window has not started yet", () => {
+    const start = new Date("2026-08-24T17:00:00Z");
+    const end = new Date("2026-08-28T17:00:00Z");
+    expect(describeTimeLeft(end, now, start)).toEqual({
+      label: "Opens in 4 days",
+      urgent: false,
+    });
+  });
+
+  it("says 'Opens in X hours' when the window opens within a day", () => {
+    const start = new Date("2026-08-20T18:00:00Z");
+    const end = new Date("2026-08-24T17:00:00Z");
+    expect(describeTimeLeft(end, now, start)).toEqual({
+      label: "Opens in 6 hours",
+      urgent: false,
+    });
+  });
+
+  it("counts down to the end once the window has opened", () => {
+    const start = new Date("2026-08-18T00:00:00Z");
+    const end = new Date("2026-08-24T17:00:00Z");
+    expect(describeTimeLeft(end, now, start)).toEqual({
+      label: "4 days left to apply",
+      urgent: false,
+    });
+  });
+
+  it("works without applicationStart (backwards compatible)", () => {
+    expect(describeTimeLeft(future, now)).toEqual({
+      label: "4 days left to apply",
+      urgent: false,
+    });
+  });
 });
 
 describe("closesWithin", () => {

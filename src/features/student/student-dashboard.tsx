@@ -1,6 +1,6 @@
 import { NotificationBody } from "@components/notification-body";
 import { OfferLetterLink } from "@components/offer-letter-link";
-import { Badge, Card, PageHeader, StatCard } from "@components/ui";
+import { Badge, Button, Card, PageHeader, StatCard } from "@components/ui";
 import {
   ABSENCE_LIMIT,
   type AttendanceRecord,
@@ -238,13 +238,13 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                         {note.read ? (
                           <span className="shrink-0 text-xs font-medium text-ink-500">✓ Read</span>
                         ) : (
-                          <button
-                            type="button"
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => void markRead(note.id)}
-                            className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
                           >
                             Mark read
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </li>
@@ -320,10 +320,10 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                   <Card className="p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-heading font-bold text-ink-900">
+                        <p className="truncate font-heading font-bold text-ink-900">
                           {application.companyName}
                         </p>
-                        <p className="text-sm text-ink-500">{application.roleTitle}</p>
+                        <p className="truncate text-sm text-ink-500">{application.roleTitle}</p>
                         <p className="mt-0.5 text-xs text-ink-300">
                           Applied {onDate(application.appliedAt)}
                         </p>

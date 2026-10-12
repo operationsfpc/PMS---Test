@@ -38,7 +38,7 @@ export const RECORD_SKILL_COLUMNS = "score, skill_areas(name)";
 export const RECORD_APPLICATION_COLUMNS =
   "id, drive_id, applied_at, drives(company_name, role_title), shortlist_entries(included)";
 export const RECORD_OFFER_COLUMNS =
-  "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at, company_name, role_title";
+  "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, company_name, role_title";
 
 export function createSupabaseStudentRecordView(client: SupabaseClient): StudentRecordView {
   return {

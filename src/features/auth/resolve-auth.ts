@@ -28,11 +28,16 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
 
   const { data: profile } = await client
     .from("profiles")
-    .select("role")
+    .select("role, is_active")
     .eq("id", session.user.id)
     .maybeSingle();
 
   if (profile) {
+    // An admin toggled is_active off: the DB blocks every query for this
+    // account, so the UI must not pretend they are signed in.
+    if (profile.is_active === false) {
+      return { status: "deactivated", email };
+    }
     /**
      * The campuses this staff member is mapped to.
      *

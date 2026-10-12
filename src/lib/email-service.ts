@@ -32,7 +32,7 @@ export interface ResendEmailProviderOptions {
   readonly fetchFn?: typeof fetch | undefined;
 }
 
-export const DEFAULT_RESEND_FROM = "FACE Prep Campus <pms@faceprepcampus.com>";
+export const DEFAULT_RESEND_FROM = "FACE Prep Campus <placements@email.faceprep.in>";
 export const DEFAULT_RESEND_DEV_FROM = "onboarding@resend.dev";
 export const DEFAULT_RESEND_REPLY_TO = "placements@faceprep.in";
 
@@ -49,7 +49,7 @@ export class ResendEmailProvider implements EmailProvider {
 
   constructor(options: ResendEmailProviderOptions) {
     this.apiKey = options.apiKey;
-    this.from = options.from ?? DEFAULT_RESEND_DEV_FROM;
+    this.from = options.from ?? DEFAULT_RESEND_FROM;
     this.replyTo = options.replyTo ?? DEFAULT_RESEND_REPLY_TO;
     this.overrideRecipient = options.overrideRecipient ?? null;
     this.fetchFn = options.fetchFn ?? fetch;
@@ -196,24 +196,26 @@ export class ResendEmailProvider implements EmailProvider {
 
 /**
  * Creates the default configured EmailService instance.
- * Defaults all emails to Thanush (thanush@faceprep.in) for development safety.
+ * Defaults all emails to operationsfpc@faceprep.in for development safety.
  */
 export function createEmailService(options?: ResendEmailProviderOptions): EmailProvider {
+  const env = typeof import.meta !== "undefined" ? (import.meta.env as unknown as Record<string, string | undefined>) : undefined;
+
   const apiKey =
     options?.apiKey ??
-    (typeof process !== "undefined" ? process.env?.RESEND_API_KEY : undefined) ??
-    "re_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp";
+    env?.VITE_RESEND_API_KEY ??
+    "";
 
   const overrideRecipient =
     options?.overrideRecipient !== undefined
       ? options.overrideRecipient
-      : ((typeof process !== "undefined" ? process.env?.EMAIL_OVERRIDE_RECIPIENT : undefined) ??
-        "thanush@faceprep.in");
+      : (env?.VITE_EMAIL_OVERRIDE_RECIPIENT ??
+        "operationsfpc@faceprep.in");
 
   const from =
     options?.from ??
-    (typeof process !== "undefined" ? process.env?.RESEND_FROM_EMAIL : undefined) ??
-    DEFAULT_RESEND_DEV_FROM;
+    env?.VITE_RESEND_FROM_EMAIL ??
+    DEFAULT_RESEND_FROM;
 
   return new ResendEmailProvider({
     apiKey,

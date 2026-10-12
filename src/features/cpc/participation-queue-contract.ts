@@ -39,6 +39,7 @@ export interface PendingParticipation {
 export interface SelfPlacementClassification {
   readonly driveType: "placement" | "internship";
   readonly offerCategory: "regular" | "dream" | "super_dream" | null;
+  readonly stipendMonthly?: number | null;
 }
 
 export interface ParticipationQueueView {

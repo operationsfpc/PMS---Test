@@ -251,10 +251,10 @@ export function DriveTabs({
             role="tab"
             aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${
+            className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
               tab === t.key
-                ? "bg-[#3D3777] text-white"
-                : "border border-line text-ink-700 hover:border-brand-300"
+                ? "border-[#3D3777] bg-[#3D3777] text-white"
+                : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
             }`}
           >
             {t.label} ({counts[t.key]})
@@ -424,7 +424,7 @@ function RowHead({
   return (
     <>
       <h2 className="flex flex-wrap items-center gap-2 font-[Raleway] text-lg font-bold text-ink-900">
-        {row.companyName}
+        <span className="max-w-[250px] truncate">{row.companyName}</span>
         {/* 2026-08-27: the type, on every drive summary the student sees. */}
         {row.driveType !== undefined && row.driveType !== null && (
           <Badge tone={driveTypeTone(row.driveType)}>{driveTypeLabel(row.driveType)}</Badge>

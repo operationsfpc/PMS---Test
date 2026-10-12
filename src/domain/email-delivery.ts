@@ -365,6 +365,10 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
     case "ae_drive_live":
     case "account_live":
       return { templateCode: "A3", targetRole: "account_executive", ccRoles: ["delivery_head"] };
+    // A4: Account Executive — Drive Offers Milestone
+    case "drive_offers_milestone":
+    case "ae_drive_concluded":
+      return { templateCode: "A4", targetRole: "account_executive", ccRoles: ["delivery_head"] };
 
     // DH1: Delivery Head — PIF Submitted
     case "pif_submitted":
@@ -381,6 +385,41 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
     case "dh_weekly_digest":
     case "operations_digest":
       return { templateCode: "DH3", targetRole: "delivery_head", ccRoles: [] };
+
+    // L1: Leadership — Weekly Placement Digest
+    case "weekly_leadership_digest":
+    case "leadership_weekly":
+      return { templateCode: "L1", targetRole: "campus_manager", ccRoles: [] };
+    // L2: Leadership — Super Dream Milestone
+    case "super_dream_milestone":
+    case "leadership_milestone":
+      return { templateCode: "L2", targetRole: "campus_manager", ccRoles: ["central_placement_coordinator"] };
+
+    // R1: Recruiter — Candidate Shortlist
+    case "recruiter_shortlist":
+    case "candidate_shortlist_pack":
+      return { templateCode: "R1", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+    // R2: Recruiter — Drive Sourcing Kickoff
+    case "recruiter_drive_live":
+    case "drive_sourcing_kickoff":
+      return { templateCode: "R2", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+    // R3: Recruiter — Interview Schedule & Roster
+    case "recruiter_interview_schedule":
+    case "interview_roster":
+      return { templateCode: "R3", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+    // R4: Recruiter — Drive Concluded Summary
+    case "recruiter_drive_concluded":
+    case "drive_concluded_summary":
+      return { templateCode: "R4", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+
+    // AD2: Administrator — Roster Import Complete
+    case "roster_import_complete":
+    case "admin_roster_import":
+      return { templateCode: "AD2", targetRole: "admin", ccRoles: [] };
+    // AD3: Administrator — Email Delivery Alert
+    case "email_delivery_alert":
+    case "admin_delivery_alert":
+      return { templateCode: "AD3", targetRole: "admin", ccRoles: [] };
 
     default:
       return { templateCode: "GENERIC", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
@@ -670,6 +709,15 @@ export function composeStudentNotificationEmail(
       url = `${portalUrl}/ae/overview`;
       break;
     }
+    // A4: Account Executive — Drive Offers Milestone
+    case "drive_offers_milestone":
+    case "ae_drive_concluded": {
+      subject = data.title || "Placement Success: Drive Concluded with Offers";
+      title = "Drive Concluded Successfully";
+      button = "View Account Performance";
+      url = `${portalUrl}/ae/overview`;
+      break;
+    }
     // DH1: Delivery Head — PIF Submitted
     case "pif_submitted":
     case "dh_pif_submitted":
@@ -697,6 +745,78 @@ export function composeStudentNotificationEmail(
       subject = data.title || "Weekly Placement Operations Summary";
       title = "Weekly Placement Operations Summary";
       button = "Open Operations Cockpit";
+      url = `${portalUrl}/dashboard`;
+      break;
+    }
+    // L1: Leadership — Weekly Placement Digest
+    case "weekly_leadership_digest":
+    case "leadership_weekly": {
+      subject = data.title || "Weekly Campus Placement Executive Summary";
+      title = "Weekly Campus Placement Executive Summary";
+      button = "Open Leadership Dashboard";
+      url = `${portalUrl}/dashboard`;
+      break;
+    }
+    // L2: Leadership — Super Dream Milestone
+    case "super_dream_milestone":
+    case "leadership_milestone": {
+      subject = data.title || "Marquee Placement Success Milestone";
+      title = "Marquee Placement Success Milestone";
+      button = "View Placement Statistics";
+      url = `${portalUrl}/dashboard`;
+      break;
+    }
+    // R1: Recruiter — Candidate Shortlist
+    case "recruiter_shortlist":
+    case "candidate_shortlist_pack": {
+      subject = data.title || "Candidate Shortlist & Resume Pack";
+      title = "Candidate Shortlist & Resume Pack";
+      button = "Open Candidate Pack";
+      url = `${portalUrl}/login`;
+      break;
+    }
+    // R2: Recruiter — Drive Sourcing Kickoff
+    case "recruiter_drive_live":
+    case "drive_sourcing_kickoff": {
+      subject = data.title || "Your Campus Drive Is Live";
+      title = "Your Campus Drive Is Live";
+      button = "View Drive Status";
+      url = `${portalUrl}/login`;
+      break;
+    }
+    // R3: Recruiter — Interview Schedule & Roster
+    case "recruiter_interview_schedule":
+    case "interview_roster": {
+      subject = data.title || "Interview Schedule & Candidate Roster";
+      title = "Interview Schedule & Candidate Roster";
+      button = "Access Interview Dossier";
+      url = `${portalUrl}/login`;
+      break;
+    }
+    // R4: Recruiter — Drive Concluded Summary
+    case "recruiter_drive_concluded":
+    case "drive_concluded_summary": {
+      subject = data.title || "Campus Drive Concluded";
+      title = "Campus Drive Concluded";
+      button = "Download Placements Package";
+      url = `${portalUrl}/login`;
+      break;
+    }
+    // AD2: Administrator — Roster Import Complete
+    case "roster_import_complete":
+    case "admin_roster_import": {
+      subject = data.title || "Roster Import Complete";
+      title = "Roster Import Complete";
+      button = "View Student Directory";
+      url = `${portalUrl}/central/students`;
+      break;
+    }
+    // AD3: Administrator — Email Delivery Alert
+    case "email_delivery_alert":
+    case "admin_delivery_alert": {
+      subject = data.title || "Email Delivery Exception Alert";
+      title = "Email Delivery Exception Alert";
+      button = "Review Delivery Logs";
       url = `${portalUrl}/dashboard`;
       break;
     }

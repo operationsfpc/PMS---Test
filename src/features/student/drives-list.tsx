@@ -192,7 +192,7 @@ export function DrivesList({
             return (
               <Card key={drive.id} className="p-5">
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <h2 className="font-[Raleway] text-lg font-bold text-ink-900">
+                  <h2 className="max-w-[250px] truncate font-[Raleway] text-lg font-bold text-ink-900">
                     {drive.companyName}
                   </h2>
                   {/* 2026-08-27: the type tag. */}
@@ -212,7 +212,7 @@ export function DrivesList({
                     )}
                   {drive.applied && <Badge tone="success">Applied</Badge>}
                 </div>
-                <p className="text-sm text-ink-500">
+                <p className="truncate text-sm text-ink-500">
                   {drive.roleTitle} · {drive.ctcLabel}
                 </p>
                 <p className="mt-1 text-xs text-ink-500">
@@ -221,7 +221,11 @@ export function DrivesList({
                 {/* N7: closing time SHOWN, hot under 24 hours. */}
                 {!drive.applied &&
                   (() => {
-                    const left = describeTimeLeft(new Date(drive.applicationEnd), now());
+                    const left = describeTimeLeft(
+                      new Date(drive.applicationEnd),
+                      now(),
+                      drive.details.applicationStart ? new Date(drive.details.applicationStart) : null,
+                    );
                     return (
                       <p
                         className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${

@@ -1,7 +1,7 @@
 import { composeNotificationEmail, composeStaffInviteEmail } from "../src/domain/email-delivery.ts";
 import { ResendEmailProvider } from "../src/lib/email-service.ts";
 
-const apiKey = "re_MnXJzytd_CnW2TvKLk5Dbv6FYPnDtMLfp";
+const apiKey = process.env.RESEND_API_KEY || "";
 
 async function runTest() {
   console.log("--- 1. Testing Domain Template Composition ---");
@@ -28,7 +28,7 @@ async function runTest() {
   // Test sending to operationsfpc@faceprep.in (the active verified sandbox owner)
   const provider = new ResendEmailProvider({
     apiKey,
-    from: "onboarding@resend.dev",
+    from: "FACE Prep Campus <placements@email.faceprep.in>",
     overrideRecipient: "operationsfpc@faceprep.in",
   });
 

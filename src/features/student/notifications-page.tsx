@@ -44,8 +44,13 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
   /** G3 (UAT 2026-08-20): a lens on read state — never a deletion. */
   const [filter, setFilter] = useState<NotificationFilter>("all");
 
+  const [loadingError, setLoadingError] = useState(false);
+
   useEffect(() => {
-    void view.notifications().then(setNotes);
+    view
+      .notifications()
+      .then(setNotes)
+      .catch(() => setLoadingError(true));
   }, [view]);
 
   async function markRead(id: string) {
@@ -65,9 +70,17 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
       />
 
       {notes === null ? (
+        loadingError ? (
+          <Card className="p-6">
+            <p className="text-sm text-[#DD4820]">
+              Could not load notifications. Check your connection and try again.
+            </p>
+          </Card>
+        ) : (
         <p role="status" className="text-sm text-ink-500">
           Loading notifications…
         </p>
+        )
       ) : sorted.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">
@@ -88,10 +101,10 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
               {NOTIFICATION_FILTERS.map((option) => (
                 <label
                   key={option}
-                  className={`cursor-pointer rounded-lg border px-3 py-1 text-xs font-medium ${
+                  className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
                     filter === option
-                      ? "border-brand-500 bg-brand-500 text-white"
-                      : "border-line bg-surface text-ink-700 hover:border-brand-300"
+                      ? "border-[#3D3777] bg-[#3D3777] text-white"
+                      : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
                   }`}
                 >
                   <input

@@ -24,6 +24,7 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
   const [categories, setCategories] = useState<
     Record<string, NonNullable<SelfPlacementClassification["offerCategory"]>>
   >({});
+  const [stipends, setStipends] = useState<Record<string, string>>({});
 
   return (
     <QueueShell
@@ -107,6 +108,21 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                         <option value="super_dream">Super Dream (&gt; ₹10 LPA)</option>
                       </select>
                     </label>
+                    {kinds[placement.id] === "internship" && (
+                      <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                        Stipend (&#8377;/month)
+                        <input
+                          type="number"
+                          min="0"
+                          className="w-28 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink-900"
+                          placeholder="e.g. 15000"
+                          value={stipends[placement.id] ?? ""}
+                          onChange={(e) =>
+                            setStipends((s) => ({ ...s, [placement.id]: e.target.value }))
+                          }
+                        />
+                      </label>
+                    )}
                     <Button
                       variant="secondary"
                       size="sm"
@@ -119,7 +135,9 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                       disabled={
                         kinds[placement.id] === undefined ||
                         (kinds[placement.id] === "placement" &&
-                          categories[placement.id] === undefined)
+                          categories[placement.id] === undefined) ||
+                        (kinds[placement.id] === "internship" &&
+                          !stipends[placement.id])
                       }
                       onClick={() => {
                         const driveType = kinds[placement.id];
@@ -131,6 +149,10 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                               driveType === "internship"
                                 ? null
                                 : (categories[placement.id] ?? null),
+                            stipendMonthly:
+                              driveType === "internship"
+                                ? Number(stipends[placement.id])
+                                : null,
                           }),
                         );
                       }}

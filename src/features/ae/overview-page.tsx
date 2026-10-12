@@ -169,7 +169,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[540px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                   <tr>
                     <th className="px-3 py-2">Drive</th>
@@ -186,12 +186,12 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                     return (
                       <tr key={drive.driveId}>
                         <td className="px-3 py-3">
-                          <p className="font-semibold text-ink-900">
+                          <p className="max-w-[200px] truncate font-semibold text-ink-900">
                             <Link to={`/drives/${drive.driveId}`} className="hover:underline">
                               {drive.companyName}
                             </Link>
                           </p>
-                          <p className="text-xs text-ink-500">
+                          <p className="max-w-[200px] truncate text-xs text-ink-500">
                             {drive.roleTitle ?? "Role not specified"}
                             {ctc !== null && ` · ${ctc}`}
                           </p>

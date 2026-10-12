@@ -1,4 +1,4 @@
-import { Card, PageHeader } from "@components/ui";
+import { Button, Card, PageHeader } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -155,22 +155,21 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                     />
                   </div>
 
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
                     disabled={busyId === semester.id}
-                    className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
                     onClick={() => void decide(semester, true)}
                   >
                     Verify
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
                     disabled={busyId === semester.id}
-                    className="rounded-lg border border-[#DD4820] px-4 py-2 text-sm font-semibold text-[#DD4820] hover:bg-[#FFF0EC] disabled:opacity-50"
                     onClick={() => void decide(semester, false)}
                   >
                     Reject
-                  </button>
+                  </Button>
                 </div>
               </Card>
             </li>

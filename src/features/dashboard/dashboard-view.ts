@@ -102,7 +102,7 @@ export function createSupabaseDashboardView(
           : client
               .from("offers")
               .select(
-                "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, declared_at",
+                "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at",
               )
               .in("student_id", studentIds),
         client.from("drives").select("status"),

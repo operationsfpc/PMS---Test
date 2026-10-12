@@ -141,15 +141,29 @@ function MultiSelect({
   options,
   selected,
   onToggle,
+  onSelectAll,
 }: {
   label: string;
   options: readonly string[];
   selected: readonly string[];
   onToggle: (value: string) => void;
+  onSelectAll?: () => void;
 }) {
+  const allSelected = options.length > 0 && selected.length === options.length;
   return (
     <fieldset>
-      <legend className="mb-1.5 text-sm font-medium text-ink-700">{label}</legend>
+      <div className="mb-1.5 flex items-center justify-between">
+        <legend className="text-sm font-medium text-ink-700">{label}</legend>
+        {onSelectAll && options.length > 0 && (
+          <button
+            type="button"
+            className="text-xs font-medium text-brand-500 hover:text-brand-700"
+            onClick={onSelectAll}
+          >
+            {allSelected ? "Clear all" : "Select all"}
+          </button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-1.5">
         {options.map((o) => {
           const on = selected.includes(o);
@@ -497,24 +511,28 @@ export function DafPublish({ view }: { view: PublishView }) {
                 options={loaded.options.cities}
                 selected={cities}
                 onToggle={toggle(setCities)}
+                onSelectAll={() => setCities(cities.length === loaded.options.cities.length ? [] : [...loaded.options.cities])}
               />
               <MultiSelect
                 label="Campuses"
                 options={loaded.options.campuses}
                 selected={campuses}
                 onToggle={toggle(setCampuses)}
+                onSelectAll={() => setCampuses(campuses.length === loaded.options.campuses.length ? [] : [...loaded.options.campuses])}
               />
               <MultiSelect
                 label="Degrees"
                 options={loaded.options.degrees}
                 selected={degrees}
                 onToggle={toggle(setDegrees)}
+                onSelectAll={() => setDegrees(degrees.length === loaded.options.degrees.length ? [] : [...loaded.options.degrees])}
               />
               <MultiSelect
                 label="Branches"
                 options={loaded.options.branches}
                 selected={branches}
                 onToggle={toggle(setBranches)}
+                onSelectAll={() => setBranches(branches.length === loaded.options.branches.length ? [] : [...loaded.options.branches])}
               />
 
               <div className="grid gap-4 sm:grid-cols-2">

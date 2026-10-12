@@ -27,6 +27,15 @@ export interface RoundsRepository {
     status: AttendanceStatus,
     isScheduled: boolean,
   ): Promise<void>;
+  /**
+   * 0100: saves attendance for many students in one transaction. Either all
+   * succeed or none do - no half-saved attendance lists.
+   */
+  markBatchAttendance(
+    roundId: string,
+    entries: readonly { applicationId: string; status: AttendanceStatus }[],
+    isScheduled: boolean,
+  ): Promise<void>;
   recordResult(
     roundId: string,
     applicationId: string,
@@ -60,40 +69,20 @@ export function createSupabaseRoundsRepository(
 
   return {
     async scheduleParticipants(roundId, applicationIds) {
+      if (applicationIds.length === 0) return;
+
       const actorId = await actor();
 
-      const { error } = await client
-        .from("round_participants")
-        .insert(
-          applicationIds.map((applicationId) => ({
-            round_id: roundId,
-            application_id: applicationId,
-            added_by: actorId,
-          })),
-        )
-        .select("id");
+      // 0101: one transaction for both inserts. A failure leaves neither
+      // table half-populated - participants without attendance rows would be
+      // un-markable, and attendance without participants would be orphaned.
+      const { error } = await client.rpc("schedule_round_participants", {
+        p_round_id: roundId,
+        p_application_ids: applicationIds,
+        p_added_by: actorId,
+      });
 
       if (error !== null) throw withDetail("Could not schedule the participants.", error);
-
-      // Scheduling is what makes attendance markable at all, so the rows are
-      // created together rather than lazily on first mark.
-      const { error: attendanceError } = await client
-        .from("attendance")
-        .insert(
-          applicationIds.map((applicationId) => ({
-            round_id: roundId,
-            application_id: applicationId,
-            status: "scheduled",
-          })),
-        )
-        .select("id");
-
-      if (attendanceError !== null) {
-        throw withDetail(
-          "Participants were scheduled but attendance could not be prepared.",
-          attendanceError,
-        );
-      }
     },
 
     async markAttendance(roundId, applicationId, status, isScheduled) {
@@ -109,6 +98,25 @@ export function createSupabaseRoundsRepository(
         .eq("application_id", applicationId)
         .select("id")
         .single();
+
+      if (error !== null) throw withDetail("Could not save attendance.", error);
+    },
+
+    async markBatchAttendance(roundId, entries, isScheduled) {
+      const permission = canMarkAttendance(await getActorRole(), isScheduled);
+      if (!permission.allowed) throw new RoundsError(permission.reason);
+
+      if (entries.length === 0) return;
+
+      const actorId = await actor();
+
+      // 0100: one transaction for the whole batch. A failure leaves the old
+      // attendance intact rather than half-updated.
+      const { error } = await client.rpc("save_batch_attendance", {
+        p_round_id: roundId,
+        p_entries: entries.map((e) => ({ applicationId: e.applicationId, status: e.status })),
+        p_marked_by: actorId,
+      });
 
       if (error !== null) throw withDetail("Could not save attendance.", error);
     },
