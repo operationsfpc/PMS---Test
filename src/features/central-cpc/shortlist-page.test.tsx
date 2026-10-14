@@ -416,7 +416,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
    * shortlist.xlsx + resumes/, hyperlinked, zipped; and a missing resume now
    * BLOCKS the export instead of merely being named beside a download.
    */
-  it("downloads the zip pack — sheet + resumes — and logs it (5a)", async () => {
+  it("downloads the shortlist CSV with direct resume database links, shows loader and logs it", async () => {
     const download = vi.fn();
     const logExport = vi.fn();
     const user = userEvent.setup();
@@ -428,8 +428,13 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
             { applicationId: "a1", included: true, snapshot: snapshot("R1", "Priya") },
             { applicationId: "a2", included: false, snapshot: snapshot("R2", "Left Out") },
           ],
-          resumeFiles: async () =>
-            new Map([["resume-1", { data: new Uint8Array([1]).buffer, extension: ".pdf" }]]),
+          resumeSignedUrls: async () =>
+            new Map([
+              [
+                "resume-1",
+                "https://supabase.co/storage/v1/object/sign/resumes/s1/priya.pdf?token=abc",
+              ],
+            ]),
           logExport,
         })}
         download={download}
@@ -437,16 +442,22 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     );
 
     await screen.findByText("Strong Candidate");
-    await user.click(screen.getByRole("button", { name: /export recruiter pack/i }));
+    const exportButton = screen.getByRole("button", { name: /export shortlist/i });
+    await user.click(exportButton);
 
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
-    const [filename, content] = download.mock.calls[0] as [string, Blob];
-    expect(filename).toMatch(/zoho.*\.zip$/i);
-    expect(content).toBeInstanceOf(Blob);
-    expect(logExport).toHaveBeenCalledWith("d1", expect.arrayContaining(["Resume"]), 1);
+    const [filename, content] = download.mock.calls[0] as [string, string];
+    expect(filename).toMatch(/zoho.*\.csv$/i);
+    expect(content).toContain("\uFEFF");
+    expect(content).toContain(
+      "https://supabase.co/storage/v1/object/sign/resumes/s1/priya.pdf?token=abc",
+    );
+    expect(content).toContain("Priya");
+    expect(logExport).toHaveBeenCalledWith("d1", expect.arrayContaining(["Resume link"]), 1);
+    expect(screen.getByRole("status").textContent).toMatch(/exported 1 shortlisted candidate/i);
   });
 
-  it("BLOCKS the export when a shortlisted candidate has no resume (5b)", async () => {
+  it("handles empty shortlist export gracefully with error message", async () => {
     const download = vi.fn();
     const logExport = vi.fn();
     const user = userEvent.setup();
@@ -454,13 +465,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
       <ShortlistPage
         driveId="d1"
         view={view({
-          exportEntries: async () => [
-            {
-              applicationId: "a1",
-              included: true,
-              snapshot: { ...snapshot("R9", "No Resume"), resumeId: null },
-            },
-          ],
+          exportEntries: async () => [],
           logExport,
         })}
         download={download}
@@ -468,10 +473,9 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     );
 
     await screen.findByText("Strong Candidate");
-    await user.click(screen.getByRole("button", { name: /export recruiter pack/i }));
+    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/R9/);
-    // Nothing left the building and nothing was logged as if it had.
+    expect((await screen.findByRole("alert")).textContent).toMatch(/no shortlisted candidates/i);
     expect(download).not.toHaveBeenCalled();
     expect(logExport).not.toHaveBeenCalled();
   });
@@ -667,18 +671,17 @@ describe("the applicant's actual skills", () => {
 });
 
 /**
- * 2026-08-26: the button still said "(CSV)" while answer 5a had already made
- * the artefact a ZIP — `shortlist-<company>.zip`, the sheet plus every resume.
- * Karthik reported this as "the Export CSV button", which is what the screen
- * told him it was.
+ * The export button names what it produces: a clean CSV with direct DB resume links.
  */
 describe("the export button names what it produces", () => {
-  it("offers a recruiter pack, not a CSV", async () => {
+  it("offers a CSV export with resume links and an optional recruiter pack", async () => {
     render(<ShortlistPage driveId="d1" view={view()} />);
 
-    const button = await screen.findByRole("button", { name: /export/i });
-    expect(button.textContent).toMatch(/pack|zip/i);
-    expect(button.textContent).not.toMatch(/csv/i);
+    const csvButton = await screen.findByRole("button", { name: /export shortlist \(csv\)/i });
+    expect(csvButton).toBeDefined();
+
+    const zipButton = screen.getByRole("button", { name: /export recruiter pack \(zip\)/i });
+    expect(zipButton).toBeDefined();
   });
 });
 

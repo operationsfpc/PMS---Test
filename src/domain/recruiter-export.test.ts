@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRecruiterCsvRows,
   buildRecruiterExport,
   EXPORT_COLUMNS,
+  RECRUITER_CSV_COLUMNS,
   recruiterPackProblem,
   resumeHyperlink,
   resumePackFilename,
@@ -114,6 +116,31 @@ describe("buildRecruiterExport", () => {
     const result = buildRecruiterExport([]);
     expect(result.rows).toEqual([]);
     expect(result.resumeIds).toEqual([]);
+  });
+});
+
+describe("buildRecruiterCsvRows", () => {
+  it("includes all standard columns plus Resume link", () => {
+    const signedUrls = new Map([
+      ["r1", "https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc"],
+    ]);
+    const rows = buildRecruiterCsvRows(shortlisted, signedUrls);
+
+    expect(rows).toHaveLength(1);
+    expect(Object.keys(rows[0] ?? {})).toEqual([...RECRUITER_CSV_COLUMNS]);
+    expect(rows[0]?.["Resume link"]).toBe(
+      "https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc",
+    );
+  });
+
+  it("leaves Resume link empty when a candidate has no resume on file", () => {
+    const [first] = shortlisted;
+    if (first === undefined) throw new Error("fixture missing");
+    const noResume = [{ ...first, snapshot: { ...first.snapshot, resumeId: null } }];
+    const rows = buildRecruiterCsvRows(noResume, new Map());
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.["Resume link"]).toBe("");
   });
 });
 

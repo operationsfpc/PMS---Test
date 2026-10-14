@@ -511,3 +511,51 @@ describe("resumeFiles — the path the bucket actually knows", () => {
     expect(paths).toEqual(["s2/profile-sales-abc-cv.pdf"]);
   });
 });
+
+describe("resumeSignedUrls — generates signed URLs with normalized keys", () => {
+  it("normalizes prefixed paths and requests signed URLs", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/student_documents`, () =>
+        HttpResponse.json([
+          { id: "resume-1", storage_path: "resumes/s1/resume.pdf" },
+          { id: "resume-2", storage_path: "s2/cv.pdf" },
+        ]),
+      ),
+    );
+
+    const client_ = client();
+    const requestedPaths: string[] = [];
+    client_.storage.from = ((bucket: string) => ({
+      createSignedUrls: async (paths: string[]) => {
+        requestedPaths.push(...paths);
+        return {
+          data: paths.map((path) => ({
+            path,
+            signedUrl: `https://supabase.co/storage/v1/object/sign/${bucket}/${path}?token=secret`,
+            error: null,
+          })),
+          error: null,
+        };
+      },
+    })) as unknown as typeof client_.storage.from;
+
+    const urls = await createSupabaseShortlistView(
+      client_,
+      async () => "cpc-1",
+      async () => "central_placement_coordinator",
+    ).resumeSignedUrls?.(["resume-1", "resume-2"]);
+
+    expect(requestedPaths).toEqual(["s1/resume.pdf", "s2/cv.pdf"]);
+    expect(urls?.get("resume-1")).toBe(
+      "https://supabase.co/storage/v1/object/sign/resumes/s1/resume.pdf?token=secret",
+    );
+    expect(urls?.get("resume-2")).toBe(
+      "https://supabase.co/storage/v1/object/sign/resumes/s2/cv.pdf?token=secret",
+    );
+  });
+
+  it("returns an empty map when given no resume IDs", async () => {
+    const urls = await view().resumeSignedUrls?.([]);
+    expect(urls?.size).toBe(0);
+  });
+});

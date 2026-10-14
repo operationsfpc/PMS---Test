@@ -29,6 +29,10 @@ export const EXPORT_COLUMNS = [
 export type ExportColumn = (typeof EXPORT_COLUMNS)[number];
 export type ExportRow = Readonly<Record<ExportColumn, string | number>>;
 
+export const RECRUITER_CSV_COLUMNS = [...EXPORT_COLUMNS, "Resume link"] as const;
+export type RecruiterCsvColumn = (typeof RECRUITER_CSV_COLUMNS)[number];
+export type RecruiterCsvRow = Readonly<Record<RecruiterCsvColumn, string | number>>;
+
 export interface ShortlistEntry {
   readonly applicationId: string;
   readonly included: boolean;
@@ -73,6 +77,37 @@ export function buildRecruiterExport(entries: readonly ShortlistEntry[]): Recrui
       e.snapshot.resumeId === null ? [e.snapshot.profile.rollNumber] : [],
     ),
   };
+}
+
+/**
+ * Builds rows for the recruiter CSV export with direct DB signed URLs
+ * for each candidate's resume (instead of bundling separate files in a zip).
+ */
+export function buildRecruiterCsvRows(
+  entries: readonly ShortlistEntry[],
+  resumeSignedUrls: ReadonlyMap<string, string>,
+): readonly RecruiterCsvRow[] {
+  const included = entries.filter((e) => e.included);
+
+  return included.map(({ snapshot }): RecruiterCsvRow => {
+    const p = snapshot.profile;
+    const resumeUrl = snapshot.resumeId ? (resumeSignedUrls.get(snapshot.resumeId) ?? "") : "";
+    return {
+      "Roll number": p.rollNumber,
+      Name: p.fullName,
+      Email: p.email,
+      Degree: p.degree,
+      Branch: p.branch,
+      "Passing year": p.passingYear,
+      "Overall CGPA": p.overallCgpa,
+      "10th %": p.tenthPercentage,
+      "12th %": p.twelfthPercentage,
+      "Standing arrears": p.currentArrears,
+      "Arrear history": p.historyOfArrears,
+      "Technical skills": p.technicalSkills,
+      "Resume link": resumeUrl,
+    };
+  });
 }
 
 /** The folder every resume sits in, inside the pack. */

@@ -1,8 +1,11 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { serialiseCsv } from "@domain/csv";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
 import {
+  buildRecruiterCsvRows,
   buildRecruiterExport,
   EXPORT_COLUMNS,
+  RECRUITER_CSV_COLUMNS,
   recruiterPackProblem,
   resumePackFilename,
   type ShortlistEntry,
@@ -67,6 +70,14 @@ export interface ShortlistView {
   resumeFiles?(
     resumeIds: readonly string[],
   ): Promise<ReadonlyMap<string, { data: ArrayBuffer; extension: string }>>;
+  /**
+   * DB / Storage direct links for resumes (signed URLs).
+   * Used for CSV export with direct clickable links instead of separate zip files.
+   */
+  resumeSignedUrls?(
+    resumeIds: readonly string[],
+    expiresInSeconds?: number,
+  ): Promise<ReadonlyMap<string, string>>;
 }
 
 /** Real downloads go through a Blob; tests hand in a spy. */
@@ -104,6 +115,8 @@ export function ShortlistPage({
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   /**
    * F16 (UAT 2026-08-06): "After shortlisting the candidates, the screen stays
    * the same, this needs to be fixed." It saved, re-read, and came back pixel
@@ -240,6 +253,44 @@ export function ShortlistPage({
   }
 
   /**
+   * Recruiter CSV export with direct DB signed URLs for resumes.
+   * Eliminates the need to download binary files and bundle them into a zip,
+   * providing instant, clickable links directly to the PDFs in Supabase storage.
+   */
+  async function exportShortlistCsv() {
+    setError(null);
+    setExportFeedback(null);
+    setExporting(true);
+    try {
+      const entries = await view.exportEntries(driveId);
+      const pack = buildRecruiterExport(entries);
+
+      if (pack.rows.length === 0) {
+        setError("No shortlisted candidates to export.");
+        return;
+      }
+
+      const signedUrls =
+        (await view.resumeSignedUrls?.(pack.resumeIds)) ?? new Map<string, string>();
+
+      const csvRows = buildRecruiterCsvRows(entries, signedUrls);
+      const companyName = drive?.companyName ?? "drive";
+      const company = companyName.toLowerCase().replaceAll(/\s+/g, "-");
+      const columns = [...RECRUITER_CSV_COLUMNS];
+      const csvContent = `\uFEFF${serialiseCsv(columns, csvRows)}`;
+      download(`shortlist-${company}.csv`, csvContent);
+
+      await view.logExport(driveId, columns, csvRows.length);
+      setExportFeedback(`Exported ${csvRows.length} shortlisted candidates with resume links.`);
+      setMissingResumes([]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /**
    * WS8 (D4), reshaped by answers 5a/5b (2026-08-24): ONE zip —
    * shortlist.xlsx beside resumes/, each row hyperlinking its candidate's
    * file — built from the SNAPSHOTS (R7), included students only. A missing
@@ -331,8 +382,41 @@ export function ShortlistPage({
         {...(drive?.roleTitle == null ? {} : { subtitle: drive.roleTitle })}
         actions={
           <span className="flex flex-wrap gap-2">
-            {/* Answer 5a made this a ZIP — the sheet plus every resume — and
-                the label went on saying CSV until 2026-08-26. */}
+            <Button
+              variant="secondary"
+              onClick={() => void exportShortlistCsv()}
+              disabled={exporting}
+              className="inline-flex items-center gap-2"
+            >
+              {exporting ? (
+                <>
+                  <svg
+                    className="h-4 w-4 animate-spin text-ink-700"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    />
+                  </svg>
+                  <span>Exporting CSV…</span>
+                </>
+              ) : (
+                "Export shortlist (CSV)"
+              )}
+            </Button>
             <Button variant="secondary" onClick={() => void exportShortlist()}>
               Export recruiter pack (ZIP)
             </Button>
@@ -429,6 +513,15 @@ export function ShortlistPage({
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           {error}
+        </div>
+      )}
+
+      {exportFeedback !== null && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-success-700"
+        >
+          {exportFeedback}
         </div>
       )}
 

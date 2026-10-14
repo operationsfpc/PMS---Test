@@ -213,6 +213,52 @@ export function createSupabaseShortlistView(
       return files;
     },
 
+    /**
+     * DB / Storage direct signed links for resumes.
+     * Generates active signed URLs directly from the resumes bucket, avoiding the need
+     * to download all files into memory and package them in a zip.
+     */
+    async resumeSignedUrls(resumeIds, expiresInSeconds = 60 * 60 * 24 * 30) {
+      if (resumeIds.length === 0) return new Map();
+
+      const { data, error } = await client
+        .from("student_documents")
+        .select("id, storage_path")
+        .in("id", resumeIds);
+
+      if (error !== null) throw new ShortlistError("Could not read the resumes for export.");
+
+      const rows = (data ?? []) as Array<{ id: string; storage_path: string }>;
+      const paths = rows.map((r) => objectKeyIn("resumes", r.storage_path));
+
+      const { data: signedEntries, error: signError } = await client.storage
+        .from("resumes")
+        .createSignedUrls(paths, expiresInSeconds);
+
+      if (signError !== null || signedEntries === null) {
+        throw new ShortlistError("Could not generate signed resume links.");
+      }
+
+      const urlByPath = new Map<string, string>();
+      signedEntries.forEach((item, index) => {
+        const path = item.path ?? paths[index];
+        if (path && item.signedUrl) {
+          urlByPath.set(path, item.signedUrl);
+        }
+      });
+
+      const urlMap = new Map<string, string>();
+      for (const row of rows) {
+        const key = objectKeyIn("resumes", row.storage_path);
+        const signedUrl = urlByPath.get(key);
+        if (signedUrl) {
+          urlMap.set(row.id, signedUrl);
+        }
+      }
+
+      return urlMap;
+    },
+
     /** PRD §13.2: the data-sharing log. An unlogged export never happened. */
     async logExport(driveId, columns, studentCount) {
       const actorId = await getActorId();
