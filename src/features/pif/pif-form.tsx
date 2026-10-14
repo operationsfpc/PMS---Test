@@ -173,6 +173,8 @@ export function PifForm({
   onSubmit,
   onSaveDraft,
   skillAreas = [],
+  initialValues,
+  existingCompanies = [],
 }: {
   onSubmit: (values: PifFormValues) => Promise<void>;
   onSaveDraft: (values: PifFormValues) => Promise<void>;
@@ -182,6 +184,13 @@ export function PifForm({
    * explicit "other". Free text invited names the ranking could never match.
    */
   skillAreas?: readonly string[];
+  initialValues?: Partial<PifFormValues>;
+  existingCompanies?: readonly {
+    readonly id?: string;
+    readonly name: string;
+    readonly industry?: string | null;
+    readonly website?: string | null;
+  }[];
 }) {
   const intent = useRef<"draft" | "submit">("submit");
   const [failure, setFailure] = useState<string | null>(null);
@@ -198,7 +207,7 @@ export function PifForm({
     watch,
     formState: { errors, isSubmitting },
   } = useForm<PifFormValues>({
-    defaultValues: { ...PIF_DEFAULTS },
+    defaultValues: { ...PIF_DEFAULTS, ...initialValues },
     resolver: async (values, context, options) =>
       zodResolver(intent.current === "draft" ? pifDraftSchema : pifSubmitSchema)(
         values,
@@ -408,8 +417,75 @@ export function PifForm({
         </Section>
 
         <Section title="Company details">
+          {initialValues?.companyName && (
+            <div className="sm:col-span-2 rounded-lg border border-brand-200 bg-brand-50 p-3.5 text-xs text-brand-900">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Existing Company
+                  </span>
+                  <span className="font-semibold text-brand-900">
+                    Adding drive / role for {watch("companyName")}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setValue("companyName", "", { shouldValidate: true });
+                    setValue("companyDriveId", "");
+                    setValue("companyId", "");
+                  }}
+                  className="font-medium text-brand-700 underline hover:text-brand-900"
+                >
+                  Clear to create for another company
+                </button>
+              </div>
+              <p className="mt-1 text-ink-600">
+                This recruitment event will be tracked and monitored under the company's existing
+                profile.
+              </p>
+            </div>
+          )}
+
           <Labelled label="Company name" required error={err("companyName")}>
-            {(id) => <input id={id} className={control} {...register("companyName")} />}
+            {(id) => (
+              <div>
+                <input
+                  id={id}
+                  className={control}
+                  {...register("companyName", {
+                    onChange: (e) => {
+                      const val = (e.target.value as string).trim();
+                      const match = existingCompanies.find(
+                        (c) => c.name.toLowerCase() === val.toLowerCase(),
+                      );
+                      if (match) {
+                        if (match.industry && !watch("industry")) {
+                          setValue("industry", match.industry);
+                        }
+                        if (match.website && !watch("companyWebsite")) {
+                          setValue("companyWebsite", match.website);
+                        }
+                        if (match.id) {
+                          setValue("companyId", match.id);
+                        }
+                      }
+                    },
+                  })}
+                  list={`${id}-companies-list`}
+                  autoComplete="off"
+                />
+                {existingCompanies.length > 0 && (
+                  <datalist id={`${id}-companies-list`}>
+                    {existingCompanies.map((c) => (
+                      <option key={c.name} value={c.name}>
+                        {c.industry ? `${c.name} (${c.industry})` : c.name}
+                      </option>
+                    ))}
+                  </datalist>
+                )}
+              </div>
+            )}
           </Labelled>
           <Labelled label="Industry / domain" error={err("industry")}>
             {(id) => <input id={id} className={control} {...register("industry")} />}

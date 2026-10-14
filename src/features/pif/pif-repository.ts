@@ -42,6 +42,17 @@ export interface PifRepository {
    * catalogue: the AE can still raise the PIF using "other skills".
    */
   skillAreas(): Promise<readonly string[]>;
+  /**
+   * Returns previously created companies for autocomplete and linking.
+   */
+  existingCompanies?(): Promise<readonly CompanySuggestion[]>;
+}
+
+export interface CompanySuggestion {
+  readonly id?: string;
+  readonly name: string;
+  readonly industry?: string | null;
+  readonly website?: string | null;
 }
 
 export type GetActorId = () => Promise<string | null>;
@@ -83,6 +94,9 @@ function toRow(
      * before the row exists (see `write`).
      */
     id: driveId,
+    ...(values.companyDriveId && values.companyDriveId.trim() !== ""
+      ? { company_drive_id: values.companyDriveId.trim() }
+      : {}),
     company_name: values.companyName,
     industry: nullIfBlank(values.industry),
     company_website: nullIfBlank(values.companyWebsite),
@@ -439,6 +453,42 @@ export function createSupabasePifRepository(
       return ((data ?? []) as Array<{ name?: unknown }>)
         .map((r) => String(r.name ?? ""))
         .filter((n) => n !== "");
+    },
+    async existingCompanies(): Promise<readonly CompanySuggestion[]> {
+      const { data, error } = await client
+        .from("companies")
+        .select("id, name, industry, website")
+        .order("name");
+
+      if (error === null && Array.isArray(data) && data.length > 0) {
+        return data.map((c) => ({
+          id: c.id as string,
+          name: c.name as string,
+          industry: (c.industry as string | null) ?? null,
+          website: (c.website as string | null) ?? null,
+        }));
+      }
+
+      const { data: drivesData } = await client
+        .from("drives")
+        .select("company_name, industry, company_website")
+        .order("company_name");
+
+      if (!Array.isArray(drivesData)) return [];
+      const seen = new Set<string>();
+      const results: CompanySuggestion[] = [];
+      for (const row of drivesData) {
+        const name = String(row.company_name ?? "").trim();
+        if (name && !seen.has(name.toLowerCase())) {
+          seen.add(name.toLowerCase());
+          results.push({
+            name,
+            industry: (row.industry as string | null) ?? null,
+            website: (row.company_website as string | null) ?? null,
+          });
+        }
+      }
+      return results;
     },
   };
 }

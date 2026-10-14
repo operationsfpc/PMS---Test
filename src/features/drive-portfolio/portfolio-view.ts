@@ -26,6 +26,7 @@ export const PORTFOLIO_DRIVE_COLUMNS = `
   ctc_min_lpa, ctc_max_lpa, drive_type,
   created_by, approved_by, published_by,
   application_start, application_end,
+  tentative_date, openings, company_drive_id,
   drive_rounds(
     id, sequence, name,
     round_participants(application_id),
@@ -140,6 +141,9 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           createdAt: (row.created_at as string | null) ?? null,
           applicationStart: (row.application_start as string | null) ?? null,
           applicationEnd: (row.application_end as string | null) ?? null,
+          tentativeDate: (row.tentative_date as string | null) ?? null,
+          openings: row.openings == null ? null : Number(row.openings),
+          companyDriveId: (row.company_drive_id as string | null) ?? null,
           totalRounds: roundRows.length,
           // A round counts as decided when a result has been declared in it -
           // not when it was merely scheduled or attended.

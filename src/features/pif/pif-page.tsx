@@ -1,8 +1,13 @@
 import { Card } from "@components/ui";
 import { supabase } from "@lib/supabase";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 import { PifForm } from "./pif-form";
-import { createSupabasePifRepository, type PifRepository } from "./pif-repository";
+import {
+  type CompanySuggestion,
+  createSupabasePifRepository,
+  type PifRepository,
+} from "./pif-repository";
 import type { PifFormValues } from "./pif-schema";
 
 /**
@@ -13,6 +18,11 @@ import type { PifFormValues } from "./pif-schema";
  * because an AE who expects to edit it later will be surprised.
  */
 export function PifPage({ repository }: { repository?: PifRepository }) {
+  const [searchParams] = useSearchParams();
+  const companyNameParam = searchParams.get("companyName");
+  const companyDriveIdParam = searchParams.get("companyDriveId");
+  const companyIdParam = searchParams.get("companyId");
+
   const [repo] = useState<PifRepository>(
     () => repository ?? createSupabasePifRepository(supabase()),
   );
@@ -25,10 +35,28 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
   /** The assessed-skills catalogue for the mandatory-skills picker (part A). */
   const [skillAreas, setSkillAreas] = useState<readonly string[]>([]);
+  const [existingCompanies, setExistingCompanies] = useState<readonly CompanySuggestion[]>([]);
 
   useEffect(() => {
     void repo.skillAreas().then(setSkillAreas);
+    if (repo.existingCompanies) {
+      void repo.existingCompanies().then(setExistingCompanies);
+    }
   }, [repo]);
+
+  const initialValues = useMemo<Partial<PifFormValues>>(() => {
+    const init: Partial<PifFormValues> = {};
+    if (companyNameParam && companyNameParam.trim() !== "") {
+      init.companyName = companyNameParam.trim();
+    }
+    if (companyDriveIdParam && companyDriveIdParam.trim() !== "") {
+      init.companyDriveId = companyDriveIdParam.trim();
+    }
+    if (companyIdParam && companyIdParam.trim() !== "") {
+      init.companyId = companyIdParam.trim();
+    }
+    return init;
+  }, [companyNameParam, companyDriveIdParam, companyIdParam]);
 
   async function submit(values: PifFormValues) {
     await repo.submit(values, draftId);
@@ -64,7 +92,13 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
           </p>
         </Card>
       )}
-      <PifForm onSubmit={submit} onSaveDraft={saveDraft} skillAreas={skillAreas} />
+      <PifForm
+        onSubmit={submit}
+        onSaveDraft={saveDraft}
+        skillAreas={skillAreas}
+        initialValues={initialValues}
+        existingCompanies={existingCompanies}
+      />
     </>
   );
 }

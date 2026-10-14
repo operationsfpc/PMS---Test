@@ -71,6 +71,8 @@ export interface PifContact {
 }
 
 export const PIF_DEFAULTS = {
+  companyId: "",
+  companyDriveId: "",
   companyName: "",
   industry: "",
   companyWebsite: "",
@@ -156,6 +158,8 @@ const contacts = z
 
 /** A draft needs only enough to identify what it is about. */
 export const pifDraftSchema = z.object({
+  companyId: optionalText,
+  companyDriveId: optionalText,
   companyName: requiredText("Company name"),
   industry: optionalText,
   companyWebsite: optionalUrl,

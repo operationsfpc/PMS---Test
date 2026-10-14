@@ -1,3 +1,4 @@
+import { DriveDateFilter } from "@components/drive-date-filter";
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
@@ -5,6 +6,7 @@ import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
 import { type DriveOrder, orderDrives, partitionExpired } from "@domain/drive-aging";
 import { applicationWindow } from "@domain/drive-analytics";
+import { type DateRangeFilterCriteria, filterDrivesByDateRange } from "@domain/drive-date-filter";
 import {
   canShortlistFromPortfolio,
   canViewDriveApplicants,
@@ -56,6 +58,9 @@ export interface PortfolioDrive {
   readonly createdAt: string | null;
   readonly applicationStart: string | null;
   readonly applicationEnd: string | null;
+  readonly tentativeDate?: string | null;
+  readonly openings?: number | null;
+  readonly companyDriveId?: string | null;
   readonly applicants: readonly PortfolioApplicant[];
 }
 
@@ -147,6 +152,12 @@ export function DrivePortfolioPage({
    */
   const [order, setOrder] = useState<DriveOrder>("newest");
   const [type, setType] = useState<DriveTypeFilterValue>("");
+  const [dateCriteria, setDateCriteria] = useState<DateRangeFilterCriteria>({
+    dimension: "created_at",
+    preset: "all",
+    startDate: null,
+    endDate: null,
+  });
 
   useEffect(() => {
     let live = true;
@@ -176,6 +187,11 @@ export function DrivePortfolioPage({
     [drives, statuses],
   );
 
+  const dateFiltered = useMemo(
+    () => filterDrivesByDateRange(inScope, dateCriteria),
+    [inScope, dateCriteria],
+  );
+
   /**
    * 2026-08-27 (Karthik): the type filter. It sits between the tab and the
    * search for the same reason the tab does: it narrows WHICH drives, while
@@ -185,24 +201,24 @@ export function DrivePortfolioPage({
     () =>
       orderDrives(
         searchDrives(
-          inScope.filter((drive) => matchesDriveType(drive.driveType, type)),
+          dateFiltered.filter((drive) => matchesDriveType(drive.driveType, type)),
           query,
         ),
         order,
       ),
-    [inScope, query, order, type],
+    [dateFiltered, query, order, type],
   );
 
   /** What each chip is worth, counted before the search narrows anything. */
   const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = { "": inScope.length };
+    const counts: Record<string, number> = { "": dateFiltered.length };
     for (const option of DRIVE_TYPE_FILTERS) {
       if (option.value !== "") {
-        counts[option.value] = inScope.filter((d) => d.driveType === option.value).length;
+        counts[option.value] = dateFiltered.filter((d) => d.driveType === option.value).length;
       }
     }
     return counts;
-  }, [inScope]);
+  }, [dateFiltered]);
 
   /**
    * G5c / G1d (UAT 2026-08-20, answer 1a): past-deadline drives collapse into
@@ -249,6 +265,14 @@ export function DrivePortfolioPage({
         </Card>
       ) : (
         <>
+          <DriveDateFilter
+            criteria={dateCriteria}
+            onChange={setDateCriteria}
+            filteredDrives={dateFiltered}
+            allDrivesCount={inScope.length}
+            showAnalytics={true}
+          />
+
           <DriveSearch value={query} onChange={setQuery} />
 
           <DriveTypeFilter value={type} onChange={setType} counts={typeCounts} />
@@ -421,6 +445,17 @@ export function DrivePortfolioPage({
                   className="text-xs font-semibold text-brand-600 hover:underline"
                 >
                   Shortlist applicants
+                </Link>
+              )}
+
+              {(role === "account_executive" || role === "admin") && (
+                <Link
+                  to={`/ae/pif?companyName=${encodeURIComponent(drive.companyName)}${
+                    drive.companyDriveId ? `&companyDriveId=${drive.companyDriveId}` : ""
+                  }`}
+                  className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                >
+                  + Add Drive / Role for {drive.companyName}
                 </Link>
               )}
             </div>
