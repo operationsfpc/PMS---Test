@@ -46,6 +46,10 @@ export interface PifRepository {
    * Returns previously created companies for autocomplete and linking.
    */
   existingCompanies?(): Promise<readonly CompanySuggestion[]>;
+  /**
+   * Returns existing drive events / dates for a specific company name.
+   */
+  getCompanyEvents?(companyName: string): Promise<readonly ExistingDriveEvent[]>;
 }
 
 export interface CompanySuggestion {
@@ -53,6 +57,22 @@ export interface CompanySuggestion {
   readonly name: string;
   readonly industry?: string | null;
   readonly website?: string | null;
+}
+
+export interface ExistingDriveEvent {
+  readonly id: string;
+  readonly companyName: string;
+  readonly tentativeDate: string | null;
+  readonly driveMode: string | null;
+  readonly venue: string | null;
+  readonly status: string;
+  readonly existingRoles: readonly string[];
+  readonly contacts?: readonly {
+    readonly name: string;
+    readonly designation: string;
+    readonly email: string;
+    readonly phone: string;
+  }[];
 }
 
 export type GetActorId = () => Promise<string | null>;
@@ -489,6 +509,101 @@ export function createSupabasePifRepository(
         }
       }
       return results;
+    },
+    async getCompanyEvents(companyName: string): Promise<readonly ExistingDriveEvent[]> {
+      const trimmed = companyName.trim();
+      if (!trimmed) return [];
+
+      const events: ExistingDriveEvent[] = [];
+
+      const { data: cdData, error: cdError } = await client
+        .from("company_drives")
+        .select(`
+          id, company_name, drive_mode, venue, tentative_date, status,
+          drives(id, role_title),
+          company_drive_contacts(sequence, name, designation, email, phone)
+        `)
+        .ilike("company_name", trimmed)
+        .order("tentative_date", { ascending: false });
+
+      if (cdError === null && Array.isArray(cdData)) {
+        for (const row of cdData) {
+          const roles = (Array.isArray(row.drives) ? row.drives : [])
+            .map((d: Record<string, unknown>) => String(d.role_title ?? "").trim())
+            .filter((r) => r !== "");
+          const contacts = (
+            Array.isArray(row.company_drive_contacts) ? row.company_drive_contacts : []
+          )
+            .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
+            .map((c: Record<string, unknown>) => ({
+              name: String(c.name ?? ""),
+              designation: String(c.designation ?? ""),
+              email: String(c.email ?? ""),
+              phone: String(c.phone ?? ""),
+            }));
+
+          events.push({
+            id: row.id as string,
+            companyName: row.company_name as string,
+            tentativeDate: (row.tentative_date as string | null) ?? null,
+            driveMode: (row.drive_mode as string | null) ?? null,
+            venue: (row.venue as string | null) ?? null,
+            status: (row.status as string | null) ?? "draft",
+            existingRoles: roles,
+            contacts,
+          });
+        }
+      }
+
+      const { data: drivesData, error: drivesError } = await client
+        .from("drives")
+        .select(`
+          id, company_drive_id, company_name, drive_mode, venue, tentative_date, status, role_title,
+          drive_contacts(sequence, name, designation, email, phone)
+        `)
+        .ilike("company_name", trimmed)
+        .order("tentative_date", { ascending: false });
+
+      if (drivesError === null && Array.isArray(drivesData)) {
+        const seenEventIds = new Set(events.map((e) => e.id));
+        for (const d of drivesData) {
+          const eventId = (d.company_drive_id as string | null) ?? (d.id as string);
+          if (seenEventIds.has(eventId)) {
+            const existing = events.find((e) => e.id === eventId);
+            if (
+              existing &&
+              d.role_title &&
+              !existing.existingRoles.includes(String(d.role_title))
+            ) {
+              (existing.existingRoles as string[]).push(String(d.role_title));
+            }
+            continue;
+          }
+          seenEventIds.add(eventId);
+
+          const contacts = (Array.isArray(d.drive_contacts) ? d.drive_contacts : [])
+            .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
+            .map((c: Record<string, unknown>) => ({
+              name: String(c.name ?? ""),
+              designation: String(c.designation ?? ""),
+              email: String(c.email ?? ""),
+              phone: String(c.phone ?? ""),
+            }));
+
+          events.push({
+            id: eventId,
+            companyName: d.company_name as string,
+            tentativeDate: (d.tentative_date as string | null) ?? null,
+            driveMode: (d.drive_mode as string | null) ?? null,
+            venue: (d.venue as string | null) ?? null,
+            status: (d.status as string | null) ?? "draft",
+            existingRoles: d.role_title ? [String(d.role_title)] : [],
+            contacts,
+          });
+        }
+      }
+
+      return events;
     },
   };
 }

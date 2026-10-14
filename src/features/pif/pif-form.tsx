@@ -8,8 +8,9 @@ import { SHIFT_TYPES, shiftLabel } from "@domain/shift";
 import { joinMandatorySkills, normaliseSkillAreaName, skillAreaKey } from "@domain/skills";
 import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ReactNode, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
+import type { ExistingDriveEvent } from "./pif-repository";
 import { PIF_DEFAULTS, type PifFormValues, pifDraftSchema, pifSubmitSchema } from "./pif-schema";
 
 /**
@@ -175,6 +176,7 @@ export function PifForm({
   skillAreas = [],
   initialValues,
   existingCompanies = [],
+  getCompanyEvents,
 }: {
   onSubmit: (values: PifFormValues) => Promise<void>;
   onSaveDraft: (values: PifFormValues) => Promise<void>;
@@ -191,6 +193,7 @@ export function PifForm({
     readonly industry?: string | null;
     readonly website?: string | null;
   }[];
+  getCompanyEvents?: (companyName: string) => Promise<readonly ExistingDriveEvent[]>;
 }) {
   const intent = useRef<"draft" | "submit">("submit");
   const [failure, setFailure] = useState<string | null>(null);
@@ -215,6 +218,35 @@ export function PifForm({
         options,
       ),
   });
+
+  const [eventsForCompany, setEventsForCompany] = useState<readonly ExistingDriveEvent[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(
+    initialValues?.companyDriveId ?? null,
+  );
+
+  const watchedCompanyName = watch("companyName");
+
+  useEffect(() => {
+    let active = true;
+    if (getCompanyEvents && watchedCompanyName && watchedCompanyName.trim().length >= 2) {
+      void getCompanyEvents(watchedCompanyName.trim()).then((events) => {
+        if (active) {
+          setEventsForCompany(events);
+          if (initialValues?.companyDriveId) {
+            const found = events.find((e) => e.id === initialValues.companyDriveId);
+            if (found) {
+              setSelectedEventId(found.id);
+            }
+          }
+        }
+      });
+    } else {
+      setEventsForCompany([]);
+    }
+    return () => {
+      active = false;
+    };
+  }, [getCompanyEvents, watchedCompanyName, initialValues?.companyDriveId]);
 
   /**
    * The mode is set when the BUTTON IS PRESSED, not when it is rendered.
@@ -493,6 +525,124 @@ export function PifForm({
           <Labelled label="Company website" error={err("companyWebsite")}>
             {(id) => <input id={id} className={control} {...register("companyWebsite")} />}
           </Labelled>
+
+          {eventsForCompany.length > 0 && (
+            <div className="sm:col-span-2 rounded-xl border-2 border-brand-200 bg-brand-50/60 p-4">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-bold text-brand-900">
+                    Recruitment Drive / Day for {watchedCompanyName}
+                  </h3>
+                  <p className="text-xs text-ink-600">
+                    Select an already-created drive date to add this role to it, or schedule a new
+                    drive date.
+                  </p>
+                </div>
+                <span className="rounded-full border border-brand-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-700">
+                  {eventsForCompany.length} existing drive{eventsForCompany.length > 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {eventsForCompany.map((evt) => {
+                  const isSelected = selectedEventId === evt.id;
+                  return (
+                    <label
+                      key={evt.id}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                        isSelected
+                          ? "border-brand-500 bg-white shadow-xs ring-1 ring-brand-500/20"
+                          : "border-line bg-white/70 hover:bg-white"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="companyDriveEventSelector"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedEventId(evt.id);
+                          setValue("companyDriveId", evt.id);
+                          if (evt.tentativeDate) {
+                            setValue("tentativeDate", evt.tentativeDate);
+                          }
+                          if (evt.driveMode) {
+                            setValue("driveMode", evt.driveMode as PifFormValues["driveMode"]);
+                          }
+                          if (evt.venue) {
+                            setValue("venue", evt.venue);
+                            setValue("venueStatus", "confirmed");
+                          }
+                          if (evt.contacts && evt.contacts.length > 0) {
+                            setValue(
+                              "contacts",
+                              evt.contacts.map((c) => ({
+                                name: c.name,
+                                designation: c.designation,
+                                email: c.email,
+                                phone: c.phone,
+                              })),
+                            );
+                          }
+                        }}
+                        className="mt-1 size-4 accent-[#3D3777]"
+                      />
+                      <div className="flex-1 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-ink-900">
+                            Drive Date:{" "}
+                            {evt.tentativeDate ? evt.tentativeDate : "Date to be announced"}
+                          </span>
+                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-700">
+                            {evt.status}
+                          </span>
+                          {evt.driveMode && (
+                            <span className="text-ink-500 capitalize">
+                              · {evt.driveMode.replace(/_/g, " ")}
+                            </span>
+                          )}
+                        </div>
+                        {evt.existingRoles.length > 0 && (
+                          <p className="mt-1 text-ink-700">
+                            <strong>Existing role(s) in this drive:</strong>{" "}
+                            {evt.existingRoles.join(", ")}
+                          </p>
+                        )}
+                        {evt.venue && <p className="mt-0.5 text-ink-500">Venue: {evt.venue}</p>}
+                      </div>
+                    </label>
+                  );
+                })}
+
+                <label
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                    selectedEventId === "new"
+                      ? "border-brand-500 bg-white shadow-xs ring-1 ring-brand-500/20"
+                      : "border-line bg-white/70 hover:bg-white"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="companyDriveEventSelector"
+                    checked={selectedEventId === "new"}
+                    onChange={() => {
+                      setSelectedEventId("new");
+                      setValue("companyDriveId", "");
+                    }}
+                    className="mt-1 size-4 accent-[#3D3777]"
+                  />
+                  <div className="flex-1 text-xs">
+                    <span className="font-bold text-ink-900">
+                      + Create a new drive event / date for {watchedCompanyName}
+                    </span>
+                    <p className="mt-0.5 text-ink-500">
+                      Schedule a separate campus recruitment visit with its own date, mode, and
+                      details.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
 
           {/* A4/A5 (UAT 2026-08-19): several contacts, all optional. With none,
               the Central CPC is the point of contact — said here, not assumed. */}

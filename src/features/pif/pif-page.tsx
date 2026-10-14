@@ -22,6 +22,7 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
   const companyNameParam = searchParams.get("companyName");
   const companyDriveIdParam = searchParams.get("companyDriveId");
   const companyIdParam = searchParams.get("companyId");
+  const tentativeDateParam = searchParams.get("tentativeDate");
 
   const [repo] = useState<PifRepository>(
     () => repository ?? createSupabasePifRepository(supabase()),
@@ -55,8 +56,11 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     if (companyIdParam && companyIdParam.trim() !== "") {
       init.companyId = companyIdParam.trim();
     }
+    if (tentativeDateParam && tentativeDateParam.trim() !== "") {
+      init.tentativeDate = tentativeDateParam.trim();
+    }
     return init;
-  }, [companyNameParam, companyDriveIdParam, companyIdParam]);
+  }, [companyNameParam, companyDriveIdParam, companyIdParam, tentativeDateParam]);
 
   async function submit(values: PifFormValues) {
     await repo.submit(values, draftId);
@@ -83,6 +87,8 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     );
   }
 
+  const getCompanyEvents = repo.getCompanyEvents?.bind(repo);
+
   return (
     <>
       {outcome === "draft" && (
@@ -98,6 +104,7 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
         skillAreas={skillAreas}
         initialValues={initialValues}
         existingCompanies={existingCompanies}
+        {...(getCompanyEvents ? { getCompanyEvents } : {})}
       />
     </>
   );

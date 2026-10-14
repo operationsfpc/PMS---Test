@@ -167,10 +167,10 @@ export function DriveRecordPage({
         actions={
           staff && (role === "account_executive" || role === "admin") ? (
             <Link
-              to={`/ae/pif?companyName=${encodeURIComponent(record.companyName)}`}
+              to={`/ae/pif?companyName=${encodeURIComponent(record.companyName)}&tentativeDate=${encodeURIComponent(record.tentativeDate ?? "")}`}
               className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
             >
-              + Add Drive / Role for {record.companyName}
+              + Add Role to this Drive {record.tentativeDate ? `(${record.tentativeDate})` : ""}
             </Link>
           ) : undefined
         }
