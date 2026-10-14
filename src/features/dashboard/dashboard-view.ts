@@ -1,3 +1,4 @@
+import type { DriveProgressStudentItem } from "@components/drive-progress-modal";
 import type { PlacementCtc } from "@domain/ctc-statistics";
 import type { RoundParticipant } from "@domain/drive-funnel";
 import { type Offer, resolvePlacementRecord } from "@domain/offers";
@@ -59,7 +60,7 @@ export const DASHBOARD_DRIVE_BOX_COLUMNS = `
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const DASHBOARD_COHORT_COLUMNS = `
-  id, participation_status, srf_status, campus_id, passing_year,
+  id, full_name, roll_number, participation_status, srf_status, campus_id, passing_year,
   overall_cgpa, tenth_percentage, twelfth_percentage,
   current_arrears, history_of_arrears,
   degrees(name), branches(name), campuses(name, cities(name))
@@ -93,7 +94,12 @@ export function createSupabaseDashboardView(
           ? await studentQuery
           : await studentQuery.in("campus_id", campusIds);
 
-      const studentRows = (students ?? []) as Array<Record<string, unknown>>;
+      const studentRows = ((students ?? []) as Array<Record<string, unknown>>).filter(
+        (s) =>
+          campusIds === undefined ||
+          campusIds.length === 0 ||
+          campusIds.includes(s.campus_id as string),
+      );
       const studentIds = studentRows.map((s) => s.id as string);
 
       const [{ data: offers }, { data: drives }, { data: applications }] = await Promise.all([
@@ -347,6 +353,58 @@ export function createSupabaseDashboardView(
           .map((row) => row.application_id as string),
       );
 
+      const studentMap = new Map<
+        string,
+        {
+          fullName: string;
+          rollNumber: string;
+          campusId: string;
+          campusName: string;
+          degree?: string | undefined;
+          branch?: string | undefined;
+          cgpa?: number | undefined;
+        }
+      >();
+
+      for (const row of studentRows) {
+        const campus = one<{ name?: string }>(row.campuses);
+        studentMap.set(row.id as string, {
+          fullName: (row.full_name as string | null) ?? "Unknown student",
+          rollNumber: (row.roll_number as string | null) ?? "—",
+          campusId: (row.campus_id as string | null) ?? "unknown",
+          campusName: campus?.name ?? "Unassigned campus",
+          degree: one<{ name?: string }>(row.degrees)?.name,
+          branch: one<{ name?: string }>(row.branches)?.name,
+          cgpa:
+            row.overall_cgpa !== null && row.overall_cgpa !== undefined
+              ? Number(row.overall_cgpa)
+              : undefined,
+        });
+      }
+
+      const studentIdByApp = new Map<string, string>();
+      for (const row of appliedRows) {
+        studentIdByApp.set(row.id as string, row.student_id as string);
+      }
+
+      const offerByStudentDrive = new Map<
+        string,
+        {
+          ctcLpa: number | null;
+          stipendMonthly?: number | null;
+          driveType?: DriveType;
+          offerCategory: string | null;
+        }
+      >();
+      for (const o of offerRows) {
+        offerByStudentDrive.set(`${o.student_id}:${o.drive_id}`, {
+          ctcLpa: (o.ctc_lpa as number | null) === null ? null : Number(o.ctc_lpa),
+          stipendMonthly: (o.stipend_monthly as number | null) ?? null,
+          driveType: (o.drive_type as DriveType | null) ?? "placement",
+          offerCategory: (o.offer_category as string | null) ?? null,
+        });
+      }
+
       const driveProgress: DriveProgressSnapshot[] = rows(allDrives).map((row) => {
         const driveId = row.id as string;
         const roleTitle = (row.role_title as string | null) ?? null;
@@ -354,42 +412,81 @@ export function createSupabaseDashboardView(
         const applications = applicationsByDrive.get(driveId) ?? [];
         const applicationIds = new Set(applications);
 
+        const driveRounds = rows(rounds)
+          .filter((round) => round.drive_id === driveId)
+          .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0));
+
+        const driveStudents: DriveProgressStudentItem[] = applications
+          .map((appId): DriveProgressStudentItem | null => {
+            const studentId = studentIdByApp.get(appId);
+            if (!studentId) return null;
+            const student = studentMap.get(studentId);
+            if (!student) return null;
+
+            const studentRounds = driveRounds.map((round) => {
+              const roundId = round.id as string;
+              const key = `${roundId}:${appId}`;
+              return {
+                roundId,
+                sequence: Number(round.sequence ?? 0),
+                name: (round.name as string | null) ?? "Round",
+                attendance: attendanceOf.get(key) ?? "scheduled",
+                result: resultOf.get(key) ?? null,
+              };
+            });
+
+            return {
+              applicationId: appId,
+              studentId,
+              studentName: student.fullName,
+              rollNumber: student.rollNumber,
+              campusId: student.campusId,
+              campusName: student.campusName,
+              degree: student.degree,
+              branch: student.branch,
+              cgpa: student.cgpa,
+              shortlisted: includedApplications.has(appId),
+              rounds: studentRounds,
+              offer: offerByStudentDrive.get(`${studentId}:${driveId}`) ?? null,
+            };
+          })
+          .filter((s): s is DriveProgressStudentItem => s !== null)
+          .sort((a, b) => a.studentName.localeCompare(b.studentName));
+
         return {
           driveId,
           // Named for a human, because the filter above it is typed by one.
           driveName: roleTitle === null || roleTitle === "" ? company : `${company} — ${roleTitle}`,
           campusNames: linkedNames(row.drive_target_campuses, "campuses"),
+          students: driveStudents,
           participation: {
             eligible: eligibleByDrive.get(driveId) ?? 0,
             applied: applications.length,
             shortlisted: applications.filter((id) => includedApplications.has(id)).length,
             offers: offerRows.filter((o) => o.drive_id === driveId).length,
-            rounds: rows(rounds)
-              .filter((round) => round.drive_id === driveId)
-              .map((round) => {
-                const roundId = round.id as string;
-                return {
-                  roundId,
-                  sequence: Number(round.sequence ?? 0),
-                  name: (round.name as string | null) ?? "Round",
-                  participants: rows(participants)
-                    .filter(
-                      (p) =>
-                        p.round_id === roundId && applicationIds.has(p.application_id as string),
-                    )
-                    .map((p): RoundParticipant => {
-                      const key = `${roundId}:${p.application_id as string}`;
-                      return {
-                        studentId: p.application_id as string,
-                        // No attendance row means the round has not happened
-                        // to them yet. Reading that as an absence would put
-                        // students on the R8 disbarment ladder for nothing.
-                        attendance: attendanceOf.get(key) ?? "scheduled",
-                        result: resultOf.get(key) ?? null,
-                      };
-                    }),
-                };
-              }),
+            rounds: driveRounds.map((round) => {
+              const roundId = round.id as string;
+              return {
+                roundId,
+                sequence: Number(round.sequence ?? 0),
+                name: (round.name as string | null) ?? "Round",
+                participants: rows(participants)
+                  .filter(
+                    (p) => p.round_id === roundId && applicationIds.has(p.application_id as string),
+                  )
+                  .map((p): RoundParticipant => {
+                    const key = `${roundId}:${p.application_id as string}`;
+                    return {
+                      studentId: p.application_id as string,
+                      // No attendance row means the round has not happened
+                      // to them yet. Reading that as an absence would put
+                      // students on the R8 disbarment ladder for nothing.
+                      attendance: attendanceOf.get(key) ?? "scheduled",
+                      result: resultOf.get(key) ?? null,
+                    };
+                  }),
+              };
+            }),
           },
         };
       });

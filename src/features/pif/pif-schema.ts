@@ -397,3 +397,184 @@ export const pifSubmitSchema = pifDraftSchema
 
 export type PifFormValues = z.input<typeof pifDraftSchema>;
 export type PifSubmission = z.output<typeof pifSubmitSchema>;
+
+export const DEFAULT_ROLE_VALUES = {
+  roleTitle: "",
+  roleCategory: "",
+  driveType: "",
+  jobDescription: "",
+  openings: null as number | null,
+  workLocations: "",
+  ctcMinLpa: null as number | null,
+  ctcMaxLpa: null as number | null,
+  ctcBreakup: "",
+  stipendMinMonthly: null as number | null,
+  stipendMaxMonthly: null as number | null,
+  shiftType: "",
+  shiftNightTiming: "",
+  bondDetails: "",
+  jobDescriptionFile: null as File | null,
+  minOverallCgpa: null as number | null,
+  minOverallCgpaScale: "cgpa" as const,
+  minTenthPercentage: null as number | null,
+  minTwelfthPercentage: null as number | null,
+  arrearsPolicy: "flexible" as const,
+  eligiblePassingYears: [] as number[],
+  mandatorySkills: "",
+  additionalDesignations: [] as string[],
+  rounds: [] as Array<{ sequence: number; name: string }>,
+  joiningImmediateNotes: "",
+  joiningLaterNotes: "",
+};
+
+export const pifRoleDraftSchema = z.object({
+  id: z.string().optional(),
+  roleTitle: optionalText,
+  roleCategory: z.enum(["", ...ROLE_CATEGORIES]).default(""),
+  driveType: z.enum(["", ...DRIVE_TYPES]).default(""),
+  jobDescription: optionalText,
+  openings: nullableNumber,
+  workLocations: optionalText,
+  ctcMinLpa: nullableNumber,
+  ctcMaxLpa: nullableNumber,
+  ctcBreakup: optionalText,
+  stipendMinMonthly: nullableNumber,
+  stipendMaxMonthly: nullableNumber,
+  shiftType: z.enum(["", ...SHIFT_TYPES]).default(""),
+  shiftNightTiming: optionalText,
+  bondDetails: optionalText,
+  jobDescriptionFile,
+  minOverallCgpa: nullableNumber,
+  minOverallCgpaScale: z.enum(MARKS_SCALES).default("cgpa"),
+  minTenthPercentage: nullableNumber,
+  minTwelfthPercentage: nullableNumber,
+  arrearsPolicy: z.enum(ARREAR_POLICIES).default("flexible"),
+  eligiblePassingYears: passingYears.default([]),
+  mandatorySkills: optionalText,
+  additionalDesignations: additionalDesignations.default([]),
+  rounds: z
+    .array(z.object({ sequence: z.number().int().positive(), name: z.string() }))
+    .default([]),
+  joiningImmediateNotes: optionalText,
+  joiningLaterNotes: optionalText,
+});
+
+export const pifRoleSubmitSchema = pifRoleDraftSchema
+  .extend({
+    roleTitle: requiredText("Role title"),
+    driveType: z.enum(DRIVE_TYPES, { message: "Choose the drive type." }),
+    roleCategory: z.enum(ROLE_CATEGORIES, { message: "Choose a role category." }),
+    workLocations: requiredText("Work location"),
+    openings: z.number().int().positive("There must be at least one opening."),
+    minOverallCgpa: z.number().min(0).nullable(),
+    eligiblePassingYears: z.preprocess(
+      (v) => {
+        if (Array.isArray(v)) return v.filter((x) => x !== false && x !== "").map(Number);
+        if (v === "" || v === null || v === undefined || v === false) return [];
+        return [Number(v)];
+      },
+      z.array(z.number().int()).min(1, "Choose at least one passing year."),
+    ),
+    rounds: z
+      .array(z.object({ sequence: z.number().int().positive(), name: z.string() }))
+      .min(1, "A selection process has at least one round.")
+      .refine(
+        (rounds) => rounds.every((round) => round.name.trim() !== ""),
+        "Name every round — a student cannot prepare for “Round 2”.",
+      ),
+  })
+  .superRefine((v, ctx) => {
+    const wantsCtc = v.driveType === "placement" || v.driveType === "internship_convertible";
+    const wantsStipend = v.driveType === "internship" || v.driveType === "internship_convertible";
+
+    if (wantsCtc && (v.ctcMinLpa === null || v.ctcMinLpa <= 0)) {
+      ctx.addIssue({ code: "custom", path: ["ctcMinLpa"], message: "Minimum CTC is required." });
+    }
+    if (wantsCtc && v.ctcMinLpa !== null && v.ctcMaxLpa !== null && v.ctcMaxLpa < v.ctcMinLpa) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["ctcMaxLpa"],
+        message: "Maximum CTC cannot be below the minimum.",
+      });
+    }
+    if (wantsStipend && (v.stipendMinMonthly === null || v.stipendMinMonthly <= 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["stipendMinMonthly"],
+        message: "The monthly stipend is required for an internship.",
+      });
+    }
+    if (
+      wantsStipend &&
+      v.stipendMinMonthly !== null &&
+      v.stipendMaxMonthly !== null &&
+      v.stipendMaxMonthly < v.stipendMinMonthly
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["stipendMaxMonthly"],
+        message: "Maximum stipend cannot be below the minimum.",
+      });
+    }
+  })
+  .refine(
+    (v) => v.minOverallCgpa === null || isValidForScale(v.minOverallCgpa, v.minOverallCgpaScale),
+    {
+      path: ["minOverallCgpa"],
+      message: "A CGPA is on the 10-point scale; a percentage is between 0 and 100.",
+    },
+  )
+  .transform((v) => {
+    const wantsCtc = v.driveType === "placement" || v.driveType === "internship_convertible";
+    const wantsStipend = v.driveType === "internship" || v.driveType === "internship_convertible";
+
+    return {
+      ...v,
+      shiftNightTiming: nightTimingFor(v.shiftType, v.shiftNightTiming),
+      ctcMinLpa: wantsCtc ? v.ctcMinLpa : null,
+      ctcMaxLpa: wantsCtc ? v.ctcMaxLpa : null,
+      ctcBreakup: wantsCtc ? v.ctcBreakup : "",
+      stipendMinMonthly: wantsStipend ? v.stipendMinMonthly : null,
+      stipendMaxMonthly: wantsStipend ? v.stipendMaxMonthly : null,
+    };
+  });
+
+export const multiRolePifDraftSchema = z.object({
+  id: z.string().optional(),
+  companyId: z.string().optional(),
+  companyName: requiredText("Company name"),
+  industry: optionalText,
+  companyWebsite: optionalUrl,
+  contacts: contacts.default([]),
+  driveMode: z.enum(["", ...DRIVE_MODES]).default(""),
+  venueStatus: z.enum(["not_yet_confirmed", "confirmed"]).default("not_yet_confirmed"),
+  venue: optionalText,
+  tentativeDate: optionalText,
+  timelineNotes: optionalText,
+  joiningTimeline: z.enum(["", ...JOINING_TIMELINES]).default(""),
+  roles: z.array(pifRoleDraftSchema).default([]),
+});
+
+export const multiRolePifSubmitSchema = multiRolePifDraftSchema
+  .extend({
+    companyName: requiredText("Company name"),
+    roles: z.array(pifRoleSubmitSchema).min(1, "Add at least one role to submit."),
+    joiningTimeline: z.enum(JOINING_TIMELINES, {
+      message: "Say whether joining is immediate or later.",
+    }),
+  })
+  .refine(
+    (v) =>
+      !driveVenueApplies(v.driveMode) ||
+      v.venueStatus === "not_yet_confirmed" ||
+      v.venue.trim() !== "",
+    {
+      path: ["venue"],
+      message: "Type the venue, or choose “Venue not yet confirmed”.",
+    },
+  );
+
+export type PifRoleValues = z.input<typeof pifRoleDraftSchema>;
+export type PifRoleSubmission = z.output<typeof pifRoleSubmitSchema>;
+export type MultiRolePifValues = z.input<typeof multiRolePifDraftSchema>;
+export type MultiRolePifSubmission = z.output<typeof multiRolePifSubmitSchema>;

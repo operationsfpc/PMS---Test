@@ -78,6 +78,35 @@ const SNAPSHOT: DashboardSnapshot = {
       driveId: "d1",
       driveName: "Zoho Corporation — Member Technical Staff",
       campusNames: ["Alliance University"],
+      students: [
+        {
+          applicationId: "app-1",
+          studentId: "a",
+          studentName: "Priya Ramesh",
+          rollNumber: "21CSE101",
+          campusId: "c1",
+          campusName: "Alliance University",
+          degree: "B.Tech",
+          branch: "CSE",
+          cgpa: 8.8,
+          shortlisted: true,
+          rounds: [
+            {
+              roundId: "r1",
+              sequence: 1,
+              name: "Aptitude",
+              attendance: "present",
+              result: "selected",
+            },
+          ],
+          offer: {
+            ctcLpa: 9,
+            stipendMonthly: 25000,
+            driveType: "placement",
+            offerCategory: "dream",
+          },
+        },
+      ],
       participation: {
         eligible: 120,
         applied: 30,
@@ -100,6 +129,7 @@ const SNAPSHOT: DashboardSnapshot = {
       driveId: "d2",
       driveName: "Freshworks — SDE",
       campusNames: ["VIT Bangalore"],
+      students: [],
       participation: {
         eligible: 40,
         applied: 10,
@@ -527,10 +557,7 @@ describe("the drive-specific box", () => {
 
   it("says so when the filters match no drive at all", async () => {
     render(
-      <DashboardPage
-        view={view({ ...SNAPSHOT, driveProgress: [] })}
-        title="Placement overview"
-      />,
+      <DashboardPage view={view({ ...SNAPSHOT, driveProgress: [] })} title="Placement overview" />,
     );
 
     expect(within(await box()).getByText(/no drives match/i)).toBeDefined();
@@ -545,6 +572,83 @@ describe("the drive-specific box", () => {
     const section = await box();
     expect(within(section).getByText("Eligible")).toBeDefined();
     expect(within(section).queryByText(/attended/i)).toBeNull();
+  });
+
+  it("displays names of students currently in the ongoing drive on the card", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await box();
+    expect(within(section).getByText("Priya Ramesh")).toBeDefined();
+  });
+
+  it("opens the modal and displays student placement details when clicked", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await box();
+    const studentBtn = within(section).getByRole("button", { name: /Priya Ramesh/i });
+    await user.click(studentBtn);
+
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeDefined();
+    expect(within(dialog).getByText(/Zoho Corporation/i)).toBeDefined();
+
+    // Click Priya Ramesh to expand her placement details
+    const modalStudent = within(dialog).getByRole("button", { name: /Priya Ramesh/i });
+    await user.click(modalStudent);
+
+    expect(within(dialog).getByText(/Placement Offer Details/i)).toBeDefined();
+    expect(within(dialog).getAllByText(/₹9 LPA/i).length).toBeGreaterThanOrEqual(1);
+    expect(within(dialog).getAllByText(/Aptitude/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("scopes students on the drive card to the Campus Manager's assigned campus", async () => {
+    const baseDrive = SNAPSHOT.driveProgress[0];
+    if (baseDrive === undefined) throw new Error("missing base drive");
+
+    const customSnapshot: DashboardSnapshot = {
+      ...SNAPSHOT,
+      driveProgress: [
+        {
+          ...baseDrive,
+          students: [
+            {
+              applicationId: "app-1",
+              studentId: "a",
+              studentName: "Student Campus 1",
+              rollNumber: "21CSE101",
+              campusId: "c1",
+              campusName: "Alliance University",
+              shortlisted: true,
+              rounds: [],
+              offer: null,
+            },
+            {
+              applicationId: "app-2",
+              studentId: "b",
+              studentName: "Student Campus 2",
+              rollNumber: "21IT202",
+              campusId: "c2",
+              campusName: "VIT Bangalore",
+              shortlisted: true,
+              rounds: [],
+              offer: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    const user = userEvent.setup();
+    render(<DashboardPage view={view(customSnapshot)} title="Campus overview" />);
+
+    // Select campus c1
+    const campusSelect = await screen.findByLabelText("Campus");
+    await user.selectOptions(campusSelect, "c1");
+
+    const section = await box();
+    expect(within(section).getByText("Student Campus 1")).toBeDefined();
+    expect(within(section).queryByText("Student Campus 2")).toBeNull();
   });
 });
 

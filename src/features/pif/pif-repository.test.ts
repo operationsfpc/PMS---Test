@@ -705,3 +705,128 @@ describe("skillAreas", () => {
     expect(await repo.skillAreas()).toEqual([]);
   });
 });
+
+describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
+  it("submits a multi-role company drive via save_company_drive_with_roles RPC", async () => {
+    const { client } = storageStub();
+    let rpcCalledWith: Record<string, unknown> = {};
+
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        rpcCalledWith = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          eventId: "event-123",
+          roleIds: ["role-1", "role-2"],
+          status: "submitted",
+        });
+      }),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    const result = await repo.submitCompanyDrive({
+      companyName: "Zoho Corporation",
+      industry: "Software",
+      companyWebsite: "https://zoho.com",
+      contacts: [{ name: "HR", designation: "Lead", email: "hr@zoho.com", phone: "123" }],
+      driveMode: "on_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+      tentativeDate: "2026-11-15",
+      timelineNotes: "Fast track",
+      joiningTimeline: "immediate",
+      roles: [
+        {
+          roleTitle: "SDE",
+          roleCategory: "software_technical",
+          driveType: "placement",
+          jobDescription: "Backend dev",
+          openings: 10,
+          workLocations: "Chennai",
+          ctcMinLpa: 8,
+          ctcMaxLpa: 12,
+          ctcBreakup: "8 fixed",
+          stipendMinMonthly: null,
+          stipendMaxMonthly: null,
+          shiftType: "day",
+          shiftNightTiming: "",
+          bondDetails: "",
+          jobDescriptionFile: null,
+          minOverallCgpa: 7.5,
+          minOverallCgpaScale: "cgpa",
+          minTenthPercentage: 70,
+          minTwelfthPercentage: 70,
+          arrearsPolicy: "flexible",
+          eligiblePassingYears: [2026],
+          mandatorySkills: "Java",
+          additionalDesignations: [],
+          rounds: [{ sequence: 1, name: "Coding" }],
+          joiningImmediateNotes: "Within 2 weeks",
+          joiningLaterNotes: "",
+        },
+      ],
+    });
+
+    expect(result.eventId).toBe("event-123");
+    expect(result.roleIds).toEqual(["role-1", "role-2"]);
+    expect(result.status).toBe("submitted");
+    expect(rpcCalledWith.p_status).toBe("submitted");
+    expect((rpcCalledWith.p_event as Record<string, unknown>).companyName).toBe("Zoho Corporation");
+    expect((rpcCalledWith.p_roles as Array<Record<string, unknown>>)[0]?.roleTitle).toBe("SDE");
+  });
+
+  it("saves a multi-role draft with draft status", async () => {
+    const { client } = storageStub();
+    let rpcCalledWith: Record<string, unknown> = {};
+
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        rpcCalledWith = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          eventId: "event-456",
+          roleIds: [],
+          status: "draft",
+        });
+      }),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    const result = await repo.saveCompanyDriveDraft({
+      companyName: "Zoho Corporation",
+      industry: "Software",
+      companyWebsite: "",
+      contacts: [],
+      driveMode: "",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+      tentativeDate: "",
+      timelineNotes: "",
+      joiningTimeline: "",
+      roles: [],
+    });
+
+    expect(result.eventId).toBe("event-456");
+    expect(result.status).toBe("draft");
+    expect(rpcCalledWith.p_status).toBe("draft");
+  });
+
+  it("throws PifError if session expired", async () => {
+    const { client } = storageStub();
+    const repo = createSupabasePifRepository(client, async () => null);
+
+    await expect(
+      repo.saveCompanyDriveDraft({
+        companyName: "Zoho",
+        industry: "",
+        companyWebsite: "",
+        contacts: [],
+        driveMode: "",
+        venueStatus: "not_yet_confirmed",
+        venue: "",
+        tentativeDate: "",
+        timelineNotes: "",
+        joiningTimeline: "",
+        roles: [],
+      }),
+    ).rejects.toThrow("Your session has expired");
+  });
+});

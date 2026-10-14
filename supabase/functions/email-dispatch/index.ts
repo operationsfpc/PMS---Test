@@ -160,6 +160,7 @@ serve(async (req: Request) => {
     .select(`
       id,
       recipient_email,
+      cc_emails,
       subject,
       html_body,
       attempts,
@@ -198,12 +199,23 @@ serve(async (req: Request) => {
     ),
   ];
 
+  // Also collect CC emails for profile lookup
+  const ccEmails = [
+    ...new Set(
+      deliveries
+        .flatMap((d: any) => (d.cc_emails as string[] | null) || [])
+        .map((email: string) => email.trim().toLowerCase()),
+    ),
+  ];
+
+  const allPendingEmails = [...new Set([...pendingEmails, ...ccEmails])];
+
   const profileMap = new Map<string, { full_name: string; role: string }>();
-  if (pendingEmails.length > 0) {
+  if (allPendingEmails.length > 0) {
     const { data: profiles } = await supabase
       .from("profiles")
       .select("email, full_name, role")
-      .in("email", pendingEmails);
+      .in("email", allPendingEmails);
 
     if (profiles) {
       for (const p of profiles) {
@@ -386,6 +398,13 @@ serve(async (req: Request) => {
         buttonLabel = "View Profile";
         targetUrl = `${PORTAL_URL}/student/profile`;
         break;
+      // KAM: Key Account Manager — Drive Alert
+      case "kam_drive_alert":
+        subject = notificationTitle || "New Placement Drive Published for Your Campus";
+        templateTitle = "New Placement Drive Announced";
+        buttonLabel = "View Drive Details";
+        targetUrl = `${PORTAL_URL}/cpc/drives`;
+        break;
       // C1: Campus Drive Alert
       case "campus_drive_alert":
       case "cpc_drive_alert":
@@ -524,6 +543,7 @@ serve(async (req: Request) => {
         targetUrl = `${PORTAL_URL}/delivery-head/pif-approvals`;
         break;
       // DH2: Delivery Head — Policy Override Alert
+      case "policy_override_alert":
       case "policy_override_requested":
       case "policy_override":
       case "dh_policy_override":
@@ -542,6 +562,7 @@ serve(async (req: Request) => {
         targetUrl = `${PORTAL_URL}/dashboard`;
         break;
       // L1: Leadership — Weekly Placement Digest
+      case "weekly_placement_digest":
       case "weekly_leadership_digest":
       case "leadership_weekly":
         subject = notificationTitle || "Weekly Campus Placement Executive Summary";
@@ -566,6 +587,7 @@ serve(async (req: Request) => {
         targetUrl = `${PORTAL_URL}/login`;
         break;
       // R2: Recruiter — Drive Sourcing Kickoff
+      case "recruiter_sourcing_kickoff":
       case "recruiter_drive_live":
       case "drive_sourcing_kickoff":
         subject = notificationTitle || "Your Campus Drive Is Live";
@@ -632,18 +654,31 @@ serve(async (req: Request) => {
     const routingPrefix = isOverridden ? `[Dev Routing Note: Intended for ${originalEmail}]\n\n` : "";
     const textBody = `${routingPrefix}Dear ${recipientDisplayName},\n\n${plainBody}\n\n${buttonLabel}: ${targetUrl}\n\nWarm regards,\nPlacement Cell,\nFACE Prep Campus\n\nNeed help? Contact hello@faceprep.in`;
 
+    // Extract CC recipients
+    const ccEmailsList = (delivery as any).cc_emails as string[] | null;
+    const ccRecipients = ccEmailsList && ccEmailsList.length > 0 
+      ? ccEmailsList.map((email: string) => email.trim().toLowerCase())
+      : undefined;
+
+    const payload: Record<string, unknown> = {
+      from: RESEND_FROM_EMAIL,
+      to: [finalRecipient],
+      reply_to: "placements@faceprep.in",
+      subject,
+      text: textBody,
+      html: htmlBody,
+    };
+
+    // Add CC field if present
+    if (ccRecipients && ccRecipients.length > 0) {
+      payload.cc = ccRecipients;
+    }
+
     batchItems.push({
       deliveryId: delivery.id,
       originalEmail,
       finalRecipient,
-      payload: {
-        from: RESEND_FROM_EMAIL,
-        to: [finalRecipient],
-        reply_to: "placements@faceprep.in",
-        subject,
-        text: textBody,
-        html: htmlBody,
-      },
+      payload,
     });
   }
 

@@ -1,25 +1,16 @@
 import type { AppRole } from "@domain/types";
 import { isTestPreviewAllowed, useAuth } from "@lib/auth-context";
 import type { ReactNode } from "react";
-import { AccessDeniedPage } from "./access-denied-page";
+import { Navigate } from "react-router";
 
 /**
- * One guard for every role-restricted route.
- *
- * Replaces the seven inline guards that used to live in `app.tsx` — each was
- * the same twelve lines copy-pasted with a different role check and a
- * different refusal message. The duplication meant fixes (bypass logic,
- * styling, the refusal page) had to happen in seven places at once.
+ * Guard for role-restricted routes.
  *
  * `allow` accepts either a domain function `(role) => boolean` or a plain
- * array of roles. Use the function form when the domain already exports a
- * capability check (`canShortlistFromPortfolio`, `canRaiseDrive`, …). Use the
- * array form for simple membership tests that do not warrant a domain
- * function of their own.
+ * array of roles.
  *
- * Test-preview bypass lives HERE — once. `isTestPreviewAllowed` checks the
- * email AND the hostname, so radhika@ and thanush@ on pms-test-gamma can see
- * every screen regardless of their signed-in role.
+ * When an unauthorized role accesses the route, renders the inline refusal
+ * message instead of silently redirecting to home.
  */
 export function RoleGuard({
   allow,
@@ -31,16 +22,15 @@ export function RoleGuard({
   children: ReactNode;
 }) {
   const auth = useAuth();
-  const role = auth.status === "signed-in" ? auth.role : null;
-  const email = auth.status === "signed-in" ? auth.email : undefined;
-  const bypassed = isTestPreviewAllowed(email);
+
+  if (auth.status !== "signed-in") return <Navigate to="/login" replace />;
 
   const permitted =
-    bypassed ||
-    (role !== null && (typeof allow === "function" ? allow(role) : allow.includes(role)));
+    isTestPreviewAllowed(auth.email) ||
+    (typeof allow === "function" ? allow(auth.role) : allow.includes(auth.role));
 
   if (!permitted) {
-    return <AccessDeniedPage reason={reason} />;
+    return <p className="p-8 text-sm text-ink-700">{reason}</p>;
   }
 
   return <>{children}</>;

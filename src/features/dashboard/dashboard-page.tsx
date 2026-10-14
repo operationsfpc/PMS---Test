@@ -1,3 +1,7 @@
+import {
+  DriveProgressModal,
+  type DriveProgressStudentItem,
+} from "@components/drive-progress-modal";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
@@ -44,6 +48,7 @@ export interface DriveProgressSnapshot {
   readonly driveName: string;
   readonly campusNames: readonly string[];
   readonly participation: DriveParticipation;
+  readonly students?: readonly DriveProgressStudentItem[];
 }
 
 export interface LiveDrive {
@@ -169,7 +174,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
   );
 
   const [drivePage, setDrivePage] = useState(1);
-  const [expandedDriveId, setExpandedDriveId] = useState<string | null>(null);
+  const [selectedModalDrive, setSelectedModalDrive] = useState<DriveProgressSnapshot | null>(null);
   const DRIVES_PAGE_SIZE = 5;
 
   const drives = useMemo(() => {
@@ -177,9 +182,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     return (snapshot?.driveProgress ?? [])
       .filter(
         (d) =>
-          query === "" ||
-          d.driveName.toLowerCase().includes(query) ||
-          d.driveName === driveQuery,
+          query === "" || d.driveName.toLowerCase().includes(query) || d.driveName === driveQuery,
       )
       .filter(
         (d) =>
@@ -569,14 +572,15 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 <div>
                   <h2 className="text-lg text-ink-900">Drive progress</h2>
                   <p className="mt-1 text-sm text-ink-500">
-                    Eligible students, applications, and attendance and clearance in each round through
-                    to the final offer.
+                    Eligible students, applications, and attendance and clearance in each round
+                    through to the final offer.
                   </p>
                 </div>
                 {drives.length > 0 && (
                   <span className="text-xs font-medium text-ink-500">
                     Showing {Math.min((drivePage - 1) * DRIVES_PAGE_SIZE + 1, drives.length)}–
-                    {Math.min(drivePage * DRIVES_PAGE_SIZE, drives.length)} of {drives.length} drives
+                    {Math.min(drivePage * DRIVES_PAGE_SIZE, drives.length)} of {drives.length}{" "}
+                    drives
                   </span>
                 )}
               </div>
@@ -635,97 +639,152 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               {drives.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-line p-6 text-center">
                   <p className="text-sm text-ink-700">
-                    No drives match these filters yet. Published drives appear here as students become
-                    eligible for them.
+                    No drives match these filters yet. Published drives appear here as students
+                    become eligible for them.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {paginatedDrives.map((drive) => (
-                    <div
-                      key={drive.driveId}
-                      className="rounded-xl border border-line bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm"
-                    >
-                      <header className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-line/60">
-                        <section className="min-w-0">
-                          <Link
-                            to={`/drives/${drive.driveId}`}
-                            className="font-semibold text-ink-900 text-base hover:text-brand-600 hover:underline transition-colors block"
-                          >
-                            {drive.driveName}
-                          </Link>
-                          <p className="mt-0.5 text-xs text-ink-500">
-                            {drive.campusNames.length === 0
-                              ? "Open to every campus"
-                              : drive.campusNames.join(" · ")}
-                          </p>
-                        </section>
-                        <section className="flex items-center gap-2">
-                          <span className="rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                            {drive.funnel.stages.length} Funnel Stages
-                          </span>
-                        </section>
-                      </header>
+                  {paginatedDrives.map((drive) => {
+                    const driveStudents = (drive.students ?? []).filter(
+                      (s) => campusId === "" || s.campusId === campusId,
+                    );
+                    const visibleStudents = driveStudents.filter(
+                      (s) => collegeFilter === "" || s.campusName === collegeFilter,
+                    );
 
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                          <thead>
-                            <tr className="text-xs font-semibold uppercase tracking-wider text-ink-500 border-b border-line/40">
-                              <th className="pb-2 font-medium">Stage</th>
-                              <th className="pb-2 font-medium text-right pr-4">Count</th>
-                              <th className="pb-2 font-medium">Performance / Attendance</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-line/40">
-                            {drive.funnel.stages.map((stage) => {
-                              const round = drive.funnel.rounds.find((r) => r.roundId === stage.key);
-                              return (
-                                <tr key={stage.key} className="hover:bg-surface-muted/30">
-                                  <td className="py-2.5 pr-3 font-medium text-ink-800 text-xs sm:text-sm">
-                                    <li className="list-none">
-                                      <span className="text-ink-700">{stage.label}</span>
-                                      {round !== undefined && (
-                                        <p className="mt-0.5 text-xs text-ink-500">
-                                          <span>
-                                            {round.present} of {round.scheduled} attended
-                                          </span>{" "}
-                                          · <span>{round.cleared} cleared</span> ·{" "}
-                                          <span>{round.clearanceRate}% clearance</span>
-                                          {round.unconfirmed > 0 && (
-                                            <span> · {round.unconfirmed} unconfirmed</span>
-                                          )}
-                                        </p>
-                                      )}
-                                    </li>
-                                  </td>
-                                  <td className="py-2.5 pr-4 text-right font-semibold text-ink-900 text-xs sm:text-sm">
-                                    {stage.count}
-                                  </td>
-                                  <td className="py-2.5 text-xs text-ink-500">
-                                    {round !== undefined ? (
-                                      <div className="flex items-center gap-2">
-                                        <div className="h-1.5 w-20 sm:w-28 overflow-hidden rounded-full bg-surface-muted">
-                                          <div
-                                            className="h-full bg-brand-500"
-                                            style={{ width: `${round.clearanceRate}%` }}
-                                          />
+                    return (
+                      <div
+                        key={drive.driveId}
+                        className="rounded-xl border border-line bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm"
+                      >
+                        <header className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-line/60">
+                          <section className="min-w-0">
+                            <Link
+                              to={`/drives/${drive.driveId}`}
+                              className="font-semibold text-ink-900 text-base hover:text-brand-600 hover:underline transition-colors block"
+                            >
+                              {drive.driveName}
+                            </Link>
+                            <p className="mt-0.5 text-xs text-ink-500">
+                              {drive.campusNames.length === 0
+                                ? "Open to every campus"
+                                : drive.campusNames.join(" · ")}
+                            </p>
+                          </section>
+                          <section className="flex items-center gap-2">
+                            <span className="rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+                              {drive.funnel.stages.length} Funnel Stages
+                            </span>
+                          </section>
+                        </header>
+
+                        {/* Active students in ongoing drive preview & modal trigger */}
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted/30 px-3.5 py-2.5 border border-line/60">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-semibold text-ink-700">
+                              Students in this drive ({visibleStudents.length}):
+                            </span>
+                            {visibleStudents.length === 0 ? (
+                              <span className="ml-2 text-xs text-ink-500 italic">
+                                No student applications recorded yet.
+                              </span>
+                            ) : (
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                {visibleStudents.slice(0, 4).map((s) => (
+                                  <button
+                                    key={s.applicationId}
+                                    type="button"
+                                    onClick={() => setSelectedModalDrive(drive)}
+                                    className="inline-flex items-center rounded-md bg-white border border-line px-2 py-0.5 text-xs text-ink-800 hover:border-brand-400 hover:text-brand-600 cursor-pointer transition-colors"
+                                    title={`View placement details for ${s.studentName}`}
+                                  >
+                                    {s.studentName}
+                                  </button>
+                                ))}
+                                {visibleStudents.length > 4 && (
+                                  <span className="text-xs text-ink-500 font-medium">
+                                    +{visibleStudents.length - 4} more
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {visibleStudents.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedModalDrive(drive)}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline cursor-pointer py-1 px-2 rounded-md hover:bg-brand-50 transition-colors"
+                            >
+                              <span>View all students</span>
+                              <span>&rarr;</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead>
+                              <tr className="text-xs font-semibold uppercase tracking-wider text-ink-500 border-b border-line/40">
+                                <th className="pb-2 font-medium">Stage</th>
+                                <th className="pb-2 font-medium text-right pr-4">Count</th>
+                                <th className="pb-2 font-medium">Performance / Attendance</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-line/40">
+                              {drive.funnel.stages.map((stage) => {
+                                const round = drive.funnel.rounds.find(
+                                  (r) => r.roundId === stage.key,
+                                );
+                                return (
+                                  <tr key={stage.key} className="hover:bg-surface-muted/30">
+                                    <td className="py-2.5 pr-3 font-medium text-ink-800 text-xs sm:text-sm">
+                                      <li className="list-none">
+                                        <span className="text-ink-700">{stage.label}</span>
+                                        {round !== undefined && (
+                                          <p className="mt-0.5 text-xs text-ink-500">
+                                            <span>
+                                              {round.present} of {round.scheduled} attended
+                                            </span>{" "}
+                                            · <span>{round.cleared} cleared</span> ·{" "}
+                                            <span>{round.clearanceRate}% clearance</span>
+                                            {round.unconfirmed > 0 && (
+                                              <span> · {round.unconfirmed} unconfirmed</span>
+                                            )}
+                                          </p>
+                                        )}
+                                      </li>
+                                    </td>
+                                    <td className="py-2.5 pr-4 text-right font-semibold text-ink-900 text-xs sm:text-sm">
+                                      {stage.count}
+                                    </td>
+                                    <td className="py-2.5 text-xs text-ink-500">
+                                      {round !== undefined ? (
+                                        <div className="flex items-center gap-2">
+                                          <div className="h-1.5 w-20 sm:w-28 overflow-hidden rounded-full bg-surface-muted">
+                                            <div
+                                              className="h-full bg-brand-500"
+                                              style={{ width: `${round.clearanceRate}%` }}
+                                            />
+                                          </div>
+                                          <span className="font-medium text-ink-700">
+                                            {round.clearanceRate}%
+                                          </span>
                                         </div>
-                                        <span className="font-medium text-ink-700">
-                                          {round.clearanceRate}%
-                                        </span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-ink-400">—</span>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                      ) : (
+                                        <span className="text-ink-400">—</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Pagination Controls */}
                   {totalDrivePages > 1 && (
@@ -799,6 +858,18 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
             </section>
           </Card>
         </>
+      )}
+
+      {selectedModalDrive !== null && (
+        <DriveProgressModal
+          isOpen={true}
+          onClose={() => setSelectedModalDrive(null)}
+          driveName={selectedModalDrive.driveName}
+          students={(selectedModalDrive.students ?? [])
+            .filter((s) => campusId === "" || s.campusId === campusId)
+            .filter((s) => collegeFilter === "" || s.campusName === collegeFilter)}
+          collegeFilter={collegeFilter || (campusName !== "All campuses" ? campusName : "")}
+        />
       )}
     </div>
   );

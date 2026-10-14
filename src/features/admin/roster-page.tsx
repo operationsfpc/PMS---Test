@@ -3,6 +3,7 @@ import { type EmailHolder, normaliseEmail } from "@domain/email-identity";
 import { supabase } from "@lib/supabase";
 import { useEffect, useState } from "react";
 import { type CampusOption, RosterImportPage } from "./roster-import-page";
+import { ExistingStudentsList } from "./existing-students-list";
 
 /**
  * Route wrapper: loads the campuses an administrator may add students into.
@@ -84,5 +85,10 @@ export function AdminRosterPage() {
     );
   }
 
-  return <RosterImportPage campuses={campuses} taken={taken} />;
+  return (
+    <>
+      <RosterImportPage campuses={campuses} taken={taken} />
+      <ExistingStudentsList campuses={campuses} />
+    </>
+  );
 }

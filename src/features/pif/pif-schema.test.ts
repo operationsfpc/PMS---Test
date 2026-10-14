@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { PIF_DEFAULTS, pifDraftSchema, pifSubmitSchema } from "./pif-schema";
+import {
+  DEFAULT_ROLE_VALUES,
+  multiRolePifDraftSchema,
+  multiRolePifSubmitSchema,
+  PIF_DEFAULTS,
+  pifDraftSchema,
+  pifSubmitSchema,
+} from "./pif-schema";
 
 /**
  * The AE's PIF contract (Sections 1-4).
@@ -551,6 +558,107 @@ describe("pifSubmitSchema", () => {
         ],
       });
       expect(parsed.contacts.map((c) => c.name)).toEqual(["First", "Second"]);
+    });
+  });
+
+  describe("the multi-role company drive schema", () => {
+    it("accepts a multi-role draft with empty roles", () => {
+      const parsed = multiRolePifDraftSchema.safeParse({
+        companyName: "Zoho Corporation",
+        roles: [],
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it("requires at least one valid role on submission", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        roles: [],
+      });
+      expect(parsed.success).toBe(false);
+      expect(parsed.success ? "" : parsed.error.issues[0]?.message).toMatch(/at least one role/i);
+    });
+
+    it("submits multiple roles with independent CTC and eligibility", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        contacts: [{ name: "HR Lead", designation: "HR", email: "hr@zoho.com", phone: "123" }],
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Software Engineer",
+            roleCategory: "software_technical",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            ctcMaxLpa: 12,
+            minOverallCgpa: 7.5,
+            eligiblePassingYears: [2026],
+            rounds: [
+              { sequence: 1, name: "Coding" },
+              { sequence: 2, name: "Interview" },
+            ],
+          },
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "QA Engineer",
+            roleCategory: "technical_support_it_ops",
+            driveType: "placement",
+            workLocations: "Tenkasi",
+            openings: 5,
+            ctcMinLpa: 5,
+            ctcMaxLpa: 6,
+            minOverallCgpa: 6.5,
+            eligiblePassingYears: [2026],
+            rounds: [{ sequence: 1, name: "Aptitude" }],
+          },
+        ],
+      });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.roles).toHaveLength(2);
+        expect(parsed.data.roles[0]?.roleTitle).toBe("Software Engineer");
+        expect(parsed.data.roles[1]?.roleTitle).toBe("QA Engineer");
+      }
+    });
+
+    it("rejects submission if any role within the event is invalid", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Software Engineer",
+            roleCategory: "software_technical",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            ctcMaxLpa: 12,
+            minOverallCgpa: 7.5,
+            eligiblePassingYears: [2026],
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "", // INVALID: missing role title
+            roleCategory: "technical_support_it_ops",
+            driveType: "placement",
+            workLocations: "Tenkasi",
+            openings: 5,
+            ctcMinLpa: 5,
+            ctcMaxLpa: 6,
+            minOverallCgpa: 6.5,
+            eligiblePassingYears: [2026],
+            rounds: [{ sequence: 1, name: "Aptitude" }],
+          },
+        ],
+      });
+      expect(parsed.success).toBe(false);
     });
   });
 });

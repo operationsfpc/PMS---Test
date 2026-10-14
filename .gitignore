@@ -15,6 +15,9 @@ test-results/
 .env.*
 !.env.example
 *.local
+Cred.txt
+deploy-function.mjs
+
 
 # Logs
 *.log

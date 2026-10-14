@@ -458,7 +458,7 @@ describe("live drive figures", () => {
  * round participation the domain's `driveFunnel` reduces.
  */
 describe("createSupabaseDashboardView — campus switching and drive progress", () => {
-  const view = () => createSupabaseDashboardView(client());
+  const view = (campusIds?: readonly string[]) => createSupabaseDashboardView(client(), campusIds);
 
   it("carries each student's campus, so the switcher has something to filter on", async () => {
     stub({
@@ -585,5 +585,82 @@ describe("createSupabaseDashboardView — campus switching and drive progress", 
     });
 
     expect((await view().snapshot()).driveProgress[0]?.participation.shortlisted).toBe(1);
+  });
+
+  it("populates driveProgress students with names, roll numbers, rounds and offers", async () => {
+    stub({
+      students: [
+        {
+          id: "s1",
+          full_name: "Priya Ramesh",
+          roll_number: "21CSE101",
+          participation_status: "active",
+          srf_status: "srf_approved",
+          campuses: { name: "KGiSL Institute" },
+          degrees: { name: "B.Tech" },
+          branches: { name: "CSE" },
+          overall_cgpa: 8.5,
+        },
+      ],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
+      rounds: [{ id: "r1", drive_id: "d1", sequence: 1, name: "Aptitude" }],
+      attendance: [{ round_id: "r1", application_id: "a1", status: "present" }],
+      results: [{ round_id: "r1", application_id: "a1", result: "selected" }],
+      offers: [
+        {
+          id: "o1",
+          student_id: "s1",
+          drive_id: "d1",
+          ctc_lpa: 8.5,
+          offer_category: "Dream",
+          source: "on_campus",
+        },
+      ],
+    });
+
+    const students = (await view().snapshot()).driveProgress[0]?.students ?? [];
+
+    expect(students).toHaveLength(1);
+    expect(students[0]?.studentName).toBe("Priya Ramesh");
+    expect(students[0]?.rollNumber).toBe("21CSE101");
+    expect(students[0]?.campusName).toBe("KGiSL Institute");
+    expect(students[0]?.rounds[0]?.name).toBe("Aptitude");
+    expect(students[0]?.rounds[0]?.attendance).toBe("present");
+    expect(students[0]?.rounds[0]?.result).toBe("selected");
+    expect(students[0]?.offer?.ctcLpa).toBe(8.5);
+    expect(students[0]?.offer?.offerCategory).toBe("Dream");
+  });
+
+  it("scopes driveProgress students to the Campus Manager's assigned college", async () => {
+    stub({
+      students: [
+        {
+          id: "s1",
+          campus_id: "c1",
+          full_name: "Student College 1",
+          participation_status: "active",
+          srf_status: "srf_approved",
+        },
+        {
+          id: "s2",
+          campus_id: "c2",
+          full_name: "Student College 2",
+          participation_status: "active",
+          srf_status: "srf_approved",
+        },
+      ],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [
+        { id: "a1", student_id: "s1", drive_id: "d1" },
+        { id: "a2", student_id: "s2", drive_id: "d1" },
+      ],
+    });
+
+    // Campus manager scoped to c1 only
+    const snapshot = await view(["c1"]).snapshot();
+    const students = snapshot.driveProgress[0]?.students ?? [];
+
+    expect(students.map((s) => s.studentName)).toEqual(["Student College 1"]);
   });
 });

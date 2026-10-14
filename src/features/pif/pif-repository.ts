@@ -5,7 +5,7 @@ import { normaliseToCgpa } from "@domain/marks";
 import { nightTimingFor } from "@domain/shift";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { PifFormValues } from "./pif-schema";
+import type { MultiRolePifValues, PifFormValues } from "./pif-schema";
 
 export class PifError extends Error {}
 
@@ -27,6 +27,14 @@ export interface PifRepository {
     existingDraftId?: string,
   ): Promise<{ id: string; status: string }>;
   submit(values: PifFormValues, existingDraftId?: string): Promise<{ id: string; status: string }>;
+  saveCompanyDriveDraft(
+    values: MultiRolePifValues,
+    existingEventId?: string,
+  ): Promise<{ eventId: string; roleIds: string[]; status: string }>;
+  submitCompanyDrive(
+    values: MultiRolePifValues,
+    existingEventId?: string,
+  ): Promise<{ eventId: string; roleIds: string[]; status: string }>;
   /**
    * The assessed-skills catalogue for the mandatory-skills picker (spec
    * 2026-08-21 part A, approved 2026-08-24). Names only — student scores stay
@@ -311,9 +319,120 @@ export function createSupabasePifRepository(
     return { id: data.id as string, status: data.status as string };
   }
 
+  async function writeCompanyDrive(
+    values: MultiRolePifValues,
+    status: "draft" | "submitted",
+    existingEventId?: string,
+  ): Promise<{ eventId: string; roleIds: string[]; status: string }> {
+    const actorId = await getActorId();
+    if (actorId === null) {
+      throw new PifError("Your session has expired. Please sign in again.");
+    }
+
+    const eventId = existingEventId ?? values.id ?? crypto.randomUUID();
+
+    const processedRoles = await Promise.all(
+      (values.roles ?? []).map(async (role) => {
+        const roleId = role.id ?? crypto.randomUUID();
+        const file = role.jobDescriptionFile ?? null;
+        let jd: JobDescriptionUpload | null = null;
+        if (file instanceof File) {
+          jd = await uploadJobDescription(roleId, file);
+        }
+
+        const nightTiming = nightTimingFor(role.shiftType ?? "", role.shiftNightTiming ?? "");
+
+        return {
+          id: roleId,
+          roleTitle: nullIfBlank(role.roleTitle),
+          roleCategory: nullIfBlank(role.roleCategory),
+          driveType: nullIfBlank(role.driveType),
+          openings: role.openings ?? null,
+          workLocations: nullIfBlank(role.workLocations),
+          ctcMinLpa: role.ctcMinLpa ?? null,
+          ctcMaxLpa: role.ctcMaxLpa ?? null,
+          ctcBreakup: nullIfBlank(role.ctcBreakup),
+          stipendMinMonthly: role.stipendMinMonthly ?? null,
+          stipendMaxMonthly: role.stipendMaxMonthly ?? null,
+          shiftType: nullIfBlank(role.shiftType),
+          shiftNightTiming: nullIfBlank(nightTiming),
+          bondDetails: nullIfBlank(role.bondDetails),
+          jdStoragePath: jd?.storagePath ?? null,
+          jdFileName: jd?.fileName ?? null,
+          jdSizeBytes: jd?.sizeBytes ?? null,
+          jobDescription: nullIfBlank(role.jobDescription),
+          minOverallMarks: role.minOverallCgpa ?? null,
+          minOverallCgpaScale: role.minOverallCgpaScale ?? "cgpa",
+          minOverallCgpa:
+            role.minOverallCgpa === null || role.minOverallCgpa === undefined
+              ? null
+              : normaliseToCgpa(role.minOverallCgpa, role.minOverallCgpaScale ?? "cgpa"),
+          minTenthPercentage: role.minTenthPercentage ?? null,
+          minTwelfthPercentage: role.minTwelfthPercentage ?? null,
+          arrearsPolicy: role.arrearsPolicy ?? "flexible",
+          eligiblePassingYears: role.eligiblePassingYears ?? [],
+          mandatorySkills: nullIfBlank(role.mandatorySkills),
+          joiningImmediateNotes: nullIfBlank(role.joiningImmediateNotes),
+          joiningLaterNotes: nullIfBlank(role.joiningLaterNotes),
+          rounds: (role.rounds ?? []).map((r) => ({
+            sequence: r.sequence,
+            name: r.name.trim(),
+          })),
+        };
+      }),
+    );
+
+    const eventPayload = {
+      id: eventId,
+      companyId: nullIfBlank(values.companyId),
+      companyName: values.companyName,
+      industry: nullIfBlank(values.industry),
+      companyWebsite: nullIfBlank(values.companyWebsite),
+      driveMode: nullIfBlank(values.driveMode),
+      venue:
+        driveVenueApplies(values.driveMode) && values.venueStatus === "confirmed"
+          ? nullIfBlank(values.venue)
+          : null,
+      tentativeDate: nullIfBlank(values.tentativeDate),
+      timelineNotes: nullIfBlank(values.timelineNotes),
+      joiningTimeline: nullIfBlank(values.joiningTimeline),
+      status,
+    };
+
+    const contactPayload = (values.contacts ?? []).map((c, idx) => ({
+      sequence: idx + 1,
+      name: nullIfBlank(c.name),
+      designation: nullIfBlank(c.designation),
+      email: nullIfBlank(c.email),
+      phone: nullIfBlank(c.phone),
+    }));
+
+    const { data, error } = await client.rpc("save_company_drive_with_roles", {
+      p_event: eventPayload,
+      p_contacts: contactPayload,
+      p_roles: processedRoles,
+      p_status: status,
+    });
+
+    if (error !== null) {
+      throw new PifError(explain(error), { cause: error });
+    }
+
+    const res = (data ?? {}) as { eventId?: string; roleIds?: string[]; status?: string };
+    return {
+      eventId: res.eventId ?? eventId,
+      roleIds: res.roleIds ?? [],
+      status: res.status ?? status,
+    };
+  }
+
   return {
     saveDraft: (values, existingDraftId) => write(values, "draft", existingDraftId),
     submit: (values, existingDraftId) => write(values, "submitted", existingDraftId),
+    saveCompanyDriveDraft: (values, existingEventId) =>
+      writeCompanyDrive(values, "draft", existingEventId),
+    submitCompanyDrive: (values, existingEventId) =>
+      writeCompanyDrive(values, "submitted", existingEventId),
     async skillAreas() {
       const { data, error } = await client.from("skill_areas").select("name").order("name");
       if (error !== null) return [];
