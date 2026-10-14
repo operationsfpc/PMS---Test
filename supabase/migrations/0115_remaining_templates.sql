@@ -247,8 +247,8 @@ BEGIN
     IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
       -- Count candidates scheduled for this round
       SELECT COUNT(*) INTO v_candidate_count
-      FROM drive_applications
-      WHERE drive_id = NEW.drive_id AND status = 'round_scheduled';
+      FROM applications
+      WHERE drive_id = NEW.drive_id AND status = 'applied';
       
       INSERT INTO notifications (kind, title, body, drive_id)
       VALUES (
@@ -256,9 +256,8 @@ BEGIN
         'Interview Round Scheduled: ' || v_company,
         'A new interview round has been scheduled for **' || v_company || '**.' || E'\n\n' ||
         '**Round Details**' || E'\n' ||
-        '• **Round:** ' || COALESCE(NEW.round_name, 'Round ' || NEW.round_number) || E'\n' ||
-        '• **Date:** ' || COALESCE(TO_CHAR(NEW.scheduled_date, 'DD Mon YYYY'), 'TBD') || E'\n' ||
-        '• **Time:** ' || COALESCE(TO_CHAR(NEW.scheduled_time, 'HH24:MI'), 'TBD') || E'\n' ||
+        '• **Round:** ' || COALESCE(NEW.name, 'Round ' || NEW.sequence) || E'\n' ||
+        '• **Date/Time:** ' || COALESCE(TO_CHAR(NEW.scheduled_at, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n' ||
         '• **Candidates:** ' || v_candidate_count || ' students' || E'\n\n' ||
         'Please review the candidate roster and prepare for the interview session.',
         NEW.drive_id
@@ -293,8 +292,8 @@ DECLARE
   v_total_candidates INT;
   v_notification_id UUID;
 BEGIN
-  -- Fire when drive status changes to 'concluded' or 'completed'
-  IF NEW.status IN ('concluded', 'completed') AND OLD.status IS DISTINCT FROM NEW.status THEN
+  -- Fire when drive status changes to 'completed' ('concluded' is not an enum value)
+  IF NEW.status = 'completed' AND OLD.status IS DISTINCT FROM NEW.status THEN
     SELECT spoc_email INTO v_recruiter_email
     FROM drives WHERE id = NEW.id;
     
@@ -304,7 +303,7 @@ BEGIN
       FROM offers WHERE drive_id = NEW.id;
       
       SELECT COUNT(DISTINCT student_id) INTO v_total_candidates
-      FROM drive_applications WHERE drive_id = NEW.id;
+      FROM applications WHERE drive_id = NEW.id;
       
       INSERT INTO notifications (kind, title, body, drive_id)
       VALUES (

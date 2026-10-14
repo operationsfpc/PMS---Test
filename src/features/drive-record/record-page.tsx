@@ -448,6 +448,48 @@ export function DriveRecordPage({
             </p>
           </Section>
         )}
+
+        {record.siblingRoles.length > 0 && (
+          <Section title="Other Roles in This Drive">
+            <p className="mb-3 text-sm text-ink-600">
+              This company is hiring for {record.siblingRoles.length + 1} roles under the same
+              recruitment drive.
+            </p>
+            <ul className="space-y-2">
+              {record.siblingRoles.map((sibling) => (
+                <li
+                  key={sibling.driveId}
+                  className="rounded-lg border border-line bg-surface-muted/30 p-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <Link
+                        to={`/drives/${sibling.driveId}`}
+                        className="font-semibold text-brand-600 hover:underline"
+                      >
+                        {sibling.roleTitle || "Unnamed role"}
+                      </Link>
+                      {sibling.driveType !== null && (
+                        <span className="ml-2">
+                          <Badge tone={driveTypeTone(asDriveType(sibling.driveType))}>
+                            {driveTypeLabel(asDriveType(sibling.driveType))}
+                          </Badge>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <Badge tone="neutral">{STATUS_LABEL[sibling.status] ?? sibling.status}</Badge>
+                      <span className="text-ink-600">{sibling.ctcLabel}</span>
+                      {sibling.stipendLabel !== null && (
+                        <span className="text-ink-600">{sibling.stipendLabel}</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
       </div>
     </>
   );

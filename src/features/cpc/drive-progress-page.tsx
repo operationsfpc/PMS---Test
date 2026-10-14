@@ -14,6 +14,42 @@ import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
+/** Grouped drive progress entries by company event for multi-role display. */
+interface DriveProgressEvent {
+  readonly eventId: string;
+  readonly companyName: string;
+  readonly tentativeDate: string | null;
+  readonly roles: readonly DriveProgressEntry[];
+  readonly totalStudents: number;
+}
+
+/** Groups drive progress entries by their parent company event. */
+function groupProgressByEvent(entries: readonly DriveProgressEntry[]): DriveProgressEvent[] {
+  const groups = new Map<string, DriveProgressEntry[]>();
+
+  for (const entry of entries) {
+    const key = entry.companyDriveId || `standalone:${entry.driveId}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(entry);
+    } else {
+      groups.set(key, [entry]);
+    }
+  }
+
+  return Array.from(groups.entries()).map(([key, roles]) => {
+    const first = roles[0];
+    if (!first) throw new Error("Group has no roles");
+    return {
+      eventId: key,
+      companyName: first.companyName,
+      tentativeDate: first.tentativeDate ?? null,
+      roles,
+      totalStudents: roles.reduce((sum, r) => sum + r.students.length, 0),
+    };
+  });
+}
+
 /**
  * D10 (2026-08-12): the placement coordinator and KAM follow students
  * through the ENTIRE cycle — shortlist, every round, the offer.
@@ -55,6 +91,10 @@ export interface DriveProgressEntry {
   readonly driveType?: DriveType | null;
   readonly status: string;
   readonly students: readonly DriveProgressStudent[];
+  /** Multi-role grouping: the parent event ID (null for legacy standalone drives). */
+  readonly companyDriveId?: string | null;
+  /** Multi-role grouping: the event date. */
+  readonly tentativeDate?: string | null;
 }
 
 export interface DriveProgressView {
@@ -201,6 +241,32 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
 
             return (
               <Card key={drive.driveId} className="mb-6 overflow-hidden">
+                {/* Event header for multi-role drives */}
+                {drive.companyDriveId && (
+                  <div className="border-b border-line bg-brand-50 p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        to={`/drives/${drive.driveId}`}
+                        className="font-[Raleway] text-lg font-bold text-ink-900 hover:text-brand-600 hover:underline"
+                      >
+                        {drive.companyName}
+                      </Link>
+                      <Badge tone="brand">Multi-role drive</Badge>
+                    </div>
+                    {drive.tentativeDate && (
+                      <p className="mt-1 text-sm text-ink-600">
+                        📅{" "}
+                        {new Date(drive.tentativeDate).toLocaleDateString("en-IN", {
+                          timeZone: "Asia/Kolkata",
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
                   <div className="min-w-0">
                     <Link
@@ -288,7 +354,8 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                 {collegeList.length > 0 && (
                   <div className="border-b border-line bg-surface px-4 py-3">
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                      College Breakdown (Click card to filter college · Click counts to filter stage)
+                      College Breakdown (Click card to filter college · Click counts to filter
+                      stage)
                     </p>
                     <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
                       {/* Overall / All colleges button card */}
@@ -310,24 +377,36 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                           className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
                         >
                           <span>All Colleges</span>
-                          {selectedCollege === "" && <span className="text-brand-600 font-bold">✓</span>}
+                          {selectedCollege === "" && (
+                            <span className="text-brand-600 font-bold">✓</span>
+                          )}
                         </button>
                         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedCollegeByDrive((prev) => ({ ...prev, [drive.driveId]: "" }));
-                              setSelectedStageByDrive((prev) => ({ ...prev, [drive.driveId]: "all" }));
+                              setSelectedCollegeByDrive((prev) => ({
+                                ...prev,
+                                [drive.driveId]: "",
+                              }));
+                              setSelectedStageByDrive((prev) => ({
+                                ...prev,
+                                [drive.driveId]: "all",
+                              }));
                             }}
                             className="hover:underline cursor-pointer"
                           >
-                            Applied: <strong className="text-ink-900">{drive.students.length}</strong>
+                            Applied:{" "}
+                            <strong className="text-ink-900">{drive.students.length}</strong>
                           </button>
                           <span>·</span>
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedCollegeByDrive((prev) => ({ ...prev, [drive.driveId]: "" }));
+                              setSelectedCollegeByDrive((prev) => ({
+                                ...prev,
+                                [drive.driveId]: "",
+                              }));
                               setSelectedStageByDrive((prev) => ({
                                 ...prev,
                                 [drive.driveId]: "shortlisted",
@@ -342,7 +421,10 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                           <button
                             type="button"
                             onClick={() => {
-                              setSelectedCollegeByDrive((prev) => ({ ...prev, [drive.driveId]: "" }));
+                              setSelectedCollegeByDrive((prev) => ({
+                                ...prev,
+                                [drive.driveId]: "",
+                              }));
                               setSelectedStageByDrive((prev) => ({
                                 ...prev,
                                 [drive.driveId]: "offers",
@@ -377,7 +459,9 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                             title={col.name}
                           >
                             <span className="truncate">{col.name}</span>
-                            {selectedCollege === col.name && <span className="ml-1 text-brand-600 font-bold">✓</span>}
+                            {selectedCollege === col.name && (
+                              <span className="ml-1 text-brand-600 font-bold">✓</span>
+                            )}
                           </button>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
                             <button
@@ -411,7 +495,8 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                               }}
                               className="hover:underline cursor-pointer"
                             >
-                              Shortlisted: <strong className="text-ink-900">{col.shortlisted}</strong>
+                              Shortlisted:{" "}
+                              <strong className="text-ink-900">{col.shortlisted}</strong>
                             </button>
                             <span>·</span>
                             <button

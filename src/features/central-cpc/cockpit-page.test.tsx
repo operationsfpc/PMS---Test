@@ -27,6 +27,8 @@ const APPROVED: DriveSummary = {
   rounds: [],
   createdAt: null,
   applicationEnd: null,
+  companyDriveId: null,
+  tentativeDate: null,
 };
 
 const LIVE: DriveSummary = {
@@ -41,6 +43,8 @@ const LIVE: DriveSummary = {
   rounds: [],
   createdAt: null,
   applicationEnd: null,
+  companyDriveId: null,
+  tentativeDate: null,
 };
 
 const IN_ROUNDS: DriveSummary = {
@@ -527,10 +531,15 @@ describe("the Delivery Head decides from the list (G1c)", () => {
     await user.click(within(dialog).getByRole("button", { name: /confirm — approve/i }));
 
     await waitFor(() =>
-      expect(decide).toHaveBeenCalledWith("d30", "submitted", {
-        decision: "approve",
-        offerCategory: "dream",
-      }),
+      expect(decide).toHaveBeenCalledWith(
+        "d30",
+        "submitted",
+        expect.objectContaining({
+          decision: "approve",
+          offerCategory: "dream",
+        }),
+        null,
+      ),
     );
   });
 
@@ -583,10 +592,15 @@ describe("the Delivery Head decides from the list (G1c)", () => {
     await user.click(within(dialog).getByRole("button", { name: /confirm — reject/i }));
 
     await waitFor(() =>
-      expect(decide).toHaveBeenCalledWith("d30", "submitted", {
-        decision: "reject",
-        reason: "CTC below our floor",
-      }),
+      expect(decide).toHaveBeenCalledWith(
+        "d30",
+        "submitted",
+        expect.objectContaining({
+          decision: "reject",
+          reason: "CTC below our floor",
+        }),
+        null,
+      ),
     );
   });
 
@@ -820,10 +834,15 @@ describe("CockpitPage — approving an internship", () => {
 
     await user.click(within(dialog).getByRole("button", { name: /confirm — approve/i }));
     await waitFor(() =>
-      expect(decide).toHaveBeenCalledWith("d-int", "submitted", {
-        decision: "approve",
-        offerCategory: "internship",
-      }),
+      expect(decide).toHaveBeenCalledWith(
+        "d-int",
+        "submitted",
+        expect.objectContaining({
+          decision: "approve",
+          offerCategory: "internship",
+        }),
+        "internship",
+      ),
     );
   });
 });

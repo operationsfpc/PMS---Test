@@ -51,6 +51,7 @@ export interface DriveApplicantRow {
 
 export interface DriveRecord {
   readonly id: string;
+  readonly companyDriveId: string | null;
   readonly companyName: string;
   readonly industry: string;
   readonly companyWebsite: string;
@@ -99,6 +100,21 @@ export interface DriveRecord {
   readonly recruiters: readonly DriveRecruiterContact[];
   readonly provenance: DriveProvenance;
   readonly applicants: readonly DriveApplicantRow[];
+  /**
+   * 2026-10-15: other roles under the same company drive event, so the page
+   * can show "Other Roles in This Drive" — null/empty means this drive is
+   * standalone or the only role.
+   */
+  readonly siblingRoles: readonly SiblingRole[];
+}
+
+export interface SiblingRole {
+  readonly driveId: string;
+  readonly roleTitle: string;
+  readonly driveType: string | null;
+  readonly status: DriveStatus;
+  readonly ctcLabel: string;
+  readonly stipendLabel: string | null;
 }
 
 export interface DriveRecordView {
@@ -107,7 +123,7 @@ export interface DriveRecordView {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const RECORD_DRIVE_COLUMNS = `
-  id, company_name, industry, company_website, role_title, additional_designations,
+  id, company_drive_id, company_name, industry, company_website, role_title, additional_designations,
   role_category, status, drive_type, drive_mode, venue, offer_category, openings,
   ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations,
   application_start, application_end, tentative_date,
@@ -217,6 +233,45 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         jobDescriptionUrl = data?.signedUrl ?? null;
       }
 
+      // 2026-10-15: fetch sibling roles under the same company drive event,
+      // so the page can show "Other Roles in This Drive".
+      const companyDriveId = (row.company_drive_id as string | null) ?? null;
+      let siblingRoles: SiblingRole[] = [];
+      if (companyDriveId !== null) {
+        const { data: siblingRows } = await client
+          .from("drives")
+          .select(
+            "id, role_title, drive_type, status, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly",
+          )
+          .eq("company_drive_id", companyDriveId)
+          .neq("id", driveId);
+
+        siblingRoles = ((siblingRows ?? []) as Array<Record<string, unknown>>).map((s) => {
+          const sMin = (s.ctc_min_lpa as number | null) ?? null;
+          const sMax = (s.ctc_max_lpa as number | null) ?? null;
+          const stipendMin = (s.stipend_min_monthly as number | null) ?? null;
+          const stipendMax = (s.stipend_max_monthly as number | null) ?? null;
+          return {
+            driveId: s.id as string,
+            roleTitle: text(s.role_title),
+            driveType: (s.drive_type as string | null) ?? null,
+            status: s.status as DriveStatus,
+            ctcLabel:
+              sMin === null && sMax === null
+                ? "Not stated"
+                : sMax === null
+                  ? `₹${sMin} LPA`
+                  : `₹${sMin}–${sMax} LPA`,
+            stipendLabel:
+              stipendMin === null && stipendMax === null
+                ? null
+                : stipendMax === null
+                  ? `₹${stipendMin} / month`
+                  : `₹${stipendMin}–${stipendMax} / month`,
+          };
+        });
+      }
+
       // `?? null` throughout: a column a select DID ask for still reads
       // `undefined` off a partial row, and `undefined === null` is false —
       // "≥ undefined CGPA" is the label that bug prints.
@@ -229,6 +284,7 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
 
       return {
         id: row.id as string,
+        companyDriveId: companyDriveId,
         companyName: text(row.company_name),
         industry: text(row.industry),
         companyWebsite: text(row.company_website),
@@ -348,6 +404,7 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
             rounds: applicantRounds,
           };
         }),
+        siblingRoles: siblingRoles,
       };
     },
   };

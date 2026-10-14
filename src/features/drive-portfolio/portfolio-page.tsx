@@ -28,6 +28,55 @@ import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
+/** Grouped portfolio drives by company event for multi-role display. */
+interface PortfolioEvent {
+  readonly eventId: string;
+  readonly companyName: string;
+  readonly tentativeDate: string | null;
+  readonly driveMode: string | null;
+  readonly venue: string | null;
+  readonly roles: readonly PortfolioDrive[];
+  readonly totalFunnel: {
+    readonly applied: number;
+    readonly shortlisted: number;
+    readonly inRounds: number;
+    readonly offers: number;
+    readonly notSelected: number;
+  };
+}
+
+/** Groups portfolio drives by their parent company event. */
+function groupPortfolioByEvent(drives: readonly PortfolioDrive[]): PortfolioEvent[] {
+  const groups = new Map<string, PortfolioDrive[]>();
+
+  for (const drive of drives) {
+    const key = drive.companyDriveId || `standalone:${drive.driveId}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(drive);
+    } else {
+      groups.set(key, [drive]);
+    }
+  }
+
+  return Array.from(groups.entries()).map(([key, roles]) => {
+    const first = roles[0];
+    if (!first) throw new Error("Group has no roles");
+    const allApplicants = roles.flatMap((r) => r.applicants);
+    const funnel = summariseFunnel(allApplicants);
+
+    return {
+      eventId: key,
+      companyName: first.companyName,
+      tentativeDate: first.tentativeDate ?? null,
+      driveMode: null,
+      venue: null,
+      roles,
+      totalFunnel: funnel,
+    };
+  });
+}
+
 export interface PortfolioApplicant {
   readonly applicationId: string;
   readonly studentName: string;
@@ -229,6 +278,10 @@ export function DrivePortfolioPage({
     [visible, now],
   );
 
+  /** Group drives by company event for multi-role display. */
+  const activeEvents = useMemo(() => groupPortfolioByEvent(activeDrives), [activeDrives]);
+  const expiredEvents = useMemo(() => groupPortfolioByEvent(expiredDrives), [expiredDrives]);
+
   if (failed) {
     return (
       <p role="alert" className="rounded-card bg-danger-50 p-4 text-sm text-danger-700">
@@ -291,16 +344,16 @@ export function DrivePortfolioPage({
           ) : (
             <>
               <ul className="flex flex-col gap-4">
-                {activeDrives.map((drive) => renderDrive(drive))}
+                {activeEvents.map((event) => renderEvent(event))}
               </ul>
 
-              {expiredDrives.length > 0 && (
+              {expiredEvents.length > 0 && (
                 <details className="mt-4">
                   <summary className="cursor-pointer text-sm font-medium text-ink-500">
-                    Expired — application deadline passed ({expiredDrives.length})
+                    Expired — application deadline passed ({expiredEvents.length})
                   </summary>
                   <ul className="mt-3 flex flex-col gap-4">
-                    {expiredDrives.map((drive) => renderDrive(drive))}
+                    {expiredEvents.map((event) => renderEvent(event))}
                   </ul>
                 </details>
               )}
@@ -311,7 +364,75 @@ export function DrivePortfolioPage({
     </div>
   );
 
-  function renderDrive(drive: PortfolioDrive) {
+  function renderEvent(event: PortfolioEvent) {
+    const isMultiRole = event.roles.length > 1;
+
+    return (
+      <li key={event.eventId}>
+        <Card className="overflow-hidden">
+          {/* Event Header for multi-role drives */}
+          {isMultiRole && (
+            <div className="border-b border-line bg-brand-50 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-[Raleway] text-lg font-bold text-ink-900">
+                  {event.companyName}
+                </h3>
+                <Badge tone="brand">{event.roles.length} roles</Badge>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-3 text-sm text-ink-600">
+                {event.tentativeDate && (
+                  <span>
+                    📅{" "}
+                    {new Date(event.tentativeDate).toLocaleDateString("en-IN", {
+                      timeZone: "Asia/Kolkata",
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </span>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                <span className="font-semibold">
+                  <strong>{event.totalFunnel.applied}</strong> applied
+                </span>
+                <span className="font-semibold">
+                  <strong>{event.totalFunnel.shortlisted}</strong> shortlisted
+                </span>
+                <span className="font-semibold">
+                  <strong>{event.totalFunnel.inRounds}</strong> in rounds
+                </span>
+                <span className="font-semibold">
+                  <strong>{event.totalFunnel.offers}</strong> offers
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Roles List */}
+          <div className={isMultiRole ? "divide-y divide-line" : ""}>
+            {event.roles.map((drive) => renderDrive(drive, isMultiRole))}
+          </div>
+
+          {/* Add Role Button */}
+          {(role === "account_executive" || role === "admin") && (
+            <div className="border-t border-line bg-surface-muted p-3">
+              <Link
+                to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${
+                  event.eventId.startsWith("standalone:") ? "" : event.eventId
+                }&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
+                className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+              >
+                + Add Another Role to This Drive
+              </Link>
+            </div>
+          )}
+        </Card>
+      </li>
+    );
+  }
+
+  function renderDrive(drive: PortfolioDrive, isMultiRoleEvent: boolean = false) {
     const progress = driveProgress(drive);
     const funnel = summariseFunnel(drive.applicants);
     const window = applicationWindow(
@@ -324,7 +445,6 @@ export function DrivePortfolioPage({
     const hats = involvementIn(drive, profileId);
     const open = expanded === drive.driveId;
     const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
-    /** G5b: the date identifier that tells two same-company drives apart. */
     const closeDate =
       drive.applicationEnd === null
         ? null
@@ -337,174 +457,177 @@ export function DrivePortfolioPage({
     const closed =
       drive.applicationEnd !== null && new Date(drive.applicationEnd).getTime() < now.getTime();
 
+    const content = (
+      <section aria-label={drive.companyName} className={isMultiRoleEvent ? "p-4" : "p-5"}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
+              {!isMultiRoleEvent && (
+                <Link to={`/drives/${drive.driveId}`} className="hover:underline">
+                  {drive.companyName}
+                </Link>
+              )}
+              {isMultiRoleEvent && (
+                <Link to={`/drives/${drive.driveId}`} className="hover:underline">
+                  {drive.roleTitle}
+                </Link>
+              )}
+              <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
+            </p>
+            <p className="text-sm text-ink-500">
+              {isMultiRoleEvent ? ctc : `${drive.roleTitle}${ctc !== null ? ` · ${ctc}` : ""}`}
+              {closeDate !== null && ` · applications ${closed ? "closed" : "close"} ${closeDate}`}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {hats.map((hat) => (
+                <Badge key={hat} tone="brand">
+                  {ROLE_LABEL[hat]}
+                </Badge>
+              ))}
+              <Badge tone={progress.terminal ? "neutral" : "warning"}>{progress.phase}</Badge>
+              {window.urgent && <Badge tone="danger">Closing soon</Badge>}
+              <Badge tone={window.state === "open" ? "success" : "neutral"}>{window.label}</Badge>
+              {drive.totalRounds > 0 && (
+                <span className="text-xs text-ink-500">
+                  {progress.roundsDecided} of {progress.totalRounds} rounds decided
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full sm:w-48">
+            <div
+              className="h-2 w-full overflow-hidden rounded-full bg-surface-muted"
+              role="progressbar"
+              aria-label={`${drive.companyName} progress`}
+              aria-valuenow={progress.percentComplete}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <div
+                className="h-full bg-brand-500"
+                style={{ width: `${progress.percentComplete}%` }}
+              />
+            </div>
+            <p className="mt-1 text-right text-xs text-ink-500">
+              {progress.percentComplete}% through the pipeline
+            </p>
+          </div>
+        </div>
+
+        {progress.blocked !== null && (
+          <p className="mt-3 rounded-lg bg-gold-50 px-3 py-2 text-xs text-gold-700">
+            {progress.blocked}
+          </p>
+        )}
+
+        <section
+          aria-label={`${drive.companyName} applicants`}
+          className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+        >
+          <Link to={`/drives/${drive.driveId}?stage=applied`} className="block">
+            <StatCard label="Applied" value={funnel.applied} />
+          </Link>
+          <Link to={`/drives/${drive.driveId}?stage=shortlisted`} className="block">
+            <StatCard label="Shortlisted" value={funnel.shortlisted} tone="brand" />
+          </Link>
+          <Link to={`/drives/${drive.driveId}?stage=in_rounds`} className="block">
+            <StatCard label="In rounds" value={funnel.inRounds} tone="warning" />
+          </Link>
+          <Link to={`/drives/${drive.driveId}?stage=offers`} className="block">
+            <StatCard label="Offers" value={funnel.offers} tone="success" />
+          </Link>
+          <Link to={`/drives/${drive.driveId}?stage=not_selected`} className="block">
+            <StatCard label="Not selected" value={funnel.notSelected} />
+          </Link>
+        </section>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {mayViewApplicants && (
+            <button
+              type="button"
+              aria-expanded={open}
+              onClick={() => setExpanded(open ? null : drive.driveId)}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
+            >
+              {open ? "Hide" : "Show"} applicants to {drive.companyName}
+            </button>
+          )}
+
+          {mayShortlist && funnel.applied > 0 && (
+            <Link
+              to={`/central/shortlisting?drive=${drive.driveId}`}
+              className="text-xs font-semibold text-brand-600 hover:underline"
+            >
+              Shortlist applicants
+            </Link>
+          )}
+
+          {!isMultiRoleEvent && (role === "account_executive" || role === "admin") && (
+            <Link
+              to={`/ae/pif?companyName=${encodeURIComponent(drive.companyName)}&companyDriveId=${
+                drive.companyDriveId || drive.driveId
+              }&tentativeDate=${encodeURIComponent(drive.tentativeDate ?? "")}`}
+              className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+            >
+              + Add Role to this Drive {drive.tentativeDate ? `(${drive.tentativeDate})` : ""}
+            </Link>
+          )}
+        </div>
+
+        {/* Gated on the rule as well as on `open`: a stale
+            expansion must not survive a role that may not read it. */}
+        {open && mayViewApplicants && (
+          <section
+            aria-label={`${drive.companyName} applicant list`}
+            className="border-t border-line bg-surface-muted p-5"
+          >
+            {drive.applicants.length === 0 ? (
+              <p className="text-sm text-ink-700">
+                Nobody has applied yet. Applicants appear the moment they apply.
+              </p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {drive.applicants.map((applicant) => {
+                  const stage = applicationProgress({
+                    rounds: applicant.rounds,
+                    hasOffer: applicant.hasOffer,
+                  });
+
+                  return (
+                    <li
+                      key={applicant.applicationId}
+                      className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink-900">
+                          {applicant.studentName}
+                        </p>
+                        <p className="text-xs text-ink-500">
+                          <span>{applicant.rollNumber}</span> · {applicant.campus}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {applicant.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
+                        <Badge tone={STAGE_TONE[stage.stage]}>{stage.label}</Badge>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
+      </section>
+    );
+
+    if (isMultiRoleEvent) {
+      return <div key={drive.driveId}>{content}</div>;
+    }
+
     return (
       <li key={drive.driveId}>
-        <Card className="overflow-hidden">
-          <section aria-label={drive.companyName} className="p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
-                  {/* N1: the name is the door to the full record. */}
-                  <Link to={`/drives/${drive.driveId}`} className="hover:underline">
-                    {drive.companyName}
-                  </Link>
-                  {/* 2026-08-27: the type, on every drive summary. */}
-                  <Badge tone={driveTypeTone(drive.driveType)}>
-                    {driveTypeLabel(drive.driveType)}
-                  </Badge>
-                </p>
-                <p className="text-sm text-ink-500">
-                  {drive.roleTitle}
-                  {ctc !== null && ` · ${ctc}`}
-                  {closeDate !== null &&
-                    ` · applications ${closed ? "closed" : "close"} ${closeDate}`}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {hats.map((hat) => (
-                    <Badge key={hat} tone="brand">
-                      {ROLE_LABEL[hat]}
-                    </Badge>
-                  ))}
-                  <Badge tone={progress.terminal ? "neutral" : "warning"}>{progress.phase}</Badge>
-                  {window.urgent && <Badge tone="danger">Closing soon</Badge>}
-                  <Badge tone={window.state === "open" ? "success" : "neutral"}>
-                    {window.label}
-                  </Badge>
-                  {drive.totalRounds > 0 && (
-                    <span className="text-xs text-ink-500">
-                      {progress.roundsDecided} of {progress.totalRounds} rounds decided
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="w-full sm:w-48">
-                <div
-                  className="h-2 w-full overflow-hidden rounded-full bg-surface-muted"
-                  role="progressbar"
-                  aria-label={`${drive.companyName} progress`}
-                  aria-valuenow={progress.percentComplete}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                >
-                  <div
-                    className="h-full bg-brand-500"
-                    style={{ width: `${progress.percentComplete}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-right text-xs text-ink-500">
-                  {progress.percentComplete}% through the pipeline
-                </p>
-              </div>
-            </div>
-
-            {progress.blocked !== null && (
-              <p className="mt-3 rounded-lg bg-gold-50 px-3 py-2 text-xs text-gold-700">
-                {progress.blocked}
-              </p>
-            )}
-
-            <section
-              aria-label={`${drive.companyName} applicants`}
-              className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
-            >
-              {/* C8 (2026-08-21, answer 5b): every number opens the drive
-                  page filtered to exactly the applicants it counted. */}
-              <Link to={`/drives/${drive.driveId}?stage=applied`} className="block">
-                <StatCard label="Applied" value={funnel.applied} />
-              </Link>
-              <Link to={`/drives/${drive.driveId}?stage=shortlisted`} className="block">
-                <StatCard label="Shortlisted" value={funnel.shortlisted} tone="brand" />
-              </Link>
-              <Link to={`/drives/${drive.driveId}?stage=in_rounds`} className="block">
-                <StatCard label="In rounds" value={funnel.inRounds} tone="warning" />
-              </Link>
-              <Link to={`/drives/${drive.driveId}?stage=offers`} className="block">
-                <StatCard label="Offers" value={funnel.offers} tone="success" />
-              </Link>
-              <Link to={`/drives/${drive.driveId}?stage=not_selected`} className="block">
-                <StatCard label="Not selected" value={funnel.notSelected} />
-              </Link>
-            </section>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              {mayViewApplicants && (
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  onClick={() => setExpanded(open ? null : drive.driveId)}
-                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
-                >
-                  {open ? "Hide" : "Show"} applicants to {drive.companyName}
-                </button>
-              )}
-
-              {mayShortlist && funnel.applied > 0 && (
-                <Link
-                  to={`/central/shortlisting?drive=${drive.driveId}`}
-                  className="text-xs font-semibold text-brand-600 hover:underline"
-                >
-                  Shortlist applicants
-                </Link>
-              )}
-
-              {(role === "account_executive" || role === "admin") && (
-                <Link
-                  to={`/ae/pif?companyName=${encodeURIComponent(drive.companyName)}&companyDriveId=${
-                    drive.companyDriveId || drive.driveId
-                  }&tentativeDate=${encodeURIComponent(drive.tentativeDate ?? "")}`}
-                  className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
-                >
-                  + Add Role to this Drive {drive.tentativeDate ? `(${drive.tentativeDate})` : ""}
-                </Link>
-              )}
-            </div>
-          </section>
-
-          {/* Gated on the rule as well as on `open`: a stale
-                          expansion must not survive a role that may not read it. */}
-          {open && mayViewApplicants && (
-            <section
-              aria-label={`${drive.companyName} applicant list`}
-              className="border-t border-line bg-surface-muted p-5"
-            >
-              {drive.applicants.length === 0 ? (
-                <p className="text-sm text-ink-700">
-                  Nobody has applied yet. Applicants appear the moment they apply.
-                </p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {drive.applicants.map((applicant) => {
-                    const stage = applicationProgress({
-                      rounds: applicant.rounds,
-                      hasOffer: applicant.hasOffer,
-                    });
-
-                    return (
-                      <li
-                        key={applicant.applicationId}
-                        className="flex flex-wrap items-center justify-between gap-2 py-2.5"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-ink-900">
-                            {applicant.studentName}
-                          </p>
-                          <p className="text-xs text-ink-500">
-                            <span>{applicant.rollNumber}</span> · {applicant.campus}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {applicant.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
-                          <Badge tone={STAGE_TONE[stage.stage]}>{stage.label}</Badge>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
-          )}
-        </Card>
+        <Card className="overflow-hidden">{content}</Card>
       </li>
     );
   }

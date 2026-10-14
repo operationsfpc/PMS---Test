@@ -27,6 +27,8 @@ const openCard: OpenDrive = {
   refusal: null,
   applied: false,
   profileResumeName: null,
+  companyDriveId: null,
+  tentativeDate: null,
   details: {
     jobDescription: "",
     designations: [],

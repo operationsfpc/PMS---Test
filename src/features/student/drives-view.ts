@@ -88,6 +88,7 @@ export const DRIVE_COLUMNS = `
   shift_night_timing, timeline_notes, joining_timeline, joining_immediate_notes,
   joining_later_notes, jd_storage_path, jd_file_name,
   mandatory_skills, drive_mode, venue, openings, additional_designations,
+  company_drive_id, tentative_date,
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name))),
@@ -295,7 +296,8 @@ export function createSupabaseDrivesView(
         minOverallCgpa: (raw.min_overall_cgpa as number | null) ?? null,
         minTenthPercentage: (raw.min_tenth_percentage as number | null) ?? null,
         minTwelfthPercentage: (raw.min_twelfth_percentage as number | null) ?? null,
-        arrearPolicy: (raw.arrears_policy as "flexible" | "no_standing" | "no_history") ?? "flexible",
+        arrearPolicy:
+          (raw.arrears_policy as "flexible" | "no_standing" | "no_history") ?? "flexible",
         targetCities: targetedCities(raw.drive_target_campuses),
         targetCampuses: linkedNames(raw.drive_target_campuses, "campuses"),
       },
@@ -382,6 +384,8 @@ export function createSupabaseDrivesView(
           refusal: verdict.allowed ? null : (REFUSALS[verdict.reason] ?? "Not open to you."),
           applied: appliedIds.includes(drive.id),
           profileResumeName: student.resumeNames[drive.roleCategory] ?? null,
+          companyDriveId: (raw.company_drive_id as string | null) ?? null,
+          tentativeDate: (raw.tentative_date as string | null) ?? null,
           details: {
             jobDescription: text(raw.job_description),
             designations: (raw.additional_designations as string[] | null) ?? [],

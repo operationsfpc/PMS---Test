@@ -18,7 +18,7 @@ import type {
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PROGRESS_APPLICATION_COLUMNS =
   "id, student_id, drive_id, students(full_name, roll_number, campuses(name)), shortlist_entries(included), " +
-  "drives(company_name, role_title, drive_type, status)";
+  "drives(company_name, role_title, drive_type, status, company_drive_id, tentative_date)";
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
@@ -99,6 +99,8 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
           role_title?: string | null;
           drive_type?: string | null;
           status?: string;
+          company_drive_id?: string | null;
+          tentative_date?: string | null;
         }>(row.drives);
         const student = one<{ full_name?: string; roll_number?: string; campuses?: unknown }>(
           row.students,
@@ -138,6 +140,8 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
             // 2026-08-27: filtered on, and tagged on every card.
             driveType: (drive?.drive_type as DriveType | null) ?? null,
             status: drive?.status ?? "live",
+            companyDriveId: drive?.company_drive_id ?? null,
+            tentativeDate: drive?.tentative_date ?? null,
             students: [entry],
           });
         } else {

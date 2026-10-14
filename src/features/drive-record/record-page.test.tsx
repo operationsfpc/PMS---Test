@@ -13,6 +13,7 @@ import type { DriveRecord, DriveRecordView } from "./record-view";
  */
 const RECORD: DriveRecord = {
   id: "d1",
+  companyDriveId: null,
   companyName: "Accenture",
   industry: "Technology",
   companyWebsite: "https://accenture.com",
@@ -88,6 +89,7 @@ const RECORD: DriveRecord = {
       rounds: [],
     },
   ],
+  siblingRoles: [],
 };
 
 const view = (record: DriveRecord | null = RECORD): DriveRecordView => ({

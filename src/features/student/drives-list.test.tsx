@@ -31,6 +31,8 @@ const open = {
   refusal: null,
   applied: false,
   profileResumeName: null as string | null,
+  companyDriveId: null as string | null,
+  tentativeDate: null as string | null,
   details: {
     jobDescription: "Build and maintain backend services.",
     designations: ["Associate Engineer"],

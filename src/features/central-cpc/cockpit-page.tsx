@@ -64,6 +64,10 @@ export interface DriveSummary {
    */
   readonly driveMode?: string | null;
   readonly venue?: string | null;
+  /** Multi-role grouping: the parent event ID (null for legacy standalone drives). */
+  readonly companyDriveId?: string | null;
+  /** Multi-role grouping: the event date. */
+  readonly tentativeDate?: string | null;
 }
 
 export interface DisbarmentReview {
@@ -151,7 +155,12 @@ export function CockpitPage({
    * drive from THIS list. Wired by the route for the delivery head alone —
    * absent, the buttons do not exist.
    */
-  decide?: (driveId: string, current: DriveStatus, decision: PifDecision, driveType?: DriveType | null) => Promise<void>;
+  decide?: (
+    driveId: string,
+    current: DriveStatus,
+    decision: PifDecision,
+    driveType?: DriveType | null,
+  ) => Promise<void>;
 }) {
   // 2026-08-17 (Karthik): the AE views drive status and results; they neither
   // publish nor shortlist. The domain owns both answers - this screen only asks.
