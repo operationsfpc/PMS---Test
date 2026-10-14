@@ -158,14 +158,25 @@ export function CampusProgrammes({
       ) : (
         <div className="mt-4 space-y-4">
           {byYear.map((group) => (
-            <div key={group.passingYear}>
-              <h4 className="text-sm font-semibold text-ink-700">{group.passingYear}</h4>
-              <ul className="mt-1 divide-y divide-neutral-200">
+            <div
+              key={group.passingYear}
+              className="rounded-lg border border-line bg-surface p-3.5 shadow-xs"
+            >
+              <div className="flex items-center gap-2 mb-2 pb-1.5 border-b border-line">
+                <span className="font-semibold text-xs text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
+                  Cohort
+                </span>
+                <h4 className="text-sm font-bold text-ink-900">{group.passingYear}</h4>
+              </div>
+              <ul className="divide-y divide-line/60">
                 {group.programmes.map((row) => {
                   const label = programmeLabel(row.degree, row.branch);
                   return (
-                    <li key={row.id} className="flex items-center justify-between gap-3 py-2">
-                      <span className="text-sm text-ink-800">
+                    <li
+                      key={row.id}
+                      className="flex items-center justify-between gap-3 py-2 px-1 hover:bg-surface-muted/40 rounded transition-colors"
+                    >
+                      <span className="text-sm font-medium text-ink-800">
                         {label}
                         <span className="ml-2 text-xs text-ink-500">{row.passingYear}</span>
                       </span>
@@ -186,76 +197,80 @@ export function CampusProgrammes({
         </div>
       )}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-4">
-        <div>
-          <label
-            htmlFor={`degree-${campusId}`}
-            className="mb-1 block text-sm font-medium text-ink-700"
-          >
-            Degree
-          </label>
-          <input
-            id={`degree-${campusId}`}
-            list={`degree-options-${campusId}`}
-            value={degree}
-            onChange={(e) => {
-              setDegree(e.target.value);
-              // A branch from the previous degree would pair two things that
-              // never went together.
-              setBranch("");
-            }}
-            placeholder="Pick or type a new one"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <datalist id={`degree-options-${campusId}`}>
-            {options.map((option) => (
-              <option key={option.degree} value={option.degree} />
-            ))}
-          </datalist>
+      <div className="mt-5 rounded-lg border border-line bg-surface-muted/20 p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-ink-600 mb-3">
+          Add new programme mapping
         </div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div>
+            <label
+              htmlFor={`degree-${campusId}`}
+              className="mb-1 block text-xs font-medium text-ink-700"
+            >
+              Degree
+            </label>
+            <input
+              id={`degree-${campusId}`}
+              list={`degree-options-${campusId}`}
+              value={degree}
+              onChange={(e) => {
+                setDegree(e.target.value);
+                setBranch("");
+              }}
+              placeholder="Pick or type a new one"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+            />
+            <datalist id={`degree-options-${campusId}`}>
+              {options.map((option) => (
+                <option key={option.degree} value={option.degree} />
+              ))}
+            </datalist>
+          </div>
 
-        <div>
-          <label
-            htmlFor={`branch-${campusId}`}
-            className="mb-1 block text-sm font-medium text-ink-700"
-          >
-            Branch
-          </label>
-          <input
-            id={`branch-${campusId}`}
-            list={`branch-options-${campusId}`}
-            value={branch}
-            onChange={(e) => setBranch(e.target.value)}
-            placeholder="No branch, or pick / type one"
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <datalist id={`branch-options-${campusId}`}>
-            {branchSuggestions.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </div>
+          <div>
+            <label
+              htmlFor={`branch-${campusId}`}
+              className="mb-1 block text-xs font-medium text-ink-700"
+            >
+              Branch
+            </label>
+            <input
+              id={`branch-${campusId}`}
+              list={`branch-options-${campusId}`}
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+              placeholder="No branch, or pick / type one"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+            />
+            <datalist id={`branch-options-${campusId}`}>
+              {branchSuggestions.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </div>
 
-        <div>
-          <label
-            htmlFor={`year-${campusId}`}
-            className="mb-1 block text-sm font-medium text-ink-700"
-          >
-            Year of passing
-          </label>
-          <input
-            id={`year-${campusId}`}
-            inputMode="numeric"
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
+          <div>
+            <label
+              htmlFor={`year-${campusId}`}
+              className="mb-1 block text-xs font-medium text-ink-700"
+            >
+              Year of passing
+            </label>
+            <input
+              id={`year-${campusId}`}
+              inputMode="numeric"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              placeholder="e.g. 2027"
+              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+            />
+          </div>
 
-        <div className="flex items-end">
-          <Button variant="secondary" onClick={() => void add()}>
-            Add programme
-          </Button>
+          <div className="flex items-end">
+            <Button variant="secondary" onClick={() => void add()} className="w-full sm:w-auto">
+              Add programme
+            </Button>
+          </div>
         </div>
       </div>
 

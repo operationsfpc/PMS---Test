@@ -34,7 +34,7 @@ BEGIN
   FOR v_drive IN
     SELECT d.id, d.company_name, d.role_title, d.application_end, d.ctc_max_lpa
     FROM drives d
-    WHERE d.status = 'published'
+    WHERE d.status = 'live'
       AND d.application_end BETWEEN now() AND now() + interval '24 hours'
   LOOP
     -- Send to all eligible students who haven't applied yet
@@ -176,7 +176,7 @@ BEGIN
   
   SELECT COUNT(*) INTO v_active_drives 
   FROM drives 
-  WHERE status = 'published';
+  WHERE status = 'live';
   
   SELECT COUNT(*) INTO v_total_applications 
   FROM drive_applications 
@@ -250,7 +250,7 @@ BEGIN
       FROM drives d
       JOIN drive_target_campuses dtc ON dtc.drive_id = d.id
       WHERE dtc.campus_id = v_campus.id
-        AND d.status = 'published';
+        AND d.status = 'live';
       
       SELECT COUNT(DISTINCT s.id) INTO v_students_participating
       FROM students s

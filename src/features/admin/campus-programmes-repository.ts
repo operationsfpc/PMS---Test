@@ -75,7 +75,9 @@ export function createSupabaseCampusProgrammesView(client: SupabaseClient): Camp
       const degreeName = programme.degree.trim();
       const branchName = programme.branch.trim();
       const sameName = (a: unknown, b: string) =>
-        String(a ?? "").trim().toLowerCase() === b.toLowerCase();
+        String(a ?? "")
+          .trim()
+          .toLowerCase() === b.toLowerCase();
 
       let { degrees, branches } = await catalogue();
 
@@ -85,7 +87,9 @@ export function createSupabaseCampusProgrammesView(client: SupabaseClient): Camp
         // resolves the id in either case.
         const { error } = await client.from("degrees").insert({ name: degreeName });
         if (error !== null && error.code !== "23505") {
-          throw new CampusProgrammeError(`Could not add the degree ${degreeName}: ${error.message}`);
+          throw new CampusProgrammeError(
+            `Could not add the degree ${degreeName}: ${error.message}`,
+          );
         }
         ({ degrees } = await catalogue());
         degree = degrees.find((d) => sameName(d.name, degreeName));
@@ -99,9 +103,8 @@ export function createSupabaseCampusProgrammesView(client: SupabaseClient): Camp
       let branch =
         branchName === ""
           ? null
-          : (branches.find(
-              (b) => b.degree_id === degree?.id && sameName(b.name, branchName),
-            ) ?? null);
+          : (branches.find((b) => b.degree_id === degree?.id && sameName(b.name, branchName)) ??
+            null);
 
       if (branchName !== "" && branch === null) {
         const { error } = await client
@@ -114,9 +117,7 @@ export function createSupabaseCampusProgrammesView(client: SupabaseClient): Camp
         }
         ({ branches } = await catalogue());
         branch =
-          branches.find(
-            (b) => b.degree_id === degree?.id && sameName(b.name, branchName),
-          ) ?? null;
+          branches.find((b) => b.degree_id === degree?.id && sameName(b.name, branchName)) ?? null;
         if (branch === null) {
           throw new CampusProgrammeError(`Could not add the branch ${branchName}.`);
         }

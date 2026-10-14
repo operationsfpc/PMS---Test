@@ -190,8 +190,8 @@ DECLARE
   v_recruiter_email TEXT;
   v_notification_id UUID;
 BEGIN
-  -- Fire when drive is published
-  IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'published') THEN
+  -- Fire when drive is published (status = 'live')
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
     SELECT spoc_email INTO v_recruiter_email
     FROM drives WHERE id = NEW.id;
     

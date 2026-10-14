@@ -9,6 +9,10 @@ export interface CampusListItem {
   readonly cityName: string;
   readonly state: string;
   readonly isActive: boolean;
+  readonly address?: string | undefined;
+  readonly primaryContactName?: string | undefined;
+  readonly primaryContactEmail?: string | undefined;
+  readonly primaryContactPhone?: string | undefined;
 }
 
 export interface NewCampus {
@@ -61,7 +65,9 @@ export function createSupabaseCampusRepository(client: SupabaseClient): CampusRe
     async list() {
       const { data, error } = await client
         .from("campuses")
-        .select("id, name, code, is_active, cities(name, state)")
+        .select(
+          "id, name, code, is_active, address, primary_contact_name, primary_contact_email, primary_contact_phone, cities(name, state)",
+        )
         .order("name");
 
       if (error !== null) throw new CampusError("Could not load the campuses.");
@@ -75,6 +81,7 @@ export function createSupabaseCampusRepository(client: SupabaseClient): CampusRe
           | null
           | undefined;
 
+        const rowRec = row as Record<string, unknown>;
         return {
           id: row.id as string,
           name: row.name as string,
@@ -82,6 +89,19 @@ export function createSupabaseCampusRepository(client: SupabaseClient): CampusRe
           cityName: city?.name ?? "",
           state: city?.state ?? "",
           isActive: row.is_active as boolean,
+          address: typeof rowRec.address === "string" ? rowRec.address : undefined,
+          primaryContactName:
+            typeof rowRec.primary_contact_name === "string"
+              ? rowRec.primary_contact_name
+              : undefined,
+          primaryContactEmail:
+            typeof rowRec.primary_contact_email === "string"
+              ? rowRec.primary_contact_email
+              : undefined,
+          primaryContactPhone:
+            typeof rowRec.primary_contact_phone === "string"
+              ? rowRec.primary_contact_phone
+              : undefined,
         };
       });
     },

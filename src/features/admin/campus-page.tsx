@@ -1,5 +1,5 @@
-import { Button, Card, PageHeader } from "@components/ui";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
+import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { CampusProgrammes, type CampusProgrammesView } from "./campus-programmes";
 import type { CampusListItem, CampusRepository, NewCampus } from "./campus-repository";
 
@@ -57,6 +57,11 @@ export function CampusPage({
   const [missing, setMissing] = useState<readonly FieldName[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Search & filter state
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
 
   const refresh = useCallback(async () => {
     setCampuses(await repository.list());
@@ -78,6 +83,7 @@ export function CampusPage({
     try {
       await repository.create(values as unknown as NewCampus);
       setValues(EMPTY);
+      setShowAddForm(false);
       await refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save the campus.");
@@ -96,11 +102,37 @@ export function CampusPage({
     }
   }
 
+  const filteredCampuses = useMemo(() => {
+    if (campuses === null) return null;
+    return campuses.filter((c) => {
+      if (search.trim() !== "") {
+        const q = search.toLowerCase();
+        const match =
+          c.name.toLowerCase().includes(q) ||
+          c.code.toLowerCase().includes(q) ||
+          c.cityName.toLowerCase().includes(q) ||
+          c.state.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (statusFilter === "active" && !c.isActive) return false;
+      if (statusFilter === "inactive" && c.isActive) return false;
+      return true;
+    });
+  }, [campuses, search, statusFilter]);
+
   return (
     <div>
       <PageHeader
         title="Campuses"
         subtitle="A campus must exist before its roster can be imported."
+        actions={
+          <Button
+            variant={showAddForm ? "secondary" : "primary"}
+            onClick={() => setShowAddForm(!showAddForm)}
+          >
+            {showAddForm ? "Close campus form" : "Add new campus"}
+          </Button>
+        }
       />
 
       {error !== null && (
@@ -112,7 +144,9 @@ export function CampusPage({
         </div>
       )}
 
-      <Card className="mb-6 p-6">
+      {/* Add Campus Form Card (always available or toggleable) */}
+      <Card className={`mb-6 p-6 ${showAddForm ? "block" : "hidden sm:block"}`}>
+        <h2 className="mb-4 text-base font-semibold text-ink-900">Add new campus</h2>
         <form onSubmit={submit} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map((field) => (
@@ -128,7 +162,8 @@ export function CampusPage({
                   type={field.type}
                   value={values[field.name]}
                   onChange={(e) => setValues({ ...values, [field.name]: e.target.value })}
-                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                  placeholder={`Enter ${field.label.toLowerCase()}`}
+                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
                 />
                 {missing.includes(field.name) && (
                   <p className="mt-1 text-xs text-destructive">{field.label} is required.</p>
@@ -137,70 +172,184 @@ export function CampusPage({
             ))}
           </div>
 
-          <div className="mt-5">
+          <div className="mt-5 flex items-center gap-3">
             <Button type="submit" disabled={saving}>
               {saving ? "Adding…" : "Add campus"}
             </Button>
+            {showAddForm && (
+              <Button variant="ghost" onClick={() => setShowAddForm(false)}>
+                Cancel
+              </Button>
+            )}
           </div>
         </form>
       </Card>
+
+      {/* Directory Header and Search Toolbar */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-ink-900">
+            Campuses directory {campuses !== null ? `(${campuses.length})` : ""}
+          </h2>
+          <p className="text-xs text-ink-500">
+            Registered partner campuses, location details, and affiliated degree programmes
+          </p>
+        </div>
+
+        {campuses !== null && campuses.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search campuses by name, code, or city…"
+              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[240px]"
+            />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+            >
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            {(search !== "" || statusFilter !== "") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setStatusFilter("");
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
 
       {campuses === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading campuses…
         </p>
       ) : campuses.length === 0 ? (
-        <Card className="p-6">
+        <Card className="p-6 text-center">
           <p className="text-sm text-ink-700">No campuses yet. Add the first one above.</p>
         </Card>
       ) : (
-        <Card className="divide-y divide-neutral-200">
-          {campuses.map((campus) => (
-            <div key={campus.id} className="p-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-ink-900">{campus.name}</p>
-                  <p className="text-sm text-ink-500">
-                    {campus.code} · {campus.cityName}, {campus.state}
-                    {campus.isActive ? "" : " · Inactive"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {programmes !== undefined && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-expanded={openProgrammes === campus.id}
-                      onClick={() =>
-                        setOpenProgrammes(openProgrammes === campus.id ? null : campus.id)
-                      }
-                    >
-                      Programmes at {campus.name}
-                    </Button>
-                  )}
-                  {campus.isActive && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void deactivate(campus.id)}
-                    >
-                      Deactivate
-                    </Button>
-                  )}
-                </div>
-              </div>
+        <Card className="overflow-hidden p-0 border border-line bg-surface shadow-xs">
+          <DataTable
+            caption="Campuses directory"
+            columns={["Campus", "Location", "Primary contact", "Status", "Actions"]}
+          >
+            {filteredCampuses !== null && filteredCampuses.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-sm text-ink-500">
+                  No campuses match your search or filter.
+                </td>
+              </tr>
+            ) : (
+              filteredCampuses?.map((campus) => (
+                <Fragment key={campus.id}>
+                  <tr className="border-t border-line hover:bg-surface-muted/30 transition-colors">
+                    {/* Campus Name and Code */}
+                    <td className="px-4 py-3 align-top min-w-[200px]">
+                      <div className="font-semibold text-ink-900">{campus.name}</div>
+                      <div className="text-xs text-ink-500 mt-0.5 font-mono">
+                        <span className="font-medium">{campus.code}</span>
+                        {!campus.isActive && " · Inactive"}
+                      </div>
+                    </td>
 
-              {programmes !== undefined && openProgrammes === campus.id && (
-                <div className="mt-4">
-                  <CampusProgrammes
-                    campusId={campus.id}
-                    campusName={campus.name}
-                    view={programmes}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
+                    {/* Location & Address */}
+                    <td className="px-4 py-3 align-top min-w-[180px]">
+                      <div className="text-sm text-ink-800 font-medium">
+                        {campus.cityName}, {campus.state}
+                      </div>
+                      {campus.address && (
+                        <div
+                          className="text-xs text-ink-500 mt-0.5 line-clamp-1"
+                          title={campus.address}
+                        >
+                          {campus.address}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Primary Contact Person */}
+                    <td className="px-4 py-3 align-top min-w-[200px]">
+                      {campus.primaryContactName ? (
+                        <div>
+                          <div className="text-sm font-medium text-ink-900">
+                            {campus.primaryContactName}
+                          </div>
+                          <div className="text-xs text-ink-500 mt-0.5 font-mono">
+                            {campus.primaryContactEmail}
+                            {campus.primaryContactPhone ? ` · ${campus.primaryContactPhone}` : ""}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-ink-400">—</span>
+                      )}
+                    </td>
+
+                    {/* Status Badge */}
+                    <td className="px-4 py-3 align-top whitespace-nowrap min-w-[110px]">
+                      {campus.isActive ? (
+                        <Badge tone="success">Active</Badge>
+                      ) : (
+                        <Badge tone="neutral">Inactive</Badge>
+                      )}
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-4 py-3 align-top text-right min-w-[240px]">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {programmes !== undefined && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-expanded={openProgrammes === campus.id}
+                            onClick={() =>
+                              setOpenProgrammes(openProgrammes === campus.id ? null : campus.id)
+                            }
+                          >
+                            {openProgrammes === campus.id
+                              ? "Hide programmes"
+                              : `Programmes at ${campus.name}`}
+                          </Button>
+                        )}
+                        {campus.isActive && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => void deactivate(campus.id)}
+                          >
+                            Deactivate
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Expanded Programmes Sub-Panel */}
+                  {programmes !== undefined && openProgrammes === campus.id && (
+                    <tr key={`${campus.id}-programmes`} className="bg-surface-muted/30">
+                      <td colSpan={5} className="p-4 border-t border-line">
+                        <CampusProgrammes
+                          campusId={campus.id}
+                          campusName={campus.name}
+                          view={programmes}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))
+            )}
+          </DataTable>
         </Card>
       )}
     </div>

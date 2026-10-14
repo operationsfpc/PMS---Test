@@ -191,7 +191,8 @@ export function createSupabaseStaffRepository(
       // Atomic replacement: 0098's function deletes and inserts in one
       // transaction, so a failure leaves the old mapping intact rather than
       // empty. Applied where they have signed in, staged where they have not.
-      const fn = profileId === null ? "set_staff_campus_invitations" : "set_staff_campus_assignments";
+      const fn =
+        profileId === null ? "set_staff_campus_invitations" : "set_staff_campus_assignments";
       const key = profileId ?? address;
 
       const { error } = await client.rpc(fn, {
@@ -225,14 +226,12 @@ export function createSupabaseStaffRepository(
       // auth.users row, the `accept_invitation_for_existing_account` trigger
       // finds their staged campuses immediately.
       if (invitation.campusIds.length > 0) {
-        const { error: stagedError } = await client
-          .from("staff_campus_invitations")
-          .insert(
-            invitation.campusIds.map((campusId) => ({
-              email,
-              campus_id: campusId,
-            })),
-          );
+        const { error: stagedError } = await client.from("staff_campus_invitations").insert(
+          invitation.campusIds.map((campusId) => ({
+            email,
+            campus_id: campusId,
+          })),
+        );
 
         if (stagedError !== null && stagedError.code !== "23505") {
           throw new StaffError(

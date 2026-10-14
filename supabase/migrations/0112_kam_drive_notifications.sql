@@ -18,8 +18,8 @@ DECLARE
   v_campus RECORD;
   v_notification_id UUID;
 BEGIN
-  -- Only fire when drive is published (status changes to 'published')
-  IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'published') THEN
+  -- Only fire when drive is published (status changes to 'live')
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
     -- Get all target campuses for this drive
     FOR v_campus IN
       SELECT dtc.campus_id, c.name as campus_name

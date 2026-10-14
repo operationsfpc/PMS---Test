@@ -1,7 +1,7 @@
-import { Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
 import { campusScopeFor, requiresCampusAssignment, validateCampusSelection } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { CampusOption, StaffMember, StaffRepository } from "./staff-repository";
 
 /** Students arrive by roster import, so they are never an invitable role. */
@@ -30,6 +30,11 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // Search & filter state
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
+
   const refresh = useCallback(async () => {
     setStaff(await repository.list());
   }, [repository]);
@@ -50,9 +55,6 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       setProblem("A full name and an email address are required.");
       return;
     }
-    // The domain decides how many campuses this role may hold, so inviting a
-    // coordinator to two is refused here for the same reason the repository
-    // refuses it: the mapping is where their authority to verify comes from.
     const selection = validateCampusSelection(role, campusIds);
     if (!selection.ok) {
       setProblem(selection.error);
@@ -78,11 +80,6 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     }
   }
 
-  /**
-   * F8 (UAT 2026-08-06): deactivating used to be a one-way door on this
-   * screen. The only route back was the database, so a misclick cost somebody
-   * their login until an engineer intervened.
-   */
   async function setActive(target: string, isActive: boolean) {
     setError(null);
     try {
@@ -93,11 +90,6 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     }
   }
 
-  /**
-   * The domain refuses self-demotion and the removal of the last Admin, so the
-   * reason it gives is shown verbatim - it is the only explanation the Admin
-   * will get, and "could not update" would send them looking in the wrong place.
-   */
   async function changeRole(target: string, newRole: AppRole) {
     setError(null);
     setBusy(target);
@@ -112,11 +104,6 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     }
   }
 
-  /**
-   * Maps a coordinator to a campus. One campus, so this replaces rather than
-   * adds - and an empty choice is simply not sent, because the domain would
-   * refuse it and "none" is never a mapping anyone wants on purpose.
-   */
   async function mapCampus(target: string, campusId: string) {
     if (campusId === "") return;
     setError(null);
@@ -154,6 +141,22 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     );
   }
 
+  const filteredStaff = useMemo(() => {
+    if (staff === null) return null;
+    return staff.filter((m) => {
+      if (search.trim() !== "") {
+        const q = search.toLowerCase();
+        const match = m.fullName.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (roleFilter !== "" && m.role !== roleFilter) return false;
+      if (statusFilter === "active" && !m.isActive) return false;
+      if (statusFilter === "deactivated" && m.isActive) return false;
+      if (statusFilter === "pending" && m.acceptedAt !== null) return false;
+      return true;
+    });
+  }, [staff, search, roleFilter, statusFilter]);
+
   return (
     <div>
       <PageHeader
@@ -170,7 +173,9 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
         </div>
       )}
 
+      {/* Invite Staff Card */}
       <Card className="mb-6 p-6">
+        <h2 className="mb-4 text-base font-semibold text-ink-900">Invite new staff member</h2>
         <form onSubmit={submit} noValidate>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
@@ -181,7 +186,8 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 id="staff-name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                placeholder="e.g. John Doe"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
               />
             </div>
             <div>
@@ -193,7 +199,8 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                placeholder="name@faceprep.in"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
               />
             </div>
             <div>
@@ -204,7 +211,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 id="staff-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as AppRole)}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm capitalize"
+                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm capitalize text-ink-900 focus:border-brand-500 focus:outline-hidden"
               >
                 {INVITABLE.map((r) => (
                   <option key={r} value={r}>
@@ -245,127 +252,230 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
         </form>
       </Card>
 
+      {/* Staff Directory Header & Filters */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-ink-900">
+            Staff directory {staff !== null ? `(${staff.length})` : ""}
+          </h2>
+          <p className="text-xs text-ink-500">
+            Active permissions, role assignments, and campus scopes
+          </p>
+        </div>
+
+        {staff !== null && staff.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden"
+            />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+            >
+              <option value="">All roles</option>
+              {INVITABLE.map((r) => (
+                <option key={r} value={r}>
+                  {label(r)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+            >
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="deactivated">Deactivated</option>
+              <option value="pending">Pending sign-in</option>
+            </select>
+            {(search !== "" || roleFilter !== "" || statusFilter !== "") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearch("");
+                  setRoleFilter("");
+                  setStatusFilter("");
+                }}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
       {staff === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading staff…
         </p>
       ) : staff.length === 0 ? (
-        <Card className="p-6">
+        <Card className="p-6 text-center">
           <p className="text-sm text-ink-700">No staff invited yet.</p>
         </Card>
       ) : (
-        <Card className="divide-y divide-neutral-200">
-          {staff.map((member) => (
-            <div key={member.email} className="flex flex-wrap items-center gap-3 p-4">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-ink-900">{member.fullName}</p>
-                <p className="text-sm text-ink-500">
-                  <span>{member.email}</span>
-                  {member.acceptedAt === null && " · Not signed in yet"}
-                  {member.isActive ? "" : " · Deactivated"}
-                </p>
-                {/*
-                 * Said out loud, because silence here cost a day: a
-                 * coordinator with no campus signs in perfectly well and then
-                 * sees an empty verification queue with no explanation.
-                 */}
-                {campusScopeFor(member.role) !== "none" && member.campuses.length === 0 && (
-                  <p className="text-sm text-destructive">
-                    No campus mapped — they cannot see any students yet.
-                  </p>
-                )}
-              </div>
+        <Card className="overflow-hidden p-0 border border-line bg-surface shadow-xs">
+          <DataTable
+            caption="Staff directory"
+            columns={["Staff member", "Role", "Assigned campus", "Status", "Actions"]}
+          >
+            {filteredStaff !== null && filteredStaff.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-sm text-ink-500">
+                  No staff match your search or filter.
+                </td>
+              </tr>
+            ) : (
+              filteredStaff?.map((member) => (
+                <tr
+                  key={member.email}
+                  className="border-t border-line hover:bg-surface-muted/30 transition-colors"
+                >
+                  {/* Staff Member Info */}
+                  <td className="px-4 py-3 align-top min-w-[200px]">
+                    <div className="font-semibold text-ink-900">{member.fullName}</div>
+                    <div className="text-xs text-ink-500 font-mono mt-0.5">{member.email}</div>
+                  </td>
 
-              {confirming === member.email ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-sm text-destructive">
-                    Permanently remove {member.fullName}? Their sign-in stops working.
-                  </p>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={busy === member.email}
-                    onClick={() => void remove(member.email)}
-                  >
-                    Yes, remove
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {campusScopeFor(member.role) === "one" && (
-                    <>
-                      <label className="sr-only" htmlFor={`campus-${member.email}`}>
-                        Campus for {member.fullName}
-                      </label>
-                      <select
-                        id={`campus-${member.email}`}
-                        value={member.campuses[0]?.id ?? ""}
-                        disabled={busy === member.email}
-                        onChange={(e) => void mapCampus(member.email, e.target.value)}
-                        className="rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm"
-                      >
-                        <option value="">Select a campus…</option>
-                        {campuses.map((campus) => (
-                          <option key={campus.id} value={campus.id}>
-                            {campus.name}
-                          </option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-
-                  <label className="sr-only" htmlFor={`role-${member.email}`}>
-                    Role for {member.fullName}
-                  </label>
-                  <select
-                    id={`role-${member.email}`}
-                    value={member.role}
-                    disabled={busy === member.email}
-                    onChange={(e) => void changeRole(member.email, e.target.value as AppRole)}
-                    className="rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm capitalize"
-                  >
-                    {INVITABLE.map((r) => (
-                      <option key={r} value={r}>
-                        {label(r)}
-                      </option>
-                    ))}
-                  </select>
-
-                  {member.isActive ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => void setActive(member.email, false)}
+                  {/* Role Selector */}
+                  <td className="px-4 py-3 align-top min-w-[170px]">
+                    <label className="sr-only" htmlFor={`role-${member.email}`}>
+                      Role for {member.fullName}
+                    </label>
+                    <select
+                      id={`role-${member.email}`}
+                      value={member.role}
+                      disabled={busy === member.email}
+                      onChange={(e) => void changeRole(member.email, e.target.value as AppRole)}
+                      className="w-full rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs font-medium text-ink-800 capitalize shadow-xs focus:border-brand-500 focus:outline-hidden"
                     >
-                      Deactivate
-                    </Button>
-                  ) : (
-                    // Named, because a queue of deactivated staff needs the
-                    // buttons told apart by a screen reader as well as by eye.
-                    <Button
-                      size="sm"
-                      aria-label={`Activate ${member.fullName}`}
-                      onClick={() => void setActive(member.email, true)}
-                    >
-                      Activate
-                    </Button>
-                  )}
+                      {INVITABLE.map((r) => (
+                        <option key={r} value={r}>
+                          {label(r)}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
 
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    aria-label={`Remove ${member.fullName}`}
-                    onClick={() => setConfirming(member.email)}
-                  >
-                    Remove
-                  </Button>
-                </>
-              )}
-            </div>
-          ))}
+                  {/* Campus Mapping */}
+                  <td className="px-4 py-3 align-top min-w-[200px]">
+                    {campusScopeFor(member.role) === "one" && (
+                      <div>
+                        <label className="sr-only" htmlFor={`campus-${member.email}`}>
+                          Campus for {member.fullName}
+                        </label>
+                        <select
+                          id={`campus-${member.email}`}
+                          value={member.campuses[0]?.id ?? ""}
+                          disabled={busy === member.email}
+                          onChange={(e) => void mapCampus(member.email, e.target.value)}
+                          className="w-full rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 shadow-xs focus:border-brand-500 focus:outline-hidden"
+                        >
+                          <option value="">Select a campus…</option>
+                          {campuses.map((campus) => (
+                            <option key={campus.id} value={campus.id}>
+                              {campus.name}
+                            </option>
+                          ))}
+                        </select>
+                        {member.campuses.length === 0 && (
+                          <p className="mt-1 text-xs font-medium text-destructive">
+                            No campus mapped — they cannot see any students yet.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {campusScopeFor(member.role) === "many" && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-neutral-100 text-ink-700">
+                        {member.campuses.length > 0
+                          ? member.campuses.map((c) => c.name).join(", ")
+                          : "Assigned campuses"}
+                      </span>
+                    )}
+                    {campusScopeFor(member.role) === "none" && (
+                      <span className="text-xs text-ink-400">—</span>
+                    )}
+                  </td>
+
+                  {/* Status Badges */}
+                  <td className="px-4 py-3 align-top whitespace-nowrap min-w-[130px]">
+                    <div className="flex flex-col gap-1 items-start">
+                      {member.isActive ? (
+                        <Badge tone="success">Active</Badge>
+                      ) : (
+                        <Badge tone="danger">Deactivated</Badge>
+                      )}
+                      {member.acceptedAt === null && (
+                        <span className="text-xs text-ink-500">Not signed in yet</span>
+                      )}
+                      {!member.isActive && <span className="sr-only"> · Deactivated</span>}
+                    </div>
+                  </td>
+
+                  {/* Actions & Confirmation */}
+                  <td className="px-4 py-3 align-top text-right min-w-[220px]">
+                    {confirming === member.email ? (
+                      <div className="flex flex-col items-end gap-1.5 text-right">
+                        <p className="text-xs font-semibold text-destructive">
+                          Permanently remove {member.fullName}? Their sign-in stops working.
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={busy === member.email}
+                            onClick={() => void remove(member.email)}
+                          >
+                            Yes, remove
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setConfirming(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1.5">
+                        {member.isActive ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busy === member.email}
+                            onClick={() => void setActive(member.email, false)}
+                          >
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            aria-label={`Activate ${member.fullName}`}
+                            disabled={busy === member.email}
+                            onClick={() => void setActive(member.email, true)}
+                          >
+                            Activate
+                          </Button>
+                        )}
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          aria-label={`Remove ${member.fullName}`}
+                          disabled={busy === member.email}
+                          onClick={() => setConfirming(member.email)}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </DataTable>
         </Card>
       )}
     </div>

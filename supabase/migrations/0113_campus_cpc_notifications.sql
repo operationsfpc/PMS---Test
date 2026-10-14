@@ -18,7 +18,7 @@ DECLARE
   v_cpc_email TEXT;
   v_notification_id UUID;
 BEGIN
-  IF NEW.status = 'published' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'published') THEN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
     FOR v_campus IN
       SELECT dtc.campus_id, c.name as campus_name
       FROM drive_target_campuses dtc

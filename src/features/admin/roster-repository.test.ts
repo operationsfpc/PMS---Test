@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import { createSupabaseRosterRepository, RosterError } from "./roster-repository";
 

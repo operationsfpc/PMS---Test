@@ -440,26 +440,24 @@ describe("campus mapping for existing staff", () => {
   });
 
   it("maps a coordinator to a campus, replacing whatever was there", async () => {
-    const deleted: string[] = [];
     let inserted: Array<Record<string, unknown>> = [];
     withAssignments(
       [{ profile_id: "p1", campus_id: "campus-2" }],
       [{ id: "p1", email: "cpc@faceprep.in" }],
     );
     server.use(
-      http.delete(`${BASE}/rest/v1/staff_campus_assignments`, ({ request }) => {
-        deleted.push(new URL(request.url).search);
-        return HttpResponse.json([]);
-      }),
-      http.post(`${BASE}/rest/v1/staff_campus_assignments`, async ({ request }) => {
-        inserted = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(inserted);
+      http.post(`${BASE}/rest/v1/rpc/set_staff_campus_assignments`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        inserted = (body.p_campus_ids as string[]).map((cid) => ({
+          profile_id: body.p_profile_id,
+          campus_id: cid,
+        }));
+        return HttpResponse.json(null);
       }),
     );
 
     await repo().setCampuses("cpc@faceprep.in", ["campus-1"]);
 
-    expect(deleted[0]).toContain("profile_id=eq.p1");
     expect(inserted).toEqual([{ profile_id: "p1", campus_id: "campus-1" }]);
   });
 
@@ -486,10 +484,13 @@ describe("campus mapping for existing staff", () => {
     let staged: Array<Record<string, unknown>> = [];
     withAssignments([], []);
     server.use(
-      http.delete(`${BASE}/rest/v1/staff_campus_invitations`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/staff_campus_invitations`, async ({ request }) => {
-        staged = (await request.json()) as Array<Record<string, unknown>>;
-        return HttpResponse.json(staged);
+      http.post(`${BASE}/rest/v1/rpc/set_staff_campus_invitations`, async ({ request }) => {
+        const body = (await request.json()) as Record<string, unknown>;
+        staged = (body.p_campus_ids as string[]).map((cid) => ({
+          email: body.p_email,
+          campus_id: cid,
+        }));
+        return HttpResponse.json(null);
       }),
     );
 

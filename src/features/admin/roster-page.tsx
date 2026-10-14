@@ -2,8 +2,8 @@ import { Card } from "@components/ui";
 import { type EmailHolder, normaliseEmail } from "@domain/email-identity";
 import { supabase } from "@lib/supabase";
 import { useEffect, useState } from "react";
-import { type CampusOption, RosterImportPage } from "./roster-import-page";
 import { ExistingStudentsList } from "./existing-students-list";
+import { type CampusOption, RosterImportPage } from "./roster-import-page";
 
 /**
  * Route wrapper: loads the campuses an administrator may add students into.

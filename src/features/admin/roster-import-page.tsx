@@ -202,18 +202,22 @@ export function RosterImportPage({
           </Card>
 
           {parsed.rejected.length > 0 && (
-            <Card className="p-5">
-              <h2 className="mb-3 font-[Raleway] text-base font-bold text-[#DD4820]">
-                Rows that cannot be imported
+            <Card className="mb-4 border border-destructive/40 bg-destructive/5 p-5">
+              <h2 className="mb-3 font-[Raleway] text-base font-bold text-destructive">
+                Rows that cannot be imported ({parsed.rejected.length})
               </h2>
-              <ul className="flex flex-col gap-2">
+              <ul className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">
                 {parsed.rejected.map((r) => (
-                  <li key={`${r.row}-${r.reason}`} className="text-sm text-ink-700">
-                    <strong>Row {r.row}:</strong> {r.reason}
+                  <li
+                    key={`${r.row}-${r.reason}`}
+                    className="text-sm text-ink-800 bg-white border border-destructive/20 rounded-lg p-2.5 shadow-2xs"
+                  >
+                    <strong className="text-destructive mr-1.5">Row {r.row}:</strong>
+                    <span>{r.reason}</span>
                   </li>
                 ))}
               </ul>
-              <p className="mt-3 text-xs text-ink-500">
+              <p className="mt-3 text-xs text-ink-600">
                 These students will not be able to sign in. Correct the file and import again —
                 students already imported are left untouched.
               </p>
