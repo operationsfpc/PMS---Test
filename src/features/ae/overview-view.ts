@@ -28,7 +28,8 @@ const orNull = (value: unknown): number | null => (value == null ? null : Number
  * to the recruiter is the point of the card; `0019` is what lets them read it.
  */
 export const AE_OVERVIEW_DRIVE_COLUMNS = `
-  id, company_name, role_title, status, ctc_min_lpa, ctc_max_lpa, created_at,
+  id, company_name, role_title, status, drive_type, ctc_min_lpa, ctc_max_lpa, created_at,
+  drive_target_campuses(campuses(name)),
   applications(id, student_id, shortlist_entries(included))
 `;
 
@@ -65,9 +66,13 @@ export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverview
           companyName: (row.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (row.role_title as string | null) ?? null,
           status: (row.status as AeOverviewDrive["status"] | null) ?? "draft",
+          driveType: (row.drive_type as AeOverviewDrive["driveType"]) ?? null,
           ctcMinLpa: orNull(row.ctc_min_lpa),
           ctcMaxLpa: orNull(row.ctc_max_lpa),
           createdAt: (row.created_at as string | null) ?? null,
+          campuses: rows(row.drive_target_campuses)
+            .map((c) => (c.campuses as { name?: string } | null)?.name)
+            .filter((name): name is string => typeof name === "string" && name !== ""),
           applicants: rows(row.applications).map((application) => ({
             shortlisted: rows(application.shortlist_entries).some((s) => s.included === true),
             hasOffer: won.has(`${driveId}::${application.student_id as string}`),

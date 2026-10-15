@@ -19,6 +19,7 @@ import type {
   DashboardView,
   DriveProgressSnapshot,
   LiveDrive,
+  StatusDriveItem,
 } from "./dashboard-page";
 
 const one = <T>(value: unknown): T | null =>
@@ -194,6 +195,20 @@ export function createSupabaseDashboardView(
         const status = drive.status as string;
         drivesByStatus[status] = (drivesByStatus[status] ?? 0) + 1;
       }
+
+      // The drives behind those counts, so a status row can open what it
+      // counts — the data is already fetched for the drive box.
+      const statusDrives: StatusDriveItem[] = ((drives ?? []) as Array<Record<string, unknown>>)
+        .map((row) => ({
+          driveId: row.id as string,
+          companyName: (row.company_name as string | null) ?? "Unnamed drive",
+          roleTitle: (row.role_title as string | null) ?? null,
+          status: (row.status as string) ?? "draft",
+          campuses: linkedNames(row.drive_target_campuses, "campuses"),
+        }))
+        .sort(
+          (a, b) => a.status.localeCompare(b.status) || a.companyName.localeCompare(b.companyName),
+        );
 
       // Per-campus counts use the same definitions, so a campus row can never
       // disagree with the headline.
@@ -510,6 +525,7 @@ export function createSupabaseDashboardView(
         liveDrives,
         now: clock().toISOString(),
         drivesByStatus,
+        statusDrives,
         offersByCategory,
         campuses: [...campusTotals.values()].sort((a, b) =>
           a.campusName.localeCompare(b.campusName),

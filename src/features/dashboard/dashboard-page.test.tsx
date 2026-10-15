@@ -54,7 +54,44 @@ const SNAPSHOT: DashboardSnapshot = {
     },
   ],
   placements: [{ studentId: "a", ctcLpa: 9, category: "dream" }],
-  drivesByStatus: { live: 2, in_rounds: 1, completed: 4 },
+  drivesByStatus: { live: 2, in_rounds: 1, completed: 2 },
+  statusDrives: [
+    {
+      driveId: "d1",
+      companyName: "Zoho Corporation",
+      roleTitle: "Member Technical Staff",
+      status: "live",
+      campuses: ["Alliance University"],
+    },
+    {
+      driveId: "d3",
+      companyName: "Freshworks",
+      roleTitle: "SDE",
+      status: "live",
+      campuses: [],
+    },
+    {
+      driveId: "d4",
+      companyName: "Amazon",
+      roleTitle: null,
+      status: "in_rounds",
+      campuses: [],
+    },
+    {
+      driveId: "d5",
+      companyName: "TCS",
+      roleTitle: "Assistant System Engineer",
+      status: "completed",
+      campuses: ["VIT Bangalore"],
+    },
+    {
+      driveId: "d6",
+      companyName: "Infosys",
+      roleTitle: "Systems Engineer",
+      status: "completed",
+      campuses: [],
+    },
+  ],
   liveDrives: [
     {
       driveId: "d1",
@@ -201,6 +238,7 @@ describe("DashboardPage", () => {
           students: [],
           placements: [],
           drivesByStatus: {},
+          statusDrives: [],
           offersByCategory: {},
           campuses: [],
           liveDrives: [],
@@ -349,7 +387,7 @@ describe("live drives", () => {
 
     const headline = await screen.findByRole("region", { name: /headline/i });
     expect(within(headline).getByText(/drives completed/i)).toBeDefined();
-    expect(within(headline).getByText("4")).toBeDefined();
+    expect(within(headline).getByText("2")).toBeDefined();
   });
 
   it("shows each open drive with the time left to apply", async () => {
@@ -868,5 +906,47 @@ describe("category spelling", () => {
     const packages = await screen.findByRole("list", { name: "Package by category" });
     expect(within(packages).getByText("Super Dream")).toBeDefined();
     expect(within(packages).queryByText("super dream")).toBeNull();
+  });
+});
+
+/**
+ * The drill-down behind "Drives by status". The popup must list exactly the
+ * drives behind the count that opened it — no more, no fewer — and say which
+ * colleges each one targets, because that is the question the row raises.
+ */
+describe("DashboardPage — the drives behind a status count", () => {
+  it("opens a popup listing exactly the drives in that status, with their colleges", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "live: 2 drives" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Drives — live" });
+    expect(within(dialog).getByText("Zoho Corporation")).toBeDefined();
+    expect(within(dialog).getByText("Freshworks")).toBeDefined();
+    expect(within(dialog).queryByText("TCS")).toBeNull();
+    expect(within(dialog).getByText("Open to: Alliance University")).toBeDefined();
+    expect(within(dialog).getByText("Open to every campus")).toBeDefined();
+  });
+
+  it("opens the drives of a different status when its row is clicked", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "completed: 2 drives" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Drives — completed" });
+    expect(within(dialog).getByText("TCS")).toBeDefined();
+    expect(within(dialog).getByText("Open to: VIT Bangalore")).toBeDefined();
+    expect(within(dialog).queryByText("Zoho Corporation")).toBeNull();
+  });
+
+  it("closes the popup on Escape", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "live: 2 drives" }));
+    expect(await screen.findByRole("dialog", { name: "Drives — live" })).toBeDefined();
+
+    await userEvent.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog", { name: "Drives — live" })).toBeNull();
   });
 });

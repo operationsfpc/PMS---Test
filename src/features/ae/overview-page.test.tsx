@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { AeOverviewPage, type AeOverviewSnapshot, type AeOverviewView } from "./overview-page";
@@ -23,9 +24,11 @@ const SNAPSHOT: AeOverviewSnapshot = {
       companyName: "Accenture",
       roleTitle: "Junior Analyst",
       status: "live",
+      driveType: "placement",
       ctcMinLpa: 4,
       ctcMaxLpa: 5,
       createdAt: "2026-08-20T09:00:00.000Z",
+      campuses: [],
       applicants: [
         { shortlisted: true, hasOffer: false },
         { shortlisted: false, hasOffer: false },
@@ -36,9 +39,11 @@ const SNAPSHOT: AeOverviewSnapshot = {
       companyName: "Zoho Corporation",
       roleTitle: "Member Technical Staff",
       status: "completed",
+      driveType: "internship_convertible",
       ctcMinLpa: 6,
       ctcMaxLpa: 9,
       createdAt: "2026-08-01T09:00:00.000Z",
+      campuses: ["PSG Tech", "Sona College"],
       applicants: [{ shortlisted: true, hasOffer: true }],
     },
   ],
@@ -73,36 +78,54 @@ describe("AeOverviewPage — my drives", () => {
     show();
     const mine = await inSection(/my drives/i);
 
-    expect(mine.getByRole("link", { name: /drives brought in 2/i })).toBeDefined();
+    expect(mine.getByRole("button", { name: /drives brought in 2/i })).toBeDefined();
   });
 
   it("counts the live ones separately from the completed ones", async () => {
     show();
     const mine = await inSection(/my drives/i);
 
-    expect(mine.getByRole("link", { name: /live now 1/i })).toBeDefined();
-    expect(mine.getByRole("link", { name: /drives completed 1/i })).toBeDefined();
+    expect(mine.getByRole("button", { name: /live now 1/i })).toBeDefined();
+    expect(mine.getByRole("button", { name: /drives completed 1/i })).toBeDefined();
   });
 
   it("adds up applicants, shortlists and offers across their drives", async () => {
     show();
     const mine = await inSection(/my drives/i);
 
-    expect(mine.getByRole("link", { name: /applicants 3/i })).toBeDefined();
-    expect(mine.getByRole("link", { name: /shortlisted 2/i })).toBeDefined();
-    expect(mine.getByRole("link", { name: /offers made 1/i })).toBeDefined();
+    expect(mine.getByRole("button", { name: /applicants 3/i })).toBeDefined();
+    expect(mine.getByRole("button", { name: /shortlisted 2/i })).toBeDefined();
+    expect(mine.getByRole("button", { name: /offers made 1/i })).toBeDefined();
   });
 
-  it("opens the drive lists behind the cards", async () => {
+  it("opens the drives behind a card in a popup, with who and which college", async () => {
+    const user = userEvent.setup();
     show();
     const mine = await inSection(/my drives/i);
 
-    expect(mine.getByRole("link", { name: /live now/i }).getAttribute("href")).toBe(
-      "/central/drives/live",
-    );
-    expect(mine.getByRole("link", { name: /drives completed/i }).getAttribute("href")).toBe(
-      "/central/drives/completed",
-    );
+    await user.click(mine.getByRole("button", { name: /live now 1/i }));
+
+    const dialog = await screen.findByRole("dialog", { name: /open drives/i });
+    expect(within(dialog).getByText("Accenture")).toBeDefined();
+    expect(within(dialog).getByText(/open to every campus/i)).toBeDefined();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("filters the popup by drive type", async () => {
+    const user = userEvent.setup();
+    show();
+    const mine = await inSection(/my drives/i);
+
+    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
+
+    await user.click(within(dialog).getByRole("button", { name: /internship → full time/i }));
+
+    expect(within(dialog).queryByText("Accenture")).toBeNull();
+    expect(within(dialog).getByText("Zoho Corporation")).toBeDefined();
+    expect(within(dialog).getByText(/open to: psg tech, sona college/i)).toBeDefined();
   });
 
   it("lists their most recent drives, newest first, each opening the drive", async () => {

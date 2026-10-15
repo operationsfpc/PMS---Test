@@ -1,9 +1,17 @@
+import { DrilldownModal } from "@components/drilldown-modal";
 import { Badge, Card, PageHeader, StatCard } from "@components/ui";
 import { type AeApplicant, summariseAeDrives } from "@domain/ae-overview";
 import { describeCtcRange } from "@domain/ctc";
 import { orderDrives } from "@domain/drive-aging";
+import {
+  DRIVE_TYPE_FILTERS,
+  type DriveTypeFilter,
+  driveTypeLabel,
+  driveTypeTone,
+  matchesDriveType,
+} from "@domain/drive-type";
 import { type PlacementCounts, summarisePlacementTotals } from "@domain/placement-totals";
-import type { DriveStatus } from "@domain/types";
+import type { DriveStatus, DriveType } from "@domain/types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -26,9 +34,12 @@ export interface AeOverviewDrive {
   readonly companyName: string;
   readonly roleTitle: string | null;
   readonly status: DriveStatus;
+  readonly driveType: DriveType | null;
   readonly ctcMinLpa: number | null;
   readonly ctcMaxLpa: number | null;
   readonly createdAt: string | null;
+  /** The colleges the drive targets; empty means open to every campus. */
+  readonly campuses: readonly string[];
   readonly applicants: readonly AeApplicant[];
 }
 
@@ -73,9 +84,91 @@ const STATUS_TONE = (status: DriveStatus): "success" | "warning" | "neutral" =>
 /** How many of their recent drives the overview shows before deferring to Drives. */
 const RECENT = 5;
 
+/** Which number was clicked — each opens the drives behind it. */
+type StatKind = "broughtIn" | "liveNow" | "applicants" | "shortlisted" | "offers" | "completed";
+
+const STAT_TITLES: Record<StatKind, string> = {
+  broughtIn: "Drives brought in",
+  liveNow: "Open drives",
+  applicants: "Applicants by drive",
+  shortlisted: "Shortlisted by drive",
+  offers: "Offers made",
+  completed: "Drives completed",
+};
+
+function drivesBehindStat(
+  kind: StatKind,
+  drives: readonly AeOverviewDrive[],
+): readonly AeOverviewDrive[] {
+  const byCount = (pick: (f: ReturnType<typeof summariseAeDrives>) => number) =>
+    [...drives].sort(
+      (a, b) =>
+        pick(summariseAeDrives([b])) - pick(summariseAeDrives([a])) ||
+        (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
+    );
+  switch (kind) {
+    case "broughtIn":
+      return orderDrives(drives, "newest");
+    case "liveNow":
+      return drives.filter((d) => d.status === "live");
+    case "completed":
+      return drives.filter((d) => d.status === "completed");
+    case "applicants":
+      return byCount((f) => f.applicants);
+    case "shortlisted":
+      return byCount((f) => f.shortlisted);
+    case "offers":
+      return byCount((f) => f.offers);
+  }
+}
+
+function StatDriveRow({ drive }: { drive: AeOverviewDrive }) {
+  const funnel = summariseAeDrives([drive]);
+  const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
+
+  return (
+    <li className="py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold text-ink-900">
+            <Link to={`/drives/${drive.driveId}`} className="hover:underline">
+              {drive.companyName}
+            </Link>
+          </p>
+          <p className="text-sm text-ink-500">
+            {drive.roleTitle ?? "Role not specified"}
+            {ctc !== null && ` · ${ctc}`}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
+          <Badge tone={STATUS_TONE(drive.status)}>
+            {STATUS_LABEL[drive.status] ?? drive.status}
+          </Badge>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-ink-500">
+        {drive.campuses.length === 0
+          ? "Open to every campus"
+          : `Open to: ${drive.campuses.join(", ")}`}
+      </p>
+      <p className="mt-1 text-xs font-medium text-ink-700">
+        {funnel.applicants} applied · {funnel.shortlisted} shortlisted · {funnel.offers} offers
+      </p>
+    </li>
+  );
+}
+
 export function AeOverviewPage({ view }: { view: AeOverviewView }) {
   const [snapshot, setSnapshot] = useState<AeOverviewSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  const [openStat, setOpenStat] = useState<StatKind | null>(null);
+  const [statTypeFilter, setStatTypeFilter] = useState<DriveTypeFilter>("");
+
+  function showStat(kind: StatKind) {
+    setStatTypeFilter("");
+    setOpenStat(kind);
+  }
 
   useEffect(() => {
     let live = true;
@@ -120,6 +213,10 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
   const org = summarisePlacementTotals(snapshot.totals);
   const recent = orderDrives(snapshot.drives, "newest").slice(0, RECENT);
   const hasPackages = snapshot.totals.highestLpa !== null;
+  const statDrives = openStat === null ? [] : drivesBehindStat(openStat, snapshot.drives);
+  const filteredStatDrives = statDrives.filter((d) =>
+    matchesDriveType(d.driveType, statTypeFilter),
+  );
 
   return (
     <div>
@@ -135,24 +232,25 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <Link to="/central/drives/live" className="block">
-            <StatCard label="Drives brought in" value={mine.broughtIn} tone="brand" />
-          </Link>
-          <Link to="/central/drives/live" className="block">
-            <StatCard label="Live now" value={mine.liveNow} tone="success" />
-          </Link>
-          <Link to="/central/drives/live" className="block">
-            <StatCard label="Applicants" value={mine.applicants} />
-          </Link>
-          <Link to="/central/drives/live" className="block">
-            <StatCard label="Shortlisted" value={mine.shortlisted} />
-          </Link>
-          <Link to="/central/drives/completed" className="block">
-            <StatCard label="Offers made" value={mine.offers} tone="warning" />
-          </Link>
-          <Link to="/central/drives/completed" className="block">
-            <StatCard label="Drives completed" value={mine.completed} />
-          </Link>
+          {(
+            [
+              ["broughtIn", "Drives brought in", mine.broughtIn, "brand"],
+              ["liveNow", "Live now", mine.liveNow, "success"],
+              ["applicants", "Applicants", mine.applicants, undefined],
+              ["shortlisted", "Shortlisted", mine.shortlisted, undefined],
+              ["offers", "Offers made", mine.offers, "warning"],
+              ["completed", "Drives completed", mine.completed, undefined],
+            ] as const
+          ).map(([kind, label, value, tone]) => (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => showStat(kind)}
+              className="rounded-card text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            >
+              <StatCard label={label} value={value} {...(tone !== undefined ? { tone } : {})} />
+            </button>
+          ))}
         </div>
       </section>
 
@@ -278,6 +376,48 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
           )}
         </section>
       </Card>
+
+      {openStat !== null && (
+        <DrilldownModal
+          eyebrow="My drives"
+          title={STAT_TITLES[openStat]}
+          subtitle={`${statDrives.length} drive${statDrives.length === 1 ? "" : "s"}`}
+          onClose={() => setOpenStat(null)}
+        >
+          <div className="mb-4 flex flex-wrap gap-2">
+            {DRIVE_TYPE_FILTERS.map((option) => {
+              const count = statDrives.filter((d) =>
+                matchesDriveType(d.driveType, option.value),
+              ).length;
+              const selected = statTypeFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setStatTypeFilter(option.value)}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+                    selected
+                      ? "bg-[#3D3777] text-white shadow-sm"
+                      : "border border-line bg-surface text-ink-700 hover:border-brand-300"
+                  }`}
+                >
+                  {option.label} ({count})
+                </button>
+              );
+            })}
+          </div>
+          {filteredStatDrives.length === 0 ? (
+            <p className="text-sm text-ink-700">No drives here yet.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {filteredStatDrives.map((drive) => (
+                <StatDriveRow key={drive.driveId} drive={drive} />
+              ))}
+            </ul>
+          )}
+        </DrilldownModal>
+      )}
     </div>
   );
 }

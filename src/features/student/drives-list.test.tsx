@@ -276,3 +276,58 @@ describe("DrivesList — the saved resume auto-fetches (D2)", () => {
     expect(resume.name).toBe("tailored.pdf");
   });
 });
+
+/**
+ * A multi-role submission is ONE company visit offering SEVERAL roles. The
+ * student must see each role as its own row with its own Apply — one card,
+ * not one blurred offer. The buttons are named per role, because two
+ * "Apply to Zoho" buttons on one card tell a screen-reader user nothing
+ * about which role they are choosing.
+ */
+describe("DrivesList — several roles under one company event", () => {
+  const mts = { ...open, companyDriveId: "evt-1", tentativeDate: "2026-11-05T00:00:00Z" };
+  const qa = {
+    ...open,
+    id: "d2",
+    roleTitle: "QA Engineer",
+    ctcLabel: "₹4–5.5 LPA",
+    offerCategory: "regular" as const,
+    companyDriveId: "evt-1",
+    tentativeDate: "2026-11-05T00:00:00Z",
+  };
+
+  it("shows one event card with each role as its own row", async () => {
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+
+    expect(await screen.findByText("2 roles")).toBeDefined();
+    expect(screen.getByRole("heading", { name: "Member Technical Staff" })).toBeDefined();
+    expect(screen.getByRole("heading", { name: "QA Engineer" })).toBeDefined();
+    expect(await screen.findByText("₹6.5–9 LPA")).toBeDefined();
+    expect(screen.getByText("₹4–5.5 LPA")).toBeDefined();
+  });
+
+  it("names each role's Apply button after that role", async () => {
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+
+    expect(
+      await screen.findByRole("button", { name: "Apply to Zoho — Member Technical Staff" }),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Apply to Zoho — QA Engineer" })).toBeDefined();
+  });
+
+  it("applies to exactly the role whose Apply was clicked", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa], apply })} />);
+
+    await user.click(await screen.findByRole("button", { name: "Apply to Zoho — QA Engineer" }));
+    await user.upload(
+      screen.getByLabelText(/resume for this drive/i),
+      new File(["cv"], "resume.pdf", { type: "application/pdf" }),
+    );
+    await user.click(screen.getByRole("button", { name: /yes, apply/i }));
+
+    await waitFor(() => expect(apply).toHaveBeenCalledWith("d2", expect.any(File)));
+    expect(apply).not.toHaveBeenCalledWith("d1", expect.anything());
+  });
+});

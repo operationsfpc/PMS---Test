@@ -140,6 +140,8 @@ describe("PifApprovalQueue", () => {
     jobDescriptionName: null,
     shift: "Day shift",
     joining: "Immediate joining",
+    companyDriveId: null,
+    event: null,
   };
   const stub = {
     pending: async () => [

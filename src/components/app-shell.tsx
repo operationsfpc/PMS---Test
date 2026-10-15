@@ -147,10 +147,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     { heading: "Overview", items: [{ to: "/ae/overview", label: "My overview" }] },
     {
       heading: "Drive initiation",
-      items: [
-        { to: "/ae/pif", label: "Position information form" },
-        { to: "/ae/pif-multi", label: "Multi-role drive (one event)" },
-      ],
+      items: [{ to: "/ae/pif", label: "Position information form" }],
     },
     DRIVES,
   ],

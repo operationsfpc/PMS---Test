@@ -36,6 +36,9 @@ const pif = {
   // 2026-08-27: what an internship is paid.
   stipendMinMonthly: null as number | null,
   stipendMaxMonthly: null as number | null,
+  // A legacy single-role PIF has no recruitment event behind it.
+  companyDriveId: null as string | null,
+  event: null,
 };
 
 function repo(overrides: Partial<ApprovalRepository> = {}): ApprovalRepository {
@@ -374,5 +377,90 @@ describe("PifApprovalQueue — the JD, the shift and the joining timeline", () =
 
     expect(await screen.findByText("Night shift (9pm – 6am)")).toBeDefined();
     expect(screen.getByText("Joining later — Joining July 2027")).toBeDefined();
+  });
+});
+
+/**
+ * A multi-role submission (one recruitment event, several roles) arrives as
+ * N pending drive rows. The Delivery Head asked to see the company and the
+ * event the roles share, and to accept each role on its own — one "Approve"
+ * per role, never a blanket approval, because every offer category (§3.3) is
+ * an individual, immutable decision.
+ */
+describe("PifApprovalQueue — a multi-role submission", () => {
+  const event = {
+    id: "evt-1",
+    companyName: "Zoho Corporation",
+    tentativeDate: "2026-11-05",
+    driveMode: "pooled",
+    venue: "Kamaraj College, Madurai",
+    contacts: [
+      { name: "R Karthik", designation: "HR Manager", email: "hr@zoho.example", phone: null },
+    ],
+  };
+  const roleA = {
+    ...pif,
+    id: "d-a",
+    companyName: "Zoho Corporation",
+    roleTitle: "Member Technical Staff",
+    companyDriveId: "evt-1",
+    event,
+  };
+  const roleB = {
+    ...pif,
+    id: "d-b",
+    companyName: "Zoho Corporation",
+    roleTitle: "QA Engineer",
+    ctcMinLpa: 6.5,
+    ctcMaxLpa: 9,
+    companyDriveId: "evt-1",
+    event,
+  };
+
+  it("shows the company and the event facts once, above the roles", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [roleA, roleB] })} />);
+
+    expect(await screen.findByText("Zoho Corporation")).toBeDefined();
+    expect(screen.getByText(/2 roles/i)).toBeDefined();
+    expect(screen.getByText(/2026-11-05/)).toBeDefined();
+    expect(screen.getByText(/Kamaraj College, Madurai/)).toBeDefined();
+    expect(screen.getByText(/R Karthik/)).toBeDefined();
+    // The company name comes from the event header, not repeated per role.
+    expect(screen.getAllByText("Zoho Corporation")).toHaveLength(1);
+  });
+
+  it("lists each role under that header with its own suggested category", async () => {
+    render(<PifApprovalQueue repository={repo({ pending: async () => [roleA, roleB] })} />);
+
+    expect(await screen.findByText("Member Technical Staff")).toBeDefined();
+    expect(screen.getByText("QA Engineer")).toBeDefined();
+
+    const selects = await screen.findAllByLabelText(/offer category/i);
+    expect(selects).toHaveLength(2);
+    expect((selects[0] as HTMLSelectElement).value).toBe("super_dream");
+    expect((selects[1] as HTMLSelectElement).value).toBe("dream");
+  });
+
+  it("approves one role without touching the others", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ pending: async () => [roleA, roleB], decide })} />);
+
+    const approveButtons = await screen.findAllByRole("button", { name: /^approve$/i });
+    expect(approveButtons).toHaveLength(2);
+    const firstApprove = approveButtons[0];
+    if (firstApprove === undefined) throw new Error("approve button missing");
+    await user.click(firstApprove);
+
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(decide.mock.calls[0]?.[0]).toBe("d-a");
+    expect(decide.mock.calls[0]?.[2]).toEqual({
+      decision: "approve",
+      offerCategory: "super_dream",
+    });
+
+    // The role leaves the group; its sibling stays, still decidable.
+    await waitFor(() => expect(screen.queryByText("Member Technical Staff")).toBeNull());
+    expect(screen.getByText("QA Engineer")).toBeDefined();
   });
 });

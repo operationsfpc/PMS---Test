@@ -18,7 +18,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
       const { data: drives } = await client
         .from("drives")
         .select(
-          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, status, on_hold, created_at, application_end, drive_mode, venue, company_drive_id, tentative_date, drive_rounds(id, sequence, name)",
+          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, status, on_hold, created_at, application_end, drive_mode, venue, company_drive_id, tentative_date, drive_rounds(id, sequence, name), drive_target_campuses(campuses(name))",
         )
         .order("created_at", { ascending: false });
 
@@ -60,6 +60,13 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
             venue: (row.venue as string | null) ?? null,
             companyDriveId: (row.company_drive_id as string | null) ?? null,
             tentativeDate: (row.tentative_date as string | null) ?? null,
+            campuses: (
+              (Array.isArray(row.drive_target_campuses) ? row.drive_target_campuses : []) as Array<{
+                campuses?: { name?: string } | null;
+              }>
+            )
+              .map((tc) => tc.campuses?.name)
+              .filter((name): name is string => typeof name === "string" && name !== ""),
             rounds: rounds
               .map((r) => ({
                 roundId: r.id as string,

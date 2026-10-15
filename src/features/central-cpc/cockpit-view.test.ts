@@ -72,6 +72,28 @@ describe("cockpit drives", () => {
     ]);
   });
 
+  it("carries the colleges the drive targets onto the summary", async () => {
+    stub({
+      drives: [
+        {
+          ...DRIVE,
+          drive_target_campuses: [
+            { campuses: { name: "PSG Tech" } },
+            { campuses: { name: "Sona College" } },
+          ],
+        },
+      ],
+    });
+
+    expect((await view().drives())[0]?.campuses).toEqual(["PSG Tech", "Sona College"]);
+  });
+
+  it("reads an empty targeting as open to every campus, not as an error", async () => {
+    stub({ drives: [{ ...DRIVE, drive_target_campuses: [] }] });
+
+    expect((await view().drives())[0]?.campuses).toEqual([]);
+  });
+
   it("shows a drive that has no rounds yet rather than dropping it", async () => {
     stub({ drives: [{ ...DRIVE, drive_rounds: [] }] });
     const [drive] = await view().drives();

@@ -335,7 +335,10 @@ export function DrivesList({
                             to={`/drives/${drive.id}`}
                             className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
                           >
-                            View everything about {drive.companyName}
+                            {/* Per-role: a multi-role event card holds one of
+                                these per role, and the company alone would
+                                name them all the same. */}
+                            View everything about {drive.companyName} — {drive.roleTitle}
                           </Link>
                         </p>
 
@@ -348,7 +351,7 @@ export function DrivesList({
                              for this drive?" There is no withdrawal (PRD §7.4), so
                              this is the last moment the decision is reversible. */
                           <section
-                            aria-label={`Confirm applying to ${drive.companyName}`}
+                            aria-label={`Confirm applying to ${drive.companyName} — ${drive.roleTitle}`}
                             className="mt-4 rounded-lg border border-gold-300 bg-gold-50 p-4"
                           >
                             <p className="font-semibold text-ink-900">
@@ -416,7 +419,7 @@ export function DrivesList({
                         ) : drive.canApply ? (
                           <div className="mt-4">
                             <Button
-                              aria-label={`Apply to ${drive.companyName}`}
+                              aria-label={`Apply to ${drive.companyName} — ${drive.roleTitle}`}
                               onClick={() => startApplying(drive.id)}
                             >
                               Apply

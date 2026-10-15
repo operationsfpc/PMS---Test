@@ -712,6 +712,42 @@ describe("the off-campus venue on the cockpit", () => {
   });
 });
 
+describe("the colleges a drive targets, on the card", () => {
+  it("names the targeted colleges on the card", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{
+            drives: async () => [{ ...LIVE, campuses: ["PSG Tech", "Sona College"] }],
+            reviews: async () => [],
+          }}
+          filter="published"
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Open to: PSG Tech, Sona College")).toBeDefined();
+  });
+
+  it("says a drive with no targeting is open to every campus", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{
+            drives: async () => [{ ...LIVE, campuses: [] }],
+            reviews: async () => [],
+          }}
+          filter="published"
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Open to every campus")).toBeDefined();
+  });
+});
+
 /**
  * Karthik, 2026-08-27: the type filter and the type tag belong on every list
  * of ongoing drives — this is the Central CPC's "Yet to publish" queue.

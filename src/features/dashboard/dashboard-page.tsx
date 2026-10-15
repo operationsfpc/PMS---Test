@@ -1,3 +1,4 @@
+import { DrilldownModal } from "@components/drilldown-modal";
 import {
   DriveProgressModal,
   type DriveProgressStudentItem,
@@ -63,6 +64,16 @@ export interface LiveDrive {
   readonly offers: number;
 }
 
+/** One drive behind a "Drives by status" count, for the drill-down popup. */
+export interface StatusDriveItem {
+  readonly driveId: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly status: string;
+  /** The colleges the drive targets; empty means open to every campus. */
+  readonly campuses: readonly string[];
+}
+
 export interface DashboardSnapshot {
   readonly students: readonly DashboardStudent[];
   readonly liveDrives: readonly LiveDrive[];
@@ -78,6 +89,8 @@ export interface DashboardSnapshot {
    */
   readonly placements: readonly PlacementCtc[];
   readonly drivesByStatus: Readonly<Record<string, number>>;
+  /** The drives behind `drivesByStatus`, for the drill-down popup. */
+  readonly statusDrives: readonly StatusDriveItem[];
   readonly offersByCategory: Readonly<Record<string, number>>;
   readonly campuses: readonly CampusBreakdown[];
   /** F5: the drive-specific box. Empty until a drive has an audience. */
@@ -175,6 +188,8 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
 
   const [drivePage, setDrivePage] = useState(1);
   const [selectedModalDrive, setSelectedModalDrive] = useState<DriveProgressSnapshot | null>(null);
+  /** The status row opened in the drill-down popup; null while closed. */
+  const [statusOpen, setStatusOpen] = useState<string | null>(null);
   const DRIVES_PAGE_SIZE = 5;
 
   const drives = useMemo(() => {
@@ -264,6 +279,10 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
       </div>
     );
   }
+
+  // Exactly the drives behind the clicked count — no extra filtering, or the
+  // popup would open longer than the number that opened it.
+  const statusOpenDrives = snapshot.statusDrives.filter((d) => d.status === statusOpen);
 
   return (
     <div>
@@ -459,11 +478,18 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="p-5">
               <h2 className="text-lg text-ink-900">Drives by status</h2>
-              <ul className="mt-3 space-y-2">
+              <ul className="mt-3 space-y-1">
                 {Object.entries(snapshot.drivesByStatus).map(([status, count]) => (
-                  <li key={status} className="flex justify-between text-sm">
-                    <span className="capitalize text-ink-700">{label(status)}</span>
-                    <span className="font-semibold text-ink-900">{count}</span>
+                  <li key={status}>
+                    <button
+                      type="button"
+                      aria-label={`${label(status)}: ${count} drives`}
+                      onClick={() => setStatusOpen(status)}
+                      className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-brand-50"
+                    >
+                      <span className="capitalize text-ink-700">{label(status)}</span>
+                      <span className="font-semibold text-ink-900">{count}</span>
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -870,6 +896,43 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
             .filter((s) => collegeFilter === "" || s.campusName === collegeFilter)}
           collegeFilter={collegeFilter || (campusName !== "All campuses" ? campusName : "")}
         />
+      )}
+
+      {statusOpen !== null && (
+        <DrilldownModal
+          eyebrow="Campus overview"
+          title={`Drives — ${label(statusOpen)}`}
+          subtitle={`${statusOpenDrives.length} drive${statusOpenDrives.length === 1 ? "" : "s"}`}
+          onClose={() => setStatusOpen(null)}
+        >
+          {statusOpenDrives.length === 0 ? (
+            <p className="text-sm text-ink-500">No drives in this status right now.</p>
+          ) : (
+            <ul className="space-y-3">
+              {statusOpenDrives.map((drive) => (
+                <li
+                  key={drive.driveId}
+                  className="rounded-card border border-line bg-surface p-4 transition-shadow hover:shadow-sm"
+                >
+                  <Link
+                    to={`/drives/${drive.driveId}`}
+                    className="font-medium text-ink-900 transition-colors hover:text-brand-700"
+                  >
+                    {drive.companyName}
+                  </Link>
+                  <p className="text-sm text-ink-500">
+                    {drive.roleTitle ?? "Role to be announced"}
+                  </p>
+                  <p className="mt-2 text-xs text-ink-500">
+                    {drive.campuses.length === 0
+                      ? "Open to every campus"
+                      : `Open to: ${drive.campuses.join(", ")}`}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DrilldownModal>
       )}
     </div>
   );

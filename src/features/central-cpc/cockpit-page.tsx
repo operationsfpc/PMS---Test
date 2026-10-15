@@ -68,6 +68,12 @@ export interface DriveSummary {
   readonly companyDriveId?: string | null;
   /** Multi-role grouping: the event date. */
   readonly tentativeDate?: string | null;
+  /**
+   * The colleges the drive targets — the "who is this for" answer on the
+   * card. Optional so older fixtures stay valid; absent reads as unknown,
+   * and an EMPTY array reads as "open to every campus".
+   */
+  readonly campuses?: readonly string[];
 }
 
 export interface DisbarmentReview {
@@ -579,6 +585,16 @@ function DriveList({
                         (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
                         drive.venue ?? null,
                       )}
+                    </p>
+                  )}
+                  {/* Who the drive is for, on the card — a CPC member should
+                      not have to open the record to learn it. Absent (older
+                      fixtures) stays silent; empty means every campus. */}
+                  {drive.campuses !== undefined && (
+                    <p className="mt-0.5 text-xs text-ink-500">
+                      {drive.campuses.length === 0
+                        ? "Open to every campus"
+                        : `Open to: ${drive.campuses.join(", ")}`}
                     </p>
                   )}
                 </div>
