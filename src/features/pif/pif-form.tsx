@@ -1,4 +1,4 @@
-import { Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader, type Tone } from "@components/ui";
 import { describeFileSize } from "@domain/attachments";
 import { driveTypeLabel } from "@domain/drive-type";
 import { driveVenueApplies } from "@domain/drive-venue";
@@ -8,7 +8,7 @@ import { SHIFT_TYPES, shiftLabel } from "@domain/shift";
 import { joinMandatorySkills, normaliseSkillAreaName, skillAreaKey } from "@domain/skills";
 import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import type { ExistingDriveEvent } from "./pif-repository";
 import { PIF_DEFAULTS, type PifFormValues, pifDraftSchema, pifSubmitSchema } from "./pif-schema";
@@ -27,7 +27,7 @@ export const PIF_SECTIONS = [
   { id: "process", title: "Selection process and timeline" },
 ] as const;
 
-const ROLE_CATEGORY_LABELS: Record<string, string> = {
+export const ROLE_CATEGORY_LABELS: Record<string, string> = {
   software_technical: "Software / Technical",
   technical_support_it_ops: "Technical Support / IT Operations",
   digital_marketing: "Digital Marketing",
@@ -35,7 +35,7 @@ const ROLE_CATEGORY_LABELS: Record<string, string> = {
   operations_business: "Operations and Business Roles",
 };
 
-const DRIVE_MODE_LABELS: Record<string, string> = {
+export const DRIVE_MODE_LABELS: Record<string, string> = {
   on_campus: "On-campus",
   physical_outside_campus: "Physical drive outside campus",
   virtual: "Virtual",
@@ -48,25 +48,57 @@ const DRIVE_MODE_LABELS: Record<string, string> = {
  * convertible" and the cards printed the raw value — four spellings of three
  * things.
  */
-const DRIVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+export const DRIVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   DRIVE_TYPES.map((type) => [type, driveTypeLabel(type)]),
 );
 
-const ARREAR_LABELS: Record<string, string> = {
+export const ARREAR_LABELS: Record<string, string> = {
   flexible: "Flexible — arrears allowed",
   no_standing: "No standing arrears",
   no_history: "No arrear history at all",
 };
 
-const PASSING_YEARS = [2026, 2027, 2028] as const;
+export const PASSING_YEARS = [2026, 2027, 2028] as const;
 
 /** F12: recruiters state the bar the way their own HR does. */
-const SCALE_LABELS: Record<string, string> = {
+export const SCALE_LABELS: Record<string, string> = {
   cgpa: "CGPA (out of 10)",
   percentage: "Percentage (out of 100)",
 };
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/** What the event picker says about where a drive is in its life. */
+const EVENT_STATUS_LABELS: Record<string, { label: string; tone: Tone }> = {
+  draft: { label: "Draft", tone: "neutral" },
+  submitted: { label: "Pending approval", tone: "warning" },
+  approved: { label: "Approved", tone: "success" },
+  live: { label: "Live", tone: "success" },
+  applications_closed: { label: "Applications closed", tone: "warning" },
+  in_rounds: { label: "In rounds", tone: "warning" },
+  completed: { label: "Completed", tone: "neutral" },
+  rejected: { label: "Rejected", tone: "danger" },
+};
+
+/** A contact as the form and the event picker both hold it — every part optional. */
+export interface ContactRow {
+  name?: string | undefined;
+  designation?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+}
+
+export const contactSignature = (rows: readonly ContactRow[] | undefined) =>
+  JSON.stringify(
+    (rows ?? []).map((c) => [c?.name ?? "", c?.designation ?? "", c?.email ?? "", c?.phone ?? ""]),
+  );
+
+export const hasAnyContactIn = (rows: readonly ContactRow[] | undefined) =>
+  (rows ?? []).some((c) =>
+    [c?.name, c?.designation, c?.email, c?.phone].some(
+      (f) => typeof f === "string" && f.trim() !== "",
+    ),
+  );
+
+export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Card className="mb-4 p-5">
       <h2 className="mb-4 font-[Raleway] text-lg font-bold text-[#3D3777]">{title}</h2>
@@ -75,7 +107,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function Labelled({
+export function Labelled({
   label,
   error,
   children,
@@ -105,7 +137,7 @@ function Labelled({
   );
 }
 
-const control =
+export const control =
   "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-[#A46AFC]";
 
 /**
@@ -114,7 +146,7 @@ const control =
  * Nothing is preselected anywhere it is used: a preselected first option is an
  * answer nobody gave, and it would be stored as if the AE had chosen it.
  */
-function RadioGroup({
+export function RadioGroup({
   legend,
   name,
   options,
@@ -207,6 +239,7 @@ export function PifForm({
     control: formControl,
     handleSubmit,
     setValue,
+    getValues,
     watch,
     formState: { errors, isSubmitting },
   } = useForm<PifFormValues>({
@@ -220,23 +253,90 @@ export function PifForm({
   });
 
   const [eventsForCompany, setEventsForCompany] = useState<readonly ExistingDriveEvent[]>([]);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(
+  const [selectedEventIdState, setSelectedEventIdState] = useState<string | null>(
     initialValues?.companyDriveId ?? null,
   );
+  /** Mirror of `selectedEventId` so effects can read it without re-firing on it. */
+  const selectedEventIdRef = useRef<string | null>(selectedEventIdState);
+  const setSelectedEventId = useCallback((next: string | null) => {
+    selectedEventIdRef.current = next;
+    setSelectedEventIdState(next);
+  }, []);
+  const selectedEventId = selectedEventIdState;
+
+  /**
+   * Contacts that rode in with a selected event, as a signature. Selecting an
+   * event must never clobber contacts the AE typed; and contacts inherited
+   * from one event must not survive a switch to a NEW event, where they would
+   * name the wrong company's people.
+   */
+  const autoContactSignatureRef = useRef<string | null>(null);
+  /** The event whose defaults were auto-applied from the URL prefill, once. */
+  const appliedEventRef = useRef<string | null>(null);
 
   const watchedCompanyName = watch("companyName");
+
+  /**
+   * Copies the targeted event's identity — date, mode, venue, contacts — onto
+   * the form. The contacts rule: fill an empty form, replace an inherited set,
+   * never touch a set the AE typed.
+   */
+  const applyEventDefaults = useCallback(
+    (evt: ExistingDriveEvent) => {
+      if (evt.tentativeDate) setValue("tentativeDate", evt.tentativeDate);
+      if (evt.driveMode) setValue("driveMode", evt.driveMode as PifFormValues["driveMode"]);
+      if (evt.venue) {
+        setValue("venue", evt.venue);
+        setValue("venueStatus", "confirmed");
+      }
+      const incoming: ContactRow[] = (evt.contacts ?? []).map((c) => ({
+        name: c.name ?? "",
+        designation: c.designation ?? "",
+        email: c.email ?? "",
+        phone: c.phone ?? "",
+      }));
+      const current = getValues("contacts") as ContactRow[] | undefined;
+      const inherited = contactSignature(current) === autoContactSignatureRef.current;
+      if (!hasAnyContactIn(current) || inherited) {
+        setValue("contacts", incoming);
+        autoContactSignatureRef.current = incoming.length > 0 ? contactSignature(incoming) : null;
+      }
+    },
+    [getValues, setValue],
+  );
 
   useEffect(() => {
     let active = true;
     if (getCompanyEvents && watchedCompanyName && watchedCompanyName.trim().length >= 2) {
       void getCompanyEvents(watchedCompanyName.trim()).then((events) => {
-        if (active) {
-          setEventsForCompany(events);
-          if (initialValues?.companyDriveId) {
-            const found = events.find((e) => e.id === initialValues.companyDriveId);
-            if (found) {
-              setSelectedEventId(found.id);
+        if (!active) return;
+        setEventsForCompany(events);
+        if (initialValues?.companyDriveId) {
+          const found = events.find((e) => e.id === initialValues.companyDriveId);
+          if (found) {
+            setSelectedEventId(found.id);
+            // Applied once per event: a refetch (the name re-typed) must not
+            // clobber what the AE edited since.
+            if (appliedEventRef.current !== found.id) {
+              appliedEventRef.current = found.id;
+              applyEventDefaults(found);
             }
+            return;
+          }
+        }
+        // The name moved to a different company: a selection made under the
+        // previous one must not ride along and attach this role to its event.
+        const previous = selectedEventIdRef.current;
+        if (previous !== null && previous !== "new" && !events.some((e) => e.id === previous)) {
+          setSelectedEventId(null);
+          setValue("companyDriveId", "");
+          const current = getValues("contacts") as ContactRow[] | undefined;
+          if (
+            autoContactSignatureRef.current !== null &&
+            contactSignature(current) === autoContactSignatureRef.current
+          ) {
+            setValue("contacts", []);
+            autoContactSignatureRef.current = null;
           }
         }
       });
@@ -246,7 +346,15 @@ export function PifForm({
     return () => {
       active = false;
     };
-  }, [getCompanyEvents, watchedCompanyName, initialValues?.companyDriveId]);
+  }, [
+    getCompanyEvents,
+    watchedCompanyName,
+    initialValues?.companyDriveId,
+    applyEventDefaults,
+    setSelectedEventId,
+    getValues,
+    setValue,
+  ]);
 
   /**
    * The mode is set when the BUTTON IS PRESSED, not when it is rendered.
@@ -324,12 +432,13 @@ export function PifForm({
   const driveType = watch("driveType") ?? "";
   const wantsCtc = driveType === "placement" || driveType === "internship_convertible";
   const wantsStipend = driveType === "internship" || driveType === "internship_convertible";
-  const contactRows = watch("contacts") ?? [];
-  const hasAnyContact = contactRows.some((c) =>
-    [c?.name, c?.designation, c?.email, c?.phone].some(
-      (f) => typeof f === "string" && f.trim() !== "",
-    ),
-  );
+  const hasAnyContact = hasAnyContactIn(watch("contacts"));
+  /** The strip above the submit buttons says exactly where this role lands. */
+  const watchedRoleTitle = watch("roleTitle") ?? "";
+  const selectedEvent =
+    selectedEventId !== null && selectedEventId !== "new"
+      ? (eventsForCompany.find((e) => e.id === selectedEventId) ?? null)
+      : null;
 
   return (
     <>
@@ -562,27 +671,7 @@ export function PifForm({
                         onChange={() => {
                           setSelectedEventId(evt.id);
                           setValue("companyDriveId", evt.id);
-                          if (evt.tentativeDate) {
-                            setValue("tentativeDate", evt.tentativeDate);
-                          }
-                          if (evt.driveMode) {
-                            setValue("driveMode", evt.driveMode as PifFormValues["driveMode"]);
-                          }
-                          if (evt.venue) {
-                            setValue("venue", evt.venue);
-                            setValue("venueStatus", "confirmed");
-                          }
-                          if (evt.contacts && evt.contacts.length > 0) {
-                            setValue(
-                              "contacts",
-                              evt.contacts.map((c) => ({
-                                name: c.name,
-                                designation: c.designation,
-                                email: c.email,
-                                phone: c.phone,
-                              })),
-                            );
-                          }
+                          applyEventDefaults(evt);
                         }}
                         className="mt-1 size-4 accent-[#3D3777]"
                       />
@@ -592,9 +681,9 @@ export function PifForm({
                             Drive Date:{" "}
                             {evt.tentativeDate ? evt.tentativeDate : "Date to be announced"}
                           </span>
-                          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-700">
-                            {evt.status}
-                          </span>
+                          <Badge tone={EVENT_STATUS_LABELS[evt.status]?.tone ?? "neutral"}>
+                            {EVENT_STATUS_LABELS[evt.status]?.label ?? evt.status}
+                          </Badge>
                           {evt.driveMode && (
                             <span className="text-ink-500 capitalize">
                               · {evt.driveMode.replace(/_/g, " ")}
@@ -627,6 +716,22 @@ export function PifForm({
                     onChange={() => {
                       setSelectedEventId("new");
                       setValue("companyDriveId", "");
+                      // A NEW event starts clean. Anything inherited from a
+                      // previously selected event — its date, mode, venue and
+                      // auto-filled contacts — is dropped here, because a
+                      // hidden field still submits (the J2 lesson).
+                      setValue("tentativeDate", "");
+                      setValue("driveMode", "");
+                      setValue("venueStatus", "not_yet_confirmed");
+                      setValue("venue", "");
+                      const current = getValues("contacts") as ContactRow[] | undefined;
+                      if (
+                        autoContactSignatureRef.current !== null &&
+                        contactSignature(current) === autoContactSignatureRef.current
+                      ) {
+                        setValue("contacts", []);
+                        autoContactSignatureRef.current = null;
+                      }
                     }}
                     className="mt-1 size-4 accent-[#3D3777]"
                   />
@@ -1119,12 +1224,15 @@ export function PifForm({
                 id={id}
                 className={control}
                 {...register("driveMode", {
-                  onChange: () => {
-                    // UAT 2026-08-21 item 2, the J2 lesson: a venue typed for
-                    // an off-campus mode must not survive, hidden, when the
-                    // mode changes its mind. Reset both halves.
-                    setValue("venueStatus", "not_yet_confirmed");
-                    setValue("venue", "");
+                  onChange: (e) => {
+                    // UAT 2026-08-21 item 2, the J2 lesson: a venue must never
+                    // survive hidden on a mode that has none. Moving between
+                    // two venue-bearing modes keeps it — it may be the one the
+                    // targeted event already confirmed.
+                    if (!driveVenueApplies(e.target.value as PifFormValues["driveMode"])) {
+                      setValue("venueStatus", "not_yet_confirmed");
+                      setValue("venue", "");
+                    }
                   },
                 })}
               >
@@ -1215,8 +1323,10 @@ export function PifForm({
                       )}
                     </Labelled>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     aria-label={`Remove round ${round.sequence}`}
                     onClick={() =>
                       setValue(
@@ -1229,25 +1339,26 @@ export function PifForm({
                         { shouldValidate: true },
                       )
                     }
-                    className="rounded-lg border border-line px-3 py-2 text-sm font-medium text-danger-700 hover:bg-danger-50"
                   >
                     Remove
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-3"
               onClick={() =>
                 setValue("rounds", [...rounds, { sequence: rounds.length + 1, name: "" }], {
                   shouldValidate: true,
                 })
               }
-              className="mt-3 rounded-lg border border-dashed border-brand-300 px-4 py-2 text-sm font-semibold text-brand-500 hover:bg-brand-50"
             >
               Add round
-            </button>
+            </Button>
             {err("rounds") !== undefined && (
               <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
                 {err("rounds")}
@@ -1319,6 +1430,42 @@ export function PifForm({
             )}
           </div>
         </Section>
+
+        {/*
+         * The one fact a silent form hid: WHERE this role will land. An AE
+         * adding a role to an existing drive must see the target before they
+         * press submit — a role attached to the wrong event is found only
+         * after the fact, on someone else's screen.
+         */}
+        {(watchedCompanyName ?? "").trim() !== "" && (
+          <section
+            aria-label="Where this role will be saved"
+            className="mb-4 rounded-card border border-brand-200 bg-brand-50 p-4 shadow-sm"
+          >
+            <p className="text-xs font-bold uppercase tracking-wide text-brand-700">
+              Where this role goes
+            </p>
+            <p className="mt-1 text-sm text-ink-900">
+              <strong>{watchedRoleTitle.trim() !== "" ? watchedRoleTitle : "Unnamed role"}</strong>{" "}
+              → {selectedEvent !== null ? "existing drive" : "new drive event"} for{" "}
+              <strong>{watchedCompanyName}</strong>
+              {selectedEvent !== null && (
+                <>
+                  {" · "}
+                  {selectedEvent.tentativeDate ?? "date to be announced"}
+                  {selectedEvent.driveMode
+                    ? ` · ${DRIVE_MODE_LABELS[selectedEvent.driveMode] ?? selectedEvent.driveMode.replace(/_/g, " ")}`
+                    : ""}
+                </>
+              )}
+            </p>
+            {selectedEvent !== null && selectedEvent.existingRoles.length > 0 && (
+              <p className="mt-1 text-xs text-ink-700">
+                Already in this drive: {selectedEvent.existingRoles.join(", ")}
+              </p>
+            )}
+          </section>
+        )}
 
         <div className="flex flex-wrap gap-3 pb-10">
           <Button type="button" disabled={isSubmitting} onClick={run("submit")}>

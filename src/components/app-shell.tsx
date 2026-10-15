@@ -147,7 +147,10 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     { heading: "Overview", items: [{ to: "/ae/overview", label: "My overview" }] },
     {
       heading: "Drive initiation",
-      items: [{ to: "/ae/pif", label: "Position information form" }],
+      items: [
+        { to: "/ae/pif", label: "Position information form" },
+        { to: "/ae/pif-multi", label: "Multi-role drive (one event)" },
+      ],
     },
     DRIVES,
   ],
@@ -330,7 +333,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const auth = useAuth();
   const { signOut, setPreviewRole } = useAuthActions();
-  const signedInRole = auth.status === "signed-in" ? auth.role : "student";
   const actualRole = auth.status === "signed-in" ? (auth.actualRole ?? auth.role) : "student";
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
   const campuses = auth.status === "signed-in" ? auth.campuses : [];

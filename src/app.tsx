@@ -30,6 +30,7 @@ import { DashboardRoute } from "@features/dashboard/dashboard-route";
 import { PifApprovalQueue } from "@features/delivery-head/pif-approval-queue";
 import { DrivePortfolioRoute } from "@features/drive-portfolio/portfolio-route";
 import { DriveRecordRoute } from "@features/drive-record/record-route";
+import { PifMultiPage } from "@features/pif/pif-multi-page";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
@@ -232,6 +233,15 @@ export function App() {
                   element={
                     <RaisersOnly>
                       <PifPage />
+                    </RaisersOnly>
+                  }
+                />
+                {/* One event, several roles — the atomic multi-role raise. */}
+                <Route
+                  path="/ae/pif-multi"
+                  element={
+                    <RaisersOnly>
+                      <PifMultiPage />
                     </RaisersOnly>
                   }
                 />

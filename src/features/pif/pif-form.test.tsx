@@ -962,3 +962,113 @@ describe("PifForm — mandatory skills come from the assessed-skills catalogue",
     expect(screen.queryByText("Testing")).toBeNull();
   });
 });
+
+/**
+ * Adding a role to an EXISTING drive — the event picker in "Company details".
+ *
+ * The picker must make the event's identity the role's defaults, never
+ * clobber what the AE typed, and leave nothing behind when the AE changes
+ * their mind about which event (or whether there is one at all).
+ */
+describe("PifForm — adding a role to an existing drive (the event picker)", () => {
+  const existingEvent = {
+    id: "evt-1",
+    companyName: "Zoho Corporation",
+    tentativeDate: "2026-10-21",
+    driveMode: "pooled",
+    venue: "Kamaraj College, Madurai",
+    status: "approved",
+    existingRoles: ["Web Dev"],
+    contacts: [{ name: "R Karthik", designation: "HR", email: "karthik@zoho.com", phone: "" }],
+  };
+  const renderWithEvents = () =>
+    render(
+      <PifForm
+        onSubmit={vi.fn()}
+        onSaveDraft={vi.fn()}
+        getCompanyEvents={vi.fn().mockResolvedValue([existingEvent])}
+      />,
+    );
+
+  it("copies the targeted event's date, mode and venue onto the form", async () => {
+    const user = userEvent.setup();
+    renderWithEvents();
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+
+    expect((screen.getByLabelText(/tentative drive date/i) as HTMLInputElement).value).toBe(
+      "2026-10-21",
+    );
+    expect((screen.getByLabelText(/drive mode/i) as HTMLSelectElement).value).toBe("pooled");
+    expect(
+      (screen.getByRole("radio", { name: /venue confirmed/i }) as HTMLInputElement).checked,
+    ).toBe(true);
+    expect((screen.getByLabelText(/^venue$/i) as HTMLInputElement).value).toBe(
+      "Kamaraj College, Madurai",
+    );
+  });
+
+  it("never clobbers contacts the AE already typed", async () => {
+    const user = userEvent.setup();
+    renderWithEvents();
+
+    await user.click(screen.getByRole("button", { name: /add a contact/i }));
+    await user.type(screen.getByLabelText(/contact 1 name/i), "Ravi Kumar");
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+
+    expect((screen.getByLabelText(/contact 1 name/i) as HTMLInputElement).value).toBe("Ravi Kumar");
+  });
+
+  it("starts a NEW event clean — nothing inherited rides along", async () => {
+    const user = userEvent.setup();
+    renderWithEvents();
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+    expect((screen.getByLabelText(/drive mode/i) as HTMLSelectElement).value).toBe("pooled");
+
+    await user.click(screen.getByRole("radio", { name: /create a new drive event/i }));
+
+    expect((screen.getByLabelText(/drive mode/i) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText(/tentative drive date/i) as HTMLInputElement).value).toBe("");
+    // The venue is gone with the mode that carried it.
+    expect(screen.queryByRole("radio", { name: /venue confirmed/i })).toBeNull();
+  });
+
+  it("does not wipe a confirmed venue when the mode stays venue-bearing", async () => {
+    const user = userEvent.setup();
+    renderWithEvents();
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+
+    // pooled → physical: both carry a venue, so the confirmed one survives.
+    await user.selectOptions(screen.getByLabelText(/drive mode/i), "physical_outside_campus");
+    expect(
+      (screen.getByRole("radio", { name: /venue confirmed/i }) as HTMLInputElement).checked,
+    ).toBe(true);
+    expect((screen.getByLabelText(/^venue$/i) as HTMLInputElement).value).toBe(
+      "Kamaraj College, Madurai",
+    );
+  });
+
+  it("says where the role will land before the AE presses submit", async () => {
+    const user = userEvent.setup();
+    renderWithEvents();
+
+    expect(screen.queryByLabelText(/where this role will be saved/i)).toBeNull();
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    const strip = await screen.findByLabelText(/where this role will be saved/i);
+    expect(strip.textContent).toContain("new drive event");
+
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+    const targeted = screen.getByLabelText(/where this role will be saved/i);
+    expect(targeted.textContent).toContain("existing drive");
+    expect(targeted.textContent).toContain("Web Dev");
+    expect(targeted.textContent).toContain("2026-10-21");
+  });
+});
