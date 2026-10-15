@@ -136,8 +136,7 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                         kinds[placement.id] === undefined ||
                         (kinds[placement.id] === "placement" &&
                           categories[placement.id] === undefined) ||
-                        (kinds[placement.id] === "internship" &&
-                          !stipends[placement.id])
+                        (kinds[placement.id] === "internship" && !stipends[placement.id])
                       }
                       onClick={() => {
                         const driveType = kinds[placement.id];
@@ -150,9 +149,7 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                                 ? null
                                 : (categories[placement.id] ?? null),
                             stipendMonthly:
-                              driveType === "internship"
-                                ? Number(stipends[placement.id])
-                                : null,
+                              driveType === "internship" ? Number(stipends[placement.id]) : null,
                           }),
                         );
                       }}

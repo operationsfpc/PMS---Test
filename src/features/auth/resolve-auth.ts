@@ -70,10 +70,7 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
 
   if (student) {
     if (!student.auth_user_id) {
-      await client
-        .from("students")
-        .update({ auth_user_id: session.user.id })
-        .eq("id", student.id);
+      await client.from("students").update({ auth_user_id: session.user.id }).eq("id", student.id);
     }
     // A student is not staff: there are no assignment rows to read, and asking
     // would be a round trip that can only ever come back empty.

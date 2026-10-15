@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
-  type EmailDeliveryStatus,
   applyDeliveryEvent,
   composeNotificationEmail,
   composeStaffInviteEmail,
   composeStudentNotificationEmail,
+  type DeliveryEvent,
   formatRoleName,
   isRecipientAllowed,
   resolveDisplayName,
@@ -44,8 +44,7 @@ describe("email delivery state machine (applyDeliveryEvent)", () => {
   });
 
   it("is idempotent on receiving the same event", () => {
-    const states: EmailDeliveryStatus[] = [
-      "queued",
+    const events: DeliveryEvent[] = [
       "sent",
       "delivered",
       "delayed",
@@ -53,10 +52,8 @@ describe("email delivery state machine (applyDeliveryEvent)", () => {
       "complained",
       "failed",
     ];
-    for (const s of states) {
-      if (s !== "queued") {
-        expect(applyDeliveryEvent(s, s as any)).toBe(s);
-      }
+    for (const event of events) {
+      expect(applyDeliveryEvent(event, event)).toBe(event);
     }
   });
 });
@@ -117,7 +114,6 @@ describe("recipient allowlist and override guards", () => {
   });
 });
 
-
 describe("composing notification email (composeNotificationEmail)", () => {
   it("formats subject, plain text, and HTML exactly according to the canonical HTML template in docs/email-templates-preview.html", () => {
     const email = composeNotificationEmail({
@@ -136,12 +132,18 @@ describe("composing notification email (composeNotificationEmail)", () => {
     expect(email.text).toContain("Complete Registration: https://fpc-pms.faceprep.workers.dev/srf");
 
     // Canonical HTML tokens from docs/email-templates-preview.html
-    expect(email.html).toContain('style="height:4px;background:#ffb800;font-size:4px;line-height:4px;"');
-    expect(email.html).toContain('background:#3d3777;');
+    expect(email.html).toContain(
+      'style="height:4px;background:#ffb800;font-size:4px;line-height:4px;"',
+    );
+    expect(email.html).toContain("background:#3d3777;");
     expect(email.html).toContain("https://pms.faceprepcampus.com/brand/faceprep-campus-light.png");
     expect(email.html).toContain("Placement Management System");
-    expect(email.html).toContain('<h1 style="margin:0 0 6px;color:#151228;font-size:22px;font-weight:700;line-height:1.3;">Complete Your Placement Profile</h1>');
-    expect(email.html).toContain('<p style="margin:0 0 18px;color:#64748b;font-size:14.5px;line-height:1.5;">Please fill in all the required details to complete your placement profile.</p>');
+    expect(email.html).toContain(
+      '<h1 style="margin:0 0 6px;color:#151228;font-size:22px;font-weight:700;line-height:1.3;">Complete Your Placement Profile</h1>',
+    );
+    expect(email.html).toContain(
+      '<p style="margin:0 0 18px;color:#64748b;font-size:14.5px;line-height:1.5;">Please fill in all the required details to complete your placement profile.</p>',
+    );
     expect(email.html).toContain('Dear <strong style="color:#151228;">Asha Devi</strong>,');
     expect(email.html).toContain('<strong style="color: #151228;">Kamaraj College</strong>');
     expect(email.html).toContain('<strong style="color: #151228;">Roll Number:</strong>');
@@ -163,7 +165,7 @@ describe("composing notification email (composeNotificationEmail)", () => {
     expect(email.text).toContain("Venue is Auditorium A.");
     expect(email.html).toContain("Venue is Auditorium A.");
     expect(email.html).not.toContain("&rarr;");
-    expect(email.html).not.toContain("<p style=\"margin:0 0 18px;color:#64748b;");
+    expect(email.html).not.toContain('<p style="margin:0 0 18px;color:#64748b;');
   });
 });
 
@@ -455,7 +457,9 @@ describe("role and display name resolution", () => {
     );
     expect(resolveDisplayName("Radhika", "student")).toBe("Radhika");
     expect(resolveDisplayName("Radhika")).toBe("Radhika");
-    expect(resolveDisplayName("", "campus_placement_coordinator")).toBe("Campus Placement Coordinator");
+    expect(resolveDisplayName("", "campus_placement_coordinator")).toBe(
+      "Campus Placement Coordinator",
+    );
     expect(resolveDisplayName("", "")).toBe("Candidate");
   });
 });
@@ -477,7 +481,9 @@ describe("coordinator notification emails (C1 through C7)", () => {
     expect(email.html).toContain("New Campus Placement Drive Active");
     expect(email.html).toContain("View Drive Cohort &rarr;");
     expect(email.html).toContain(`${portal}/cpc/drives`);
-    expect(email.html).toContain("Dear <strong style=\"color:#151228;\">Dr. K. Ramanathan (Campus Placement Coordinator)</strong>");
+    expect(email.html).toContain(
+      'Dear <strong style="color:#151228;">Dr. K. Ramanathan (Campus Placement Coordinator)</strong>',
+    );
   });
 
   it("composes C2 campus shortlist ready correctly", () => {
@@ -510,7 +516,9 @@ describe("coordinator notification emails (C1 through C7)", () => {
     expect(email.html).toContain("Student Profiles Pending Verification");
     expect(email.html).toContain("Open Verification Queue &rarr;");
     expect(email.html).toContain(`${portal}/cpc/verification`);
-    expect(email.html).toContain("Prompt verification ensures these students become eligible for recruitment drives.");
+    expect(email.html).toContain(
+      "Prompt verification ensures these students become eligible for recruitment drives.",
+    );
   });
 
   it("composes C4 semester pending verification with verified wording", () => {
@@ -527,7 +535,9 @@ describe("coordinator notification emails (C1 through C7)", () => {
     expect(email.html).toContain("Semester Record Pending Verification");
     expect(email.html).toContain("Verify Semester Record &rarr;");
     expect(email.html).toContain(`${portal}/cpc/semesters`);
-    expect(email.html).toContain("Please verify the declared score against the uploaded marksheet document.");
+    expect(email.html).toContain(
+      "Please verify the declared score against the uploaded marksheet document.",
+    );
   });
 
   it("composes C5 attendance pending submission", () => {
@@ -576,7 +586,9 @@ describe("coordinator notification emails (C1 through C7)", () => {
     expect(email.html).toContain("Off-Campus Offer Verification Required");
     expect(email.html).toContain("Review Off-Campus Queue &rarr;");
     expect(email.html).toContain(`${portal}/cpc/off-campus`);
-    expect(email.html).toContain("Please inspect the uploaded offer letter and complete submission.");
+    expect(email.html).toContain(
+      "Please inspect the uploaded offer letter and complete submission.",
+    );
     expect(email.html).not.toContain("verify or reject");
   });
 });
@@ -801,7 +813,3 @@ describe("recipient and CC routing verification (resolveTemplateRouting)", () =>
     expect(invite.ccRoles).toEqual(["admin"]);
   });
 });
-
-
-
-

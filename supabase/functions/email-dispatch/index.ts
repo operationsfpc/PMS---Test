@@ -9,12 +9,34 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
-const RESEND_FROM_EMAIL = Deno.env.get("RESEND_FROM_EMAIL") || "FACE Prep Campus <placements@email.faceprep.in>";
+const RESEND_FROM_EMAIL =
+  Deno.env.get("RESEND_FROM_EMAIL") || "FACE Prep Campus <placements@email.faceprep.in>";
 const EMAIL_OVERRIDE_RECIPIENT = Deno.env.get("EMAIL_OVERRIDE_RECIPIENT") || "";
 const PORTAL_URL = Deno.env.get("PORTAL_URL") || "https://pms.faceprepcampus.com";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+/** The notification joined onto a delivery row. */
+interface DeliveryNotification {
+  readonly id?: string;
+  readonly kind?: string;
+  readonly title?: string;
+  readonly body?: string;
+  readonly drive_id?: string;
+  readonly student?: { full_name?: string } | null;
+}
+
+/** One `email_deliveries` row with its joined notification, as this function selects it. */
+interface DeliveryRow {
+  readonly id: string;
+  readonly recipient_email?: string | null;
+  readonly cc_emails?: string[] | null;
+  readonly subject?: string | null;
+  readonly html_body?: string | null;
+  readonly attempts?: number | null;
+  readonly notification?: DeliveryNotification | null;
+}
 
 function escapeHtml(value: string): string {
   return String(value)
@@ -47,7 +69,13 @@ function formatRoleName(role?: string | null): string {
     ceo: "CEO",
   };
   const normalized = role.trim().toLowerCase();
-  return roleMap[normalized] || normalized.split("_").map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return (
+    roleMap[normalized] ||
+    normalized
+      .split("_")
+      .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
 }
 
 function resolveDisplayName(recipientName?: string | null, roleName?: string | null): string {
@@ -106,9 +134,7 @@ function isAuthorized(token: string): boolean {
   const parts = token.split(".");
   if (parts.length === 3) {
     try {
-      const payload = JSON.parse(
-        atob(parts[1].replaceAll("-", "+").replaceAll("_", "/")),
-      );
+      const payload = JSON.parse(atob(parts[1].replaceAll("-", "+").replaceAll("_", "/")));
       return payload?.role === "service_role";
     } catch {
       return false;
@@ -136,8 +162,9 @@ serve(async (req: Request) => {
   // 1. Atomically claim up to 100 queued deliveries (queued -> processing).
   // FOR UPDATE SKIP LOCKED inside the RPC guarantees concurrent invocations
   // never hold the same row, preventing duplicate sends.
-  const { data: claimedIds, error: claimError } = await supabase
-    .rpc("claim_email_deliveries", { p_limit: 100 });
+  const { data: claimedIds, error: claimError } = await supabase.rpc("claim_email_deliveries", {
+    p_limit: 100,
+  });
 
   if (claimError) {
     return new Response(JSON.stringify({ error: claimError.message }), {
@@ -155,7 +182,7 @@ serve(async (req: Request) => {
   }
 
   // 2. Fetch claimed rows joining notifications for rendering
-  const { data: deliveries, error: fetchError } = await supabase
+  const { data: fetchedDeliveries, error: fetchError } = await supabase
     .from("email_deliveries")
     .select(`
       id,
@@ -183,7 +210,8 @@ serve(async (req: Request) => {
     });
   }
 
-  if (!deliveries || deliveries.length === 0) {
+  const deliveries = (fetchedDeliveries ?? []) as readonly DeliveryRow[];
+  if (deliveries.length === 0) {
     return new Response(JSON.stringify({ message: "No queued deliveries to process." }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -193,18 +221,18 @@ serve(async (req: Request) => {
   // Batch lookup profile data for any recipients not in students table (e.g. coordinators/staff)
   const pendingEmails = [
     ...new Set(
-      deliveries
-        .filter((d: any) => !d.notification?.student?.full_name && d.recipient_email)
-        .map((d: any) => d.recipient_email.trim().toLowerCase()),
+      deliveries.flatMap((d) =>
+        d.recipient_email && !d.notification?.student?.full_name
+          ? [d.recipient_email.trim().toLowerCase()]
+          : [],
+      ),
     ),
   ];
 
   // Also collect CC emails for profile lookup
   const ccEmails = [
     ...new Set(
-      deliveries
-        .flatMap((d: any) => (d.cc_emails as string[] | null) || [])
-        .map((email: string) => email.trim().toLowerCase()),
+      deliveries.flatMap((d) => d.cc_emails ?? []).map((email) => email.trim().toLowerCase()),
     ),
   ];
 
@@ -227,19 +255,26 @@ serve(async (req: Request) => {
   }
 
   const results = [];
-  const batchItems: { deliveryId: string; originalEmail: string; finalRecipient: string; payload: Record<string, unknown> }[] = [];
+  const batchItems: {
+    deliveryId: string;
+    originalEmail: string;
+    finalRecipient: string;
+    payload: Record<string, unknown>;
+  }[] = [];
 
   // 3. Build payloads for each delivery
   for (const delivery of deliveries) {
-    const customHtml = (delivery as any).html_body as string | null;
-    const customSubject = (delivery as any).subject as string | null;
+    const customHtml = delivery.html_body;
+    const customSubject = delivery.subject;
 
     const originalEmail = delivery.recipient_email?.trim() || "";
 
     // Custom HTML bypass: staff invitations and other direct emails carry
     // pre-built HTML with no notification_id.
-    if (customHtml && customHtml.trim()) {
-      const isOverridden = Boolean(EMAIL_OVERRIDE_RECIPIENT && EMAIL_OVERRIDE_RECIPIENT !== originalEmail);
+    if (customHtml?.trim()) {
+      const isOverridden = Boolean(
+        EMAIL_OVERRIDE_RECIPIENT && EMAIL_OVERRIDE_RECIPIENT !== originalEmail,
+      );
       const finalRecipient = isOverridden ? EMAIL_OVERRIDE_RECIPIENT : originalEmail;
 
       batchItems.push({
@@ -257,14 +292,7 @@ serve(async (req: Request) => {
       continue;
     }
 
-    const notif = delivery.notification as {
-      id?: string;
-      kind?: string;
-      title?: string;
-      body?: string;
-      drive_id?: string;
-      student?: { full_name?: string } | null;
-    } | null;
+    const notif = delivery.notification;
 
     let recipientDisplayName = notif?.student?.full_name?.trim();
     if (!recipientDisplayName && originalEmail) {
@@ -291,7 +319,8 @@ serve(async (req: Request) => {
     switch (rawKind) {
       // S1: Welcome
       case "welcome":
-        subject = notificationTitle || "Welcome to FACE Prep Campus Placements — Complete Your Profile";
+        subject =
+          notificationTitle || "Welcome to FACE Prep Campus Placements — Complete Your Profile";
         templateTitle = "Complete Your Placement Profile";
         subtitle = "Please fill in all the required details to complete your placement profile.";
         buttonLabel = "Complete Registration";
@@ -377,7 +406,8 @@ serve(async (req: Request) => {
         break;
       // S14: SRF Approved
       case "srf_approved":
-        subject = notificationTitle || "Profile Verified: You Are Now Eligible for Placement Drives";
+        subject =
+          notificationTitle || "Profile Verified: You Are Now Eligible for Placement Drives";
         templateTitle = "Placement Profile Approved";
         buttonLabel = "Explore Open Drives";
         targetUrl = `${PORTAL_URL}/student/drives`;
@@ -635,7 +665,9 @@ serve(async (req: Request) => {
     }
 
     // Direct all emails to override recipient in dev/test mode
-    const isOverridden = Boolean(EMAIL_OVERRIDE_RECIPIENT && EMAIL_OVERRIDE_RECIPIENT !== originalEmail);
+    const isOverridden = Boolean(
+      EMAIL_OVERRIDE_RECIPIENT && EMAIL_OVERRIDE_RECIPIENT !== originalEmail,
+    );
     const finalRecipient = isOverridden ? EMAIL_OVERRIDE_RECIPIENT : originalEmail;
     const routingNotice = isOverridden ? originalEmail : undefined;
 
@@ -651,14 +683,16 @@ serve(async (req: Request) => {
     });
 
     const plainBody = notificationBody.replace(/\*\*(.*?)\*\*/g, "$1");
-    const routingPrefix = isOverridden ? `[Dev Routing Note: Intended for ${originalEmail}]\n\n` : "";
+    const routingPrefix = isOverridden
+      ? `[Dev Routing Note: Intended for ${originalEmail}]\n\n`
+      : "";
     const textBody = `${routingPrefix}Dear ${recipientDisplayName},\n\n${plainBody}\n\n${buttonLabel}: ${targetUrl}\n\nWarm regards,\nPlacement Cell,\nFACE Prep Campus\n\nNeed help? Contact hello@faceprep.in`;
 
     // Extract CC recipients
-    const ccEmailsList = (delivery as any).cc_emails as string[] | null;
-    const ccRecipients = ccEmailsList && ccEmailsList.length > 0 
-      ? ccEmailsList.map((email: string) => email.trim().toLowerCase())
-      : undefined;
+    const ccRecipients =
+      delivery.cc_emails && delivery.cc_emails.length > 0
+        ? delivery.cc_emails.map((email) => email.trim().toLowerCase())
+        : undefined;
 
     const payload: Record<string, unknown> = {
       from: RESEND_FROM_EMAIL,
@@ -701,8 +735,7 @@ serve(async (req: Request) => {
 
       if (res.ok && Array.isArray(resData?.data)) {
         const resArray = resData.data as { id?: string }[];
-        for (let j = 0; j < chunk.length; j++) {
-          const item = chunk[j]!;
+        for (const [j, item] of chunk.entries()) {
           const itemRes = resArray[j];
           await supabase
             .from("email_deliveries")
@@ -714,7 +747,12 @@ serve(async (req: Request) => {
             })
             .eq("id", item.deliveryId);
 
-          results.push({ id: item.deliveryId, status: "sent", messageId: itemRes?.id, recipient: item.finalRecipient });
+          results.push({
+            id: item.deliveryId,
+            status: "sent",
+            messageId: itemRes?.id,
+            recipient: item.finalRecipient,
+          });
         }
       } else {
         const errorMsg = resData?.message || `HTTP ${res.status}`;
@@ -722,8 +760,8 @@ serve(async (req: Request) => {
         // 4xx validation/auth errors are permanent.
         const retryable = res.status === 429 || res.status >= 500;
         for (const item of chunk) {
-          const delivery = deliveries.find((d: any) => d.id === item.deliveryId);
-          const willRetry = retryable && ((delivery as any)?.attempts ?? 1) < 3;
+          const delivery = deliveries.find((d) => d.id === item.deliveryId);
+          const willRetry = retryable && (delivery?.attempts ?? 1) < 3;
           await supabase
             .from("email_deliveries")
             .update({
@@ -733,14 +771,19 @@ serve(async (req: Request) => {
             })
             .eq("id", item.deliveryId);
 
-          results.push({ id: item.deliveryId, status: willRetry ? "requeued" : "failed", error: errorMsg, recipient: item.finalRecipient });
+          results.push({
+            id: item.deliveryId,
+            status: willRetry ? "requeued" : "failed",
+            error: errorMsg,
+            recipient: item.finalRecipient,
+          });
         }
       }
     } catch (sendErr: unknown) {
       const errorMessage = sendErr instanceof Error ? sendErr.message : String(sendErr);
       for (const item of chunk) {
-        const delivery = deliveries.find((d: any) => d.id === item.deliveryId);
-        const willRetry = ((delivery as any)?.attempts ?? 1) < 3;
+        const delivery = deliveries.find((d) => d.id === item.deliveryId);
+        const willRetry = (delivery?.attempts ?? 1) < 3;
         await supabase
           .from("email_deliveries")
           .update({
@@ -750,7 +793,12 @@ serve(async (req: Request) => {
           })
           .eq("id", item.deliveryId);
 
-        results.push({ id: item.deliveryId, status: willRetry ? "requeued" : "failed", error: errorMessage, recipient: item.finalRecipient });
+        results.push({
+          id: item.deliveryId,
+          status: willRetry ? "requeued" : "failed",
+          error: errorMessage,
+          recipient: item.finalRecipient,
+        });
       }
     }
   }

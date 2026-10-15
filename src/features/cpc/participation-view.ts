@@ -217,7 +217,9 @@ export function createSupabaseParticipationQueueView(
           drive_type: classification.driveType,
           offer_category: isInternship ? "internship" : classification.offerCategory,
           ctc_lpa: isInternship ? null : (data.ctc_lpa as number),
-          stipend_monthly: isInternship ? (data.stipend_monthly as number ?? classification.stipendMonthly ?? null) : null,
+          stipend_monthly: isInternship
+            ? ((data.stipend_monthly as number) ?? classification.stipendMonthly ?? null)
+            : null,
           declared_by: actorId,
           approved_by: actorId,
           approved_at: now,

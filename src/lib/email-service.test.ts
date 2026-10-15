@@ -1,17 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
-import { ResendEmailProvider, createEmailService } from "./email-service";
+import { ResendEmailProvider } from "./email-service";
+
+/** Email dispatch reads only `ok`, `status` and `json()` off the Resend response. */
+function responseStub(body: Record<string, unknown>, ok = true, status = 200): Response {
+  return { ok, status, json: async () => body } as Response;
+}
 
 describe("ResendEmailProvider", () => {
   it("sends a single email through Resend API", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ id: "msg_12345" }),
-    });
+    const mockFetch = vi.fn<typeof fetch>().mockResolvedValue(responseStub({ id: "msg_12345" }));
 
     const provider = new ResendEmailProvider({
       apiKey: "re_test_key",
       from: "onboarding@resend.dev",
-      fetchFn: mockFetch as any,
+      fetchFn: mockFetch,
     });
 
     const result = await provider.send({
@@ -36,19 +38,16 @@ describe("ResendEmailProvider", () => {
   });
 
   it("redirects recipient to thanush@faceprep.in when overrideRecipient is set", async () => {
-    let requestBody: any;
-    const mockFetch = vi.fn().mockImplementation(async (_url, opts) => {
-      requestBody = JSON.parse(opts.body);
-      return {
-        ok: true,
-        json: async () => ({ id: "msg_overridden" }),
-      };
+    let requestBody: { to: string[]; text: string } | undefined;
+    const mockFetch = vi.fn<typeof fetch>(async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return responseStub({ id: "msg_overridden" });
     });
 
     const provider = new ResendEmailProvider({
       apiKey: "re_test_key",
       overrideRecipient: "thanush@faceprep.in",
-      fetchFn: mockFetch as any,
+      fetchFn: mockFetch,
     });
 
     const result = await provider.send({
@@ -59,20 +58,18 @@ describe("ResendEmailProvider", () => {
 
     expect(result.success).toBe(true);
     expect(result.recipient).toBe("thanush@faceprep.in");
-    expect(requestBody.to).toEqual(["thanush@faceprep.in"]);
-    expect(requestBody.text).toContain("original_student@college.edu");
+    expect(requestBody?.to).toEqual(["thanush@faceprep.in"]);
+    expect(requestBody?.text).toContain("original_student@college.edu");
   });
 
   it("handles Resend API error responses cleanly", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 422,
-      json: async () => ({ message: "Domain not verified" }),
-    });
+    const mockFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(responseStub({ message: "Domain not verified" }, false, 422));
 
     const provider = new ResendEmailProvider({
       apiKey: "re_test_key",
-      fetchFn: mockFetch as any,
+      fetchFn: mockFetch,
     });
 
     const result = await provider.send({
@@ -85,15 +82,14 @@ describe("ResendEmailProvider", () => {
   });
 
   it("sends batch emails in chunks adhering to batch limits", async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "b_1" }, { id: "b_2" }] }),
-    });
+    const mockFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(responseStub({ data: [{ id: "b_1" }, { id: "b_2" }] }));
 
     const provider = new ResendEmailProvider({
       apiKey: "re_test_key",
       overrideRecipient: "thanush@faceprep.in",
-      fetchFn: mockFetch as any,
+      fetchFn: mockFetch,
     });
 
     const results = await provider.sendBatch([

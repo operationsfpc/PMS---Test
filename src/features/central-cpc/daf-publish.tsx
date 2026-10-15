@@ -511,28 +511,52 @@ export function DafPublish({ view }: { view: PublishView }) {
                 options={loaded.options.cities}
                 selected={cities}
                 onToggle={toggle(setCities)}
-                onSelectAll={() => setCities(cities.length === loaded.options.cities.length ? [] : [...loaded.options.cities])}
+                onSelectAll={() =>
+                  setCities(
+                    cities.length === loaded.options.cities.length
+                      ? []
+                      : [...loaded.options.cities],
+                  )
+                }
               />
               <MultiSelect
                 label="Campuses"
                 options={loaded.options.campuses}
                 selected={campuses}
                 onToggle={toggle(setCampuses)}
-                onSelectAll={() => setCampuses(campuses.length === loaded.options.campuses.length ? [] : [...loaded.options.campuses])}
+                onSelectAll={() =>
+                  setCampuses(
+                    campuses.length === loaded.options.campuses.length
+                      ? []
+                      : [...loaded.options.campuses],
+                  )
+                }
               />
               <MultiSelect
                 label="Degrees"
                 options={loaded.options.degrees}
                 selected={degrees}
                 onToggle={toggle(setDegrees)}
-                onSelectAll={() => setDegrees(degrees.length === loaded.options.degrees.length ? [] : [...loaded.options.degrees])}
+                onSelectAll={() =>
+                  setDegrees(
+                    degrees.length === loaded.options.degrees.length
+                      ? []
+                      : [...loaded.options.degrees],
+                  )
+                }
               />
               <MultiSelect
                 label="Branches"
                 options={loaded.options.branches}
                 selected={branches}
                 onToggle={toggle(setBranches)}
-                onSelectAll={() => setBranches(branches.length === loaded.options.branches.length ? [] : [...loaded.options.branches])}
+                onSelectAll={() =>
+                  setBranches(
+                    branches.length === loaded.options.branches.length
+                      ? []
+                      : [...loaded.options.branches],
+                  )
+                }
               />
 
               <div className="grid gap-4 sm:grid-cols-2">

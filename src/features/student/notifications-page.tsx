@@ -77,9 +77,9 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
             </p>
           </Card>
         ) : (
-        <p role="status" className="text-sm text-ink-500">
-          Loading notifications…
-        </p>
+          <p role="status" className="text-sm text-ink-500">
+            Loading notifications…
+          </p>
         )
       ) : sorted.length === 0 ? (
         <Card className="p-6">

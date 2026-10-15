@@ -52,10 +52,7 @@ const optionalMobile = z
   .pipe(
     z
       .string()
-      .refine(
-        (v) => v === "" || isValidIndianMobile(v),
-        "Enter a valid 10-digit mobile number",
-      ),
+      .refine((v) => v === "" || isValidIndianMobile(v), "Enter a valid 10-digit mobile number"),
   );
 
 /** Maximum document size in bytes allowed by PostgreSQL student_documents check constraint (5MB). */
@@ -161,7 +158,10 @@ export const srfSchema = z
           semesterNumber: z.number().int(),
           marks: z.number({ error: "Enter the marks for this semester" }),
           currentArrears: z.number().int("Whole numbers only").nonnegative("Must be 0 or greater"),
-          historyOfArrears: z.number().int("Whole numbers only").nonnegative("Must be 0 or greater"),
+          historyOfArrears: z
+            .number()
+            .int("Whole numbers only")
+            .nonnegative("Must be 0 or greater"),
         }),
       )
       .min(1, "Add at least one semester"),

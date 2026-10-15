@@ -1,7 +1,7 @@
 import type { AppRole } from "@domain/types";
 import { type AuthActions, AuthActionsContext, isTestPreviewAllowed } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { AuthContext, type AuthState } from "./require-auth";
 import { resolveAuthState } from "./resolve-auth";
 
@@ -48,7 +48,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const handleSetPreviewRole = (role: AppRole | null) => {
+  const handleSetPreviewRole = useCallback((role: AppRole | null) => {
     setPreviewRole(role);
     if (typeof window !== "undefined") {
       if (role) {
@@ -57,7 +57,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
         sessionStorage.removeItem("fpc_preview_role");
       }
     }
-  };
+  }, []);
 
   const effectiveState = useMemo<AuthState>(() => {
     if (state.status !== "signed-in") return state;
@@ -96,7 +96,7 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       },
       setPreviewRole: handleSetPreviewRole,
     }),
-    [],
+    [handleSetPreviewRole],
   );
 
   return (

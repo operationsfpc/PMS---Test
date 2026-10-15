@@ -10,7 +10,9 @@
       "!dist",
       "!supabase/.temp",
       "!test-results",
-      "!playwright-report"
+      "!playwright-report",
+      "!scratch",
+      "!src/db/database.types.ts"
     ]
   },
   "formatter": {

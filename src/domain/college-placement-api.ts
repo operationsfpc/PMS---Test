@@ -342,6 +342,34 @@ export interface StudentPlacementProfile {
 
 const PLACEMENT_DRIVE_TYPES = new Set(["placement", "internship_convertible"]);
 
+/** The campus a student profile reads back, joined or flat. */
+interface StudentProfileRow extends RawStudentRow {
+  readonly campuses?: RawCampusRow | RawCampusRow[] | null;
+}
+
+/** An application as the student profile reads it — the student is already known. */
+interface StudentApplicationRow {
+  readonly id: string;
+  readonly drive_id?: string | null | undefined;
+  readonly applied_at?: string | null | undefined;
+}
+
+/** A student row read back after a participation-status write. */
+interface StudentParticipationRow {
+  readonly id: string;
+  readonly full_name: string;
+  readonly roll_number: string;
+  readonly email: string;
+  readonly participation_status: string;
+}
+
+/** `select().single()` answers with one row, or with an error and none. */
+interface MutationResult<T> {
+  readonly success: boolean;
+  readonly data: T | null;
+  readonly error: string | null;
+}
+
 function unwrapName(item: { name?: string } | Array<{ name?: string }> | null | undefined): string {
   if (!item) return "N/A";
   if (Array.isArray(item)) return item[0]?.name || "N/A";
@@ -864,8 +892,7 @@ export function aggregateCollegePlacements(
     const averageCtcLpa =
       studentHighestCtcList.length > 0
         ? Math.round(
-            (studentHighestCtcList.reduce((acc, v) => acc + v, 0) /
-              studentHighestCtcList.length) *
+            (studentHighestCtcList.reduce((acc, v) => acc + v, 0) / studentHighestCtcList.length) *
               100,
           ) / 100
         : null;
@@ -1061,9 +1088,11 @@ export async function fetchCollegePlacementData(
     client.from("applications").select("id, student_id, drive_id, applied_at"),
     client.from("attendance").select("application_id, status, round_id"),
     client.from("round_results").select("application_id, result, round_id"),
-    client.from("offers").select(
-      "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, company_name, role_title, declared_at",
-    ),
+    client
+      .from("offers")
+      .select(
+        "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, company_name, role_title, declared_at",
+      ),
     client.from("drives").select("id, company_name, role_title, drive_type"),
     client.from("drive_rounds").select("id, drive_id, name, sequence"),
   ]);
@@ -1097,8 +1126,8 @@ export async function updatePlacementOffer(
   client: SupabaseClient,
   offerId: string,
   patch: PlacementOfferPatch,
-): Promise<{ success: boolean; data: any; error: string | null }> {
-  const updateData: Record<string, any> = {};
+): Promise<MutationResult<RawOfferRow>> {
+  const updateData: Record<string, unknown> = {};
   if (patch.ctcLpa !== undefined) updateData.ctc_lpa = patch.ctcLpa;
   if (patch.roleTitle !== undefined) updateData.role_title = patch.roleTitle;
   if (patch.offerCategory !== undefined) updateData.offer_category = patch.offerCategory;
@@ -1123,7 +1152,7 @@ export async function updatePlacementOffer(
 export async function createPlacementOffer(
   client: SupabaseClient,
   input: CreatePlacementOfferInput,
-): Promise<{ success: boolean; data: any; error: string | null }> {
+): Promise<MutationResult<RawOfferRow>> {
   const insertPayload = {
     student_id: input.studentId,
     drive_id: input.driveId || null,
@@ -1142,11 +1171,7 @@ export async function createPlacementOffer(
       : {}),
   };
 
-  const { data, error } = await client
-    .from("offers")
-    .insert(insertPayload)
-    .select()
-    .single();
+  const { data, error } = await client.from("offers").insert(insertPayload).select().single();
 
   if (error) {
     return { success: false, data: null, error: error.message };
@@ -1175,7 +1200,7 @@ export async function updateStudentParticipationStatus(
   client: SupabaseClient,
   studentId: string,
   status: "active" | "opted_out",
-): Promise<{ success: boolean; data: any; error: string | null }> {
+): Promise<MutationResult<StudentParticipationRow>> {
   const { data, error } = await client
     .from("students")
     .update({ participation_status: status })
@@ -1196,7 +1221,7 @@ export async function fetchStudentPlacementProfile(
   client: SupabaseClient,
   studentId: string,
 ): Promise<StudentPlacementProfile | null> {
-  const { data: student, error: sErr } = await client
+  const { data: studentRow, error: sErr } = await client
     .from("students")
     .select(
       "id, full_name, roll_number, email, campus_id, passing_year, participation_status, overall_cgpa, current_arrears, history_of_arrears, campuses(name, cities(name)), degrees(name), branches(name)",
@@ -1204,49 +1229,54 @@ export async function fetchStudentPlacementProfile(
     .eq("id", studentId)
     .maybeSingle();
 
-  if (sErr || !student) return null;
+  if (sErr || !studentRow) return null;
 
-  const [
-    { data: offers },
-    { data: applications },
-    { data: allDrives },
-    { data: allRounds },
-  ] = await Promise.all([
-    client
-      .from("offers")
-      .select(
-        "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, company_name, role_title, declared_at",
-      )
-      .eq("student_id", studentId),
-    client
-      .from("applications")
-      .select("id, drive_id, applied_at")
-      .eq("student_id", studentId),
-    client.from("drives").select("id, company_name, role_title, drive_type"),
-    client.from("drive_rounds").select("id, drive_id, name, sequence"),
-  ]);
+  const student = studentRow as StudentProfileRow;
 
-  const drivesMap = new Map((allDrives || []).map((d: any) => [d.id, d]));
-  const roundsMap = new Map((allRounds || []).map((r: any) => [r.id, r]));
+  const [{ data: offers }, { data: applications }, { data: allDrives }, { data: allRounds }] =
+    await Promise.all([
+      client
+        .from("offers")
+        .select(
+          "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, company_name, role_title, declared_at",
+        )
+        .eq("student_id", studentId),
+      client.from("applications").select("id, drive_id, applied_at").eq("student_id", studentId),
+      client.from("drives").select("id, company_name, role_title, drive_type"),
+      client.from("drive_rounds").select("id, drive_id, name, sequence"),
+    ]);
 
-  const appIds = (applications || []).map((a: any) => a.id);
-  let attendanceList: any[] = [];
-  let resultsList: any[] = [];
+  const driveRows = (allDrives ?? []) as readonly RawDriveRow[];
+  const roundRows = (allRounds ?? []) as readonly RawRoundRow[];
+  const drivesMap = new Map<string, RawDriveRow>(driveRows.map((d) => [d.id, d]));
+  const roundsMap = new Map<string, RawRoundRow>(roundRows.map((r) => [r.id, r]));
+
+  const appRows = (applications ?? []) as readonly StudentApplicationRow[];
+  const appIds = appRows.map((a) => a.id);
+  let attendanceList: readonly RawAttendanceRow[] = [];
+  let resultsList: readonly RawRoundResultRow[] = [];
 
   if (appIds.length > 0) {
     const [attRes, roundRes] = await Promise.all([
-      client.from("attendance").select("application_id, status, round_id").in("application_id", appIds),
-      client.from("round_results").select("application_id, result, round_id").in("application_id", appIds),
+      client
+        .from("attendance")
+        .select("application_id, status, round_id")
+        .in("application_id", appIds),
+      client
+        .from("round_results")
+        .select("application_id, result, round_id")
+        .in("application_id", appIds),
     ]);
-    attendanceList = attRes.data || [];
-    resultsList = roundRes.data || [];
+    attendanceList = (attRes.data ?? []) as readonly RawAttendanceRow[];
+    resultsList = (roundRes.data ?? []) as readonly RawRoundResultRow[];
   }
 
-  const campusData: any = student.campuses;
-  const campusName = campusData?.name || "N/A";
-  const city = campusData?.city || unwrapName(campusData?.cities);
+  const campus = Array.isArray(student.campuses) ? student.campuses[0] : student.campuses;
+  const campusName = campus?.name || "N/A";
+  const city = campus?.city || unwrapName(campus?.cities);
 
-  const placedOffers: PlacedStudentDetail[] = (offers || []).map((off: any) => {
+  const offerRows = (offers ?? []) as readonly RawOfferRow[];
+  const placedOffers: PlacedStudentDetail[] = offerRows.map((off) => {
     const ctc = Number(off.ctc_lpa) || 0;
     return {
       studentId: student.id,
@@ -1271,7 +1301,7 @@ export async function fetchStudentPlacementProfile(
     };
   });
 
-  const appsById = new Map((applications || []).map((a: any) => [a.id, a]));
+  const appsById = new Map<string, StudentApplicationRow>(appRows.map((a) => [a.id, a]));
 
   const missedRounds: MissedStudentDetail[] = attendanceList
     .filter((a) => a.status === "absent")
@@ -1325,7 +1355,7 @@ export async function fetchStudentPlacementProfile(
       };
     });
 
-  const appDetails = (applications || []).map((app: any) => {
+  const appDetails = appRows.map((app) => {
     const drive = app.drive_id ? drivesMap.get(app.drive_id) : null;
     return {
       id: app.id,

@@ -14,42 +14,6 @@ import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
-/** Grouped drive progress entries by company event for multi-role display. */
-interface DriveProgressEvent {
-  readonly eventId: string;
-  readonly companyName: string;
-  readonly tentativeDate: string | null;
-  readonly roles: readonly DriveProgressEntry[];
-  readonly totalStudents: number;
-}
-
-/** Groups drive progress entries by their parent company event. */
-function groupProgressByEvent(entries: readonly DriveProgressEntry[]): DriveProgressEvent[] {
-  const groups = new Map<string, DriveProgressEntry[]>();
-
-  for (const entry of entries) {
-    const key = entry.companyDriveId || `standalone:${entry.driveId}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.push(entry);
-    } else {
-      groups.set(key, [entry]);
-    }
-  }
-
-  return Array.from(groups.entries()).map(([key, roles]) => {
-    const first = roles[0];
-    if (!first) throw new Error("Group has no roles");
-    return {
-      eventId: key,
-      companyName: first.companyName,
-      tentativeDate: first.tentativeDate ?? null,
-      roles,
-      totalStudents: roles.reduce((sum, r) => sum + r.students.length, 0),
-    };
-  });
-}
-
 /**
  * D10 (2026-08-12): the placement coordinator and KAM follow students
  * through the ENTIRE cycle — shortlist, every round, the offer.

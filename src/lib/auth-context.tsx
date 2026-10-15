@@ -94,7 +94,7 @@ export function isTestPreviewAllowed(email?: string): boolean {
     return !email || email === "radhika@faceprep.in" || email === "thanush@faceprep.in";
   }
 
-  if (Boolean(import.meta.env.DEV)) return true;
+  if (import.meta.env.DEV) return true;
   if (!email) return false;
 
   const normalized = email.toLowerCase().trim();
@@ -114,4 +114,3 @@ export function isTestPreviewAllowed(email?: string): boolean {
 
   return false;
 }
-

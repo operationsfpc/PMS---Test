@@ -42,8 +42,11 @@ function loadEnv() {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
         const match = trimmed.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/);
-        if (match && !process.env[match[1]!]) {
-          process.env[match[1]!] = match[2]!.trim().replace(/^['"]|['"]$/g, "");
+        const key = match?.[1];
+        if (!key) continue;
+        const value = (match?.[2] ?? "").trim().replace(/^['"]|['"]$/g, "");
+        if (!process.env[key]) {
+          process.env[key] = value;
         }
       }
     }
@@ -65,7 +68,8 @@ export function fuseMigrations(): {
 
   console.log(`📦 Fusing ${migrationFiles.length} migrations from supabase/migrations/...`);
 
-  let schemaSql = `-- =============================================================================\n` +
+  let schemaSql =
+    `-- =============================================================================\n` +
     `-- FACE Prep Campus — Placement Management System (PMS)\n` +
     `-- Consolidated Schema (Migrations 0001 - ${migrationFiles[migrationFiles.length - 1]?.slice(0, 4)})\n` +
     `-- =============================================================================\n\n`;
@@ -74,7 +78,7 @@ export function fuseMigrations(): {
     const filePath = join(MIGRATIONS_DIR, file);
     const content = readFileSync(filePath, "utf8");
     schemaSql += `-- Migration: ${file}\n`;
-    schemaSql += content.trim() + `\n\n`;
+    schemaSql += `${content.trim()}\n\n`;
   }
 
   writeFileSync(SCHEMA_FILE, schemaSql, "utf8");
@@ -86,7 +90,7 @@ export function fuseMigrations(): {
  */
 export async function executeDirectPg(dbUrl: string, sqlContent: string): Promise<boolean> {
   console.log(`\n🚀 Applying database schema...`);
-  
+
   // Try dynamic pg driver if available
   try {
     // @ts-expect-error - optional dynamic import for pg if installed
@@ -104,8 +108,9 @@ export async function executeDirectPg(dbUrl: string, sqlContent: string): Promis
       await client.end();
       return true;
     }
-  } catch (err: any) {
-    console.warn(`ℹ️ Direct driver attempt: ${err?.message || "Skipping to CLI push"}`);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "Skipping to CLI push";
+    console.warn(`ℹ️ Direct driver attempt: ${reason}`);
   }
 
   // Fallback: Execute via Supabase CLI
@@ -117,7 +122,7 @@ export async function executeDirectPg(dbUrl: string, sqlContent: string): Promis
       cwd: ROOT,
     });
     return true;
-  } catch (err: any) {
+  } catch {
     console.warn("⚠️  Supabase CLI push encountered an issue.");
     return false;
   }
@@ -190,9 +195,7 @@ export async function verifyTables(supabaseUrl: string, anonOrServiceKey: string
   const summary: Array<{ Table: string; Status: string }> = [];
 
   for (const t of sampleTables) {
-    const { error } = await supabase
-      .from(t)
-      .select("*", { count: "exact", head: true });
+    const { error } = await supabase.from(t).select("*", { count: "exact", head: true });
 
     if (error) {
       summary.push({ Table: t, Status: `❌ ${error.message}` });
@@ -235,8 +238,9 @@ async function main() {
   }
 
   // Verify Table status
-  if (success && supabaseUrl && (serviceKey || anonKey)) {
-    await verifyTables(supabaseUrl, serviceKey || anonKey!);
+  const tablesKey = serviceKey ?? anonKey;
+  if (success && supabaseUrl && tablesKey) {
+    await verifyTables(supabaseUrl, tablesKey);
   }
 
   if (success) {
@@ -244,8 +248,12 @@ async function main() {
     console.log("🎉 Complete Database Schema Created Successfully on Remote Supabase!");
     console.log("=============================================================================\n");
   } else {
-    console.log("\nℹ️  If the direct connection port is blocked by firewall, copy-paste the contents of");
-    console.log(`   ${SCHEMA_FILE} into the Supabase SQL Editor: https://supabase.com/dashboard/project/rsioktfxukraqlwowcgc/sql/new\n`);
+    console.log(
+      "\nℹ️  If the direct connection port is blocked by firewall, copy-paste the contents of",
+    );
+    console.log(
+      `   ${SCHEMA_FILE} into the Supabase SQL Editor: https://supabase.com/dashboard/project/rsioktfxukraqlwowcgc/sql/new\n`,
+    );
   }
 }
 

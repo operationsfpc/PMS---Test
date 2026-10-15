@@ -29,6 +29,7 @@ const TITLES: Record<string, string> = {
 export function DashboardRoute() {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : "student";
+  const [view] = useState(() => createSupabaseDashboardView(supabase()));
 
   if (role === "student") {
     return <Navigate to="/student" replace />;
@@ -36,8 +37,6 @@ export function DashboardRoute() {
   if (role === "account_executive") {
     return <Navigate to="/ae/overview" replace />;
   }
-
-  const [view] = useState(() => createSupabaseDashboardView(supabase()));
 
   return <DashboardPage view={view} title={TITLES[role] ?? "Overview"} />;
 }

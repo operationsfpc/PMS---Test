@@ -213,7 +213,8 @@ export function createSupabaseStudentDashboardView(
             roleTitle: (offer.role_title as string | null) ?? null,
             driveType: (offer.drive_type as StudentOfferRow["driveType"]) ?? "placement",
             ctcLpa: (offer.ctc_lpa as number | null) === null ? null : num(offer.ctc_lpa),
-            stipendMonthly: (offer.stipend_monthly as number | null) === null ? null : num(offer.stipend_monthly),
+            stipendMonthly:
+              (offer.stipend_monthly as number | null) === null ? null : num(offer.stipend_monthly),
             offerCategory: (offer.offer_category as OfferCategory | null) ?? null,
             declaredAt: offer.declared_at as string,
             source: (offer.source as OfferSource | null) ?? "on_campus",

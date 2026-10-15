@@ -238,11 +238,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                         {note.read ? (
                           <span className="shrink-0 text-xs font-medium text-ink-500">✓ Read</span>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void markRead(note.id)}
-                          >
+                          <Button variant="ghost" size="sm" onClick={() => void markRead(note.id)}>
                             Mark read
                           </Button>
                         )}

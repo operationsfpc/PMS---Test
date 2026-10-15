@@ -250,7 +250,9 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                       beside the document that proves it. */}
                   <td className="align-top px-3 py-3 text-sm min-w-[180px]">
                     {student.semesters.length === 0 ? (
-                      <span className="text-xs text-[#DD4820] font-medium">No semesters declared</span>
+                      <span className="text-xs text-[#DD4820] font-medium">
+                        No semesters declared
+                      </span>
                     ) : (
                       <div className="flex flex-col gap-1.5">
                         {student.semesters.map((semester) => (
@@ -259,12 +261,17 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                             className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
                           >
                             <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium text-ink-700">Semester {semester.semesterNumber}</span>
-                              <strong className="font-semibold text-ink-900">{semester.cgpa}</strong>
+                              <span className="font-medium text-ink-700">
+                                Semester {semester.semesterNumber}
+                              </span>
+                              <strong className="font-semibold text-ink-900">
+                                {semester.cgpa}
+                              </strong>
                             </div>
                             <div className="mt-1 flex items-center justify-between text-[11px] text-ink-500">
                               <span>
-                                {semester.currentArrears} standing, {semester.historyOfArrears} in history
+                                {semester.currentArrears} standing, {semester.historyOfArrears} in
+                                history
                               </span>
                               {semester.marksheetUrl === null ? (
                                 <span className="text-[#DD4820]">No marksheet</span>
@@ -318,7 +325,9 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                                   </a>
                                 )
                               ) : (
-                                <Badge tone={certificate.status === "verified" ? "success" : "neutral"}>
+                                <Badge
+                                  tone={certificate.status === "verified" ? "success" : "neutral"}
+                                >
                                   {certificate.status === "verified" ? "Verified" : "Not accepted"}
                                 </Badge>
                               )}

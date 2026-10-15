@@ -18,21 +18,36 @@ describe("0080: Drive Lifecycle Staff Email Triggers", () => {
     t = await createTestDb();
 
     const cityId = "99999999-9999-9999-9999-999999999999";
-    await t.sql(`insert into cities (id, name, state) values ($1, 'Chennai', 'Tamil Nadu')`, [cityId]);
+    await t.sql(`insert into cities (id, name, state) values ($1, 'Chennai', 'Tamil Nadu')`, [
+      cityId,
+    ]);
     await t.sql(
       `insert into campuses (id, name, city_id, code, address, primary_contact_name, primary_contact_email, primary_contact_phone)
        values ($1, 'Test Campus', $2, 'TC', 'Address', 'Contact', 'c@test.com', '9999999999')`,
       [campusA, cityId],
     );
     await t.sql(`insert into degrees (id, name) values ($1, 'B.Tech')`, [degreeId]);
-    await t.sql(`insert into branches (id, degree_id, name) values ($1, $2, 'CSE')`, [branchId, degreeId]);
+    await t.sql(`insert into branches (id, degree_id, name) values ($1, $2, 'CSE')`, [
+      branchId,
+      degreeId,
+    ]);
 
     // Setup staff accounts
     const staff = [
       { id: aeId, email: "ae@faceprep.in", name: "Alice AE", role: "account_executive" },
       { id: dhId, email: "dh@faceprep.in", name: "David DH", role: "delivery_head" },
-      { id: cpcCentralId, email: "central@faceprep.in", name: "Charlie Central", role: "central_placement_coordinator" },
-      { id: cpcCampusId, email: "campuscpc@faceprep.in", name: "Clara Campus", role: "campus_placement_coordinator" },
+      {
+        id: cpcCentralId,
+        email: "central@faceprep.in",
+        name: "Charlie Central",
+        role: "central_placement_coordinator",
+      },
+      {
+        id: cpcCampusId,
+        email: "campuscpc@faceprep.in",
+        name: "Clara Campus",
+        role: "campus_placement_coordinator",
+      },
     ];
 
     for (const s of staff) {
@@ -44,10 +59,10 @@ describe("0080: Drive Lifecycle Staff Email Triggers", () => {
     }
 
     // Assign campus CPC to campusA
-    await t.sql(
-      `insert into staff_campus_assignments (profile_id, campus_id) values ($1, $2)`,
-      [cpcCampusId, campusA],
-    );
+    await t.sql(`insert into staff_campus_assignments (profile_id, campus_id) values ($1, $2)`, [
+      cpcCampusId,
+      campusA,
+    ]);
 
     // Setup student on campusA
     await t.sql(
@@ -101,7 +116,9 @@ describe("0080: Drive Lifecycle Staff Email Triggers", () => {
       `select recipient_email, subject, status from email_deliveries where recipient_email = 'central@faceprep.in'`,
     );
     expect(centralEmails).toHaveLength(1);
-    expect(centralEmails[0]?.subject).toContain("Drive Approved: Ready for Round Setup & Publishing");
+    expect(centralEmails[0]?.subject).toContain(
+      "Drive Approved: Ready for Round Setup & Publishing",
+    );
   });
 
   it("queues A2 to AE when PIF is rejected with reason", async () => {
@@ -129,17 +146,19 @@ describe("0080: Drive Lifecycle Staff Email Triggers", () => {
       `select recipient_email, subject, status from email_deliveries where recipient_email = 'ae@faceprep.in'`,
     );
     expect(aeEmails).toHaveLength(1);
-    expect(aeEmails[0]?.subject).toContain("Action Required: PIF Revision Requested — Beta Solutions");
+    expect(aeEmails[0]?.subject).toContain(
+      "Action Required: PIF Revision Requested — Beta Solutions",
+    );
   });
 
   it("queues A3 to AE and C1 to targeted Campus CPCs when Drive goes Live", async () => {
     await t.sql(`delete from email_deliveries`);
 
     // Target campusA
-    await t.sql(
-      `insert into drive_target_campuses (drive_id, campus_id) values ($1, $2)`,
-      [driveId, campusA],
-    );
+    await t.sql(`insert into drive_target_campuses (drive_id, campus_id) values ($1, $2)`, [
+      driveId,
+      campusA,
+    ]);
 
     // Complete all mandatory live fields
     await t.sql(

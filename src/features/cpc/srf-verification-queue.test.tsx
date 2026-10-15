@@ -41,7 +41,13 @@ const row = {
       url: "https://signed/aws",
       status: "pending" as const,
     },
-    { id: "c2", name: "NPTEL Data Structures", fileName: null, url: null, status: "pending" as const },
+    {
+      id: "c2",
+      name: "NPTEL Data Structures",
+      fileName: null,
+      url: null,
+      status: "pending" as const,
+    },
   ],
   resumes: [
     {

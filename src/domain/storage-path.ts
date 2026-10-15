@@ -81,12 +81,11 @@ export function filenameToCertificateName(filename: string): string {
 export function sanitizeStorageFileName(filename: string): string {
   if (!filename) return "file";
   return filename
-    .replace(/[\[{]/g, "(")
+    .replace(/[[{]/g, "(")
     .replace(/[\]}]/g, ")")
     .normalize("NFKD")
     .replace(/[^\x20-\x7E]/g, "")
-    .replace(/["%\\^`|<>\/]/g, "_")
+    .replace(/["%\\^`|<>/]/g, "_")
     .replace(/\s+/g, " ")
     .trim();
 }
-

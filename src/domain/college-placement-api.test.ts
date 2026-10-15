@@ -1,19 +1,24 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import {
   aggregateCollegePlacements,
   createPlacementOffer,
   deletePlacementOffer,
-  updatePlacementOffer,
-  updateStudentParticipationStatus,
   type RawApplicationRow,
   type RawAttendanceRow,
   type RawCampusRow,
-  type RawDriveRow,
   type RawOfferRow,
   type RawRoundResultRow,
-  type RawRoundRow,
   type RawStudentRow,
+  updatePlacementOffer,
+  updateStudentParticipationStatus,
 } from "./college-placement-api";
+
+/** A missing row must fail with what was looked for, not a TypeError on undefined. */
+function mustFind<T>(found: T | null | undefined, what: string): T {
+  if (found === null || found === undefined) throw new Error(`Missing ${what}`);
+  return found;
+}
 
 describe("college placement data aggregation API (aggregateCollegePlacements)", () => {
   const campuses: RawCampusRow[] = [
@@ -143,7 +148,10 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     // Overall rate: 2 / 4 = 50%
     expect(report.overallTotals.overallPlacementRatePct).toBe(50);
 
-    const kamaraj = report.colleges.find((c) => c.campusId === "c-1")!;
+    const kamaraj = mustFind(
+      report.colleges.find((c) => c.campusId === "c-1"),
+      "Kamaraj College summary",
+    );
     expect(kamaraj.campusName).toBe("Kamaraj College");
     expect(kamaraj.totalStudents).toBe(3);
     expect(kamaraj.eligibleStudents).toBe(2); // excluding 1 opted_out
@@ -163,7 +171,10 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     expect(kamaraj.medianCtcLpa).toBe(7.75);
 
     // SDNB Vaishnav
-    const vaishnav = report.colleges.find((c) => c.campusId === "c-2")!;
+    const vaishnav = mustFind(
+      report.colleges.find((c) => c.campusId === "c-2"),
+      "Vaishnav College summary",
+    );
     expect(vaishnav.totalStudents).toBe(2);
     expect(vaishnav.eligibleStudents).toBe(2);
     expect(vaishnav.placedStudents).toBe(0); // on_campus placed is 0
@@ -171,7 +182,10 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     expect(vaishnav.unplacedStudents).toBe(2);
 
     // Empty college
-    const empty = report.colleges.find((c) => c.campusId === "c-empty")!;
+    const empty = mustFind(
+      report.colleges.find((c) => c.campusId === "c-empty"),
+      "New College summary",
+    );
     expect(empty.totalStudents).toBe(0);
     expect(empty.eligibleStudents).toBe(0);
     expect(empty.placedStudents).toBe(0);
@@ -183,18 +197,24 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
   it("filters by campusId when specified", () => {
     const report = aggregateCollegePlacements(campuses, students, offers, { campusId: "c-1" });
     expect(report.colleges.length).toBe(1);
-    expect(report.colleges[0]!.campusName).toBe("Kamaraj College");
+    expect(mustFind(report.colleges[0], "filtered college").campusName).toBe("Kamaraj College");
   });
 
   it("includes detailed student roster when requested", () => {
     const report = aggregateCollegePlacements(campuses, students, offers, {
       includeStudentRoster: true,
     });
-    const kamaraj = report.colleges.find((c) => c.campusId === "c-1")!;
-    expect(kamaraj.placedStudentsRoster).toBeDefined();
-    expect(kamaraj.placedStudentsRoster?.length).toBe(3); // 2 for s-1, 1 for s-2
+    const kamaraj = mustFind(
+      report.colleges.find((c) => c.campusId === "c-1"),
+      "Kamaraj College summary",
+    );
+    const roster = mustFind(kamaraj.placedStudentsRoster, "placed students roster");
+    expect(roster.length).toBe(3); // 2 for s-1, 1 for s-2
 
-    const zohoOffer = kamaraj.placedStudentsRoster?.find((r) => r.companyName === "Zoho Corporation")!;
+    const zohoOffer = mustFind(
+      roster.find((r) => r.companyName === "Zoho Corporation"),
+      "Zoho roster row",
+    );
     expect(zohoOffer.fullName).toBe("Keerthana S");
     expect(zohoOffer.ctcLpa).toBe(9);
     expect(zohoOffer.degreeName).toBe("B.E.");
@@ -236,19 +256,27 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     expect(report.overallTotals.totalRejectedRounds).toBe(2); // app-2, app-3 rejected
 
     // SDNB Vaishnav College (s-4)
-    const vaishnav = report.colleges.find((c) => c.campusId === "c-2")!;
+    const vaishnav = mustFind(
+      report.colleges.find((c) => c.campusId === "c-2"),
+      "Vaishnav College summary",
+    );
     expect(vaishnav.funnel.missedRounds).toBe(1);
     expect(vaishnav.funnel.rejectedRounds).toBe(1);
     expect(vaishnav.missedIncidents.length).toBe(1);
-    expect(vaishnav.missedIncidents[0]!.fullName).toBe("Radhika R");
-    expect(vaishnav.missedIncidents[0]!.reason).toBe("missed_attendance");
+    const vaishnavMissed = mustFind(vaishnav.missedIncidents[0], "Vaishnav missed incident");
+    expect(vaishnavMissed.fullName).toBe("Radhika R");
+    expect(vaishnavMissed.reason).toBe("missed_attendance");
 
     // Kamaraj College (s-1, s-2)
-    const kamaraj = report.colleges.find((c) => c.campusId === "c-1")!;
+    const kamaraj = mustFind(
+      report.colleges.find((c) => c.campusId === "c-1"),
+      "Kamaraj College summary",
+    );
     expect(kamaraj.funnel.missedRounds).toBe(0);
     expect(kamaraj.funnel.rejectedRounds).toBe(1); // s-2 was rejected in round
     expect(kamaraj.rejectedIncidents.length).toBe(1);
-    expect(kamaraj.rejectedIncidents[0]!.fullName).toBe("Arun Kumar");
+    const kamarajRejection = mustFind(kamaraj.rejectedIncidents[0], "Kamaraj rejected incident");
+    expect(kamarajRejection.fullName).toBe("Arun Kumar");
 
     // 2. Check "what they get" (Package tiers)
     // Kamaraj has offers: Zoho (9 LPA -> Super Dream), Freshworks (6.5 LPA -> Dream), TCS (4 LPA -> Regular)
@@ -263,23 +291,31 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     expect(report.overallTotals.packageTiers.regularCount).toBe(1);
 
     // 3. Check "most which company" (Top recruiters)
-    const topRecruiterOverall = report.overallTotals.topCompaniesOverall[0]!;
-    expect(report.overallTotals.topCompaniesOverall.length).toBe(4); // Zoho, TCS, Freshworks, Infosys
+    const { topCompaniesOverall } = report.overallTotals;
+    expect(topCompaniesOverall.length).toBe(4); // Zoho, TCS, Freshworks, Infosys
+    const topRecruiterOverall = mustFind(topCompaniesOverall[0], "top recruiter");
     expect(topRecruiterOverall.offersCount).toBe(1);
 
-    const zohoInfo = report.overallTotals.topCompaniesOverall.find(
-      (c) => c.companyName === "Zoho Corporation",
-    )!;
+    const zohoInfo = mustFind(
+      topCompaniesOverall.find((c) => c.companyName === "Zoho Corporation"),
+      "Zoho recruiter stats",
+    );
     expect(zohoInfo.maxCtcLpa).toBe(9);
     expect(zohoInfo.minCtcLpa).toBe(9);
     expect(zohoInfo.categoryBreakdown.superDream).toBe(1);
 
     // 4. Check detailed rosters ("who all that data")
+    const { placedRoster, missedRoster, rejectedRoster, unplacedRoster, optedOutRoster } =
+      report.overallTotals;
+
     // Placed roster
-    expect(report.overallTotals.placedRoster.length).toBe(4);
-    const keerthanaOffer = report.overallTotals.placedRoster.find(
-      (p) => p.fullName === "Keerthana S" && p.companyName === "Zoho Corporation",
-    )!;
+    expect(placedRoster.length).toBe(4);
+    const keerthanaOffer = mustFind(
+      placedRoster.find(
+        (p) => p.fullName === "Keerthana S" && p.companyName === "Zoho Corporation",
+      ),
+      "Keerthana placed roster row",
+    );
     expect(keerthanaOffer.ctcLpa).toBe(9);
     expect(keerthanaOffer.tier).toBe("super_dream");
     expect(keerthanaOffer.campusName).toBe("Kamaraj College");
@@ -287,26 +323,28 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     expect(keerthanaOffer.branchName).toBe("CSE");
 
     // Missed roster
-    expect(report.overallTotals.missedRoster.length).toBe(1);
-    expect(report.overallTotals.missedRoster[0]!.fullName).toBe("Radhika R");
-    expect(report.overallTotals.missedRoster[0]!.status).toBe("absent");
+    expect(missedRoster.length).toBe(1);
+    const radhikaMissed = mustFind(missedRoster[0], "Radhika missed roster row");
+    expect(radhikaMissed.fullName).toBe("Radhika R");
+    expect(radhikaMissed.status).toBe("absent");
 
     // Rejected roster
-    expect(report.overallTotals.rejectedRoster.length).toBe(2);
-    const arunRejection = report.overallTotals.rejectedRoster.find(
-      (r) => r.fullName === "Arun Kumar",
-    )!;
+    expect(rejectedRoster.length).toBe(2);
+    const arunRejection = mustFind(
+      rejectedRoster.find((r) => r.fullName === "Arun Kumar"),
+      "Arun rejected roster row",
+    );
     expect(arunRejection.result).toBe("rejected");
 
     // Unplaced roster
     // s-5 (Meena K) is active, has 0 offers -> unplaced
-    expect(report.overallTotals.unplacedRoster.length).toBe(1);
-    expect(report.overallTotals.unplacedRoster[0]!.fullName).toBe("Meena K");
+    expect(unplacedRoster.length).toBe(1);
+    expect(mustFind(unplacedRoster[0], "unplaced roster row").fullName).toBe("Meena K");
 
     // Opted out roster
     // s-3 (Pooja M) is opted_out
-    expect(report.overallTotals.optedOutRoster.length).toBe(1);
-    expect(report.overallTotals.optedOutRoster[0]!.fullName).toBe("Pooja M");
+    expect(optedOutRoster.length).toBe(1);
+    expect(mustFind(optedOutRoster[0], "opted out roster row").fullName).toBe("Pooja M");
   });
 
   it("updates placement offers and student participation status cleanly", async () => {
@@ -315,8 +353,8 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
       from: (table: string) => {
         if (table === "offers") {
           return {
-            update: (patch: any) => ({
-              eq: (col: string, val: string) => ({
+            update: (patch: Record<string, unknown>) => ({
+              eq: (_col: string, val: string) => ({
                 select: () => ({
                   single: async () => ({
                     data: { id: val, ...patch },
@@ -325,7 +363,7 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
                 }),
               }),
             }),
-            insert: (data: any) => ({
+            insert: (data: Record<string, unknown>) => ({
               select: () => ({
                 single: async () => ({
                   data: { id: "new-offer-123", ...data },
@@ -334,14 +372,14 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
               }),
             }),
             delete: () => ({
-              eq: (col: string, val: string) => Promise.resolve({ error: null }),
+              eq: (_col: string, _val: string) => Promise.resolve({ error: null }),
             }),
           };
         }
         if (table === "students") {
           return {
-            update: (patch: any) => ({
-              eq: (col: string, val: string) => ({
+            update: (patch: Record<string, unknown>) => ({
+              eq: (_col: string, val: string) => ({
                 select: () => ({
                   single: async () => ({
                     data: { id: val, ...patch },
@@ -354,7 +392,7 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
         }
         return {};
       },
-    } as any;
+    } as unknown as SupabaseClient;
 
     // Test offer update
     const updateRes = await updatePlacementOffer(mockClient, "o-1", {
@@ -363,8 +401,9 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
       companyName: "Zoho Corporation",
     });
     expect(updateRes.success).toBe(true);
-    expect(updateRes.data.ctc_lpa).toBe(12);
-    expect(updateRes.data.role_title).toBe("Senior MTS");
+    const updatedOffer = mustFind(updateRes.data, "updated offer row");
+    expect(updatedOffer.ctc_lpa).toBe(12);
+    expect(updatedOffer.role_title).toBe("Senior MTS");
 
     // Test create offer
     const createRes = await createPlacementOffer(mockClient, {
@@ -377,8 +416,9 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
       source: "on_campus",
     });
     expect(createRes.success).toBe(true);
-    expect(createRes.data.company_name).toBe("Google");
-    expect(createRes.data.ctc_lpa).toBe(24);
+    const createdOffer = mustFind(createRes.data, "created offer row");
+    expect(createdOffer.company_name).toBe("Google");
+    expect(createdOffer.ctc_lpa).toBe(24);
 
     // Test delete offer
     const delRes = await deletePlacementOffer(mockClient, "o-old");
@@ -387,6 +427,7 @@ describe("college placement data aggregation API (aggregateCollegePlacements)", 
     // Test participation status update
     const statusRes = await updateStudentParticipationStatus(mockClient, "s-2", "opted_out");
     expect(statusRes.success).toBe(true);
-    expect(statusRes.data.participation_status).toBe("opted_out");
+    const updatedStudent = mustFind(statusRes.data, "updated student row");
+    expect(updatedStudent.participation_status).toBe("opted_out");
   });
 });

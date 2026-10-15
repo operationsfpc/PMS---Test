@@ -720,25 +720,22 @@ describe("Cambridge and Other school boards grade vs percentage validation", () 
   });
 
   describe("mobile number sanitization", () => {
-    it.each([
-      "+91 9876543210",
-      "+91-9876543210",
-      "98765 43210",
-      "09876543210",
-      "919876543210",
-    ])("sanitizes mobile '%s' into 10 digits", (inputMobile) => {
-      const parsed = srfSchema.safeParse({
-        ...valid,
-        mobile: inputMobile,
-        alternateContact: inputMobile,
-        whatsapp: inputMobile,
-      });
-      expect(parsed.success).toBe(true);
-      if (parsed.success) {
-        expect(parsed.data.mobile).toBe("9876543210");
-        expect(parsed.data.alternateContact).toBe("9876543210");
-        expect(parsed.data.whatsapp).toBe("9876543210");
-      }
-    });
+    it.each(["+91 9876543210", "+91-9876543210", "98765 43210", "09876543210", "919876543210"])(
+      "sanitizes mobile '%s' into 10 digits",
+      (inputMobile) => {
+        const parsed = srfSchema.safeParse({
+          ...valid,
+          mobile: inputMobile,
+          alternateContact: inputMobile,
+          whatsapp: inputMobile,
+        });
+        expect(parsed.success).toBe(true);
+        if (parsed.success) {
+          expect(parsed.data.mobile).toBe("9876543210");
+          expect(parsed.data.alternateContact).toBe("9876543210");
+          expect(parsed.data.whatsapp).toBe("9876543210");
+        }
+      },
+    );
   });
 });

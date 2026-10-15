@@ -168,7 +168,9 @@ export function StudentRecordPage({
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="shrink-0 text-ink-500">Mobile</dt>
-                <dd className="truncate text-right text-ink-900">{record.mobile ?? "Not recorded"}</dd>
+                <dd className="truncate text-right text-ink-900">
+                  {record.mobile ?? "Not recorded"}
+                </dd>
               </div>
             </dl>
           </Card>

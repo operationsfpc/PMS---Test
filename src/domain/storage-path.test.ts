@@ -118,4 +118,3 @@ describe("sanitizeStorageFileName", () => {
     expect(sanitizeStorageFileName("")).toBe("file");
   });
 });
-

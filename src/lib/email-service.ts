@@ -1,7 +1,4 @@
-import {
-  resolveRecipient,
-  toEmailBatches,
-} from "@domain/email-delivery";
+import { resolveRecipient, toEmailBatches } from "@domain/email-delivery";
 
 export interface SendEmailPayload {
   readonly to: string;
@@ -55,7 +52,6 @@ export class ResendEmailProvider implements EmailProvider {
     this.fetchFn = options.fetchFn ?? fetch;
   }
 
-
   async send(payload: SendEmailPayload): Promise<SendEmailResult> {
     const resolved = resolveRecipient(payload.to, this.overrideRecipient);
 
@@ -103,7 +99,7 @@ export class ResendEmailProvider implements EmailProvider {
         id: data?.id,
         recipient: resolved.to,
       };
-    } catch (err: any) {
+    } catch (err) {
       return {
         success: false,
         error: err instanceof Error ? err.message : String(err),
@@ -168,8 +164,7 @@ export class ResendEmailProvider implements EmailProvider {
           }
         } else {
           const resData = Array.isArray(data?.data) ? data.data : [];
-          for (let i = 0; i < formattedBatch.length; i++) {
-            const item = formattedBatch[i]!;
+          for (const [i, item] of formattedBatch.entries()) {
             const itemRes = resData[i];
             results.push({
               success: true,
@@ -178,7 +173,7 @@ export class ResendEmailProvider implements EmailProvider {
             });
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         for (const item of formattedBatch) {
           results.push({
@@ -199,23 +194,19 @@ export class ResendEmailProvider implements EmailProvider {
  * Defaults all emails to operationsfpc@faceprep.in for development safety.
  */
 export function createEmailService(options?: ResendEmailProviderOptions): EmailProvider {
-  const env = typeof import.meta !== "undefined" ? (import.meta.env as unknown as Record<string, string | undefined>) : undefined;
+  const env =
+    typeof import.meta !== "undefined"
+      ? (import.meta.env as unknown as Record<string, string | undefined>)
+      : undefined;
 
-  const apiKey =
-    options?.apiKey ??
-    env?.VITE_RESEND_API_KEY ??
-    "";
+  const apiKey = options?.apiKey ?? env?.VITE_RESEND_API_KEY ?? "";
 
   const overrideRecipient =
     options?.overrideRecipient !== undefined
       ? options.overrideRecipient
-      : (env?.VITE_EMAIL_OVERRIDE_RECIPIENT ??
-        "operationsfpc@faceprep.in");
+      : (env?.VITE_EMAIL_OVERRIDE_RECIPIENT ?? "operationsfpc@faceprep.in");
 
-  const from =
-    options?.from ??
-    env?.VITE_RESEND_FROM_EMAIL ??
-    DEFAULT_RESEND_FROM;
+  const from = options?.from ?? env?.VITE_RESEND_FROM_EMAIL ?? DEFAULT_RESEND_FROM;
 
   return new ResendEmailProvider({
     apiKey,
@@ -224,4 +215,3 @@ export function createEmailService(options?: ResendEmailProviderOptions): EmailP
     fetchFn: options?.fetchFn,
   });
 }
-

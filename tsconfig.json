@@ -28,17 +28,6 @@
       "@components/*": ["./src/components/*"]
     }
   },
-  "include": [
-    "src",
-    "e2e",
-    "vitest.config.ts",
-    "vite.config.ts",
-    "vitest.setup.ts",
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "supabase/functions"
-  ]
+  "include": ["src", "e2e", "vitest.config.ts", "vite.config.ts", "vitest.setup.ts"],
+  "exclude": ["node_modules", "dist", "supabase/functions"]
 }
-

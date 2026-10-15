@@ -850,7 +850,10 @@ describe("dropdown synchronization and label validation", () => {
     await user.type(semResult, "85");
 
     // Switch scale to percentage - 85 is valid
-    await user.selectOptions(screen.getByLabelText(/how does your college report marks/i), "percentage");
+    await user.selectOptions(
+      screen.getByLabelText(/how does your college report marks/i),
+      "percentage",
+    );
     expect(screen.queryByText(/10-point scale/i)).toBeNull();
 
     // Switch scale back to CGPA - 85 is immediately invalid and flagged
@@ -859,4 +862,3 @@ describe("dropdown synchronization and label validation", () => {
     expect(errorsFound.length).toBeGreaterThan(0);
   });
 });
-

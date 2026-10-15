@@ -1,6 +1,6 @@
 import { completionReadiness } from "@domain/drive-completion";
 import type { SlotAssignment } from "@domain/meeting-slots";
-import { type RoundFacts } from "@domain/round-editing";
+import type { RoundFacts } from "@domain/round-editing";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import { applicationProgress } from "@domain/student-progress";
 import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
@@ -83,8 +83,7 @@ export function createSupabaseResultsView(
     /** F4 (UAT 2026-08-19): the round's details, edited after creation. */
     async updateRound(roundId, details) {
       const isVirtual = details.mode === "virtual";
-      const isPhysical =
-        details.mode === "on_campus" || details.mode === "physical_outside_campus";
+      const isPhysical = details.mode === "on_campus" || details.mode === "physical_outside_campus";
 
       const { error } = await client
         .from("drive_rounds")

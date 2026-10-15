@@ -12,13 +12,7 @@ export type EmailDeliveryStatus =
   | "complained"
   | "failed";
 
-export type DeliveryEvent =
-  | "sent"
-  | "delivered"
-  | "delayed"
-  | "bounced"
-  | "complained"
-  | "failed";
+export type DeliveryEvent = "sent" | "delivered" | "delayed" | "bounced" | "complained" | "failed";
 
 /**
  * State machine governing transitions between email delivery statuses.
@@ -52,10 +46,7 @@ export function applyDeliveryEvent(
  * Splits an array of items into batches adhering to provider batch limits.
  * Resend enforces a limit of 100 emails per batch.
  */
-export function toEmailBatches<T>(
-  items: readonly T[],
-  batchSize = 100,
-): readonly (readonly T[])[] {
+export function toEmailBatches<T>(items: readonly T[], batchSize = 100): readonly (readonly T[])[] {
   const size = batchSize > 0 ? Math.floor(batchSize) : 100;
   if (items.length === 0) return [];
 
@@ -70,10 +61,7 @@ export function toEmailBatches<T>(
  * Safety rail check for non-production environments.
  * When an allowlist is configured, dispatches are blocked for any recipient not on the list.
  */
-export function isRecipientAllowed(
-  email: string,
-  allowlist?: readonly string[] | null,
-): boolean {
+export function isRecipientAllowed(email: string, allowlist?: readonly string[] | null): boolean {
   if (!allowlist || allowlist.length === 0) {
     return true;
   }
@@ -113,7 +101,6 @@ export function resolveRecipient(
   };
 }
 
-
 export function formatRoleName(role?: string | null | undefined): string {
   if (!role) return "";
   const roleMap: Record<string, string> = {
@@ -130,7 +117,13 @@ export function formatRoleName(role?: string | null | undefined): string {
     ceo: "CEO",
   };
   const normalized = role.trim().toLowerCase();
-  return roleMap[normalized] || normalized.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  return (
+    roleMap[normalized] ||
+    normalized
+      .split("_")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ")
+  );
 }
 
 export function resolveDisplayName(
@@ -202,9 +195,7 @@ export function composeNotificationEmail(input: NotificationEmailInput): Compose
   const subject = input.subject?.trim() || input.title;
   const buttonText = input.actionButtonText?.trim() || "View on PMS Portal";
 
-  const actionButton = input.actionUrl
-    ? `\n\n${buttonText}: ${input.actionUrl}`
-    : "";
+  const actionButton = input.actionUrl ? `\n\n${buttonText}: ${input.actionUrl}` : "";
 
   const plainBody = input.body.replace(/\*\*(.*?)\*\*/g, "$1");
   const text = `Dear ${name},\n\n${plainBody}${actionButton}\n\nWarm regards,\nPlacement Cell,\nFACE Prep Campus\n\nNeed help? Contact hello@faceprep.in`;
@@ -249,64 +240,136 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
   switch (normalized) {
     // S1: Student Welcome & Registration
     case "welcome":
-      return { templateCode: "S1", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S1",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S2: New Drive Announced
     case "drive_published":
-      return { templateCode: "S2", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S2",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S3: Shortlisted Candidates
     case "shortlisted":
-      return { templateCode: "S3", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S3",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S4: Round Schedule
     case "round_scheduled":
-      return { templateCode: "S4", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S4",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S5: Interview Slot
     case "meeting_link":
-      return { templateCode: "S5", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S5",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S6: Round Cleared
     case "round_cleared":
-      return { templateCode: "S6", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S6",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S7: Round Outcome / Not Selected
     case "round_not_selected":
-      return { templateCode: "S7", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S7",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S8: Offer Declared
     case "offer":
-      return { templateCode: "S8", targetRole: "student", ccRoles: ["campus_placement_coordinator", "central_placement_coordinator"] };
+      return {
+        templateCode: "S8",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator", "central_placement_coordinator"],
+      };
     // S9: Attendance Notice
     case "absent":
-      return { templateCode: "S9", targetRole: "student", ccRoles: ["campus_placement_coordinator", "delivery_head"] };
+      return {
+        templateCode: "S9",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator", "delivery_head"],
+      };
     // S10: Registration Feedback
     case "srf_rejected":
-      return { templateCode: "S10", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S10",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S11: Application Confirmed
     case "application_confirmed":
     case "application_submitted":
-      return { templateCode: "S11", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S11",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S12: Deadline Reminder
     case "drive_deadline_reminder":
-      return { templateCode: "S12", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S12",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S13: Interview Day Reminder
     case "interview_day_reminder":
-      return { templateCode: "S13", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S13",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S14: Profile Approved
     case "srf_approved":
-      return { templateCode: "S14", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S14",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // S15: Offer Decision Recorded
     case "offer_decision_recorded":
     case "offer_accepted":
     case "offer_declined":
-      return { templateCode: "S15", targetRole: "student", ccRoles: ["campus_placement_coordinator", "central_placement_coordinator"] };
+      return {
+        templateCode: "S15",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator", "central_placement_coordinator"],
+      };
     // S16: Opt-Out Confirmed
     case "opt_out_confirmed":
-      return { templateCode: "S16", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "S16",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
 
     // C1: Campus Placement Coordinator — Campus Drive Alert
     case "campus_drive_alert":
     case "cpc_drive_alert":
-      return { templateCode: "C1", targetRole: "campus_placement_coordinator", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "C1",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: ["central_placement_coordinator"],
+      };
     // C2: Campus Placement Coordinator — Campus Shortlist Ready
     case "campus_shortlist_ready":
     case "cpc_shortlist_ready":
-      return { templateCode: "C2", targetRole: "campus_placement_coordinator", ccRoles: ["delivery_head"] };
+      return {
+        templateCode: "C2",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: ["delivery_head"],
+      };
     // C3: Campus Placement Coordinator — Verification Queue Digest
     case "verification_queue_digest":
     case "verification_digest":
@@ -320,41 +383,73 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
     // C5: Campus Placement Coordinator — Attendance Pending Submission
     case "attendance_pending":
     case "cpc_attendance_pending":
-      return { templateCode: "C5", targetRole: "campus_placement_coordinator", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "C5",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: ["central_placement_coordinator"],
+      };
     // C6: Campus Placement Coordinator — Campus Student Placed
     case "campus_student_placed":
     case "cpc_student_placed":
-      return { templateCode: "C6", targetRole: "campus_placement_coordinator", ccRoles: ["delivery_head"] };
+      return {
+        templateCode: "C6",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: ["delivery_head"],
+      };
     // C7: Campus Placement Coordinator — Off-Campus Offer Proof
     case "off_campus_offer_proof":
     case "cpc_off_campus_verification":
-      return { templateCode: "C7", targetRole: "campus_placement_coordinator", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "C7",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: ["central_placement_coordinator"],
+      };
 
     // CP1: Central Placement Coordinator — Drive Approved / Ready to Publish
     case "drive_approved":
     case "central_drive_approved":
     case "cp_drive_publish_ready":
-      return { templateCode: "CP1", targetRole: "central_placement_coordinator", ccRoles: ["account_executive"] };
+      return {
+        templateCode: "CP1",
+        targetRole: "central_placement_coordinator",
+        ccRoles: ["account_executive"],
+      };
     // CP2: Central Placement Coordinator — Applications Closed
     case "applications_closed":
     case "central_applications_closed":
     case "cp_applications_closed":
-      return { templateCode: "CP2", targetRole: "central_placement_coordinator", ccRoles: ["account_executive"] };
+      return {
+        templateCode: "CP2",
+        targetRole: "central_placement_coordinator",
+        ccRoles: ["account_executive"],
+      };
     // CP3: Central Placement Coordinator — Attendance Finalized
     case "round_attendance_finalized":
     case "attendance_finalized":
     case "central_attendance_finalized":
-      return { templateCode: "CP3", targetRole: "central_placement_coordinator", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "CP3",
+        targetRole: "central_placement_coordinator",
+        ccRoles: ["campus_placement_coordinator"],
+      };
     // CP4: Central Placement Coordinator — All Rounds Completed
     case "all_rounds_completed":
     case "central_rounds_completed":
     case "cp_offers_ready":
-      return { templateCode: "CP4", targetRole: "central_placement_coordinator", ccRoles: ["delivery_head", "account_executive", "campus_placement_coordinator"] };
+      return {
+        templateCode: "CP4",
+        targetRole: "central_placement_coordinator",
+        ccRoles: ["delivery_head", "account_executive", "campus_placement_coordinator"],
+      };
 
     // A1: Account Executive — PIF Approved
     case "pif_approved":
     case "ae_pif_approved":
-      return { templateCode: "A1", targetRole: "account_executive", ccRoles: ["delivery_head", "central_placement_coordinator"] };
+      return {
+        templateCode: "A1",
+        targetRole: "account_executive",
+        ccRoles: ["delivery_head", "central_placement_coordinator"],
+      };
     // A2: Account Executive — PIF Revision Requested
     case "pif_revision_requested":
     case "ae_pif_revision":
@@ -379,7 +474,11 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
     case "policy_override_requested":
     case "policy_override":
     case "dh_policy_override":
-      return { templateCode: "DH2", targetRole: "delivery_head", ccRoles: ["central_placement_coordinator", "account_executive"] };
+      return {
+        templateCode: "DH2",
+        targetRole: "delivery_head",
+        ccRoles: ["central_placement_coordinator", "account_executive"],
+      };
     // DH3: Delivery Head — Weekly Operations Digest
     case "weekly_operations_digest":
     case "dh_weekly_digest":
@@ -393,24 +492,44 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
     // L2: Leadership — Super Dream Milestone
     case "super_dream_milestone":
     case "leadership_milestone":
-      return { templateCode: "L2", targetRole: "campus_manager", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "L2",
+        targetRole: "campus_manager",
+        ccRoles: ["central_placement_coordinator"],
+      };
 
     // R1: Recruiter — Candidate Shortlist
     case "recruiter_shortlist":
     case "candidate_shortlist_pack":
-      return { templateCode: "R1", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "R1",
+        targetRole: "key_account_manager",
+        ccRoles: ["central_placement_coordinator"],
+      };
     // R2: Recruiter — Drive Sourcing Kickoff
     case "recruiter_drive_live":
     case "drive_sourcing_kickoff":
-      return { templateCode: "R2", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "R2",
+        targetRole: "key_account_manager",
+        ccRoles: ["central_placement_coordinator"],
+      };
     // R3: Recruiter — Interview Schedule & Roster
     case "recruiter_interview_schedule":
     case "interview_roster":
-      return { templateCode: "R3", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "R3",
+        targetRole: "key_account_manager",
+        ccRoles: ["central_placement_coordinator"],
+      };
     // R4: Recruiter — Drive Concluded Summary
     case "recruiter_drive_concluded":
     case "drive_concluded_summary":
-      return { templateCode: "R4", targetRole: "key_account_manager", ccRoles: ["central_placement_coordinator"] };
+      return {
+        templateCode: "R4",
+        targetRole: "key_account_manager",
+        ccRoles: ["central_placement_coordinator"],
+      };
 
     // AD2: Administrator — Roster Import Complete
     case "roster_import_complete":
@@ -422,7 +541,11 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
       return { templateCode: "AD3", targetRole: "admin", ccRoles: [] };
 
     default:
-      return { templateCode: "GENERIC", targetRole: "student", ccRoles: ["campus_placement_coordinator"] };
+      return {
+        templateCode: "GENERIC",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
   }
 }
 
@@ -848,8 +971,6 @@ export function composeStudentNotificationEmail(
     ccRoles: routing.ccRoles,
   };
 }
-
-
 
 export interface StaffInviteEmailInput {
   readonly email: string;

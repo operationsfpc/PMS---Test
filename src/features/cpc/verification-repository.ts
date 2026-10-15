@@ -5,7 +5,12 @@ import {
   filenameToCertificateName,
   objectKeyIn,
 } from "@domain/storage-path";
-import { ROLE_CATEGORIES, type RoleCategory, type SrfStatus, type VerificationStatus } from "@domain/types";
+import {
+  ROLE_CATEGORIES,
+  type RoleCategory,
+  type SrfStatus,
+  type VerificationStatus,
+} from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class VerificationError extends Error {}
@@ -330,16 +335,22 @@ async function signDocuments(
   });
 }
 
+/** A stored document row, before its path is signed into a URL. */
+interface ResumeSourceRow {
+  readonly kind: string;
+  readonly role_category?: string | null;
+  readonly storage_path: string;
+  readonly uploaded_at?: string | null;
+}
+
 async function signResumes(
   client: SupabaseClient,
-  rows: Array<{
-    kind: string;
-    role_category?: string | null;
-    storage_path: string;
-    uploaded_at?: string | null;
-  }>,
+  rows: readonly ResumeSourceRow[],
 ): Promise<readonly DeclaredResume[]> {
-  const resumeRows = rows.filter((r) => r.kind === "resume" && r.role_category);
+  const resumeRows = rows.filter(
+    (r): r is ResumeSourceRow & { role_category: string } =>
+      r.kind === "resume" && typeof r.role_category === "string" && r.role_category !== "",
+  );
 
   // Deduplicate by role_category, keeping the latest document for each category
   const latestByCategory = new Map<
@@ -348,7 +359,7 @@ async function signResumes(
   >();
 
   for (const row of resumeRows) {
-    const category = row.role_category!;
+    const category = row.role_category;
     const existing = latestByCategory.get(category);
     if (!existing) {
       latestByCategory.set(category, { ...row, role_category: category });
@@ -381,8 +392,7 @@ async function signResumes(
   return resumes.map((r, index) => {
     const fileName = extractOriginalFilename(r.storage_path);
     const categoryLabel =
-      ROLE_CATEGORY_LABELS[r.role_category as RoleCategory] ??
-      r.role_category.replaceAll("_", " ");
+      ROLE_CATEGORY_LABELS[r.role_category as RoleCategory] ?? r.role_category.replaceAll("_", " ");
     return {
       roleCategory: r.role_category as RoleCategory,
       label: categoryLabel,

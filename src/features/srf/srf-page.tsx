@@ -1,12 +1,12 @@
 import {
   CheckboxField,
-  controlClass,
   Field,
   FileField,
-  FormSection as Section,
   getControlClass,
+  FormSection as Section,
   TextField,
 } from "@components/form";
+import { Button } from "@components/ui";
 import { MAX_SEMESTERS } from "@domain/academics";
 import { boardLabel, INDIAN_STATES, SCHOOL_BOARDS, type SchoolLevel } from "@domain/boards";
 import { marksScaleQuestion, UG_COLLEGE_MARKS_SCALE_QUESTION } from "@domain/marks";
@@ -19,7 +19,6 @@ import { srfCompletion, srfSectionProgress } from "@domain/srf-progress";
 import { filenameToCertificateName } from "@domain/storage-path";
 import type { SrfStatus } from "@domain/types";
 import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
-import { Button } from "@components/ui";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useState } from "react";
@@ -75,8 +74,9 @@ const ScaleSelect = forwardRef<
     <div>
       <label
         htmlFor={id}
-        className={`mb-1.5 block text-sm transition-colors ${hasError ? "font-semibold text-danger-700" : "font-medium text-ink-700"
-          }`}
+        className={`mb-1.5 block text-sm transition-colors ${
+          hasError ? "font-semibold text-danger-700" : "font-medium text-ink-700"
+        }`}
       >
         <span>{label}</span>
         {hasError && (
@@ -130,8 +130,9 @@ const BoardSelect = forwardRef<
     <div>
       <label
         htmlFor={id}
-        className={`mb-1.5 block text-sm transition-colors ${hasError ? "font-semibold text-danger-700" : "font-medium text-ink-700"
-          }`}
+        className={`mb-1.5 block text-sm transition-colors ${
+          hasError ? "font-semibold text-danger-700" : "font-medium text-ink-700"
+        }`}
       >
         <span>{label}</span>
         {required && (
@@ -275,7 +276,7 @@ export function SrfPage({
       SRF_DEFAULTS as unknown as Record<string, unknown>,
       profile === null || profile === undefined ? null : { ...profile },
       draft ??
-      (status === "srf_rejected" && profile != null ? srfValuesFromSubmitted(profile) : null),
+        (status === "srf_rejected" && profile != null ? srfValuesFromSubmitted(profile) : null),
     ) as unknown as SrfFormValues,
     mode: "onTouched",
   });
@@ -547,19 +548,21 @@ export function SrfPage({
 
   const hasProfiles = Boolean(
     (watch("linkedin") ?? "").trim() !== "" ||
-    (watch("github") ?? "").trim() !== "" ||
-    (watch("leetcode") ?? "").trim() !== "" ||
-    (watch("hackerrank") ?? "").trim() !== "" ||
-    ((watch("otherProfiles") ?? []).some((p) => (p.label ?? "").trim() !== "" || (p.value ?? "").trim() !== ""))
+      (watch("github") ?? "").trim() !== "" ||
+      (watch("leetcode") ?? "").trim() !== "" ||
+      (watch("hackerrank") ?? "").trim() !== "" ||
+      (watch("otherProfiles") ?? []).some(
+        (p) => (p.label ?? "").trim() !== "" || (p.value ?? "").trim() !== "",
+      ),
   );
 
   const hasAdditional = Boolean(
     (watch("technicalSkills") ?? "").trim() !== "" ||
-    (watch("areasOfInterest") ?? "").trim() !== "" ||
-    (watch("areasOfExpertise") ?? "").trim() !== "" ||
-    (watch("projects") ?? "").trim() !== "" ||
-    (watch("achievements") ?? "").trim() !== "" ||
-    ((watch("certificates") ?? []).some((c) => (c.name ?? "").trim() !== "" || c.file !== null))
+      (watch("areasOfInterest") ?? "").trim() !== "" ||
+      (watch("areasOfExpertise") ?? "").trim() !== "" ||
+      (watch("projects") ?? "").trim() !== "" ||
+      (watch("achievements") ?? "").trim() !== "" ||
+      (watch("certificates") ?? []).some((c) => (c.name ?? "").trim() !== "" || c.file !== null),
   );
 
   /**
@@ -801,11 +804,10 @@ export function SrfPage({
             <nav aria-label="Form progress" className="mb-6">
               <ol className="flex flex-wrap gap-1.5">
                 {progress.map((s) => {
-                  const isComplete =
-                    s.optional
-                      ? (s.id === "profiles" && hasProfiles) ||
+                  const isComplete = s.optional
+                    ? (s.id === "profiles" && hasProfiles) ||
                       (s.id === "additional" && hasAdditional)
-                      : s.complete;
+                    : s.complete;
 
                   return (
                     <li key={s.id} className="min-w-9 flex-1">
@@ -814,10 +816,11 @@ export function SrfPage({
                         aria-current={isComplete ? "step" : undefined}
                         aria-label={`${s.title}${isComplete ? " — done" : ""}`}
                         title={s.title}
-                        className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${isComplete
+                        className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
+                          isComplete
                             ? "bg-brand-500 text-white"
                             : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
-                          }`}
+                        }`}
                       >
                         {isComplete ? "\u2713" : s.step}
                       </a>
@@ -1179,10 +1182,11 @@ export function SrfPage({
                 something different depending on the answer. */}
                 <fieldset className="mt-6">
                   <legend
-                    className={`mb-2 text-sm transition-colors ${errors.programmeLevel
+                    className={`mb-2 text-sm transition-colors ${
+                      errors.programmeLevel
                         ? "font-semibold text-danger-700"
                         : "font-medium text-ink-700"
-                      }`}
+                    }`}
                   >
                     <span>Which are you pursuing?</span>
                     <span className="ml-0.5 text-danger-500" aria-hidden="true">
@@ -1394,10 +1398,11 @@ export function SrfPage({
                 each one is entered, evidenced and checked separately. */}
                 <div className="mt-6">
                   <p
-                    className={`mb-2 text-sm transition-colors ${errors.semesters
+                    className={`mb-2 text-sm transition-colors ${
+                      errors.semesters
                         ? "font-semibold text-danger-700"
                         : "font-medium text-ink-700"
-                      }`}
+                    }`}
                   >
                     <span>Semester results</span>
                     <span className="ml-0.5 text-danger-500" aria-hidden="true">
@@ -1508,11 +1513,11 @@ export function SrfPage({
                   {errors.marksheets === undefined
                     ? undefined
                     : `Upload your ${missingMarksheets(
-                      { programmeLevel, semesters: semesters ?? [], hasDiplomaMarks },
-                      Object.keys(marksheets),
-                    )
-                      .map((s) => s.label)
-                      .join(", ")}.`}
+                        { programmeLevel, semesters: semesters ?? [], hasDiplomaMarks },
+                        Object.keys(marksheets),
+                      )
+                        .map((s) => s.label)
+                        .join(", ")}.`}
                 </ErrorText>
               </Section>
 
@@ -1576,8 +1581,8 @@ export function SrfPage({
                           error={
                             (
                               errors.resumes as
-                              | Record<string, { message?: string } | undefined>
-                              | undefined
+                                | Record<string, { message?: string } | undefined>
+                                | undefined
                             )?.[category]?.message ??
                             (errors.resumes !== undefined && !resumeCategories.includes(category)
                               ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
@@ -1783,7 +1788,7 @@ export function SrfPage({
                                         !currentName ||
                                         currentName.trim() === "" ||
                                         currentName.trim().toLowerCase() ===
-                                        "e.g. aws cloud practitioner"
+                                          "e.g. aws cloud practitioner"
                                       ) {
                                         setValue(
                                           `certificates.${index}.name`,
@@ -1796,7 +1801,13 @@ export function SrfPage({
                                   className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                                 />
                                 <ErrorText>
-                                  {(errors.certificates?.[index]?.file as { message?: string } | undefined)?.message}
+                                  {
+                                    (
+                                      errors.certificates?.[index]?.file as
+                                        | { message?: string }
+                                        | undefined
+                                    )?.message
+                                  }
                                 </ErrorText>
                               </div>
                             )}
@@ -1871,7 +1882,8 @@ export function SrfPage({
                       Cannot submit yet. Please fix the highlighted errors in the form above.
                     </p>
                     <p className="mt-1 text-xs text-danger-800">
-                      Check your personal details, academic record, marksheet uploads, or required consent.
+                      Check your personal details, academic record, marksheet uploads, or required
+                      consent.
                     </p>
                   </div>
                 )}
