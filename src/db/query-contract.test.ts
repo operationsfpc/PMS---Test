@@ -1,7 +1,11 @@
 import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repository";
 import { AE_OVERVIEW_DRIVE_COLUMNS } from "@features/ae/overview-view";
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
-import { PUBLISH_COHORT_COLUMNS, PUBLISH_DRIVE_COLUMNS } from "@features/central-cpc/publish-view";
+import {
+  PUBLISH_COHORT_COLUMNS,
+  PUBLISH_COLLEGE_COLUMNS,
+  PUBLISH_DRIVE_COLUMNS,
+} from "@features/central-cpc/publish-view";
 import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
 import { CERTIFICATE_QUEUE_COLUMNS } from "@features/cpc/certificate-queue-repository";
 import { PROGRESS_APPLICATION_COLUMNS } from "@features/cpc/drive-progress-view";
@@ -274,6 +278,9 @@ describe("every hand-written select matches the schema", () => {
     // strand every student on a fallback route rather than their form.
     ["student landing standing", "students", STUDENT_STANDING_COLUMNS],
     ["publish cohort", "students", PUBLISH_COHORT_COLUMNS],
+    // The college list the publish screen's targeting is chosen from, registered
+    // when it grew the city it filters by and the retired ones it must still show.
+    ["publish colleges", "campuses", PUBLISH_COLLEGE_COLUMNS],
     [
       "cockpit absence reviews",
       "attendance",

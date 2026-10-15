@@ -74,6 +74,12 @@ function stub(
     students?: unknown[];
     updateFails?: { code?: string; message?: string };
     roundInsertFails?: boolean;
+    /** Rows the by-name lookups hand back, e.g. one short of what was chosen. */
+    lookups?: Partial<Record<"campuses" | "degrees" | "branches", unknown[]>>;
+    /** A link table whose INSERT the database refuses. */
+    linkInsertFails?: { table: string; code?: string; message?: string };
+    /** A link table whose DELETE the database refuses. */
+    linkDeleteFails?: { table: string; message?: string };
   } = {},
 ) {
   const calls: Call[] = [];
@@ -88,9 +94,9 @@ function stub(
     calls.push({ table, method: request.method, body, search: new URL(request.url).search });
   };
 
-  const lookup = (rows: { id: string; name: string }[]) =>
-    http.get(`${BASE}/rest/v1/${rows[0]?.name === "" ? "" : ""}`, () => HttpResponse.json(rows));
-  void lookup;
+  /** The ids a name resolves to, exactly as the write path needs them. */
+  const found = (table: "campuses" | "degrees" | "branches", rows: unknown[]) =>
+    opts.lookups?.[table] === undefined ? rows : opts.lookups[table];
 
   server.use(
     http.get(`${BASE}/rest/v1/drives`, () =>
@@ -98,28 +104,30 @@ function stub(
         ? new HttpResponse(null, { status: 406 })
         : HttpResponse.json(opts.drive === undefined ? DRIVE : opts.drive),
     ),
-    http.get(`${BASE}/rest/v1/cities`, () =>
-      HttpResponse.json([{ name: "Chennai" }, { name: "Chennai" }, { name: "Bengaluru" }]),
-    ),
     http.get(`${BASE}/rest/v1/campuses`, ({ request }) => {
       const url = new URL(request.url);
       // The publish write looks campuses up by name to get their ids.
       if (url.searchParams.get("select") === "id,name") {
-        return HttpResponse.json([{ id: "c1", name: "Alliance University" }]);
+        return HttpResponse.json(found("campuses", [{ id: "c1", name: "Alliance University" }]));
       }
-      return HttpResponse.json([{ name: "Alliance University" }]);
+      return HttpResponse.json([
+        { name: "Alliance University", is_active: true, cities: { name: "Chennai" } },
+        { name: "VIT Bangalore", is_active: true, cities: { name: "Bengaluru" } },
+        // Retired, and still on some drive's targeting.
+        { name: "SACAS", is_active: false, cities: { name: "Chennai" } },
+      ]);
     }),
     http.get(`${BASE}/rest/v1/degrees`, ({ request }) => {
       const url = new URL(request.url);
       if (url.searchParams.get("select") === "id,name") {
-        return HttpResponse.json([{ id: "dg1", name: "B.E" }]);
+        return HttpResponse.json(found("degrees", [{ id: "dg1", name: "B.E" }]));
       }
       return HttpResponse.json([{ name: "B.E" }]);
     }),
     http.get(`${BASE}/rest/v1/branches`, ({ request }) => {
       const url = new URL(request.url);
       if (url.searchParams.get("select") === "id,name") {
-        return HttpResponse.json([{ id: "br1", name: "CSE" }]);
+        return HttpResponse.json(found("branches", [{ id: "br1", name: "CSE" }]));
       }
       return HttpResponse.json([{ name: "CSE" }]);
     }),
@@ -138,6 +146,21 @@ function stub(
     ...["drive_target_campuses", "drive_eligible_degrees", "drive_eligible_branches"].map((table) =>
       http.all(`${BASE}/rest/v1/${table}`, async ({ request }) => {
         await record(table, request);
+        if (request.method === "POST" && opts.linkInsertFails?.table === table) {
+          return HttpResponse.json(
+            {
+              code: opts.linkInsertFails.code ?? "400",
+              message: opts.linkInsertFails.message ?? "nope",
+            },
+            { status: 400 },
+          );
+        }
+        if (request.method === "DELETE" && opts.linkDeleteFails?.table === table) {
+          return HttpResponse.json(
+            { code: "42501", message: opts.linkDeleteFails.message ?? "nope" },
+            { status: 403 },
+          );
+        }
         return HttpResponse.json([]);
       }),
     ),
@@ -156,7 +179,6 @@ const view = () => createSupabasePublishView(client(), "d1", async () => "cpc-1"
 
 const INPUT = {
   driveId: "d1",
-  cities: [] as string[],
   campuses: ["Alliance University"],
   degrees: ["B.E"],
   branches: ["CSE"],
@@ -257,10 +279,14 @@ describe("loading the publish screen", () => {
     expect((await view().load()).drive.locations).toEqual([]);
   });
 
-  it("offers each targeting option once, however many rows mention it", async () => {
+  it("offers every college on the roster, retired ones included", async () => {
     stub();
 
-    expect((await view().load()).options.cities).toEqual(["Chennai", "Bengaluru"]);
+    expect((await view().load()).options.colleges).toEqual([
+      { name: "Alliance University", city: "Chennai", isActive: true },
+      { name: "VIT Bangalore", city: "Bengaluru", isActive: true },
+      { name: "SACAS", city: "Chennai", isActive: false },
+    ]);
   });
 
   it("reads the cohort from the roster, with campus and city for R2", async () => {
@@ -456,6 +482,31 @@ describe("the criteria the drive already carries", () => {
     stub({ drive: { ...DRIVE, arrears_policy: "flexible" } });
 
     expect((await view().load()).drive.arrearPolicy).toBe("flexible");
+  });
+
+  /**
+   * The override, read back. It was selected nowhere, so the box opened
+   * unticked on a drive that was already open to all and the coordinator's next
+   * publish wrote the tick back off — revoking a decision the Delivery Head had
+   * approved, and nulling its audit reason (`override_needs_reason`, 0004).
+   */
+  it("reads the prestige override the drive is already carrying", async () => {
+    stub({
+      drive: { ...DRIVE, open_to_all_override: true, open_to_all_reason: "Flagship recruiter" },
+    });
+
+    const { drive } = await view().load();
+
+    expect(drive.openToAllOverride).toBe(true);
+    expect(drive.openToAllReason).toBe("Flagship recruiter");
+  });
+
+  it("reports no override as none, with no reason beside it", async () => {
+    stub();
+    const { drive } = await view().load();
+
+    expect(drive.openToAllOverride).toBe(false);
+    expect(drive.openToAllReason).toBeNull();
   });
 
   it("reads the targeting the drive already has, so re-publishing cannot silently widen it", async () => {
@@ -693,6 +744,36 @@ describe("publishing", () => {
     await expect(view().publish(INPUT)).rejects.toThrow(/could not save the rounds/i);
     // Only the targeting PATCH ran; the drive never went live.
     expect(calls.filter((c) => c.method === "PATCH" && c.table === "drives")).toHaveLength(1);
+  });
+
+  /**
+   * The two failures that used to look like success.
+   *
+   * supabase-js hands a database error back as `error` rather than rejecting,
+   * and the old code discarded it — then discarded the case where a chosen name
+   * resolved to no row at all. Both left the drive published with a link table
+   * shorter than the screen, and an empty link table means "any": the audience
+   * became the whole roster while the coordinator read their own chips back.
+   */
+  it("stops the publish when a chosen college is not on the list, writing nothing", async () => {
+    const calls = stub({ lookups: { campuses: [] } });
+
+    await expect(view().publish(INPUT)).rejects.toThrow(/could not find Alliance University/i);
+    expect(calls).toEqual([]);
+  });
+
+  it("says so when the targeted colleges could not be saved, rather than going live without them", async () => {
+    stub({ linkInsertFails: { table: "drive_target_campuses", message: "row is not authorized" } });
+
+    await expect(view().publish(INPUT)).rejects.toThrow(/could not save the targeted colleges/i);
+  });
+
+  it("says so when the previous targeting could not be cleared", async () => {
+    const calls = stub({ linkDeleteFails: { table: "drive_eligible_degrees" } });
+
+    await expect(view().publish(INPUT)).rejects.toThrow(/could not clear the previous degrees/i);
+    // Nothing was written over the top of the failure.
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 });
 

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { CollegeOption } from "@domain/drive-targeting";
 import type { AcademicProfile } from "@domain/types";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -9,6 +10,7 @@ import {
   type PublishCandidate,
   type PublishDrive,
   type PublishView,
+  type TargetingOptions,
 } from "./daf-publish";
 
 /**
@@ -79,7 +81,30 @@ const DRIVE: PublishDrive = {
   arrearPolicy: "flexible",
   mandatorySkills: "TypeScript, SQL",
   targeting: { cities: [], campuses: [], degrees: [], branches: [] },
+  openToAllOverride: false,
+  openToAllReason: null,
 };
+
+/**
+ * The roster the screen filters over.
+ *
+ * SACAS is retired but still sits on some drive's targeting — exactly the case
+ * a screen that hides inactive colleges cannot un-target.
+ */
+const COLLEGES: readonly CollegeOption[] = [
+  { name: "Alliance University", city: "Chennai", isActive: true },
+  { name: "SACAS", city: "Chennai", isActive: false },
+  { name: "VIT Bangalore", city: "Bengaluru", isActive: true },
+];
+
+const OPTIONS: TargetingOptions = {
+  colleges: COLLEGES,
+  degrees: ["BCA", "B.E"],
+  branches: ["AI and DS", "CSE"],
+};
+
+/** A roster that has declared nothing yet — no chips to choose from. */
+const NO_OPTIONS: TargetingOptions = { colleges: [], degrees: [], branches: [] };
 
 /** A drive in the state the TCS drive was actually in: approved, but bare. */
 const BARE_DRIVE: PublishDrive = {
@@ -89,26 +114,35 @@ const BARE_DRIVE: PublishDrive = {
   rounds: [],
 };
 
+/** The three-student roster most of these tests count against. */
+const COHORT: readonly PublishCandidate[] = [
+  candidate("s1", "Sai Naveen"),
+  candidate("s2", "Thanush Krishna"),
+  candidate("s3", "Naveen Kumar", { academics: academics({ branch: "CSE" }) }),
+];
+
 function view(over: Partial<PublishView> = {}, cohort?: readonly PublishCandidate[]): PublishView {
   return {
     load: async () => ({
       drive: DRIVE,
-      options: {
-        cities: ["Chennai", "Bengaluru"],
-        campuses: ["Alliance University"],
-        degrees: ["BCA", "B.E"],
-        branches: ["AI and DS", "CSE"],
-      },
-      cohort: cohort ?? [
-        candidate("s1", "Sai Naveen"),
-        candidate("s2", "Thanush Krishna"),
-        candidate("s3", "Naveen Kumar", { academics: academics({ branch: "CSE" }) }),
-      ],
+      options: OPTIONS,
+      cohort: cohort ?? COHORT,
     }),
     publish: async () => undefined,
     ...over,
   };
 }
+
+/** The same drive, saying something else. Lets a test change one fact. */
+const withDrive = (
+  over: Partial<PublishDrive>,
+  viewOver: Partial<PublishView> = {},
+  cohort: readonly PublishCandidate[] = COHORT,
+): PublishView =>
+  view({
+    ...viewOver,
+    load: async () => ({ drive: { ...DRIVE, ...over }, options: OPTIONS, cohort }),
+  });
 
 const routed = (v: PublishView) =>
   render(
@@ -177,9 +211,6 @@ describe("DafPublish — live audience", () => {
  * the criteria that went live were never the criteria anybody approved.
  */
 describe("DafPublish — starts from the approved criteria", () => {
-  const withDrive = (over: Partial<typeof DRIVE>) =>
-    view({ load: async () => ({ ...(await view().load()), drive: { ...DRIVE, ...over } }) });
-
   const cgpaBox = async () =>
     (await screen.findByLabelText(/minimum overall cgpa/i)) as HTMLInputElement;
 
@@ -228,15 +259,19 @@ describe("DafPublish — starts from the approved criteria", () => {
    */
   it("re-publishes the targeting it arrived with instead of widening the drive", async () => {
     const publish = vi.fn().mockResolvedValue(undefined);
-    const seeded = withDrive({
-      targeting: {
-        cities: [],
-        campuses: ["Alliance University"],
-        degrees: ["BCA"],
-        branches: ["AI and DS"],
-      },
-    });
-    routed(view({ ...seeded, publish }));
+    routed(
+      withDrive(
+        {
+          targeting: {
+            cities: [],
+            campuses: ["Alliance University"],
+            degrees: ["BCA"],
+            branches: ["AI and DS"],
+          },
+        },
+        { publish },
+      ),
+    );
     // Two, not three: the seeded targeting is doing its job - the CSE student
     // is outside a drive targeted at AI and DS.
     await waitFor(() => expect(count()).toBe(2));
@@ -253,14 +288,293 @@ describe("DafPublish — starts from the approved criteria", () => {
 
   it("publishes the cutoff it was seeded with, unchanged", async () => {
     const publish = vi.fn().mockResolvedValue(undefined);
-    const seeded = withDrive({ minOverallCgpa: 7.89 });
-    routed(view({ ...seeded, publish }));
+    routed(withDrive({ minOverallCgpa: 7.89 }, { publish }));
     await waitFor(() => expect(count()).toBe(3));
 
     await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
 
     await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
     expect(publish.mock.calls[0]?.[0]).toMatchObject({ minOverallCgpa: 7.89 });
+  });
+});
+
+/**
+ * Area targeting (UAT 2026-10-15: "as per the area colleges not selecting").
+ *
+ * The city chips used to be an independent selection that nothing persisted:
+ * `drive_target_campuses` is the only geographic fact the database keeps, so a
+ * drive "targeted at Chennai" was published with an empty link table — and an
+ * empty list means ANY, so ticking an area widened the audience instead of
+ * narrowing it. A city is now a route through the college list: ticking it
+ * selects the colleges in it, and the preview counts what will be stored.
+ */
+describe("DafPublish — area targeting", () => {
+  const bengaluruStudent = candidate("s9", "Rahul Nair", {
+    academics: academics({ city: "Bengaluru", campus: "VIT Bangalore" }),
+  });
+
+  it("puts every college of a city into the drive when the city is ticked", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
+
+    expect(
+      await screen.findByRole("checkbox", { name: "Alliance University", checked: true }),
+    ).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: /SACAS/, checked: true })).toBeDefined();
+  });
+
+  it("narrows the college list to the city, so the area is a filter too", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
+
+    expect(screen.getByText(/^Campuses in Chennai$/i)).toBeDefined();
+    expect(screen.queryByRole("checkbox", { name: "VIT Bangalore" })).toBeNull();
+  });
+
+  /** The bug in one line: an area that reached nobody was an area that reached everybody. */
+  it("counts only the students in the area it ticked", async () => {
+    routed(view({}, [candidate("s1", "Chennai student"), bengaluruStudent]));
+    await waitFor(() => expect(count()).toBe(2));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Bengaluru" }));
+
+    await waitFor(() => expect(count()).toBe(1));
+    expect(screen.getByText(/Does not meet eligibility/i)).toBeDefined();
+  });
+
+  it("publishes the colleges the area resolved to, not the area itself", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }, [candidate("s1", "Chennai student"), bengaluruStudent]));
+    await waitFor(() => expect(count()).toBe(2));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Bengaluru" }));
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({ campuses: ["VIT Bangalore"] });
+  });
+
+  it("takes a city's colleges back out when it is unticked", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
+
+    // The whole roster is offerable again, and nothing is targeted.
+    expect(screen.getByRole("checkbox", { name: "VIT Bangalore" })).toBeDefined();
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({ campuses: [] });
+  });
+
+  it("offers a city only where a college actually sits", async () => {
+    routed(
+      view({
+        load: async () => ({
+          drive: DRIVE,
+          options: {
+            colleges: [...COLLEGES, { name: "Hostel Field Site", city: null, isActive: true }],
+            degrees: [],
+            branches: [],
+          },
+          cohort: COHORT,
+        }),
+      }),
+    );
+
+    // Reachable as a college, never as an area — no city owns it.
+    expect(await screen.findByRole("checkbox", { name: "Hostel Field Site" })).toBeDefined();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Bengaluru" }));
+    expect(screen.queryByRole("checkbox", { name: "Hostel Field Site" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "VIT Bangalore", checked: true })).toBeDefined();
+  });
+
+  /**
+   * A retired college still on a drive's targeting has to be ON screen: a chip
+   * nobody can see is a chip nobody can untick, so the drive would keep
+   * targeting a campus the roster closed.
+   */
+  it("shows a retired college the drive still targets, and lets it go", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(
+      withDrive(
+        {
+          targeting: {
+            cities: [],
+            campuses: ["Alliance University", "SACAS"],
+            degrees: [],
+            branches: [],
+          },
+        },
+        { publish },
+      ),
+    );
+
+    const chip = (await screen.findByRole("checkbox", {
+      name: /SACAS/,
+    })) as HTMLInputElement;
+    expect(chip.labels?.[0]?.textContent).toContain("retired");
+    expect(chip.checked).toBe(true);
+
+    await userEvent.click(chip);
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({ campuses: ["Alliance University"] });
+  });
+
+  /**
+   * "Select all" used to answer two different questions — the label counted the
+   * whole selection, the click re-tested the full list — so on a narrowed list
+   * it offered to select everything while showing three of twenty.
+   */
+  it("selects and clears only the colleges on show", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
+    // Both colleges the filter shows are in the drive, so the bulk action is a clear.
+    await userEvent.click(screen.getByRole("button", { name: /^Clear all Campuses/ }));
+    expect(
+      screen.getByRole("checkbox", { name: "Alliance University", checked: false }),
+    ).toBeDefined();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Select all Campuses/ }));
+    expect(
+      screen.getByRole("checkbox", { name: "Alliance University", checked: true }),
+    ).toBeDefined();
+    // Bengaluru is outside the filter, so it was never in play.
+    expect(screen.queryByRole("checkbox", { name: "VIT Bangalore" })).toBeNull();
+  });
+
+  it("says what an empty area means, because here empty means everyone", async () => {
+    routed(view());
+
+    expect(await screen.findByText(/open to every college on the roster/i)).toBeDefined();
+  });
+});
+
+/**
+ * R5a — the prestige override, read back rather than assumed.
+ *
+ * The box was never seeded from the drive, so an approved open-to-all drive
+ * opened on an UNticked override and the coordinator's next publish switched the
+ * override off — deleting the audit reason 0004 requires beside it. And because
+ * the domain runs eligibility ABOVE the short-circuit, ticking it must widen the
+ * audience to placed students and no further; that is the line these hold.
+ */
+describe("DafPublish — the override the drive already carries", () => {
+  const carried = { openToAllOverride: true, openToAllReason: "Flagship recruiter, CEO approval" };
+
+  const overrideBox = async () =>
+    (await screen.findByRole("checkbox", { name: /open to all students/i })) as HTMLInputElement;
+
+  const placedStudent = candidate("s8", "Already placed", {
+    offers: [
+      {
+        id: "o1",
+        driveId: "drive-0",
+        driveType: "placement",
+        offerCategory: "dream",
+        ctcLpa: 12,
+        declaredAt: new Date("2026-07-01T00:00:00Z"),
+        source: "on_campus",
+      },
+    ],
+  });
+
+  it("opens ticked, with the reason it was approved on", async () => {
+    routed(withDrive(carried));
+
+    expect(await overrideBox()).toMatchObject({ checked: true });
+    expect((screen.getByLabelText(/reason for override/i) as HTMLInputElement).value).toBe(
+      "Flagship recruiter, CEO approval",
+    );
+    expect(screen.getByText("Override active")).toBeDefined();
+  });
+
+  it("publishes the override back unchanged when nothing was touched", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(withDrive(carried, { publish }));
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({
+      openToAllOverride: true,
+      overrideReason: "Flagship recruiter, CEO approval",
+    });
+  });
+
+  /** Clearing it is a decision, so it says what it does and why. */
+  it("warns that clearing the tick drops an approved override, and names its reason", async () => {
+    routed(withDrive(carried));
+
+    await userEvent.click(await overrideBox());
+
+    const warning = await screen.findByText(/clearing the tick takes the override off/i);
+    expect(warning.textContent).toContain("Flagship recruiter, CEO approval");
+  });
+
+  it("takes the override and its reason off when the coordinator clears the tick", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(withDrive(carried, { publish }));
+
+    await userEvent.click(await overrideBox());
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({
+      openToAllOverride: false,
+      overrideReason: null,
+    });
+  });
+
+  /** What the override IS for: the ladder. */
+  it("admits a student already placed at the drive's own category", async () => {
+    routed(
+      withDrive({ ...carried, offerCategory: "dream" }, {}, [
+        candidate("s1", "Free student"),
+        placedStudent,
+      ]),
+    );
+
+    await waitFor(() => expect(count()).toBe(2));
+    expect(screen.getByText("Nobody is excluded.")).toBeDefined();
+  });
+
+  it("puts that student back out the moment the tick is cleared", async () => {
+    routed(
+      withDrive({ ...carried, offerCategory: "dream" }, {}, [
+        candidate("s1", "Free student"),
+        placedStudent,
+      ]),
+    );
+
+    await userEvent.click(await overrideBox());
+
+    await waitFor(() => expect(count()).toBe(1));
+    expect(screen.getByText(/Placed at an equal or higher category/i)).toBeDefined();
+  });
+
+  /** The user's question (2026-10-15): an override must never reach the ineligible. */
+  it("never admits a student who fails the criteria", async () => {
+    routed(
+      withDrive({ ...carried, minOverallCgpa: 8.5 }, {}, [
+        candidate("s1", "Below the bar"),
+        candidate("s2", "Above it", { academics: academics({ overallCgpa: 9 }) }),
+      ]),
+    );
+
+    await waitFor(() => expect(count()).toBe(1));
+    expect(screen.getByText("Does not meet eligibility")).toBeDefined();
   });
 });
 
@@ -408,12 +722,7 @@ describe("DafPublish \u2014 the rounds the AE declared", () => {
     view({
       load: async () => ({
         drive: { ...BARE_DRIVE, rounds, declaredRoundCount },
-        options: {
-          cities: ["Chennai"],
-          campuses: ["Alliance University"],
-          degrees: ["B.E"],
-          branches: ["CSE"],
-        },
+        options: { colleges: COLLEGES, degrees: ["B.E"], branches: ["CSE"] },
         cohort: [candidate("s1", "Sai Naveen")],
       }),
     });
@@ -623,7 +932,7 @@ describe("DafPublish — a JD that arrived as the recruiter's own PDF", () => {
       view({
         load: async () => ({
           drive: { ...DRIVE, jobDescription: "", hasJobDescriptionFile: true },
-          options: { cities: [], campuses: [], degrees: [], branches: [] },
+          options: NO_OPTIONS,
           cohort: [candidate("s1", "Sai Naveen")],
         }),
       }),
@@ -638,7 +947,7 @@ describe("DafPublish — a JD that arrived as the recruiter's own PDF", () => {
       view({
         load: async () => ({
           drive: { ...DRIVE, jobDescription: "", hasJobDescriptionFile: false },
-          options: { cities: [], campuses: [], degrees: [], branches: [] },
+          options: NO_OPTIONS,
           cohort: [candidate("s1", "Sai Naveen")],
         }),
       }),
@@ -663,7 +972,7 @@ describe("the role's must-have skills, on the publish screen", () => {
         view={view({
           load: async () => ({
             drive: { ...DRIVE, mandatorySkills: "" },
-            options: { cities: [], campuses: [], degrees: [], branches: [] },
+            options: NO_OPTIONS,
             cohort: [],
           }),
         })}

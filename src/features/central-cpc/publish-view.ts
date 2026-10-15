@@ -1,5 +1,6 @@
 import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import type { DriveReadiness } from "@domain/drive-lifecycle";
+import type { CollegeOption } from "@domain/drive-targeting";
 import { asDriveType, driveTypeLabel } from "@domain/drive-type";
 import type { EligibilityCriteria } from "@domain/eligibility";
 import {
@@ -34,11 +35,23 @@ export const PUBLISH_DRIVE_COLUMNS = `
   min_overall_cgpa, min_overall_marks, min_overall_cgpa_scale,
   min_tenth_percentage, min_twelfth_percentage,
   arrears_policy, round_count, mandatory_skills,
+  open_to_all_override, open_to_all_reason,
   drive_rounds(id, sequence, name),
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name)))
 `;
+
+/**
+ * The college list the targeting is chosen from.
+ *
+ * `is_active` is selected and the filter for it is deliberately absent: a drive
+ * can be targeted at a college the roster has since deactivated, and the
+ * coordinator has to be able to see that and untick it. Hiding retired colleges
+ * left the drive carrying targeting nobody could see or change.
+ * Exported so src/db/query-contract.test.ts can prove it against the real schema.
+ */
+export const PUBLISH_COLLEGE_COLUMNS = "name, is_active, cities(name)";
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PUBLISH_COHORT_COLUMNS = `
@@ -74,6 +87,15 @@ function targetedCities(rows: unknown): readonly string[] {
         .filter((value): value is string => typeof value === "string" && value !== ""),
     ),
   ];
+}
+
+/** The college list the targeting is chosen from: each one carries its city. */
+function collegeOption(row: Record<string, unknown>): CollegeOption {
+  return {
+    name: (row.name as string | null) ?? "",
+    city: one<{ name?: string }>(row.cities)?.name ?? null,
+    isActive: row.is_active === true,
+  };
 }
 
 function ctcLabel(min: number | null, max: number | null): string | null {
@@ -206,10 +228,9 @@ export function createSupabasePublishView(
 
   return {
     async load() {
-      const [row, cities, campuses, degrees, branches, students] = await Promise.all([
+      const [row, colleges, degrees, branches, students] = await Promise.all([
         loadDriveRow(),
-        client.from("cities").select("name").order("name"),
-        client.from("campuses").select("name").eq("is_active", true).order("name"),
+        client.from("campuses").select(PUBLISH_COLLEGE_COLUMNS).order("name"),
         client.from("degrees").select("name").order("name"),
         client.from("branches").select("name").order("name"),
         client.from("students").select(PUBLISH_COHORT_COLUMNS),
@@ -222,8 +243,11 @@ export function createSupabasePublishView(
       ];
 
       const options: TargetingOptions = {
-        cities: names(cities),
-        campuses: names(campuses),
+        // The cities the screen offers are read off these colleges, so a city
+        // can never be offered that holds nobody.
+        colleges: ((colleges.data ?? []) as Array<Record<string, unknown>>)
+          .map(collegeOption)
+          .filter((college) => college.name !== ""),
         degrees: names(degrees),
         branches: names(branches),
       };
@@ -281,6 +305,11 @@ export function createSupabasePublishView(
           (row.arrears_policy as EligibilityCriteria["arrearPolicy"] | null) ?? "flexible",
         // Item 38 (2026-08-21): stated inline on the publish screen.
         mandatorySkills: (row.mandatory_skills as string | null) ?? "",
+        // R5a as the drive actually says it. Read nowhere before 2026-10-15, so
+        // the override box opened unticked on a drive already open to all and
+        // publishing again quietly revoked it — reason included.
+        openToAllOverride: row.open_to_all_override === true,
+        openToAllReason: (row.open_to_all_reason as string | null) ?? null,
         targeting: {
           cities: targetedCities(row.drive_target_campuses),
           campuses: linkedNames(row.drive_target_campuses, "campuses"),
@@ -305,20 +334,45 @@ export function createSupabasePublishView(
     },
 
     async publish(input: PublishInput) {
-      // Names are what the coordinator picked; the link tables want ids.
-      const idsFor = async (table: string, wanted: readonly string[]) => {
+      /**
+       * Names are what the coordinator picked; the link tables want ids.
+       *
+       * The old lookup threw away both its error and the case of a name that
+       * resolved to nothing. Either one produced a SHORTER id list than the
+       * screen showed, and the deletes ran anyway — so a failed lookup quietly
+       * narrowed a live drive or emptied a link table, which the domain reads as
+       * "any" and the coordinator reads as the chips they ticked. Resolving
+       * before anything is written means a refusal leaves the targeting intact.
+       */
+      const idsFor = async (table: string, wanted: readonly string[], label: string) => {
         if (wanted.length === 0) return [];
-        const { data } = await client
+
+        const { data, error } = await client
           .from(table)
           .select("id, name")
           .in("name", [...wanted]);
-        return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+
+        if (error !== null) {
+          throw new Error(`Could not look up the ${label}: ${error.message}`);
+        }
+
+        const rows = (data ?? []) as Array<{ id: string; name: string }>;
+        const lost = wanted.filter((wantedName) => !rows.some((r) => r.name === wantedName));
+
+        if (lost.length > 0) {
+          throw new Error(
+            `Could not find ${lost.join(", ")} among the ${label}, so nothing was published. ` +
+              "The drive's targeting is unchanged.",
+          );
+        }
+
+        return rows.map((r) => r.id);
       };
 
       const [campusIds, degreeIds, branchIds] = await Promise.all([
-        idsFor("campuses", input.campuses),
-        idsFor("degrees", input.degrees),
-        idsFor("branches", input.branches),
+        idsFor("campuses", input.campuses, "colleges"),
+        idsFor("degrees", input.degrees, "degrees"),
+        idsFor("branches", input.branches, "branches"),
       ]);
 
       // `datetime-local` has no zone. It is wall-clock time in the coordinator's
@@ -351,13 +405,19 @@ export function createSupabasePublishView(
         );
       }
 
-      // Replace rather than merge: the screen shows the whole selection, so
-      // what is on screen must be what ends up stored.
-      await Promise.all([
-        client.from("drive_target_campuses").delete().eq("drive_id", input.driveId),
-        client.from("drive_eligible_degrees").delete().eq("drive_id", input.driveId),
-        client.from("drive_eligible_branches").delete().eq("drive_id", input.driveId),
-      ]);
+      // Replace rather than merge: the screen shows the whole selection, so what
+      // is on screen must be what ends up stored. Checked, because a delete that
+      // fails quietly leaves last release's rows beside this one's.
+      for (const [table, label] of [
+        ["drive_target_campuses", "colleges"],
+        ["drive_eligible_degrees", "degrees"],
+        ["drive_eligible_branches", "branches"],
+      ] as const) {
+        const { error } = await client.from(table).delete().eq("drive_id", input.driveId);
+        if (error !== null) {
+          throw new Error(`Could not clear the previous ${label}: ${error.message}`);
+        }
+      }
 
       // Rounds are positional, so they are replaced wholesale rather than
       // reconciled - renumbering in place would collide with the (drive_id,
@@ -376,22 +436,40 @@ export function createSupabasePublishView(
         }
       }
 
+      /**
+       * supabase-js does not reject on a database error; it hands back `error`.
+       * Discarding the result of these three inserts therefore proved nothing —
+       * a drive could "publish" with the link tables empty, which is the whole
+       * roster, and the screen would still say it was targeted.
+       */
+      const insert = async (
+        table: string,
+        rows: readonly Record<string, string>[],
+        label: string,
+      ) => {
+        if (rows.length === 0) return;
+        const { error } = await client.from(table).insert([...rows]);
+        if (error !== null) {
+          throw new Error(`Could not save the ${label}: ${error.message}`);
+        }
+      };
+
       await Promise.all([
-        campusIds.length === 0
-          ? null
-          : client
-              .from("drive_target_campuses")
-              .insert(campusIds.map((id) => ({ drive_id: input.driveId, campus_id: id }))),
-        degreeIds.length === 0
-          ? null
-          : client
-              .from("drive_eligible_degrees")
-              .insert(degreeIds.map((id) => ({ drive_id: input.driveId, degree_id: id }))),
-        branchIds.length === 0
-          ? null
-          : client
-              .from("drive_eligible_branches")
-              .insert(branchIds.map((id) => ({ drive_id: input.driveId, branch_id: id }))),
+        insert(
+          "drive_target_campuses",
+          campusIds.map((id) => ({ drive_id: input.driveId, campus_id: id })),
+          "targeted colleges",
+        ),
+        insert(
+          "drive_eligible_degrees",
+          degreeIds.map((id) => ({ drive_id: input.driveId, degree_id: id })),
+          "eligible degrees",
+        ),
+        insert(
+          "drive_eligible_branches",
+          branchIds.map((id) => ({ drive_id: input.driveId, branch_id: id })),
+          "eligible branches",
+        ),
       ]);
 
       const row = await loadDriveRow();

@@ -422,3 +422,173 @@ describe("the 10th and 12th bars", () => {
     );
   });
 });
+
+/**
+ * 0119 — the gates the prestige override was never a way past.
+ *
+ * `visibility.ts` has always run eligibility BEFORE R5a's short-circuit, and
+ * R5 (0017) decides who may apply from VERIFIED semesters rather than the
+ * imported roster. The trigger agreed with neither: it stopped at the 10th and
+ * 12th bars, then jumped to the ladder. So a drive ticked "open to all" admitted
+ * a student below its own CGPA bar, one carrying a backlog, and one outside the
+ * degree and branch the role was raised for - while the publish screen, reading
+ * the domain, showed a smaller cohort than the database actually let through.
+ */
+describe("the CGPA, arrear and course gates, above the override (0119)", () => {
+  beforeEach(async () => {
+    await t.sql(`delete from offers where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from applications where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from student_semesters where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from student_documents where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from student_role_preferences where student_id = $1`, [ids.priya]);
+    await t.sql(
+      `update students set overall_cgpa = 8.24, current_arrears = 0, history_of_arrears = 0
+       where id = $1`,
+      [ids.priya],
+    );
+  });
+
+  /**
+   * Evidence, not just a number: 0023 made every declared semester figure
+   * carry the student's own marksheet, so the fixture has to create one.
+   */
+  async function verify(
+    semester: number,
+    cgpa: string,
+    currentArrears: number,
+    historyOfArrears: number,
+  ): Promise<void> {
+    const [doc] = await t.sql(
+      `insert into student_documents (student_id, kind, storage_path, size_bytes)
+       values ($1, 'semester_marksheet', $2, 1000) returning id`,
+      [ids.priya, `${ids.priya}/0119-sem-${semester}.pdf`],
+    );
+    await t.sql(
+      `insert into student_semesters
+         (student_id, semester_number, cgpa, current_arrears, history_of_arrears,
+          marksheet_id, status, verified_by)
+       values ($1,$2,$3,$4,$5,$6,'verified',$7)`,
+      [ids.priya, semester, cgpa, currentArrears, historyOfArrears, doc?.id, ids.centralUser],
+    );
+  }
+
+  async function targetDegree(name: string): Promise<string> {
+    const [row] = await t.sql(`insert into degrees (name) values ($1) returning id`, [name]);
+    return row?.id as string;
+  }
+
+  it("refuses a degree the drive is not open to", async () => {
+    const drive = await makeDrive();
+    const other = await targetDegree("B.Tech");
+    await t.sql(`insert into drive_eligible_degrees (drive_id, degree_id) values ($1,$2)`, [
+      drive,
+      other,
+    ]);
+
+    await t.expectRejection(() => apply(drive), /not open to your degree/i);
+  });
+
+  it("takes the degree it targets, and any degree when it targets none", async () => {
+    const targeted = await makeDrive();
+    await t.sql(`insert into drive_eligible_degrees (drive_id, degree_id) values ($1,$2)`, [
+      targeted,
+      ids.degree,
+    ]);
+    await expect(apply(targeted)).resolves.toHaveLength(1);
+
+    await expect(apply(await makeDrive())).resolves.toHaveLength(1);
+  });
+
+  it("refuses a branch the drive is not open to", async () => {
+    const [ece] = await t.sql(
+      `insert into branches (degree_id, name) values ($1,'ECE') returning id`,
+      [ids.degree],
+    );
+    const drive = await makeDrive();
+    await t.sql(`insert into drive_eligible_branches (drive_id, branch_id) values ($1,$2)`, [
+      drive,
+      ece?.id,
+    ]);
+
+    await t.expectRejection(() => apply(drive), /not open to your branch/i);
+  });
+
+  /**
+   * The roster says 8.24. The transcript, once verified, says 6.00 — and R5
+   * reads the transcript, because that is the figure a coordinator signed off.
+   */
+  it("judges the CGPA on the latest verified semester, not the roster", async () => {
+    await verify(3, "8.50", 0, 0);
+    await verify(5, "6.00", 0, 0);
+    const drive = await makeDrive({ min_overall_cgpa: 7.5 });
+
+    await t.expectRejection(() => apply(drive), /CGPA of at least 7\.50, and yours is 6\.00/i);
+  });
+
+  /**
+   * Verified semesters are the exception, not the rule - the roster is what
+   * nearly every student currently has. Falling back to it is what keeps this
+   * gate from locking out the whole cohort.
+   */
+  it("falls back to the imported roster figure when nothing is verified", async () => {
+    await expect(apply(await makeDrive({ min_overall_cgpa: 7.5 }))).resolves.toHaveLength(1);
+  });
+
+  it("refuses standing arrears under no_standing", async () => {
+    await verify(4, "9.00", 2, 2);
+    const drive = await makeDrive({ arrears_policy: "no_standing" });
+
+    await t.expectRejection(() => apply(drive), /no standing arrears, and you have 2/i);
+  });
+
+  /**
+   * `no_history` is strictly stronger than `no_standing` (decision Q6): a
+   * cleared backlog still counts, and it counts from ANY verified semester,
+   * not only the latest one.
+   */
+  it("refuses a cleared backlog under no_history, from any verified semester", async () => {
+    await verify(2, "9.00", 0, 3);
+    await verify(4, "9.00", 0, 0);
+    const drive = await makeDrive({ arrears_policy: "no_history" });
+
+    await t.expectRejection(() => apply(drive), /no history of arrears, and yours has 3/i);
+  });
+
+  it("is not lifted by the override, which is about placement history", async () => {
+    await verify(3, "7.00", 0, 0);
+    const belowBar = await makeDrive({
+      min_overall_cgpa: 8.5,
+      open_to_all_override: true,
+      open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+    });
+    await t.expectRejection(() => apply(belowBar), /CGPA of at least 8\.50/i);
+
+    const other = await targetDegree("B.Arch");
+    const wrongCourse = await makeDrive({
+      open_to_all_override: true,
+      open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+    });
+    await t.sql(`insert into drive_eligible_degrees (drive_id, degree_id) values ($1,$2)`, [
+      wrongCourse,
+      other,
+    ]);
+    await t.expectRejection(() => apply(wrongCourse), /not open to your degree/i);
+  });
+
+  /** What the override IS for: it still climbs over the ladder. */
+  it("is bypassed by the override where the ladder is concerned", async () => {
+    await giveOffer({ offer_category: "dream" });
+
+    await t.expectRejection(
+      async () => await apply(await makeDrive({ offer_category: "regular" })),
+      /already placed/i,
+    );
+
+    const overridden = await makeDrive({
+      offer_category: "regular",
+      open_to_all_override: true,
+      open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+    });
+    await expect(apply(overridden)).resolves.toHaveLength(1);
+  });
+});

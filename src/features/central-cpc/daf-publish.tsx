@@ -1,5 +1,15 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { type DriveReadiness, missingBeforeGoLive } from "@domain/drive-lifecycle";
+import {
+  areAllSelected,
+  type CollegeOption,
+  citiesCoveredBy,
+  citiesOf,
+  collegesIn,
+  toggleCity,
+  toggleSelection,
+  toggleVisibleSelection,
+} from "@domain/drive-targeting";
 import type { EligibilityCriteria } from "@domain/eligibility";
 import type { OfferCategory } from "@domain/offer-category";
 import type { DriveStatus, DriveType, RoleCategory } from "@domain/types";
@@ -26,15 +36,27 @@ export interface PublishCandidate extends StudentContext {
   readonly name: string;
 }
 
+/**
+ * What the coordinator may choose between.
+ *
+ * Colleges carry their city because a city is not a targeting — it is a way of
+ * moving through the college list (`@domain/drive-targeting`). The retired ones
+ * are here too: a drive can still be targeted at a college the roster has
+ * deactivated, and a chip the screen cannot see is a chip nobody can untick.
+ */
 export interface TargetingOptions {
-  readonly cities: readonly string[];
-  readonly campuses: readonly string[];
+  readonly colleges: readonly CollegeOption[];
   readonly degrees: readonly string[];
   readonly branches: readonly string[];
 }
 
 /** Whom the drive is already targeted at. Empty everywhere means "not yet". */
-export type DriveTargeting = TargetingOptions;
+export interface DriveTargeting {
+  readonly cities: readonly string[];
+  readonly campuses: readonly string[];
+  readonly degrees: readonly string[];
+  readonly branches: readonly string[];
+}
 
 export interface DriveRound {
   readonly sequence: number;
@@ -82,6 +104,14 @@ export interface PublishDrive {
   readonly arrearPolicy: EligibilityCriteria["arrearPolicy"];
   readonly targeting: DriveTargeting;
   /**
+   * R5a as the drive actually carries it. Fetched nowhere until 2026-10-15, so
+   * the override box always opened UNTICKED on a drive that was already open to
+   * all — and publishing again wrote the tick back off, revoking a decision the
+   * Delivery Head had approved and erasing its audit reason.
+   */
+  readonly openToAllOverride: boolean;
+  readonly openToAllReason: string | null;
+  /**
    * How many rounds the AE said the recruiter runs (F11, UAT 2026-08-06).
    * Null when they never said. It seeds the list below and is then compared
    * against it — it is information, not a constraint.
@@ -91,7 +121,12 @@ export interface PublishDrive {
 
 export interface PublishInput {
   readonly driveId: string;
-  readonly cities: readonly string[];
+  /**
+   * CampUSES, never cities: `drive_target_campuses` is all the database holds
+   * about geography, and an input named `cities` that nothing read is how a
+   * "Chennai" drive ended up open to the whole roster. The screen derives the
+   * cities it previews from the colleges chosen here.
+   */
   readonly campuses: readonly string[];
   readonly degrees: readonly string[];
   readonly branches: readonly string[];
@@ -130,26 +165,45 @@ const EXCLUSION_LABEL: Record<Exclude<VisibilityReason, "visible">, string> = {
   opted_out: "Opted out of placements",
   disbarred: "Disbarred",
   not_eligible: "Does not meet eligibility",
-  area_not_chosen: "Did not choose this area",
+  // "Area" means the ROLE area here, not a city — the two share a word in this
+  // product and the panel below is all about cities (UAT 2026-10-15).
+  area_not_chosen: "Did not choose this role area",
   drive_type_not_preferred: "Did not ask for this drive type",
   internship_cap_consumed: "Internship cap already used",
   placed_at_equal_or_higher: "Placed at an equal or higher category",
 };
 
+/**
+ * A chip list with an honest "Select all".
+ *
+ * `options` is what is VISIBLE, which for campuses is a list the city filter
+ * has narrowed. The button's label and its click used to compute that question
+ * separately — one by counting the whole selection against the visible options,
+ * the other by re-testing the full list — so on a narrowed list it could offer
+ * "Select all" while showing three of twenty, and "Clear all" could add chips.
+ * Both now read the same two helpers.
+ */
 function MultiSelect({
   label,
   options,
   selected,
   onToggle,
   onSelectAll,
+  emptyNote,
+  inactive = [],
 }: {
   label: string;
   options: readonly string[];
   selected: readonly string[];
   onToggle: (value: string) => void;
-  onSelectAll?: () => void;
+  /** Absent means no bulk action, which is how a filter says so. */
+  onSelectAll?: (next: readonly string[]) => void;
+  /** What empty means, in the coordinator's words: in this domain it means ANY. */
+  emptyNote: string;
+  /** Chosen options that are no longer active — visible, and untickable. */
+  inactive?: readonly string[];
 }) {
-  const allSelected = options.length > 0 && selected.length === options.length;
+  const allSelected = areAllSelected(options, selected);
   return (
     <fieldset>
       <div className="mb-1.5 flex items-center justify-between">
@@ -157,8 +211,12 @@ function MultiSelect({
         {onSelectAll && options.length > 0 && (
           <button
             type="button"
+            // Three of these sit on one panel, all named "Select all". The
+            // section belongs in the name for a screen-reader user, and the
+            // filter means the section's own name says what "all" covers.
+            aria-label={`${allSelected ? "Clear all" : "Select all"} ${label}`}
             className="text-xs font-medium text-brand-500 hover:text-brand-700"
-            onClick={onSelectAll}
+            onClick={() => onSelectAll(toggleVisibleSelection(options, selected))}
           >
             {allSelected ? "Clear all" : "Select all"}
           </button>
@@ -183,13 +241,60 @@ function MultiSelect({
                 onChange={() => onToggle(o)}
               />
               {o}
+              {inactive.includes(o) && (
+                <span className={on ? "text-white/70" : "text-ink-300"}> · retired</span>
+              )}
             </label>
           );
         })}
       </div>
       {selected.length === 0 && (
-        <p className="mt-1 text-xs text-ink-300">No filter — all {label.toLowerCase()} included.</p>
+        <p className="mt-1 text-xs font-medium text-gold-700">{emptyNote}</p>
       )}
+    </fieldset>
+  );
+}
+
+/** A city is a way of moving through the college list, never a targeting itself. */
+function CityFilter({
+  cities,
+  selected,
+  onToggle,
+}: {
+  cities: readonly string[];
+  selected: readonly string[];
+  onToggle: (city: string) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-1.5 text-sm font-medium text-ink-700">Filter colleges by city</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {cities.map((city) => {
+          const on = selected.includes(city);
+          return (
+            <label
+              key={city}
+              className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                on
+                  ? "border-brand-500 bg-brand-500 text-white"
+                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={on}
+                onChange={() => onToggle(city)}
+              />
+              {city}
+            </label>
+          );
+        })}
+      </div>
+      <p className="mt-1 text-xs text-ink-500">
+        Tick a city to add every college in it to the list below, and to narrow that list to them.
+        Untick it to take those colleges back out.
+      </p>
     </fieldset>
   );
 }
@@ -201,7 +306,11 @@ export function DafPublish({ view }: { view: PublishView }) {
   const [published, setPublished] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
-  const [cities, setCities] = useState<readonly string[]>([]);
+  /**
+   * A VIEW filter over the college list, not a targeting: only `campuses` is
+   * ever persisted. It shares a name with nothing the drive says about itself.
+   */
+  const [cityFilter, setCityFilter] = useState<readonly string[]>([]);
   const [campuses, setCampuses] = useState<readonly string[]>([]);
   const [degrees, setDegrees] = useState<readonly string[]>([]);
   const [branches, setBranches] = useState<readonly string[]>([]);
@@ -248,10 +357,18 @@ export function DafPublish({ view }: { view: PublishView }) {
        */
       setMinCgpa(next.drive.minOverallCgpa === null ? "" : String(next.drive.minOverallCgpa));
       setArrearPolicy(next.drive.arrearPolicy);
-      setCities([...next.drive.targeting.cities]);
+      setCityFilter([...next.drive.targeting.cities]);
       setCampuses([...next.drive.targeting.campuses]);
       setDegrees([...next.drive.targeting.degrees]);
       setBranches([...next.drive.targeting.branches]);
+      /**
+       * R5a, seeded rather than assumed. The box used to open unticked on a
+       * drive that was ALREADY open to all, so the coordinator saw no override
+       * and their next publish removed one - along with the reason that made it
+       * legal (0004's `override_needs_reason`).
+       */
+      setOpenToAll(next.drive.openToAllOverride);
+      setOverrideReason(next.drive.openToAllReason ?? "");
       /**
        * F11: seeded from what the AE declared, but ONLY when the coordinator
        * has named none themselves. Their names are the real work here; a
@@ -279,10 +396,28 @@ export function DafPublish({ view }: { view: PublishView }) {
   const toggle =
     (set: (fn: (cur: readonly string[]) => readonly string[]) => void) =>
     (value: string): void =>
-      set((cur) => (cur.includes(value) ? cur.filter((x) => x !== value) : [...cur, value]));
+      set((cur) => toggleSelection(value, cur));
 
+  const colleges = loaded?.options.colleges ?? [];
   const cohort = loaded?.cohort ?? [];
   const loadedDrive = loaded?.drive ?? null;
+
+  /**
+   * A city chip does two things at once: it narrows the college list below to
+   * that city, and it puts every college in it into the drive. Unticking takes
+   * them back out again. Anything less is how a "Chennai" drive was published
+   * to the whole roster, because a city is not persisted on its own.
+   */
+  const toggleCityChip = (city: string): void => {
+    const next = toggleCity(city, colleges, cityFilter, campuses);
+    setCityFilter(next.cities);
+    setCampuses(next.colleges);
+  };
+
+  const visibleColleges = collegesIn(cityFilter, colleges).map((college) => college.name);
+  const retiredColleges = colleges
+    .filter((college) => !college.isActive)
+    .map((college) => college.name);
 
   const drive: VisibleDrive | null = useMemo(
     () =>
@@ -309,7 +444,11 @@ export function DafPublish({ view }: { view: PublishView }) {
               minTenthPercentage: minTenth === "" ? null : Number(minTenth),
               minTwelfthPercentage: minTwelfth === "" ? null : Number(minTwelfth),
               arrearPolicy,
-              targetCities: cities,
+              // Read off the colleges the coordinator chose, because that list
+              // is the only geographic thing the database keeps. The student's
+              // own drive list derives its cities the same way, so this number
+              // and what they may apply to cannot disagree.
+              targetCities: citiesCoveredBy(colleges, campuses),
               targetCampuses: campuses,
             },
           },
@@ -317,13 +456,13 @@ export function DafPublish({ view }: { view: PublishView }) {
     // window, and ticking it changes the start the audience is judged on.
     [
       loadedDrive,
+      colleges,
       degrees,
       branches,
       minCgpa,
       minTenth,
       minTwelfth,
       arrearPolicy,
-      cities,
       campuses,
       openToAll,
       openNow,
@@ -420,7 +559,6 @@ export function DafPublish({ view }: { view: PublishView }) {
     try {
       await view.publish({
         driveId: loadedDrive.id,
-        cities,
         campuses,
         degrees,
         branches,
@@ -504,59 +642,47 @@ export function DafPublish({ view }: { view: PublishView }) {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="flex flex-col gap-4">
           <Card className="p-5">
-            <h2 className="mb-4 text-lg text-ink-900">Audience targeting</h2>
+            <h2 className="mb-1 text-lg text-ink-900">Audience targeting</h2>
+            {/* "Area" means two things in this product and the panel is where
+                they collide: the role area comes from the PIF and the student's
+                own preferences, and nothing below is it (UAT 2026-10-15). */}
+            <p className="mb-4 text-xs text-ink-500">
+              The cities and campuses here are <strong>where the colleges are</strong>. A
+              drive&apos;s role area is a separate thing — the kind of work the PIF declared,
+              matched against what each student asked for.
+            </p>
             <div className="flex flex-col gap-5">
-              <MultiSelect
-                label="Cities"
-                options={loaded.options.cities}
-                selected={cities}
-                onToggle={toggle(setCities)}
-                onSelectAll={() =>
-                  setCities(
-                    cities.length === loaded.options.cities.length
-                      ? []
-                      : [...loaded.options.cities],
-                  )
-                }
+              <CityFilter
+                cities={citiesOf(colleges)}
+                selected={cityFilter}
+                onToggle={toggleCityChip}
               />
               <MultiSelect
-                label="Campuses"
-                options={loaded.options.campuses}
+                label={
+                  cityFilter.length === 0 ? "Campuses" : `Campuses in ${cityFilter.join(", ")}`
+                }
+                options={visibleColleges}
                 selected={campuses}
                 onToggle={toggle(setCampuses)}
-                onSelectAll={() =>
-                  setCampuses(
-                    campuses.length === loaded.options.campuses.length
-                      ? []
-                      : [...loaded.options.campuses],
-                  )
-                }
+                onSelectAll={setCampuses}
+                inactive={retiredColleges}
+                emptyNote="No campus ticked — this drive is open to every college on the roster."
               />
               <MultiSelect
                 label="Degrees"
                 options={loaded.options.degrees}
                 selected={degrees}
                 onToggle={toggle(setDegrees)}
-                onSelectAll={() =>
-                  setDegrees(
-                    degrees.length === loaded.options.degrees.length
-                      ? []
-                      : [...loaded.options.degrees],
-                  )
-                }
+                onSelectAll={setDegrees}
+                emptyNote="No degree ticked — every degree on the roster is included."
               />
               <MultiSelect
                 label="Branches"
                 options={loaded.options.branches}
                 selected={branches}
                 onToggle={toggle(setBranches)}
-                onSelectAll={() =>
-                  setBranches(
-                    branches.length === loaded.options.branches.length
-                      ? []
-                      : [...loaded.options.branches],
-                  )
-                }
+                onSelectAll={setBranches}
+                emptyNote="No branch ticked — every branch on the roster is included."
               />
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -785,6 +911,18 @@ export function DafPublish({ view }: { view: PublishView }) {
                   Ignores the category ladder and the internship cap, so already-placed students can
                   apply. Does <strong>not</strong> override eligibility, opt-outs or disbarments.
                 </p>
+                {/* Said out loud, WITH the reason, because the box now reads back
+                    what the drive already carries: unticking it is a decision, not
+                    a reset — and an unlabelled reason on screen reads as none. */}
+                {loadedDrive.openToAllOverride && !openToAll && (
+                  <p className="mt-1 text-xs font-medium text-gold-700">
+                    {`This drive is open to all right now${
+                      loadedDrive.openToAllReason === null
+                        ? ""
+                        : `, for this reason: "${loadedDrive.openToAllReason}"`
+                    }. Clearing the tick takes the override off and removes its reason from the record.`}
+                  </p>
+                )}
                 {openToAll && (
                   <div className="mt-3">
                     <label
