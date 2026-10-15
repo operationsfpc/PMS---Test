@@ -1,207 +1,222 @@
-import { Badge, Button, Card, PageHeader, type Tone } from "@components/ui";
-import { describeFileSize } from "@domain/attachments";
-import { driveTypeLabel } from "@domain/drive-type";
-import { driveVenueApplies } from "@domain/drive-venue";
-import { JOINING_TIMELINES, joiningLabel } from "@domain/joining";
-import { MARKS_SCALES } from "@domain/marks";
-import { SHIFT_TYPES, shiftLabel } from "@domain/shift";
-import { joinMandatorySkills, normaliseSkillAreaName, skillAreaKey } from "@domain/skills";
-import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { ROLE_CATEGORIES } from "@domain/types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type FieldErrors, useFieldArray } from "react-hook-form";
+import { control, Labelled, numeric, Section, SectionNav } from "./pif-controls";
+import {
+  CompanyNameField,
+  ContactsEditor,
+  DesignationsEditor,
+  DriveTypeAndCompensationField,
+  EligibilityFields,
+  findCompanyMatch,
+  JobDescriptionField,
+  JoiningCommentBox,
+  JoiningTimelineField,
+  type PifFieldApi,
+  RoundsEditor,
+  ShiftField,
+  SkillsPicker,
+  scopedPifFieldApi,
+  VenueAndModeField,
+} from "./pif-fields";
+import {
+  type ContactRow,
+  contactSignature,
+  DRIVE_MODE_LABELS,
+  EVENT_STATUS_LABELS,
+  hasAnyContactIn,
+  PIF_SECTIONS,
+  ROLE_CATEGORY_LABELS,
+  ROLES_SECTION,
+} from "./pif-labels";
 import type { ExistingDriveEvent } from "./pif-repository";
-import { PIF_DEFAULTS, type PifFormValues, pifDraftSchema, pifSubmitSchema } from "./pif-schema";
+import {
+  DEFAULT_ROLE_VALUES,
+  type MultiRolePifValues,
+  multiRolePifDraftSchema,
+  multiRolePifSubmitSchema,
+  type PifFormValues,
+  type PifRoleValues,
+  toSinglePifValues,
+} from "./pif-schema";
+import { usePifIntent } from "./use-pif-intent";
 
 /**
- * The AE's sections, in the order UAT 2026-08-19 asked for (A1/A3): the drive
- * type FIRST — it decides which compensation exists, which students see the
- * drive and how the offer classifies — with the compensation immediately
- * after it. Offer category still belongs to the Delivery Head.
- */
-export const PIF_SECTIONS = [
-  { id: "type", title: "Drive type and compensation" },
-  { id: "company", title: "Company details" },
-  { id: "role", title: "Role details" },
-  { id: "eligibility", title: "Eligibility criteria" },
-  { id: "process", title: "Selection process and timeline" },
-] as const;
-
-export const ROLE_CATEGORY_LABELS: Record<string, string> = {
-  software_technical: "Software / Technical",
-  technical_support_it_ops: "Technical Support / IT Operations",
-  digital_marketing: "Digital Marketing",
-  sales: "Sales",
-  operations_business: "Operations and Business Roles",
-};
-
-export const DRIVE_MODE_LABELS: Record<string, string> = {
-  on_campus: "On-campus",
-  physical_outside_campus: "Physical drive outside campus",
-  virtual: "Virtual",
-  pooled: "Pooled drive",
-};
-
-/**
- * 2026-08-27: one spelling, from the domain. This map said "Placement" and
- * "Internship (convertible)" while the publish view printed "internship
- * convertible" and the cards printed the raw value — four spellings of three
- * things.
- */
-export const DRIVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  DRIVE_TYPES.map((type) => [type, driveTypeLabel(type)]),
-);
-
-export const ARREAR_LABELS: Record<string, string> = {
-  flexible: "Flexible — arrears allowed",
-  no_standing: "No standing arrears",
-  no_history: "No arrear history at all",
-};
-
-export const PASSING_YEARS = [2026, 2027, 2028] as const;
-
-/** F12: recruiters state the bar the way their own HR does. */
-export const SCALE_LABELS: Record<string, string> = {
-  cgpa: "CGPA (out of 10)",
-  percentage: "Percentage (out of 100)",
-};
-
-/** What the event picker says about where a drive is in its life. */
-const EVENT_STATUS_LABELS: Record<string, { label: string; tone: Tone }> = {
-  draft: { label: "Draft", tone: "neutral" },
-  submitted: { label: "Pending approval", tone: "warning" },
-  approved: { label: "Approved", tone: "success" },
-  live: { label: "Live", tone: "success" },
-  applications_closed: { label: "Applications closed", tone: "warning" },
-  in_rounds: { label: "In rounds", tone: "warning" },
-  completed: { label: "Completed", tone: "neutral" },
-  rejected: { label: "Rejected", tone: "danger" },
-};
-
-/** A contact as the form and the event picker both hold it — every part optional. */
-export interface ContactRow {
-  name?: string | undefined;
-  designation?: string | undefined;
-  email?: string | undefined;
-  phone?: string | undefined;
-}
-
-export const contactSignature = (rows: readonly ContactRow[] | undefined) =>
-  JSON.stringify(
-    (rows ?? []).map((c) => [c?.name ?? "", c?.designation ?? "", c?.email ?? "", c?.phone ?? ""]),
-  );
-
-export const hasAnyContactIn = (rows: readonly ContactRow[] | undefined) =>
-  (rows ?? []).some((c) =>
-    [c?.name, c?.designation, c?.email, c?.phone].some(
-      (f) => typeof f === "string" && f.trim() !== "",
-    ),
-  );
-
-export function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Card className="mb-4 p-5">
-      <h2 className="mb-4 font-[Raleway] text-lg font-bold text-[#3D3777]">{title}</h2>
-      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
-    </Card>
-  );
-}
-
-export function Labelled({
-  label,
-  error,
-  children,
-  wide = false,
-  required = false,
-}: {
-  label: string;
-  error?: string | undefined;
-  children: (id: string) => ReactNode;
-  wide?: boolean;
-  /** G2 (UAT 2026-08-20): required to SUBMIT — the marker the form was missing. */
-  required?: boolean;
-}) {
-  const id = useId();
-  return (
-    <div className={wide ? "sm:col-span-2" : undefined}>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink-900">
-        {required ? `${label} *` : label}
-      </label>
-      {children(id)}
-      {error !== undefined && (
-        <p className="mt-1 text-xs text-[#DD4820]" role="status">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-export const control =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-[#A46AFC]";
-
-/**
- * A radio group, as a fieldset with a real legend.
+ * The AE's Position Information Form — the only one there is.
  *
- * Nothing is preselected anywhere it is used: a preselected first option is an
- * answer nobody gave, and it would be stored as if the AE had chosen it.
- */
-export function RadioGroup({
-  legend,
-  name,
-  options,
-  value,
-  onChange,
-  error,
-  required = false,
-}: {
-  legend: string;
-  name: string;
-  options: readonly { value: string; label: string }[];
-  value: string;
-  onChange: (next: string) => void;
-  error?: string | undefined;
-  /** G2: required to submit. */
-  required?: boolean;
-}) {
-  return (
-    <fieldset>
-      <legend className="mb-2 text-sm font-medium text-ink-900">
-        {required ? `${legend} *` : legend}
-      </legend>
-      <div className="flex flex-wrap gap-x-6 gap-y-2">
-        {options.map((option) => (
-          <label key={option.value} className="flex items-center gap-2 text-sm">
-            <input
-              type="radio"
-              name={name}
-              value={option.value}
-              checked={value === option.value}
-              onChange={() => onChange(option.value)}
-              className="size-4 accent-[#3D3777]"
-            />
-            {option.label}
-          </label>
-        ))}
-      </div>
-      {error !== undefined && (
-        <p className="mt-1 text-xs text-[#DD4820]" role="status">
-          {error}
-        </p>
-      )}
-    </fieldset>
-  );
-}
-
-/**
- * The AE's Position Information Form.
+ * One PIF is one company visit. The company and the day are stated once at the
+ * top, and the roles raised under that visit each get an identical block added
+ * with "+ Add another role". A visit with ONE role is still saved as a plain
+ * drive; two or more go through the atomic `save_company_drive_with_roles` RPC,
+ * so the visit and its roles commit or fail together and a half-raised event
+ * with roles missing cannot exist.
  *
  * Offer category is deliberately absent: §3.3 gives it to the Delivery Head at
- * approval and makes it immutable, so the AE must not be able to propose one.
- *
- * Draft and submit validate differently - a draft may be half-finished, but
+ * approval and makes it immutable, so the AE must not be able to propose it.
+ * Draft and submit validate differently — a draft may be half-finished, but
  * submitting hands the PIF to an approver and must be complete.
  */
+
+const UNIFIED_DEFAULTS = {
+  companyId: "",
+  companyDriveId: "",
+  companyName: "",
+  industry: "",
+  companyWebsite: "",
+  contacts: [] as Array<{ name: string; designation: string; email: string; phone: string }>,
+  driveMode: "" as const,
+  venueStatus: "not_yet_confirmed" as "not_yet_confirmed" | "confirmed",
+  venue: "",
+  tentativeDate: "",
+  timelineNotes: "",
+  joiningTimeline: "" as const,
+  roles: [{ ...DEFAULT_ROLE_VALUES }] as MultiRolePifValues["roles"],
+};
+
+/** The three event fields the company record can answer for the AE. */
+const AUTO_FILLED = ["industry", "companyWebsite", "companyId"] as const;
+type AutoFilledKey = (typeof AUTO_FILLED)[number];
+
+/**
+ * One role's block. Every field group is the SAME component the drive has
+ * always asked for, scoped to `roles.N` — so a second role is not a second
+ * class of form, and the two can never drift apart.
+ */
+function RoleBlock({
+  index,
+  count,
+  api,
+  errors,
+  onRemove,
+  skillAreas,
+  joiningTimeline,
+}: {
+  index: number;
+  /** Removing the only role would leave a drive with nothing on it. */
+  count: number;
+  api: PifFieldApi<MultiRolePifValues>;
+  errors: FieldErrors<MultiRolePifValues>;
+  onRemove: () => void;
+  skillAreas: readonly string[];
+  /** The DRIVE-level joining choice — each role keeps its own comment for it. */
+  joiningTimeline: string;
+}) {
+  const roleApi = scopedPifFieldApi<MultiRolePifValues>(
+    api,
+    `roles.${index}`,
+    errors.roles?.[index],
+  );
+  const number = PIF_SECTIONS.length + index + 1;
+
+  return (
+    <Section
+      number={number}
+      title={`Role ${index + 1}`}
+      id={`role-${index}`}
+      action={
+        count > 1 ? (
+          <Button
+            type="button"
+            variant="danger"
+            size="sm"
+            aria-label={`Remove role ${index + 1}`}
+            onClick={onRemove}
+          >
+            Remove role
+          </Button>
+        ) : undefined
+      }
+    >
+      {/* A1: the type is the first question of the block — it decides which
+          compensation exists for THIS role, and a visit may hire an internship
+          and a placement side by side. */}
+      <DriveTypeAndCompensationField api={roleApi} />
+
+      <Labelled label="Role title" required error={roleApi.err("roleTitle")}>
+        {(id) => (
+          <input
+            id={id}
+            className={control}
+            {...roleApi.register(roleApi.field("roleTitle") as never)}
+          />
+        )}
+      </Labelled>
+      <DesignationsEditor
+        api={roleApi}
+        heading="One interview process, however many designations — one role."
+        detail="A designation with its own interview process needs its own role below — the visit is shared, the process is not. Two roles for one process would double the shortlist and the audience count."
+      />
+      <Labelled label="Role category" required error={roleApi.err("roleCategory")}>
+        {(id) => (
+          <select
+            id={id}
+            className={control}
+            {...roleApi.register(roleApi.field("roleCategory") as never)}
+          >
+            <option value="">Select…</option>
+            {ROLE_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {ROLE_CATEGORY_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        )}
+      </Labelled>
+      <Labelled label="Number of openings" required error={roleApi.err("openings")}>
+        {(id) => (
+          <input
+            id={id}
+            type="number"
+            className={control}
+            {...roleApi.register(roleApi.field("openings") as never, numeric)}
+          />
+        )}
+      </Labelled>
+      <Labelled label="Work location(s)" required error={roleApi.err("workLocations")}>
+        {(id) => (
+          <input
+            id={id}
+            className={control}
+            {...roleApi.register(roleApi.field("workLocations") as never)}
+          />
+        )}
+      </Labelled>
+      <JobDescriptionField
+        api={roleApi}
+        fileHint="PDF only, up to 5 MB. Visible to the Delivery Head approving the drive and to the students it is published to."
+      />
+      <ShiftField api={roleApi} />
+      <Labelled label="Bond / service agreement" error={roleApi.err("bondDetails")}>
+        {(id) => (
+          <input
+            id={id}
+            className={control}
+            {...roleApi.register(roleApi.field("bondDetails") as never)}
+          />
+        )}
+      </Labelled>
+
+      <EligibilityFields api={roleApi} />
+      <SkillsPicker
+        skillAreas={skillAreas}
+        onChange={(joined) =>
+          roleApi.setValue(roleApi.field("mandatorySkills") as never, joined as never)
+        }
+      />
+
+      <RoundsEditor api={roleApi} />
+
+      {/* The choice belongs to the drive; each role keeps its own words for the
+          option the drive chose. */}
+      {joiningTimeline === "immediate" && (
+        <JoiningCommentBox api={roleApi} which="immediate" wide />
+      )}
+      {joiningTimeline === "later" && <JoiningCommentBox api={roleApi} which="later" wide />}
+    </Section>
+  );
+}
+
 export function PifForm({
   onSubmit,
   onSaveDraft,
@@ -210,15 +225,16 @@ export function PifForm({
   existingCompanies = [],
   getCompanyEvents,
 }: {
-  onSubmit: (values: PifFormValues) => Promise<void>;
-  onSaveDraft: (values: PifFormValues) => Promise<void>;
   /**
-   * The assessed-skills catalogue (spec 2026-08-21 part A, approved
-   * 2026-08-24): the ONLY skills the AE may pick; anything else is an
-   * explicit "other". Free text invited names the ranking could never match.
+   * One role → a flat `PifFormValues` drive. Two or more → the grouped values,
+   * which the page sends to the event RPC. The form decides which it is; the
+   * page only has to know where to write it.
    */
+  onSubmit: (values: PifFormValues | MultiRolePifValues) => Promise<void>;
+  onSaveDraft: (values: PifFormValues | MultiRolePifValues) => Promise<void>;
+  /** The assessed-skills catalogue — the ONLY skills the AE may pick. */
   skillAreas?: readonly string[];
-  initialValues?: Partial<PifFormValues>;
+  initialValues?: Partial<MultiRolePifValues>;
   existingCompanies?: readonly {
     readonly id?: string;
     readonly name: string;
@@ -227,30 +243,52 @@ export function PifForm({
   }[];
   getCompanyEvents?: (companyName: string) => Promise<readonly ExistingDriveEvent[]>;
 }) {
-  const intent = useRef<"draft" | "submit">("submit");
-  const [failure, setFailure] = useState<string | null>(null);
-  /** The picker's state; `mandatorySkills` stays the stored comma-joined text. */
-  const [pickedSkills, setPickedSkills] = useState<readonly string[]>([]);
-  const [otherSkills, setOtherSkills] = useState<readonly string[]>([]);
-  const [otherSkillDraft, setOtherSkillDraft] = useState("");
+  const [seed] = useState(() => ({ ...UNIFIED_DEFAULTS, ...initialValues }));
+
+  const { form, run, failure } = usePifIntent<MultiRolePifValues>({
+    schemaFor: (mode) => (mode === "draft" ? multiRolePifDraftSchema : multiRolePifSubmitSchema),
+    defaultValues: seed,
+    onCommit: (mode, values) => {
+      const commit = mode === "draft" ? onSaveDraft : onSubmit;
+      const roleList = values.roles ?? [];
+      const onlyRole = roleList.length === 1 ? roleList[0] : undefined;
+      if (onlyRole === undefined) {
+        // Several roles: the visit IS the event. A date the AE picked in the
+        // selector becomes the event these roles are added to.
+        const event =
+          values.companyDriveId && values.companyDriveId.trim() !== ""
+            ? { ...values, id: values.companyDriveId.trim() }
+            : values;
+        return commit(event);
+      }
+      return commit(toSinglePifValues(values, onlyRole));
+    },
+    failureFallback: "Could not save the PIF.",
+  });
 
   const {
     register,
     control: formControl,
-    handleSubmit,
     setValue,
     getValues,
     watch,
     formState: { errors, isSubmitting },
-  } = useForm<PifFormValues>({
-    defaultValues: { ...PIF_DEFAULTS, ...initialValues },
-    resolver: async (values, context, options) =>
-      zodResolver(intent.current === "draft" ? pifDraftSchema : pifSubmitSchema)(
-        values,
-        context,
-        options,
-      ),
-  });
+  } = form;
+
+  const api: PifFieldApi<MultiRolePifValues> = {
+    field: (name) => name,
+    register,
+    setValue,
+    control: formControl,
+    err: (key) =>
+      (errors as unknown as Record<string, { message?: string } | undefined>)[key]?.message,
+  };
+
+  const roles = useFieldArray({ control: formControl, name: "roles" as never });
+  const watchedCompanyName = watch("companyName") ?? "";
+  const watchedRoles = (watch("roles") ?? []) as PifRoleValues[];
+  /** The drive-level joining choice, read live so every role block follows it. */
+  const joiningTimeline = (watch("joiningTimeline") ?? "") as string;
 
   const [eventsForCompany, setEventsForCompany] = useState<readonly ExistingDriveEvent[]>([]);
   const [selectedEventIdState, setSelectedEventIdState] = useState<string | null>(
@@ -273,8 +311,63 @@ export function PifForm({
   const autoContactSignatureRef = useRef<string | null>(null);
   /** The event whose defaults were auto-applied from the URL prefill, once. */
   const appliedEventRef = useRef<string | null>(null);
+  /** What the company autofill wrote, so a re-match replaces its OWN values. */
+  const autoFilledRef = useRef<Record<AutoFilledKey, string | undefined>>({
+    industry: undefined,
+    companyWebsite: undefined,
+    companyId: undefined,
+  });
+  const [arrivedWithCompany, setArrivedWithCompany] = useState(
+    () => (initialValues?.companyName ?? "").trim() !== "",
+  );
 
-  const watchedCompanyName = watch("companyName");
+  const matchedCompany = findCompanyMatch(watchedCompanyName, existingCompanies);
+
+  /**
+   * An existing company answers what it already knows — industry, website and
+   * its id — so the AE does not retype it and the drive lands on the company's
+   * existing profile.
+   *
+   * It is driven by the NAME, not by the input's change event, because the name
+   * also arrives from a `?companyName=` prefill and from picking a datalist
+   * entry. And it overwrites only what it filled itself: an AE who typed an
+   * industry by hand gets to keep it.
+   */
+  useEffect(() => {
+    const wanted: Record<AutoFilledKey, string> = {
+      industry: matchedCompany?.industry ?? "",
+      companyWebsite: matchedCompany?.website ?? "",
+      companyId: matchedCompany?.id ?? "",
+    };
+    for (const key of AUTO_FILLED) {
+      const current = (getValues(key) ?? "") as string;
+      // A field the AE answered is theirs, whatever the record says.
+      if (current !== "" && current !== autoFilledRef.current[key]) continue;
+      if (current === wanted[key]) {
+        autoFilledRef.current[key] = current === "" ? undefined : current;
+        continue;
+      }
+      setValue(key, wanted[key]);
+      autoFilledRef.current[key] = wanted[key] === "" ? undefined : wanted[key];
+    }
+  }, [matchedCompany, getValues, setValue]);
+
+  /**
+   * `0051` refuses a comment for the joining option the drive did not choose,
+   * and the atomic event save would fail WHOLE over it. So an abandoned comment
+   * is dropped from every role block, not merely hidden — a hidden field still
+   * submits.
+   */
+  useEffect(() => {
+    (getValues("roles") ?? []).forEach((role, index) => {
+      if (joiningTimeline !== "immediate" && (role.joiningImmediateNotes ?? "") !== "") {
+        setValue(`roles.${index}.joiningImmediateNotes` as never, "" as never);
+      }
+      if (joiningTimeline !== "later" && (role.joiningLaterNotes ?? "") !== "") {
+        setValue(`roles.${index}.joiningLaterNotes` as never, "" as never);
+      }
+    });
+  }, [joiningTimeline, getValues, setValue]);
 
   /**
    * Copies the targeted event's identity — date, mode, venue, contacts — onto
@@ -284,10 +377,12 @@ export function PifForm({
   const applyEventDefaults = useCallback(
     (evt: ExistingDriveEvent) => {
       if (evt.tentativeDate) setValue("tentativeDate", evt.tentativeDate);
-      if (evt.driveMode) setValue("driveMode", evt.driveMode as PifFormValues["driveMode"]);
-      if (evt.venue) {
-        setValue("venue", evt.venue);
-        setValue("venueStatus", "confirmed");
+      if (evt.driveMode) {
+        setValue("driveMode", evt.driveMode as MultiRolePifValues["driveMode"]);
+        if (evt.venue) {
+          setValue("venue", evt.venue);
+          setValue("venueStatus", "confirmed");
+        }
       }
       const incoming: ContactRow[] = (evt.contacts ?? []).map((c) => ({
         name: c.name ?? "",
@@ -307,7 +402,7 @@ export function PifForm({
 
   useEffect(() => {
     let active = true;
-    if (getCompanyEvents && watchedCompanyName && watchedCompanyName.trim().length >= 2) {
+    if (getCompanyEvents && watchedCompanyName.trim().length >= 2) {
       void getCompanyEvents(watchedCompanyName.trim()).then((events) => {
         if (!active) return;
         setEventsForCompany(events);
@@ -325,7 +420,7 @@ export function PifForm({
           }
         }
         // The name moved to a different company: a selection made under the
-        // previous one must not ride along and attach this role to its event.
+        // previous one must not ride along and attach this drive to its event.
         const previous = selectedEventIdRef.current;
         if (previous !== null && previous !== "new" && !events.some((e) => e.id === previous)) {
           setSelectedEventId(null);
@@ -356,89 +451,26 @@ export function PifForm({
     setValue,
   ]);
 
-  /**
-   * The mode is set when the BUTTON IS PRESSED, not when it is rendered.
-   *
-   * This used to be `run(mode)` called during render, setting `intent.current`
-   * as a side effect — so whichever button rendered last won, and that was
-   * "Save draft". Every "Submit for approval" was therefore validated against
-   * `pifDraftSchema`, which asks for a company name and nothing else. An AE
-   * could hand the Delivery Head a PIF with no role, no CTC, no eligibility
-   * and no passing years, and the only symptom was an approval queue full of
-   * empty forms.
-   */
-  const run = (mode: "draft" | "submit") => async () => {
-    intent.current = mode;
-    await submitWith(mode)();
-  };
-
-  const submitWith = (mode: "draft" | "submit") => {
-    return handleSubmit(async (values) => {
-      setFailure(null);
-      try {
-        await (mode === "draft" ? onSaveDraft(values) : onSubmit(values));
-      } catch (cause) {
-        // The repository knows WHY it failed. Replacing that with a blanket
-        // apology made a production failure impossible to diagnose, and told
-        // the AE to "try again" at something that could never succeed.
-        const reason =
-          cause instanceof Error && cause.message !== ""
-            ? cause.message
-            : "Could not save the PIF.";
-        setFailure(`${reason} Your entries are still here.`);
-      }
-    });
-  };
-
-  /**
-   * F7: one interview process, several job titles, ONE PIF. Rows are added by
-   * the AE and blank ones are dropped by the schema - an untouched row is not
-   * a mistake worth an error message.
-   */
-  const designations = useFieldArray({
-    control: formControl,
-    // `additionalDesignations` is a string array, which useFieldArray cannot
-    // key on directly; RHF handles the primitive case through the same API.
-    name: "additionalDesignations" as never,
-  });
-
-  /** A4 (UAT 2026-08-19): several contacts per drive, added with a "+". */
-  const contacts = useFieldArray({ control: formControl, name: "contacts" as never });
-
-  /**
-   * An untouched optional number is NOT zero.
-   *
-   * This read `v === "" ? null : Number(v)`, and RHF hands `setValueAs` the
-   * DEFAULT value - `null` - for a field nobody typed in. `Number(null)` is 0,
-   * so every blank optional number was submitted as a real zero: a maximum CTC
-   * of 0 (which then failed "cannot be below the minimum"), and a CGPA cutoff
-   * of 0 stored as a cutoff rather than as "none set".
-   */
-  const numeric = {
-    setValueAs: (v: unknown) => (v === "" || v === null || v === undefined ? null : Number(v)),
-  };
-  const err = (k: keyof PifFormValues) => errors[k]?.message as string | undefined;
-
-  /** The named rounds (2026-08-18). Numbered by position, like the semesters. */
-  const rounds = watch("rounds") ?? [];
-
-  /** J1/J2/J3 (2026-08-18): each drives a conditional part of the form. */
-  const jobDescriptionFile = watch("jobDescriptionFile") ?? null;
-  const shiftType = watch("shiftType") ?? "";
-  const driveMode = watch("driveMode") ?? "";
-  const venueStatus = watch("venueStatus") ?? "not_yet_confirmed";
-  const joiningTimeline = watch("joiningTimeline") ?? "";
-  /** A1/A2: the load-bearing first choice, and what compensation follows it. */
-  const driveType = watch("driveType") ?? "";
-  const wantsCtc = driveType === "placement" || driveType === "internship_convertible";
-  const wantsStipend = driveType === "internship" || driveType === "internship_convertible";
-  const hasAnyContact = hasAnyContactIn(watch("contacts"));
-  /** The strip above the submit buttons says exactly where this role lands. */
-  const watchedRoleTitle = watch("roleTitle") ?? "";
   const selectedEvent =
     selectedEventId !== null && selectedEventId !== "new"
       ? (eventsForCompany.find((e) => e.id === selectedEventId) ?? null)
       : null;
+
+  const [companySection, eventSection] = PIF_SECTIONS;
+  const roleCount = roles.fields.length;
+  /** The array-level complaint ("add at least one role") lives on `.root`. */
+  const rolesError =
+    (errors.roles as unknown as { root?: { message?: string }; message?: string } | undefined)?.root
+      ?.message ?? (errors.roles as unknown as { message?: string } | undefined)?.message;
+  const namedRoles = watchedRoles
+    .map((role) => (role.roleTitle ?? "").trim())
+    .filter((title) => title !== "");
+
+  function clearCompany() {
+    setValue("companyName", "", { shouldValidate: true });
+    setValue("companyDriveId", "");
+    setArrivedWithCompany(false);
+  }
 
   return (
     <>
@@ -462,103 +494,25 @@ export function PifForm({
         <p className="mb-4 text-sm text-ink-700">
           Fields marked * are required to submit for approval. A draft can be saved at any point.
         </p>
-        {/* A1 (UAT 2026-08-19): the type comes FIRST — it decides which
-            compensation fields exist at all, so asking it last meant an AE
-            discovered the form's shape after filling it. */}
-        <Section title="Drive type and compensation">
-          <div className="sm:col-span-2">
-            <RadioGroup
-              legend="Drive type"
-              required
-              name="driveType"
-              value={driveType}
-              options={DRIVE_TYPES.map((t) => ({ value: t, label: DRIVE_TYPE_LABELS[t] ?? t }))}
-              error={err("driveType")}
-              onChange={(next) => {
-                setValue("driveType", next as typeof driveType, { shouldValidate: true });
-                // A hidden field still submits (the J2 lesson): compensation
-                // the new type does not have is cleared, not merely hidden.
-                if (next === "placement") {
-                  setValue("stipendMinMonthly", null);
-                  setValue("stipendMaxMonthly", null);
-                }
-                if (next === "internship") {
-                  setValue("ctcMinLpa", null);
-                  setValue("ctcMaxLpa", null);
-                  setValue("ctcBreakup", "");
-                }
-              }}
-            />
-          </div>
 
-          {wantsStipend && (
-            <>
-              <Labelled
-                label="Stipend minimum (₹ / month)"
-                required
-                error={err("stipendMinMonthly")}
-              >
-                {(id) => (
-                  <input
-                    id={id}
-                    type="number"
-                    className={control}
-                    {...register("stipendMinMonthly", numeric)}
-                  />
-                )}
-              </Labelled>
-              <Labelled label="Stipend maximum (₹ / month)" error={err("stipendMaxMonthly")}>
-                {(id) => (
-                  <input
-                    id={id}
-                    type="number"
-                    className={control}
-                    {...register("stipendMaxMonthly", numeric)}
-                  />
-                )}
-              </Labelled>
-            </>
-          )}
+        <SectionNav
+          label="PIF sections"
+          items={[
+            ...PIF_SECTIONS.map((section, index) => ({
+              id: section.id,
+              label: section.short,
+              number: index + 1,
+            })),
+            ...roles.fields.map((_, index) => ({
+              id: `role-${index}`,
+              label: `Role ${index + 1}`,
+              number: PIF_SECTIONS.length + index + 1,
+            })),
+          ]}
+        />
 
-          {wantsCtc && (
-            <>
-              <Labelled label="Minimum CTC (LPA)" required error={err("ctcMinLpa")}>
-                {(id) => (
-                  <input
-                    id={id}
-                    type="number"
-                    step="0.01"
-                    className={control}
-                    {...register("ctcMinLpa", numeric)}
-                  />
-                )}
-              </Labelled>
-              <Labelled label="Maximum CTC (LPA)" error={err("ctcMaxLpa")}>
-                {(id) => (
-                  <input
-                    id={id}
-                    type="number"
-                    step="0.01"
-                    className={control}
-                    {...register("ctcMaxLpa", numeric)}
-                  />
-                )}
-              </Labelled>
-              <Labelled label="CTC breakup (fixed / variable)" error={err("ctcBreakup")} wide>
-                {(id) => <input id={id} className={control} {...register("ctcBreakup")} />}
-              </Labelled>
-            </>
-          )}
-
-          {driveType === "" && (
-            <p className="sm:col-span-2 text-sm text-ink-500">
-              Choose the type first — the compensation fields follow from it.
-            </p>
-          )}
-        </Section>
-
-        <Section title="Company details">
-          {initialValues?.companyName && (
+        <Section number={1} title={companySection.title} id={companySection.id}>
+          {(arrivedWithCompany || matchedCompany !== null) && (
             <div className="sm:col-span-2 rounded-lg border border-brand-200 bg-brand-50 p-3.5 text-xs text-brand-900">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -566,75 +520,40 @@ export function PifForm({
                     Existing Company
                   </span>
                   <span className="font-semibold text-brand-900">
-                    Adding drive / role for {watch("companyName")}
+                    Adding a drive for {watchedCompanyName || matchedCompany?.name}
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setValue("companyName", "", { shouldValidate: true });
-                    setValue("companyDriveId", "");
-                    setValue("companyId", "");
-                  }}
+                  onClick={clearCompany}
                   className="font-medium text-brand-700 underline hover:text-brand-900"
                 >
                   Clear to create for another company
                 </button>
               </div>
               <p className="mt-1 text-ink-600">
-                This recruitment event will be tracked and monitored under the company's existing
-                profile.
+                Industry, website and contacts come from this company's existing profile.
               </p>
             </div>
           )}
 
-          <Labelled label="Company name" required error={err("companyName")}>
-            {(id) => (
-              <div>
-                <input
-                  id={id}
-                  className={control}
-                  {...register("companyName", {
-                    onChange: (e) => {
-                      const val = (e.target.value as string).trim();
-                      const match = existingCompanies.find(
-                        (c) => c.name.toLowerCase() === val.toLowerCase(),
-                      );
-                      if (match) {
-                        if (match.industry && !watch("industry")) {
-                          setValue("industry", match.industry);
-                        }
-                        if (match.website && !watch("companyWebsite")) {
-                          setValue("companyWebsite", match.website);
-                        }
-                        if (match.id) {
-                          setValue("companyId", match.id);
-                        }
-                      }
-                    },
-                  })}
-                  list={`${id}-companies-list`}
-                  autoComplete="off"
-                />
-                {existingCompanies.length > 0 && (
-                  <datalist id={`${id}-companies-list`}>
-                    {existingCompanies.map((c) => (
-                      <option key={c.name} value={c.name}>
-                        {c.industry ? `${c.name} (${c.industry})` : c.name}
-                      </option>
-                    ))}
-                  </datalist>
-                )}
-              </div>
-            )}
-          </Labelled>
-          <Labelled label="Industry / domain" error={err("industry")}>
+          <CompanyNameField api={api} existingCompanies={existingCompanies} />
+          <Labelled label="Industry / domain" error={api.err("industry")}>
             {(id) => <input id={id} className={control} {...register("industry")} />}
           </Labelled>
-          <Labelled label="Company website" error={err("companyWebsite")}>
+          <Labelled label="Company website" error={api.err("companyWebsite")}>
             {(id) => <input id={id} className={control} {...register("companyWebsite")} />}
           </Labelled>
 
+          {/* A4/A5 (UAT 2026-08-19): several contacts, all optional. With none,
+              the Central CPC is the point of contact — said here, not assumed. */}
+          <ContactsEditor
+            api={api}
+            description="Who the placement team reaches at the company. Shared by every role on this drive; all optional — add as many as you have."
+          />
+        </Section>
+
+        <Section number={2} title={eventSection.title} id={eventSection.id}>
           {eventsForCompany.length > 0 && (
             <div className="sm:col-span-2 rounded-xl border-2 border-brand-200 bg-brand-50/60 p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -643,8 +562,8 @@ export function PifForm({
                     Recruitment Drive / Day for {watchedCompanyName}
                   </h3>
                   <p className="text-xs text-ink-600">
-                    Select an already-created drive date to add this role to it, or schedule a new
-                    drive date.
+                    Select an already-created drive date to raise these roles on it, or schedule a
+                    new drive date.
                   </p>
                 </div>
                 <span className="rounded-full border border-brand-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-700">
@@ -749,704 +668,83 @@ export function PifForm({
             </div>
           )}
 
-          {/* A4/A5 (UAT 2026-08-19): several contacts, all optional. With none,
-              the Central CPC is the point of contact — said here, not assumed. */}
-          <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
-            <p className="text-sm font-medium text-ink-900">Company contacts</p>
-            <p className="mt-1 text-xs text-ink-700">
-              Who the placement team reaches at {"the company"}. All optional — add as many as you
-              have.
-            </p>
+          <VenueAndModeField api={api} />
 
-            {!hasAnyContact && (
-              <p
-                role="note"
-                className="mt-3 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-ink-900"
-              >
-                No contact added — the <strong>Central Placement Coordinator</strong> will be the
-                point of contact for this company.
-              </p>
-            )}
-
-            {contacts.fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="mt-3 grid gap-2 rounded-lg border border-line bg-white p-3 sm:grid-cols-2"
-              >
-                <div>
-                  <label
-                    htmlFor={`contact-name-${index}`}
-                    className="mb-1 block text-xs font-medium text-ink-700"
-                  >
-                    Contact {index + 1} name
-                  </label>
-                  <input
-                    id={`contact-name-${index}`}
-                    className={control}
-                    {...register(`contacts.${index}.name` as never)}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor={`contact-designation-${index}`}
-                    className="mb-1 block text-xs font-medium text-ink-700"
-                  >
-                    Contact {index + 1} designation
-                  </label>
-                  <input
-                    id={`contact-designation-${index}`}
-                    className={control}
-                    {...register(`contacts.${index}.designation` as never)}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor={`contact-email-${index}`}
-                    className="mb-1 block text-xs font-medium text-ink-700"
-                  >
-                    Contact {index + 1} email
-                  </label>
-                  <input
-                    id={`contact-email-${index}`}
-                    className={control}
-                    {...register(`contacts.${index}.email` as never)}
-                  />
-                </div>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <label
-                      htmlFor={`contact-phone-${index}`}
-                      className="mb-1 block text-xs font-medium text-ink-700"
-                    >
-                      Contact {index + 1} phone
-                    </label>
-                    <input
-                      id={`contact-phone-${index}`}
-                      className={control}
-                      {...register(`contacts.${index}.phone` as never)}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove contact ${index + 1}`}
-                    onClick={() => contacts.remove(index)}
-                  >
-                    Remove
-                  </Button>
-                </div>
-              </div>
-            ))}
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-3"
-              onClick={() =>
-                contacts.append({ name: "", designation: "", email: "", phone: "" } as never)
-              }
-            >
-              + Add a contact
-            </Button>
-          </div>
-        </Section>
-
-        <Section title="Role details">
-          <Labelled label="Role title" required error={err("roleTitle")}>
-            {(id) => <input id={id} className={control} {...register("roleTitle")} />}
-          </Labelled>
-          <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
-            <p className="text-sm font-medium text-ink-900">
-              One interview process, however many designations — one PIF.
-            </p>
-            <p className="mt-1 text-xs text-ink-700">
-              If the recruiter runs a separate interview process for another designation, raise a
-              separate PIF for it. Two PIFs for one process would double the drive, the shortlist
-              and the audience count.
-            </p>
-
-            {designations.fields.map((field, index) => (
-              <div key={field.id} className="mt-3 flex flex-wrap items-end gap-2">
-                <div className="min-w-48 flex-1">
-                  <label
-                    htmlFor={`designation-${index}`}
-                    className="mb-1 block text-xs font-medium text-ink-700"
-                  >
-                    Designation {index + 1}
-                  </label>
-                  <input
-                    id={`designation-${index}`}
-                    className={control}
-                    {...register(`additionalDesignations.${index}` as never)}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Remove designation ${index + 1}`}
-                  onClick={() => designations.remove(index)}
-                >
-                  Remove
-                </Button>
-              </div>
-            ))}
-
-            {err("additionalDesignations") !== undefined && (
-              <p className="mt-1 text-xs text-[#DD4820]" role="status">
-                {err("additionalDesignations")}
-              </p>
-            )}
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-3"
-              onClick={() => designations.append("" as never)}
-            >
-              Add another designation
-            </Button>
-          </div>
-
-          <Labelled label="Role category" required error={err("roleCategory")}>
-            {(id) => (
-              <select id={id} className={control} {...register("roleCategory")}>
-                <option value="">Select…</option>
-                {ROLE_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {ROLE_CATEGORY_LABELS[c]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Labelled>
-          {/* A3 (UAT 2026-08-19): openings and location directly after the role
-              — the order the meeting proposed. */}
-          <Labelled label="Number of openings" required error={err("openings")}>
-            {(id) => (
-              <input id={id} type="number" className={control} {...register("openings", numeric)} />
-            )}
-          </Labelled>
-          <Labelled label="Work location(s)" required error={err("workLocations")}>
-            {(id) => <input id={id} className={control} {...register("workLocations")} />}
-          </Labelled>
-          {/* Answer 2 (2026-08-18): "keep space to type JD. Field is not
-              mandatory." It is what the student's drive card and the recruiter
-              export can actually show — a PDF is neither excerptable nor
-              readable on a phone between lectures. */}
-          <Labelled label="Job description" error={err("jobDescription")} wide>
-            {(id) => (
-              <>
-                <textarea id={id} rows={4} className={control} {...register("jobDescription")} />
-                <p className="mt-1 text-xs text-ink-500">
-                  Optional. Shown on the student's drive card and in the recruiter export.
-                </p>
-              </>
-            )}
-          </Labelled>
-
-          {/*
-           * J1 (2026-08-18): "add an option to ATTACH a JD (job description) as
-           * PDF FILE." The AE used to retype or paste a fragment of the
-           * recruiter's mail; the document itself never entered the system, so
-           * nobody downstream could read what the company actually wrote.
-           *
-           * It sits BESIDE the typed description (answer 1), not instead of it.
-           */}
-          <Labelled label="Attach the job description (PDF)" error={err("jobDescriptionFile")} wide>
-            {(id) => (
-              <>
-                <input
-                  id={id}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className={`${control} file:mr-3 file:rounded-md file:border-0 file:bg-[#3D3777] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
-                  onChange={(e) =>
-                    setValue("jobDescriptionFile", e.target.files?.[0] ?? null, {
-                      shouldValidate: true,
-                    })
-                  }
-                />
-                <p className="mt-1 text-xs text-ink-500">
-                  PDF only, up to 5 MB. Visible to the Delivery Head approving the drive and to the
-                  students it is published to.
-                </p>
-                {jobDescriptionFile !== null && (
-                  <p className="mt-2 text-xs font-medium text-ink-800">
-                    Attached: {jobDescriptionFile.name}{" "}
-                    <span className="font-normal text-ink-500">
-                      ({describeFileSize(jobDescriptionFile.size)})
-                    </span>
-                  </p>
-                )}
-              </>
-            )}
-          </Labelled>
-          {/*
-           * J2 (2026-08-18): "Shift time, instead of a text box, change to
-           * radio button — Day and Night as options with time to be filled as
-           * text for night box." Rotational and Flexible were added at
-           * approval (answer 5).
-           *
-           * A free-text box produced "General" on four live drives, which tells
-           * a student nothing about whether they will be awake at 3am.
-           */}
-          <div className="sm:col-span-2">
-            <RadioGroup
-              legend="Shift"
-              name="shiftType"
-              value={shiftType}
-              options={SHIFT_TYPES.map((s) => ({ value: s, label: shiftLabel(s) }))}
-              error={err("shiftType")}
-              onChange={(next) => {
-                setValue("shiftType", next as typeof shiftType, { shouldValidate: true });
-                // Hiding the box is not enough: a hidden field still submits,
-                // and `0051` refuses a night timing on a day shift.
-                if (next !== "night") setValue("shiftNightTiming", "");
-              }}
-            />
-            {shiftType === "night" && (
-              <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
-                <Labelled label="Night shift timing" error={err("shiftNightTiming")}>
-                  {(id) => (
-                    <>
-                      <input
-                        id={id}
-                        className={control}
-                        placeholder="9.00 pm – 6.00 am IST"
-                        {...register("shiftNightTiming")}
-                      />
-                      <p className="mt-1 text-xs text-ink-500">
-                        In the recruiter's own words. A student plans their travel around it.
-                      </p>
-                    </>
-                  )}
-                </Labelled>
-              </div>
-            )}
-          </div>
-          <Labelled label="Bond / service agreement" error={err("bondDetails")}>
-            {(id) => <input id={id} className={control} {...register("bondDetails")} />}
-          </Labelled>
-        </Section>
-
-        <Section title="Eligibility criteria">
-          {/* F12: the figure and the scale it was stated on. The normalised
-              CGPA every drive is filtered on is derived once, in the
-              repository, via @domain/marks. */}
-          <Labelled label="Cutoff scale" error={err("minOverallCgpaScale")}>
-            {(id) => (
-              <select id={id} className={control} {...register("minOverallCgpaScale")}>
-                {MARKS_SCALES.map((scale) => (
-                  <option key={scale} value={scale}>
-                    {SCALE_LABELS[scale]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Labelled>
-          <Labelled label="Minimum overall marks" error={err("minOverallCgpa")}>
-            {(id) => (
-              <input
-                id={id}
-                type="number"
-                step="0.01"
-                className={control}
-                {...register("minOverallCgpa", numeric)}
-              />
-            )}
-          </Labelled>
-          <Labelled label="Arrear policy" error={err("arrearsPolicy")}>
-            {(id) => (
-              <select id={id} className={control} {...register("arrearsPolicy")}>
-                {ARREAR_POLICIES.map((p) => (
-                  <option key={p} value={p}>
-                    {ARREAR_LABELS[p]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Labelled>
-          <Labelled label="Minimum 10th %" error={err("minTenthPercentage")}>
-            {(id) => (
-              <input
-                id={id}
-                type="number"
-                step="0.01"
-                className={control}
-                {...register("minTenthPercentage", numeric)}
-              />
-            )}
-          </Labelled>
-          <Labelled label="Minimum 12th %" error={err("minTwelfthPercentage")}>
-            {(id) => (
-              <input
-                id={id}
-                type="number"
-                step="0.01"
-                className={control}
-                {...register("minTwelfthPercentage", numeric)}
-              />
-            )}
-          </Labelled>
-
-          <fieldset className="sm:col-span-2">
-            <legend className="mb-2 text-sm font-medium text-ink-900">
-              Eligible passing years *
-            </legend>
-            <div className="flex flex-wrap gap-4">
-              {PASSING_YEARS.map((year) => (
-                <label key={year} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    value={year}
-                    className="size-4 accent-[#3D3777]"
-                    {...register("eligiblePassingYears")}
-                  />
-                  {year}
-                </label>
-              ))}
-            </div>
-            {err("eligiblePassingYears") !== undefined && (
-              <p className="mt-1 text-xs text-[#DD4820]" role="status">
-                {err("eligiblePassingYears")}
-              </p>
-            )}
-          </fieldset>
-
-          {/*
-           * Spec 2026-08-21 part A (approved 2026-08-24): the skills are the
-           * ones the students are assessed on — free text here produced a live
-           * drive whose applicants all read "Scored on 0 of 2 required skills"
-           * because "Coding, Testing" matched no assessed skill.
-           */}
-          <fieldset className="sm:col-span-2">
-            <legend className="mb-1 block text-sm font-medium text-ink-700">
-              Mandatory skills
-            </legend>
-            {skillAreas.length > 0 && (
-              <div className="grid gap-1.5 sm:grid-cols-2">
-                {skillAreas.map((name) => (
-                  <label key={name} className="flex items-center gap-2 text-sm text-ink-800">
-                    <input
-                      type="checkbox"
-                      checked={pickedSkills.includes(name)}
-                      onChange={(e) => {
-                        const next = e.target.checked
-                          ? [...pickedSkills, name]
-                          : pickedSkills.filter((p) => p !== name);
-                        setPickedSkills(next);
-                        setValue(
-                          "mandatorySkills",
-                          joinMandatorySkills(next, otherSkills, skillAreas),
-                        );
-                      }}
-                    />
-                    {name}
-                  </label>
-                ))}
-              </div>
-            )}
-            <div className="mt-2 flex flex-wrap items-end gap-2">
-              <div>
-                <label
-                  htmlFor="pif-other-skill"
-                  className="mb-1 block text-xs font-medium text-ink-700"
-                >
-                  Other skill
-                </label>
-                <input
-                  id="pif-other-skill"
-                  className={control}
-                  value={otherSkillDraft}
-                  onChange={(e) => setOtherSkillDraft(e.target.value)}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label="Add other skill"
-                onClick={() => {
-                  const name = normaliseSkillAreaName(otherSkillDraft);
-                  if (name === "") return;
-                  const next = otherSkills.some((o) => skillAreaKey(o) === skillAreaKey(name))
-                    ? otherSkills
-                    : [...otherSkills, name];
-                  setOtherSkills(next);
-                  setOtherSkillDraft("");
-                  setValue("mandatorySkills", joinMandatorySkills(pickedSkills, next, skillAreas));
-                }}
-              >
-                Add
-              </Button>
-            </div>
-            {otherSkills.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {otherSkills.map((name) => (
-                  <span
-                    key={name}
-                    className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-800"
-                  >
-                    {name}
-                    <button
-                      type="button"
-                      aria-label={`Remove ${name}`}
-                      className="font-bold text-ink-500"
-                      onClick={() => {
-                        const next = otherSkills.filter((o) => o !== name);
-                        setOtherSkills(next);
-                        setValue(
-                          "mandatorySkills",
-                          joinMandatorySkills(pickedSkills, next, skillAreas),
-                        );
-                      }}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <p className="mt-1 text-xs text-ink-500">
-              Skills outside the repository can't be scored until they are assessed and added to the
-              Skill repository.
-            </p>
-          </fieldset>
-        </Section>
-
-        <Section title="Selection process and timeline">
-          <Labelled label="Drive mode" error={err("driveMode")}>
-            {(id) => (
-              <select
-                id={id}
-                className={control}
-                {...register("driveMode", {
-                  onChange: (e) => {
-                    // UAT 2026-08-21 item 2, the J2 lesson: a venue must never
-                    // survive hidden on a mode that has none. Moving between
-                    // two venue-bearing modes keeps it — it may be the one the
-                    // targeted event already confirmed.
-                    if (!driveVenueApplies(e.target.value as PifFormValues["driveMode"])) {
-                      setValue("venueStatus", "not_yet_confirmed");
-                      setValue("venue", "");
-                    }
-                  },
-                })}
-              >
-                <option value="">Select…</option>
-                {DRIVE_MODES.map((m) => (
-                  <option key={m} value={m}>
-                    {DRIVE_MODE_LABELS[m]}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Labelled>
-          {/*
-           * UAT 2026-08-21 item 2: an off-campus drive happens somewhere, and
-           * the PIF had nowhere to say where. The venue is often NOT final at
-           * PIF time — "not yet confirmed" always submits, and the Central
-           * CPC records the venue once the company confirms it (answer Q5).
-           */}
-          {driveVenueApplies(driveMode) && (
-            <div className="sm:col-span-2">
-              <RadioGroup
-                legend="Venue"
-                name="venueStatus"
-                value={venueStatus}
-                options={[
-                  { value: "not_yet_confirmed", label: "Venue not yet confirmed" },
-                  { value: "confirmed", label: "Venue confirmed" },
-                ]}
-                error={err("venueStatus")}
-                onChange={(next) => {
-                  setValue("venueStatus", next as "not_yet_confirmed" | "confirmed", {
-                    shouldValidate: true,
-                  });
-                  // The J2 lesson again: an abandoned venue does not linger.
-                  if (next !== "confirmed") setValue("venue", "");
-                }}
-              />
-              {venueStatus === "confirmed" && (
-                <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
-                  <Labelled label="Venue" error={err("venue")}>
-                    {(id) => (
-                      <input
-                        id={id}
-                        className={control}
-                        placeholder="e.g. HCL Campus, Sholinganallur, Chennai"
-                        {...register("venue")}
-                      />
-                    )}
-                  </Labelled>
-                </div>
-              )}
-            </div>
-          )}
-          {/* Drive type moved to Section 1 (A1, UAT 2026-08-19). */}
-          {/*
-           * The rounds, named and numbered (2026-08-18). F11 asked the AE for a
-           * COUNT, which told the Central CPC how many boxes to invent and told
-           * the student nothing - nobody can prepare for "Round 2". The AE heard
-           * the process from the company, so the names are theirs to record, and
-           * they are carried onto the drive at publish.
-           */}
-          <div className="sm:col-span-2">
-            <p className="mb-1.5 text-sm font-medium text-ink-700">Rounds in the process *</p>
-            <p className="mb-3 text-xs text-ink-500">
-              In order — e.g. Round 1 Aptitude test, Round 2 Technical interview.
-            </p>
-
-            <div className="flex flex-col gap-2">
-              {rounds.map((round, index) => (
-                <div key={round.sequence} className="flex flex-wrap items-end gap-2">
-                  <div className="min-w-56 flex-1">
-                    <Labelled label={`Round ${round.sequence} name`}>
-                      {(id) => (
-                        <input
-                          id={id}
-                          className={control}
-                          value={round.name}
-                          onChange={(e) =>
-                            setValue(
-                              "rounds",
-                              rounds.map((r, i) =>
-                                i === index ? { ...r, name: e.target.value } : r,
-                              ),
-                              { shouldValidate: true },
-                            )
-                          }
-                        />
-                      )}
-                    </Labelled>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove round ${round.sequence}`}
-                    onClick={() =>
-                      setValue(
-                        "rounds",
-                        // Numbers are positional, so close the gap - the same
-                        // rule the semester lines follow.
-                        rounds
-                          .filter((_, i) => i !== index)
-                          .map((r, i) => ({ ...r, sequence: i + 1 })),
-                        { shouldValidate: true },
-                      )
-                    }
-                  >
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </div>
-
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-3"
-              onClick={() =>
-                setValue("rounds", [...rounds, { sequence: rounds.length + 1, name: "" }], {
-                  shouldValidate: true,
-                })
-              }
-            >
-              Add round
-            </Button>
-            {err("rounds") !== undefined && (
-              <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
-                {err("rounds")}
-              </p>
-            )}
-          </div>
-          <Labelled label="Tentative drive date" error={err("tentativeDate")}>
+          <Labelled label="Tentative drive date" error={api.err("tentativeDate")}>
             {(id) => (
               <input id={id} type="date" className={control} {...register("tentativeDate")} />
             )}
           </Labelled>
-          {/*
-           * J3 (2026-08-18): "instead of a large text box, have radio button
-           * for immediate joining and joining later. Have a comments box also
-           * for both the options."
-           *
-           * The one fact a student plans their year around used to be buried in
-           * prose, so no screen could show it and no list could be filtered by
-           * it. One comment box PER OPTION (answer 6) — switching the radio
-           * drops the other, because a note about joining next July left on a
-           * drive that says immediate is worse than no note at all.
-           */}
-          <div className="sm:col-span-2">
-            <RadioGroup
-              legend="Offer rollout and joining"
-              required
-              name="joiningTimeline"
-              value={joiningTimeline}
-              options={JOINING_TIMELINES.map((t) => ({ value: t, label: joiningLabel(t) }))}
-              error={err("joiningTimeline")}
-              onChange={(next) => {
-                setValue("joiningTimeline", next as typeof joiningTimeline, {
-                  shouldValidate: true,
-                });
-                setValue(next === "immediate" ? "joiningLaterNotes" : "joiningImmediateNotes", "");
-              }}
-            />
-            {joiningTimeline !== "" && (
-              <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
-                {joiningTimeline === "immediate" ? (
-                  <Labelled
-                    label="Comments on immediate joining"
-                    error={err("joiningImmediateNotes")}
-                  >
-                    {(id) => (
-                      <textarea
-                        id={id}
-                        rows={2}
-                        className={control}
-                        placeholder="Optional — e.g. onboarding within 30 days of the offer."
-                        {...register("joiningImmediateNotes")}
-                      />
-                    )}
-                  </Labelled>
-                ) : (
-                  <Labelled label="Comments on joining later" error={err("joiningLaterNotes")}>
-                    {(id) => (
-                      <textarea
-                        id={id}
-                        rows={2}
-                        className={control}
-                        placeholder="Optional — e.g. offers in Nov 2026, joining from July 2027."
-                        {...register("joiningLaterNotes")}
-                      />
-                    )}
-                  </Labelled>
-                )}
-              </div>
+
+          <JoiningTimelineField
+            api={api}
+            withComments={false}
+            hint="Each role below keeps its own comments for this choice."
+          />
+
+          <Labelled label="Timeline notes" error={api.err("timelineNotes")} wide>
+            {(id) => (
+              <textarea id={id} rows={2} className={control} {...register("timelineNotes")} />
             )}
-          </div>
+          </Labelled>
         </Section>
 
+        <section id={ROLES_SECTION.id} className="mb-4 scroll-mt-24">
+          <h2 className="mb-1 font-[Raleway] text-lg font-bold text-[#3D3777]">
+            {ROLES_SECTION.title}
+          </h2>
+          <p className="mb-3 text-sm text-ink-700">{ROLES_SECTION.detail}</p>
+
+          {rolesError !== undefined && (
+            <p role="alert" className="mb-3 text-xs font-medium text-danger-700">
+              {rolesError}
+            </p>
+          )}
+
+          {roles.fields.map((field, index) => (
+            <RoleBlock
+              key={field.id}
+              index={index}
+              count={roleCount}
+              api={api}
+              errors={errors}
+              onRemove={() => roles.remove(index)}
+              skillAreas={skillAreas}
+              joiningTimeline={joiningTimeline}
+            />
+          ))}
+
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => roles.append({ ...DEFAULT_ROLE_VALUES } as never)}
+          >
+            + Add another role
+          </Button>
+        </section>
+
         {/*
-         * The one fact a silent form hid: WHERE this role will land. An AE
-         * adding a role to an existing drive must see the target before they
+         * The one fact a silent form hid: WHERE this drive will land. An AE
+         * adding roles to an existing visit must see the target before they
          * press submit — a role attached to the wrong event is found only
          * after the fact, on someone else's screen.
          */}
-        {(watchedCompanyName ?? "").trim() !== "" && (
+        {watchedCompanyName.trim() !== "" && (
           <section
-            aria-label="Where this role will be saved"
+            aria-label="Where this drive will be saved"
             className="mb-4 rounded-card border border-brand-200 bg-brand-50 p-4 shadow-sm"
           >
             <p className="text-xs font-bold uppercase tracking-wide text-brand-700">
-              Where this role goes
+              Where this drive goes
             </p>
             <p className="mt-1 text-sm text-ink-900">
-              <strong>{watchedRoleTitle.trim() !== "" ? watchedRoleTitle : "Unnamed role"}</strong>{" "}
+              <strong>
+                {namedRoles.length === 0
+                  ? "Unnamed role"
+                  : namedRoles.length === 1
+                    ? namedRoles[0]
+                    : `${namedRoles.length} roles — ${namedRoles.join(", ")}`}
+              </strong>{" "}
               → {selectedEvent !== null ? "existing drive" : "new drive event"} for{" "}
               <strong>{watchedCompanyName}</strong>
               {selectedEvent !== null && (

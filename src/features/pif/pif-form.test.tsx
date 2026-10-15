@@ -2,7 +2,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { PIF_SECTIONS, PifForm } from "./pif-form";
+import { PifForm } from "./pif-form";
+import { PIF_SECTIONS } from "./pif-labels";
 
 /**
  * The AE's PIF form.
@@ -268,13 +269,14 @@ describe("PifForm — what the recruiter actually said", () => {
   /**
    * F7: "If its one interview process, multiple designations only one PIF is
    * required, if multiple interview process for multiple designations then
-   * multiple PIF is required."
+   * multiple PIF is required." One PIF now holds several roles, so the second
+   * process is a second role block on the same visit — not a second form.
    */
-  it("says when a second PIF is needed and when it is not", () => {
+  it("says when a second role is needed and when it is not", () => {
     show();
 
     expect(screen.getByText(/one interview process/i)).toBeDefined();
-    expect(screen.getByText(/raise a separate pif/i)).toBeDefined();
+    expect(screen.getByText(/needs its own role below/i)).toBeDefined();
   });
 
   it("collects further designations covered by the same interview process", async () => {
@@ -739,11 +741,23 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
  * A4 (several contacts, "+") · A5 (no contact → the Central CPC is the POC).
  */
 describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
-  it("opens with the drive type as the FIRST section", () => {
+  it("asks each role for its drive type before anything else in it", () => {
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
+    // The visit is stated first — company, then the day it happens — and every
+    // role block under it opens on the question that decides its shape.
     const headings = screen.getAllByRole("heading", { level: 2 });
-    expect(headings[0]?.textContent).toMatch(/drive type/i);
+    expect(headings.map((h) => h.textContent)).toEqual([
+      "Company details",
+      "Drive day, mode and joining",
+      "Roles under this drive",
+      "Role 1",
+    ]);
+
+    const roleSection = screen
+      .getByRole("heading", { level: 2, name: "Role 1" })
+      .closest("section");
+    expect(roleSection?.querySelector("fieldset legend")?.textContent).toMatch(/drive type/i);
   });
 
   it("shows no compensation until the type is chosen", () => {
@@ -1055,20 +1069,274 @@ describe("PifForm — adding a role to an existing drive (the event picker)", ()
     );
   });
 
-  it("says where the role will land before the AE presses submit", async () => {
+  it("says where the drive will land before the AE presses submit", async () => {
     const user = userEvent.setup();
     renderWithEvents();
 
-    expect(screen.queryByLabelText(/where this role will be saved/i)).toBeNull();
+    expect(screen.queryByLabelText(/where this drive will be saved/i)).toBeNull();
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
-    const strip = await screen.findByLabelText(/where this role will be saved/i);
+    const strip = await screen.findByLabelText(/where this drive will be saved/i);
     expect(strip.textContent).toContain("new drive event");
 
     await user.click(await screen.findByRole("radio", { name: /drive date/i }));
-    const targeted = screen.getByLabelText(/where this role will be saved/i);
+    const targeted = screen.getByLabelText(/where this drive will be saved/i);
     expect(targeted.textContent).toContain("existing drive");
     expect(targeted.textContent).toContain("Web Dev");
     expect(targeted.textContent).toContain("2026-10-21");
+  });
+});
+
+/**
+ * The unified PIF: ONE company visit with its roles under it, added by
+ * "+ Add another role". A visit with one role is still a plain drive row —
+ * every list, approval and shortlist reads those — while two or more go up
+ * together as one event, so a half-raised visit with roles missing cannot exist.
+ */
+describe("PifForm — several roles under one drive", () => {
+  /**
+   * A second block filled to the same bar as the first. zod skips a role's own
+   * refinements while that role is still invalid, so a rule that belongs to a
+   * role — the night-shift hours — only speaks once its block answers.
+   */
+  async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
+    const second = (found: HTMLElement[]) => found[1] as HTMLElement;
+    await user.click(second(screen.getAllByRole("radio", { name: /^internship$/i })));
+    await user.type(second(screen.getAllByLabelText(/role title/i)), "Data Analyst Intern");
+    await user.type(screen.getByLabelText(/stipend minimum/i), "25000");
+    await user.selectOptions(
+      second(screen.getAllByLabelText(/role category/i)),
+      "operations_business",
+    );
+    await user.type(second(screen.getAllByLabelText(/number of openings/i)), "8");
+    await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
+    await user.click(second(screen.getAllByRole("button", { name: /add round/i })));
+    await user.type(second(screen.getAllByLabelText(/round 1 name/i)), "Case study");
+    await user.click(second(screen.getAllByRole("checkbox", { name: /2027/ })));
+  }
+
+  it("opens with one role block and nothing to remove", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    expect(screen.getByRole("heading", { name: "Role 1" })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /remove role/i })).toBeNull();
+  });
+
+  it("adds and removes role blocks", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    expect(screen.getByRole("heading", { name: "Role 2" })).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /remove role 2/i }));
+    expect(screen.queryByRole("heading", { name: "Role 2" })).toBeNull();
+  });
+
+  it("saves a single role as a plain drive, not as an event of its own", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(values.roles).toBeUndefined();
+    expect(values.roleTitle).toBe("Member Technical Staff");
+    expect(values.ctcMinLpa).toBe(6.5);
+  });
+
+  it("submits two roles as one drive, each keeping its own process", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <PifForm
+        onSubmit={onSubmit}
+        onSaveDraft={vi.fn()}
+        existingCompanies={[
+          {
+            id: "c-1",
+            name: "Zoho Corporation",
+            industry: "Software",
+            website: "https://zoho.com",
+          },
+        ]}
+      />,
+    );
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    await fillRoleTwo(user);
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0]?.[0] as {
+      companyId?: string;
+      roles: Array<{
+        roleTitle: string;
+        driveType: string;
+        stipendMinMonthly: number | null;
+        ctcMinLpa?: number | null;
+        rounds: Array<{ sequence: number; name: string }>;
+      }>;
+    };
+    expect(values.companyId).toBe("c-1");
+    expect(values.roles).toHaveLength(2);
+    expect(values.roles[0]?.roleTitle).toBe("Member Technical Staff");
+    expect(values.roles[1]?.roleTitle).toBe("Data Analyst Intern");
+    expect(values.roles[1]?.driveType).toBe("internship");
+    expect(values.roles[1]?.stipendMinMonthly).toBe(25000);
+    // The two processes are separate: role 1's aptitude test is not role 2's.
+    expect(values.roles[0]?.rounds).toEqual([{ sequence: 1, name: "Aptitude test" }]);
+    expect(values.roles[1]?.rounds).toEqual([{ sequence: 1, name: "Case study" }]);
+  });
+
+  it("refuses a night shift with no hours on the role that asked for it", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    await fillRoleTwo(user);
+    await user.click(screen.getAllByRole("radio", { name: "Night" })[1] as HTMLElement);
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(await screen.findByText(/give the hours of the night shift/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("shows every role the comment box for the option the drive chose", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    expect(screen.queryAllByLabelText(/comments on immediate joining/i)).toHaveLength(0);
+
+    await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+    expect(screen.queryAllByLabelText(/comments on immediate joining/i)).toHaveLength(2);
+
+    await user.click(screen.getByRole("radio", { name: /joining later/i }));
+    expect(screen.queryAllByLabelText(/comments on immediate joining/i)).toHaveLength(0);
+    expect(screen.queryAllByLabelText(/comments on joining later/i)).toHaveLength(2);
+  });
+
+  /**
+   * `0051` refuses a comment for the option that was not chosen, and the atomic
+   * event save fails WHOLE over one abandoned box — so it is dropped, not
+   * merely hidden (a hidden field still submits).
+   */
+  it("drops the joining comment the drive no longer chooses", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.type(
+      screen.getByLabelText(/comments on immediate joining/i),
+      "Relocating this month",
+    );
+    await user.click(screen.getByRole("radio", { name: /joining later/i }));
+    expect(screen.queryByLabelText(/comments on immediate joining/i)).toBeNull();
+
+    await user.type(screen.getByLabelText(/comments on joining later/i), "After the January exams");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0]?.[0] as {
+      joiningImmediateNotes: string;
+      joiningLaterNotes: string;
+    };
+    expect(values.joiningImmediateNotes).toBe("");
+    expect(values.joiningLaterNotes).toBe("After the January exams");
+  });
+});
+
+/**
+ * "the already existing company data should be get properly".
+ *
+ * Three separate defects hid it: most company names were never listed at all
+ * (only the `companies` registry was read, and the single-role PIF writes only
+ * `drives`), the autofill fired on a typed change alone so a linked company
+ * autofilled nothing, and a switch of company left the previous one's industry
+ * and website behind.
+ */
+describe("PifForm — an existing company answers for itself", () => {
+  const companies = [
+    {
+      id: "c-1",
+      name: "Zoho Corporation",
+      industry: "Software products",
+      website: "https://zoho.com",
+    },
+    { id: "c-2", name: "Freshworks", industry: "SaaS", website: "https://freshworks.com" },
+  ];
+
+  it("fills what the record already knows when the AE names the company", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+
+    expect((screen.getByLabelText(/^industry \/ domain$/i) as HTMLInputElement).value).toBe(
+      "Software products",
+    );
+    expect((screen.getByLabelText(/company website/i) as HTMLInputElement).value).toBe(
+      "https://zoho.com",
+    );
+  });
+
+  it("fills it too when the company arrives from a link rather than being typed", () => {
+    render(
+      <PifForm
+        onSubmit={vi.fn()}
+        onSaveDraft={vi.fn()}
+        existingCompanies={companies}
+        initialValues={{ companyName: "Zoho Corporation" }}
+      />,
+    );
+
+    expect((screen.getByLabelText(/^industry \/ domain$/i) as HTMLInputElement).value).toBe(
+      "Software products",
+    );
+  });
+
+  it("keeps an industry the AE typed over the one on the record", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+
+    await user.type(screen.getByLabelText(/^industry \/ domain$/i), "Edtech");
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+
+    expect((screen.getByLabelText(/^industry \/ domain$/i) as HTMLInputElement).value).toBe(
+      "Edtech",
+    );
+  });
+
+  it("follows the AE to another company instead of leaving the first one's details behind", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.clear(screen.getByLabelText(/company name/i));
+    await user.type(screen.getByLabelText(/company name/i), "Freshworks");
+
+    const industry = screen.getByLabelText(/^industry \/ domain$/i) as HTMLInputElement;
+    const website = screen.getByLabelText(/company website/i) as HTMLInputElement;
+    expect(industry.value).toBe("SaaS");
+    expect(website.value).toBe("https://freshworks.com");
+  });
+
+  it("says plainly that the drive is being added to an existing company", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+
+    expect(screen.getByText(/adding a drive for zoho corporation/i)).toBeDefined();
   });
 });

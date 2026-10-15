@@ -4,8 +4,10 @@ import {
   multiRolePifDraftSchema,
   multiRolePifSubmitSchema,
   PIF_DEFAULTS,
+  type PifRoleValues,
   pifDraftSchema,
   pifSubmitSchema,
+  toSinglePifValues,
 } from "./pif-schema";
 
 /**
@@ -623,6 +625,192 @@ describe("pifSubmitSchema", () => {
         expect(parsed.data.roles[0]?.roleTitle).toBe("Software Engineer");
         expect(parsed.data.roles[1]?.roleTitle).toBe("QA Engineer");
       }
+    });
+
+    /**
+     * The rules that used to live only on the flat form travel with the role —
+     * otherwise a second role block would pass what a single PIF refuses.
+     */
+    it("refuses a night shift with no hours on the role that asked for it", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Support Engineer",
+            roleCategory: "technical_support_it_ops",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 4,
+            ctcMinLpa: 5,
+            eligiblePassingYears: [2026],
+            rounds: [{ sequence: 1, name: "Interview" }],
+            shiftType: "night",
+            shiftNightTiming: "",
+          },
+        ],
+      });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0]?.path).toEqual(["roles", 0, "shiftNightTiming"]);
+        expect(parsed.error.issues[0]?.message).toMatch(/hours of the night shift/i);
+      }
+    });
+
+    it("refuses a designation named twice inside one role", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Member Technical Staff",
+            additionalDesignations: ["member technical staff"],
+            roleCategory: "software_technical",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            eligiblePassingYears: [2026],
+            rounds: [{ sequence: 1, name: "Aptitude" }],
+          },
+        ],
+      });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0]?.message).toMatch(/only be named once/i);
+      }
+    });
+
+    /**
+     * `0051` refuses a comment for the option the drive did not choose, and the
+     * atomic event save fails WHOLE over one abandoned box.
+     */
+    it("drops each role's comment for the joining option the drive did not choose", () => {
+      const role = {
+        ...DEFAULT_ROLE_VALUES,
+        roleTitle: "Software Engineer",
+        roleCategory: "software_technical",
+        driveType: "placement",
+        workLocations: "Chennai",
+        openings: 10,
+        ctcMinLpa: 8,
+        eligiblePassingYears: [2026],
+        rounds: [{ sequence: 1, name: "Coding" }],
+        joiningImmediateNotes: "Relocating this month",
+        joiningLaterNotes: "After the exams",
+      };
+
+      const later = multiRolePifSubmitSchema.parse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "later",
+        roles: [role],
+      });
+      expect(later.roles[0]?.joiningImmediateNotes).toBe("");
+      expect(later.roles[0]?.joiningLaterNotes).toBe("After the exams");
+
+      const immediate = multiRolePifSubmitSchema.parse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        roles: [role],
+      });
+      expect(immediate.roles[0]?.joiningImmediateNotes).toBe("Relocating this month");
+      expect(immediate.roles[0]?.joiningLaterNotes).toBe("");
+    });
+
+    it("still insists on a venue for an off-campus visit", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        driveMode: "physical_outside_campus",
+        venueStatus: "confirmed",
+        venue: "",
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Software Engineer",
+            roleCategory: "software_technical",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            eligiblePassingYears: [2026],
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+        ],
+      });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0]?.message).toMatch(/venue not yet confirmed/i);
+      }
+    });
+    /**
+     * One role on the PIF is still a plain drive, not an event of its own — the
+     * flattening is the only place the grouped shape meets the old contract.
+     */
+    describe("toSinglePifValues — one role saved flat", () => {
+      const visit = {
+        companyId: "c-1",
+        companyDriveId: "e-9",
+        companyName: "Zoho Corporation",
+        industry: "Software",
+        companyWebsite: "https://zoho.com",
+        contacts: [{ name: "HR", designation: "Lead", email: "hr@zoho.com", phone: "" }],
+        driveMode: "on_campus" as const,
+        venueStatus: "not_yet_confirmed" as const,
+        venue: "",
+        tentativeDate: "2026-11-15",
+        timelineNotes: "",
+        joiningTimeline: "immediate" as const,
+        roles: [],
+      };
+
+      it("carries the visit's facts and the role's own onto one flat drive", () => {
+        const role: PifRoleValues = {
+          roleTitle: "Member Technical Staff",
+          driveType: "placement",
+          ctcMinLpa: 6.5,
+          joiningImmediateNotes: "Within two weeks",
+        };
+        const flat = toSinglePifValues(visit, role);
+
+        expect(flat).toMatchObject({
+          companyId: "c-1",
+          companyDriveId: "e-9",
+          companyName: "Zoho Corporation",
+          industry: "Software",
+          tentativeDate: "2026-11-15",
+          driveMode: "on_campus",
+          joiningTimeline: "immediate",
+          joiningImmediateNotes: "Within two weeks",
+          roleTitle: "Member Technical Staff",
+          driveType: "placement",
+          ctcMinLpa: 6.5,
+        });
+        // The grouped shape must not leak into the single-drive contract.
+        expect((flat as { roles?: unknown }).roles).toBeUndefined();
+      });
+
+      it("survives the single-drive submit schema unchanged", () => {
+        const role = {
+          ...DEFAULT_ROLE_VALUES,
+          roleTitle: "Member Technical Staff",
+          roleCategory: "software_technical",
+          driveType: "placement",
+          workLocations: "Chennai",
+          openings: 25,
+          ctcMinLpa: 6.5,
+          eligiblePassingYears: [2027],
+          rounds: [{ sequence: 1, name: "Aptitude test" }],
+        } as PifRoleValues;
+        const flat = toSinglePifValues(visit, role);
+
+        expect(() => pifSubmitSchema.parse(flat)).not.toThrow();
+      });
     });
 
     it("rejects submission if any role within the event is invalid", () => {

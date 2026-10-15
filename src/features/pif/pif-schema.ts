@@ -528,6 +528,32 @@ export const pifRoleSubmitSchema = pifRoleDraftSchema
       message: "A CGPA is on the 10-point scale; a percentage is between 0 and 100.",
     },
   )
+  /**
+   * The single-role form's rule, applied to a role card: a designation named
+   * twice would appear twice on that student's drive card.
+   */
+  .refine(
+    (v) => {
+      const all = [
+        v.roleTitle.trim().toLowerCase(),
+        ...v.additionalDesignations.map((d) => d.toLowerCase()),
+      ];
+      return new Set(all).size === all.length;
+    },
+    {
+      path: ["additionalDesignations"],
+      message: "Each designation may only be named once.",
+    },
+  )
+  /**
+   * J2: "night shift" with no hours is not something a student can plan
+   * around — and each role under a visit runs its own process, so its own
+   * shift. The rule travels with the field, not with the flat form.
+   */
+  .refine((v) => !nightTimingIsMissing(v.shiftType, v.shiftNightTiming), {
+    path: ["shiftNightTiming"],
+    message: "Give the hours of the night shift — a student plans their travel around them.",
+  })
   .transform((v) => {
     const wantsCtc = v.driveType === "placement" || v.driveType === "internship_convertible";
     const wantsStipend = v.driveType === "internship" || v.driveType === "internship_convertible";
@@ -543,9 +569,20 @@ export const pifRoleSubmitSchema = pifRoleDraftSchema
     };
   });
 
+/**
+ * What the PIF HOLDS: one company visit and the roles raised under it.
+ *
+ * There is one PIF, not two — an AE who has three roles for one visit adds two
+ * more blocks rather than raising three PIFs that each invent their own event.
+ * A single role is still saved as a plain drive (see `toSinglePifValues`); two
+ * or more go through the atomic event RPC so the visit and its roles commit
+ * together.
+ */
 export const multiRolePifDraftSchema = z.object({
   id: z.string().optional(),
   companyId: z.string().optional(),
+  /** The existing event this drive attaches to. Only meaningful for one role. */
+  companyDriveId: optionalText,
   companyName: requiredText("Company name"),
   industry: optionalText,
   companyWebsite: optionalUrl,
@@ -576,9 +613,75 @@ export const multiRolePifSubmitSchema = multiRolePifDraftSchema
       path: ["venue"],
       message: "Type the venue, or choose “Venue not yet confirmed”.",
     },
-  );
+  )
+  /**
+   * The DRIVE owns the joining choice, every role keeps its own comment for it.
+   * A comment for the option that was not chosen is dropped here rather than
+   * left in the payload: `0051` refuses it row by row, and the atomic event save
+   * would fail WHOLE over one abandoned box.
+   */
+  .transform((v) => ({
+    ...v,
+    roles: v.roles.map((role) => {
+      const notes = joiningNotesFor(
+        v.joiningTimeline,
+        role.joiningImmediateNotes,
+        role.joiningLaterNotes,
+      );
+      return { ...role, joiningImmediateNotes: notes.immediate, joiningLaterNotes: notes.later };
+    }),
+  }));
 
 export type PifRoleValues = z.input<typeof pifRoleDraftSchema>;
 export type PifRoleSubmission = z.output<typeof pifRoleSubmitSchema>;
 export type MultiRolePifValues = z.input<typeof multiRolePifDraftSchema>;
 export type MultiRolePifSubmission = z.output<typeof multiRolePifSubmitSchema>;
+
+/**
+ * One role on the one PIF is still a plain drive, not an event of its own —
+ * every list, approval and shortlist in the product reads the drive row. The
+ * grouped shape is what the FORM holds; this is the only place it is flattened
+ * back onto the single-drive contract.
+ */
+export function toSinglePifValues(values: MultiRolePifValues, role: PifRoleValues): PifFormValues {
+  return {
+    companyId: values.companyId ?? "",
+    companyDriveId: values.companyDriveId,
+    companyName: values.companyName,
+    industry: values.industry,
+    companyWebsite: values.companyWebsite,
+    contacts: values.contacts,
+    driveMode: values.driveMode,
+    venueStatus: values.venueStatus,
+    venue: values.venue,
+    tentativeDate: values.tentativeDate,
+    timelineNotes: values.timelineNotes,
+    joiningTimeline: values.joiningTimeline,
+    joiningImmediateNotes: role.joiningImmediateNotes,
+    joiningLaterNotes: role.joiningLaterNotes,
+    roleTitle: role.roleTitle,
+    roleCategory: role.roleCategory,
+    driveType: role.driveType,
+    jobDescription: role.jobDescription,
+    jobDescriptionFile: role.jobDescriptionFile,
+    openings: role.openings,
+    workLocations: role.workLocations,
+    ctcMinLpa: role.ctcMinLpa,
+    ctcMaxLpa: role.ctcMaxLpa,
+    ctcBreakup: role.ctcBreakup,
+    stipendMinMonthly: role.stipendMinMonthly,
+    stipendMaxMonthly: role.stipendMaxMonthly,
+    shiftType: role.shiftType,
+    shiftNightTiming: role.shiftNightTiming,
+    bondDetails: role.bondDetails,
+    minOverallCgpa: role.minOverallCgpa,
+    minOverallCgpaScale: role.minOverallCgpaScale,
+    minTenthPercentage: role.minTenthPercentage,
+    minTwelfthPercentage: role.minTwelfthPercentage,
+    arrearsPolicy: role.arrearsPolicy,
+    eligiblePassingYears: role.eligiblePassingYears,
+    mandatorySkills: role.mandatorySkills,
+    additionalDesignations: role.additionalDesignations,
+    rounds: role.rounds,
+  };
+}

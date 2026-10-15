@@ -3,7 +3,6 @@ import { supabase } from "@lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { PifForm } from "./pif-form";
-import { PifMultiForm } from "./pif-multi-form";
 import {
   type CompanySuggestion,
   createSupabasePifRepository,
@@ -11,22 +10,25 @@ import {
 } from "./pif-repository";
 import type { MultiRolePifValues, PifFormValues } from "./pif-schema";
 
-type Mode = "single" | "multi";
-
-const MODES: readonly { value: Mode; label: string }[] = [
-  { value: "single", label: "One role" },
-  { value: "multi", label: "Multiple roles under one event" },
-];
-
 /**
- * The AE's screen for raising a drive. One page, two modes: a single-role PIF,
- * or a whole recruitment event with several roles committed together through
- * the atomic `save_company_drive_with_roles` RPC.
+ * The AE's screen for raising a drive: ONE form, one company visit, with every
+ * role under it added by "+ Add another role".
+ *
+ * The form decides what it produced and this page only routes it — one role is
+ * a plain drive row, two or more are the grouped values sent to the atomic
+ * `save_company_drive_with_roles` RPC, so the visit and its roles commit or
+ * fail together.
  *
  * A submitted PIF leaves the AE's hands entirely: the Delivery Head approves
  * or rejects it, and rejection is permanent (§3.1). The confirmation says so,
  * because an AE who expects to edit it later will be surprised.
  */
+
+/** One role arrives flat; several arrive grouped, with a `roles` array on them. */
+function isGrouped(values: PifFormValues | MultiRolePifValues): values is MultiRolePifValues {
+  return Array.isArray((values as MultiRolePifValues).roles);
+}
+
 export function PifPage({ repository }: { repository?: PifRepository }) {
   const [searchParams] = useSearchParams();
   const companyNameParam = searchParams.get("companyName");
@@ -37,18 +39,17 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
   const [repo] = useState<PifRepository>(
     () => repository ?? createSupabasePifRepository(supabase()),
   );
-  const [mode, setMode] = useState<Mode>(() =>
-    searchParams.get("mode") === "multi" ? "multi" : "single",
-  );
   const [outcome, setOutcome] = useState<"draft" | "submitted" | null>(null);
-  const [outcomeMode, setOutcomeMode] = useState<Mode>("single");
-  const [roleCount, setRoleCount] = useState(0);
+  /** How many roles went up as one visit; null means a single drive row. */
+  const [outcomeRoles, setOutcomeRoles] = useState<number | null>(null);
   /**
    * B1 (UAT 2026-08-19): once saved, the draft's id travels with the session
    * so every further save — and the final submit — lands on the SAME row.
    * Without it, save-then-submit left an orphan draft on every drives list.
    */
   const [draftId, setDraftId] = useState<string | undefined>(undefined);
+  /** The same rule for a multi-role visit, whose row is the EVENT, not a role. */
+  const [eventDraftId, setEventDraftId] = useState<string | undefined>(undefined);
   /** The assessed-skills catalogue for the mandatory-skills picker (part A). */
   const [skillAreas, setSkillAreas] = useState<readonly string[]>([]);
   const [existingCompanies, setExistingCompanies] = useState<readonly CompanySuggestion[]>([]);
@@ -60,8 +61,8 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     }
   }, [repo]);
 
-  const initialValues = useMemo<Partial<PifFormValues>>(() => {
-    const init: Partial<PifFormValues> = {};
+  const initialValues = useMemo<Partial<MultiRolePifValues>>(() => {
+    const init: Partial<MultiRolePifValues> = {};
     if (companyNameParam && companyNameParam.trim() !== "") {
       init.companyName = companyNameParam.trim();
     }
@@ -77,60 +78,50 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     return init;
   }, [companyNameParam, companyDriveIdParam, companyIdParam, tentativeDateParam]);
 
-  function switchMode(next: Mode) {
-    if (next === mode) return;
-    // The banner belongs to whichever form produced it — switching forms
-    // must not show the other form's stale status.
-    setOutcome(null);
-    setMode(next);
-  }
-
-  async function submitSingle(values: PifFormValues) {
-    await repo.submit(values, draftId);
-    setOutcomeMode("single");
-    setOutcome("submitted");
-  }
-
-  async function saveDraftSingle(values: PifFormValues) {
-    const saved = await repo.saveDraft(values, draftId);
+  async function write(values: PifFormValues | MultiRolePifValues, intent: "draft" | "submitted") {
+    if (isGrouped(values)) {
+      // An event the AE picked in the drive selector outranks the visit this
+      // session last saved: they have said, explicitly, where these go.
+      const target = values.id ?? eventDraftId;
+      const saved =
+        intent === "draft"
+          ? await repo.saveCompanyDriveDraft(values, target)
+          : await repo.submitCompanyDrive(values, target);
+      setEventDraftId(saved.eventId === "" ? undefined : saved.eventId);
+      setOutcomeRoles((values.roles ?? []).length);
+      setOutcome(intent);
+      return;
+    }
+    const saved =
+      intent === "draft"
+        ? await repo.saveDraft(values, draftId)
+        : await repo.submit(values, draftId);
     setDraftId(saved.id);
-    setOutcomeMode("single");
-    setOutcome("draft");
+    setOutcomeRoles(null);
+    setOutcome(intent);
   }
 
-  async function submitMulti(values: MultiRolePifValues) {
-    await repo.submitCompanyDrive(values);
-    setRoleCount((values.roles ?? []).length);
-    setOutcomeMode("multi");
-    setOutcome("submitted");
-  }
-
-  async function saveDraftMulti(values: MultiRolePifValues) {
-    await repo.saveCompanyDriveDraft(values);
-    setRoleCount((values.roles ?? []).length);
-    setOutcomeMode("multi");
-    setOutcome("draft");
-  }
+  const getCompanyEvents = repo.getCompanyEvents?.bind(repo);
 
   if (outcome === "submitted") {
     return (
       <Card className="p-6">
         <h1 className="font-[Raleway] text-xl font-bold text-[#3D3777]">
-          {outcomeMode === "multi"
-            ? "Company drive submitted for approval"
-            : "PIF submitted for approval"}
+          {outcomeRoles === null
+            ? "PIF submitted for approval"
+            : "Company drive submitted for approval"}
         </h1>
         <p className="mt-2 text-sm text-ink-700">
-          {outcomeMode === "multi" ? (
-            <>
-              {roleCount} role{roleCount === 1 ? "" : "s"} raised under one recruitment event. The
-              Delivery Head will review them together and set the offer category for each. A
-              rejected submission cannot be edited or resubmitted — a fresh one would be needed.
-            </>
-          ) : (
+          {outcomeRoles === null ? (
             <>
               The Delivery Head will review it and set the offer category. A rejected PIF cannot be
               edited or resubmitted — a fresh one would be needed.
+            </>
+          ) : (
+            <>
+              {outcomeRoles} role{outcomeRoles === 1 ? "" : "s"} raised under one recruitment event.
+              The Delivery Head will review them together and set the offer category for each. A
+              rejected submission cannot be edited or resubmitted — a fresh one would be needed.
             </>
           )}
         </p>
@@ -138,27 +129,8 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     );
   }
 
-  const getCompanyEvents = repo.getCompanyEvents?.bind(repo);
-
   return (
     <>
-      <fieldset aria-label="What this PIF covers" className="mb-4 flex flex-wrap gap-2">
-        {MODES.map((m) => (
-          <button
-            key={m.value}
-            type="button"
-            aria-pressed={mode === m.value}
-            onClick={() => switchMode(m.value)}
-            className={`rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
-              mode === m.value
-                ? "bg-[#3D3777] text-white shadow-sm"
-                : "border border-line bg-surface text-ink-700 hover:border-brand-300"
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </fieldset>
       {outcome === "draft" && (
         <Card className="mb-4 border border-[#FFB800] bg-[#FFF9E8] p-4">
           <p role="status" className="text-sm text-ink-900">
@@ -166,23 +138,14 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
           </p>
         </Card>
       )}
-      {mode === "multi" ? (
-        <PifMultiForm
-          onSubmit={submitMulti}
-          onSaveDraft={saveDraftMulti}
-          skillAreas={skillAreas}
-          existingCompanies={existingCompanies}
-        />
-      ) : (
-        <PifForm
-          onSubmit={submitSingle}
-          onSaveDraft={saveDraftSingle}
-          skillAreas={skillAreas}
-          initialValues={initialValues}
-          existingCompanies={existingCompanies}
-          {...(getCompanyEvents ? { getCompanyEvents } : {})}
-        />
-      )}
+      <PifForm
+        onSubmit={(values) => write(values, "submitted")}
+        onSaveDraft={(values) => write(values, "draft")}
+        skillAreas={skillAreas}
+        initialValues={initialValues}
+        existingCompanies={existingCompanies}
+        {...(getCompanyEvents ? { getCompanyEvents } : {})}
+      />
     </>
   );
 }

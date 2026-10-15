@@ -830,3 +830,158 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
     ).rejects.toThrow("Your session has expired");
   });
 });
+
+/**
+ * "the already existing company data should be get properly".
+ *
+ * THREE tables name a company and only one of them is the registry: `companies`
+ * (with an id), `company_drives` (a visit) and `drives` (a role — the only one
+ * the single-role PIF ever wrote). Reading `companies` alone listed the handful
+ * of hand-registered names, hid every company that arrived through a drive, and
+ * so autofilled nothing.
+ */
+describe("existingCompanies — every table that names a company", () => {
+  it("merges the registry with drive-raised names, deduped and alphabetical", async () => {
+    const { client } = storageStub();
+    server.use(
+      http.get(`${BASE}/rest/v1/companies`, () =>
+        HttpResponse.json([
+          { id: "c-1", name: "Zoho Corporation", industry: "Software", website: null },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/company_drives`, () =>
+        HttpResponse.json([{ company_name: "Freshworks" }]),
+      ),
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([
+          { company_name: "TCS", industry: "IT services", company_website: "https://tcs.com" },
+          // The same company again, in another case: one entry, not two.
+          { company_name: "zoho corporation", industry: "Ignored", company_website: null },
+        ]),
+      ),
+    );
+
+    const found = await createSupabasePifRepository(
+      client,
+      async () => "ae-1",
+    ).existingCompanies?.();
+
+    expect(found).toEqual([
+      { name: "Freshworks", industry: null, website: null },
+      { name: "TCS", industry: "IT services", website: "https://tcs.com" },
+      { name: "Zoho Corporation", id: "c-1", industry: "Software", website: null },
+    ]);
+  });
+
+  it("lets a later source fill what the registry left blank", async () => {
+    const { client } = storageStub();
+    server.use(
+      http.get(`${BASE}/rest/v1/companies`, () =>
+        HttpResponse.json([{ id: "c-1", name: "Zoho Corporation", industry: null, website: null }]),
+      ),
+      http.get(`${BASE}/rest/v1/company_drives`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([
+          {
+            company_name: "Zoho Corporation",
+            industry: "Software",
+            company_website: "https://zoho.com",
+          },
+        ]),
+      ),
+    );
+
+    const found = await createSupabasePifRepository(
+      client,
+      async () => "ae-1",
+    ).existingCompanies?.();
+
+    expect(found).toEqual([
+      { name: "Zoho Corporation", id: "c-1", industry: "Software", website: "https://zoho.com" },
+    ]);
+  });
+
+  it("loses one source, not the whole autocomplete, when a read is refused", async () => {
+    const { client } = storageStub();
+    server.use(
+      http.get(`${BASE}/rest/v1/companies`, () => new HttpResponse(null, { status: 403 })),
+      http.get(`${BASE}/rest/v1/company_drives`, () => new HttpResponse(null, { status: 403 })),
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([{ company_name: "TCS", industry: null, company_website: null }]),
+      ),
+    );
+
+    const found = await createSupabasePifRepository(
+      client,
+      async () => "ae-1",
+    ).existingCompanies?.();
+
+    expect(found).toEqual([{ name: "TCS", industry: null, website: null }]);
+  });
+});
+
+/**
+ * `0116` refuses `p_event.id` for a visit that is not in `company_drives` —
+ * "Company drive event not found." The old code always sent a fresh uuid, so
+ * every FIRST save of a multi-role drive failed on it. A new visit sends no id
+ * and lets the RPC mint one.
+ */
+describe("the visit an event save names", () => {
+  const eventValues = (extra: Record<string, unknown> = {}) => ({
+    companyName: "Zoho Corporation",
+    industry: "Software",
+    companyWebsite: "",
+    contacts: [],
+    driveMode: "on_campus" as const,
+    venueStatus: "not_yet_confirmed" as const,
+    venue: "",
+    tentativeDate: "",
+    timelineNotes: "",
+    joiningTimeline: "" as const,
+    roles: [],
+    ...extra,
+  });
+
+  function captureRpc() {
+    const { client } = storageStub();
+    let sent: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ eventId: "event-77", roleIds: [], status: "draft" });
+      }),
+    );
+    return { client, sent: () => sent };
+  }
+
+  it("sends none for a visit that has not been saved yet", async () => {
+    const { client, sent } = captureRpc();
+    const result = await createSupabasePifRepository(
+      client,
+      async () => "ae-1",
+    ).saveCompanyDriveDraft(eventValues());
+
+    expect(sent().p_event).toMatchObject({ id: null });
+    // The id the RPC minted is what the next save of this visit must name.
+    expect(result.eventId).toBe("event-77");
+  });
+
+  it("names the visit the AE picked from the existing drive list", async () => {
+    const { client, sent } = captureRpc();
+    await createSupabasePifRepository(client, async () => "ae-1").submitCompanyDrive(
+      eventValues({ id: "event-9" }),
+    );
+
+    expect(sent().p_event).toMatchObject({ id: "event-9" });
+  });
+
+  it("names the visit this session already saved as a draft", async () => {
+    const { client, sent } = captureRpc();
+    await createSupabasePifRepository(client, async () => "ae-1").saveCompanyDriveDraft(
+      eventValues(),
+      "event-12",
+    );
+
+    expect(sent().p_event).toMatchObject({ id: "event-12" });
+  });
+});

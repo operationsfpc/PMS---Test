@@ -59,6 +59,11 @@ export interface CompanySuggestion {
   readonly website?: string | null;
 }
 
+/** A `CompanySuggestion` while it is being assembled from several sources. */
+type MutableCompanySuggestion = {
+  -readonly [K in keyof CompanySuggestion]: CompanySuggestion[K];
+};
+
 export interface ExistingDriveEvent {
   readonly id: string;
   readonly companyName: string;
@@ -363,7 +368,15 @@ export function createSupabasePifRepository(
       throw new PifError("Your session has expired. Please sign in again.");
     }
 
-    const eventId = existingEventId ?? values.id ?? crypto.randomUUID();
+    /*
+     * `0116` raises "Company drive event not found." for an id whose row does
+     * not exist, so a NEW visit must send NO id and let the RPC mint one. A
+     * fresh uuid here looked harmless and was not: it made every first save of
+     * a multi-role drive fail. The id only travels when it names a visit that
+     * is already in the database — one saved as a draft earlier in this session,
+     * or one the AE picked from the existing-drive list.
+     */
+    const knownEventId = existingEventId ?? values.id ?? null;
 
     const processedRoles = await Promise.all(
       (values.roles ?? []).map(async (role) => {
@@ -417,7 +430,7 @@ export function createSupabasePifRepository(
     );
 
     const eventPayload = {
-      id: eventId,
+      id: knownEventId,
       companyId: nullIfBlank(values.companyId),
       companyName: values.companyName,
       industry: nullIfBlank(values.industry),
@@ -454,7 +467,7 @@ export function createSupabasePifRepository(
 
     const res = (data ?? {}) as { eventId?: string; roleIds?: string[]; status?: string };
     return {
-      eventId: res.eventId ?? eventId,
+      eventId: res.eventId ?? knownEventId ?? "",
       roleIds: res.roleIds ?? [],
       status: res.status ?? status,
     };
@@ -474,41 +487,55 @@ export function createSupabasePifRepository(
         .map((r) => String(r.name ?? ""))
         .filter((n) => n !== "");
     },
+    /*
+     * THREE tables name a company and only one of them is the registry.
+     * `companies` has the id; `company_drives` names a visit; `drives` names a
+     * role — and the single-role PIF writes only that one, never creating a
+     * registry row. Reading `companies` alone therefore listed the handful of
+     * hand-registered names, left every drive-raised company out of the
+     * autocomplete, and so autofilled nothing. All three are merged now,
+     * case-insensitively: the earliest source wins the name and a later one
+     * fills what the earlier left blank.
+     */
     async existingCompanies(): Promise<readonly CompanySuggestion[]> {
-      const { data, error } = await client
-        .from("companies")
-        .select("id, name, industry, website")
-        .order("name");
+      const byName = new Map<string, MutableCompanySuggestion>();
 
-      if (error === null && Array.isArray(data) && data.length > 0) {
-        return data.map((c) => ({
-          id: c.id as string,
-          name: c.name as string,
-          industry: (c.industry as string | null) ?? null,
-          website: (c.website as string | null) ?? null,
-        }));
-      }
+      const text = (value: unknown): string | null => {
+        const raw = typeof value === "string" ? value.trim() : "";
+        return raw === "" ? null : raw;
+      };
 
-      const { data: drivesData } = await client
-        .from("drives")
-        .select("company_name, industry, company_website")
-        .order("company_name");
+      const remember = (row: Record<string, unknown>) => {
+        const name = text(row.name ?? row.company_name);
+        if (name === null) return;
+        const key = name.toLowerCase();
+        const held = byName.get(key);
+        const merged: MutableCompanySuggestion = {
+          name: held?.name ?? name,
+          industry: held?.industry ?? text(row.industry),
+          website: held?.website ?? text(row.website ?? row.company_website),
+        };
+        const id = held?.id ?? text(row.id);
+        if (id !== null && id !== undefined) merged.id = id;
+        byName.set(key, merged);
+      };
 
-      if (!Array.isArray(drivesData)) return [];
-      const seen = new Set<string>();
-      const results: CompanySuggestion[] = [];
-      for (const row of drivesData) {
-        const name = String(row.company_name ?? "").trim();
-        if (name && !seen.has(name.toLowerCase())) {
-          seen.add(name.toLowerCase());
-          results.push({
-            name,
-            industry: (row.industry as string | null) ?? null,
-            website: (row.company_website as string | null) ?? null,
-          });
-        }
-      }
-      return results;
+      /** A refused read costs one source, not the whole autocomplete. */
+      const read = async (
+        table: string,
+        columns: string,
+      ): Promise<readonly Record<string, unknown>[]> => {
+        const { data, error } = await client.from(table).select(columns);
+        if (error !== null || !Array.isArray(data)) return [];
+        return data as unknown as readonly Record<string, unknown>[];
+      };
+
+      for (const row of await read("companies", "id, name, industry, website")) remember(row);
+      for (const row of await read("company_drives", "company_name")) remember(row);
+      for (const row of await read("drives", "company_name, industry, company_website"))
+        remember(row);
+
+      return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
     },
     async getCompanyEvents(companyName: string): Promise<readonly ExistingDriveEvent[]> {
       const trimmed = companyName.trim();
