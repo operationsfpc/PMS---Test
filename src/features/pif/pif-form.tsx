@@ -1,8 +1,10 @@
+import { ToastContainer, useToast } from "@components/toast";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { ROLE_CATEGORIES } from "@domain/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type FieldErrors, useFieldArray } from "react-hook-form";
 import { control, Labelled, numeric, Section, SectionNav } from "./pif-controls";
+import { extractPifValidationIssues } from "./pif-diagnostics";
 import {
   CompanyNameField,
   ContactsEditor,
@@ -137,6 +139,7 @@ function RoleBlock({
         {(id) => (
           <input
             id={id}
+            placeholder="e.g. Associate Software Engineer"
             className={control}
             {...roleApi.register(roleApi.field("roleTitle") as never)}
           />
@@ -168,6 +171,7 @@ function RoleBlock({
           <input
             id={id}
             type="number"
+            placeholder="e.g. 10"
             className={control}
             {...roleApi.register(roleApi.field("openings") as never, numeric)}
           />
@@ -177,6 +181,7 @@ function RoleBlock({
         {(id) => (
           <input
             id={id}
+            placeholder="e.g. Chennai / Bangalore / Hybrid"
             className={control}
             {...roleApi.register(roleApi.field("workLocations") as never)}
           />
@@ -191,6 +196,7 @@ function RoleBlock({
         {(id) => (
           <input
             id={id}
+            placeholder="e.g. 1 year service agreement or None"
             className={control}
             {...roleApi.register(roleApi.field("bondDetails") as never)}
           />
@@ -244,10 +250,39 @@ export function PifForm({
   getCompanyEvents?: (companyName: string) => Promise<readonly ExistingDriveEvent[]>;
 }) {
   const [seed] = useState(() => ({ ...UNIFIED_DEFAULTS, ...initialValues }));
+  const { toasts, toast, dismiss } = useToast();
 
   const { form, run, failure } = usePifIntent<MultiRolePifValues>({
     schemaFor: (mode) => (mode === "draft" ? multiRolePifDraftSchema : multiRolePifSubmitSchema),
     defaultValues: seed,
+    onInvalid: (mode, validationErrors) => {
+      const issues = extractPifValidationIssues(validationErrors);
+      const title =
+        mode === "submit"
+          ? "Please resolve the following issues before submitting:"
+          : "Draft cannot be saved:";
+      toast({
+        title,
+        description: issues.length > 0 ? `${issues.length} field(s) require attention:` : undefined,
+        issues,
+        tone: "danger",
+        duration: 9000,
+      });
+
+      if (typeof document !== "undefined") {
+        setTimeout(() => {
+          const firstInvalid = document.querySelector<HTMLElement>(
+            '[aria-invalid="true"], [role="alert"], input:invalid, select:invalid, textarea:invalid',
+          );
+          if (firstInvalid) {
+            if (typeof firstInvalid.scrollIntoView === "function") {
+              firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            firstInvalid.focus?.();
+          }
+        }, 50);
+      }
+    },
     onCommit: (mode, values) => {
       const commit = mode === "draft" ? onSaveDraft : onSubmit;
       const roleList = values.roles ?? [];
@@ -774,6 +809,8 @@ export function PifForm({
           </Button>
         </div>
       </form>
+
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

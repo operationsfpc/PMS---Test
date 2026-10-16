@@ -141,3 +141,11 @@ export function DataTable({
     </div>
   );
 }
+
+// Re-export modern Shadcn primitives for convenient project-wide consumption
+export * from "./alert-dialog";
+export * from "./combobox";
+export * from "./data-table";
+export * from "./sheet";
+export * from "./tabs";
+export * from "./toast";

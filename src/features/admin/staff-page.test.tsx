@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { StaffPage } from "./staff-page";
@@ -48,10 +48,13 @@ describe("changing a staff member's role", () => {
     const user = userEvent.setup();
     render(<StaffPage repository={repo({ list: async () => EXISTING, changeRole })} />);
 
-    const select = await screen.findByRole("combobox", { name: /role for cpc one/i });
+    await user.click(await screen.findByRole("button", { name: /edit cpc one/i }));
+    const dialog = await screen.findByRole("dialog", { name: /edit cpc one/i });
+    const select = within(dialog).getByRole("combobox", { name: /role for cpc one/i });
     expect((select as HTMLSelectElement).value).toBe("campus_placement_coordinator");
 
     await user.selectOptions(select, "delivery_head");
+    await user.click(within(dialog).getByRole("button", { name: /save changes/i }));
 
     await waitFor(() =>
       expect(changeRole).toHaveBeenCalledWith("cpc@faceprep.in", "delivery_head"),
@@ -71,10 +74,13 @@ describe("changing a staff member's role", () => {
       />,
     );
 
-    const select = await screen.findByRole("combobox", { name: /role for cpc one/i });
+    await user.click(await screen.findByRole("button", { name: /edit cpc one/i }));
+    const dialog = await screen.findByRole("dialog", { name: /edit cpc one/i });
+    const select = within(dialog).getByRole("combobox", { name: /role for cpc one/i });
     await user.selectOptions(select, "delivery_head");
+    await user.click(within(dialog).getByRole("button", { name: /save changes/i }));
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/last admin/i);
+    expect((await within(dialog).findByRole("alert")).textContent).toMatch(/last admin/i);
   });
 });
 
@@ -279,14 +285,14 @@ describe("mapping an existing staff member to a campus", () => {
   ];
 
   it("shows the campus a coordinator is mapped to", async () => {
+    const user = userEvent.setup();
     render(
       <StaffPage repository={repo({ list: async () => CPC, campuses: async () => CAMPUSES })} />,
     );
 
-    // Asserted on the row's own control, not on the text: the invite form
-    // above lists every campus name too, so findByText would pass on that and
-    // prove nothing about the mapping.
-    const select = await screen.findByRole("combobox", { name: /campus for cpc one/i });
+    await user.click(await screen.findByRole("button", { name: /edit cpc one/i }));
+    const dialog = await screen.findByRole("dialog", { name: /edit cpc one/i });
+    const select = within(dialog).getByRole("combobox", { name: /campus for cpc one/i });
     expect((select as HTMLSelectElement).value).toBe("c1");
   });
 
@@ -313,23 +319,30 @@ describe("mapping an existing staff member to a campus", () => {
       />,
     );
 
-    const select = await screen.findByRole("combobox", { name: /campus for cpc one/i });
+    await user.click(await screen.findByRole("button", { name: /edit cpc one/i }));
+    const dialog = await screen.findByRole("dialog", { name: /edit cpc one/i });
+    const select = within(dialog).getByRole("combobox", { name: /campus for cpc one/i });
     await user.selectOptions(select, "c2");
+    await user.click(within(dialog).getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => expect(setCampuses).toHaveBeenCalledWith("cpc@faceprep.in", ["c2"]));
   });
 
   /** One campus alone: a multi-select would offer authority we do not grant. */
   it("offers a coordinator a single choice, not a set of checkboxes", async () => {
+    const user = userEvent.setup();
     render(
       <StaffPage repository={repo({ list: async () => CPC, campuses: async () => CAMPUSES })} />,
     );
 
-    const select = await screen.findByRole("combobox", { name: /campus for cpc one/i });
+    await user.click(await screen.findByRole("button", { name: /edit cpc one/i }));
+    const dialog = await screen.findByRole("dialog", { name: /edit cpc one/i });
+    const select = within(dialog).getByRole("combobox", { name: /campus for cpc one/i });
     expect((select as HTMLSelectElement).multiple).toBe(false);
   });
 
   it("does not offer a campus to a role that has none", async () => {
+    const user = userEvent.setup();
     render(
       <StaffPage
         repository={repo({
@@ -348,8 +361,9 @@ describe("mapping an existing staff member to a campus", () => {
       />,
     );
 
-    await screen.findByText("The CEO");
-    expect(screen.queryByRole("combobox", { name: /campus for the ceo/i })).toBeNull();
+    await user.click(await screen.findByRole("button", { name: /edit the ceo/i }));
+    const dialog = await screen.findByRole("dialog", { name: /edit the ceo/i });
+    expect(within(dialog).queryByRole("combobox", { name: /campus for the ceo/i })).toBeNull();
   });
 });
 
@@ -421,5 +435,99 @@ describe("reactivating a deactivated staff member", () => {
     await user.click(await screen.findByRole("button", { name: /activate meera iyer/i }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/could not update/i);
+  });
+});
+
+describe("EditStaffModal and modern staff actions", () => {
+  const MULTI_CAMPUS_STAFF = [
+    {
+      fullName: "Anand Verma",
+      email: "anand@faceprep.in",
+      role: "campus_manager" as const,
+      campuses: [{ id: "c1", name: "Alliance University" }],
+      acceptedAt: null, // pending sign-in
+      isActive: true,
+    },
+  ];
+
+  const CAMPUSES = [
+    { id: "c1", name: "Alliance University" },
+    { id: "c2", name: "SDNB Vaishnav College for Women" },
+  ];
+
+  it("opens Edit modal and updates both role and multi-campus selection", async () => {
+    const changeRole = vi.fn();
+    const setCampuses = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => MULTI_CAMPUS_STAFF,
+          campuses: async () => CAMPUSES,
+          changeRole,
+          setCampuses,
+        })}
+      />,
+    );
+
+    // Open Edit modal via Edit button
+    await user.click(await screen.findByRole("button", { name: /edit anand verma/i }));
+
+    // Verify dialog header is visible
+    const dialog = await screen.findByRole("dialog", { name: /edit anand verma/i });
+    expect(dialog).toBeDefined();
+
+    // Select second campus in checkbox grid within modal
+    const sdnbCheckbox = within(dialog).getByRole("checkbox", {
+      name: /sdnb vaishnav college for women/i,
+    });
+    await user.click(sdnbCheckbox);
+
+    // Click Save changes button inside modal
+    await user.click(within(dialog).getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(setCampuses).toHaveBeenCalledWith("anand@faceprep.in", ["c1", "c2"]),
+    );
+  });
+
+  it("opens Edit modal from 'Manage campuses' link on multi-campus row", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => MULTI_CAMPUS_STAFF,
+          campuses: async () => CAMPUSES,
+        })}
+      />,
+    );
+
+    // Click "Manage campuses"
+    await user.click(await screen.findByRole("button", { name: /manage campuses/i }));
+
+    expect(await screen.findByRole("dialog", { name: /edit anand verma/i })).toBeDefined();
+  });
+
+  it("resends invite email for staff who have not signed in yet", async () => {
+    const resendInvite = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+
+    render(
+      <StaffPage
+        repository={repo({
+          list: async () => MULTI_CAMPUS_STAFF,
+          campuses: async () => CAMPUSES,
+          resendInvite,
+        })}
+      />,
+    );
+
+    const resendBtn = await screen.findByRole("button", { name: /resend invite to anand verma/i });
+    await user.click(resendBtn);
+
+    await waitFor(() => expect(resendInvite).toHaveBeenCalledWith("anand@faceprep.in"));
+    expect(await screen.findByText(/invitation successfully queued and resent/i)).toBeDefined();
   });
 });

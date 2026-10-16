@@ -1339,4 +1339,29 @@ describe("PifForm — an existing company answers for itself", () => {
 
     expect(screen.getByText(/adding a drive for zoho corporation/i)).toBeDefined();
   });
+
+  it("surfaces validation toast with exact missing issues when submission fails validation", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    // Click submit on empty form
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    // Toast container should show with title and issues
+    expect(
+      await screen.findByText(/please resolve the following issues before submitting:/i),
+    ).toBeDefined();
+    expect(screen.getByText(/required fixes/i)).toBeDefined();
+    expect(screen.getByText(/company: recruiter organization must be specified/i)).toBeDefined();
+
+    // AE can dismiss the notification
+    const dismissBtn = screen.getByRole("button", { name: /dismiss notification/i });
+    await user.click(dismissBtn);
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/please resolve the following issues before submitting:/i),
+      ).toBeNull();
+    });
+  });
 });

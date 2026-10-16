@@ -27,6 +27,10 @@ export function usePifIntent<TValues extends FieldValues>(args: {
   schemaFor: (intent: "draft" | "submit") => ZodType;
   defaultValues: TValues;
   onCommit: (mode: "draft" | "submit", values: TValues) => Promise<void>;
+  onInvalid?: (
+    mode: "draft" | "submit",
+    errors: import("react-hook-form").FieldErrors<TValues>,
+  ) => void;
   failureFallback: string;
 }): {
   form: UseFormReturn<TValues>;
@@ -50,19 +54,26 @@ export function usePifIntent<TValues extends FieldValues>(args: {
 
   const run = (mode: "draft" | "submit") => async () => {
     intent.current = mode;
-    await form.handleSubmit(async (values) => {
-      setFailure(null);
-      try {
-        await args.onCommit(mode, values);
-      } catch (cause) {
-        // The repository knows WHY it failed. Replacing that with a blanket
-        // apology made a production failure impossible to diagnose, and told
-        // the AE to "try again" at something that could never succeed.
-        const reason =
-          cause instanceof Error && cause.message !== "" ? cause.message : args.failureFallback;
-        setFailure(`${reason} Your entries are still here.`);
-      }
-    })();
+    await form.handleSubmit(
+      async (values) => {
+        setFailure(null);
+        try {
+          await args.onCommit(mode, values);
+        } catch (cause) {
+          // The repository knows WHY it failed. Replacing that with a blanket
+          // apology made a production failure impossible to diagnose, and told
+          // the AE to "try again" at something that could never succeed.
+          const reason =
+            cause instanceof Error && cause.message !== "" ? cause.message : args.failureFallback;
+          setFailure(`${reason} Your entries are still here.`);
+        }
+      },
+      (errors) => {
+        if (args.onInvalid) {
+          args.onInvalid(mode, errors);
+        }
+      },
+    )();
   };
 
   return { form, run, failure };

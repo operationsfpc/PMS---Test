@@ -120,7 +120,7 @@ export function Labelled({
 }
 
 export const control =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-[#A46AFC]";
+  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-400 placeholder:font-normal transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 /**
  * An untouched optional number is NOT zero.

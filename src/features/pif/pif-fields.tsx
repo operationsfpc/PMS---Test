@@ -1,3 +1,4 @@
+import { Combobox } from "@components/combobox";
 import { Button } from "@components/ui";
 import { describeFileSize } from "@domain/attachments";
 import { driveVenueApplies } from "@domain/drive-venue";
@@ -123,6 +124,7 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
               <input
                 id={id}
                 type="number"
+                placeholder="e.g. 25000"
                 className={controlClass}
                 {...api.register(api.field("stipendMinMonthly") as never, numeric)}
               />
@@ -133,6 +135,7 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
               <input
                 id={id}
                 type="number"
+                placeholder="e.g. 35000"
                 className={controlClass}
                 {...api.register(api.field("stipendMaxMonthly") as never, numeric)}
               />
@@ -149,6 +152,7 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
                 id={id}
                 type="number"
                 step="0.01"
+                placeholder="e.g. 6.5"
                 className={controlClass}
                 {...api.register(api.field("ctcMinLpa") as never, numeric)}
               />
@@ -160,6 +164,7 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
                 id={id}
                 type="number"
                 step="0.01"
+                placeholder="e.g. 8.0"
                 className={controlClass}
                 {...api.register(api.field("ctcMaxLpa") as never, numeric)}
               />
@@ -169,6 +174,7 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
             {(id) => (
               <input
                 id={id}
+                placeholder="e.g. 6 LPA Fixed + 0.5 LPA Performance Bonus"
                 className={controlClass}
                 {...api.register(api.field("ctcBreakup") as never)}
               />
@@ -258,6 +264,7 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
             id={id}
             type="number"
             step="0.01"
+            placeholder="e.g. 7.5"
             className={controlClass}
             {...api.register(api.field("minOverallCgpa") as never, numeric)}
           />
@@ -284,6 +291,7 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
             id={id}
             type="number"
             step="0.01"
+            placeholder="e.g. 60"
             className={controlClass}
             {...api.register(api.field("minTenthPercentage") as never, numeric)}
           />
@@ -295,6 +303,7 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
             id={id}
             type="number"
             step="0.01"
+            placeholder="e.g. 60"
             className={controlClass}
             {...api.register(api.field("minTwelfthPercentage") as never, numeric)}
           />
@@ -681,27 +690,34 @@ export function CompanyNameField<T extends FieldValues>({
     readonly website?: string | null;
   }[];
 }) {
+  const companyNameValue = (useWatch({
+    control: api.control,
+    name: api.field("companyName") as never,
+  }) ?? "") as unknown as string;
+
+  const options = existingCompanies.map((c) => ({
+    value: c.id ?? c.name,
+    label: c.name,
+    sublabel: c.industry ?? null,
+  }));
+
   return (
     <Labelled label="Company name" required error={api.err("companyName")}>
       {(id) => (
-        <div>
-          <input
-            id={id}
-            className={controlClass}
-            {...api.register(api.field("companyName") as never)}
-            list={`${id}-companies-list`}
-            autoComplete="off"
-          />
-          {existingCompanies.length > 0 && (
-            <datalist id={`${id}-companies-list`}>
-              {existingCompanies.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.industry ? `${c.name} (${c.industry})` : c.name}
-                </option>
-              ))}
-            </datalist>
-          )}
-        </div>
+        <Combobox
+          id={id}
+          name={api.field("companyName")}
+          value={companyNameValue}
+          options={options}
+          placeholder="e.g. Zoho Corporation or search existing recruiter…"
+          error={Boolean(api.err("companyName"))}
+          allowCustom={true}
+          onChange={(val) => {
+            api.setValue(api.field("companyName") as never, val as never, {
+              shouldValidate: true,
+            });
+          }}
+        />
       )}
     </Labelled>
   );
@@ -756,6 +772,7 @@ export function ContactsEditor<T extends FieldValues>({
             <input
               id={`contact-name-${index}`}
               className={controlClass}
+              placeholder="e.g. Priya Sharma"
               {...api.register(`${api.field("contacts")}.${index}.name` as never)}
             />
           </div>
@@ -769,6 +786,7 @@ export function ContactsEditor<T extends FieldValues>({
             <input
               id={`contact-designation-${index}`}
               className={controlClass}
+              placeholder="e.g. Head of Talent Acquisition"
               {...api.register(`${api.field("contacts")}.${index}.designation` as never)}
             />
           </div>
@@ -782,6 +800,7 @@ export function ContactsEditor<T extends FieldValues>({
             <input
               id={`contact-email-${index}`}
               className={controlClass}
+              placeholder="e.g. priya.sharma@company.com"
               {...api.register(`${api.field("contacts")}.${index}.email` as never)}
             />
           </div>
@@ -796,6 +815,7 @@ export function ContactsEditor<T extends FieldValues>({
               <input
                 id={`contact-phone-${index}`}
                 className={controlClass}
+                placeholder="e.g. +91 98765 43210"
                 {...api.register(`${api.field("contacts")}.${index}.phone` as never)}
               />
             </div>

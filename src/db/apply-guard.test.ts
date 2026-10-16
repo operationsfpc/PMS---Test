@@ -592,3 +592,157 @@ describe("the CGPA, arrear and course gates, above the override (0119)", () => {
     await expect(apply(overridden)).resolves.toHaveLength(1);
   });
 });
+
+/**
+ * 0119 — the batch the recruiter actually named.
+ *
+ * `eligible_passing_years` has been on the drive since 0004 and enforced by
+ * nobody: the gate never read it, so a student graduating in a year the company
+ * did not ask for could take a seat it reserved for the next batch. An empty
+ * array is the same silence as an empty degree list — it names no year, so it
+ * excludes none.
+ */
+describe("the passing-year batch the drive names (0119)", () => {
+  beforeEach(async () => {
+    // The block above leaves Priya holding an offer; these tests are about the
+    // batch year and must not be decided by the ladder.
+    await t.sql(`delete from applications where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from offers where student_id = $1`, [ids.priya]);
+    await t.sql(`delete from student_role_preferences where student_id = $1`, [ids.priya]);
+  });
+
+  it("refuses a year the drive did not ask for", async () => {
+    const drive = await makeDrive({ eligible_passing_years: "{2025}" });
+
+    await t.expectRejection(() => apply(drive), /not open to your passing year/i);
+  });
+
+  it("takes the year it asks for, and any year when it asks for none", async () => {
+    await expect(
+      apply(await makeDrive({ eligible_passing_years: "{2025,2026}" })),
+    ).resolves.toHaveLength(1);
+    await expect(apply(await makeDrive())).resolves.toHaveLength(1);
+  });
+
+  it("is not lifted by the override", async () => {
+    const drive = await makeDrive({
+      eligible_passing_years: "{2025}",
+      open_to_all_override: true,
+      open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+    });
+
+    await t.expectRejection(() => apply(drive), /not open to your passing year/i);
+  });
+});
+
+/**
+ * 0119 — the two readers of one rule.
+ *
+ * Going live mails the cohort. Applying admits them. They were written months
+ * apart and had drifted: the mailer read the roster instead of the verified
+ * transcript, and never applied the four gates below the override, so students
+ * were mailed drives the database then refused — and a prestige drive failed to
+ * mail the very students the override opened it to.
+ *
+ * These compare the two sets directly rather than restating each rule, which is
+ * the only way a drift like this gets caught instead of explained.
+ */
+describe("a live drive mails exactly who the gate admits (0119)", () => {
+  const NISHA = "52000000-0000-0000-0000-000000000011";
+  const NISHA_USER = "62000000-0000-0000-0000-000000000011";
+  const RAVI = "52000000-0000-0000-0000-000000000012";
+  const RAVI_USER = "62000000-0000-0000-0000-000000000012";
+
+  /** [student, user] pairs, in one place so both sides of the comparison use it. */
+  let cohort: readonly (readonly [string, string])[];
+
+  beforeAll(async () => {
+    for (const [student, user, roll, name] of [
+      [NISHA, NISHA_USER, "21CSE8888", "Nisha K"],
+      [RAVI, RAVI_USER, "21CSE8889", "Ravi S"],
+    ] as const) {
+      await t.sql(
+        `insert into students (id, campus_id, degree_id, branch_id, roll_number, full_name, email,
+                               passing_year, srf_status, participation_status, consent_given_at)
+         values ($1,$2,$3,$4,$5,$6,$7,2026,'srf_approved','active', now())`,
+        [student, ids.campusA, ids.degree, ids.branch, roll, name, `${roll}@gmail.com`],
+      );
+      await t.sql(`insert into auth.users (id, email) values ($1,$2)`, [user, `${roll}@gmail.com`]);
+    }
+
+    // Arjun applies as himself below, which needs his rostered account claimed.
+    await t.sql(`insert into auth.users (id, email) values ($1,'arjun@gmail.com')`, [
+      ids.arjunUser,
+    ]);
+  });
+
+  beforeEach(async () => {
+    cohort = [
+      [ids.priya, ids.priyaUser],
+      [ids.arjun, ids.arjunUser],
+      [NISHA, NISHA_USER],
+      [RAVI, RAVI_USER],
+    ];
+    for (const [student] of cohort) {
+      await t.sql(`delete from applications where student_id = $1`, [student]);
+      await t.sql(`delete from offers where student_id = $1`, [student]);
+      await t.sql(`delete from notifications where student_id = $1`, [student]);
+      await t.sql(`delete from student_role_preferences where student_id = $1`, [student]);
+    }
+
+    // Nisha asked for sales; the drive below is for a software role.
+    await t.sql(`insert into student_role_preferences (student_id, category) values ($1,'sales')`, [
+      NISHA,
+    ]);
+    // Ravi is already placed at the rung the drive sits on.
+    await giveOffer({ student_id: RAVI, offer_category: "dream" });
+  });
+
+  /** Who the drive mailed when it went live. */
+  async function mailed(driveId: string): Promise<string[]> {
+    const rows = await t.sql(
+      `select student_id from notifications
+        where drive_id = $1 and kind = 'drive_published'`,
+      [driveId],
+    );
+    return rows.map((r) => r.student_id as string).sort();
+  }
+
+  /** Who gets through the gate, tried as themselves under RLS. */
+  async function admitted(driveId: string): Promise<string[]> {
+    const through: string[] = [];
+    for (const [student, user] of cohort) {
+      try {
+        await t.asUser(
+          user,
+          `insert into applications (drive_id, student_id, profile_snapshot)
+           values ($1, $2, '{}'::jsonb)`,
+          [driveId, student],
+        );
+        through.push(student);
+      } catch {
+        // Refused, which is half of what this test is about.
+      }
+    }
+    return through.sort();
+  }
+
+  it("mails the two it admits and neither of the two it refuses", async () => {
+    const drive = await makeDrive();
+    const gotIn = await admitted(drive);
+
+    expect(await mailed(drive)).toEqual(gotIn);
+    expect(gotIn).toEqual([ids.arjun, ids.priya].sort());
+  });
+
+  it("widens the mail list with the gate once the override is on", async () => {
+    const drive = await makeDrive({
+      open_to_all_override: true,
+      open_to_all_reason: "Prestige drive — the client asked for the whole cohort.",
+    });
+    const gotIn = await admitted(drive);
+
+    expect(await mailed(drive)).toEqual(gotIn);
+    expect(gotIn).toHaveLength(4);
+  });
+});

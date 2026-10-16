@@ -1,3 +1,4 @@
+import { composeStaffInviteEmail } from "@domain/email-delivery";
 import {
   canChangeStaffRole,
   canInviteRole,
@@ -55,6 +56,8 @@ export interface StaffRepository {
   setCampuses(email: string, campusIds: readonly string[]): Promise<void>;
   /** Revokes the login outright. Refused when their work is still referenced. */
   remove(email: string): Promise<void>;
+  /** Re-queues the staff onboarding invitation email for an unaccepted account. */
+  resendInvite?(email: string): Promise<void>;
 }
 
 /** Who is asking. Both destructive operations need the email, not just the role. */
@@ -338,6 +341,40 @@ export function createSupabaseStaffRepository(
             ? "Their login has been revoked, but their record cannot be deleted because drives or results are still attributed to them. Deactivate them instead."
             : "Could not remove that staff member.",
         );
+      }
+    },
+
+    async resendInvite(email) {
+      const actor = await getActor();
+      if (actor.role !== "admin") {
+        throw new StaffError("Only an Admin may resend invitations.");
+      }
+
+      const target = email.trim().toLowerCase();
+      const staff = await repository.list();
+      const member = staff.find((m) => m.email.toLowerCase() === target);
+      if (member === undefined) throw new StaffError("That staff member no longer exists.");
+
+      const roleName = member.role.replaceAll("_", " ");
+      const campusNames = member.campuses.map((c) => c.name);
+
+      const emailObj = composeStaffInviteEmail({
+        fullName: member.fullName,
+        roleName,
+        campuses: campusNames,
+        email: member.email,
+        loginUrl: "https://pms.faceprepcampus.com/login",
+      });
+
+      const { error } = await client.from("email_deliveries").insert({
+        recipient_email: member.email,
+        status: "queued",
+        subject: emailObj.subject,
+        html_body: emailObj.html,
+      });
+
+      if (error !== null) {
+        throw new StaffError("Could not queue invitation email. Please try again.");
       }
     },
   };

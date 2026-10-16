@@ -48,8 +48,11 @@ export async function createTestDb(
 
   const apply = async (file: string) => {
     if (applied.has(file)) return;
+    const sql = readFileSync(join(MIGRATIONS, file), "utf8")
+      .replace(/create extension[^;]*pg_(cron|net)[^;]*;/gi, "")
+      .replace(/comment on extension[^;]*;/gi, "");
     try {
-      await db.exec(readFileSync(join(MIGRATIONS, file), "utf8"));
+      await db.exec(sql);
       applied.add(file);
     } catch (error) {
       throw new Error(`Migration ${file} failed: ${(error as Error).message}`);
@@ -57,10 +60,20 @@ export async function createTestDb(
   };
 
   await db.exec(readFileSync(SHIM, "utf8"));
+  await db.exec(
+    `create schema if not exists vault;
+     create table if not exists vault.decrypted_secrets (name text, decrypted_secret text);`,
+  );
   for (const file of files) {
     if (options.through !== undefined && file.slice(0, 4) > options.through) break;
     await apply(file);
   }
+  await db.exec(
+    `create or replace function build_notification_email_html(
+       p_subject text, p_title text, p_subtitle text, p_recipient text,
+       p_body text, p_button_label text, p_url text
+     ) returns text language sql as $$ select coalesce(p_subject, '') $$;`,
+  );
 
   const migrateTo = async (prefix: string) => {
     for (const file of files) {
