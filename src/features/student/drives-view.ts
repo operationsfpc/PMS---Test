@@ -88,7 +88,7 @@ export const DRIVE_COLUMNS = `
   shift_night_timing, timeline_notes, joining_timeline, joining_immediate_notes,
   joining_later_notes, jd_storage_path, jd_file_name,
   mandatory_skills, drive_mode, venue, openings, additional_designations,
-  company_drive_id, tentative_date,
+  tentative_date,
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name, cities(name))),

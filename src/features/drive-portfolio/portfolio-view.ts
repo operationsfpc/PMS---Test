@@ -26,7 +26,7 @@ export const PORTFOLIO_DRIVE_COLUMNS = `
   ctc_min_lpa, ctc_max_lpa, drive_type,
   created_by, approved_by, published_by,
   application_start, application_end,
-  tentative_date, openings, company_drive_id,
+  tentative_date, openings,
   drive_rounds(
     id, sequence, name,
     round_participants(application_id),

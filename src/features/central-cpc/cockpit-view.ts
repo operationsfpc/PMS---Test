@@ -13,7 +13,7 @@ const one = <T>(value: unknown): T | null =>
  */
 export const COCKPIT_DRIVE_COLUMNS = `
   id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly,
-  drive_type, status, on_hold, created_at, application_end, drive_mode, venue, company_drive_id,
+  drive_type, status, on_hold, created_at, application_end, drive_mode, venue,
   tentative_date, drive_rounds(id, sequence, name), drive_target_campuses(campuses(name))
 `;
 

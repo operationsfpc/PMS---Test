@@ -44,7 +44,7 @@ const linkedNames = (value: unknown, key: string): readonly string[] =>
  */
 export const DASHBOARD_LIVE_DRIVE_COLUMNS = `
   id, company_name, role_title, status, drive_type, offer_category,
-  company_drive_id, tentative_date,
+  tentative_date,
   open_to_all_override, application_start, application_end,
   min_overall_cgpa, min_tenth_percentage, min_twelfth_percentage,
   arrears_policy, eligible_passing_years,
@@ -64,7 +64,7 @@ export const DASHBOARD_LIVE_DRIVE_COLUMNS = `
  */
 export const DASHBOARD_DRIVE_BOX_COLUMNS = `
   id, company_name, role_title, status, drive_type,
-  company_drive_id, tentative_date,
+  tentative_date,
   drive_target_campuses(campuses(name))
 `;
 

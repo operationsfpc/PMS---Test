@@ -46,8 +46,14 @@ BEGIN
         AND s.srf_status = 'srf_approved'
         AND s.participation_status = 'active'
         AND NOT EXISTS (
-          SELECT 1 FROM drive_applications da
-          WHERE da.drive_id = v_drive.id AND da.student_id = s.id
+          SELECT 1 FROM applications a
+          WHERE a.drive_id = v_drive.id AND a.student_id = s.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n
+          WHERE n.drive_id = v_drive.id
+            AND n.student_id = s.id
+            AND n.kind = 'drive_deadline_reminder'
         )
     LOOP
       -- Create notification

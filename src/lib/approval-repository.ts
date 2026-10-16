@@ -71,7 +71,7 @@ export type GetActorId = () => Promise<string | null>;
 // One string literal, deliberately: PostgREST infers the row type from the
 // literal, and a concatenation types every column as an error object.
 export const COLUMNS =
-  "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes, company_drive_id";
+  "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes";
 
 /** Long enough to open and read the PDF, short enough not to be forwardable. */
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -139,7 +139,7 @@ export function createSupabaseApprovalRepository(
       const eventIds = [
         ...new Set(
           rows
-            .map((row) => row.company_drive_id as string | null)
+            .map((row) => (row as Record<string, unknown>).company_drive_id as string | null)
             .filter((id): id is string => typeof id === "string" && id !== ""),
         ),
       ];
@@ -210,8 +210,11 @@ export function createSupabaseApprovalRepository(
         createdAt: (row.created_at as string | null) ?? null,
         jobDescriptionUrl: signed.get((row.jd_storage_path as string | null) ?? "") ?? null,
         jobDescriptionName: (row.jd_file_name as string | null) ?? null,
-        companyDriveId: (row.company_drive_id as string | null) ?? null,
-        event: events.get((row.company_drive_id as string | null) ?? "") ?? null,
+        companyDriveId:
+          ((row as Record<string, unknown>).company_drive_id as string | null) ?? null,
+        event:
+          events.get(((row as Record<string, unknown>).company_drive_id as string | null) ?? "") ??
+          null,
         shift: describeShift(
           row.shift_type as string | null,
           row.shift_night_timing as string | null,

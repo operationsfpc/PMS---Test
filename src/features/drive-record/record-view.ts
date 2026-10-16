@@ -123,7 +123,7 @@ export interface DriveRecordView {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const RECORD_DRIVE_COLUMNS = `
-  id, company_drive_id, company_name, industry, company_website, role_title, additional_designations,
+  id, company_name, industry, company_website, role_title, additional_designations,
   role_category, status, drive_type, drive_mode, venue, offer_category, openings,
   ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations,
   application_start, application_end, tentative_date,
@@ -391,14 +391,28 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
             })
             .sort((x, y) => x.sequence - y.sequence);
 
+          const snapshotEnvelope = (a.profile_snapshot ?? {}) as Record<string, unknown>;
+          const snapshotProfile = (snapshotEnvelope.profile ?? snapshotEnvelope) as Record<
+            string,
+            unknown
+          >;
+          const snapshotAcademics = (snapshotProfile.academics ?? snapshotProfile) as Record<
+            string,
+            unknown
+          >;
+
           return {
             applicationId,
             studentId: text(a.student_id),
-            fullName: text(student?.full_name) || "Unknown student",
-            rollNumber: text(student?.roll_number),
-            campus: one<{ name?: string }>(student?.campuses)?.name ?? "",
+            fullName:
+              text(student?.full_name) || text(snapshotProfile.fullName) || "Unknown student",
+            rollNumber: text(student?.roll_number) || text(snapshotProfile.rollNumber),
+            campus:
+              one<{ name?: string }>(student?.campuses)?.name ??
+              text(snapshotAcademics.campus) ??
+              "",
             appliedAt: a.applied_at as string,
-            snapshot: (a.profile_snapshot ?? {}) as Record<string, unknown>,
+            snapshot: snapshotEnvelope,
             shortlisted: shortlistRows.some((s) => s.included === true),
             hasOffer: offered.has(a.student_id as string),
             rounds: applicantRounds,

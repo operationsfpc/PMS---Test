@@ -20,8 +20,8 @@ import type {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PROGRESS_APPLICATION_COLUMNS =
-  "id, student_id, drive_id, students(full_name, roll_number, campuses(name)), shortlist_entries(included), " +
-  "drives(company_name, role_title, drive_type, status, company_drive_id, tentative_date)";
+  "id, student_id, drive_id, profile_snapshot, students(full_name, roll_number, campuses(name)), shortlist_entries(included), " +
+  "drives(company_name, role_title, drive_type, status, tentative_date)";
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
@@ -154,10 +154,15 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
           company_drive_id?: string | null;
           tentative_date?: string | null;
         }>(row.drives);
+        const envelope = (row.profile_snapshot ?? {}) as Record<string, unknown>;
+        const snapshot = (envelope.profile ?? envelope) as Record<string, unknown>;
+        const academics = (snapshot.academics ?? snapshot) as Record<string, unknown>;
         const student = one<{ full_name?: string; roll_number?: string; campuses?: unknown }>(
           row.students,
         );
-        const campusName = one<{ name?: string }>(student?.campuses)?.name;
+        const campusName =
+          one<{ name?: string }>(student?.campuses)?.name ??
+          (academics.campus as string | undefined);
 
         const studentRounds = (roundsByApplication.get(applicationId) ?? [])
           .map((roundId): StudentRoundProgress | null => {
@@ -182,8 +187,9 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
           // The popup under a count names people and links to their record,
           // so the read that produced the row has to carry who it belongs to.
           studentId,
-          studentName: student?.full_name ?? "Unknown student",
-          rollNumber: student?.roll_number ?? "—",
+          studentName:
+            (snapshot.fullName as string | undefined) ?? student?.full_name ?? "Unknown student",
+          rollNumber: (snapshot.rollNumber as string | undefined) ?? student?.roll_number ?? "—",
           campusName,
           // Every shortlist row, not the first: a student the coordinator
           // re-included after a withdrawal is not decided by whichever row
