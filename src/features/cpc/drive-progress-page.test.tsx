@@ -86,12 +86,47 @@ describe("DriveProgressPage", () => {
   });
 
   /**
-   * 2026-10-16: two roles raised on one company visit printed the company twice
-   * per card - once in an "event" strip, once in the card header - and both
-   * links went to the same drive record. The strip is gone, and each card says
-   * how many roles the visit raised.
+   * 2026-10-16 (Karthik): "central placement coordinator same company shows as
+   * two". Two roles raised on one company visit are ONE card now — the company
+   * named once, the visit counted once — with the roles folded into accordion
+   * rows that keep their own students. Folding must never merge: Priya applied
+   * to both roles and appears under both, because each was shortlisted, tested
+   * and offered on its own.
    */
-  it("says which visit a role belongs to, without naming the company twice", async () => {
+  it("gives one company visit one card with each role inside it", async () => {
+    const mts: DriveProgressEntry = {
+      ...DRIVE,
+      companyDriveId: "e1",
+      tentativeDate: "2026-11-05T00:00:00Z",
+    };
+    const qa: DriveProgressEntry = {
+      ...DRIVE,
+      driveId: "d2",
+      roleTitle: "Quality Analyst",
+      companyDriveId: "e1",
+      tentativeDate: "2026-11-05T00:00:00Z",
+      students: DRIVE.students.slice(0, 1),
+    };
+
+    render(<DriveProgressPage view={view([mts, qa])} />);
+
+    expect(await screen.findByText("Zoho")).toBeDefined();
+    expect(screen.getByText("2 roles")).toBeDefined();
+    // The company no longer links: one visit, two drive records, and picking
+    // one of them silently is how the old event strip sent readers to the
+    // wrong place. Each role links to its own record instead.
+    expect(screen.queryByRole("link", { name: "Zoho" })).toBeNull();
+    expect(screen.getAllByRole("link", { name: /open the drive record/i })).toHaveLength(2);
+
+    expect(screen.getAllByText("Priya Ramesh")).toHaveLength(2);
+    expect(screen.getAllByText("Arjun Menon")).toHaveLength(1);
+  });
+
+  /**
+   * Arrived open: the students are the reason the card exists, and a collapsed
+   * row would hide them behind a click that buys nothing.
+   */
+  it("opens each role of the visit so its students are on screen", async () => {
     const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1" };
     const qa: DriveProgressEntry = {
       ...DRIVE,
@@ -103,9 +138,42 @@ describe("DriveProgressPage", () => {
 
     render(<DriveProgressPage view={view([mts, qa])} />);
 
-    expect(await screen.findAllByText("2 roles at this visit")).toHaveLength(2);
-    expect(screen.getAllByText("Zoho")).toHaveLength(2);
-    expect(screen.getAllByRole("link", { name: /Zoho/ })).toHaveLength(2);
+    const engineer = await screen.findByRole("button", { name: /Engineer/ });
+    expect(engineer.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      screen.getByRole("button", { name: /Quality Analyst/ }).getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  /**
+   * A visit holds STUDENTS, not applications: a coordinator who reads "4" and
+   * phones four people finds three. Without a student id on every row the
+   * figure falls back to the head-count it can actually support.
+   */
+  it("counts one applicant who reached two roles of a visit once", async () => {
+    const withIds = DRIVE.students.map((s, i) => ({ ...s, studentId: `s${i + 1}` }));
+    const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1", students: withIds };
+    const qa: DriveProgressEntry = {
+      ...DRIVE,
+      driveId: "d2",
+      roleTitle: "Quality Analyst",
+      companyDriveId: "e1",
+      students: withIds.slice(0, 1),
+    };
+
+    render(<DriveProgressPage view={view([mts, qa])} />);
+
+    // 4 applications, 3 students; 3 shortlisted across the two roles.
+    expect(await screen.findByText(/3 applicants · 3 shortlisted/)).toBeDefined();
+  });
+
+  /** The company name of a one-role visit still links to its one record. */
+  it("keeps a standalone drive a single card that links straight to its record", async () => {
+    render(<DriveProgressPage view={view([DRIVE])} />);
+
+    expect(await screen.findByRole("link", { name: /Zoho/ })).toBeDefined();
+    expect(screen.getByText(/Engineer · 3 applicants/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Engineer/ })).toBeNull();
   });
 
   /**

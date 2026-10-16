@@ -1,7 +1,16 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
-import { groupDrivesByEvent } from "@domain/company-drive";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
+  Button,
+  Card,
+  PageHeader,
+} from "@components/ui";
+import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
   type DriveTypeFilter as DriveTypeFilterValue,
@@ -13,7 +22,7 @@ import { offerCategoryLabelOf } from "@domain/offer-category";
 import { describeOfferPay } from "@domain/offer-pay";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
 /**
@@ -76,7 +85,64 @@ const RESULT_TONE = (result: RoundResult | null, attendance: AttendanceStatus) =
   return "neutral" as const;
 };
 
+/**
+ * Five company VISITS a page, not five drives. A visit that raised four roles
+ * is one card now, and paging by role would have put half a company on each
+ * page — the same company twice on screen, which is what was reported.
+ */
 const PAGE_SIZE = 5;
+
+/** The slice of the cycle a coordinator is asking about, held per role. */
+type StageFilter = "all" | "shortlisted" | "in_rounds" | "offers";
+
+interface RoleSelection {
+  readonly college: string;
+  readonly stage: StageFilter;
+}
+
+const UNFILTERED: RoleSelection = { college: "", stage: "all" };
+
+const chipClass = (active: boolean, on: string, off: string) =>
+  `rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer border ${
+    active ? on : off
+  }`;
+
+const BRAND_ON = "bg-brand-500 text-white border-brand-600";
+const BRAND_OFF = "bg-surface text-ink-700 border-line hover:bg-surface-muted";
+const GOLD_OFF = "bg-surface text-gold-700 border-gold-300 hover:bg-gold-50";
+const SUCCESS_ON = "bg-success-600 text-white border-success-700";
+const SUCCESS_OFF = "bg-surface text-success-700 border-success-300 hover:bg-success-50";
+
+/**
+ * How far a set of applications has come. Every card on this page prints these
+ * four counts, for one role or for a whole visit.
+ *
+ * A student who applied to two roles of one visit is ONE applicant, and the
+ * student id is the only way to see that. When any row arrives without an id
+ * the figure falls back to a head-count rather than mixing two measures.
+ */
+function countStage(applications: readonly DriveProgressStudent[]) {
+  const ids = applications.flatMap((s) => (s.studentId === undefined ? [] : [s.studentId]));
+  return {
+    applicants:
+      ids.length === applications.length
+        ? countDistinctApplicants(ids.map((studentId) => ({ studentId })))
+        : applications.length,
+    shortlisted: applications.filter((s) => s.shortlisted).length,
+    inRounds: applications.filter((s) => s.rounds.length > 0).length,
+    offers: applications.filter((s) => s.offer !== null).length,
+  };
+}
+
+const dayIn = (iso: string | null | undefined) =>
+  iso === null || iso === undefined
+    ? null
+    : new Date(iso).toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 
 export function DriveProgressPage({ view }: { view: DriveProgressView }) {
   const [drives, setDrives] = useState<readonly DriveProgressEntry[] | null>(null);
@@ -86,10 +152,18 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DriveTypeFilterValue>("");
   const [page, setPage] = useState(1);
-  const [selectedCollegeByDrive, setSelectedCollegeByDrive] = useState<Record<string, string>>({});
-  const [selectedStageByDrive, setSelectedStageByDrive] = useState<
-    Record<string, "all" | "shortlisted" | "in_rounds" | "offers">
-  >({});
+  /**
+   * Where each role is being read, keyed by drive id so the choice survives
+   * folding a role away and turning the page.
+   */
+  const [selection, setSelection] = useState<Record<string, RoleSelection>>({});
+
+  const select = useCallback((driveId: string, next: Partial<RoleSelection>) => {
+    setSelection((prev) => {
+      const current = prev[driveId] ?? UNFILTERED;
+      return { ...prev, [driveId]: { ...current, ...next } };
+    });
+  }, []);
 
   // "Try again" is a re-run trigger, not a value this body reads: left out of
   // the list, a refused read could never be retried without leaving the screen.
@@ -135,21 +209,15 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         };
 
   /**
-   * How many roles each company visit raised, so a card can name the visit it
-   * belongs to. The event used to get its own header strip, which printed the
-   * company and a link to the very same drive record twice in one card — a
-   * coordinator reading past it counted the visit twice.
+   * One card per company visit. A legacy drive with no event of its own groups
+   * under its own drive id, so it stays the single-role visit it always was.
    */
-  const rolesPerEvent = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const [key, roles] of groupDrivesByEvent(visible)) counts.set(key, roles.length);
-    return counts;
-  }, [visible]);
+  const events = useMemo(() => [...groupDrivesByEvent(visible).entries()], [visible]);
 
-  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const paginatedDrives = useMemo(
-    () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [visible, page],
+  const totalPages = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
+  const paginatedEvents = useMemo(
+    () => events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [events, page],
   );
 
   return (
@@ -214,403 +282,17 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
             </Card>
           ) : null}
 
-          {paginatedDrives.map((drive) => {
-            const selectedCollege = selectedCollegeByDrive[drive.driveId] ?? "";
-            const selectedStage = selectedStageByDrive[drive.driveId] ?? "all";
-
-            // College-wise count aggregation
-            const collegeMap = new Map<
-              string,
-              { applied: number; shortlisted: number; inRounds: number; offers: number }
-            >();
-
-            for (const s of drive.students) {
-              const cName = s.campusName ?? "All Campuses";
-              const current = collegeMap.get(cName) ?? {
-                applied: 0,
-                shortlisted: 0,
-                inRounds: 0,
-                offers: 0,
-              };
-              collegeMap.set(cName, {
-                applied: current.applied + 1,
-                shortlisted: current.shortlisted + (s.shortlisted ? 1 : 0),
-                inRounds: current.inRounds + (s.rounds.length > 0 ? 1 : 0),
-                offers: current.offers + (s.offer !== null ? 1 : 0),
-              });
-            }
-
-            const collegeList = [...collegeMap.entries()].map(([name, counts]) => ({
-              name,
-              ...counts,
-            }));
-
-            const filteredStudents = drive.students.filter((s) => {
-              if (selectedCollege !== "" && (s.campusName ?? "All Campuses") !== selectedCollege) {
-                return false;
-              }
-              if (selectedStage === "shortlisted" && !s.shortlisted) return false;
-              if (selectedStage === "in_rounds" && s.rounds.length === 0) return false;
-              if (selectedStage === "offers" && s.offer === null) return false;
-              return true;
-            });
-
-            const totalShortlisted = drive.students.filter((s) => s.shortlisted).length;
-            const totalInRounds = drive.students.filter((s) => s.rounds.length > 0).length;
-            const totalOffers = drive.students.filter((s) => s.offer !== null).length;
-
-            const siblings = drive.companyDriveId
-              ? (rolesPerEvent.get(drive.companyDriveId) ?? 1)
-              : 1;
-            const when = drive.tentativeDate
-              ? new Date(drive.tentativeDate).toLocaleDateString("en-IN", {
-                  timeZone: "Asia/Kolkata",
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })
-              : null;
-            const role = drive.roleTitle ?? "Role not set";
-
-            return (
-              <Card key={drive.driveId} className="mb-6 overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
-                  <div className="min-w-0">
-                    <Link
-                      to={`/drives/${drive.driveId}`}
-                      className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900 hover:text-brand-600 hover:underline transition-colors"
-                    >
-                      {drive.companyName}
-                      <Badge tone={driveTypeTone(drive.driveType ?? null)}>
-                        {driveTypeLabel(drive.driveType ?? null)}
-                      </Badge>
-                      {siblings > 1 && <Badge tone="brand">{siblings} roles at this visit</Badge>}
-                    </Link>
-                    <p className="text-sm text-ink-500">
-                      {when === null ? role : `${role} · ${when}`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* Stage quick filter buttons */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedStageByDrive((prev) => ({
-                          ...prev,
-                          [drive.driveId]: "all",
-                        }))
-                      }
-                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer border ${
-                        selectedStage === "all"
-                          ? "bg-brand-500 text-white border-brand-600"
-                          : "bg-surface text-ink-700 border-line hover:bg-surface-muted"
-                      }`}
-                    >
-                      {drive.students.length} Total Applicants
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedStageByDrive((prev) => ({
-                          ...prev,
-                          [drive.driveId]: selectedStage === "shortlisted" ? "all" : "shortlisted",
-                        }))
-                      }
-                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer border ${
-                        selectedStage === "shortlisted"
-                          ? "bg-brand-500 text-white border-brand-600"
-                          : "bg-surface text-ink-700 border-line hover:bg-surface-muted"
-                      }`}
-                    >
-                      {totalShortlisted} Shortlisted
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedStageByDrive((prev) => ({
-                          ...prev,
-                          [drive.driveId]: selectedStage === "in_rounds" ? "all" : "in_rounds",
-                        }))
-                      }
-                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer border ${
-                        selectedStage === "in_rounds"
-                          ? "bg-brand-500 text-white border-brand-600"
-                          : "bg-surface text-gold-700 border-gold-300 hover:bg-gold-50"
-                      }`}
-                    >
-                      {totalInRounds} In Rounds
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedStageByDrive((prev) => ({
-                          ...prev,
-                          [drive.driveId]: selectedStage === "offers" ? "all" : "offers",
-                        }))
-                      }
-                      className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer border ${
-                        selectedStage === "offers"
-                          ? "bg-success-600 text-white border-success-700"
-                          : "bg-surface text-success-700 border-success-300 hover:bg-success-50"
-                      }`}
-                    >
-                      {totalOffers} Offers
-                    </button>
-                    <Badge tone="brand">{label(drive.status)}</Badge>
-                  </div>
-                </div>
-
-                {/* College-wise Clickable Count Cards */}
-                {collegeList.length > 0 && (
-                  <div className="border-b border-line bg-surface px-4 py-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-                      College Breakdown (Click card to filter college · Click counts to filter
-                      stage)
-                    </p>
-                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-                      {/* Overall / All colleges button card */}
-                      <div
-                        className={`rounded-lg p-3 transition-all ${
-                          selectedCollege === ""
-                            ? "bg-brand-50 border-2 border-brand-500 shadow-xs"
-                            : "bg-surface-muted/50 border border-line"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedCollegeByDrive((prev) => ({
-                              ...prev,
-                              [drive.driveId]: "",
-                            }))
-                          }
-                          className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
-                        >
-                          <span>All Colleges</span>
-                          {selectedCollege === "" && (
-                            <span className="text-brand-600 font-bold">✓</span>
-                          )}
-                        </button>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedCollegeByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: "",
-                              }));
-                              setSelectedStageByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: "all",
-                              }));
-                            }}
-                            className="hover:underline cursor-pointer"
-                          >
-                            Applied:{" "}
-                            <strong className="text-ink-900">{drive.students.length}</strong>
-                          </button>
-                          <span>·</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedCollegeByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: "",
-                              }));
-                              setSelectedStageByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: "shortlisted",
-                              }));
-                            }}
-                            className="hover:underline cursor-pointer"
-                          >
-                            Shortlisted:{" "}
-                            <strong className="text-ink-900">{totalShortlisted}</strong>
-                          </button>
-                          <span>·</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedCollegeByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: "",
-                              }));
-                              setSelectedStageByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: "offers",
-                              }));
-                            }}
-                            className="hover:underline cursor-pointer"
-                          >
-                            Offers: <strong className="text-brand-700">{totalOffers}</strong>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Individual College cards */}
-                      {collegeList.map((col) => (
-                        <div
-                          key={col.name}
-                          className={`rounded-lg p-3 transition-all ${
-                            selectedCollege === col.name
-                              ? "bg-brand-50 border-2 border-brand-500 shadow-xs"
-                              : "bg-surface-muted/50 border border-line"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedCollegeByDrive((prev) => ({
-                                ...prev,
-                                [drive.driveId]: prev[drive.driveId] === col.name ? "" : col.name,
-                              }))
-                            }
-                            className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
-                            title={col.name}
-                          >
-                            <span className="truncate">{col.name}</span>
-                            {selectedCollege === col.name && (
-                              <span className="ml-1 text-brand-600 font-bold">✓</span>
-                            )}
-                          </button>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCollegeByDrive((prev) => ({
-                                  ...prev,
-                                  [drive.driveId]: col.name,
-                                }));
-                                setSelectedStageByDrive((prev) => ({
-                                  ...prev,
-                                  [drive.driveId]: "all",
-                                }));
-                              }}
-                              className="hover:underline cursor-pointer"
-                            >
-                              Applied: <strong className="text-ink-900">{col.applied}</strong>
-                            </button>
-                            <span>·</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCollegeByDrive((prev) => ({
-                                  ...prev,
-                                  [drive.driveId]: col.name,
-                                }));
-                                setSelectedStageByDrive((prev) => ({
-                                  ...prev,
-                                  [drive.driveId]: "shortlisted",
-                                }));
-                              }}
-                              className="hover:underline cursor-pointer"
-                            >
-                              Shortlisted:{" "}
-                              <strong className="text-ink-900">{col.shortlisted}</strong>
-                            </button>
-                            <span>·</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCollegeByDrive((prev) => ({
-                                  ...prev,
-                                  [drive.driveId]: col.name,
-                                }));
-                                setSelectedStageByDrive((prev) => ({
-                                  ...prev,
-                                  [drive.driveId]: "offers",
-                                }));
-                              }}
-                              className="hover:underline cursor-pointer"
-                            >
-                              Offers: <strong className="text-brand-700">{col.offers}</strong>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Student list for this drive / selected college */}
-                <ul className="divide-y divide-neutral-200">
-                  {filteredStudents.length === 0 ? (
-                    <li className="p-4 text-xs text-ink-500 italic text-center">
-                      No students found for this filter.
-                    </li>
-                  ) : (
-                    filteredStudents.map((student) => (
-                      <li
-                        key={student.applicationId}
-                        className="flex flex-wrap items-start justify-between gap-4 p-4 hover:bg-surface-muted/20 transition-colors"
-                      >
-                        <div className="min-w-40">
-                          {student.studentId ? (
-                            <Link
-                              to={`/students/${student.studentId}`}
-                              className="font-medium text-ink-900 hover:text-brand-600 hover:underline transition-colors block"
-                            >
-                              {student.studentName}
-                            </Link>
-                          ) : (
-                            <p className="font-medium text-ink-900">{student.studentName}</p>
-                          )}
-                          <p className="text-sm text-ink-500">{student.rollNumber}</p>
-                          {student.campusName && (
-                            <span className="mt-0.5 inline-block text-[11px] font-medium text-brand-700">
-                              {student.campusName}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-                          {student.shortlisted ? (
-                            student.rounds.length === 0 ? (
-                              <Badge tone="neutral">Shortlisted — no round yet</Badge>
-                            ) : (
-                              student.rounds.map((round) => (
-                                <Badge
-                                  key={round.sequence}
-                                  tone={RESULT_TONE(round.result, round.attendance)}
-                                >
-                                  Round {round.sequence} ·{" "}
-                                  {round.result !== null
-                                    ? label(round.result)
-                                    : label(round.attendance)}
-                                </Badge>
-                              ))
-                            )
-                          ) : (
-                            <Badge tone="neutral">Applied — not shortlisted</Badge>
-                          )}
-                          {student.offer !== null && (
-                            <Badge tone="success">
-                              Offer ·{" "}
-                              {describeOfferPay({
-                                driveType: student.offer.driveType ?? "placement",
-                                ctcLpa: student.offer.ctcLpa,
-                                stipendMonthly: student.offer.stipendMonthly ?? null,
-                              })}
-                              {student.offer.offerCategory !== null
-                                ? ` · ${offerCategoryLabelOf(student.offer.offerCategory)}`
-                                : ""}
-                            </Badge>
-                          )}
-                        </div>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </Card>
-            );
-          })}
+          {paginatedEvents.map(([eventId, roles]) => (
+            <VisitCard key={eventId} roles={roles} selection={selection} onSelect={select} />
+          ))}
 
           {/* Pagination Controls */}
           {totalPages > 1 && (
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
               <p className="text-xs text-ink-500">
                 Showing Page <span className="font-semibold text-ink-900">{page}</span> of{" "}
-                <span className="font-semibold text-ink-900">{totalPages}</span> ({visible.length}{" "}
-                total drives)
+                <span className="font-semibold text-ink-900">{totalPages}</span> ({events.length}{" "}
+                total company visits)
               </p>
               <div className="flex items-center gap-1.5">
                 <button
@@ -649,5 +331,403 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * One company visit, one card — 2026-10-16 (Karthik): "same company shows as
+ * two". The header answers what two cards side by side never could: how many
+ * roles the visit raised, how many students it holds, and how far they have
+ * come. Each role keeps its own college and stage filters and its own student
+ * list underneath, because shortlisting, rounds and offers are still decided
+ * role by role — folding them must never merge them.
+ */
+function VisitCard({
+  roles,
+  selection,
+  onSelect,
+}: {
+  roles: readonly DriveProgressEntry[];
+  selection: Record<string, RoleSelection>;
+  onSelect: (driveId: string, next: Partial<RoleSelection>) => void;
+}) {
+  const head = roles[0];
+  if (head === undefined) return null;
+
+  const isVisit = roles.length > 1;
+  const counts = countStage(roles.flatMap((role) => [...role.students]));
+  const when = dayIn(head.tentativeDate);
+
+  // The type said once for the whole visit. A visit that mixes an internship
+  // with a full-time role cannot pick one at random, so it says "Mixed types"
+  // and each role carries its own tag below.
+  const types = new Set(roles.map((role) => role.driveType ?? null));
+  const [singleType] = types;
+  const mixed = types.size > 1;
+
+  const statuses = [...new Set(roles.map((role) => role.status))].map((status) => ({
+    status,
+    count: roles.filter((role) => role.status === status).length,
+  }));
+
+  const meta: string[] = [];
+  if (!isVisit) meta.push(head.roleTitle ?? "Role not set");
+  if (when !== null) meta.push(when);
+  meta.push(
+    `${counts.applicants} applicants`,
+    `${counts.shortlisted} shortlisted`,
+    `${counts.inRounds} in rounds`,
+    `${counts.offers} offers`,
+  );
+
+  const body = (drive: DriveProgressEntry) => (
+    <RoleProgress
+      drive={drive}
+      selection={selection[drive.driveId] ?? UNFILTERED}
+      onSelect={(next) => onSelect(drive.driveId, next)}
+    />
+  );
+
+  return (
+    <Card className="mb-6 overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
+            {/* A single-role visit is one company with exactly one drive record
+                behind it, so the name can link. A visit that raised several
+                cannot — picking one of them silently is how a coordinator ends
+                up reading the wrong record. */}
+            {isVisit ? (
+              head.companyName
+            ) : (
+              <Link
+                to={`/drives/${head.driveId}`}
+                className="transition-colors hover:text-brand-600 hover:underline"
+              >
+                {head.companyName}
+              </Link>
+            )}
+            <Badge tone={mixed ? "neutral" : driveTypeTone(singleType ?? null)}>
+              {mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)}
+            </Badge>
+            {isVisit && <Badge tone="brand">{roles.length} roles</Badge>}
+          </p>
+          <p className="mt-1 text-sm text-ink-500">{meta.join(" · ")}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {statuses.map((entry) => (
+            <Badge key={entry.status} tone="brand">
+              {label(entry.status)}
+              {entry.count > 1 && ` ×${entry.count}`}
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      {/* Roles fold, they never merge. The panels arrive open: the students are
+          the reason the card exists, and a collapsed panel would hide them
+          behind a click that buys nothing. */}
+      {isVisit ? (
+        <Accordion multiple className="px-4" defaultValue={roles.map((role) => role.driveId)}>
+          {roles.map((drive) => {
+            const own = countStage(drive.students);
+            return (
+              <AccordionItem key={drive.driveId} value={drive.driveId}>
+                <AccordionTrigger className="py-3">
+                  <span className="font-semibold text-ink-900">
+                    {drive.roleTitle ?? "Role not set"}
+                  </span>
+                  {mixed && drive.driveType !== undefined && drive.driveType !== null && (
+                    <Badge tone={driveTypeTone(drive.driveType)}>
+                      {driveTypeLabel(drive.driveType)}
+                    </Badge>
+                  )}
+                  <span className="text-sm font-normal text-ink-600">
+                    {own.applicants} applicants · {own.shortlisted} shortlisted · {own.offers}{" "}
+                    offers
+                  </span>
+                  <Badge tone="brand">{label(drive.status)}</Badge>
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <p className="mt-1 mb-2">
+                    <Link
+                      to={`/drives/${drive.driveId}`}
+                      className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                    >
+                      Open the drive record for {drive.roleTitle ?? "this role"}
+                    </Link>
+                  </p>
+                  {body(drive)}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
+      ) : (
+        body(head)
+      )}
+    </Card>
+  );
+}
+
+/**
+ * One role's cycle: who applied, and where each of them stands, college by
+ * college. The filters belong to the role, not to the visit — a coordinator
+ * reading VIT's shortlist for one role has said nothing about the others.
+ */
+function RoleProgress({
+  drive,
+  selection,
+  onSelect,
+}: {
+  drive: DriveProgressEntry;
+  selection: RoleSelection;
+  onSelect: (next: Partial<RoleSelection>) => void;
+}) {
+  const selectedCollege = selection.college;
+  const selectedStage = selection.stage;
+  const totals = countStage(drive.students);
+
+  // College-wise count aggregation
+  const collegeMap = new Map<
+    string,
+    { applied: number; shortlisted: number; inRounds: number; offers: number }
+  >();
+
+  for (const s of drive.students) {
+    const cName = s.campusName ?? "All Campuses";
+    const current = collegeMap.get(cName) ?? {
+      applied: 0,
+      shortlisted: 0,
+      inRounds: 0,
+      offers: 0,
+    };
+    collegeMap.set(cName, {
+      applied: current.applied + 1,
+      shortlisted: current.shortlisted + (s.shortlisted ? 1 : 0),
+      inRounds: current.inRounds + (s.rounds.length > 0 ? 1 : 0),
+      offers: current.offers + (s.offer !== null ? 1 : 0),
+    });
+  }
+
+  const collegeList = [...collegeMap.entries()].map(([name, counts]) => ({ name, ...counts }));
+
+  const filteredStudents = drive.students.filter((s) => {
+    if (selectedCollege !== "" && (s.campusName ?? "All Campuses") !== selectedCollege) {
+      return false;
+    }
+    if (selectedStage === "shortlisted" && !s.shortlisted) return false;
+    if (selectedStage === "in_rounds" && s.rounds.length === 0) return false;
+    if (selectedStage === "offers" && s.offer === null) return false;
+    return true;
+  });
+
+  return (
+    <>
+      {/* Stage quick filter buttons */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+        <button
+          type="button"
+          onClick={() => onSelect({ stage: "all" })}
+          className={chipClass(selectedStage === "all", BRAND_ON, BRAND_OFF)}
+        >
+          {drive.students.length} Total Applicants
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onSelect({ stage: selectedStage === "shortlisted" ? "all" : "shortlisted" })
+          }
+          className={chipClass(selectedStage === "shortlisted", BRAND_ON, BRAND_OFF)}
+        >
+          {totals.shortlisted} Shortlisted
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelect({ stage: selectedStage === "in_rounds" ? "all" : "in_rounds" })}
+          className={chipClass(selectedStage === "in_rounds", BRAND_ON, GOLD_OFF)}
+        >
+          {totals.inRounds} In Rounds
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelect({ stage: selectedStage === "offers" ? "all" : "offers" })}
+          className={chipClass(selectedStage === "offers", SUCCESS_ON, SUCCESS_OFF)}
+        >
+          {totals.offers} Offers
+        </button>
+      </div>
+
+      {/* College-wise Clickable Count Cards */}
+      {collegeList.length > 0 && (
+        <div className="border-b border-line bg-surface px-4 py-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
+            College Breakdown (Click card to filter college · Click counts to filter stage)
+          </p>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Overall / All colleges button card */}
+            <div
+              className={`rounded-lg p-3 transition-all ${
+                selectedCollege === ""
+                  ? "bg-brand-50 border-2 border-brand-500 shadow-xs"
+                  : "bg-surface-muted/50 border border-line"
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onSelect({ college: "" })}
+                className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
+              >
+                <span>All Colleges</span>
+                {selectedCollege === "" && <span className="text-brand-600 font-bold">✓</span>}
+              </button>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
+                <button
+                  type="button"
+                  onClick={() => onSelect({ college: "", stage: "all" })}
+                  className="hover:underline cursor-pointer"
+                >
+                  Applied: <strong className="text-ink-900">{drive.students.length}</strong>
+                </button>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={() => onSelect({ college: "", stage: "shortlisted" })}
+                  className="hover:underline cursor-pointer"
+                >
+                  Shortlisted: <strong className="text-ink-900">{totals.shortlisted}</strong>
+                </button>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={() => onSelect({ college: "", stage: "offers" })}
+                  className="hover:underline cursor-pointer"
+                >
+                  Offers: <strong className="text-brand-700">{totals.offers}</strong>
+                </button>
+              </div>
+            </div>
+
+            {/* Individual College cards */}
+            {collegeList.map((col) => (
+              <div
+                key={col.name}
+                className={`rounded-lg p-3 transition-all ${
+                  selectedCollege === col.name
+                    ? "bg-brand-50 border-2 border-brand-500 shadow-xs"
+                    : "bg-surface-muted/50 border border-line"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSelect({ college: selectedCollege === col.name ? "" : col.name })
+                  }
+                  className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
+                  title={col.name}
+                >
+                  <span className="truncate">{col.name}</span>
+                  {selectedCollege === col.name && (
+                    <span className="ml-1 text-brand-600 font-bold">✓</span>
+                  )}
+                </button>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
+                  <button
+                    type="button"
+                    onClick={() => onSelect({ college: col.name, stage: "all" })}
+                    className="hover:underline cursor-pointer"
+                  >
+                    Applied: <strong className="text-ink-900">{col.applied}</strong>
+                  </button>
+                  <span>·</span>
+                  <button
+                    type="button"
+                    onClick={() => onSelect({ college: col.name, stage: "shortlisted" })}
+                    className="hover:underline cursor-pointer"
+                  >
+                    Shortlisted: <strong className="text-ink-900">{col.shortlisted}</strong>
+                  </button>
+                  <span>·</span>
+                  <button
+                    type="button"
+                    onClick={() => onSelect({ college: col.name, stage: "offers" })}
+                    className="hover:underline cursor-pointer"
+                  >
+                    Offers: <strong className="text-brand-700">{col.offers}</strong>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Student list for this role / selected college */}
+      <ul className="divide-y divide-neutral-200">
+        {filteredStudents.length === 0 ? (
+          <li className="p-4 text-xs text-ink-500 italic text-center">
+            No students found for this filter.
+          </li>
+        ) : (
+          filteredStudents.map((student) => (
+            <li
+              key={student.applicationId}
+              className="flex flex-wrap items-start justify-between gap-4 p-4 hover:bg-surface-muted/20 transition-colors"
+            >
+              <div className="min-w-40">
+                {student.studentId ? (
+                  <Link
+                    to={`/students/${student.studentId}`}
+                    className="font-medium text-ink-900 hover:text-brand-600 hover:underline transition-colors block"
+                  >
+                    {student.studentName}
+                  </Link>
+                ) : (
+                  <p className="font-medium text-ink-900">{student.studentName}</p>
+                )}
+                <p className="text-sm text-ink-500">{student.rollNumber}</p>
+                {student.campusName && (
+                  <span className="mt-0.5 inline-block text-[11px] font-medium text-brand-700">
+                    {student.campusName}
+                  </span>
+                )}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+                {student.shortlisted ? (
+                  student.rounds.length === 0 ? (
+                    <Badge tone="neutral">Shortlisted — no round yet</Badge>
+                  ) : (
+                    student.rounds.map((round) => (
+                      <Badge
+                        key={round.sequence}
+                        tone={RESULT_TONE(round.result, round.attendance)}
+                      >
+                        Round {round.sequence} ·{" "}
+                        {round.result !== null ? label(round.result) : label(round.attendance)}
+                      </Badge>
+                    ))
+                  )
+                ) : (
+                  <Badge tone="neutral">Applied — not shortlisted</Badge>
+                )}
+                {student.offer !== null && (
+                  <Badge tone="success">
+                    Offer ·{" "}
+                    {describeOfferPay({
+                      driveType: student.offer.driveType ?? "placement",
+                      ctcLpa: student.offer.ctcLpa,
+                      stipendMonthly: student.offer.stipendMonthly ?? null,
+                    })}
+                    {student.offer.offerCategory !== null
+                      ? ` · ${offerCategoryLabelOf(student.offer.offerCategory)}`
+                      : ""}
+                  </Badge>
+                )}
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
+    </>
   );
 }

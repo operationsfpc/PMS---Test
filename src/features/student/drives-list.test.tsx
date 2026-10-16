@@ -283,6 +283,13 @@ describe("DrivesList — the saved resume auto-fetches (D2)", () => {
  * not one blurred offer. The buttons are named per role, because two
  * "Apply to Zoho" buttons on one card tell a screen-reader user nothing
  * about which role they are choosing.
+ *
+ * 2026-10-16 (Karthik): "still the company show each roles seperate for
+ * students too it should show company name ? on accordation it should show
+ * role and more? and type also?" The COMPANY is the card's headline — a
+ * student gives an afternoon to Zoho, not to a list of job titles that happen
+ * to share a date and a venue — and the roles fold into an accordion whose
+ * trigger carries the role, its category and its money.
  */
 describe("DrivesList — several roles under one company event", () => {
   const mts = { ...open, companyDriveId: "evt-1", tentativeDate: "2026-11-05T00:00:00Z" };
@@ -296,14 +303,83 @@ describe("DrivesList — several roles under one company event", () => {
     tentativeDate: "2026-11-05T00:00:00Z",
   };
 
-  it("shows one event card with each role as its own row", async () => {
+  it("heads the card with the company, not with the roles", async () => {
     render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
 
-    expect(await screen.findByText("2 roles")).toBeDefined();
-    expect(screen.getByRole("heading", { name: "Member Technical Staff" })).toBeDefined();
-    expect(screen.getByRole("heading", { name: "QA Engineer" })).toBeDefined();
-    expect(await screen.findByText("₹6.5–9 LPA")).toBeDefined();
-    expect(screen.getByText("₹4–5.5 LPA")).toBeDefined();
+    expect(await screen.findByRole("heading", { name: /^Zoho/ })).toBeDefined();
+    expect(screen.getByText("2 roles")).toBeDefined();
+  });
+
+  it("shows each role as its own accordion row, with its category and money", async () => {
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+
+    const mtsRow = await screen.findByRole("heading", { name: /Member Technical Staff/ });
+    const qaRow = screen.getByRole("heading", { name: /QA Engineer/ });
+
+    expect(mtsRow.textContent).toContain("₹6.5–9 LPA");
+    expect(mtsRow.textContent).toContain("Dream");
+    expect(qaRow.textContent).toContain("₹4–5.5 LPA");
+    expect(qaRow.textContent).toContain("Regular");
+  });
+
+  /**
+   * A collapsed panel hides the only button the card exists for, so the roles
+   * are opened for the student rather than made to click before they can apply.
+   */
+  it("leaves every role open so Apply is one click, not two", async () => {
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+
+    const mtsToggle = await screen.findByRole("button", { name: /^Member Technical Staff/ });
+    expect(mtsToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: /^QA Engineer/ }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Apply to Zoho — QA Engineer" })).toBeDefined();
+  });
+
+  /**
+   * The type is said ONCE: by the visit when every role shares it, and by each
+   * role when the visit cannot pick one. Repeating "Full time" on three rows
+   * under a "Full time" header tells the reader nothing new, in three colours.
+   */
+  it("states the type once on the card when every role shares it", async () => {
+    const fullTime = { ...mts, driveType: "placement" as const };
+    const qaFullTime = { ...qa, driveType: "placement" as const };
+    render(<DrivesList view={view({ openDrives: async () => [fullTime, qaFullTime] })} />);
+
+    expect(await screen.findByRole("heading", { name: /^Zoho/ })).toBeDefined();
+    expect(screen.getAllByText("Full time")).toHaveLength(1);
+    expect(screen.queryByText("Mixed types")).toBeNull();
+  });
+
+  it("gives each role its own type when the visit mixes them", async () => {
+    const fullTime = { ...mts, driveType: "placement" as const };
+    const intern = {
+      ...qa,
+      driveType: "internship" as const,
+      offerCategory: "internship" as const,
+    };
+    render(<DrivesList view={view({ openDrives: async () => [fullTime, intern] })} />);
+
+    expect(await screen.findByText("Mixed types")).toBeDefined();
+    expect(screen.getByRole("heading", { name: /Member Technical Staff/ }).textContent).toContain(
+      "Full time",
+    );
+    expect(screen.getByRole("heading", { name: /QA Engineer/ }).textContent).toContain(
+      "Internship",
+    );
+  });
+
+  /**
+   * One role is not a queue. There is nothing to fold, and a toggle would cost
+   * a click to reach the only button the card holds.
+   */
+  it("gives a single-role visit no accordion and no role count", async () => {
+    render(<DrivesList view={view({ openDrives: async () => [mts] })} />);
+
+    expect(await screen.findByRole("heading", { name: /Member Technical Staff/ })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /^Member Technical Staff/ })).toBeNull();
+    expect(screen.queryByText("1 roles")).toBeNull();
   });
 
   it("names each role's Apply button after that role", async () => {
