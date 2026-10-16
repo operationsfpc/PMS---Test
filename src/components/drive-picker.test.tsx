@@ -129,3 +129,103 @@ describe("DrivePicker — sparse drives", () => {
     expect(within(rows[3] as HTMLElement).getByText("Mystery Co")).toBeDefined();
   });
 });
+
+/**
+ * UAT 2026-10-16: "i need central placement coordinator same company shows as
+ * two". Two roles raised under one company visit are one visit, so the picker
+ * names the company once and puts each role — with its own money and status —
+ * underneath it.
+ */
+describe("DrivePicker — one card per company visit", () => {
+  const PAIR: readonly PickerDrive[] = [
+    {
+      driveId: "r1",
+      companyName: "FACE Prep tst",
+      roleTitle: "SDE",
+      ctcLabel: "₹3–4 LPA",
+      raisedOn: "2026-10-20T10:00:00Z",
+      status: "live",
+      companyDriveId: "e1",
+      driveType: "placement",
+    },
+    {
+      driveId: "r2",
+      companyName: "FACE Prep tst",
+      roleTitle: "Data analyst",
+      ctcLabel: "₹5–8 LPA",
+      raisedOn: "2026-10-20T09:00:00Z",
+      status: "live",
+      companyDriveId: "e1",
+      driveType: "internship",
+    },
+  ];
+
+  const visit = (overrides: Partial<PickerDrive>[] = []): readonly PickerDrive[] =>
+    PAIR.map((role, index) => ({ ...role, ...overrides[index] }));
+
+  const LEGACY: PickerDrive = { ...(PAIR[1] as PickerDrive), companyDriveId: null };
+
+  const pick = (drives: readonly PickerDrive[]) =>
+    render(
+      <MemoryRouter>
+        <DrivePicker
+          drives={drives}
+          makeLink={(id) => `/central/shortlisting?drive=${id}`}
+          prompt="Choose a drive to shortlist its applicants."
+        />
+      </MemoryRouter>,
+    );
+
+  it("names the company once for a visit that raised two roles", () => {
+    pick(visit());
+    expect(screen.getAllByText("FACE Prep tst")).toHaveLength(1);
+    expect(screen.getByText("2 roles")).toBeDefined();
+  });
+
+  it("keeps each role's own CTC instead of picking one for the visit", () => {
+    pick(visit());
+    expect(screen.getByText(/₹3–4 LPA/)).toBeDefined();
+    expect(screen.getByText(/₹5–8 LPA/)).toBeDefined();
+  });
+
+  it("opens both roles so choosing one is still a single click", () => {
+    pick(visit());
+    expect(screen.getByRole("button", { name: /sde/i }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("link", { name: /choose data analyst/i })).toBeDefined();
+  });
+
+  it("links each role to its own drive, never to whichever one came first", () => {
+    pick(visit());
+    expect(screen.getByRole("link", { name: /choose sde/i }).getAttribute("href")).toBe(
+      "/central/shortlisting?drive=r1",
+    );
+    expect(screen.getByRole("link", { name: /choose data analyst/i }).getAttribute("href")).toBe(
+      "/central/shortlisting?drive=r2",
+    );
+  });
+
+  it("says the type once when the visit is uniform, and per role when it mixes", () => {
+    pick(visit([{ driveType: "placement" }, { driveType: "placement" }]));
+    expect(screen.getByText("Full time")).toBeDefined();
+    expect(screen.queryByText("Mixed types")).toBeNull();
+  });
+
+  it("refuses to name one type for a visit that mixed an internship with a full-time role", () => {
+    pick(visit());
+    expect(screen.getByText("Mixed types")).toBeDefined();
+    // Each role still declares its own underneath.
+    const analyst = screen.getByRole("button", { name: /data analyst/i });
+    expect(within(analyst).getByText("Internship")).toBeDefined();
+  });
+
+  it("keeps a legacy drive with no visit of its own as the single row it always was", () => {
+    pick([LEGACY]);
+    expect(screen.getByRole("link", { name: /face prep tst/i })).toBeDefined();
+    expect(screen.queryByText(/roles/)).toBeNull();
+  });
+
+  it("counts one visit, not two, wherever the picker lists drives", () => {
+    pick([...visit(), ...DRIVES]);
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+  });
+});

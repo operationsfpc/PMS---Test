@@ -29,6 +29,8 @@ describe("fetchPickerDrives", () => {
             ctc_max_lpa: 5,
             status: "in_rounds",
             created_at: "2026-08-12T10:00:00Z",
+            drive_type: "internship",
+            company_drive_id: "e1",
           },
         ]);
       }),
@@ -44,10 +46,16 @@ describe("fetchPickerDrives", () => {
         ctcLabel: "₹4–5 LPA",
         raisedOn: "2026-08-12T10:00:00Z",
         status: "in_rounds",
+        companyDriveId: "e1",
+        driveType: "internship",
       },
     ]);
     expect(url).toContain("status=in.%28");
     expect(url).toContain("in_rounds");
+    // Without the event id in the select the picker cannot tell that two
+    // roles were one visit, and prints the company twice (UAT 2026-10-16).
+    expect(decodeURIComponent(url)).toContain("company_drive_id");
+    expect(decodeURIComponent(url)).toContain("drive_type");
   });
 
   it("copes with a drive that declared almost nothing — nulls become honest fallbacks", async () => {
@@ -62,6 +70,8 @@ describe("fetchPickerDrives", () => {
             ctc_max_lpa: null,
             status: null,
             created_at: null,
+            drive_type: null,
+            company_drive_id: null,
           },
         ]),
       ),
@@ -76,6 +86,8 @@ describe("fetchPickerDrives", () => {
       ctcLabel: null,
       raisedOn: null,
       status: "draft",
+      companyDriveId: null,
+      driveType: null,
     });
   });
 

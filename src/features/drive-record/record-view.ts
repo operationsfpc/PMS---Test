@@ -123,7 +123,7 @@ export interface DriveRecordView {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const RECORD_DRIVE_COLUMNS = `
-  id, company_name, industry, company_website, role_title, additional_designations,
+  id, company_drive_id, company_name, industry, company_website, role_title, additional_designations,
   role_category, status, drive_type, drive_mode, venue, offer_category, openings,
   ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations,
   application_start, application_end, tentative_date,

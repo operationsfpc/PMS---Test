@@ -1,7 +1,11 @@
+import { groupDrivesByEvent } from "@domain/company-drive";
 import { compareNewestFirst, compareOldestFirst, type DriveOrder } from "@domain/drive-aging";
 import { searchDrives } from "@domain/drive-portfolio";
+import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
+import type { DriveType } from "@domain/types";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./accordion";
 import { DriveSort } from "./drive-sort";
 import { Badge, Card, type Tone } from "./ui";
 
@@ -22,6 +26,9 @@ export interface PickerDrive {
   /** When the AE raised it — the queue's age (G1a's lesson). */
   readonly raisedOn: string | null;
   readonly status: string;
+  /** The company visit this role belongs to; null for a legacy standalone drive. */
+  readonly companyDriveId?: string | null;
+  readonly driveType?: DriveType | null;
 }
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -73,6 +80,12 @@ export function DrivePicker({
     [drives, query, sort],
   );
 
+  /**
+   * One entry per company visit, in the order its newest role was raised —
+   * `visible` is already sorted, and grouping preserves insertion order.
+   */
+  const events = useMemo(() => [...groupDrivesByEvent(visible).entries()], [visible]);
+
   return (
     <Card className="p-6">
       <p className="text-sm text-ink-700">{prompt}</p>
@@ -97,36 +110,139 @@ export function DrivePicker({
             <p className="mt-3 text-sm text-ink-500">No drives match “{query}”.</p>
           ) : (
             <ul className="mt-3 divide-y divide-neutral-200">
-              {visible.map((drive) => (
-                <li
-                  key={drive.driveId}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
-                  <div className="min-w-0">
-                    <Link
-                      to={makeLink(drive.driveId)}
-                      className="font-medium text-brand-600 hover:underline"
-                    >
-                      {drive.companyName}
-                    </Link>
-                    {drive.roleTitle !== null && (
-                      <span className="ml-2 text-sm text-ink-500">— {drive.roleTitle}</span>
+              {events.map(([eventId, roles]) => {
+                const [only] = roles;
+                return (
+                  <li key={eventId} className="py-3">
+                    {roles.length === 1 && only !== undefined ? (
+                      <RoleRow drive={only} makeLink={makeLink} />
+                    ) : (
+                      <Visit visit={roles} makeLink={makeLink} />
                     )}
-                    <p className="text-xs text-ink-500">
-                      {[raisedLabel(drive.raisedOn), drive.ctcLabel]
-                        .filter((part) => part !== null)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  <Badge tone={STATUS_TONE[drive.status] ?? "neutral"}>
-                    {drive.status.replaceAll("_", " ")}
-                  </Badge>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </>
       )}
     </Card>
+  );
+}
+
+/** The status word and its colour, spelled the way every other drive list spells it. */
+const statusBadge = (status: string) => (
+  <Badge tone={STATUS_TONE[status] ?? "neutral"}>{status.replaceAll("_", " ")}</Badge>
+);
+
+/**
+ * One role of a visit, seen from outside: the company, the job, the money,
+ * when it was raised and where it stands.
+ */
+function RoleRow({
+  drive,
+  makeLink,
+}: {
+  drive: PickerDrive;
+  makeLink: (driveId: string) => string;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <Link to={makeLink(drive.driveId)} className="font-medium text-brand-600 hover:underline">
+          {drive.companyName}
+        </Link>
+        {drive.roleTitle !== null && (
+          <span className="ml-2 text-sm text-ink-500">— {drive.roleTitle}</span>
+        )}
+        <p className="text-xs text-ink-500">
+          {[raisedLabel(drive.raisedOn), drive.ctcLabel]
+            .filter((part) => part !== null)
+            .join(" · ")}
+        </p>
+      </div>
+      {statusBadge(drive.status)}
+    </div>
+  );
+}
+
+/**
+ * A company visit that raised more than one role, shown as the one card it is
+ * (UAT 2026-10-16: "same company shows as two"). The visit is the headline and
+ * each role opens beneath it with its own CTC, age and status — those facts
+ * differ per role, so they are never said for the visit.
+ */
+function Visit({
+  visit,
+  makeLink,
+}: {
+  visit: readonly PickerDrive[];
+  makeLink: (driveId: string) => string;
+}) {
+  // A visit that mixes an internship with a full-time role cannot pick one
+  // label at random, so it says "Mixed types" and each role carries its own.
+  const types = new Set(visit.map((role) => role.driveType ?? null));
+  const [singleType] = types;
+  const mixed = types.size > 1;
+
+  const statuses = [...new Set(visit.map((role) => role.status))].map((status) => ({
+    status,
+    count: visit.filter((role) => role.status === status).length,
+  }));
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-ink-900">
+          {visit[0]?.companyName}
+          <Badge tone={mixed ? "neutral" : driveTypeTone(singleType ?? null)}>
+            {mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)}
+          </Badge>
+          <Badge tone="brand">{visit.length} roles</Badge>
+        </p>
+        <span className="flex flex-wrap items-center gap-2">
+          {statuses.map((entry) => (
+            <Badge key={entry.status} tone={STATUS_TONE[entry.status] ?? "neutral"}>
+              {entry.status.replaceAll("_", " ")}
+              {entry.count > 1 && ` ×${entry.count}`}
+            </Badge>
+          ))}
+        </span>
+      </div>
+
+      {/* Roles fold, they never merge — and the panels arrive open, so choosing
+          one is still one click. */}
+      <Accordion multiple className="mt-2" defaultValue={visit.map((role) => role.driveId)}>
+        {visit.map((role) => (
+          <AccordionItem key={role.driveId} value={role.driveId}>
+            <AccordionTrigger className="py-2">
+              <span className="font-semibold text-ink-900">{role.roleTitle ?? "Role not set"}</span>
+              {mixed && (
+                <Badge tone={driveTypeTone(role.driveType ?? null)}>
+                  {driveTypeLabel(role.driveType ?? null)}
+                </Badge>
+              )}
+              <span className="text-sm font-normal text-ink-600">
+                {[raisedLabel(role.raisedOn), role.ctcLabel]
+                  .filter((part) => part !== null)
+                  .join(" · ")}
+              </span>
+              {statusBadge(role.status)}
+            </AccordionTrigger>
+            <AccordionContent className="pb-2">
+              {/* The choice itself. Kept inside the panel rather than folded
+                  into the heading: two roles of one visit are two different
+                  pages to open, and the reader should say which. */}
+              <Link
+                to={makeLink(role.driveId)}
+                className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+              >
+                Choose {role.roleTitle ?? "this role"}
+              </Link>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
+    </div>
   );
 }

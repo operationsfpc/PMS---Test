@@ -21,7 +21,7 @@ import type {
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PROGRESS_APPLICATION_COLUMNS =
   "id, student_id, drive_id, profile_snapshot, students(full_name, roll_number, campuses(name)), shortlist_entries(included), " +
-  "drives(company_name, role_title, drive_type, status, tentative_date)";
+  "drives(company_name, role_title, drive_type, status, company_drive_id, tentative_date)";
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
