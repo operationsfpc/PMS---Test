@@ -12,6 +12,7 @@ import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mo
 import { describeParticipantOutcome } from "@domain/round-outcome";
 import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
 import type { AttendanceStatus, RoundResult } from "@domain/types";
+import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -154,6 +155,12 @@ export function ResultsPage({
    */
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<RoundResult | null>(null);
+  /**
+   * Keyed by the result: a batch records one notification per student, so a
+   * second click on the confirmation mails the cohort twice and writes the
+   * result a second time under the round that already carries it.
+   */
+  const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
     setParticipants(await view.participants(roundId));
@@ -188,7 +195,7 @@ export function ResultsPage({
       setPending(result);
       return;
     }
-    void recordChecked(result);
+    void actions.run(() => recordChecked(result), `record:${result}`);
   }
 
   function toggle(applicationId: string) {
@@ -333,10 +340,12 @@ export function ResultsPage({
           {/* M2: the bottom action bar — the ONE place results are recorded. */}
           <div className="sticky bottom-2 mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-brand-600 p-3 text-white shadow-lg">
             <span className="text-sm font-semibold">{checked.size} selected</span>
+            {/* Button takes an explicit `disabled` over `isLoading`, so both say it. */}
             <Button
               size="sm"
               variant="secondary"
-              disabled={checked.size === 0}
+              disabled={checked.size === 0 || actions.busy}
+              isLoading={actions.isPending("record:selected")}
               onClick={() => requestRecord("selected")}
             >
               Mark Selected
@@ -344,7 +353,8 @@ export function ResultsPage({
             <Button
               size="sm"
               variant="secondary"
-              disabled={checked.size === 0}
+              disabled={checked.size === 0 || actions.busy}
+              isLoading={actions.isPending("record:rejected")}
               onClick={() => requestRecord("rejected")}
             >
               Mark Rejected
@@ -352,7 +362,8 @@ export function ResultsPage({
             <Button
               size="sm"
               variant="secondary"
-              disabled={checked.size === 0}
+              disabled={checked.size === 0 || actions.busy}
+              isLoading={actions.isPending("record:on_hold")}
               onClick={() => requestRecord("on_hold")}
             >
               Mark On hold
@@ -386,7 +397,8 @@ export function ResultsPage({
                 onClick={() => {
                   const request = pending;
                   setPending(null);
-                  if (request !== null) void recordChecked(request);
+                  if (request !== null)
+                    void actions.run(() => recordChecked(request), `record:${request}`);
                 }}
               >
                 Confirm — record and notify
@@ -543,6 +555,13 @@ export function DriveRoundsPage({
   const [completing, setCompleting] = useState<CompletionReadiness | null>(null);
   const [completionReason, setCompletionReason] = useState("");
   const [completionError, setCompletionError] = useState<string | null>(null);
+  /**
+   * Every button here writes something that cannot be un-sent — a round
+   * removed renumbers the rest, an advance schedules a round and mails the
+   * students, a completion closes the drive. Each carries its own key so the
+   * loader says which one is travelling and a second click on it is refused.
+   */
+  const actions = useAsyncAction();
 
   const loadRounds = useCallback(async () => {
     const loaded = await view.rounds(driveId);
@@ -900,7 +919,11 @@ export function DriveRoundsPage({
                 className="rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
               />
             </label>
-            <Button size="sm" onClick={() => void createRound()}>
+            <Button
+              size="sm"
+              isLoading={actions.isPending("round:create")}
+              onClick={() => void actions.run(createRound, "round:create")}
+            >
               Create Round {(rounds?.length ?? 0) + 1}
             </Button>
           </span>
@@ -916,11 +939,21 @@ export function DriveRoundsPage({
 
         <span className="ml-auto flex gap-2">
           {/* B2: rename or knock off rounds the company dropped. */}
-          <Button size="sm" variant="secondary" onClick={() => void openManage()}>
+          <Button
+            size="sm"
+            variant="secondary"
+            isLoading={actions.isPending("rounds:facts")}
+            onClick={() => void actions.run(openManage, "rounds:facts")}
+          >
             Manage rounds…
           </Button>
           {/* C3: the drive is done when every applicant has an outcome. */}
-          <Button size="sm" variant="secondary" onClick={() => void openCompletion()}>
+          <Button
+            size="sm"
+            variant="secondary"
+            isLoading={actions.isPending("completion:facts")}
+            onClick={() => void actions.run(openCompletion, "completion:facts")}
+          >
             Mark drive completed…
           </Button>
         </span>
@@ -1081,7 +1114,11 @@ export function DriveRoundsPage({
                     <Button variant="secondary" size="sm" onClick={cancelDetails}>
                       Cancel
                     </Button>
-                    <Button size="sm" onClick={() => void saveDetails()}>
+                    <Button
+                      size="sm"
+                      isLoading={actions.isPending("details")}
+                      onClick={() => void actions.run(saveDetails, "details")}
+                    >
                       Save round details
                     </Button>
                   </span>
@@ -1109,7 +1146,13 @@ export function DriveRoundsPage({
           <div className="mt-4">
             {nextRound !== null ? (
               advancing > 0 ? (
-                <Button onClick={() => setAdvanceOpen(true)}>
+                <Button
+                  isLoading={actions.isPending("advance")}
+                  // The confirmation closes as soon as it is accepted, so this
+                  // is the button that has to carry the wait.
+                  disabled={actions.busy}
+                  onClick={() => setAdvanceOpen(true)}
+                >
                   Advance {advancing} selected to Round {nextRound.sequence} — schedules them
                 </Button>
               ) : (
@@ -1185,9 +1228,10 @@ export function DriveRoundsPage({
                     Cancel
                   </Button>
                   <Button
+                    isLoading={actions.isPending("advance")}
                     onClick={() => {
                       setAdvanceOpen(false);
-                      void advance();
+                      void actions.run(advance, "advance");
                     }}
                   >
                     Confirm — advance and schedule
@@ -1252,7 +1296,10 @@ export function DriveRoundsPage({
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => void saveRename(round)}
+                            isLoading={actions.isPending(`rename:${round.roundId}`)}
+                            onClick={() =>
+                              void actions.run(() => saveRename(round), `rename:${round.roundId}`)
+                            }
                           >
                             Save name
                           </Button>
@@ -1298,7 +1345,12 @@ export function DriveRoundsPage({
               <Button variant="secondary" onClick={() => setRemoving(null)}>
                 Cancel
               </Button>
-              <Button onClick={() => void confirmRemove()}>Remove round</Button>
+              <Button
+                isLoading={actions.isPending("round:remove")}
+                onClick={() => void actions.run(confirmRemove, "round:remove")}
+              >
+                Remove round
+              </Button>
             </div>
           </div>
         </div>
@@ -1348,7 +1400,12 @@ export function DriveRoundsPage({
               <Button variant="secondary" onClick={() => setCompleting(null)}>
                 Cancel
               </Button>
-              <Button onClick={() => void confirmCompletion()}>Complete drive</Button>
+              <Button
+                isLoading={actions.isPending("drive:complete")}
+                onClick={() => void actions.run(confirmCompletion, "drive:complete")}
+              >
+                Complete drive
+              </Button>
             </div>
           </div>
         </div>

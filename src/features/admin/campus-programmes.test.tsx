@@ -202,3 +202,71 @@ describe("CampusProgrammes", () => {
     expect((await screen.findByRole("alert")).textContent).toMatch(/already registered/i);
   });
 });
+
+/**
+ * 2026-10-16, "button loader for process": this card lists every programme a
+ * college runs, so a write must show which row it belongs to and refuse to be
+ * clicked twice on the way. A double remove is not harmful, but a double add
+ * inserts the same degree and branch under two ids — and the student then sees
+ * the programme twice on their registration form.
+ */
+describe("CampusProgrammes — a write in flight", () => {
+  it("loads only the row being removed and refuses a second click on it", async () => {
+    let release: () => void = () => {};
+    const remove = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<CampusProgrammes campusId="c1" campusName="Alliance" view={view({ remove })} />);
+
+    const cse = (await screen.findByRole("button", {
+      name: /remove B\.E — CSE for 2027/i,
+    })) as HTMLButtonElement;
+    const ece = screen.getByRole("button", {
+      name: /remove B\.E — ECE for 2027/i,
+    }) as HTMLButtonElement;
+
+    await user.click(cse);
+
+    expect(cse.getAttribute("aria-busy")).toBe("true");
+    expect(cse.disabled).toBe(true);
+    expect(ece.getAttribute("aria-busy")).toBe("false");
+    expect(ece.disabled).toBe(false);
+
+    await user.click(cse);
+    expect(remove).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(cse.getAttribute("aria-busy")).toBe("false"));
+  });
+
+  it("holds the Add button until the programme is in, so one click adds one row", async () => {
+    let release: () => void = () => {};
+    const add = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<CampusProgrammes campusId="c1" campusName="Alliance" view={view({ add })} />);
+
+    await user.type(await screen.findByLabelText(/degree/i), "B.Tech");
+    await user.type(screen.getByLabelText(/year of passing/i), "2028");
+    const button = screen.getByRole("button", { name: /add programme/i }) as HTMLButtonElement;
+
+    await user.click(button);
+
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+
+    await user.click(button);
+    expect(add).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(add).toHaveBeenCalledTimes(1));
+  });
+});

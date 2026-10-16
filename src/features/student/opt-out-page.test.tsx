@@ -155,6 +155,42 @@ describe("OptOutPage", () => {
     expect(alert.textContent).toMatch(/already waiting/i);
   });
 
+  /**
+   * 2026-10-16, "button loader for process": opting out is irreversible, so a
+   * double click must raise one request, not two — and the button has to say
+   * that the first is still travelling.
+   */
+  it("loads the button and refuses a second click while the request is out", async () => {
+    let release: () => void = () => {};
+    const requestOptOut = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<OptOutPage view={view({ requestOptOut })} />);
+
+    await user.type(await screen.findByLabelText(/why are you opting out/i), "Higher studies");
+    await user.upload(
+      screen.getByLabelText(/signed declaration/i),
+      new File(["signed"], "declaration.jpg", { type: "image/jpeg" }),
+    );
+
+    const button = screen.getByRole("button", { name: /request opt-out/i }) as HTMLButtonElement;
+    await user.click(button);
+
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+    expect(requestOptOut).toHaveBeenCalledTimes(1);
+
+    await user.click(button);
+    expect(requestOptOut).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(button.getAttribute("aria-busy")).toBe("false"));
+  });
+
   /** F2: this screen is about one decision. */
   it("says nothing about off-campus offers", async () => {
     render(<OptOutPage view={view()} />);

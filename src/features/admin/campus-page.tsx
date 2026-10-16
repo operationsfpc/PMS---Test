@@ -1,4 +1,5 @@
 import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
+import { useAsyncAction } from "@lib/use-async-action";
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { CampusProgrammes, type CampusProgrammesView } from "./campus-programmes";
 import type { CampusListItem, CampusRepository, NewCampus } from "./campus-repository";
@@ -58,6 +59,9 @@ export function CampusPage({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  // Keyed per college: the list shows ten of them at once, and deactivating
+  // one must not look like it is deactivating all of them.
+  const actions = useAsyncAction();
 
   // Search & filter state
   const [search, setSearch] = useState("");
@@ -325,7 +329,15 @@ export function CampusPage({
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => void deactivate(campus.id)}
+                            // Ten rows, ten identical "Deactivate" buttons.
+                            aria-label={`Deactivate ${campus.name}`}
+                            isLoading={actions.isPending(`deactivate:${campus.id}`)}
+                            onClick={() =>
+                              void actions.run(
+                                () => deactivate(campus.id),
+                                `deactivate:${campus.id}`,
+                              )
+                            }
                           >
                             Deactivate
                           </Button>

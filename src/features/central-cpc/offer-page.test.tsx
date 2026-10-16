@@ -135,6 +135,59 @@ describe("OfferPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/already been declared/i);
   });
+
+  /**
+   * 2026-10-16, "button loader for process": a declaration writes a placement
+   * record, so a double click must not write two — and the spinner belongs to
+   * the row that was clicked, not to every candidate still waiting.
+   */
+  it("loads only the row that was clicked and refuses a second declaration of it", async () => {
+    const undeclared = [
+      {
+        applicationId: "app1",
+        studentId: "s1",
+        studentName: "Priya Ramesh",
+        rollNumber: "21CSE1042",
+        declared: false,
+      },
+      {
+        applicationId: "app3",
+        studentId: "s3",
+        studentName: "Meena V",
+        rollNumber: "21CSE5555",
+        declared: false,
+      },
+    ];
+    let release: () => void = () => {};
+    const declare = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<OfferPage driveId="d1" view={view({ declare, candidates: async () => undeclared })} />);
+
+    const row = (await screen.findByText("Priya Ramesh")).closest("li");
+    if (row === null) throw new Error("row not found");
+    const other = (screen.getByText("Meena V").closest("li") as HTMLLIElement).querySelector(
+      "button",
+    );
+    const button = within(row).getByRole("button", { name: /declare/i }) as HTMLButtonElement;
+
+    await user.click(button);
+
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+    expect(other?.getAttribute("aria-busy")).toBe("false");
+    expect(declare).toHaveBeenCalledTimes(1);
+
+    await user.click(button);
+    expect(declare).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(button.getAttribute("aria-busy")).toBe("false"));
+  });
 });
 
 /**

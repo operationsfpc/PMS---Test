@@ -162,3 +162,55 @@ describe("CampusPage — programmes live under the college", () => {
     expect(screen.queryByText("B.E — CSE")).toBeNull();
   });
 });
+
+/**
+ * 2026-10-16, "button loader for process": this table lists every college the
+ * platform knows about, each with its own Deactivate. The spinner therefore has
+ * to belong to the row that was clicked, and the second click on that row has
+ * to be refused while the first is still travelling.
+ */
+describe("CampusPage — deactivating", () => {
+  const TWO = [
+    ...EXISTING,
+    {
+      id: "c2",
+      name: "VIT Bangalore",
+      code: "VITB",
+      cityName: "Bengaluru",
+      state: "Karnataka",
+      isActive: true,
+    },
+  ];
+
+  it("loads only the row that was clicked and refuses a second click on it", async () => {
+    let release: () => void = () => {};
+    const setActive = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<CampusPage repository={repo({ list: async () => TWO, setActive })} />);
+
+    const alliance = (await screen.findByRole("button", {
+      name: /deactivate Alliance University/i,
+    })) as HTMLButtonElement;
+    const vit = screen.getByRole("button", {
+      name: /deactivate VIT Bangalore/i,
+    }) as HTMLButtonElement;
+
+    await user.click(alliance);
+
+    expect(alliance.getAttribute("aria-busy")).toBe("true");
+    expect(alliance.disabled).toBe(true);
+    expect(vit.getAttribute("aria-busy")).toBe("false");
+    expect(vit.disabled).toBe(false);
+
+    await user.click(alliance);
+    expect(setActive).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(alliance.getAttribute("aria-busy")).toBe("false"));
+  });
+});

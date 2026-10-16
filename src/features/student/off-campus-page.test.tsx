@@ -113,6 +113,37 @@ describe("OffCampusPage", () => {
     expect(await screen.findByRole("alert")).toBeDefined();
   });
 
+  it("loads the button and refuses a second click while the offer is being recorded", async () => {
+    let release: () => void = () => {};
+    const recordSelfPlacement = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view({ recordSelfPlacement })} />);
+
+    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
+    await user.type(screen.getByLabelText(/ctc/i), "9");
+    await user.upload(
+      screen.getByLabelText(/offer letter/i),
+      new File(["offer"], "offer.pdf", { type: "application/pdf" }),
+    );
+
+    const button = screen.getByRole("button", { name: /record.*offer/i }) as HTMLButtonElement;
+    await user.click(button);
+
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.disabled).toBe(true);
+
+    await user.click(button);
+    expect(recordSelfPlacement).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(button.getAttribute("aria-busy")).toBe("false"));
+  });
+
   /** F2: this screen is about one decision. */
   it("says nothing about opting out", async () => {
     render(<OffCampusPage view={view()} />);

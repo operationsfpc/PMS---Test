@@ -2,6 +2,7 @@ import { Badge, Button, Card, PageHeader } from "@components/ui";
 import type { OfferCategory } from "@domain/offer-category";
 import { offerCountsAsPackage, offerPayProblem } from "@domain/offer-pay";
 import type { DriveType } from "@domain/types";
+import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import type { DeclaredOffer } from "./offers-repository";
 
@@ -58,7 +59,10 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
   const [candidates, setCandidates] = useState<readonly OfferCandidate[] | null>(null);
   const [pay, setPay] = useState<Record<string, string>>({});
   const [letters, setLetters] = useState<Record<string, File | null>>({});
-  const [error, setError] = useState<string | null>(null);
+  // Keyed per student: declaring Nithya must not spin Arjun's button, and a
+  // second click on the same row is a second placement record for the same
+  // offer.
+  const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
     const [loadedDrive, loadedCandidates] = await Promise.all([
@@ -84,9 +88,12 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
     void refresh();
   }, [refresh]);
 
+  // Thrown, not returned: `useAsyncAction` turns any rejection into the copy in
+  // the alert, so a missing figure and a database refusal arrive the same way
+  // — and it refuses the second click while the first is still out. Double
+  // declaring is how one student ended up with two placement records.
   async function declare(candidate: OfferCandidate) {
     if (drive === null) return;
-    setError(null);
 
     const salaried = offerCountsAsPackage(drive.driveType);
     const typed = (pay[candidate.studentId] ?? "").trim();
@@ -98,27 +105,22 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
     // figure that is missing rather than the one this screen happens to show.
     const problem = offerPayProblem({ driveType: drive.driveType, ctcLpa, stipendMonthly });
     if (problem !== null) {
-      setError(`${problem} (${candidate.studentName})`);
-      return;
+      throw new Error(`${problem} (${candidate.studentName})`);
     }
 
-    try {
-      await view.declare({
-        studentId: candidate.studentId,
-        driveId,
-        companyName: drive.companyName,
-        roleTitle: drive.roleTitle,
-        driveType: drive.driveType,
-        offerCategory: drive.offerCategory,
-        ctcLpa,
-        stipendMonthly,
-        // Spec B: the letter travels with the declaration when one was chosen.
-        letter: letters[candidate.studentId] ?? null,
-      });
-      await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not declare the offer.");
-    }
+    await view.declare({
+      studentId: candidate.studentId,
+      driveId,
+      companyName: drive.companyName,
+      roleTitle: drive.roleTitle,
+      driveType: drive.driveType,
+      offerCategory: drive.offerCategory,
+      ctcLpa,
+      stipendMonthly,
+      // Spec B: the letter travels with the declaration when one was chosen.
+      letter: letters[candidate.studentId] ?? null,
+    });
+    await refresh();
   }
 
   return (
@@ -128,12 +130,12 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
         subtitle="Being placed is declared here. It is never inferred from the last round."
       />
 
-      {error !== null && (
+      {actions.error !== null && (
         <div
           role="alert"
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
-          {error}
+          {actions.error}
         </div>
       )}
 
@@ -186,19 +188,10 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             if (file === undefined) return;
-                            void (async () => {
-                              setError(null);
-                              try {
-                                await view.attachLetter?.(candidate.studentId, driveId, file);
-                                await refresh();
-                              } catch (cause) {
-                                setError(
-                                  cause instanceof Error
-                                    ? cause.message
-                                    : "Could not file the offer letter.",
-                                );
-                              }
-                            })();
+                            void actions.run(async () => {
+                              await view.attachLetter?.(candidate.studentId, driveId, file);
+                              await refresh();
+                            }, `attach:${candidate.studentId}`);
                           }}
                         />
                       </div>
@@ -248,7 +241,14 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                         className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm"
                       />
                     </div>
-                    <Button onClick={() => void declare(candidate)}>Declare selected</Button>
+                    <Button
+                      isLoading={actions.isPending(candidate.studentId)}
+                      onClick={() =>
+                        void actions.run(() => declare(candidate), candidate.studentId)
+                      }
+                    >
+                      Declare selected
+                    </Button>
                   </div>
                 )}
               </li>

@@ -99,6 +99,40 @@ describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
+  it("loads the bar while the batch is being recorded, and takes no second batch", async () => {
+    let release: () => void = () => {};
+    const record = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<ResultsPage roundId="r1" view={view({ record })} />);
+
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    // The confirmation closes at once, so the bar is what carries the wait —
+    // and every button in it is shut, because a second batch recorded against
+    // the same round would notify the same students twice.
+    const selected = screen.getByRole("button", { name: /mark selected/i }) as HTMLButtonElement;
+    expect(selected.getAttribute("aria-busy")).toBe("true");
+    expect(selected.disabled).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: /mark rejected/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /mark on hold/i }));
+    expect(record).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(selected.getAttribute("aria-busy")).toBe("false"));
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+
   it("select-all-undecided ticks exactly the rows without a result; Clear unticks", async () => {
     const record = vi.fn();
     const user = userEvent.setup();

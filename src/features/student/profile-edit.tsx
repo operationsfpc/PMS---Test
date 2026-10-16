@@ -14,6 +14,7 @@ import {
   validateProfileLinks,
 } from "@domain/profile-links";
 import { filenameToCertificateName } from "@domain/storage-path";
+import { useAsyncAction } from "@lib/use-async-action";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import type {
@@ -123,6 +124,8 @@ export function ProfileEditPage({
   const [certificateFile, setCertificateFile] = useState<File | null>(null);
   const [certificateProblems, setCertificateProblems] = useState<readonly string[]>([]);
   const [uploading, setUploading] = useState(false);
+  /** Keyed per certificate: a list of five of them, and removing one is one row's business. */
+  const certActions = useAsyncAction();
 
   useEffect(() => {
     void repository.load().then((current) => {
@@ -397,7 +400,13 @@ export function ProfileEditPage({
                         variant="danger"
                         size="sm"
                         aria-label={`Remove ${certificate.name}`}
-                        onClick={() => void removeCertificate(certificate.id)}
+                        isLoading={certActions.isPending(`remove:${certificate.id}`)}
+                        onClick={() =>
+                          void certActions.run(
+                            () => removeCertificate(certificate.id),
+                            `remove:${certificate.id}`,
+                          )
+                        }
                       >
                         Remove
                       </Button>

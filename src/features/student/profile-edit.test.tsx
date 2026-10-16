@@ -387,6 +387,42 @@ describe("ProfileEditPage — certificates", () => {
     const item = within(await screen.findByRole("listitem", { name: /nptel data structures/i }));
     expect(item.getByRole("button", { name: /remove nptel data structures/i })).toBeDefined();
   });
+
+  /**
+   * 2026-10-16, "button loader for process": two certificates on file, so the
+   * spinner must answer for the one that was clicked — and a second click on it
+   * must not raise a second delete of a row that is already on its way out.
+   */
+  it("loads only the certificate being removed and refuses a second click on it", async () => {
+    let release: () => void = () => {};
+    const remove = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    renderPage(repo(), certs({ remove }));
+
+    const aws = (await screen.findByRole("button", {
+      name: /remove aws cloud practitioner/i,
+    })) as HTMLButtonElement;
+    const nptel = screen.getByRole("button", {
+      name: /remove nptel data structures/i,
+    }) as HTMLButtonElement;
+
+    await user.click(aws);
+
+    expect(aws.getAttribute("aria-busy")).toBe("true");
+    expect(aws.disabled).toBe(true);
+    expect(nptel.getAttribute("aria-busy")).toBe("false");
+
+    await user.click(aws);
+    expect(remove).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
+  });
 });
 
 /**

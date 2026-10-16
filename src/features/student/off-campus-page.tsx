@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { canRecordSelfPlacement } from "@domain/participation";
+import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import type { ParticipationStatusView, ParticipationView } from "./participation-contract";
 import { RequestOutcome, submittedOn } from "./request-outcome";
@@ -18,7 +19,7 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
   const [roleTitle, setRoleTitle] = useState("");
   const [ctc, setCtc] = useState("");
   const [offerLetter, setOfferLetter] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
     setStatus(await view.status());
@@ -28,11 +29,14 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
     void refresh();
   }, [refresh]);
 
+  // Validation throws so that a missing CTC and a refused upload arrive in the
+  // same alert as a failed request — one error source, not two. A double click
+  // here records the same offer twice, and the coordinator then has to work out
+  // which of the two rows to decline.
   async function selfPlace() {
     const value = Number(ctc);
     if (company.trim() === "" || !Number.isFinite(value) || value <= 0) {
-      setError("Enter the company and a valid CTC in LPA.");
-      return;
+      throw new Error("Enter the company and a valid CTC in LPA.");
     }
 
     const decision = canRecordSelfPlacement({
@@ -40,26 +44,20 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
       hasOfferLetter: offerLetter !== null,
     });
     if (!decision.allowed) {
-      setError(decision.reason);
-      return;
+      throw new Error(decision.reason);
     }
 
-    setError(null);
-    try {
-      await view.recordSelfPlacement({
-        companyName: company.trim(),
-        roleTitle: roleTitle.trim(),
-        ctcLpa: value,
-        offerLetter: offerLetter as File,
-      });
-      setCompany("");
-      setRoleTitle("");
-      setCtc("");
-      setOfferLetter(null);
-      await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not record the offer.");
-    }
+    await view.recordSelfPlacement({
+      companyName: company.trim(),
+      roleTitle: roleTitle.trim(),
+      ctcLpa: value,
+      offerLetter: offerLetter as File,
+    });
+    setCompany("");
+    setRoleTitle("");
+    setCtc("");
+    setOfferLetter(null);
+    await refresh();
   }
 
   const placements = status?.selfPlacements ?? [];
@@ -71,12 +69,12 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
         subtitle="An offer you found yourself, recorded and verified separately."
       />
 
-      {error !== null && (
+      {actions.error !== null && (
         <div
           role="alert"
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
-          {error}
+          {actions.error}
         </div>
       )}
 
@@ -177,7 +175,9 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
         </div>
 
         <div className="mt-4">
-          <Button onClick={() => void selfPlace()}>Record off-campus offer</Button>
+          <Button isLoading={actions.busy} onClick={() => void actions.run(selfPlace)}>
+            Record off-campus offer
+          </Button>
         </div>
       </Card>
     </div>

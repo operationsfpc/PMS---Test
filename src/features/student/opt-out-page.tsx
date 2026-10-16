@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { canRequestOptOut } from "@domain/participation";
+import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import {
   hasPendingRequest,
@@ -19,7 +20,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
   const [status, setStatus] = useState<ParticipationStatusView | null>(null);
   const [reason, setReason] = useState("");
   const [declaration, setDeclaration] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
     setStatus(await view.status());
@@ -29,10 +30,14 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
     void refresh();
   }, [refresh]);
 
+  // Validation throws instead of calling setError: the hook turns a rejection
+  // into the sentence the student reads, so a missing reason and a refused
+  // request share one alert rather than two states that can contradict each
+  // other. And the request is irreversible, which is exactly why a second
+  // click must not be able to raise a second one.
   async function optOut() {
     if (reason.trim() === "") {
-      setError("Give a reason for opting out.");
-      return;
+      throw new Error("Give a reason for opting out.");
     }
 
     // The domain refuses without the declaration, so the screen and the
@@ -43,19 +48,13 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
       hasDeclaration: declaration !== null,
     });
     if (!decision.allowed) {
-      setError(decision.reason);
-      return;
+      throw new Error(decision.reason);
     }
 
-    setError(null);
-    try {
-      await view.requestOptOut({ reason: reason.trim(), declaration: declaration as File });
-      setReason("");
-      setDeclaration(null);
-      await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not send your request.");
-    }
+    await view.requestOptOut({ reason: reason.trim(), declaration: declaration as File });
+    setReason("");
+    setDeclaration(null);
+    await refresh();
   }
 
   const requests = status?.optOutRequests ?? [];
@@ -78,12 +77,12 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
         subtitle="A decision only you can make, and only once."
       />
 
-      {error !== null && (
+      {actions.error !== null && (
         <div
           role="alert"
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
-          {error}
+          {actions.error}
         </div>
       )}
 
@@ -161,7 +160,11 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
               />
             </div>
             <div className="mt-3">
-              <Button variant="secondary" onClick={() => void optOut()}>
+              <Button
+                variant="secondary"
+                isLoading={actions.busy}
+                onClick={() => void actions.run(optOut)}
+              >
                 Request opt-out
               </Button>
             </div>

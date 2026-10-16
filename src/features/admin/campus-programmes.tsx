@@ -1,5 +1,6 @@
 import { Button, Card } from "@components/ui";
 import { programmeLabel, validateProgramme } from "@domain/programmes";
+import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface ProgrammeRow {
@@ -59,7 +60,9 @@ export function CampusProgrammes({
   const [branch, setBranch] = useState("");
   const [year, setYear] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Keyed per row: thirty programmes are listed and removing one is a decision
+  // about that one row, so its spinner must not answer for the others.
+  const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
     setRows(await view.programmes(campusId));
@@ -92,6 +95,9 @@ export function CampusProgrammes({
     );
   }, [rows]);
 
+  // The write itself is handed to `useAsyncAction`: a second click on "Add
+  // programme" while the first is still out inserts the same degree and branch
+  // twice, and the student then sees one programme listed under two ids.
   async function add() {
     const programme: NewProgramme = {
       campusId,
@@ -101,7 +107,8 @@ export function CampusProgrammes({
     };
 
     // The rule is the domain's, so this screen and the database refuse for the
-    // same reason and say the same thing.
+    // same reason and say the same thing. Validation stays here because it is
+    // shown under the form, not as the failure alert.
     const problems = validateProgramme(programme);
     if (problems.length > 0) {
       setProblem(problems.join(" "));
@@ -109,24 +116,14 @@ export function CampusProgrammes({
     }
 
     setProblem(null);
-    setError(null);
-    try {
-      await view.add(programme);
-      setBranch("");
-      await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not add that programme.");
-    }
+    await view.add(programme);
+    setBranch("");
+    await refresh();
   }
 
   async function remove(id: string) {
-    setError(null);
-    try {
-      await view.remove(id);
-      await refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not remove that programme.");
-    }
+    await view.remove(id);
+    await refresh();
   }
 
   return (
@@ -137,12 +134,12 @@ export function CampusProgrammes({
         registration form.
       </p>
 
-      {error !== null && (
+      {actions.error !== null && (
         <p
           role="alert"
           className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
         >
-          {error}
+          {actions.error}
         </p>
       )}
 
@@ -184,7 +181,8 @@ export function CampusProgrammes({
                         variant="ghost"
                         size="sm"
                         aria-label={`Remove ${label} for ${row.passingYear}`}
-                        onClick={() => void remove(row.id)}
+                        isLoading={actions.isPending(`remove:${row.id}`)}
+                        onClick={() => void actions.run(() => remove(row.id), `remove:${row.id}`)}
                       >
                         Remove
                       </Button>
@@ -267,7 +265,12 @@ export function CampusProgrammes({
           </div>
 
           <div className="flex items-end">
-            <Button variant="secondary" onClick={() => void add()} className="w-full sm:w-auto">
+            <Button
+              variant="secondary"
+              isLoading={actions.isPending("add")}
+              onClick={() => void actions.run(add, "add")}
+              className="w-full sm:w-auto"
+            >
               Add programme
             </Button>
           </div>
