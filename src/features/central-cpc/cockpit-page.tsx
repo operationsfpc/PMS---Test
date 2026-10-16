@@ -1,6 +1,16 @@
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
+  Button,
+  Card,
+  PageHeader,
+} from "@components/ui";
+import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import {
   type DriveOrder,
@@ -28,6 +38,7 @@ import {
 } from "@domain/offer-category";
 import { describeStipendRange } from "@domain/stipend";
 import type { AppRole, DriveStatus, DriveType } from "@domain/types";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -52,6 +63,12 @@ export interface DriveSummary {
   readonly status: DriveStatus;
   readonly onHold: boolean;
   readonly applicationCount: number;
+  /**
+   * Who applied, in the same read that produced the count. Optional so older
+   * fixtures stay valid — a count with nobody behind it is a card that cannot
+   * open, not a card that lies.
+   */
+  readonly applicantStudentIds?: readonly string[];
   readonly rounds: readonly CockpitRound[];
   /** G1a (UAT 2026-08-20): when it was raised — the queue's age. */
   readonly createdAt: string | null;
@@ -193,14 +210,34 @@ export function CockpitPage({
   const [category, setCategory] = useState<OfferCategory | null>(null);
   const [reason, setReason] = useState("");
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  /** A decision or a venue is a WRITE: while one is out, its button is shut. */
+  const [savingDecision, setSavingDecision] = useState(false);
+  const [savingVenue, setSavingVenue] = useState(false);
   /** UAT 2026-08-21 item 2: the venue being recorded, and its text. */
   const [venueEditing, setVenueEditing] = useState<DriveSummary | null>(null);
   const [venueText, setVenueText] = useState("");
   const [venueError, setVenueError] = useState<string | null>(null);
+  /** The queue could not be read — a different nothing from an empty queue. */
+  const [failure, setFailure] = useState<string | null>(null);
+  const [reviewsFailed, setReviewsFailed] = useState(false);
 
   const load = useCallback(() => {
-    void view.drives().then(setLoaded);
-    void view.reviews().then(setReviews);
+    // `void view.drives().then(setLoaded)` used to swallow a rejection: the
+    // screen sat on "Loading drives…" and the operator could not tell a broken
+    // read from a slow one, so nothing here was ever believed.
+    setFailure(null);
+    setReviewsFailed(false);
+    void view
+      .drives()
+      .then(setLoaded, (cause: unknown) =>
+        setFailure(describeReadFailure(cause, "The drive queue could not be read.")),
+      );
+    // Cleared, not left standing: a list from an earlier read, kept beside a
+    // failure that says the current one is unknown, gets believed anyway.
+    void view.reviews().then(setReviews, () => {
+      setReviews([]);
+      setReviewsFailed(true);
+    });
   }, [view]);
 
   useEffect(() => {
@@ -243,11 +280,12 @@ export function CockpitPage({
   }
 
   async function saveVenue() {
-    if (venueEditing === null || view.updateVenue === undefined) return;
+    if (venueEditing === null || view.updateVenue === undefined || savingVenue) return;
     if (venueText.trim() === "") {
       setVenueError("Type the venue — an empty venue is “not yet confirmed”, not a venue.");
       return;
     }
+    setSavingVenue(true);
     try {
       await view.updateVenue(venueEditing.driveId, venueText.trim());
       setVenueEditing(null);
@@ -256,6 +294,8 @@ export function CockpitPage({
       load();
     } catch (cause) {
       setVenueError(cause instanceof Error ? cause.message : "Could not save the venue.");
+    } finally {
+      setSavingVenue(false);
     }
   }
 
@@ -272,7 +312,7 @@ export function CockpitPage({
   }
 
   async function confirmDecision() {
-    if (deciding === null || decide === undefined) return;
+    if (deciding === null || decide === undefined || savingDecision) return;
     const intent: PifDecision =
       deciding.kind === "approve"
         ? { decision: "approve", offerCategory: category }
@@ -286,12 +326,15 @@ export function CockpitPage({
       return;
     }
 
+    setSavingDecision(true);
     try {
       await decide(deciding.drive.driveId, "submitted", intent, deciding.drive.driveType ?? null);
       setDeciding(null);
       load();
     } catch (cause) {
       setDecisionError(cause instanceof Error ? cause.message : "Could not save the decision.");
+    } finally {
+      setSavingDecision(false);
     }
   }
 
@@ -301,6 +344,12 @@ export function CockpitPage({
         title={scope?.title ?? "Drive cockpit"}
         subtitle={scope?.subtitle ?? "Every drive, and what it is waiting for."}
       />
+
+      {reviewsFailed && (
+        <p role="alert" className="mb-6 rounded-card bg-danger-50 p-4 text-sm text-danger-700">
+          The absence reviews could not be read. That is not the same as nobody needing one.
+        </p>
+      )}
 
       {reviews.length > 0 && (
         <Card className="mb-6 p-5">
@@ -325,7 +374,20 @@ export function CockpitPage({
         </Card>
       )}
 
-      {drives === null || split === null ? (
+      {failure !== null ? (
+        <Card className="p-6">
+          <p role="alert" className="text-sm text-danger-700">
+            {failure}
+          </p>
+          <p className="mt-1 text-sm text-ink-500">
+            Nothing is listed under it on purpose — a queue that arrived in parts is a queue that
+            does not add up.
+          </p>
+          <Button variant="secondary" className="mt-3" onClick={load}>
+            Try again
+          </Button>
+        </Card>
+      ) : drives === null || split === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading drives…
         </p>
@@ -371,21 +433,23 @@ export function CockpitPage({
           {/* G1d (answer 1a): expired drives collapse on the SAME list —
               out of the way, never destroyed. */}
           {split.expired.length > 0 && (
-            <details className="mt-4">
-              <summary className="cursor-pointer text-sm font-medium text-ink-500">
-                Expired — application deadline passed ({split.expired.length})
-              </summary>
-              <div className="mt-3">
-                <DriveList
-                  drives={split.expired}
-                  now={clock}
-                  mayPublish={mayPublish}
-                  mayShortlist={mayShortlist}
-                  onDecide={decide === undefined ? null : openDecision}
-                  onEditVenue={mayRecordVenue ? openVenue : null}
-                />
-              </div>
-            </details>
+            <Accordion className="mt-4">
+              <AccordionItem value="expired">
+                <AccordionTrigger className="py-3 text-sm font-medium text-ink-500">
+                  Expired — application deadline passed ({split.expired.length})
+                </AccordionTrigger>
+                <AccordionContent className="pb-3">
+                  <DriveList
+                    drives={split.expired}
+                    now={clock}
+                    mayPublish={mayPublish}
+                    mayShortlist={mayShortlist}
+                    onDecide={decide === undefined ? null : openDecision}
+                    onEditVenue={mayRecordVenue ? openVenue : null}
+                  />
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           )}
         </>
       )}
@@ -431,7 +495,9 @@ export function CockpitPage({
               <Button variant="secondary" onClick={() => setVenueEditing(null)}>
                 Cancel
               </Button>
-              <Button onClick={() => void saveVenue()}>Save venue</Button>
+              <Button isLoading={savingVenue} onClick={() => void saveVenue()}>
+                Save venue
+              </Button>
             </div>
           </div>
         </div>
@@ -508,7 +574,7 @@ export function CockpitPage({
               <Button variant="secondary" onClick={() => setDeciding(null)}>
                 Cancel
               </Button>
-              <Button onClick={() => void confirmDecision()}>
+              <Button isLoading={savingDecision} onClick={() => void confirmDecision()}>
                 {deciding.kind === "approve" ? "Confirm — approve" : "Confirm — reject permanently"}
               </Button>
             </div>
@@ -520,185 +586,341 @@ export function CockpitPage({
 }
 
 /** The card list — one renderer for the active and the expired sections. */
-function DriveList({
-  drives,
-  now,
-  mayPublish,
-  mayShortlist,
-  onDecide,
-  onEditVenue,
-}: {
-  drives: readonly DriveSummary[];
-  now: Date;
-  mayPublish: boolean;
-  mayShortlist: boolean;
-  onDecide: ((drive: DriveSummary, kind: "approve" | "reject") => void) | null;
+interface RowProps {
+  readonly now: Date;
+  readonly mayPublish: boolean;
+  readonly mayShortlist: boolean;
+  readonly onDecide: ((drive: DriveSummary, kind: "approve" | "reject") => void) | null;
   /** UAT 2026-08-21 item 2 — wired for the Central CPC alone (answer Q5). */
-  onEditVenue: ((drive: DriveSummary) => void) | null;
-}) {
+  readonly onEditVenue: ((drive: DriveSummary) => void) | null;
+}
+
+/**
+ * 2026-10-16 (UAT): "same company shows as two" — two roles raised for one
+ * visit are ONE event, and this queue is cleared event by event. A legacy
+ * drive with no parent is an event of exactly one role and keeps the row it
+ * always had; more than one role folds into an accordion whose header counts
+ * the visit.
+ */
+function DriveList({ drives, ...props }: { drives: readonly DriveSummary[] } & RowProps) {
+  const events = [...groupDrivesByEvent(drives).values()];
+
   return (
     <Card>
       <ul className="divide-y divide-neutral-200">
-        {drives.map((drive) => {
-          const raised = describeRaisedOn(drive.createdAt);
-          const pendingDays = daysPending(drive.createdAt, now);
-          const unpublished =
-            drive.status === "draft" || drive.status === "submitted" || drive.status === "approved";
-
+        {events.map((roles) => {
+          const head = roles[0];
+          if (head === undefined) return null;
           return (
-            <li key={drive.driveId} className="p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
-                    {drive.companyName}
-                    {/* 2026-08-27: the type, on every drive summary. */}
-                    <Badge tone={driveTypeTone(drive.driveType ?? null)}>
-                      {driveTypeLabel(drive.driveType ?? null)}
-                    </Badge>
-                  </p>
-                  <p className="text-sm text-ink-500">
-                    {drive.roleTitle ?? "Role not set"}
-                    {describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa) !== null &&
-                      ` · ${describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa)}`}
-                    {/* An internship has no CTC — the stipend is the number. */}
-                    {describeStipendRange(
-                      drive.stipendMinMonthly ?? null,
-                      drive.stipendMaxMonthly ?? null,
-                    ) !== null &&
-                      ` · ${describeStipendRange(
-                        drive.stipendMinMonthly ?? null,
-                        drive.stipendMaxMonthly ?? null,
-                      )}`}{" "}
-                    · {drive.applicationCount} applicants
-                  </p>
-                  {/* G1a: the age of the submission, stated on the card. */}
-                  {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
-                  {/* UAT 2026-08-21 item 2: where an off-campus drive happens —
-                      "to be confirmed" is said out loud, never left blank. */}
-                  {describeDriveVenue(
-                    (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
-                    drive.venue ?? null,
-                  ) !== null && (
-                    <p className="mt-0.5 text-xs text-ink-500">
-                      Venue:{" "}
-                      {describeDriveVenue(
-                        (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
-                        drive.venue ?? null,
-                      )}
-                    </p>
-                  )}
-                  {/* Who the drive is for, on the card — a CPC member should
-                      not have to open the record to learn it. Absent (older
-                      fixtures) stays silent; empty means every campus. */}
-                  {drive.campuses !== undefined && (
-                    <p className="mt-0.5 text-xs text-ink-500">
-                      {drive.campuses.length === 0
-                        ? "Open to every campus"
-                        : `Open to: ${drive.campuses.join(", ")}`}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
-                  {drive.onHold && <Badge tone="warning">On hold</Badge>}
-                  {/* G1a: flagged only while it awaits someone's action. */}
-                  {unpublished && isPendingTooLong(drive.createdAt, now) && (
-                    <Badge tone="warning">Pending {pendingDays} days</Badge>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-                {/* B2 (UAT 2026-08-19): every card opens the record page,
-                    whatever its status — a submitted drive awaiting the
-                    Delivery Head used to be a dead end with no link at all. */}
-                <Link
-                  to={`/drives/${drive.driveId}`}
-                  className="font-medium text-brand-600 hover:underline"
-                >
-                  View drive
-                </Link>
-
-                {/* UAT 2026-08-21 item 2: the venue stays editable after
-                    submission — the company confirms it late, the CPC records
-                    it here. */}
-                {onEditVenue !== null &&
-                  drive.status !== "draft" &&
-                  driveVenueApplies(
-                    (drive.driveMode ?? null) as Parameters<typeof driveVenueApplies>[0],
-                  ) && (
-                    <Button size="sm" variant="secondary" onClick={() => onEditVenue(drive)}>
-                      Update venue…
-                    </Button>
-                  )}
-
-                {/* G1c: the Delivery Head's one action, on the list itself. */}
-                {onDecide !== null && drive.status === "submitted" && (
-                  <>
-                    <Button size="sm" onClick={() => onDecide(drive, "approve")}>
-                      Approve…
-                    </Button>
-                    <Button size="sm" variant="secondary" onClick={() => onDecide(drive, "reject")}>
-                      Reject…
-                    </Button>
-                  </>
-                )}
-
-                {mayPublish && (drive.status === "approved" || drive.status === "draft") && (
-                  <Link
-                    to={`/central/publish?drive=${drive.driveId}`}
-                    className="font-medium text-brand-600 hover:underline"
-                  >
-                    Complete and publish
-                  </Link>
-                )}
-
-                {mayShortlist &&
-                  (drive.status === "live" ||
-                    drive.status === "applications_closed" ||
-                    drive.status === "in_rounds") && (
-                    <Link
-                      to={`/central/shortlisting?drive=${drive.driveId}`}
-                      className="font-medium text-brand-600 hover:underline"
-                    >
-                      Shortlist applicants
-                    </Link>
-                  )}
-
-                {drive.rounds.map((round) => (
-                  <Link
-                    key={round.roundId}
-                    to={`/central/results?drive=${drive.driveId}`}
-                    className="font-medium text-brand-600 hover:underline"
-                  >
-                    {round.sequence}. {round.name}
-                  </Link>
-                ))}
-
-                {(drive.status === "in_rounds" || drive.status === "completed") && (
-                  <Link
-                    to={`/central/offers?drive=${drive.driveId}`}
-                    className="font-medium text-brand-600 hover:underline"
-                  >
-                    Final selection
-                  </Link>
-                )}
-
-                {/* C3 (2026-08-21): the completion dialog lives on the rounds
-                    screen; the card only takes the coordinator there. */}
-                {mayShortlist && drive.status === "in_rounds" && (
-                  <Link
-                    to={`/central/results?drive=${drive.driveId}`}
-                    className="font-medium text-brand-600 hover:underline"
-                  >
-                    Complete drive…
-                  </Link>
-                )}
-              </div>
+            <li key={head.driveId} className="p-4">
+              {roles.length === 1 ? (
+                <DriveRow drive={head} {...props} />
+              ) : (
+                <EventGroup head={head} roles={roles} {...props} />
+              )}
             </li>
           );
         })}
       </ul>
     </Card>
   );
+}
+
+/**
+ * One role's facts and one role's actions — the row this card used to be.
+ * `nested` is the same row inside an event accordion, where the trigger has
+ * already said the company, the role, the money and the status.
+ */
+function DriveRow({
+  drive,
+  now,
+  mayPublish,
+  mayShortlist,
+  onDecide,
+  onEditVenue,
+  nested = false,
+}: { drive: DriveSummary; nested?: boolean } & RowProps) {
+  const raised = describeRaisedOn(drive.createdAt);
+  const pendingDays = daysPending(drive.createdAt, now);
+  const unpublished =
+    drive.status === "draft" || drive.status === "submitted" || drive.status === "approved";
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          {!nested && (
+            <>
+              <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
+                {drive.companyName}
+                {/* 2026-08-27: the type, on every drive summary. */}
+                <Badge tone={driveTypeTone(drive.driveType ?? null)}>
+                  {driveTypeLabel(drive.driveType ?? null)}
+                </Badge>
+              </p>
+              <p className="text-sm text-ink-500">
+                {[
+                  drive.roleTitle ?? "Role not set",
+                  describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa),
+                  // An internship has no CTC — the stipend is the number.
+                  describeStipendRange(
+                    drive.stipendMinMonthly ?? null,
+                    drive.stipendMaxMonthly ?? null,
+                  ),
+                  `${drive.applicationCount} applicants`,
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(" · ")}
+              </p>
+              {/* G1a: the age of the submission, stated on the card. */}
+              {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
+            </>
+          )}
+          {/* UAT 2026-08-21 item 2: where an off-campus drive happens —
+              "to be confirmed" is said out loud, never left blank. */}
+          {describeDriveVenue(
+            (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
+            drive.venue ?? null,
+          ) !== null && (
+            <p className="mt-0.5 text-xs text-ink-500">
+              Venue:{" "}
+              {describeDriveVenue(
+                (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
+                drive.venue ?? null,
+              )}
+            </p>
+          )}
+          {/* Who the drive is for, on the card — a CPC member should
+              not have to open the record to learn it. Absent (older
+              fixtures) stays silent; empty means every campus. */}
+          {drive.campuses !== undefined && (
+            <p className="mt-0.5 text-xs text-ink-500">
+              {drive.campuses.length === 0
+                ? "Open to every campus"
+                : `Open to: ${drive.campuses.join(", ")}`}
+            </p>
+          )}
+        </div>
+        {!nested && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
+            {drive.onHold && <Badge tone="warning">On hold</Badge>}
+            {/* G1a: flagged only while it awaits someone's action. */}
+            {unpublished && isPendingTooLong(drive.createdAt, now) && (
+              <Badge tone="warning">Pending {pendingDays} days</Badge>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        {/* B2 (UAT 2026-08-19): every card opens the record page,
+            whatever its status — a submitted drive awaiting the
+            Delivery Head used to be a dead end with no link at all. */}
+        <Link
+          to={`/drives/${drive.driveId}`}
+          className="font-medium text-brand-600 hover:underline"
+        >
+          View drive
+        </Link>
+
+        {/* UAT 2026-08-21 item 2: the venue stays editable after
+            submission — the company confirms it late, the CPC records
+            it here. */}
+        {onEditVenue !== null &&
+          drive.status !== "draft" &&
+          driveVenueApplies(
+            (drive.driveMode ?? null) as Parameters<typeof driveVenueApplies>[0],
+          ) && (
+            <Button size="sm" variant="secondary" onClick={() => onEditVenue(drive)}>
+              Update venue…
+            </Button>
+          )}
+
+        {/* G1c: the Delivery Head's one action, on the list itself. */}
+        {onDecide !== null && drive.status === "submitted" && (
+          <>
+            <Button size="sm" onClick={() => onDecide(drive, "approve")}>
+              Approve…
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => onDecide(drive, "reject")}>
+              Reject…
+            </Button>
+          </>
+        )}
+
+        {mayPublish && (drive.status === "approved" || drive.status === "draft") && (
+          <Link
+            to={`/central/publish?drive=${drive.driveId}`}
+            className="font-medium text-brand-600 hover:underline"
+          >
+            Complete and publish
+          </Link>
+        )}
+
+        {mayShortlist &&
+          (drive.status === "live" ||
+            drive.status === "applications_closed" ||
+            drive.status === "in_rounds") && (
+            <Link
+              to={`/central/shortlisting?drive=${drive.driveId}`}
+              className="font-medium text-brand-600 hover:underline"
+            >
+              Shortlist applicants
+            </Link>
+          )}
+
+        {drive.rounds.map((round) => (
+          <Link
+            key={round.roundId}
+            to={`/central/results?drive=${drive.driveId}`}
+            className="font-medium text-brand-600 hover:underline"
+          >
+            {round.sequence}. {round.name}
+          </Link>
+        ))}
+
+        {(drive.status === "in_rounds" || drive.status === "completed") && (
+          <Link
+            to={`/central/offers?drive=${drive.driveId}`}
+            className="font-medium text-brand-600 hover:underline"
+          >
+            Final selection
+          </Link>
+        )}
+
+        {/* C3 (2026-08-21): the completion dialog lives on the rounds
+            screen; the card only takes the coordinator there. */}
+        {mayShortlist && drive.status === "in_rounds" && (
+          <Link
+            to={`/central/results?drive=${drive.driveId}`}
+            className="font-medium text-brand-600 hover:underline"
+          >
+            Complete drive…
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 2026-10-16 (UAT): the whole visit on one card. Each role keeps the row it
+ * had — approval, publishing and the venue are decided per role — but the
+ * queue is read and cleared event by event, so the header answers the questions
+ * a list of same-company cards could not: how many roles, how many students,
+ * and how many of them are waiting on the reader.
+ */
+function EventGroup({
+  head,
+  roles,
+  ...props
+}: { head: DriveSummary; roles: readonly DriveSummary[] } & RowProps) {
+  const raised = describeRaisedOn(head.createdAt);
+  const students = roles.flatMap((role) => [...(role.applicantStudentIds ?? [])]);
+  // The ids are the only way to de-duplicate a student who applied to two of
+  // the visit's roles; without them the honest statement is a summed head-count.
+  const applicants =
+    students.length === 0
+      ? roles.reduce((sum, role) => sum + role.applicationCount, 0)
+      : countDistinctApplicants(students.map((studentId) => ({ studentId })));
+  const awaiting = roles.filter((role) => awaitsReader(role, props));
+
+  const types = new Set(roles.map((role) => role.driveType ?? null));
+  const [singleType] = types;
+  const uniform = types.size === 1 && singleType !== undefined;
+
+  const statuses = [...countBy(roles, (role) => role.status)];
+  const held = roles.filter((role) => role.onHold).length;
+  const stale = roles.filter(
+    (role) =>
+      (role.status === "draft" || role.status === "submitted" || role.status === "approved") &&
+      isPendingTooLong(role.createdAt, props.now),
+  ).length;
+
+  // Opened for the reader rather than making them hunt: the roles awaiting an
+  // action are the reason the card exists.
+  const openByDefault = awaiting.map((role) => role.driveId);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
+            {head.companyName}
+            <Badge tone={uniform ? driveTypeTone(singleType ?? null) : "neutral"}>
+              {uniform ? driveTypeLabel(singleType ?? null) : "Mixed types"}
+            </Badge>
+          </p>
+          <p className="text-sm text-ink-500">
+            {roles.length} roles · {applicants} applicants
+            {awaiting.length > 0 && ` · ${awaiting.length} awaiting you`}
+          </p>
+          {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {statuses.map(([status, count]) => (
+            <Badge key={status} tone={STATUS_TONE[status]}>
+              {label(status)}
+              {count > 1 && ` ×${count}`}
+            </Badge>
+          ))}
+          {held > 0 && <Badge tone="warning">{held} on hold</Badge>}
+          {stale > 0 && <Badge tone="warning">Pending too long ({stale})</Badge>}
+        </div>
+      </div>
+
+      <Accordion multiple className="mt-3" defaultValue={openByDefault}>
+        {roles.map((drive) => {
+          const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
+          const stipend = describeStipendRange(
+            drive.stipendMinMonthly ?? null,
+            drive.stipendMaxMonthly ?? null,
+          );
+          return (
+            <AccordionItem key={drive.driveId} value={drive.driveId}>
+              <AccordionTrigger className="py-3">
+                <span className="font-medium text-ink-900">
+                  {drive.roleTitle ?? "Role not set"}
+                </span>
+                {ctc !== null && <span>{ctc}</span>}
+                {stipend !== null && <span>{stipend}</span>}
+                <span>{drive.applicationCount} applicants</span>
+                <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
+                {drive.onHold && <Badge tone="warning">On hold</Badge>}
+              </AccordionTrigger>
+              <AccordionContent className="pb-4">
+                <DriveRow nested drive={drive} {...props} />
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    </div>
+  );
+}
+
+/**
+ * "Awaiting you" counts only what blocks the visit: the Delivery Head's
+ * decision and the Central CPC's publishing. Shortlisting and results are
+ * links, not demands — counting them would make every card urgent.
+ */
+function awaitsReader(
+  drive: DriveSummary,
+  props: Pick<RowProps, "mayPublish" | "onDecide">,
+): boolean {
+  if (props.onDecide !== null && drive.status === "submitted") return true;
+  return props.mayPublish && (drive.status === "approved" || drive.status === "draft");
+}
+
+function countBy<T, K extends string>(
+  rows: readonly T[],
+  key: (row: T) => K,
+): readonly (readonly [K, number])[] {
+  const counts = new Map<K, number>();
+  for (const row of rows) {
+    const k = key(row);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return [...counts];
 }

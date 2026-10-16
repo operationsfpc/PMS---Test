@@ -801,8 +801,8 @@ export function PifForm({
         )}
 
         <div className="flex flex-wrap gap-3 pb-10">
-          <Button type="button" disabled={isSubmitting} onClick={run("submit")}>
-            {isSubmitting ? "Working…" : "Submit for approval"}
+          <Button type="button" isLoading={isSubmitting} onClick={run("submit")}>
+            Submit for approval
           </Button>
           <Button type="button" variant="secondary" disabled={isSubmitting} onClick={run("draft")}>
             Save draft

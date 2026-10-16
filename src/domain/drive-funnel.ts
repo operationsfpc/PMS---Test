@@ -126,3 +126,48 @@ export function driveFunnel(participation: DriveParticipation): DriveFunnel {
     ],
   };
 }
+
+/**
+ * The per-student version of the same ladder (2026-10-16).
+ *
+ * `driveFunnel` counts a drive; these answer "where is THIS student up to",
+ * which is what the stage chips and the popups under them filter on. They
+ * belong here rather than in a page because the two drive-progress screens
+ * used to disagree: the dashboard treated any shortlist row that included the
+ * student as a shortlist, while `/cpc/drives` read only the first embedded row
+ * and derived rounds from ATTENDANCE — so a student called to a round nobody
+ * had taken attendance for was "not in rounds" there and "in rounds" next door.
+ * Being called is `round_participants`; attendance is what happened after.
+ */
+
+/** One shortlist row that includes them is enough. */
+export const isShortlisted = (entries: readonly { readonly included: boolean | null }[]): boolean =>
+  entries.some((entry) => entry.included === true);
+
+/** A student who has been called to at least one round. */
+export const isInRounds = (rounds: number): boolean => rounds > 0;
+
+export type DriveStage = "applied" | "shortlisted" | "in_rounds" | "offers";
+
+export interface DriveStageFacts {
+  readonly shortlisted: boolean;
+  /** Rounds they were called to, whether or not attendance was taken. */
+  readonly rounds: number;
+  readonly offer: boolean;
+}
+
+/**
+ * Every stage they have reached, cumulative: an offer holder was shortlisted,
+ * so the chips above a list add up to the list beneath them instead of
+ * contradicting it.
+ */
+export function stagesReached(facts: DriveStageFacts): readonly DriveStage[] {
+  const stages: DriveStage[] = ["applied"];
+  if (facts.shortlisted) stages.push("shortlisted");
+  if (isInRounds(facts.rounds)) stages.push("in_rounds");
+  if (facts.offer) stages.push("offers");
+  return stages;
+}
+
+export const reachedStage = (facts: DriveStageFacts, stage: DriveStage): boolean =>
+  stagesReached(facts).includes(stage);

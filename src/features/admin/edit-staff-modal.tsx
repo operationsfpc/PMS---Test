@@ -401,8 +401,8 @@ export function EditStaffModal({
             <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" disabled={saving}>
-              {saving ? "Saving changes…" : "Save changes"}
+            <Button type="submit" size="sm" isLoading={saving}>
+              Save changes
             </Button>
           </div>
         </form>

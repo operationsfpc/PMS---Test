@@ -1,3 +1,4 @@
+import { PostgrestReadError } from "@lib/postgrest-read";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -90,7 +91,7 @@ describe("createSupabaseDashboardView", () => {
     const snapshot = await createSupabaseDashboardView(client()).snapshot();
 
     expect(snapshot.students[0]?.hasOnCampusPlacement).toBe(true);
-    expect(snapshot.offersByCategory).toEqual({ dream: 1 });
+    expect(snapshot.offerCategories).toEqual([{ category: "dream", studentIds: ["s1"] }]);
   });
 
   it("counts a convertible internship as a placement, and a plain one as neither", async () => {
@@ -112,7 +113,7 @@ describe("createSupabaseDashboardView", () => {
     expect(snapshot.students[0]?.hasOnCampusPlacement).toBe(true);
     expect(snapshot.students[1]?.hasOnCampusPlacement).toBe(false);
     // A plain internship has no category, so it never lands on the ladder.
-    expect(snapshot.offersByCategory).toEqual({ regular: 1 });
+    expect(snapshot.offerCategories).toEqual([{ category: "regular", studentIds: ["s1"] }]);
   });
 
   it("keeps a self-placed offer out of the on-campus count entirely (PRD §16.2)", async () => {
@@ -131,15 +132,48 @@ describe("createSupabaseDashboardView", () => {
 
     expect(snapshot.students[0]?.hasSelfPlacement).toBe(true);
     expect(snapshot.students[0]?.hasOnCampusPlacement).toBe(false);
-    expect(snapshot.offersByCategory).toEqual({});
+    // Its own line, never a rung on the ladder — so it is not a category row.
+    expect(snapshot.offerCategories).toEqual([]);
   });
 
   it("counts drives by status", async () => {
-    stub({ drives: [{ status: "live" }, { status: "live" }, { status: "completed" }] });
+    stub({
+      drives: [
+        { id: "d1", status: "live" },
+        { id: "d2", status: "live" },
+        { id: "d3", status: "completed" },
+      ],
+    });
 
     const snapshot = await createSupabaseDashboardView(client()).snapshot();
 
     expect(snapshot.drivesByStatus).toEqual({ live: 2, completed: 1 });
+  });
+
+  /**
+   * 2026-10-16 (UAT): "same company shows as two". Two roles raised for one
+   * company visit are one drive on this screen — and the row that opens from
+   * the count lists that visit once, with both roles named under it.
+   */
+  it("counts one company visit once, whatever roles it raised", async () => {
+    stub({
+      drives: [
+        {
+          id: "d1",
+          company_name: "TCS",
+          role_title: "MTS",
+          status: "live",
+          company_drive_id: "e1",
+        },
+        { id: "d2", company_name: "TCS", role_title: "QA", status: "live", company_drive_id: "e1" },
+        { id: "d3", company_name: "Infosys", status: "live" },
+      ],
+    });
+
+    const snapshot = await createSupabaseDashboardView(client()).snapshot();
+
+    expect(snapshot.drivesByStatus).toEqual({ live: 2 });
+    expect(snapshot.statusDrives).toHaveLength(3);
   });
 
   it("breaks the same definitions down per campus, so a row cannot disagree with the headline", async () => {
@@ -205,7 +239,7 @@ describe("createSupabaseDashboardView", () => {
     const snapshot = await createSupabaseDashboardView(client()).snapshot();
 
     expect(snapshot.students).toEqual([]);
-    expect(snapshot.offersByCategory).toEqual({});
+    expect(snapshot.offerCategories).toEqual([]);
   });
 });
 
@@ -556,8 +590,10 @@ describe("createSupabaseDashboardView — campus switching and drive progress", 
     const [round] = (await view().snapshot()).driveProgress[0]?.participation.rounds ?? [];
 
     expect(round?.name).toBe("Aptitude");
+    // The STUDENT, not the application the round row keys on: a popup under a
+    // round's count has to name people.
     expect(round?.participants).toEqual([
-      { studentId: "a1", attendance: "present", result: "selected" },
+      { studentId: "s1", attendance: "present", result: "selected" },
     ]);
   });
 
@@ -605,6 +641,7 @@ describe("createSupabaseDashboardView — campus switching and drive progress", 
       drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
       applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
       rounds: [{ id: "r1", drive_id: "d1", sequence: 1, name: "Aptitude" }],
+      participants: [{ round_id: "r1", application_id: "a1" }],
       attendance: [{ round_id: "r1", application_id: "a1", status: "present" }],
       results: [{ round_id: "r1", application_id: "a1", result: "selected" }],
       offers: [
@@ -630,6 +667,31 @@ describe("createSupabaseDashboardView — campus switching and drive progress", 
     expect(students[0]?.rounds[0]?.result).toBe("selected");
     expect(students[0]?.offer?.ctcLpa).toBe(8.5);
     expect(students[0]?.offer?.offerCategory).toBe("Dream");
+  });
+
+  /**
+   * 2026-10-16: `/cpc/drives` used to derive a student's rounds from
+   * ATTENDANCE, while this screen derived them from every round the drive has.
+   * A student called to a round nobody had taken attendance for was therefore
+   * "not in rounds" on one screen and "in rounds" on the other. Being CALLED is
+   * `round_participants`; attendance is what happened afterwards.
+   */
+  it("lists only the rounds a student was actually called to", async () => {
+    stub({
+      students: [{ id: "s1", participation_status: "active", srf_status: "srf_approved" }],
+      drives: [{ id: "d1", company_name: "Zoho", status: "live" }],
+      applications: [{ id: "a1", student_id: "s1", drive_id: "d1" }],
+      rounds: [
+        { id: "r1", drive_id: "d1", sequence: 1, name: "Aptitude" },
+        { id: "r2", drive_id: "d1", sequence: 2, name: "Interview" },
+      ],
+      participants: [{ round_id: "r1", application_id: "a1" }],
+      attendance: [{ round_id: "r2", application_id: "a1", status: "present" }],
+    });
+
+    const students = (await view().snapshot()).driveProgress[0]?.students ?? [];
+
+    expect(students[0]?.rounds.map((round) => round.name)).toEqual(["Aptitude"]);
   });
 
   it("scopes driveProgress students to the Campus Manager's assigned college", async () => {
@@ -662,5 +724,187 @@ describe("createSupabaseDashboardView — campus switching and drive progress", 
     const students = snapshot.driveProgress[0]?.students ?? [];
 
     expect(students.map((s) => s.studentName)).toEqual(["Student College 1"]);
+  });
+});
+
+/**
+ * 2026-10-16: the overview had to be TRUSTWORTHY before it could be clickable.
+ *
+ * Four things were wrong at this layer: one read answered with `data: null` on
+ * a failure and the screen reported an empty campus; every select was capped at
+ * 1000 rows, so a 6,000-student roster was counted as 1,000; the drives behind
+ * a "Drives by status" count came from a second `select("status")` that carried
+ * no names, so the popup printed "Unnamed drive" for every drive; and the
+ * campus switcher narrowed only the student rows, so the screen quoted two
+ * cohorts at once.
+ */
+describe("createSupabaseDashboardView — trustworthy figures", () => {
+  it("throws when the roster cannot be read, instead of answering with none", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () =>
+        HttpResponse.json({ message: "students: relation does not exist" }, { status: 400 }),
+      ),
+    );
+
+    await expect(createSupabaseDashboardView(client()).snapshot()).rejects.toThrow(
+      PostgrestReadError,
+    );
+  });
+
+  it("asks for the roster a page at a time rather than trusting the 1000-row cap", async () => {
+    const { studentQueries } = stub();
+
+    await createSupabaseDashboardView(client()).snapshot();
+
+    expect(studentQueries[0]).toMatch(/offset=0&limit=1000/);
+  });
+
+  it("names the drives behind a status count, so the popup is not a list of strangers", async () => {
+    stub({
+      drives: [
+        {
+          id: "d1",
+          company_name: "Zoho Corporation",
+          role_title: "MTS",
+          status: "completed",
+          drive_target_campuses: [{ campuses: { name: "Alliance University" } }],
+        },
+      ],
+    });
+
+    const snapshot = await createSupabaseDashboardView(client()).snapshot();
+
+    expect(snapshot.drivesByStatus).toEqual({ completed: 1 });
+    expect(snapshot.statusDrives[0]?.companyName).toBe("Zoho Corporation");
+    expect(snapshot.statusDrives[0]?.campuses).toEqual(["Alliance University"]);
+  });
+
+  it("carries the event each role belongs to, so three roles are not counted as three visits", async () => {
+    stub({
+      drives: [
+        {
+          id: "d1",
+          company_name: "Infosys",
+          role_title: "SE",
+          status: "live",
+          company_drive_id: "ev-1",
+        },
+        {
+          id: "d2",
+          company_name: "Infosys",
+          role_title: "SDE",
+          status: "live",
+          company_drive_id: "ev-1",
+        },
+        { id: "d3", company_name: "TCS", role_title: "Assistant SE", status: "live" },
+      ],
+    });
+
+    const { statusDrives } = await createSupabaseDashboardView(client()).snapshot();
+
+    expect(statusDrives.map((d) => d.companyDriveId)).toEqual(["ev-1", "ev-1", null]);
+  });
+
+  it("carries the students behind an open drive's own counts", async () => {
+    stub({
+      students: [student(), student({ id: "s2" })],
+      drives: [
+        {
+          id: "d1",
+          company_name: "Zoho",
+          status: "live",
+          drive_type: "placement",
+          open_to_all_override: true,
+          drive_eligible_degrees: [],
+          drive_eligible_branches: [],
+          eligible_passing_years: [],
+          drive_target_campuses: [],
+        },
+      ],
+      applications: [
+        { id: "a1", student_id: "s1", drive_id: "d1" },
+        { id: "a2", student_id: "s2", drive_id: "d1" },
+      ],
+      offers: [
+        {
+          id: "o1",
+          student_id: "s1",
+          drive_id: "d1",
+          source: "on_campus",
+          drive_type: "placement",
+          offer_category: "dream",
+          ctc_lpa: 9,
+          declared_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+
+    const [drive] = (await createSupabaseDashboardView(client()).snapshot()).liveDrives;
+
+    // Every count and its id list arrive together, or a popup opens a different
+    // population than the number that opened it.
+    expect(drive?.eligible).toBe(drive?.eligibleStudentIds.length);
+    expect(drive?.applied).toBe(2);
+    expect(drive?.appliedStudentIds).toEqual(["s1", "s2"]);
+    expect(drive?.offers).toBe(1);
+    expect(drive?.offerStudentIds).toEqual(["s1"]);
+  });
+
+  it("narrows every figure to the campus the screen switched to", async () => {
+    stub({
+      students: [
+        student({ id: "s1", full_name: "A", campus_id: "c1" }),
+        student({ id: "s2", full_name: "B", campus_id: "c2", campuses: { name: "VIT Bangalore" } }),
+      ],
+      offers: [
+        {
+          id: "o1",
+          student_id: "s2",
+          drive_id: "d1",
+          source: "on_campus",
+          drive_type: "placement",
+          offer_category: "dream",
+          ctc_lpa: 9,
+          declared_at: "2026-08-01T00:00:00Z",
+        },
+      ],
+    });
+
+    const scoped = await createSupabaseDashboardView(client()).snapshot({ campusIds: ["c2"] });
+
+    expect(scoped.students.map((s) => s.studentId)).toEqual(["s2"]);
+    expect(scoped.campuses.map((c) => c.campusId)).toEqual(["c2"]);
+    // The package table follows the switcher; it used to stay at the org while
+    // the funnel beside it moved.
+    expect(scoped.placements.map((p) => p.studentId)).toEqual(["s2"]);
+  });
+
+  it("keeps a student's display facts so a count can say who it counted", async () => {
+    stub({
+      students: [
+        {
+          id: "s1",
+          full_name: "Priya Ramesh",
+          roll_number: "21CSE101",
+          participation_status: "active",
+          srf_status: "srf_approved",
+          passing_year: 2026,
+          overall_cgpa: 8.8,
+          degrees: { name: "B.Tech" },
+          branches: { name: "CSE" },
+          campus_id: "c1",
+          campuses: { name: "Alliance University" },
+        },
+      ],
+    });
+
+    const [row] = (await createSupabaseDashboardView(client()).snapshot()).students;
+
+    expect(row?.fullName).toBe("Priya Ramesh");
+    expect(row?.rollNumber).toBe("21CSE101");
+    expect(row?.degree).toBe("B.Tech");
+    expect(row?.branch).toBe("CSE");
+    expect(row?.passingYear).toBe(2026);
+    expect(row?.cgpa).toBe(8.8);
   });
 });

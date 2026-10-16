@@ -120,7 +120,7 @@ export function AlertDialogContent({
       <div
         aria-hidden="true"
         onClick={close}
-        className="fixed inset-0 bg-ink-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+        className="fixed inset-0 bg-ink-900/50 backdrop-blur-xs transition-opacity animate-fade-in"
       />
 
       {/* Modal Card */}
@@ -130,7 +130,7 @@ export function AlertDialogContent({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className={`relative z-50 w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-150 ${className}`}
+        className={`relative z-50 w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl animate-pop-in ${className}`}
       >
         {children}
       </div>

@@ -1,6 +1,7 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { groupDrivesByEvent } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
   type DriveTypeFilter as DriveTypeFilterValue,
@@ -11,6 +12,7 @@ import {
 import { offerCategoryLabelOf } from "@domain/offer-category";
 import { describeOfferPay } from "@domain/offer-pay";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -78,6 +80,9 @@ const PAGE_SIZE = 5;
 
 export function DriveProgressPage({ view }: { view: DriveProgressView }) {
   const [drives, setDrives] = useState<readonly DriveProgressEntry[] | null>(null);
+  /** The read failed — said plainly, never drawn as an empty cycle. */
+  const [failure, setFailure] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DriveTypeFilterValue>("");
   const [page, setPage] = useState(1);
@@ -86,9 +91,28 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
     Record<string, "all" | "shortlisted" | "in_rounds" | "offers">
   >({});
 
+  // "Try again" is a re-run trigger, not a value this body reads: left out of
+  // the list, a refused read could never be retried without leaving the screen.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
-    void view.drives().then(setDrives);
-  }, [view]);
+    let ignore = false;
+    setFailure(null);
+    // A refused read is not a campus with no students. Before, the rejection
+    // was dropped on the floor and the screen stayed on "Loading drives…" —
+    // and a coordinator who waited long enough started calling students to ask
+    // whether they had been left out of a round.
+    view.drives().then(
+      (next) => {
+        if (!ignore) setDrives(next);
+      },
+      (cause: unknown) => {
+        if (!ignore) setFailure(describeReadFailure(cause, "Your drives could not be read."));
+      },
+    );
+    return () => {
+      ignore = true;
+    };
+  }, [view, attempt]);
 
   // The domain's predicate, so "hcl" matches the same drives here as on every other list.
   const visible = useMemo(() => {
@@ -110,6 +134,18 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
           internship: drives.filter((d) => d.driveType === "internship").length,
         };
 
+  /**
+   * How many roles each company visit raised, so a card can name the visit it
+   * belongs to. The event used to get its own header strip, which printed the
+   * company and a link to the very same drive record twice in one card — a
+   * coordinator reading past it counted the visit twice.
+   */
+  const rolesPerEvent = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const [key, roles] of groupDrivesByEvent(visible)) counts.set(key, roles.length);
+    return counts;
+  }, [visible]);
+
   const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const paginatedDrives = useMemo(
     () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
@@ -123,7 +159,27 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         subtitle="Students and college-wise progress through every round to the offer. Read-only — results are recorded centrally."
       />
 
-      {drives === null ? (
+      {failure !== null ? (
+        <Card className="p-6">
+          <p role="alert" className="text-sm text-danger-700">
+            {failure}
+          </p>
+          <p className="mt-1 text-sm text-ink-500">
+            No students are listed under it on purpose — a cycle that arrived in parts looks exactly
+            like a student who was left out of a round.
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-3"
+            onClick={() => {
+              setDrives(null);
+              setAttempt((count) => count + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </Card>
+      ) : drives === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading drives…
         </p>
@@ -203,34 +259,21 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
             const totalInRounds = drive.students.filter((s) => s.rounds.length > 0).length;
             const totalOffers = drive.students.filter((s) => s.offer !== null).length;
 
+            const siblings = drive.companyDriveId
+              ? (rolesPerEvent.get(drive.companyDriveId) ?? 1)
+              : 1;
+            const when = drive.tentativeDate
+              ? new Date(drive.tentativeDate).toLocaleDateString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })
+              : null;
+            const role = drive.roleTitle ?? "Role not set";
+
             return (
               <Card key={drive.driveId} className="mb-6 overflow-hidden">
-                {/* Event header for multi-role drives */}
-                {drive.companyDriveId && (
-                  <div className="border-b border-line bg-brand-50 p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        to={`/drives/${drive.driveId}`}
-                        className="font-[Raleway] text-lg font-bold text-ink-900 hover:text-brand-600 hover:underline"
-                      >
-                        {drive.companyName}
-                      </Link>
-                      <Badge tone="brand">Multi-role drive</Badge>
-                    </div>
-                    {drive.tentativeDate && (
-                      <p className="mt-1 text-sm text-ink-600">
-                        📅{" "}
-                        {new Date(drive.tentativeDate).toLocaleDateString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </p>
-                    )}
-                  </div>
-                )}
-
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
                   <div className="min-w-0">
                     <Link
@@ -241,8 +284,11 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                       <Badge tone={driveTypeTone(drive.driveType ?? null)}>
                         {driveTypeLabel(drive.driveType ?? null)}
                       </Badge>
+                      {siblings > 1 && <Badge tone="brand">{siblings} roles at this visit</Badge>}
                     </Link>
-                    <p className="text-sm text-ink-500">{drive.roleTitle ?? "Role not set"}</p>
+                    <p className="text-sm text-ink-500">
+                      {when === null ? role : `${role} · ${when}`}
+                    </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {/* Stage quick filter buttons */}

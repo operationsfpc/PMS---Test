@@ -476,6 +476,11 @@ describe("SRF submission", () => {
     expect(await screen.findByText(/could not submit your form/i)).toBeDefined();
   });
 
+  /**
+   * The button used to answer by changing its own label to "Submitting…", which
+   * is a sentence, not a gate. `isLoading` says the same thing the platform says
+   * everywhere else: a spinner, `aria-busy`, and a refused second click.
+   */
   it("disables the submit button while in flight", async () => {
     studentsPatch(async () => {
       await delay(80);
@@ -487,10 +492,13 @@ describe("SRF submission", () => {
     render(<SrfPage profile={ROSTER} />);
     await fillValidForm(user);
 
-    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+    const submit = () => screen.getByRole("button", { name: /submit for verification/i });
+    await user.click(submit());
+
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /submitting/i })).toBeDefined();
+      expect(submit().hasAttribute("disabled")).toBe(true);
     });
+    expect(submit().getAttribute("aria-busy")).toBe("true");
   });
 });
 

@@ -407,10 +407,10 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                           <Button
                             size="sm"
                             variant="danger"
-                            disabled={busyId === student.id}
+                            isLoading={busyId === student.id}
                             onClick={() => void sendBack(student)}
                           >
-                            {busyId === student.id ? "Saving…" : "Send back"}
+                            Send back
                           </Button>
                           <Button
                             size="sm"
@@ -429,11 +429,11 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                       <div className="flex flex-col gap-2">
                         <Button
                           size="sm"
-                          disabled={busyId === student.id}
+                          isLoading={busyId === student.id}
                           aria-label={`Approve ${student.fullName}`}
                           onClick={() => void approve(student)}
                         >
-                          {busyId === student.id ? "Saving…" : "Approve"}
+                          Approve
                         </Button>
                         <Button
                           size="sm"

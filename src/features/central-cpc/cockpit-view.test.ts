@@ -1,3 +1,4 @@
+import { PostgrestReadError } from "@lib/postgrest-read";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -40,27 +41,94 @@ const absence = (studentId: string, roundId: string, name = "Anjali", roll = "21
   },
 });
 
-function stub(opts: { drives?: unknown[]; attendance?: unknown[]; applicants?: number } = {}) {
+function stub(
+  opts: { drives?: unknown[]; attendance?: unknown[]; applications?: unknown[] } = {},
+): {
+  driveQueries: string[];
+  applicationQueries: string[];
+} {
+  const driveQueries: string[] = [];
+  const applicationQueries: string[] = [];
   server.use(
-    http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [DRIVE])),
+    http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
+      driveQueries.push(request.url);
+      return HttpResponse.json(opts.drives ?? [DRIVE]);
+    }),
     http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
-    // An exact count is a HEAD request; PostgREST answers in content-range.
-    http.head(`${BASE}/rest/v1/applications`, () => {
-      const total = opts.applicants ?? 0;
-      return new HttpResponse(null, {
-        headers: { "content-range": `0-${Math.max(total - 1, 0)}/${total}` },
-      });
+    http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
+      applicationQueries.push(request.url);
+      return HttpResponse.json(opts.applications ?? []);
     }),
   );
+  return { driveQueries, applicationQueries };
 }
+
+/** One row of `applications` — who applied to which drive. */
+const applied = (driveId: string, studentId: string) => ({
+  drive_id: driveId,
+  student_id: studentId,
+});
 
 const view = () => createSupabaseCockpitView(client());
 
 describe("cockpit drives", () => {
-  it("counts applications without pulling the applicants themselves", async () => {
-    stub({ applicants: 42 });
+  /**
+   * This used to be a `count: "exact"` HEAD request per drive, and the test
+   * proved the wrong thing: the cockpit needs the number AND the names behind
+   * it, because a count that opens a popup has to be able to say who. One
+   * grouped read answers both.
+   */
+  it("counts the applicants it read, and keeps who they were", async () => {
+    stub({
+      applications: ["s1", "s2", "s3"].map((id) => applied("d1", id)),
+    });
 
-    expect((await view().drives())[0]?.applicationCount).toBe(42);
+    const [drive] = await view().drives();
+
+    expect(drive?.applicationCount).toBe(3);
+    expect(drive?.applicantStudentIds).toEqual(["s1", "s2", "s3"]);
+  });
+
+  it("reads every drive's applicants in one query, not one per card", async () => {
+    const { applicationQueries } = stub({
+      drives: [DRIVE, { ...DRIVE, id: "d2" }, { ...DRIVE, id: "d3" }],
+      applications: [applied("d1", "s1"), applied("d2", "s2"), applied("d3", "s3")],
+    });
+
+    const drives = await view().drives();
+
+    expect(applicationQueries).toHaveLength(1);
+    expect(drives.map((d) => d.applicationCount)).toEqual([1, 1, 1]);
+  });
+
+  it("keeps one drive's applicants out of another's count", async () => {
+    stub({
+      drives: [DRIVE, { ...DRIVE, id: "d2" }],
+      applications: [applied("d1", "s1"), applied("d1", "s2"), applied("d2", "s3")],
+    });
+
+    const drives = await view().drives();
+
+    expect(drives.map((d) => [d.driveId, d.applicationCount, d.applicantStudentIds])).toEqual([
+      ["d1", 2, ["s1", "s2"]],
+      ["d2", 1, ["s3"]],
+    ]);
+  });
+
+  it("reports no applicants rather than failing on a drive nobody applied to", async () => {
+    stub({ applications: [] });
+    const [drive] = await view().drives();
+
+    expect(drive?.applicationCount).toBe(0);
+    expect(drive?.applicantStudentIds).toEqual([]);
+  });
+
+  it("asks for the queue a page at a time rather than trusting the 1000-row cap", async () => {
+    const { driveQueries } = stub();
+
+    await view().drives();
+
+    expect(driveQueries[0]).toContain("offset=0&limit=1000");
   });
 
   it("puts the rounds in sequence order, not the order the database returned them", async () => {
@@ -256,18 +324,16 @@ describe("cockpit disbarment reviews (R8)", () => {
  */
 describe("createSupabaseCockpitView — the drive type and the stipend", () => {
   it("carries the type and the stipend through to the screen", async () => {
-    server.use(
-      http.get(`${BASE}/rest/v1/drives`, () =>
-        HttpResponse.json([
-          {
-            ...DRIVE,
-            drive_type: "internship",
-            stipend_min_monthly: 15000,
-            stipend_max_monthly: 20000,
-          },
-        ]),
-      ),
-    );
+    stub({
+      drives: [
+        {
+          ...DRIVE,
+          drive_type: "internship",
+          stipend_min_monthly: 15000,
+          stipend_max_monthly: 20000,
+        },
+      ],
+    });
 
     const [drive] = await createSupabaseCockpitView(client()).drives();
     expect(drive?.driveType).toBe("internship");
@@ -276,10 +342,49 @@ describe("createSupabaseCockpitView — the drive type and the stipend", () => {
   });
 
   it("leaves them null when the drive records none", async () => {
-    server.use(http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json([DRIVE])));
+    stub({ drives: [DRIVE] });
 
     const [drive] = await createSupabaseCockpitView(client()).drives();
     expect(drive?.driveType ?? null).toBeNull();
     expect(drive?.stipendMinMonthly ?? null).toBeNull();
+  });
+});
+
+/**
+ * The two reads this view makes used to discard their `error` and carry on
+ * with `data === null`, which the screen rendered as an empty queue. A refusal
+ * and an emptiness are opposite answers, and only one of them is safe to act
+ * on — the Central CPC publishes from this list.
+ */
+describe("createSupabaseCockpitView — a read that failed", () => {
+  it("throws rather than listing no drives", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json({ message: "permission denied for table drives" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().drives()).rejects.toThrow(PostgrestReadError);
+  });
+
+  it("throws rather than listing no applicants against a drive it did read", async () => {
+    stub();
+    server.use(
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().drives()).rejects.toThrow(PostgrestReadError);
+  });
+
+  it("throws rather than reporting that no student needs a review", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/attendance`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().reviews()).rejects.toThrow(PostgrestReadError);
   });
 });

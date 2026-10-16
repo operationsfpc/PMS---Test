@@ -355,8 +355,8 @@ export function AddSemester({
           )}
 
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button disabled={sending} onClick={() => void submit()}>
-              {sending ? "Sending…" : "Submit for verification"}
+            <Button isLoading={sending} onClick={() => void submit()}>
+              Submit for verification
             </Button>
             <Button
               variant="ghost"

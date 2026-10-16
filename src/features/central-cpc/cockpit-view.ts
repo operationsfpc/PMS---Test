@@ -1,5 +1,6 @@
 import { countAbsences, needsDisbarmentReview } from "@domain/attendance";
 import type { AttendanceStatus, DriveStatus, DriveType } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CockpitView, DisbarmentReview, DriveSummary } from "./cockpit-page";
 
@@ -7,76 +8,99 @@ const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
 
 /**
+ * Exported so src/db/query-contract.test.ts can prove it against the real
+ * schema — a select that drifts from the columns cannot hide in unit tests.
+ */
+export const COCKPIT_DRIVE_COLUMNS = `
+  id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly,
+  drive_type, status, on_hold, created_at, application_end, drive_mode, venue, company_drive_id,
+  tentative_date, drive_rounds(id, sequence, name), drive_target_campuses(campuses(name))
+`;
+
+/**
  * Feeds the cockpit.
  *
- * Application counts come from a head-count query rather than by pulling every
- * row: the cockpit needs the number, not the applicants.
+ * One read of `applications(drive_id, student_id)` covers every drive's
+ * applicants. It replaces a `count: "exact"` head query issued once per drive
+ * — that was a round trip per card and, worse, an answer that could only ever
+ * be a number: the count on a card opens a list of WHO applied.
  */
 export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
   return {
     async drives() {
-      const { data: drives } = await client
-        .from("drives")
-        .select(
-          "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, status, on_hold, created_at, application_end, drive_mode, venue, company_drive_id, tentative_date, drive_rounds(id, sequence, name), drive_target_campuses(campuses(name))",
-        )
-        .order("created_at", { ascending: false });
-
-      const rows = (drives ?? []) as Array<Record<string, unknown>>;
-
-      return Promise.all(
-        rows.map(async (row): Promise<DriveSummary> => {
-          const { count } = await client
-            .from("applications")
-            .select("id", { count: "exact", head: true })
-            .eq("drive_id", row.id as string);
-
-          const rounds = (Array.isArray(row.drive_rounds) ? row.drive_rounds : []) as Array<
-            Record<string, unknown>
-          >;
-
-          return {
-            driveId: row.id as string,
-            companyName: (row.company_name as string | null) ?? "Unnamed drive",
-            roleTitle: (row.role_title as string | null) ?? null,
-            // Numerics arrive from PostgREST as strings.
-            ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
-            ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),
-            // 2026-08-27: an internship pays a stipend and has no CTC, and
-            // the Delivery Head approves from this list too (G1c).
-            stipendMinMonthly:
-              row.stipend_min_monthly == null ? null : Number(row.stipend_min_monthly),
-            stipendMaxMonthly:
-              row.stipend_max_monthly == null ? null : Number(row.stipend_max_monthly),
-            driveType: (row.drive_type as DriveType | null) ?? null,
-            status: (row.status as DriveStatus | null) ?? "draft",
-            onHold: (row.on_hold as boolean | null) ?? false,
-            applicationCount: count ?? 0,
-            // G1a/G1d (UAT 2026-08-20): the card's age and its deadline.
-            createdAt: (row.created_at as string | null) ?? null,
-            applicationEnd: (row.application_end as string | null) ?? null,
-            // UAT 2026-08-21 item 2: the off-campus venue, if the mode has one.
-            driveMode: (row.drive_mode as string | null) ?? null,
-            venue: (row.venue as string | null) ?? null,
-            companyDriveId: (row.company_drive_id as string | null) ?? null,
-            tentativeDate: (row.tentative_date as string | null) ?? null,
-            campuses: (
-              (Array.isArray(row.drive_target_campuses) ? row.drive_target_campuses : []) as Array<{
-                campuses?: { name?: string } | null;
-              }>
-            )
-              .map((tc) => tc.campuses?.name)
-              .filter((name): name is string => typeof name === "string" && name !== ""),
-            rounds: rounds
-              .map((r) => ({
-                roundId: r.id as string,
-                sequence: r.sequence as number,
-                name: (r.name as string | null) ?? "Round",
-              }))
-              .sort((a, b) => a.sequence - b.sequence),
-          };
-        }),
+      const rows = await readAllRows((from, to) =>
+        client
+          .from("drives")
+          .select(COCKPIT_DRIVE_COLUMNS)
+          .order("created_at", { ascending: false })
+          .range(from, to),
       );
+
+      const byDrive = new Map<string, string[]>();
+      const applications = await readAllRowsByIds(
+        rows.map((row) => row.id as string),
+        (batch) => (from, to) =>
+          client
+            .from("applications")
+            .select("drive_id, student_id")
+            .in("drive_id", batch)
+            .range(from, to),
+      );
+      for (const application of applications) {
+        const driveId = application.drive_id as string;
+        const ids = byDrive.get(driveId) ?? [];
+        ids.push(application.student_id as string);
+        byDrive.set(driveId, ids);
+      }
+
+      return rows.map((row): DriveSummary => {
+        const rounds = (Array.isArray(row.drive_rounds) ? row.drive_rounds : []) as Array<
+          Record<string, unknown>
+        >;
+        const applicantStudentIds = byDrive.get(row.id as string) ?? [];
+
+        return {
+          driveId: row.id as string,
+          companyName: (row.company_name as string | null) ?? "Unnamed drive",
+          roleTitle: (row.role_title as string | null) ?? null,
+          // Numerics arrive from PostgREST as strings.
+          ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
+          ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),
+          // 2026-08-27: an internship pays a stipend and has no CTC, and
+          // the Delivery Head approves from this list too (G1c).
+          stipendMinMonthly:
+            row.stipend_min_monthly == null ? null : Number(row.stipend_min_monthly),
+          stipendMaxMonthly:
+            row.stipend_max_monthly == null ? null : Number(row.stipend_max_monthly),
+          driveType: (row.drive_type as DriveType | null) ?? null,
+          status: (row.status as DriveStatus | null) ?? "draft",
+          onHold: (row.on_hold as boolean | null) ?? false,
+          applicationCount: applicantStudentIds.length,
+          applicantStudentIds,
+          // G1a/G1d (UAT 2026-08-20): the card's age and its deadline.
+          createdAt: (row.created_at as string | null) ?? null,
+          applicationEnd: (row.application_end as string | null) ?? null,
+          // UAT 2026-08-21 item 2: the off-campus venue, if the mode has one.
+          driveMode: (row.drive_mode as string | null) ?? null,
+          venue: (row.venue as string | null) ?? null,
+          companyDriveId: (row.company_drive_id as string | null) ?? null,
+          tentativeDate: (row.tentative_date as string | null) ?? null,
+          campuses: (
+            (Array.isArray(row.drive_target_campuses) ? row.drive_target_campuses : []) as Array<{
+              campuses?: { name?: string } | null;
+            }>
+          )
+            .map((tc) => tc.campuses?.name)
+            .filter((name): name is string => typeof name === "string" && name !== ""),
+          rounds: rounds
+            .map((r) => ({
+              roundId: r.id as string,
+              sequence: r.sequence as number,
+              name: (r.name as string | null) ?? "Round",
+            }))
+            .sort((a, b) => a.sequence - b.sequence),
+        };
+      });
     },
 
     /**
@@ -97,12 +121,15 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
      * sanction. Both decisions belong to the domain, not to this query.
      */
     async reviews() {
-      const { data } = await client
-        .from("attendance")
-        .select(
-          "status, round_id, applications(student_id, drive_id, students(full_name, roll_number))",
-        )
-        .eq("status", "absent");
+      const data = await readAllRows((from, to) =>
+        client
+          .from("attendance")
+          .select(
+            "status, round_id, applications(student_id, drive_id, students(full_name, roll_number))",
+          )
+          .eq("status", "absent")
+          .range(from, to),
+      );
 
       const byStudent = new Map<
         string,
@@ -113,7 +140,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
         }
       >();
 
-      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+      for (const row of data) {
         const application = one<{ student_id?: string; drive_id?: string; students: unknown }>(
           row.applications,
         );

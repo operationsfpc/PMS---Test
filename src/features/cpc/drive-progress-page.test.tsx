@@ -86,6 +86,29 @@ describe("DriveProgressPage", () => {
   });
 
   /**
+   * 2026-10-16: two roles raised on one company visit printed the company twice
+   * per card - once in an "event" strip, once in the card header - and both
+   * links went to the same drive record. The strip is gone, and each card says
+   * how many roles the visit raised.
+   */
+  it("says which visit a role belongs to, without naming the company twice", async () => {
+    const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1" };
+    const qa: DriveProgressEntry = {
+      ...DRIVE,
+      driveId: "d2",
+      roleTitle: "Quality Analyst",
+      companyDriveId: "e1",
+      students: DRIVE.students.slice(0, 1),
+    };
+
+    render(<DriveProgressPage view={view([mts, qa])} />);
+
+    expect(await screen.findAllByText("2 roles at this visit")).toHaveLength(2);
+    expect(screen.getAllByText("Zoho")).toHaveLength(2);
+    expect(screen.getAllByRole("link", { name: /Zoho/ })).toHaveLength(2);
+  });
+
+  /**
    * Narrowed 2026-08-18, deliberately: the page gained a search box, and a
    * search changes nothing about a drive. What this test is FOR is that no
    * control here can record a result, mark attendance or decide an offer -

@@ -89,7 +89,7 @@ const EVENT_MODE_LABELS: Record<string, string> = {
 function PendingRoleCard({
   pif,
   standalone,
-  busy,
+  pending,
   category,
   reason,
   onCategory,
@@ -99,7 +99,7 @@ function PendingRoleCard({
 }: {
   pif: PendingPif;
   standalone: boolean;
-  busy: boolean;
+  pending: "approve" | "reject" | null;
   category: OfferCategory | undefined;
   reason: string;
   onCategory: (value: OfferCategory) => void;
@@ -246,10 +246,15 @@ function PendingRoleCard({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <Button disabled={busy} onClick={onApprove}>
-          {busy ? "Saving…" : "Approve"}
+        <Button isLoading={pending === "approve"} disabled={pending !== null} onClick={onApprove}>
+          Approve
         </Button>
-        <Button variant="secondary" disabled={busy} onClick={onReject}>
+        <Button
+          variant="secondary"
+          isLoading={pending === "reject"}
+          disabled={pending !== null}
+          onClick={onReject}
+        >
           Reject permanently
         </Button>
       </div>
@@ -266,7 +271,15 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
   );
   const [rows, setRows] = useState<readonly PendingPif[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  /**
+   * Which card is working, and which verb was pressed. A row-level flag would
+   * spin "Reject permanently" while an approval is out, which reads exactly
+   * like the click that was missed.
+   */
+  const [pending, setPending] = useState<{
+    id: string;
+    verb: "approve" | "reject";
+  } | null>(null);
   const [categories, setCategories] = useState<Record<string, OfferCategory>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
@@ -318,7 +331,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
       return;
     }
 
-    setBusyId(pif.id);
+    setPending({ id: pif.id, verb: approve ? "approve" : "reject" });
     setError(null);
     try {
       await repo.decide(pif.id, "submitted", intent);
@@ -326,9 +339,12 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
     } catch (caught) {
       setError(caught instanceof ApprovalError ? caught.message : "Could not save the decision.");
     } finally {
-      setBusyId(null);
+      setPending(null);
     }
   }
+
+  /** The verb this card is working on, so only that button spins. */
+  const pendingFor = (pif: PendingPif) => (pending?.id === pif.id ? pending.verb : null);
 
   // Roles raised under one recruitment event sit together under that event's
   // header — but each keeps its own category, its own reason and its own
@@ -422,7 +438,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
                     key={pif.id}
                     pif={pif}
                     standalone={false}
-                    busy={busyId === pif.id}
+                    pending={pendingFor(pif)}
                     category={categories[pif.id]}
                     reason={reasons[pif.id] ?? ""}
                     onCategory={(value) => setCategories((c) => ({ ...c, [pif.id]: value }))}
@@ -439,7 +455,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
               key={pif.id}
               pif={pif}
               standalone
-              busy={busyId === pif.id}
+              pending={pendingFor(pif)}
               category={categories[pif.id]}
               reason={reasons[pif.id] ?? ""}
               onCategory={(value) => setCategories((c) => ({ ...c, [pif.id]: value }))}

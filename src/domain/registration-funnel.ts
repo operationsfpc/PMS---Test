@@ -55,6 +55,26 @@ export const countsAsVerified = (student: FunnelEvidence): boolean =>
   student.srfStatus === "srf_approved" || student.hasApplied || student.hasOnCampusPlacement;
 
 /**
+ * Who stands in each funnel row (2026-10-16).
+ *
+ * The dashboard opens a popup naming the students behind a stage's count, and
+ * that list has to be produced by the SAME test the stage used. Written here
+ * rather than in the page: a predicate copied into a component drifts, and the
+ * popup ends up longer or shorter than the number that opened it.
+ */
+export const FUNNEL_STAGE_MATCH: Readonly<
+  Record<FunnelStage["key"], (student: FunnelEvidence) => boolean>
+> = {
+  on_roster: () => true,
+  submitted: countsAsSubmitted,
+  verified: countsAsVerified,
+  // On the roster's own terms, which is deliberately NOT `isPlacedOnCampus`:
+  // an opted-out student who holds an offer still stands in this row, because
+  // the stage reports a fact about them rather than the placement rate.
+  placed: (student) => student.hasOnCampusPlacement,
+};
+
+/**
  * The funnel, widest first.
  *
  * Stages are computed CUMULATIVELY, so each one is a superset of the next: a
@@ -77,13 +97,13 @@ export const countsAsVerified = (student: FunnelEvidence): boolean =>
 export function registrationFunnel(students: readonly FunnelStudent[]): readonly FunnelStage[] {
   const roster = students.length;
 
-  const placed = students.filter((s) => s.hasOnCampusPlacement).length;
+  const placed = students.filter(FUNNEL_STAGE_MATCH.placed).length;
 
   // Applying is no longer reported, but it is still EVIDENCE: a student who
   // applied was necessarily verified, whatever their status column now says.
-  const verified = students.filter(countsAsVerified).length;
+  const verified = students.filter(FUNNEL_STAGE_MATCH.verified).length;
 
-  const submitted = students.filter(countsAsSubmitted).length;
+  const submitted = students.filter(FUNNEL_STAGE_MATCH.submitted).length;
 
   const stages: readonly Omit<FunnelStage, "percentOfRoster">[] = [
     { key: "on_roster", label: "On the roster", count: roster },

@@ -1,3 +1,4 @@
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AeOverviewDrive, AeOverviewSnapshot, AeOverviewView } from "./overview-page";
 
@@ -36,10 +37,18 @@ export const AE_OVERVIEW_DRIVE_COLUMNS = `
 export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverviewView {
   return {
     async snapshot(): Promise<AeOverviewSnapshot> {
-      const [{ data: driveRows }, { data: totalRows, error: totalsError }] = await Promise.all([
-        client.from("drives").select(AE_OVERVIEW_DRIVE_COLUMNS),
+      // Paged, and every error raised: a discarded `{ error }` here resolved
+      // with `data: null` and the page greeted an AE with "No drives yet. Raise
+      // one with the Position information form", which is a different sentence
+      // from "the read failed".
+      const [driveRows, totalsResult] = await Promise.all([
+        readAllRows((from, to) =>
+          client.from("drives").select(AE_OVERVIEW_DRIVE_COLUMNS).range(from, to),
+        ),
         client.rpc("placement_totals"),
       ]);
+      const totalRows = totalsResult.data;
+      const totalsError = totalsResult.error;
 
       // A refused or missing aggregate must never be read as an organisation
       // with no students: that would put a confident 0% in front of a client.
@@ -47,19 +56,27 @@ export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverview
         throw new AeOverviewError("Could not read the placement figures.");
       }
 
-      const driveIds = rows(driveRows).map((d) => d.id as string);
-      const { data: offerRows } =
+      const driveIds = driveRows.map((d) => d.id as string);
+      const offerRows =
         driveIds.length === 0
-          ? { data: [] }
-          : await client.from("offers").select("drive_id, student_id").in("drive_id", driveIds);
+          ? []
+          : await readAllRowsByIds(
+              driveIds,
+              (batch) => (from, to) =>
+                client
+                  .from("offers")
+                  .select("drive_id, student_id")
+                  .in("drive_id", batch)
+                  .range(from, to),
+            );
 
       // An offer belongs to a student and a drive; an application is the same
       // pair. That pair is what ties the outcome back to the applicant.
       const won = new Set(
-        rows(offerRows).map((o) => `${o.drive_id as string}::${o.student_id as string}`),
+        offerRows.map((o) => `${o.drive_id as string}::${o.student_id as string}`),
       );
 
-      const drives = rows(driveRows).map((row): AeOverviewDrive => {
+      const drives = driveRows.map((row): AeOverviewDrive => {
         const driveId = row.id as string;
         return {
           driveId,

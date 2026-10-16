@@ -156,6 +156,26 @@ describe("recording a result", () => {
   });
 });
 
+/**
+ * 0101: advancing is ONE database function, not two table inserts — a
+ * participant without its `scheduled` attendance row is un-markable and an
+ * attendance row with no participant is orphaned, so the function exists to
+ * make it both-or-neither. These tests used to stub POST round_participants
+ * and POST attendance separately, which left them answering a call the
+ * application stopped making. What is provable from the browser is the
+ * function's arguments: WHO is scheduled, into WHICH round, by WHOM.
+ */
+function stubSchedule(): { calls: Array<Record<string, unknown>> } {
+  const calls: Array<Record<string, unknown>> = [];
+  server.use(
+    http.post(`${BASE}/rest/v1/rpc/schedule_round_participants`, async ({ request }) => {
+      calls.push((await request.clone().json()) as Record<string, unknown>);
+      return HttpResponse.json(null);
+    }),
+  );
+  return { calls };
+}
+
 /** 2026-08-12 (WS6): the tabbed rounds screen and explicit advancement. */
 describe("the drive's rounds", () => {
   it("lists them in sequence order", async () => {
@@ -220,7 +240,7 @@ describe("the drive's rounds", () => {
   });
 
   it("advances exactly the selected, and says how many", async () => {
-    const scheduled: unknown[] = [];
+    const scheduled = stubSchedule();
     server.use(
       http.get(`${BASE}/rest/v1/round_results`, () =>
         HttpResponse.json([
@@ -231,22 +251,14 @@ describe("the drive's rounds", () => {
       ),
       // Nobody is in the next round yet.
       http.get(`${BASE}/rest/v1/round_participants`, () => HttpResponse.json([])),
-      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
-        scheduled.push(await request.clone().json());
-        return HttpResponse.json([{ id: "rp-1" }]);
-      }),
-      http.post(`${BASE}/rest/v1/attendance`, async ({ request }) => {
-        scheduled.push(await request.clone().json());
-        return HttpResponse.json([{ id: "at-1" }]);
-      }),
     );
 
     const moved = await view().advance("r1", "r2");
 
     expect(moved).toBe(1);
-    const participants = scheduled[0] as Array<Record<string, unknown>>;
-    expect(participants).toHaveLength(1);
-    expect(participants[0]).toMatchObject({ round_id: "r2", application_id: "a1" });
+    expect(scheduled.calls).toEqual([
+      { p_round_id: "r2", p_application_ids: ["a1"], p_added_by: "cpc-1" },
+    ]);
   });
 
   /**
@@ -258,7 +270,7 @@ describe("the drive's rounds", () => {
    * not already there — and count only them.
    */
   it("skips students already in the next round — a re-advance after late selections", async () => {
-    const scheduled: unknown[] = [];
+    const scheduled = stubSchedule();
     server.use(
       http.get(`${BASE}/rest/v1/round_results`, () =>
         HttpResponse.json([
@@ -270,23 +282,18 @@ describe("the drive's rounds", () => {
       http.get(`${BASE}/rest/v1/round_participants`, () =>
         HttpResponse.json([{ application_id: "a1" }]),
       ),
-      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
-        scheduled.push(await request.clone().json());
-        return HttpResponse.json([{ id: "rp-2" }]);
-      }),
-      http.post(`${BASE}/rest/v1/attendance`, () => HttpResponse.json([{ id: "at-2" }])),
     );
 
     const moved = await view().advance("r1", "r2");
 
     expect(moved).toBe(1);
-    const participants = scheduled[0] as Array<Record<string, unknown>>;
-    expect(participants).toHaveLength(1);
-    expect(participants[0]).toMatchObject({ round_id: "r2", application_id: "a2" });
+    expect(scheduled.calls).toEqual([
+      { p_round_id: "r2", p_application_ids: ["a2"], p_added_by: "cpc-1" },
+    ]);
   });
 
   it("advances nobody — and writes nothing — when everyone selected is already there", async () => {
-    const scheduled: unknown[] = [];
+    const scheduled = stubSchedule();
     server.use(
       http.get(`${BASE}/rest/v1/round_results`, () =>
         HttpResponse.json([{ application_id: "a1", result: "selected" }]),
@@ -294,30 +301,22 @@ describe("the drive's rounds", () => {
       http.get(`${BASE}/rest/v1/round_participants`, () =>
         HttpResponse.json([{ application_id: "a1" }]),
       ),
-      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
-        scheduled.push(await request.clone().json());
-        return HttpResponse.json([{ id: "rp-1" }]);
-      }),
     );
 
     expect(await view().advance("r1", "r2")).toBe(0);
-    expect(scheduled).toHaveLength(0);
+    expect(scheduled.calls).toHaveLength(0);
   });
 
   it("advances nobody when nobody was selected, without writing", async () => {
-    const scheduled: unknown[] = [];
+    const scheduled = stubSchedule();
     server.use(
       http.get(`${BASE}/rest/v1/round_results`, () =>
         HttpResponse.json([{ application_id: "a2", result: "rejected" }]),
       ),
-      http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
-        scheduled.push(await request.clone().json());
-        return HttpResponse.json([{ id: "rp-1" }]);
-      }),
     );
 
     expect(await view().advance("r1", "r2")).toBe(0);
-    expect(scheduled).toHaveLength(0);
+    expect(scheduled.calls).toHaveLength(0);
   });
 });
 
@@ -380,25 +379,19 @@ describe("managing rounds", () => {
     expect(p.body).toEqual({ name: "HR discussion" });
   });
 
-  it("removes a round and renumbers the survivors to close the gap", async () => {
-    const deletes: string[] = [];
-    const patches: Array<{ url: string; body: Record<string, unknown> }> = [];
+  /**
+   * 0099: the DELETE and the renumbering are one function, so two coordinators
+   * removing rounds at the same moment cannot both renumber against a sequence
+   * the other already changed. The screen's job is to ask once — the browser
+   * that patched the survivors itself could interleave with another's.
+   */
+  it("removes a round through the function that renumbers the survivors", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
     server.use(
-      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
-        HttpResponse.json([
-          { id: "r1", sequence: 1, name: "Aptitude" },
-          { id: "r2", sequence: 2, name: "HR" },
-          { id: "r3", sequence: 3, name: "Offer release" },
-        ]),
-      ),
-      http.delete(`${BASE}/rest/v1/drive_rounds`, ({ request }) => {
-        deletes.push(request.url);
-        return HttpResponse.json(null);
-      }),
-      http.patch(`${BASE}/rest/v1/drive_rounds`, async ({ request }) => {
-        patches.push({
+      http.post(`${BASE}/rest/v1/rpc/remove_drive_round`, async ({ request }) => {
+        calls.push({
           url: request.url,
-          body: (await request.json()) as Record<string, unknown>,
+          body: (await request.clone().json()) as Record<string, unknown>,
         });
         return HttpResponse.json(null);
       }),
@@ -406,11 +399,22 @@ describe("managing rounds", () => {
 
     await view().removeRound("d1", "r2");
 
-    expect(deletes[0]).toContain("id=eq.r2");
-    // Only r3 needs a new number; r1 is already right.
-    expect(patches).toHaveLength(1);
-    expect(patches[0]?.url).toContain("id=eq.r3");
-    expect(patches[0]?.body).toEqual({ sequence: 2 });
+    expect(calls).toEqual([
+      { url: `${BASE}/rest/v1/rpc/remove_drive_round`, body: { p_round_id: "r2" } },
+    ]);
+  });
+
+  it("carries the database's own words when the removal is refused", async () => {
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/remove_drive_round`, () =>
+        HttpResponse.json(
+          { message: "Cannot remove a round that has attendance recorded." },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    await expect(view().removeRound("d1", "r2")).rejects.toThrow(/attendance recorded/i);
   });
 });
 

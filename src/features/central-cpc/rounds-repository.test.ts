@@ -25,28 +25,44 @@ const repo = (role: AppRole = "central_placement_coordinator") =>
 
 describe("createSupabaseRoundsRepository", () => {
   describe("scheduleParticipants", () => {
-    it("records who the recruiter chose, and marks them scheduled", async () => {
-      const bodies: Array<Record<string, unknown>> = [];
+    /**
+     * 0101: participants and their `scheduled` attendance rows are inserted by
+     * ONE function, because half of it is worse than none — a participant with
+     * no attendance row cannot be marked, and an attendance row with no
+     * participant is orphaned. So the browser-side contract is the function's
+     * arguments: which round, which students, and the actor the row is
+     * attributed to.
+     */
+    it("schedules exactly the chosen students, attributed to the actor", async () => {
+      let body: Record<string, unknown> = {};
       server.use(
-        http.post(`${BASE}/rest/v1/round_participants`, async ({ request }) => {
-          bodies.push((await request.json()) as Record<string, unknown>);
-          return HttpResponse.json([{ id: "rp1" }]);
-        }),
-        http.post(`${BASE}/rest/v1/attendance`, async ({ request }) => {
-          bodies.push((await request.json()) as Record<string, unknown>);
-          return HttpResponse.json([{ id: "at1" }]);
+        http.post(`${BASE}/rest/v1/rpc/schedule_round_participants`, async ({ request }) => {
+          body = (await request.json()) as Record<string, unknown>;
+          return HttpResponse.json(null);
         }),
       );
 
       await repo().scheduleParticipants("r1", ["app1", "app2"]);
 
-      const participants = bodies[0] as unknown as Array<Record<string, unknown>>;
-      expect(participants).toHaveLength(2);
-      expect(participants[0]?.round_id).toBe("r1");
-      expect(participants[0]?.added_by).toBe(CPC);
+      expect(body).toEqual({
+        p_round_id: "r1",
+        p_application_ids: ["app1", "app2"],
+        p_added_by: CPC,
+      });
+    });
 
-      const attendance = bodies[1] as unknown as Array<Record<string, unknown>>;
-      expect(attendance[0]?.status).toBe("scheduled");
+    it("asks for nothing when nobody was chosen", async () => {
+      let called = 0;
+      server.use(
+        http.post(`${BASE}/rest/v1/rpc/schedule_round_participants`, () => {
+          called += 1;
+          return HttpResponse.json(null);
+        }),
+      );
+
+      await repo().scheduleParticipants("r1", []);
+
+      expect(called).toBe(0);
     });
 
     /**
@@ -54,11 +70,11 @@ describe("createSupabaseRoundsRepository", () => {
      * and nothing else. The database said exactly what was wrong (a unique
      * key refused a duplicate) and the screen threw that detail away, so the
      * coordinator could neither fix it nor report it. The refusal must carry
-     * the database's own words.
+     * the database's own words — including when it is a function that refuses.
      */
     it("carries the database's explanation when the insert is refused", async () => {
       server.use(
-        http.post(`${BASE}/rest/v1/round_participants`, () =>
+        http.post(`${BASE}/rest/v1/rpc/schedule_round_participants`, () =>
           HttpResponse.json(
             {
               code: "23505",

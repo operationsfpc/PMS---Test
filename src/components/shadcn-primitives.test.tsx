@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./accordion";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +26,7 @@ import {
   SheetTrigger,
 } from "./sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
+import { Button, StatCard } from "./ui";
 
 describe("Sheet Component", () => {
   it("opens and displays content when trigger is clicked and closes on close button", async () => {
@@ -126,6 +128,169 @@ describe("Tabs Component", () => {
 
     expect(screen.queryByText("Cockpit Drives List")).toBeNull();
     expect(screen.getByText("Active Live Drives")).toBeDefined();
+  });
+});
+
+describe("Accordion Component", () => {
+  const roster = (multiple?: boolean) => (
+    <Accordion {...(multiple === undefined ? {} : { multiple })}>
+      <AccordionItem value="tcs">
+        <AccordionTrigger>TCS · 3 roles</AccordionTrigger>
+        <AccordionContent>
+          <p>Backend Engineer panel</p>
+        </AccordionContent>
+      </AccordionItem>
+      <AccordionItem value="infy">
+        <AccordionTrigger>Infosys · 2 roles</AccordionTrigger>
+        <AccordionContent>
+          <p>Systems Engineer panel</p>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+
+  /**
+   * The panel is the element that carries `hidden`, and it is the direct parent
+   * of the row list. Querying it by role would ask testing-library to see
+   * through the very attribute under test.
+   */
+  const isClosed = (inside: string) =>
+    (screen.getByText(inside).parentElement as HTMLElement).hasAttribute("hidden");
+
+  it("hides panels until their trigger is pressed, then wires aria-expanded", async () => {
+    const user = userEvent.setup();
+    render(roster());
+
+    const trigger = screen.getByRole("button", { name: /tcs/i });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(isClosed("Backend Engineer panel")).toBe(true);
+
+    await user.click(trigger);
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(isClosed("Backend Engineer panel")).toBe(false);
+  });
+
+  it("closes the previous panel in single mode", async () => {
+    const user = userEvent.setup();
+    render(roster());
+
+    await user.click(screen.getByRole("button", { name: /tcs/i }));
+    await user.click(screen.getByRole("button", { name: /infosys/i }));
+
+    // One at a time: opening Infosys closed TCS.
+    expect(isClosed("Backend Engineer panel")).toBe(true);
+    expect(isClosed("Systems Engineer panel")).toBe(false);
+  });
+
+  it("keeps both open when the accordion allows multiple panels", async () => {
+    const user = userEvent.setup();
+    render(roster(true));
+
+    await user.click(screen.getByRole("button", { name: /tcs/i }));
+    await user.click(screen.getByRole("button", { name: /infosys/i }));
+
+    expect(isClosed("Backend Engineer panel")).toBe(false);
+    expect(isClosed("Systems Engineer panel")).toBe(false);
+  });
+
+  it("collapses again when the open trigger is pressed a second time", async () => {
+    const user = userEvent.setup();
+    render(roster());
+
+    const trigger = screen.getByRole("button", { name: /tcs/i });
+    await user.click(trigger);
+    await user.click(trigger);
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(isClosed("Backend Engineer panel")).toBe(true);
+  });
+});
+
+describe("Button loading state", () => {
+  it("cannot be pressed while it is loading", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <Button isLoading onClick={onClick}>
+        Publish drive
+      </Button>,
+    );
+
+    const button = screen.getByRole("button", { name: /publish drive/i });
+    expect(button.hasAttribute("disabled")).toBe(true);
+    expect(button.getAttribute("aria-busy")).toBe("true");
+
+    await user.click(button);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("shows the spinner and keeps the label so the button does not resize", () => {
+    render(<Button isLoading>Save venue</Button>);
+    const button = screen.getByRole("button", { name: /save venue/i });
+    expect(button.querySelector("svg")).not.toBeNull();
+    expect(button.textContent).toBe("Save venue");
+  });
+});
+
+describe("Pressable StatCard", () => {
+  it("opens the people behind the number when given a handler", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<StatCard label="Placed" value={42} hint="on campus" onClick={onClick} />);
+
+    const card = screen.getByRole("button", { name: /placed/i });
+    expect(card.getAttribute("aria-haspopup")).toBe("dialog");
+
+    await user.click(card);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays a plain figure with no handler", () => {
+    render(<StatCard label="Offers" value={7} />);
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText("Offers")).toBeDefined();
+  });
+});
+
+describe("Sheet focus and scrolling", () => {
+  const drawer = (
+    <Sheet>
+      <SheetTrigger>Open shortlist</SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Shortlisted students</SheetTitle>
+        </SheetHeader>
+        <button type="button">Row link</button>
+        <SheetFooter>
+          <SheetClose>Done</SheetClose>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+
+  it("moves focus into the drawer, traps Tab, and restores it on close", async () => {
+    const user = userEvent.setup();
+    render(drawer);
+
+    const trigger = screen.getByRole("button", { name: /open shortlist/i });
+    await user.click(trigger);
+
+    const panel = screen.getByRole("dialog");
+    expect(document.body.style.overflow).toBe("hidden");
+
+    // Tab from the last control wraps to the first, and never escapes to the page.
+    const done = within(panel).getByRole("button", { name: /done/i });
+    done.focus();
+    await user.tab();
+    expect(panel.contains(document.activeElement)).toBe(true);
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(document.body.style.overflow).toBe("");
+    expect(document.activeElement).toBe(trigger);
   });
 });
 

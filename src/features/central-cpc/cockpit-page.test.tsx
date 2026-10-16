@@ -479,10 +479,19 @@ describe("drive aging on the queue (G1)", () => {
     );
 
     await screen.findByText("Current Co");
-    // The expired drive sits behind a summary, not in the active list.
-    const expired = screen.getByText(/expired — application deadline passed \(1\)/i);
-    expect(expired).toBeDefined();
-    expect(screen.getByText("Bygone Corp")).toBeDefined();
+    // The expired drive sits behind a closed accordion, not in the active list.
+    const toggle = screen.getByRole("button", {
+      name: /expired — application deadline passed \(1\)/i,
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    const bygone = screen.getByText("Bygone Corp");
+    expect(bygone.closest("section")?.hasAttribute("hidden")).toBe(true);
+
+    const user = userEvent.setup();
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(bygone.closest("section")?.hasAttribute("hidden")).toBe(false);
   });
 });
 
@@ -657,6 +666,48 @@ describe("the off-campus venue on the cockpit", () => {
     );
   });
 
+  /**
+   * 2026-10-16: this write stayed clickable while its request was still out, so
+   * a double click recorded the venue twice. The spinner is what the coordinator
+   * sees; the refused second click is what the drive record feels.
+   */
+  it("spins the button and refuses a second Save venue while the first is out", async () => {
+    let finish: () => void = () => {};
+    const updateVenue = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{ drives: async () => [OFF_CAMPUS], reviews: async () => [], updateVenue }}
+          filter="published"
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(/venue to be confirmed/i);
+    await user.click(screen.getByRole("button", { name: /update venue/i }));
+    await user.type(screen.getByLabelText(/^venue$/i), "HCL Campus, Sholinganallur");
+
+    const save = screen.getByRole("button", { name: /save venue/i });
+    await user.click(save);
+
+    await waitFor(() => expect(updateVenue).toHaveBeenCalledTimes(1));
+    expect(save.getAttribute("aria-busy")).toBe("true");
+    expect(save.hasAttribute("disabled")).toBe(true);
+
+    await user.click(save);
+    expect(updateVenue).toHaveBeenCalledTimes(1);
+
+    finish();
+    await waitFor(() => expect(screen.queryByRole("button", { name: /save venue/i })).toBeNull());
+  });
+
   it("shows a recorded venue on the card", async () => {
     render(
       <MemoryRouter>
@@ -709,6 +760,98 @@ describe("the off-campus venue on the cockpit", () => {
 
     await screen.findByText("Freshworks");
     expect(screen.queryByText(/venue/i)).toBeNull();
+  });
+});
+
+/**
+ * UAT 2026-10-16: "central placement corodantior same company shows as two ?
+ * on yet to puplish". Two roles raised for one company visit are one event,
+ * and the queue is cleared event by event — but the decision is still made
+ * role by role, so the roles fold into an accordion instead of vanishing.
+ */
+describe("one company visit is one card", () => {
+  const EVENT = "e1";
+
+  /** "MTS 2 applicants, QA 2 applicants" — but only 3 students exist. */
+  const MTS: DriveSummary = {
+    ...APPROVED,
+    driveId: "d50",
+    roleTitle: "MTS",
+    companyDriveId: EVENT,
+    applicationCount: 2,
+    applicantStudentIds: ["s1", "s2"],
+  };
+  const QA: DriveSummary = {
+    ...APPROVED,
+    driveId: "d51",
+    roleTitle: "QA Engineer",
+    ctcMinLpa: 4,
+    ctcMaxLpa: 5,
+    companyDriveId: EVENT,
+    applicationCount: 2,
+    applicantStudentIds: ["s2", "s3"],
+  };
+  const LIVE_ROLE: DriveSummary = {
+    ...LIVE,
+    driveId: "d52",
+    companyName: "Zoho",
+    roleTitle: "Intern",
+    companyDriveId: EVENT,
+    applicationCount: 1,
+    applicantStudentIds: ["s1"],
+  };
+
+  it("names the company once and lists both roles under it", async () => {
+    routed(view([MTS, QA]));
+
+    expect(await screen.findByText(/2 roles/)).toBeDefined();
+    expect(screen.getAllByText("Zoho")).toHaveLength(1);
+    expect(screen.getByText("MTS")).toBeDefined();
+    expect(screen.getByText("QA Engineer")).toBeDefined();
+  });
+
+  it("counts the students behind the visit, not the applications", async () => {
+    routed(view([MTS, QA]));
+
+    await screen.findByText(/2 roles/);
+    // Four applications from three people: a student called to both roles is
+    // one person at this visit.
+    expect(screen.getByText(/3 applicants/)).toBeDefined();
+  });
+
+  it("keeps the actions per role, with each role's own drive id", async () => {
+    routed(view([MTS, QA]));
+
+    await screen.findByText(/2 roles/);
+    const publish = screen.getAllByRole("link", { name: /publish/i });
+    expect(publish.map((link) => link.getAttribute("href"))).toEqual([
+      "/central/publish?drive=d50",
+      "/central/publish?drive=d51",
+    ]);
+  });
+
+  it("opens the role that is waiting and leaves the rest folded", async () => {
+    routed(view([MTS, LIVE_ROLE]));
+
+    expect(await screen.findByText(/1 awaiting you/)).toBeDefined();
+
+    // Named from the trigger's own first words, with the boundary the type
+    // filter's "Internship" chip cannot cross.
+    const expanded = (title: string) =>
+      screen
+        .queryByRole("button", { name: new RegExp(`^${title}\\b`) })
+        ?.getAttribute("aria-expanded");
+    expect(expanded("MTS")).toBe("true");
+    expect(expanded("Intern")).toBe("false");
+  });
+
+  it("leaves a legacy single drive exactly the row it was", async () => {
+    routed(view([APPROVED]));
+
+    expect(await screen.findByText("Zoho")).toBeDefined();
+    expect(screen.queryByText(/roles ·/)).toBeNull();
+    // The role title is plain text on a single-role row, never a trigger.
+    expect(screen.queryByRole("button", { name: /MTS/ })).toBeNull();
   });
 });
 

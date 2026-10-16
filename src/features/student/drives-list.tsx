@@ -406,10 +406,10 @@ export function DrivesList({
 
                             <div className="mt-4 flex flex-wrap gap-2">
                               <Button
-                                disabled={busyId === drive.id}
+                                isLoading={busyId === drive.id}
                                 onClick={() => void confirm(drive)}
                               >
-                                {busyId === drive.id ? "Applying…" : "Yes, apply"}
+                                Yes, apply
                               </Button>
                               <Button variant="ghost" onClick={() => setConfirmingId(null)}>
                                 Cancel

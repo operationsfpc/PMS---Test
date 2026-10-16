@@ -249,7 +249,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
             </button>
 
             {isColumnPickerOpen && (
-              <div className="absolute right-0 z-30 mt-1 w-48 rounded-xl border border-line bg-surface p-2 shadow-xl animate-in fade-in duration-150">
+              <div className="absolute right-0 z-30 mt-1 w-48 rounded-xl border border-line bg-surface p-2 shadow-xl animate-fade-in">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 mb-1 px-1">
                   Toggle Columns
                 </p>
@@ -290,7 +290,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
 
       {/* Bulk Action Bar (when rows selected) */}
       {enableSelection && selectedRowsList.length > 0 && (
-        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 text-xs shadow-xs animate-in fade-in">
+        <div className="flex items-center justify-between rounded-xl border border-brand-200 bg-brand-50 px-4 py-2 text-xs shadow-xs animate-fade-in">
           <div className="flex items-center gap-2 font-medium text-brand-900">
             <Badge tone="brand">{selectedRowsList.length} selected</Badge>
             <span>of {data.length} total records</span>

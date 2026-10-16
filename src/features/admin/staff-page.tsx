@@ -287,8 +287,8 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
           {problem !== null && <p className="mt-3 text-sm text-destructive">{problem}</p>}
 
           <div className="mt-5">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Sending…" : "Send invitation"}
+            <Button type="submit" isLoading={saving}>
+              Send invitation
             </Button>
           </div>
         </form>
@@ -620,11 +620,12 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                                 variant="ghost"
                                 size="sm"
                                 aria-label={`Resend invite to ${member.fullName}`}
+                                isLoading={resendingEmail === member.email}
                                 disabled={busy === member.email || resendingEmail === member.email}
                                 onClick={() => void handleResendInvite(member.email)}
                                 className="text-brand-600 hover:text-brand-800"
                               >
-                                {resendingEmail === member.email ? "Sending…" : "Resend invite"}
+                                Resend invite
                               </Button>
                             )}
                             {member.isActive ? (

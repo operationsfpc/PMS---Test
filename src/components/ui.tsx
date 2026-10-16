@@ -41,22 +41,56 @@ const VARIANTS = {
   ghost: "text-brand-500 hover:bg-brand-50",
 } as const;
 
+const DISABLED = "disabled:cursor-not-allowed disabled:opacity-60";
+
+/**
+ * The design system had no spinner, so eleven buttons spelled "Saving…" out by
+ * hand and nine fired writes with nothing to stop a second click.
+ */
+export function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 animate-spin ${className}`}
+      viewBox="0 0 24 24"
+      fill="none"
+    >
+      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25" />
+      <path
+        d="M12 2a10 10 0 0 1 10 10"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function Button({
   variant = "primary",
   size = "md",
   className = "",
+  isLoading = false,
+  children,
+  disabled,
   ...props
 }: {
   variant?: keyof typeof VARIANTS;
   size?: "sm" | "md";
+  isLoading?: boolean | undefined;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const sizing = size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-sm";
   return (
     <button
       type="button"
-      className={`rounded-lg font-semibold transition-colors ${VARIANTS[variant]} ${sizing} ${className}`}
+      aria-busy={isLoading}
+      disabled={disabled ?? isLoading}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ${VARIANTS[variant]} ${sizing} ${DISABLED} ${className}`}
       {...props}
-    />
+    >
+      {isLoading && <Spinner />}
+      {children}
+    </button>
   );
 }
 
@@ -85,11 +119,18 @@ export function StatCard({
   value,
   hint,
   tone = "neutral",
+  onClick,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   tone?: Tone;
+  /**
+   * Opens the people behind the number (UAT 2026-10-16: "if it shows a count I
+   * need to know who all is there"). Omitted, the card stays the plain figure
+   * it always was.
+   */
+  onClick?: (() => void) | undefined;
 }) {
   const accent =
     tone === "brand"
@@ -101,12 +142,41 @@ export function StatCard({
           : tone === "warning"
             ? "text-gold-700"
             : "text-ink-900";
-  return (
-    <Card className="p-4">
+
+  const body = (
+    <>
       <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</p>
       <p className={`mt-1.5 font-heading text-2xl font-bold ${accent}`}>{value}</p>
       {hint !== undefined && <p className="mt-0.5 text-xs text-ink-500">{hint}</p>}
-    </Card>
+    </>
+  );
+
+  if (onClick === undefined) {
+    return <Card className="p-4">{body}</Card>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-haspopup="dialog"
+      className="group flex cursor-pointer flex-col rounded-card border border-line bg-surface p-4 text-left shadow-sm transition-all hover:border-brand-300 hover:shadow-md"
+    >
+      {body}
+      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 opacity-70 group-hover:opacity-100">
+        See who
+        <svg
+          aria-hidden="true"
+          className="h-3 w-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </span>
+    </button>
   );
 }
 
@@ -143,6 +213,7 @@ export function DataTable({
 }
 
 // Re-export modern Shadcn primitives for convenient project-wide consumption
+export * from "./accordion";
 export * from "./alert-dialog";
 export * from "./combobox";
 export * from "./data-table";

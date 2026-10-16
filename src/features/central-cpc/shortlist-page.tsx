@@ -420,8 +420,8 @@ export function ShortlistPage({
             <Button variant="secondary" onClick={() => void exportShortlist()}>
               Export recruiter pack (ZIP)
             </Button>
-            <Button onClick={() => setConfirming(true)} disabled={saving}>
-              {saving ? "Saving…" : `Shortlist ${selected.length}`}
+            <Button isLoading={saving} onClick={() => setConfirming(true)}>
+              {`Shortlist ${selected.length}`}
             </Button>
           </span>
         }

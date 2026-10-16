@@ -52,6 +52,19 @@ const DRIVES: NavGroup = {
   ],
 };
 
+/**
+ * The roster and the skill reference, view-only. Every role that reaches it is
+ * in `is_org_reader()` (0018) or scoped by campus, so the link is never a door
+ * onto a page that then says it cannot read the rows.
+ */
+const STUDENT_DETAILS: NavGroup = {
+  heading: "Student details",
+  items: [
+    { to: "/central/students", label: "All students" },
+    { to: "/central/skills", label: "Skill repository" },
+  ],
+};
+
 export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   student: [
     {
@@ -190,6 +203,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       heading: "Drives in progress",
       items: [{ to: "/cpc/drives", label: "Drive progress" }],
     },
+    STUDENT_DETAILS,
   ],
   er_head: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] },
@@ -198,6 +212,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       heading: "Drives in progress",
       items: [{ to: "/cpc/drives", label: "Drive progress" }],
     },
+    STUDENT_DETAILS,
   ],
   ceo: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Executive overview" }] },
@@ -206,6 +221,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
       heading: "Drives in progress",
       items: [{ to: "/cpc/drives", label: "Drive progress" }],
     },
+    STUDENT_DETAILS,
   ],
   // Approving a PIF used to be the end of the Delivery Head's visibility.
   delivery_head: [
@@ -288,6 +304,7 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   admin: [
     { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
     DRIVES,
+    STUDENT_DETAILS,
     {
       heading: "Organisation",
       items: [

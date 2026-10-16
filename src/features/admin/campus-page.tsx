@@ -173,8 +173,8 @@ export function CampusPage({
           </div>
 
           <div className="mt-5 flex items-center gap-3">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Adding…" : "Add campus"}
+            <Button type="submit" isLoading={saving}>
+              Add campus
             </Button>
             {showAddForm && (
               <Button variant="ghost" onClick={() => setShowAddForm(false)}>

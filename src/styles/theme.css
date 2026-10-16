@@ -50,15 +50,40 @@
 
   /* Feedback */
   --color-danger-50: #fff0ec;
+  --color-danger-100: #ffddd2;
+  --color-danger-400: #e46b45;
   --color-danger-500: #dd4820;
+  --color-danger-600: #c23d19;
   --color-danger-700: #a63317;
-  --color-success-500: #00a86b;
+  --color-danger-800: #7d2611;
+  --color-danger-900: #571a0c;
   --color-success-50: #e6f7f0;
+  --color-success-200: #b3e8d1;
+  --color-success-300: #7fd6b2;
+  --color-success-500: #00a86b;
+  --color-success-600: #00915d;
+  --color-success-700: #00744b;
+  --color-success-800: #005739;
+  --color-success-900: #003d28;
+
+  /*
+   * The shadcn name. Roughly forty files ask for `text-destructive` — error
+   * copy in the admin screens, the toast, the combobox — and Tailwind v4
+   * emits nothing for a token that does not exist, so every one of those
+   * rendered in the inherited colour. Alias it to the danger ramp.
+   */
+  --color-destructive: var(--color-danger-500);
 
   /* Neutrals */
+  --color-brand-950: #0d0b19;
+  --color-gold-800: #7d5900;
+  --color-gold-900: #52400a;
   --color-ink-900: #151228;
+  --color-ink-800: #2b2940;
   --color-ink-700: #3f3d56;
+  --color-ink-600: #55526b;
   --color-ink-500: #6b6880;
+  --color-ink-400: #8d8aa3;
   --color-ink-300: #a8a6b8;
   --color-line: #e2e0ea;
   --color-surface: #ffffff;
@@ -79,6 +104,108 @@
     var(--color-fpc-coral) 70%,
     var(--color-fpc-orange) 100%
   );
+}
+
+/**
+ * Motion. `animate-in`/`fade-in`/`slide-in-from-*` were written into the sheet
+ * and the data table but nothing defined them — Tailwind v4 ships no such
+ * utilities without a plugin, so every drawer on the platform snapped open.
+ * These are the real thing, kept short: an internal tool used all day should
+ * not animate for long.
+ */
+@keyframes qf-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes qf-slide-from-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes qf-slide-from-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes qf-slide-from-top {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes qf-slide-from-bottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes qf-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@utility animate-fade-in {
+  animation: qf-fade-in 160ms ease-out both;
+}
+
+@keyframes qf-zoom-in {
+  from {
+    transform: scale(0.97);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+/**
+ * Fade and scale in one utility: `animation` is a single property, so two
+ * `@utility` rules on the same element would override rather than combine.
+ */
+@utility animate-pop-in {
+  animation:
+    qf-fade-in 150ms ease-out both,
+    qf-zoom-in 150ms ease-out both;
+}
+
+@utility animate-slide-in-right {
+  animation: qf-slide-from-right 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-slide-in-left {
+  animation: qf-slide-from-left 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-slide-in-top {
+  animation: qf-slide-from-top 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility animate-slide-in-bottom {
+  animation: qf-slide-from-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @layer base {

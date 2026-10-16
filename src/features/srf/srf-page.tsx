@@ -1889,16 +1889,16 @@ export function SrfPage({
                 )}
 
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Submitting…" : "Submit for verification"}
+                  <Button type="submit" isLoading={isSubmitting}>
+                    Submit for verification
                   </Button>
                   <Button
                     variant="secondary"
                     type="button"
                     onClick={() => void saveNow()}
-                    disabled={draftState === "saving"}
+                    isLoading={draftState === "saving"}
                   >
-                    {draftState === "saving" ? "Saving…" : "Save draft"}
+                    Save draft
                   </Button>
                 </div>
               </Section>

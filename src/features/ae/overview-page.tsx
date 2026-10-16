@@ -100,12 +100,22 @@ function drivesBehindStat(
   kind: StatKind,
   drives: readonly AeOverviewDrive[],
 ): readonly AeOverviewDrive[] {
+  /**
+   * Only the drives that CONTRIBUTED, biggest first.
+   *
+   * "Offers made: 5" used to open every drive the AE has ever raised, sorted
+   * by how many offers each produced — so a popup under a 5 opened twelve rows,
+   * seven of them "0 offers". A list longer than the number that opened it reads
+   * as the number being wrong, which it then is.
+   */
   const byCount = (pick: (f: ReturnType<typeof summariseAeDrives>) => number) =>
-    [...drives].sort(
-      (a, b) =>
-        pick(summariseAeDrives([b])) - pick(summariseAeDrives([a])) ||
-        (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
-    );
+    drives
+      .filter((drive) => pick(summariseAeDrives([drive])) > 0)
+      .sort(
+        (a, b) =>
+          pick(summariseAeDrives([b])) - pick(summariseAeDrives([a])) ||
+          (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
+      );
   switch (kind) {
     case "broughtIn":
       return orderDrives(drives, "newest");
@@ -245,6 +255,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
             <button
               key={kind}
               type="button"
+              aria-haspopup="dialog"
               onClick={() => showStat(kind)}
               className="rounded-card text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
@@ -378,10 +389,15 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
       </Card>
 
       {openStat !== null && (
+        // The header counts what the list below actually shows. It used to count
+        // `statDrives` while rendering `filteredStatDrives`, so filtering the
+        // popup by drive type left the number alone while the rows changed.
         <DrilldownModal
           eyebrow="My drives"
           title={STAT_TITLES[openStat]}
-          subtitle={`${statDrives.length} drive${statDrives.length === 1 ? "" : "s"}`}
+          subtitle={`${filteredStatDrives.length} drive${
+            filteredStatDrives.length === 1 ? "" : "s"
+          }`}
           onClose={() => setOpenStat(null)}
         >
           <div className="mb-4 flex flex-wrap gap-2">

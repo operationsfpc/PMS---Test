@@ -3,16 +3,26 @@ import {
   DriveProgressModal,
   type DriveProgressStudentItem,
 } from "@components/drive-progress-modal";
-import { Badge, Card, PageHeader, StatCard } from "@components/ui";
+import { type DrilldownPerson, StatDrilldown } from "@components/stat-drilldown";
+import { Badge, Button, Card, PageHeader, StatCard } from "@components/ui";
+import { groupDrivesByEvent } from "@domain/company-drive";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
 import { type DriveParticipation, driveFunnel } from "@domain/drive-funnel";
 import { sameMoney } from "@domain/math";
 import { type OfferCategory, offerCategoryLabelOf } from "@domain/offer-category";
-import { registrationFunnel } from "@domain/registration-funnel";
-import { computePlacementStats, type StudentPlacementFacts } from "@domain/statistics";
+import { FUNNEL_STAGE_MATCH, registrationFunnel } from "@domain/registration-funnel";
+import {
+  computePlacementStats,
+  countsInPlacementDenominator,
+  hasOptedOut,
+  isPlacedOnCampus,
+  isSelfPlaced,
+  type StudentPlacementFacts,
+} from "@domain/statistics";
 import type { DirectoryFilter } from "@domain/student-directory";
-import type { SrfStatus } from "@domain/types";
+import type { DriveType, SrfStatus } from "@domain/types";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -28,14 +38,55 @@ export interface CampusBreakdown {
  * placement facts for `computePlacementStats` and the registration facts for
  * `registrationFunnel`. One row rather than two lists, so the funnel can never
  * be computed over a different population than the placement rate.
+ *
+ * The display fields (name, roll, course, CGPA) are here because a count that
+ * opens a popup has to be able to NAME the people it counted. Before them, the
+ * only thing a card could open was the whole student directory.
  */
 export type DashboardStudent = StudentPlacementFacts & {
+  readonly fullName: string;
+  readonly rollNumber: string;
+  readonly degree: string;
+  readonly branch: string;
+  readonly passingYear: number;
+  readonly cgpa: number | null;
   readonly srfStatus: SrfStatus;
   readonly hasApplied: boolean;
   /** F4: the campus switcher filters on this, so it must be per student. */
   readonly campusId: string;
   readonly campusName: string;
 };
+
+/**
+ * A roster row as the count→who popup spells it.
+ *
+ * Kept free of a `status`: the popup says what the COUNT meant, and only the
+ * page knows that. Where a list genuinely splits into populations — applied
+ * here, not applied there — the caller passes its own words.
+ */
+function toPerson(student: DashboardStudent): DrilldownPerson {
+  return {
+    id: student.studentId,
+    name: student.fullName,
+    rollNumber: student.rollNumber,
+    campus: student.campusName,
+    programme: `${student.degree} ${student.branch}`,
+    cgpa: student.cgpa,
+  };
+}
+
+/**
+ * Where this student got to, in the funnel's own words.
+ *
+ * Judged by the domain's stage predicates, so a row cannot say "Verified"
+ * beside a funnel that did not count them at that stage.
+ */
+function stageOf(student: DashboardStudent): string {
+  if (student.hasOnCampusPlacement) return "Placed";
+  if (FUNNEL_STAGE_MATCH.verified(student)) return "Verified";
+  if (FUNNEL_STAGE_MATCH.submitted(student)) return "Form submitted";
+  return "Not submitted";
+}
 
 /**
  * One drive's progress, as the domain's `driveFunnel` needs it. F5.
@@ -47,6 +98,13 @@ export type DashboardStudent = StudentPlacementFacts & {
 export interface DriveProgressSnapshot {
   readonly driveId: string;
   readonly driveName: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly driveType: DriveType | null;
+  readonly status: string;
+  /** The multi-role event this drive is one role of; null when standalone. */
+  readonly companyDriveId: string | null;
+  readonly tentativeDate: string | null;
   readonly campusNames: readonly string[];
   readonly participation: DriveParticipation;
   readonly students?: readonly DriveProgressStudentItem[];
@@ -56,12 +114,18 @@ export interface LiveDrive {
   readonly driveId: string;
   readonly companyName: string;
   readonly roleTitle: string | null;
+  readonly driveType: DriveType;
+  readonly companyDriveId: string | null;
+  readonly tentativeDate: string | null;
   readonly applicationStart: string | null;
   readonly applicationEnd: string | null;
   /** Students this drive is actually open to, judged by R5. */
   readonly eligible: number;
+  readonly eligibleStudentIds: readonly string[];
   readonly applied: number;
+  readonly appliedStudentIds: readonly string[];
   readonly offers: number;
+  readonly offerStudentIds: readonly string[];
 }
 
 /** One drive behind a "Drives by status" count, for the drill-down popup. */
@@ -70,8 +134,35 @@ export interface StatusDriveItem {
   readonly companyName: string;
   readonly roleTitle: string | null;
   readonly status: string;
+  readonly driveType: DriveType | null;
+  readonly companyDriveId: string | null;
+  readonly tentativeDate: string | null;
   /** The colleges the drive targets; empty means open to every campus. */
   readonly campuses: readonly string[];
+}
+
+/**
+ * One offer category and the STUDENTS whose placement record sits in it.
+ *
+ * It used to be a `Record<string, number>` of OFFER ROWS, so a student holding
+ * two Dream offers was counted twice here while the placed figure and the
+ * package table beside it — both read from the one placement record (R9) —
+ * counted them once. Carrying the ids rather than the count is what lets the
+ * row open the people it counted.
+ */
+export interface OfferCategoryCount {
+  readonly category: string;
+  readonly studentIds: readonly string[];
+}
+
+/**
+ * Which campus(es) one snapshot is for. Read by the view, not the page: the
+ * switcher used to narrow only the student rows, so the funnel was one campus
+ * while the packages, the open drives and the drive box were the whole
+ * organisation — two cohorts quoted side by side on one screen.
+ */
+export interface DashboardScope {
+  readonly campusIds?: readonly string[];
 }
 
 export interface DashboardSnapshot {
@@ -91,14 +182,14 @@ export interface DashboardSnapshot {
   readonly drivesByStatus: Readonly<Record<string, number>>;
   /** The drives behind `drivesByStatus`, for the drill-down popup. */
   readonly statusDrives: readonly StatusDriveItem[];
-  readonly offersByCategory: Readonly<Record<string, number>>;
+  readonly offerCategories: readonly OfferCategoryCount[];
   readonly campuses: readonly CampusBreakdown[];
   /** F5: the drive-specific box. Empty until a drive has an audience. */
   readonly driveProgress: readonly DriveProgressSnapshot[];
 }
 
 export interface DashboardView {
-  snapshot(): Promise<DashboardSnapshot>;
+  snapshot(scope?: DashboardScope): Promise<DashboardSnapshot>;
 }
 
 const label = (value: string) => value.replaceAll("_", " ");
@@ -108,6 +199,115 @@ const lpa = (value: number | null) => (value === null ? "—" : `₹${value} LPA
 
 const rate = (placed: number, eligible: number) =>
   eligible === 0 ? 0 : Math.round((placed / eligible) * 1000) / 10;
+
+/**
+ * One role of an open visit — its window, its take-up, its bar. The company is
+ * said once above it, however many roles that visit raised, because a TCS with
+ * three roles is one thing on the calendar and three things on the shortlist.
+ */
+function LiveDriveRole({
+  drive,
+  now,
+  onTakeUp,
+  onOffers,
+}: {
+  drive: LiveDrive;
+  now: string;
+  onTakeUp: (drive: LiveDrive) => void;
+  onOffers: (drive: LiveDrive) => void;
+}) {
+  const window = applicationWindow(
+    {
+      start: drive.applicationStart === null ? null : new Date(drive.applicationStart),
+      end: drive.applicationEnd === null ? null : new Date(drive.applicationEnd),
+    },
+    new Date(now),
+  );
+  const outcome = driveOutcome(drive);
+
+  return (
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        {drive.roleTitle !== null && <p className="text-sm text-ink-500">{drive.roleTitle}</p>}
+
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-500">
+          <span>
+            <button
+              type="button"
+              onClick={() => onTakeUp(drive)}
+              className="font-semibold text-ink-900 underline-offset-2 hover:underline"
+            >
+              {drive.applied} of {drive.eligible} eligible
+            </button>{" "}
+            applied
+          </span>
+          <span className="font-semibold text-ink-900">{outcome.applicationRate}%</span>
+          <button
+            type="button"
+            onClick={() => onOffers(drive)}
+            className="underline-offset-2 hover:underline"
+          >
+            {drive.offers} offers
+          </button>
+        </div>
+
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+          <div className="h-full bg-brand-500" style={{ width: `${outcome.applicationRate}%` }} />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {window.urgent && <Badge tone="danger">Closing soon</Badge>}
+        <Badge tone={window.state === "open" ? "brand" : "neutral"}>{window.label}</Badge>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * F4: all campuses by default, one campus on request.
+ *
+ * Kept OUT of the page body so it survives the re-read that switching triggers
+ * — a picker that unmounts mid-switch loses the reader's focus and, if the
+ * campus list came only from the scoped snapshot, collapses to the one campus
+ * already chosen.
+ */
+function CampusPicker({
+  campuses,
+  value,
+  onChange,
+}: {
+  campuses: readonly CampusBreakdown[];
+  value: string;
+  onChange: (campusId: string) => void;
+}) {
+  const name = campuses.find((campus) => campus.campusId === value)?.campusName;
+
+  if (campuses.length === 0) return null;
+
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-3">
+      <label htmlFor="campus-filter" className="text-sm font-medium text-ink-700">
+        Campus
+      </label>
+      <select
+        id="campus-filter"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+      >
+        <option value="">All campuses</option>
+        {campuses.map((campus) => (
+          <option key={campus.campusId} value={campus.campusId}>
+            {campus.campusName}
+          </option>
+        ))}
+      </select>
+      {/* A filtered screen that does not say so is read as the whole org. */}
+      {name !== undefined && <Badge tone="brand">Showing {name}</Badge>}
+    </div>
+  );
+}
 
 /** Which funnel row opens which population. The row's own count, exactly. */
 const FUNNEL_FILTER: Readonly<Record<string, DirectoryFilter | undefined>> = {
@@ -130,14 +330,50 @@ const FUNNEL_FILTER: Readonly<Record<string, DirectoryFilter | undefined>> = {
  */
 export function DashboardPage({ view, title }: { view: DashboardView; title: string }) {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  /**
+   * The first, unscoped load: it owns the campus list the switcher is built
+   * from, because the scoped one only ever contains the campus already chosen.
+   */
+  const [baseline, setBaseline] = useState<DashboardSnapshot | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  /** Bumped by "Try again"; the campus switcher never needs it. */
+  const [attempt, setAttempt] = useState(0);
   /** "" is every campus — the default the request asked for (F4). */
   const [campusId, setCampusId] = useState("");
   const [driveQuery, setDriveQuery] = useState("");
   const [collegeFilter, setCollegeFilter] = useState("");
 
+  /**
+   * One scope, one snapshot. The switcher used to be a client-side filter over
+   * the student rows only, so the funnel moved with the campus while the
+   * package figures, the open drives and the drive box stayed at the whole
+   * organisation — the same screen quoting two cohorts at once.
+   */
+  // "Try again" is a re-run trigger, not a value this body reads: left out of
+  // the list, a failed read could only be retried by switching campus.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
-    void view.snapshot().then(setSnapshot);
-  }, [view]);
+    let ignore = false;
+    // Nulled first: a second cohort must not appear beside the first while the
+    // new one is in flight.
+    setSnapshot(null);
+    setFailure(null);
+    view.snapshot(campusId === "" ? {} : { campusIds: [campusId] }).then(
+      (next) => {
+        if (ignore) return;
+        setSnapshot(next);
+        setBaseline((current) => current ?? next);
+      },
+      (cause: unknown) => {
+        // A read that fails used to resolve with `data: null` and render as
+        // "No students yet" — an outage reported as an empty campus.
+        if (!ignore) setFailure(describeReadFailure(cause, "The overview could not be read."));
+      },
+    );
+    return () => {
+      ignore = true;
+    };
+  }, [view, campusId, attempt]);
 
   /**
    * F4: "available both overall and campus-wise ... the ability to switch
@@ -146,7 +382,9 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
    *
    * Filtered ONCE, here, and fed to both the funnel and the placement stats:
    * two filters would eventually disagree and the screen would quote two
-   * different cohorts side by side.
+   * different cohorts side by side. The view already scoped the read; this says
+   * so again, so a campus's students cannot join the figures printed for it
+   * even if a view ever ignores the scope it was given.
    */
   const cohort = useMemo(
     () =>
@@ -163,7 +401,8 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
   const funnel = useMemo(() => registrationFunnel(cohort), [cohort]);
 
   const campusName =
-    snapshot?.campuses.find((c) => c.campusId === campusId)?.campusName ?? "All campuses";
+    (baseline ?? snapshot)?.campuses.find((c) => c.campusId === campusId)?.campusName ??
+    "All campuses";
 
   /** All unique drive names available for the drive name filter */
   const driveNames = useMemo(
@@ -179,17 +418,32 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     () =>
       [
         ...new Set([
-          ...(snapshot?.campuses ?? []).map((c) => c.campusName),
+          ...((baseline ?? snapshot)?.campuses.map((c) => c.campusName) ?? []),
           ...(snapshot?.driveProgress ?? []).flatMap((d) => d.campusNames),
         ]),
       ].sort((a, b) => a.localeCompare(b)),
-    [snapshot],
+    [baseline, snapshot],
   );
 
   const [drivePage, setDrivePage] = useState(1);
   const [selectedModalDrive, setSelectedModalDrive] = useState<DriveProgressSnapshot | null>(null);
   /** The status row opened in the drill-down popup; null while closed. */
   const [statusOpen, setStatusOpen] = useState<string | null>(null);
+  /**
+   * The student count that was pressed, and the people standing in it.
+   *
+   * Resolved at the click rather than re-derived on every render: the numbers
+   * on this page only change when the snapshot is re-read, which cannot happen
+   * while a popup covers the screen. So the list a card opens is provably the
+   * list the card counted.
+   */
+  const [peopleOpen, setPeopleOpen] = useState<{
+    readonly eyebrow: string;
+    readonly title: string;
+    readonly note: string | null;
+    readonly href: string;
+    readonly people: readonly DrilldownPerson[];
+  } | null>(null);
   const DRIVES_PAGE_SIZE = 5;
 
   const drives = useMemo(() => {
@@ -223,6 +477,20 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     () => (snapshot === null ? [] : summariseCtcByCategory(snapshot.placements)),
     [snapshot],
   );
+
+  /** What each placed student is paid, so a package popup can say it per row. */
+  const ctcById = useMemo(
+    () => new Map((snapshot?.placements ?? []).map((p) => [p.studentId, p.ctcLpa] as const)),
+    [snapshot],
+  );
+
+  /** The students holding one of the snapshot's placement records. */
+  function placedRows(where?: (record: PlacementCtc) => boolean) {
+    const records = (snapshot?.placements ?? []).filter(
+      (record) => where === undefined || where(record),
+    );
+    return rowsWithIds(records.map((record) => record.studentId));
+  }
 
   /**
    * Every number on this page opens the students behind it (2026-08-26,
@@ -269,13 +537,125 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
       : studentsLink({ filter: "placed" });
   }
 
+  const campusOptions = (baseline ?? snapshot)?.campuses ?? [];
+
+  /**
+   * The ids the snapshot counted — who applied, who holds which category —
+   * joined to the roster rows that can name them.
+   *
+   * Joined against `cohort`, the same population every figure on the screen is
+   * computed from. An id with no row here means the view scoped its counts and
+   * its rows differently, and the popup then opens SHORTER than the number that
+   * opened it — which is the report, not a hole to paper over.
+   */
+  function rowsWithIds(ids: readonly string[]): readonly DashboardStudent[] {
+    const byId = new Map(cohort.map((student) => [student.studentId, student]));
+    return ids.flatMap((id) => {
+      const student = byId.get(id);
+      return student === undefined ? [] : [student];
+    });
+  }
+
+  /** Opens the people behind one of this page's counts of students. */
+  function openStudents(count: {
+    eyebrow: string;
+    title: string;
+    href: string;
+    rows: readonly DashboardStudent[];
+    /** One population's own words; omitted when every row is the same thing. */
+    status?: (student: DashboardStudent) => string;
+    /** Splits the list into filter tabs — "Applied" / "Not applied". */
+    group?: (student: DashboardStudent) => string;
+    note?: string;
+    /** Which campus the list is for, when the row answers for its own. */
+    where?: string;
+  }) {
+    // The campus in view belongs in the popup's own words: a figure pressed
+    // while one campus is selected must not read as the whole organisation.
+    const parts = [
+      count.note,
+      count.where === undefined
+        ? campusId === ""
+          ? undefined
+          : `at ${campusName}`
+        : `at ${count.where}`,
+    ].filter((part) => part !== undefined);
+    setPeopleOpen({
+      eyebrow: count.eyebrow,
+      title: count.title,
+      href: count.href,
+      note: parts.length === 0 ? null : parts.join(" · "),
+      people: count.rows.map((student) => ({
+        ...toPerson(student),
+        status: count.status === undefined ? null : count.status(student),
+        group: count.group === undefined ? null : count.group(student),
+      })),
+    });
+  }
+
+  /**
+   * Who stands in an "N of M applied" line — one role, or a whole visit.
+   *
+   * A visit's roles share an audience, so the list holds a student once however
+   * many roles they applied to, exactly as the line counts them. The tabs are
+   * the point: the coordinator's next question is always who has NOT applied.
+   */
+  function openTakeUp(roles: readonly LiveDrive[], where: string) {
+    const applied = new Set(roles.flatMap((drive) => drive.appliedStudentIds));
+    const rows = rowsWithIds([...new Set(roles.flatMap((drive) => drive.eligibleStudentIds))]);
+    openStudents({
+      eyebrow: "Open drives",
+      title: `Eligible at ${where}`,
+      href: studentsLink({}),
+      rows,
+      status: (student) => (applied.has(student.studentId) ? "Applied" : "Not applied"),
+      group: (student) => (applied.has(student.studentId) ? "Applied" : "Not applied"),
+      note: `${rows.filter((student) => applied.has(student.studentId)).length} of ${
+        rows.length
+      } applied`,
+    });
+  }
+
+  /** Who holds an offer at one role, or across a whole visit. */
+  function openOffers(roles: readonly LiveDrive[], where: string) {
+    const rows = rowsWithIds([...new Set(roles.flatMap((drive) => drive.offerStudentIds))]);
+    openStudents({
+      eyebrow: "Open drives",
+      title: `Offers at ${where}`,
+      href: studentsLink({ filter: "on_campus" }),
+      rows,
+      note: `${rows.length} student${rows.length === 1 ? "" : "s"} hold an offer here`,
+    });
+  }
+
   if (snapshot === null) {
     return (
       <div>
         <PageHeader title={title} />
-        <p role="status" className="text-sm text-ink-500">
-          Loading…
-        </p>
+        <CampusPicker campuses={campusOptions} value={campusId} onChange={setCampusId} />
+        {failure === null ? (
+          <p role="status" className="text-sm text-ink-500">
+            Loading…
+          </p>
+        ) : (
+          <Card className="p-6">
+            <p className="text-sm font-medium text-danger-700" role="alert">
+              {failure}
+            </p>
+            <p className="mt-1 text-sm text-ink-500">
+              This overview reads the roster, the offers and the drives together. Showing the part
+              that did arrive would put a number on the screen that does not add up, so nothing is
+              shown until the whole read works.
+            </p>
+            <Button
+              variant="secondary"
+              className="mt-4"
+              onClick={() => setAttempt((current) => current + 1)}
+            >
+              Try again
+            </Button>
+          </Card>
+        )}
       </div>
     );
   }
@@ -283,6 +663,17 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
   // Exactly the drives behind the clicked count — no extra filtering, or the
   // popup would open longer than the number that opened it.
   const statusOpenDrives = snapshot.statusDrives.filter((d) => d.status === statusOpen);
+  // …and grouped the way the count is: one company visit per row, its roles
+  // named underneath. `drivesByStatus` counts visits, so this list must too.
+  const statusOpenEvents = [...groupDrivesByEvent(statusOpenDrives).values()];
+
+  const rolesByStatus: Record<string, number> = {};
+  for (const drive of snapshot.statusDrives) {
+    rolesByStatus[drive.status] = (rolesByStatus[drive.status] ?? 0) + 1;
+  }
+
+  /** One entry per company visit — the list and the "open now" hint both read this. */
+  const openEvents = [...groupDrivesByEvent(snapshot.liveDrives).values()];
 
   return (
     <div>
@@ -292,63 +683,95 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
       />
 
       {/* F4: all campuses by default, one campus on request. */}
-      {snapshot.campuses.length > 0 && (
-        <div className="mb-5 flex flex-wrap items-center gap-3">
-          <label htmlFor="campus-filter" className="text-sm font-medium text-ink-700">
-            Campus
-          </label>
-          <select
-            id="campus-filter"
-            value={campusId}
-            onChange={(e) => setCampusId(e.target.value)}
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-          >
-            <option value="">All campuses</option>
-            {snapshot.campuses.map((campus) => (
-              <option key={campus.campusId} value={campus.campusId}>
-                {campus.campusName}
-              </option>
-            ))}
-          </select>
-          {/* A filtered screen that does not say so is read as the whole org. */}
-          {campusId !== "" && <Badge tone="brand">Showing {campusName}</Badge>}
-        </div>
-      )}
+      <CampusPicker campuses={campusOptions} value={campusId} onChange={setCampusId} />
 
       {snapshot.students.length === 0 ? (
         <Card className="p-6">
-          <p className="text-sm text-ink-700">No students yet. Import a campus roster to begin.</p>
+          <p className="text-sm text-ink-700">
+            {campusId === ""
+              ? "No students yet. Import a campus roster to begin."
+              : `No students at ${campusName} yet. Every other campus is still on the list above.`}
+          </p>
         </Card>
       ) : (
         <>
-          {/* 2026-08-26: every card opens the students it counted, exactly as
-              the Live-drives cards open their applicants. */}
+          {/* 2026-10-16: these cards open the students they counted, in place.
+              They used to navigate to the directory, which asked the reader to
+              leave the number they were questioning to go and check it
+              somewhere else — and the directory's own filter did not always
+              hold the same population ("if it shows a count I need to know who
+              all is there"). The directory stays one click away in the footer. */}
           <section aria-label="Headline" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <Link to={studentsLink({ filter: "on_campus" })} className="block">
-              <StatCard label="Placement rate" value={`${stats.placementRate}%`} tone="brand" />
-            </Link>
-            <Link to={studentsLink({ filter: "on_campus" })} className="block">
-              <StatCard
-                label="Placed on campus"
-                value={stats.placed}
-                hint={`of ${stats.eligible} eligible`}
-              />
-            </Link>
-            <Link to={studentsLink({ filter: "self_placed" })} className="block">
-              <StatCard label="Self-placed" value={stats.selfPlaced} tone="warning" />
-            </Link>
+            <StatCard
+              label="Placement rate"
+              value={`${stats.placementRate}%`}
+              tone="brand"
+              onClick={() =>
+                openStudents({
+                  eyebrow: "Headline",
+                  // The rate is a fraction, so the popup shows the WHOLE
+                  // fraction: who is in the denominator, and where each of them
+                  // stands. Opted-out students are not here — they left the
+                  // denominator, and the card above that one names them.
+                  title: "In the placement denominator",
+                  href: studentsLink({}),
+                  rows: cohort.filter(countsInPlacementDenominator),
+                  status: (student) => (student.hasOnCampusPlacement ? "Placed" : "Not placed"),
+                  group: (student) => (student.hasOnCampusPlacement ? "Placed" : "Not placed"),
+                  note: `${stats.placed} of ${stats.eligible} placed`,
+                })
+              }
+            />
+            <StatCard
+              label="Placed on campus"
+              value={stats.placed}
+              hint={`of ${stats.eligible} eligible`}
+              onClick={() =>
+                openStudents({
+                  eyebrow: "Headline",
+                  title: "Placed on campus",
+                  href: studentsLink({ filter: "on_campus" }),
+                  rows: cohort.filter(isPlacedOnCampus),
+                  note: `of ${stats.eligible} eligible`,
+                })
+              }
+            />
+            <StatCard
+              label="Self-placed"
+              value={stats.selfPlaced}
+              tone="warning"
+              onClick={() =>
+                openStudents({
+                  eyebrow: "Headline",
+                  title: "Self-placed",
+                  href: studentsLink({ filter: "self_placed" }),
+                  rows: cohort.filter(isSelfPlaced),
+                  note: "their own find, never counted as an on-campus placement",
+                })
+              }
+            />
             {/* Opt-outs leave the placement denominator, so the number they
                 leave by is reported rather than quietly absorbed. */}
-            <Link to={studentsLink({ filter: "opted_out" })} className="block">
-              <StatCard label="Opted out" value={stats.optedOut} />
-            </Link>
+            <StatCard
+              label="Opted out"
+              value={stats.optedOut}
+              onClick={() =>
+                openStudents({
+                  eyebrow: "Headline",
+                  title: "Opted out",
+                  href: studentsLink({ filter: "opted_out" }),
+                  rows: cohort.filter(hasOptedOut),
+                  note: "outside the placement denominator",
+                })
+              }
+            />
             {/* The one card that is not about students, so it opens the drives
                 instead - and the campus switcher does not apply to it. */}
             <Link to="/central/drives/completed" className="block">
               <StatCard
                 label="Drives completed"
                 value={snapshot.drivesByStatus.completed ?? 0}
-                hint={`${snapshot.liveDrives.length} open now`}
+                hint={`${openEvents.length} open now`}
               />
             </Link>
           </section>
@@ -382,12 +805,24 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
 
                     return (
                       <li key={stage.key}>
-                        <Link
-                          to={studentsLink({ filter: FUNNEL_FILTER[stage.key] })}
-                          className="block rounded-lg transition-colors hover:bg-brand-50"
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openStudents({
+                              eyebrow: "Students overview",
+                              title: stage.label,
+                              // The directory still answers to the same
+                              // population, one click further out.
+                              href: studentsLink({ filter: FUNNEL_FILTER[stage.key] }),
+                              rows: cohort.filter(FUNNEL_STAGE_MATCH[stage.key]),
+                              status: stageOf,
+                              note: `${stage.percentOfRoster}% of the roster`,
+                            })
+                          }
+                          className="block w-full rounded-lg text-left transition-colors hover:bg-brand-50"
                         >
                           {row}
-                        </Link>
+                        </button>
                         {/* The bar is the point: a stage that drops off a cliff
                           is visible before the numbers are read. */}
                         <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
@@ -419,24 +854,59 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                     <section aria-label="Package figures">
                       <dl className="grid grid-cols-2 gap-3">
                         {[
-                          ["Highest", packages.highestLpa],
-                          ["Average", packages.averageLpa],
-                          ["Median", packages.medianLpa],
-                          ["Lowest", packages.lowestLpa],
-                        ].map(([name, value]) => (
-                          <Link
-                            key={name as string}
-                            to={packageLink(value as number | null)}
-                            className="block rounded-lg bg-surface-muted p-3 transition-colors hover:bg-brand-50"
-                          >
-                            <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                              {name}
-                            </dt>
-                            <dd className="mt-0.5 font-heading text-lg font-bold text-ink-900">
-                              {lpa(value as number | null)}
-                            </dd>
-                          </Link>
-                        ))}
+                          { name: "Highest", figure: packages.highestLpa },
+                          { name: "Average", figure: packages.averageLpa },
+                          { name: "Median", figure: packages.medianLpa },
+                          { name: "Lowest", figure: packages.lowestLpa },
+                        ].map(({ name, figure }) => {
+                          // Somebody earns the highest and the lowest. The
+                          // average is nobody's salary and the median of an
+                          // even cohort is a midpoint between two — so those
+                          // two open the placed list and SAY so, rather than
+                          // landing the reader on a list of one or none.
+                          const holders =
+                            figure === null
+                              ? []
+                              : (snapshot?.placements ?? []).filter((p) =>
+                                  sameMoney(p.ctcLpa, figure),
+                                );
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              onClick={() =>
+                                openStudents({
+                                  eyebrow: "Package",
+                                  title: `${name} package ${lpa(figure)}`,
+                                  href: packageLink(figure),
+                                  rows: rowsWithIds(
+                                    (holders.length === 0
+                                      ? (snapshot?.placements ?? [])
+                                      : holders
+                                    ).map((p) => p.studentId),
+                                  ),
+                                  status: (student) => lpa(ctcById.get(student.studentId) ?? null),
+                                  note:
+                                    holders.length === 0
+                                      ? `the ${name.toLowerCase()} of ${
+                                          snapshot?.placements.length ?? 0
+                                        } packages — not anybody's own salary`
+                                      : `${holders.length} student${
+                                          holders.length === 1 ? "" : "s"
+                                        } at this package`,
+                                })
+                              }
+                              className="block rounded-lg bg-surface-muted p-3 text-left transition-colors hover:bg-brand-50"
+                            >
+                              <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                                {name}
+                              </dt>
+                              <dd className="mt-0.5 font-heading text-lg font-bold text-ink-900">
+                                {lpa(figure)}
+                              </dd>
+                            </button>
+                          );
+                        })}
                       </dl>
                     </section>
 
@@ -447,9 +917,21 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                       >
                         {packagesByCategory.map(({ category, stats: byCategory }) => (
                           <li key={category}>
-                            <Link
-                              to={studentsLink({ filter: "placed", category })}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg py-2 text-sm transition-colors hover:bg-brand-50"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openStudents({
+                                  eyebrow: "Package by category",
+                                  title: offerCategoryLabelOf(category),
+                                  href: studentsLink({ filter: "placed", category }),
+                                  rows: placedRows((record) => record.category === category),
+                                  status: (student) => lpa(ctcById.get(student.studentId) ?? null),
+                                  note: `avg ${lpa(byCategory.averageLpa)} · high ${lpa(
+                                    byCategory.highestLpa,
+                                  )}`,
+                                })
+                              }
+                              className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg py-2 pr-1 text-left text-sm transition-colors hover:bg-brand-50"
                             >
                               {/* 2026-08-27: the domain's spelling. The
                                   `capitalize` class was a stylesheet spelling
@@ -464,7 +946,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                 </span>{" "}
                                 · high {lpa(byCategory.highestLpa)}
                               </span>
-                            </Link>
+                            </button>
                           </li>
                         ))}
                       </ul>
@@ -478,42 +960,70 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
           <div className="grid gap-6 lg:grid-cols-2">
             <Card className="p-5">
               <h2 className="text-lg text-ink-900">Drives by status</h2>
+              <p className="mt-1 text-xs text-ink-500">
+                Company visits, not role rows — a visit that raised three roles is one drive.
+              </p>
               <ul className="mt-3 space-y-1">
-                {Object.entries(snapshot.drivesByStatus).map(([status, count]) => (
-                  <li key={status}>
-                    <button
-                      type="button"
-                      aria-label={`${label(status)}: ${count} drives`}
-                      onClick={() => setStatusOpen(status)}
-                      className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-brand-50"
-                    >
-                      <span className="capitalize text-ink-700">{label(status)}</span>
-                      <span className="font-semibold text-ink-900">{count}</span>
-                    </button>
-                  </li>
-                ))}
+                {Object.entries(snapshot.drivesByStatus).map(([status, count]) => {
+                  const roles = rolesByStatus[status] ?? count;
+                  const drives = `${count} drive${count === 1 ? "" : "s"}`;
+                  return (
+                    <li key={status}>
+                      <button
+                        type="button"
+                        aria-label={
+                          roles === count
+                            ? `${label(status)}: ${drives}`
+                            : `${label(status)}: ${drives}, ${roles} roles`
+                        }
+                        onClick={() => setStatusOpen(status)}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-brand-50"
+                      >
+                        <span className="flex flex-wrap items-baseline gap-2">
+                          <span className="capitalize text-ink-700">{label(status)}</span>
+                          {roles !== count && (
+                            <span className="text-xs text-ink-500">{roles} roles</span>
+                          )}
+                        </span>
+                        <span className="font-semibold text-ink-900">{count}</span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </Card>
 
             <Card className="p-5">
               <section aria-label="Offers by category">
                 <h2 className="text-lg text-ink-900">Offers by category</h2>
-                {/* These count OFFER ROWS; the directory behind them counts
-                    STUDENTS by their one displayed placement. A student
-                    holding two Dream offers is 2 here and 1 there. */}
+                {/* 2026-10-16: these are STUDENTS, each at the one offer that is
+                    their placement record (R9) — the same population as the
+                    placed count and the package table above. They used to count
+                    offer rows, so one student holding two Dream offers was two
+                    here and one everywhere else on the screen. */}
                 <ul className="mt-3 space-y-2">
-                  {Object.entries(snapshot.offersByCategory).map(([category, count]) => (
+                  {snapshot.offerCategories.map(({ category, studentIds }) => (
                     <li key={category}>
-                      <Link
-                        to={studentsLink({
-                          filter: "placed",
-                          category: category as OfferCategory,
-                        })}
-                        className="flex justify-between rounded-lg text-sm transition-colors hover:bg-brand-50"
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openStudents({
+                            eyebrow: "Offers by category",
+                            title: `${offerCategoryLabelOf(category)} offers`,
+                            href: studentsLink({
+                              filter: "placed",
+                              category: category as OfferCategory,
+                            }),
+                            rows: rowsWithIds(studentIds),
+                            status: (student) => lpa(ctcById.get(student.studentId) ?? null),
+                            note: "one student per placement record (R9)",
+                          })
+                        }
+                        className="flex w-full justify-between rounded-lg py-1 pr-1 text-left text-sm transition-colors hover:bg-brand-50"
                       >
                         <span className="text-ink-700">{offerCategoryLabelOf(category)}</span>
-                        <span className="font-semibold text-ink-900">{count}</span>
-                      </Link>
+                        <span className="font-semibold text-ink-900">{studentIds.length}</span>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -524,59 +1034,60 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
           <Card className="mt-6 p-5">
             <section aria-label="Open drives">
               <h2 className="text-lg text-ink-900">Open drives</h2>
-              {snapshot.liveDrives.length === 0 ? (
+              {openEvents.length === 0 ? (
                 <p className="mt-3 text-sm text-ink-700">
                   No drives are open right now. Published drives appear here with the time left to
                   apply.
                 </p>
               ) : (
                 <ul className="mt-3 divide-y divide-line">
-                  {snapshot.liveDrives.map((drive) => {
-                    const window = applicationWindow(
-                      {
-                        start:
-                          drive.applicationStart === null ? null : new Date(drive.applicationStart),
-                        end: drive.applicationEnd === null ? null : new Date(drive.applicationEnd),
-                      },
-                      new Date(snapshot.now),
-                    );
-                    const outcome = driveOutcome(drive);
+                  {openEvents.map((roles) => {
+                    const head = roles[0];
+                    if (head === undefined) return null;
+                    // A student eligible for both roles, or applied to both, is
+                    // one student at the visit — the same rule the count that
+                    // opens the popup follows.
+                    const eligible = new Set(roles.flatMap((drive) => drive.eligibleStudentIds));
+                    const applied = new Set(roles.flatMap((drive) => drive.appliedStudentIds));
 
                     return (
-                      <li key={drive.driveId} className="py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-ink-900">{drive.companyName}</p>
-                            {drive.roleTitle !== null && (
-                              <p className="text-sm text-ink-500">{drive.roleTitle}</p>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {window.urgent && <Badge tone="danger">Closing soon</Badge>}
-                            <Badge tone={window.state === "open" ? "brand" : "neutral"}>
-                              {window.label}
-                            </Badge>
-                          </div>
-                        </div>
+                      <li key={head.driveId} className="py-3">
+                        <p className="flex flex-wrap items-center gap-2 font-semibold text-ink-900">
+                          {head.companyName}
+                          {roles.length > 1 && (
+                            <span className="text-xs font-normal text-ink-500">
+                              {roles.length} roles
+                            </span>
+                          )}
+                        </p>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-500">
-                          <span>
-                            <span className="font-semibold text-ink-900">
-                              {drive.applied} of {drive.eligible} eligible
-                            </span>{" "}
-                            applied
-                          </span>
-                          <span className="font-semibold text-ink-900">
-                            {outcome.applicationRate}%
-                          </span>
-                          <span>{drive.offers} offers</span>
-                        </div>
+                        {roles.length > 1 && (
+                          <p className="mt-1 text-sm text-ink-500">
+                            <button
+                              type="button"
+                              onClick={() => openTakeUp(roles, head.companyName)}
+                              className="font-semibold text-ink-900 underline-offset-2 hover:underline"
+                            >
+                              {applied.size} of {eligible.size} students
+                            </button>{" "}
+                            at this visit have applied to at least one role
+                          </p>
+                        )}
 
-                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
-                          <div
-                            className="h-full bg-brand-500"
-                            style={{ width: `${outcome.applicationRate}%` }}
-                          />
+                        <div className={roles.length > 1 ? "mt-2 space-y-3" : ""}>
+                          {roles.map((drive) => (
+                            <LiveDriveRole
+                              key={drive.driveId}
+                              drive={drive}
+                              now={snapshot.now}
+                              onTakeUp={(role) =>
+                                openTakeUp([role], role.roleTitle ?? role.companyName)
+                              }
+                              onOffers={(role) =>
+                                openOffers([role], role.roleTitle ?? role.companyName)
+                              }
+                            />
+                          ))}
                         </div>
                       </li>
                     );
@@ -766,10 +1277,10 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                 return (
                                   <tr key={stage.key} className="hover:bg-surface-muted/30">
                                     <td className="py-2.5 pr-3 font-medium text-ink-800 text-xs sm:text-sm">
-                                      <li className="list-none">
+                                      <span className="block">
                                         <span className="text-ink-700">{stage.label}</span>
                                         {round !== undefined && (
-                                          <p className="mt-0.5 text-xs text-ink-500">
+                                          <span className="mt-0.5 block text-xs text-ink-500">
                                             <span>
                                               {round.present} of {round.scheduled} attended
                                             </span>{" "}
@@ -778,9 +1289,9 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                             {round.unconfirmed > 0 && (
                                               <span> · {round.unconfirmed} unconfirmed</span>
                                             )}
-                                          </p>
+                                          </span>
                                         )}
-                                      </li>
+                                      </span>
                                     </td>
                                     <td className="py-2.5 pr-4 text-right font-semibold text-ink-900 text-xs sm:text-sm">
                                       {stage.count}
@@ -866,9 +1377,28 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                   <li key={campus.campusId}>
                     {/* Its own campus, not the switcher's: this row is the
                         answer for THAT college. */}
-                    <Link
-                      to={studentsLink({ campus: campus.campusName })}
-                      className="flex items-center justify-between gap-4 rounded-lg py-2 text-sm transition-colors hover:bg-brand-50"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const at = snapshot.students.filter(
+                          (student) =>
+                            student.campusId === campus.campusId &&
+                            countsInPlacementDenominator(student),
+                        );
+                        openStudents({
+                          eyebrow: "By campus",
+                          title: `In the denominator at ${campus.campusName}`,
+                          href: studentsLink({ campus: campus.campusName }),
+                          rows: at,
+                          status: (student) =>
+                            student.hasOnCampusPlacement ? "Placed" : "Not placed",
+                          group: (student) =>
+                            student.hasOnCampusPlacement ? "Placed" : "Not placed",
+                          note: `${rate(campus.placed, campus.eligible)}% placed`,
+                          where: campus.campusName,
+                        });
+                      }}
+                      className="flex w-full items-center justify-between gap-4 rounded-lg py-2 pr-1 text-left text-sm transition-colors hover:bg-brand-50"
                     >
                       <span className="text-ink-800">{campus.campusName}</span>
                       <span className="text-ink-500">
@@ -877,13 +1407,25 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                           {rate(campus.placed, campus.eligible)}%
                         </span>
                       </span>
-                    </Link>
+                    </button>
                   </li>
                 ))}
               </ul>
             </section>
           </Card>
         </>
+      )}
+
+      {peopleOpen !== null && (
+        <StatDrilldown
+          open
+          onClose={() => setPeopleOpen(null)}
+          eyebrow={peopleOpen.eyebrow}
+          title={peopleOpen.title}
+          people={peopleOpen.people}
+          note={peopleOpen.note}
+          href={peopleOpen.href}
+        />
       )}
 
       {selectedModalDrive !== null && (
@@ -902,34 +1444,59 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
         <DrilldownModal
           eyebrow="Campus overview"
           title={`Drives — ${label(statusOpen)}`}
-          subtitle={`${statusOpenDrives.length} drive${statusOpenDrives.length === 1 ? "" : "s"}`}
+          subtitle={`${statusOpenEvents.length} drive${statusOpenEvents.length === 1 ? "" : "s"} · ${statusOpenDrives.length} role${statusOpenDrives.length === 1 ? "" : "s"}`}
           onClose={() => setStatusOpen(null)}
         >
-          {statusOpenDrives.length === 0 ? (
+          {statusOpenEvents.length === 0 ? (
             <p className="text-sm text-ink-500">No drives in this status right now.</p>
           ) : (
             <ul className="space-y-3">
-              {statusOpenDrives.map((drive) => (
-                <li
-                  key={drive.driveId}
-                  className="rounded-card border border-line bg-surface p-4 transition-shadow hover:shadow-sm"
-                >
-                  <Link
-                    to={`/drives/${drive.driveId}`}
-                    className="font-medium text-ink-900 transition-colors hover:text-brand-700"
+              {statusOpenEvents.map((roles) => {
+                const head = roles[0];
+                if (head === undefined) return null;
+                const campuses = [...new Set(roles.flatMap((drive) => drive.campuses))];
+                return (
+                  <li
+                    key={head.driveId}
+                    className="rounded-card border border-line bg-surface p-4 transition-shadow hover:shadow-sm"
                   >
-                    {drive.companyName}
-                  </Link>
-                  <p className="text-sm text-ink-500">
-                    {drive.roleTitle ?? "Role to be announced"}
-                  </p>
-                  <p className="mt-2 text-xs text-ink-500">
-                    {drive.campuses.length === 0
-                      ? "Open to every campus"
-                      : `Open to: ${drive.campuses.join(", ")}`}
-                  </p>
-                </li>
-              ))}
+                    <p className="flex flex-wrap items-center gap-2">
+                      {roles.length === 1 ? (
+                        <Link
+                          to={`/drives/${head.driveId}`}
+                          className="font-medium text-ink-900 transition-colors hover:text-brand-700"
+                        >
+                          {head.companyName}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-ink-900">{head.companyName}</span>
+                      )}
+                      {roles.length > 1 && (
+                        <span className="text-xs text-ink-500">{roles.length} roles</span>
+                      )}
+                    </p>
+                    {/* Each role stays reachable: one visit is one row, but the
+                        record pages are per role. */}
+                    <ul className="mt-1 space-y-0.5 text-sm text-ink-500">
+                      {roles.map((drive) => (
+                        <li key={drive.driveId}>
+                          <Link
+                            to={`/drives/${drive.driveId}`}
+                            className="transition-colors hover:text-brand-700"
+                          >
+                            {drive.roleTitle ?? "Role to be announced"}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-xs text-ink-500">
+                      {campuses.length === 0
+                        ? "Open to every campus"
+                        : `Open to: ${campuses.join(", ")}`}
+                    </p>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </DrilldownModal>

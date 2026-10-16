@@ -26,6 +26,29 @@ export interface PlacementStats {
 const round1 = (value: number) => Math.round(value * 10) / 10;
 
 /**
+ * The four populations as predicates (2026-10-16).
+ *
+ * A card that shows a count now opens the people behind it, and the list must
+ * be the SAME population the number counted. Computing it a second time in a
+ * component is how a popup ends up longer than the figure that opened it — the
+ * defect the AE overview shipped with. `computePlacementStats` below is written
+ * in terms of these, so there is one definition of each.
+ */
+export const hasOptedOut = (student: StudentPlacementFacts): boolean =>
+  student.participationStatus === "opted_out";
+
+/** Still in the process — the denominator, and every card labelled "eligible". */
+export const countsInPlacementDenominator = (student: StudentPlacementFacts): boolean =>
+  !hasOptedOut(student);
+
+/** An on-campus offer, and still participating: the placement record (R9). */
+export const isPlacedOnCampus = (student: StudentPlacementFacts): boolean =>
+  countsInPlacementDenominator(student) && student.hasOnCampusPlacement;
+
+/** Their own find, reported on its own line and never as an on-campus placement. */
+export const isSelfPlaced = (student: StudentPlacementFacts): boolean => student.hasSelfPlacement;
+
+/**
  * Placement statistics (domain model 7).
  *
  * The denominator is the number everyone argues about, so it lives here with
@@ -42,10 +65,10 @@ const round1 = (value: number) => Math.round(value * 10) / 10;
  *    (PRD 16.2).
  */
 export function computePlacementStats(input: PlacementStatsInput): PlacementStats {
-  const optedOut = input.students.filter((s) => s.participationStatus === "opted_out").length;
-  const selfPlaced = input.students.filter((s) => s.hasSelfPlacement).length;
+  const optedOut = input.students.filter(hasOptedOut).length;
+  const selfPlaced = input.students.filter(isSelfPlaced).length;
 
-  const counted = input.students.filter((s) => s.participationStatus !== "opted_out");
+  const counted = input.students.filter(countsInPlacementDenominator);
   const placed = counted.filter((s) => s.hasOnCampusPlacement).length;
 
   return {

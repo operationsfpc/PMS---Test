@@ -178,8 +178,8 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
           </Card>
 
           <div className="mt-4 flex flex-wrap items-center gap-3 pb-10">
-            <Button disabled={busy} onClick={() => void save()}>
-              {busy ? "Saving…" : "Save attendance"}
+            <Button isLoading={busy} onClick={() => void save()}>
+              Save attendance
             </Button>
             <p className="text-xs text-[#FF7200]">
               Anyone left unticked is recorded absent. Three absences trigger a disbarment review.

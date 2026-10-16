@@ -4,7 +4,12 @@ import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import { DashboardPage, type DashboardSnapshot, type DashboardView } from "./dashboard-page";
+import {
+  DashboardPage,
+  type DashboardScope,
+  type DashboardSnapshot,
+  type DashboardView,
+} from "./dashboard-page";
 
 /**
  * The dashboard links out since 2026-08-17 - the Placed count opens the
@@ -24,6 +29,12 @@ const SNAPSHOT: DashboardSnapshot = {
   students: [
     {
       studentId: "a",
+      fullName: "Priya Ramesh",
+      rollNumber: "21CSE101",
+      degree: "B.Tech",
+      branch: "CSE",
+      passingYear: 2026,
+      cgpa: 8.8,
       participationStatus: "active",
       hasOnCampusPlacement: true,
       hasSelfPlacement: false,
@@ -34,6 +45,12 @@ const SNAPSHOT: DashboardSnapshot = {
     },
     {
       studentId: "b",
+      fullName: "Rahul Verma",
+      rollNumber: "21IT202",
+      degree: "B.Tech",
+      branch: "IT",
+      passingYear: 2026,
+      cgpa: 7.9,
       participationStatus: "active",
       hasOnCampusPlacement: false,
       hasSelfPlacement: true,
@@ -44,6 +61,12 @@ const SNAPSHOT: DashboardSnapshot = {
     },
     {
       studentId: "c",
+      fullName: "Anita Rao",
+      rollNumber: "22ECE303",
+      degree: "B.E",
+      branch: "ECE",
+      passingYear: 2027,
+      cgpa: 6.4,
       participationStatus: "opted_out",
       hasOnCampusPlacement: false,
       hasSelfPlacement: false,
@@ -61,6 +84,9 @@ const SNAPSHOT: DashboardSnapshot = {
       companyName: "Zoho Corporation",
       roleTitle: "Member Technical Staff",
       status: "live",
+      driveType: "placement",
+      companyDriveId: "event-1",
+      tentativeDate: null,
       campuses: ["Alliance University"],
     },
     {
@@ -68,6 +94,9 @@ const SNAPSHOT: DashboardSnapshot = {
       companyName: "Freshworks",
       roleTitle: "SDE",
       status: "live",
+      driveType: "placement",
+      companyDriveId: null,
+      tentativeDate: null,
       campuses: [],
     },
     {
@@ -75,6 +104,9 @@ const SNAPSHOT: DashboardSnapshot = {
       companyName: "Amazon",
       roleTitle: null,
       status: "in_rounds",
+      driveType: "placement",
+      companyDriveId: null,
+      tentativeDate: null,
       campuses: [],
     },
     {
@@ -82,6 +114,9 @@ const SNAPSHOT: DashboardSnapshot = {
       companyName: "TCS",
       roleTitle: "Assistant System Engineer",
       status: "completed",
+      driveType: "placement",
+      companyDriveId: "event-2",
+      tentativeDate: null,
       campuses: ["VIT Bangalore"],
     },
     {
@@ -89,6 +124,12 @@ const SNAPSHOT: DashboardSnapshot = {
       companyName: "Infosys",
       roleTitle: "Systems Engineer",
       status: "completed",
+      driveType: "placement",
+      // Each row below is its own company visit, so drivesByStatus above is the
+      // count the view would actually return for it. The tests that want a
+      // multi-role visit say so in their own fixture.
+      companyDriveId: "event-3",
+      tentativeDate: null,
       campuses: [],
     },
   ],
@@ -97,15 +138,24 @@ const SNAPSHOT: DashboardSnapshot = {
       driveId: "d1",
       companyName: "Zoho Corporation",
       roleTitle: "Member Technical Staff",
+      driveType: "placement",
+      companyDriveId: "event-1",
+      tentativeDate: null,
       applicationStart: "2026-09-01T00:00:00.000Z",
       applicationEnd: "2026-09-10T00:00:00.000Z",
       eligible: 120,
+      eligibleStudentIds: ["a", "b", "c"],
       applied: 30,
+      appliedStudentIds: ["a", "b"],
       offers: 3,
+      offerStudentIds: ["a"],
     },
   ],
   now: "2026-09-05T10:00:00.000Z",
-  offersByCategory: { regular: 3, dream: 2, super_dream: 1 },
+  // One entry per category SOMEBODY holds, as a placement record (R9): student
+  // "a" is the only placed student, so "a" is the only id. The rows that need
+  // more categories say so in the test that reads them.
+  offerCategories: [{ category: "dream", studentIds: ["a"] }],
   campuses: [
     { campusId: "c1", campusName: "Alliance University", eligible: 2, placed: 1 },
     { campusId: "c2", campusName: "VIT Bangalore", eligible: 0, placed: 0 },
@@ -114,6 +164,12 @@ const SNAPSHOT: DashboardSnapshot = {
     {
       driveId: "d1",
       driveName: "Zoho Corporation — Member Technical Staff",
+      companyName: "Zoho Corporation",
+      roleTitle: "Member Technical Staff",
+      driveType: "placement",
+      status: "live",
+      companyDriveId: "event-1",
+      tentativeDate: null,
       campusNames: ["Alliance University"],
       students: [
         {
@@ -165,6 +221,12 @@ const SNAPSHOT: DashboardSnapshot = {
     {
       driveId: "d2",
       driveName: "Freshworks — SDE",
+      companyName: "Freshworks",
+      roleTitle: "SDE",
+      driveType: "placement",
+      status: "in_rounds",
+      companyDriveId: null,
+      tentativeDate: null,
       campusNames: ["VIT Bangalore"],
       students: [],
       participation: {
@@ -200,7 +262,18 @@ describe("DashboardPage", () => {
   });
 
   it("breaks offers down by category", async () => {
-    render(<DashboardPage view={view()} title="Executive overview" />);
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          offerCategories: [
+            { category: "dream", studentIds: ["a"] },
+            { category: "super_dream", studentIds: ["a", "b"] },
+          ],
+        })}
+      />,
+    );
 
     const section = await screen.findByRole("region", { name: /offers by category/i });
     expect(within(section).getByText(/super dream/i)).toBeDefined();
@@ -239,7 +312,7 @@ describe("DashboardPage", () => {
           placements: [],
           drivesByStatus: {},
           statusDrives: [],
-          offersByCategory: {},
+          offerCategories: [],
           campuses: [],
           liveDrives: [],
           driveProgress: [],
@@ -465,6 +538,43 @@ describe("live drives", () => {
     const live = await screen.findByRole("region", { name: /open drives/i });
     expect(within(live).getByText(/no drives are open/i)).toBeDefined();
   });
+
+  /**
+   * 2026-10-16: one company visit that raised two roles used to print as two
+   * lines, so a reader counting Zoho twice was counting one drive twice — the
+   * same defect reported against the central cockpit.
+   */
+  it("shows one company visit once, with a progress line per role", async () => {
+    const mts = SNAPSHOT.liveDrives[0] as (typeof SNAPSHOT.liveDrives)[number];
+    const secondRole = {
+      ...mts,
+      driveId: "d2",
+      roleTitle: "Quality Analyst",
+      eligible: 100,
+      // "b" is eligible for (and has applied to) both roles.
+      eligibleStudentIds: ["b", "c"],
+      applied: 2,
+      appliedStudentIds: ["b"],
+      offers: 0,
+      offerStudentIds: [],
+    };
+
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({ ...SNAPSHOT, liveDrives: [mts, secondRole] })}
+      />,
+    );
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getAllByText("Zoho Corporation")).toHaveLength(1);
+    expect(within(live).getByText("2 roles")).toBeDefined();
+    expect(within(live).getByText("Member Technical Staff")).toBeDefined();
+    expect(within(live).getByText("Quality Analyst")).toBeDefined();
+    // Four eligibility rows are three students; three application rows are two.
+    expect(within(live).getByText("2 of 3 students")).toBeDefined();
+    expect(within(live).getByText(/at this visit have applied to at least one role/)).toBeDefined();
+  });
 });
 
 /**
@@ -502,7 +612,8 @@ describe("switching campus", () => {
 
     await user.selectOptions(await screen.findByLabelText("Campus"), "c2");
 
-    const funnel = screen.getByRole("region", { name: /students overview/i });
+    // The switcher now re-reads the whole snapshot, so wait for the scoped one.
+    const funnel = await screen.findByRole("region", { name: /students overview/i });
     const roster = within(funnel).getByText("On the roster").closest("li");
     if (roster === null) throw new Error("stage not found");
 
@@ -517,7 +628,7 @@ describe("switching campus", () => {
     await user.selectOptions(await screen.findByLabelText("Campus"), "c1");
 
     // Alliance: two students, one placed, one opted out -> 1 of 1 counted.
-    const headline = screen.getByRole("region", { name: /headline/i });
+    const headline = await screen.findByRole("region", { name: /headline/i });
     expect(within(headline).getByText("100%")).toBeDefined();
   });
 
@@ -528,6 +639,86 @@ describe("switching campus", () => {
     await user.selectOptions(await screen.findByLabelText("Campus"), "c2");
 
     expect(screen.getByText(/showing vit bangalore/i)).toBeDefined();
+  });
+
+  /**
+   * The switcher must MOVE the whole screen, not just the student rows. It
+   * used to be a client-side filter over `students`, so the funnel was one
+   * campus while the package figures and the drive box beside it were still the
+   * whole organisation — one screen, two cohorts.
+   */
+  it("re-reads every figure for the campus chosen", async () => {
+    const scopes: (DashboardScope | undefined)[] = [];
+    const recordingView: DashboardView = {
+      snapshot: async (scope) => {
+        scopes.push(scope);
+        return SNAPSHOT;
+      },
+    };
+    const user = userEvent.setup();
+    render(<DashboardPage view={recordingView} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText("Campus"), "c1");
+    await screen.findByRole("region", { name: /headline/i });
+
+    expect(scopes[0]).toEqual({});
+    expect(scopes[1]).toEqual({ campusIds: ["c1"] });
+  });
+
+  /** The picker cannot come from the scoped read: it would shrink to one option. */
+  it("keeps every campus in the picker after switching to one", async () => {
+    const scopedView: DashboardView = {
+      snapshot: async (scope) =>
+        scope?.campusIds === undefined || scope.campusIds.length === 0
+          ? SNAPSHOT
+          : { ...SNAPSHOT, campuses: SNAPSHOT.campuses.filter((c) => c.campusId === "c1") },
+    };
+    const user = userEvent.setup();
+    render(<DashboardPage view={scopedView} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText("Campus"), "c1");
+    await screen.findByRole("region", { name: /headline/i });
+
+    const picker = (await screen.findByLabelText("Campus")) as HTMLSelectElement;
+    expect(within(picker).getByRole("option", { name: "VIT Bangalore" })).toBeDefined();
+  });
+});
+
+/**
+ * supabase-js resolves with `{ data: null }` when a read fails, and this screen
+ * used to print that as "No students yet. Import a campus roster to begin." An
+ * outage and an empty campus looked identical. The view now throws; the page
+ * has to say so.
+ */
+describe("DashboardPage — when the overview cannot be read", () => {
+  it("reports the failure instead of an empty campus", async () => {
+    const failing: DashboardView = {
+      snapshot: async () => {
+        throw new Error("students: could not be read (401)");
+      },
+    };
+    render(<DashboardPage view={failing} title="Placement overview" />);
+
+    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(screen.getByText(/401/)).toBeDefined();
+    expect(screen.queryByText(/no students yet/i)).toBeNull();
+  });
+
+  it("offers to read it again", async () => {
+    let attempts = 0;
+    const flaky: DashboardView = {
+      snapshot: async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error("connection reset");
+        return SNAPSHOT;
+      },
+    };
+    const user = userEvent.setup();
+    render(<DashboardPage view={flaky} title="Placement overview" />);
+
+    await user.click(await screen.findByRole("button", { name: /try again/i }));
+
+    expect(await screen.findByRole("region", { name: /headline/i })).toBeDefined();
   });
 });
 
@@ -563,7 +754,7 @@ describe("the drive-specific box", () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     const section = await box();
-    const round = within(section).getByText("1. Aptitude").closest("li");
+    const round = within(section).getByText("1. Aptitude").closest("tr");
     if (round === null) throw new Error("round not found");
 
     // Two called, one present, one absent, one selected of the one who came.
@@ -697,105 +888,282 @@ describe("the drive-specific box", () => {
  * placement records directly from the overview dashboard."
  *
  * The number was a dead end: a coordinator could see that one student was
- * placed and had no way to ask who. It now opens the student directory,
- * already filtered to the placed — the same list, counted the same way, so the
- * figure and the rows behind it cannot disagree.
+ * placed and had no way to ask who.
+ *
+ * 2026-10-16 (Karthik): "if shows count i need who all is there" — the link
+ * became a popup. Asking who made a number and then having to leave the page to
+ * find out, losing the figure you were questioning, was the same dead end one
+ * click further along. The directory stays one click away in the footer, so the
+ * export path the 2026 tests pinned is still there; what changed is that the
+ * first answer is the list of people, on the spot.
+ *
+ * Every test below therefore checks three things at once: the popup NAMES the
+ * people the count stood for, it holds exactly as many rows as the number that
+ * opened it, and its footer still carries the directory href — with the same
+ * filter, because a popup that disagrees with the list behind it is the defect
+ * this replaced.
  */
 describe("every card opens the students behind it", () => {
-  /**
-   * 2026-08-26 (Karthik): "make the cards in Placement Overview clickable to
-   * show student info, just like in Live Drives."
-   *
-   * The Live-drives pattern is that every number opens exactly the people it
-   * counted. Here that also fixed a mismatch: the Placed link pointed at
-   * `filter=placed`, which includes self-placed students (C1), while the card
-   * above it counts on-campus placements only (PRD 16.2). The list was longer
-   * than the number that opened it.
-   */
   const headline = async (name: RegExp) =>
+    within(await screen.findByRole("region", { name: /headline/i })).getByRole("button", { name });
+
+  /** The card that is not about students still navigates. */
+  const headlineLink = async (name: RegExp) =>
     within(await screen.findByRole("region", { name: /headline/i })).getByRole("link", { name });
 
-  it.each([
-    [/placement rate/i, "/central/students?filter=on_campus"],
-    [/placed on campus/i, "/central/students?filter=on_campus"],
-    [/self-placed/i, "/central/students?filter=self_placed"],
-    [/opted out/i, "/central/students?filter=opted_out"],
-    [/drives completed/i, "/central/drives/completed"],
-  ])("links the %s card", async (name, href) => {
-    render(<DashboardPage view={view()} title="Placement overview" />);
+  /** Press a count and return the popup that names the people inside it. */
+  async function press(trigger: HTMLElement, title: RegExp) {
+    await userEvent.click(trigger);
+    return await screen.findByRole("dialog", { name: title });
+  }
 
-    expect((await headline(name)).getAttribute("href")).toBe(href);
-  });
+  async function close(dialog: HTMLElement) {
+    await userEvent.click(within(dialog).getByRole("button", { name: /close panel/i }));
+  }
 
-  it("keeps the number itself inside every headline link", async () => {
+  /** The people in the list, header row excluded. */
+  const listed = (dialog: HTMLElement) =>
+    within(dialog)
+      .getAllByRole("row")
+      .filter((row) => within(row).queryAllByRole("columnheader").length === 0);
+
+  /** The number that opened the popup still heads it, and matches the rows. */
+  function counted(dialog: HTMLElement, count: number) {
+    expect(
+      within(dialog).getByText(new RegExp(`^${count} student${count === 1 ? "" : "s"}`)),
+    ).toBeDefined();
+    expect(listed(dialog)).toHaveLength(count);
+  }
+
+  const directory = (dialog: HTMLElement) =>
+    within(dialog).getByRole("link", { name: /open in all students/i });
+
+  /*
+   * 2026-08-26 (Karthik): "make the cards in Placement Overview clickable to
+   * show student info, just like in Live Drives." The Live-drives pattern is
+   * that every number opens exactly the people it counted — which also fixed a
+   * mismatch, since the Placed count pointed at `filter=placed` (self-placed
+   * included, C1) while the card counted on-campus placements only (PRD 16.2).
+   * The hrefs below hold that line: popup, count and directory all one
+   * population.
+   */
+  const CARDS: readonly {
+    readonly card: string;
+    readonly name: RegExp;
+    readonly title: RegExp;
+    readonly count: number;
+    readonly people: readonly string[];
+    readonly href: string;
+  }[] = [
+    {
+      card: "Placement rate",
+      name: /placement rate/i,
+      // A rate is a fraction, so the popup shows the whole fraction — the
+      // denominator, each row saying whether it is the numerator.
+      title: /in the placement denominator/i,
+      count: 2,
+      people: ["Priya Ramesh", "Rahul Verma"],
+      href: "/central/students",
+    },
+    {
+      card: "Placed on campus",
+      name: /placed on campus/i,
+      title: /^placed on campus$/i,
+      count: 1,
+      people: ["Priya Ramesh"],
+      href: "/central/students?filter=on_campus",
+    },
+    {
+      card: "Self-placed",
+      name: /self-placed/i,
+      title: /^self-placed$/i,
+      count: 1,
+      people: ["Rahul Verma"],
+      href: "/central/students?filter=self_placed",
+    },
+    {
+      card: "Opted out",
+      name: /opted out/i,
+      title: /^opted out$/i,
+      count: 1,
+      people: ["Anita Rao"],
+      href: "/central/students?filter=opted_out",
+    },
+  ];
+
+  it.each(CARDS)(
+    "opens the students behind the $card count",
+    async ({ name, title, count, people, href }) => {
+      render(<DashboardPage view={view()} title="Placement overview" />);
+
+      const dialog = await press(await headline(name), title);
+      for (const person of people) {
+        expect(within(dialog).getByText(person)).toBeDefined();
+      }
+      counted(dialog, count);
+      expect(directory(dialog).getAttribute("href")).toBe(href);
+    },
+  );
+
+  it("keeps the number itself inside every headline button", async () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     expect((await headline(/placed on campus/i)).textContent).toMatch(/\d/);
   });
 
-  it.each([
-    [/on the roster/i, "/central/students"],
-    [/registration form submitted/i, "/central/students?filter=submitted"],
-    [/verified by a coordinator/i, "/central/students?filter=verified"],
-    [/placed/i, "/central/students?filter=on_campus"],
-  ])("links the %s funnel row to the same population it counted", async (name, href) => {
+  const FUNNEL: readonly {
+    readonly stage: string;
+    readonly count: number;
+    readonly people: readonly string[];
+    readonly href: string;
+  }[] = [
+    {
+      stage: "On the roster",
+      count: 3,
+      people: ["Priya Ramesh", "Rahul Verma", "Anita Rao"],
+      href: "/central/students",
+    },
+    {
+      stage: "Registration form submitted",
+      count: 2,
+      people: ["Priya Ramesh", "Rahul Verma"],
+      href: "/central/students?filter=submitted",
+    },
+    {
+      stage: "Verified by a coordinator",
+      count: 2,
+      people: ["Priya Ramesh", "Rahul Verma"],
+      href: "/central/students?filter=verified",
+    },
+    {
+      stage: "Placed",
+      count: 1,
+      people: ["Priya Ramesh"],
+      href: "/central/students?filter=on_campus",
+    },
+  ];
+
+  it.each(FUNNEL)(
+    "opens the $stage row on the same population it counted",
+    async ({ stage, count, people, href }) => {
+      render(<DashboardPage view={view()} title="Placement overview" />);
+
+      const overview = await screen.findByRole("region", { name: /students overview/i });
+      const dialog = await press(
+        within(overview).getByRole("button", { name: new RegExp(stage, "i") }),
+        new RegExp(`^${stage}$`, "i"),
+      );
+      for (const person of people) {
+        expect(within(dialog).getByText(person)).toBeDefined();
+      }
+      counted(dialog, count);
+      expect(directory(dialog).getAttribute("href")).toBe(href);
+    },
+  );
+
+  /**
+   * Each row of the popup says where that student stands, so the list is not
+   * just a name dump — "verified" and "placed" both sat in the same row before.
+   */
+  it("says which stage each row of the roster popup has reached", async () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    const funnel = await screen.findByRole("region", { name: /students overview/i });
-    expect(within(funnel).getByRole("link", { name }).getAttribute("href")).toBe(href);
+    const overview = await screen.findByRole("region", { name: /students overview/i });
+    const dialog = await press(
+      within(overview).getByRole("button", { name: /on the roster/i }),
+      /^on the roster$/i,
+    );
+    expect(within(dialog).getByText("Placed")).toBeDefined();
+    expect(within(dialog).getByText("Verified")).toBeDefined();
+    expect(within(dialog).getByText("Not submitted")).toBeDefined();
   });
 
   it("opens the campus behind each row of the campus breakdown", async () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     const section = await screen.findByRole("region", { name: /by campus/i });
-    expect(
-      within(section)
-        .getByRole("link", { name: /alliance university/i })
-        .getAttribute("href"),
-    ).toBe("/central/students?campus=Alliance+University");
+    const dialog = await press(
+      within(section).getByRole("button", { name: /alliance university/i }),
+      /in the denominator at alliance university/i,
+    );
+    // 1 of 2 at that campus: Anita is Alliance too, but she left the denominator.
+    expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
+    expect(within(dialog).queryByText("Anita Rao")).toBeNull();
+    counted(dialog, 1);
+    expect(directory(dialog).getAttribute("href")).toBe(
+      "/central/students?campus=Alliance+University",
+    );
   });
 
   it("opens the students placed in each offer category", async () => {
-    render(<DashboardPage view={view()} title="Placement overview" />);
+    render(
+      <DashboardPage
+        title="Placement overview"
+        view={view({
+          ...SNAPSHOT,
+          offerCategories: [
+            { category: "dream", studentIds: ["a"] },
+            { category: "super_dream", studentIds: ["a", "b"] },
+          ],
+        })}
+      />,
+    );
 
     const section = await screen.findByRole("region", { name: /offers by category/i });
-    expect(
-      within(section)
-        .getByRole("link", { name: /super dream/i })
-        .getAttribute("href"),
-    ).toBe("/central/students?filter=placed&category=super_dream");
+    const dialog = await press(
+      within(section).getByRole("button", { name: /super dream/i }),
+      /super dream offers/i,
+    );
+    expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
+    expect(within(dialog).getByText("Rahul Verma")).toBeDefined();
+    counted(dialog, 2);
+    expect(directory(dialog).getAttribute("href")).toBe(
+      "/central/students?filter=placed&category=super_dream",
+    );
   });
 
   it("opens the students placed in each category of the package breakdown", async () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     const list = await screen.findByRole("list", { name: /package by category/i });
-    expect(within(list).getByRole("link", { name: /dream/i }).getAttribute("href")).toBe(
+    const dialog = await press(within(list).getByRole("button", { name: /dream/i }), /^dream$/i);
+    expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
+    counted(dialog, 1);
+    expect(directory(dialog).getAttribute("href")).toBe(
       "/central/students?filter=placed&category=dream",
     );
   });
 
   /**
-   * F4: a card clicked while one campus is selected must open THAT campus.
-   * Landing on the whole organisation would answer a question nobody asked and
-   * quietly contradict the number that was pressed.
+   * F4: a card clicked while one campus is selected must open THAT campus, in
+   * both the list and the directory behind it. Landing on the whole organisation
+   * would answer a question nobody asked and quietly contradict the number that
+   * was pressed.
    */
-  it("carries the selected campus into every students link", async () => {
+  it("carries the selected campus into the popup and the link behind it", async () => {
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     await userEvent.selectOptions(await screen.findByLabelText("Campus"), "c1");
 
-    expect((await headline(/placed on campus/i)).getAttribute("href")).toBe(
+    const placed = await press(await headline(/placed on campus/i), /^placed on campus$/i);
+    expect(within(placed).getByText(/at Alliance University/)).toBeDefined();
+    expect(listed(placed)).toHaveLength(1);
+    expect(directory(placed).getAttribute("href")).toBe(
       "/central/students?filter=on_campus&campus=Alliance+University",
     );
+    await close(placed);
 
-    const funnel = await screen.findByRole("region", { name: /students overview/i });
-    expect(
-      within(funnel)
-        .getByRole("link", { name: /on the roster/i })
-        .getAttribute("href"),
-    ).toBe("/central/students?campus=Alliance+University");
+    const overview = await screen.findByRole("region", { name: /students overview/i });
+    const roster = await press(
+      within(overview).getByRole("button", { name: /on the roster/i }),
+      /^on the roster$/i,
+    );
+    // Two of the three students are Alliance: the roster the figure counted.
+    counted(roster, 2);
+    expect(within(roster).queryByText("Rahul Verma")).toBeNull();
+    expect(directory(roster).getAttribute("href")).toBe(
+      "/central/students?campus=Alliance+University",
+    );
   });
 
   it("leaves the drives-completed card alone when a campus is selected", async () => {
@@ -804,17 +1172,26 @@ describe("every card opens the students behind it", () => {
     await userEvent.selectOptions(await screen.findByLabelText("Campus"), "c1");
 
     // A drive is not a student and the drive list has no campus filter.
-    expect((await headline(/drives completed/i)).getAttribute("href")).toBe(
+    expect((await headlineLink(/drives completed/i)).getAttribute("href")).toBe(
       "/central/drives/completed",
     );
+  });
+
+  it("keeps the drives-completed card a link, not a popup", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    expect(await headlineLink(/drives completed/i)).toBeDefined();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
 
 /**
- * The package figures. A link that lands on an empty list teaches the reader
- * that none of these are worth pressing, so a figure opens `ctc=` only when
- * some placed student actually holds it - the median of an even-sized cohort
- * is the midpoint of two packages and frequently belongs to nobody.
+ * The package figures. A popup that opens on nobody teaches the reader that
+ * none of these are worth pressing, so a figure names its holders when somebody
+ * earns it - and when nobody does, which is ordinary for an average and for the
+ * midpoint of an even-sized cohort, it opens the placed list and SAYS the figure
+ * belongs to nobody. The number a board meeting quotes must not be presented as
+ * somebody's salary when it is an arithmetic.
  */
 describe("the package figures", () => {
   const TWO: DashboardSnapshot = {
@@ -826,30 +1203,57 @@ describe("the package figures", () => {
   };
 
   const figure = async (name: RegExp) =>
-    within(await screen.findByRole("region", { name: /package figures/i })).getByRole("link", {
+    within(await screen.findByRole("region", { name: /package figures/i })).getByRole("button", {
       name,
     });
 
-  it("opens the students holding the highest and the lowest package", async () => {
+  /** Press a figure and return its popup. */
+  async function open(name: RegExp, title: RegExp) {
+    await userEvent.click(await figure(name));
+    return await screen.findByRole("dialog", { name: title });
+  }
+
+  const listed = (dialog: HTMLElement) =>
+    within(dialog)
+      .getAllByRole("row")
+      .filter((row) => within(row).queryAllByRole("columnheader").length === 0);
+
+  const directory = (dialog: HTMLElement) =>
+    within(dialog).getByRole("link", { name: /open in all students/i });
+
+  it("names the holders of the highest and the lowest package", async () => {
     render(<DashboardPage view={view(TWO)} title="Placement overview" />);
 
-    expect((await figure(/highest/i)).getAttribute("href")).toBe(
-      "/central/students?filter=placed&ctc=9",
-    );
-    expect((await figure(/lowest/i)).getAttribute("href")).toBe(
-      "/central/students?filter=placed&ctc=4",
-    );
+    const high = await open(/highest/i, /highest package/i);
+    expect(within(high).getByText("Priya Ramesh")).toBeDefined();
+    expect(listed(high)).toHaveLength(1);
+    // The row says what she earns, not only that she is the highest.
+    expect(within(high).getByText("₹9 LPA")).toBeDefined();
+    expect(directory(high).getAttribute("href")).toBe("/central/students?filter=placed&ctc=9");
+    await userEvent.click(within(high).getByRole("button", { name: /close panel/i }));
+
+    const low = await open(/lowest/i, /lowest package/i);
+    expect(within(low).getByText("Rahul Verma")).toBeDefined();
+    expect(listed(low)).toHaveLength(1);
+    expect(directory(low).getAttribute("href")).toBe("/central/students?filter=placed&ctc=4");
   });
 
-  it("opens the whole placed list for a figure no student holds", async () => {
+  it("opens the whole placed list, and says so, for a figure no student holds", async () => {
     render(<DashboardPage view={view(TWO)} title="Placement overview" />);
 
     // Average and median are both 6.5 here, and nobody earns 6.5.
-    expect((await figure(/average/i)).getAttribute("href")).toBe("/central/students?filter=placed");
-    expect((await figure(/median/i)).getAttribute("href")).toBe("/central/students?filter=placed");
+    const average = await open(/average/i, /average package/i);
+    expect(within(average).getByText(/not anybody.s own salary/)).toBeDefined();
+    expect(listed(average)).toHaveLength(2);
+    expect(directory(average).getAttribute("href")).toBe("/central/students?filter=placed");
+    await userEvent.click(within(average).getByRole("button", { name: /close panel/i }));
+
+    const median = await open(/median/i, /median package/i);
+    expect(within(median).getByText(/not anybody.s own salary/)).toBeDefined();
+    expect(directory(median).getAttribute("href")).toBe("/central/students?filter=placed");
   });
 
-  it("opens the holder of a median that is a real package", async () => {
+  it("names the holder of a median that is a real package", async () => {
     const three: DashboardSnapshot = {
       ...SNAPSHOT,
       placements: [
@@ -860,9 +1264,11 @@ describe("the package figures", () => {
     };
     render(<DashboardPage view={view(three)} title="Placement overview" />);
 
-    expect((await figure(/median/i)).getAttribute("href")).toBe(
-      "/central/students?filter=placed&ctc=6.5",
-    );
+    const median = await open(/median/i, /median package/i);
+    expect(within(median).getByText("Rahul Verma")).toBeDefined();
+    expect(listed(median)).toHaveLength(1);
+    expect(within(median).queryByText(/not anybody.s own salary/)).toBeNull();
+    expect(directory(median).getAttribute("href")).toBe("/central/students?filter=placed&ctc=6.5");
   });
 });
 
@@ -880,7 +1286,11 @@ describe("category spelling", () => {
       <DashboardPage
         view={view({
           ...SNAPSHOT,
-          offersByCategory: { regular: 3, super_dream: 1, internship: 2 },
+          offerCategories: [
+            { category: "regular", studentIds: ["a"] },
+            { category: "super_dream", studentIds: ["a"] },
+            { category: "internship", studentIds: ["a", "b"] },
+          ],
         })}
         title="Executive overview"
       />,
@@ -948,5 +1358,43 @@ describe("DashboardPage — the drives behind a status count", () => {
     await userEvent.keyboard("{Escape}");
 
     expect(screen.queryByRole("dialog", { name: "Drives — live" })).toBeNull();
+  });
+
+  /**
+   * The count is company VISITS and the rows are roles, so the popup has to
+   * open on visits — otherwise "completed: 2" lists three drives and the two
+   * figures on the same screen disagree with each other.
+   */
+  it("lists a two-role visit once, with every role still reachable", async () => {
+    const visit = SNAPSHOT.statusDrives.find((drive) => drive.driveId === "d5");
+    if (visit === undefined) throw new Error("fixture changed");
+
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          statusDrives: [
+            ...SNAPSHOT.statusDrives,
+            { ...visit, driveId: "d8", roleTitle: "Business Analyst", campuses: [] },
+          ],
+        })}
+      />,
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "completed: 2 drives, 3 roles" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Drives — completed" });
+    expect(within(dialog).getByText("2 drives · 3 roles")).toBeDefined();
+    expect(within(dialog).getAllByText("TCS")).toHaveLength(1);
+    expect(within(dialog).getByText("2 roles")).toBeDefined();
+    const roleLink = (name: string) => within(dialog).getByRole("link", { name });
+
+    expect(roleLink("Assistant System Engineer").getAttribute("href")).toBe("/drives/d5");
+    expect(roleLink("Business Analyst").getAttribute("href")).toBe("/drives/d8");
+    // A visit that raised one role is still that role's own record page.
+    expect(roleLink("Infosys").getAttribute("href")).toBe("/drives/d6");
   });
 });

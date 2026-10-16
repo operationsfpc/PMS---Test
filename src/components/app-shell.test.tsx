@@ -625,6 +625,32 @@ describe("Student details replaces Publish a drive", () => {
     shellFor(signedIn("account_executive"), async () => {}, "/my-drives");
     expect(screen.queryByRole("link", { name: /all students/i })).toBeNull();
   });
+
+  /**
+   * 2026-10-16: the sidebar missed four of the roles RLS already lets read
+   * `students` — `is_org_reader()` (0018) covers ceo, er_head,
+   * enterprise_relations and admin. Their overview's counts now open the
+   * people behind them, and the roster is the same population one click
+   * further out; it was reachable by typing the URL and absent from the menu.
+   */
+  const ORG_READERS: readonly AppRole[] = [
+    "admin",
+    "ceo",
+    "central_placement_coordinator",
+    "delivery_head",
+    "enterprise_relations",
+    "er_head",
+  ];
+
+  it.each(ORG_READERS)("gives the org reader %s the student directory", (role) => {
+    shellFor(signedIn(role));
+
+    expect(screen.getByRole("button", { name: "Student details" })).toBeDefined();
+    expect(screen.getByRole("link", { name: /all students/i }).getAttribute("href")).toBe(
+      "/central/students",
+    );
+    expect(screen.getByRole("link", { name: /skill repository/i })).toBeDefined();
+  });
 });
 
 /**

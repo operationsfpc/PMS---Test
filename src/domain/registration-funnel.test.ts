@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countsAsSubmitted,
   countsAsVerified,
+  FUNNEL_STAGE_MATCH,
   type FunnelStudent,
   registrationFunnel,
 } from "./registration-funnel";
@@ -208,5 +209,58 @@ describe("countsAsSubmitted / countsAsVerified", () => {
     expect(cohort.filter(countsAsVerified).length).toBe(
       funnel.find((s) => s.key === "verified")?.count,
     );
+  });
+});
+
+/**
+ * The row filter behind a funnel count (2026-10-16).
+ *
+ * Each number on the overview now opens the students it counted, so this
+ * predicate has to return exactly the rows the figure describes. One fewer and
+ * the popup is shorter than the number that opened it; one more and the reader
+ * has caught the report inventing people. That is the defect the AE overview
+ * shipped with, so the rule is pinned where the funnel lives rather than in
+ * whichever page happens to use it.
+ */
+describe("FUNNEL_STAGE_MATCH", () => {
+  const cohort = [
+    student(),
+    student({ srfStatus: "srf_submitted" }),
+    student({ srfStatus: "srf_approved" }),
+    student({ srfStatus: "invited", hasApplied: true }),
+    student({ srfStatus: "registered", hasOnCampusPlacement: true }),
+    student({ srfStatus: "srf_approved", participationStatus: "opted_out" }),
+  ];
+
+  it.each([
+    ["on_roster", 6],
+    ["submitted", 5],
+    ["verified", 4],
+    ["placed", 1],
+  ] as const)("lists exactly the %s students the funnel counted", (key, count) => {
+    expect(cohort.filter(FUNNEL_STAGE_MATCH[key])).toHaveLength(count);
+    expect(registrationFunnel(cohort).find((s) => s.key === key)?.count).toBe(count);
+  });
+
+  it("holds a student who is on the roster and nowhere further", () => {
+    const fresh = student({ srfStatus: "invited" });
+
+    expect(FUNNEL_STAGE_MATCH.on_roster(fresh)).toBe(true);
+    expect(FUNNEL_STAGE_MATCH.submitted(fresh)).toBe(false);
+    expect(FUNNEL_STAGE_MATCH.verified(fresh)).toBe(false);
+    expect(FUNNEL_STAGE_MATCH.placed(fresh)).toBe(false);
+  });
+
+  /**
+   * Deliberately NOT `isPlacedOnCampus` (statistics.ts), which drops opt-outs.
+   * This row is measured against the roster, and an opt-out who signed an offer
+   * did reach it — dropping them here would make the funnel disagree with the
+   * roster count printed above it.
+   */
+  it("keeps an opted-out student holding an offer in the placed row", () => {
+    const opted = student({ participationStatus: "opted_out", hasOnCampusPlacement: true });
+
+    expect(FUNNEL_STAGE_MATCH.placed(opted)).toBe(true);
+    expect(FUNNEL_STAGE_MATCH.on_roster(opted)).toBe(true);
   });
 });

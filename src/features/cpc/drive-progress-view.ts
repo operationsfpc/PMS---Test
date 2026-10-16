@@ -1,9 +1,12 @@
+import { isShortlisted } from "@domain/drive-funnel";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   DriveProgressEntry,
   DriveProgressStudent,
   DriveProgressView,
+  StudentRoundProgress,
 } from "./drive-progress-page";
 
 /**
@@ -26,54 +29,98 @@ const one = <T>(value: unknown): T | null =>
 export function createSupabaseDriveProgressView(client: SupabaseClient): DriveProgressView {
   return {
     async drives() {
-      const { data: applications } = await client
-        .from("applications")
-        .select(PROGRESS_APPLICATION_COLUMNS);
-
       // The select string is assembled, which defeats supabase-js's type
       // parser; the shape is proven against the real schema by
       // query-contract.test.ts instead.
-      const rows = (applications ?? []) as unknown as Array<Record<string, unknown>>;
+      const rows = await readAllRows((from, to) =>
+        client.from("applications").select(PROGRESS_APPLICATION_COLUMNS).range(from, to),
+      );
       if (rows.length === 0) return [];
 
       const driveIds = [...new Set(rows.map((r) => r.drive_id as string))];
       const applicationIds = rows.map((r) => r.id as string);
       const studentIds = [...new Set(rows.map((r) => r.student_id as string))];
 
-      const [{ data: rounds }, { data: attendance }, { data: results }, { data: offers }] =
-        await Promise.all([
-          client
-            .from("drive_rounds")
-            .select("id, drive_id, sequence, name")
-            .in("drive_id", driveIds),
-          client
-            .from("attendance")
-            .select("round_id, application_id, status")
-            .in("application_id", applicationIds),
-          client
-            .from("round_results")
-            .select("round_id, application_id, result")
-            .in("application_id", applicationIds),
-          client
-            .from("offers")
-            .select("student_id, drive_id, ctc_lpa, stipend_monthly, drive_type, offer_category")
-            .in("student_id", studentIds),
-        ]);
+      /**
+       * Paged and id-batched. Each of these used to be one unpaged `.in()`
+       * over every application at the campus: past a thousand rows the read
+       * answered with the first thousand, and past a few hundred ids the URL
+       * was refused outright — both came back as a table with rounds missing,
+       * which reads exactly like a coordinator whose students did not attend.
+       */
+      const [roundRows, participantRows, attendanceRows, resultRows, offerRows] = await Promise.all(
+        [
+          readAllRowsByIds(
+            driveIds,
+            (batch) => (from, to) =>
+              client
+                .from("drive_rounds")
+                .select("id, drive_id, sequence, name")
+                .in("drive_id", batch)
+                .range(from, to),
+          ),
+          readAllRowsByIds(
+            applicationIds,
+            (batch) => (from, to) =>
+              client
+                .from("round_participants")
+                .select("round_id, application_id")
+                .in("application_id", batch)
+                .range(from, to),
+          ),
+          readAllRowsByIds(
+            applicationIds,
+            (batch) => (from, to) =>
+              client
+                .from("attendance")
+                .select("round_id, application_id, status")
+                .in("application_id", batch)
+                .range(from, to),
+          ),
+          readAllRowsByIds(
+            applicationIds,
+            (batch) => (from, to) =>
+              client
+                .from("round_results")
+                .select("round_id, application_id, result")
+                .in("application_id", batch)
+                .range(from, to),
+          ),
+          readAllRowsByIds(
+            studentIds,
+            (batch) => (from, to) =>
+              client
+                .from("offers")
+                .select(
+                  "student_id, drive_id, ctc_lpa, stipend_monthly, drive_type, offer_category",
+                )
+                .in("student_id", batch)
+                .range(from, to),
+          ),
+        ],
+      );
 
       const roundById = new Map(
-        ((rounds ?? []) as Array<Record<string, unknown>>).map((r) => [
+        roundRows.map((r) => [
           r.id as string,
-          { driveId: r.drive_id as string, sequence: Number(r.sequence), name: String(r.name) },
+          {
+            driveId: r.drive_id as string,
+            sequence: Number(r.sequence),
+            name: (r.name as string | null) ?? "Round",
+          },
+        ]),
+      );
+      const attendanceByKey = new Map(
+        attendanceRows.map((a) => [
+          `${a.round_id}:${a.application_id}`,
+          a.status as AttendanceStatus,
         ]),
       );
       const resultByKey = new Map(
-        ((results ?? []) as Array<Record<string, unknown>>).map((r) => [
-          `${r.round_id}:${r.application_id}`,
-          r.result as RoundResult,
-        ]),
+        resultRows.map((r) => [`${r.round_id}:${r.application_id}`, r.result as RoundResult]),
       );
       const offerByKey = new Map(
-        ((offers ?? []) as Array<Record<string, unknown>>).map((o) => [
+        offerRows.map((o) => [
           `${o.student_id}:${o.drive_id}`,
           {
             ctcLpa: (o.ctc_lpa as number | null) === null ? null : Number(o.ctc_lpa),
@@ -84,16 +131,21 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
         ]),
       );
 
-      const attendanceByApplication = new Map<string, Array<Record<string, unknown>>>();
-      for (const row of (attendance ?? []) as Array<Record<string, unknown>>) {
-        const list = attendanceByApplication.get(row.application_id as string) ?? [];
-        list.push(row);
-        attendanceByApplication.set(row.application_id as string, list);
+      // Which rounds each student was CALLED to — the fact the row list is
+      // built from. Attendance is what happened after being called.
+      const roundsByApplication = new Map<string, string[]>();
+      for (const row of participantRows) {
+        const appId = row.application_id as string;
+        const list = roundsByApplication.get(appId) ?? [];
+        list.push(row.round_id as string);
+        roundsByApplication.set(appId, list);
       }
 
       const byDrive = new Map<string, DriveProgressEntry>();
       for (const row of rows) {
         const driveId = row.drive_id as string;
+        const applicationId = row.id as string;
+        const studentId = row.student_id as string;
         const drive = one<{
           company_name?: string;
           role_title?: string | null;
@@ -107,28 +159,42 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
         );
         const campusName = one<{ name?: string }>(student?.campuses)?.name;
 
-        const studentRounds = (attendanceByApplication.get(row.id as string) ?? [])
-          .map((att) => {
-            const round = roundById.get(att.round_id as string);
+        const studentRounds = (roundsByApplication.get(applicationId) ?? [])
+          .map((roundId): StudentRoundProgress | null => {
+            const round = roundById.get(roundId);
             if (round === undefined) return null;
+            const key = `${roundId}:${applicationId}`;
             return {
               sequence: round.sequence,
               name: round.name,
-              attendance: att.status as AttendanceStatus,
-              result: resultByKey.get(`${att.round_id}:${row.id}`) ?? null,
+              // No attendance row is not an absence: the round has simply not
+              // been marked for them yet. Recording one would hand the student
+              // to the R8 disbarment count for nothing.
+              attendance: attendanceByKey.get(key) ?? "scheduled",
+              result: resultByKey.get(key) ?? null,
             };
           })
-          .filter((r): r is NonNullable<typeof r> => r !== null)
+          .filter((r): r is StudentRoundProgress => r !== null)
           .sort((a, b) => a.sequence - b.sequence);
 
         const entry: DriveProgressStudent = {
-          applicationId: row.id as string,
+          applicationId,
+          // The popup under a count names people and links to their record,
+          // so the read that produced the row has to carry who it belongs to.
+          studentId,
           studentName: student?.full_name ?? "Unknown student",
           rollNumber: student?.roll_number ?? "—",
           campusName,
-          shortlisted: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
+          // Every shortlist row, not the first: a student the coordinator
+          // re-included after a withdrawal is not decided by whichever row
+          // PostgREST happened to embed first.
+          shortlisted: isShortlisted(
+            (Array.isArray(row.shortlist_entries) ? row.shortlist_entries : []).map((entry) => ({
+              included: (entry as { included?: boolean | null }).included ?? null,
+            })),
+          ),
           rounds: studentRounds,
-          offer: offerByKey.get(`${row.student_id}:${driveId}`) ?? null,
+          offer: offerByKey.get(`${studentId}:${driveId}`) ?? null,
         };
 
         const existing = byDrive.get(driveId);

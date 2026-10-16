@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 interface SheetContextValue {
   isOpen: boolean;
@@ -87,6 +88,23 @@ export function SheetTrigger({
   );
 }
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Body scrolling must stop while a drawer covers the page — and two drawers
+ * opened in sequence must not leave it stuck off.
+ */
+let scrollLocks = 0;
+function lockPageScroll(): () => void {
+  scrollLocks += 1;
+  document.body.style.overflow = "hidden";
+  return () => {
+    scrollLocks = Math.max(0, scrollLocks - 1);
+    if (scrollLocks === 0) document.body.style.overflow = "";
+  };
+}
+
 export function SheetContent({
   children,
   side = "right",
@@ -96,18 +114,39 @@ export function SheetContent({
   children: ReactNode;
   side?: "right" | "left" | "top" | "bottom" | undefined;
   className?: string | undefined;
-  size?: "sm" | "md" | "lg" | "xl" | "full" | undefined;
+  size?: "sm" | "md" | "lg" | "xl" | "2xl" | "full" | undefined;
 }) {
   const { isOpen, close, titleId, descriptionId } = useSheetContext();
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Close on Escape key
+  // Escape closes, Tab stays inside. A drawer that lets focus escape behind the
+  // backdrop is a keyboard trap in reverse: the user is tabbing through a page
+  // they cannot see.
   useEffect(() => {
     if (!isOpen) return;
 
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         close();
+        return;
+      }
+      if (e.key !== "Tab" || contentRef.current === null) return;
+
+      const focusable = [...contentRef.current.querySelectorAll(FOCUSABLE)];
+      if (focusable.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const first = focusable[0] as HTMLElement;
+      const last = focusable[focusable.length - 1] as HTMLElement;
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey && (active === first || active === contentRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
       }
     }
 
@@ -115,13 +154,27 @@ export function SheetContent({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, close]);
 
+  // Hand focus to the drawer, and give it back to whatever opened it.
+  useEffect(() => {
+    if (!isOpen) return;
+    const openedBy = document.activeElement as HTMLElement | null;
+    const target = contentRef.current;
+    target?.focus();
+
+    const unlock = lockPageScroll();
+    return () => {
+      unlock();
+      openedBy?.focus?.();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const sideClasses = {
-    right: "inset-y-0 right-0 h-full border-l animate-in slide-in-from-right duration-300",
-    left: "inset-y-0 left-0 h-full border-r animate-in slide-in-from-left duration-300",
-    top: "inset-x-0 top-0 w-full border-b animate-in slide-in-from-top duration-300",
-    bottom: "inset-x-0 bottom-0 w-full border-t animate-in slide-in-from-bottom duration-300",
+    right: "inset-y-0 right-0 h-full border-l animate-slide-in-right",
+    left: "inset-y-0 left-0 h-full border-r animate-slide-in-left",
+    top: "inset-x-0 top-0 w-full border-b animate-slide-in-top",
+    bottom: "inset-x-0 bottom-0 w-full border-t animate-slide-in-bottom",
   }[side];
 
   const sizeClasses = {
@@ -129,16 +182,17 @@ export function SheetContent({
     md: "max-w-md",
     lg: "max-w-xl",
     xl: "max-w-3xl",
+    "2xl": "max-w-5xl",
     full: "max-w-full w-full",
   }[size];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
       <div
         aria-hidden="true"
         onClick={close}
-        className="fixed inset-0 bg-ink-900/40 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+        className="fixed inset-0 animate-fade-in bg-ink-900/40 backdrop-blur-xs"
       />
 
       {/* Drawer Panel */}
@@ -146,9 +200,10 @@ export function SheetContent({
         ref={contentRef}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className={`relative z-50 flex h-full w-full flex-col border-line bg-surface p-6 shadow-2xl overflow-y-auto ${sideClasses} ${sizeClasses} ${className}`}
+        className={`relative z-50 flex h-full w-full flex-col border-line bg-surface p-6 shadow-2xl overflow-y-auto focus:outline-hidden ${sideClasses} ${sizeClasses} ${className}`}
       >
         <button
           type="button"
@@ -170,7 +225,8 @@ export function SheetContent({
 
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -452,8 +452,8 @@ export function ProfileEditPage({
 
           <div className="mt-3">
             {/* type="button": this is its own action, not part of the save. */}
-            <Button type="button" disabled={uploading} onClick={() => void addCertificate()}>
-              {uploading ? "Uploading…" : "Add certificate"}
+            <Button type="button" isLoading={uploading} onClick={() => void addCertificate()}>
+              Add certificate
             </Button>
           </div>
         </FormSection>
@@ -531,8 +531,8 @@ export function ProfileEditPage({
         )}
 
         <div>
-          <Button type="submit" disabled={saving}>
-            {saving ? "Saving…" : "Save"}
+          <Button type="submit" isLoading={saving}>
+            Save
           </Button>
         </div>
       </form>

@@ -95,8 +95,8 @@ export function RemoveStaffModal({ member, onClose, onConfirm }: RemoveStaffModa
             <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="danger" size="sm" onClick={handleRemove} disabled={busy}>
-              {busy ? "Removing…" : "Yes, remove"}
+            <Button variant="danger" size="sm" onClick={handleRemove} isLoading={busy}>
+              Yes, remove
             </Button>
           </div>
         </div>
