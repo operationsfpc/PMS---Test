@@ -762,15 +762,52 @@ describe("the drive-specific box", () => {
     expect(within(round).getByText(/1 cleared/i)).toBeDefined();
   });
 
-  it("filters by drive name", async () => {
+  it("filters by company", async () => {
     const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    await user.selectOptions(await screen.findByLabelText(/drive name/i), "Freshworks — SDE");
+    await user.selectOptions(await screen.findByLabelText(/^company$/i), "Freshworks");
 
     const section = await box();
     expect(within(section).getByRole("link", { name: /freshworks/i })).toBeDefined();
     expect(within(section).queryByRole("link", { name: /zoho/i })).toBeNull();
+  });
+
+  /**
+   * UAT 2026-10-16: "same company shows as two". Two roles of one visit are one
+   * visit — the box names the company once and folds each role, with its own
+   * funnel table, underneath.
+   */
+  it("names the company once when one visit raised two roles", async () => {
+    const [base] = SNAPSHOT.driveProgress;
+    if (base === undefined) throw new Error("missing base drive");
+    const second = {
+      ...base,
+      driveId: "d3",
+      driveName: "Zoho Corporation — Engineer Trainee",
+      roleTitle: "Engineer Trainee",
+    };
+
+    render(
+      <DashboardPage
+        view={view({ ...SNAPSHOT, driveProgress: [base, second] })}
+        title="Placement overview"
+      />,
+    );
+
+    const section = await box();
+    // The company filter below lists every company too, so the roster is counted
+    // without it — the visit still has to name the company once inside the box.
+    const namedInRoster = within(section)
+      .getAllByText("Zoho Corporation")
+      .filter((el) => el.closest("select") === null);
+    expect(namedInRoster).toHaveLength(1);
+    expect(within(section).getByText("2 roles")).toBeDefined();
+    expect(
+      within(section)
+        .getByRole("button", { name: /engineer trainee/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
   });
 
   it("filters by college name", async () => {
@@ -796,7 +833,7 @@ describe("the drive-specific box", () => {
     const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 
-    await user.selectOptions(await screen.findByLabelText(/drive name/i), "Freshworks — SDE");
+    await user.selectOptions(await screen.findByLabelText(/^company$/i), "Freshworks");
 
     const section = await box();
     expect(within(section).getByText("Eligible")).toBeDefined();

@@ -82,13 +82,17 @@ function stub(
     drives?: unknown[];
   } = {},
 ) {
+  const selects: { applications: string[] } = { applications: [] };
   server.use(
     http.get(`${BASE}/rest/v1/students`, () =>
       HttpResponse.json(opts.student === undefined ? STUDENT : opts.student),
     ),
-    http.get(`${BASE}/rest/v1/applications`, () =>
-      HttpResponse.json(opts.applications ?? [APPLICATION]),
-    ),
+    // Two reads of `applications` land here: the dashboard's own, and the drives
+    // view's list of what this student already applied to. Keep both.
+    http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
+      selects.applications.push(new URL(request.url).searchParams.get("select") ?? "");
+      return HttpResponse.json(opts.applications ?? [APPLICATION]);
+    }),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
     http.get(`${BASE}/rest/v1/round_participants`, () =>
       HttpResponse.json(opts.participants ?? []),
@@ -99,6 +103,7 @@ function stub(
     // full read rather than a head count.
     http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [])),
   );
+  return selects;
 }
 
 const view = () => createSupabaseStudentDashboardView(client(), async () => "u1");
@@ -184,6 +189,22 @@ describe("createSupabaseStudentDashboardView", () => {
 
     expect(snapshot.offers[0]?.ctcLpa).toBe(9);
     expect(snapshot.applications[0]?.hasOffer).toBe(true);
+  });
+
+  /**
+   * The column no schema test can catch being dropped: without the visit id the
+   * read still succeeds and the dashboard prints one company visit twice
+   * (UAT 2026-10-16).
+   */
+  it("asks applications for their company visit and hands it to the page", async () => {
+    const selects = stub({
+      applications: [{ ...APPLICATION, drives: { ...APPLICATION.drives, company_drive_id: "e1" } }],
+    });
+
+    const [application] = (await view().snapshot()).applications;
+
+    expect(decodeURIComponent(selects.applications.join(" "))).toContain("company_drive_id");
+    expect(application?.companyDriveId).toBe("e1");
   });
 
   it("does not mark an application as won by an unrelated offer", async () => {

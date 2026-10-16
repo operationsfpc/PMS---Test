@@ -1,6 +1,16 @@
 import { NotificationBody } from "@components/notification-body";
 import { OfferLetterLink } from "@components/offer-letter-link";
-import { Badge, Button, Card, PageHeader, StatCard } from "@components/ui";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
+  Button,
+  Card,
+  PageHeader,
+  StatCard,
+} from "@components/ui";
 import {
   ABSENCE_LIMIT,
   type AttendanceRecord,
@@ -10,7 +20,12 @@ import {
 import { condenseNotifications } from "@domain/notifications";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { describeOfferPay } from "@domain/offer-pay";
-import { type ApplicantRound, applicationProgress, studentPrompt } from "@domain/student-progress";
+import {
+  type ApplicantRound,
+  type ApplicationProgress,
+  applicationProgress,
+  studentPrompt,
+} from "@domain/student-progress";
 import type { DriveType, OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -23,11 +38,19 @@ export interface StudentSemesterRow {
 
 export interface StudentApplicationRow {
   readonly applicationId: string;
+  /** The company visit this role belongs to; null for a legacy standalone drive. */
+  readonly companyDriveId?: string | null;
   readonly companyName: string;
   readonly roleTitle: string;
   readonly appliedAt: string;
   readonly hasOffer: boolean;
   readonly rounds: readonly ApplicantRound[];
+}
+
+/** An application plus the stage the domain says it has reached. */
+interface ProgressedApplication {
+  readonly application: StudentApplicationRow;
+  readonly progress: ApplicationProgress;
 }
 
 export interface StudentOfferRow {
@@ -115,6 +138,102 @@ const ROUND_TONE = (round: ApplicantRound) => {
   if (round.participating) return "warning" as const;
   return "neutral" as const;
 };
+
+const AppliedLine = ({ entry }: { entry: ProgressedApplication }) => (
+  <p className="mt-0.5 text-xs text-ink-300">Applied {onDate(entry.application.appliedAt)}</p>
+);
+
+const RoundChips = ({ entry }: { entry: ProgressedApplication }) =>
+  entry.application.rounds.length === 0 ? null : (
+    <ol className="mt-4 flex flex-wrap gap-2">
+      {[...entry.application.rounds]
+        .sort((a, b) => a.sequence - b.sequence)
+        .map((round) => (
+          <li key={round.sequence}>
+            <Badge tone={ROUND_TONE(round)}>{round.name}</Badge>
+          </li>
+        ))}
+    </ol>
+  );
+
+/**
+ * One card per company visit (UAT 2026-10-16: "single company, under it each
+ * role and its data"). Two roles of one visit are one visit the student applied
+ * to twice, so the company is said once and each role keeps its own stage, its
+ * own date and its own rounds — those are never summed.
+ */
+function ApplicationVisits({ entries }: { entries: readonly ProgressedApplication[] }) {
+  const visits = new Map<string, ProgressedApplication[]>();
+  for (const entry of entries) {
+    const key = entry.application.companyDriveId ?? `standalone:${entry.application.applicationId}`;
+    const group = visits.get(key);
+    if (group !== undefined) group.push(entry);
+    else visits.set(key, [entry]);
+  }
+
+  return (
+    <ul className="flex flex-col gap-3">
+      {[...visits.entries()].map(([visitId, roles]) => {
+        const [first] = roles;
+        if (first === undefined) return null;
+
+        if (roles.length === 1) {
+          return (
+            <li key={visitId}>
+              <Card className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-heading font-bold text-ink-900">
+                      {first.application.companyName}
+                    </p>
+                    <p className="truncate text-sm text-ink-500">{first.application.roleTitle}</p>
+                    <AppliedLine entry={first} />
+                  </div>
+                  <Badge tone={STAGE_TONE[first.progress.stage]}>{first.progress.label}</Badge>
+                </div>
+                <RoundChips entry={first} />
+              </Card>
+            </li>
+          );
+        }
+
+        return (
+          <li key={visitId}>
+            <Card className="p-4">
+              <p className="flex flex-wrap items-center gap-2 font-heading font-bold text-ink-900">
+                <span className="truncate">{first.application.companyName}</span>
+                <Badge tone="brand">{roles.length} roles</Badge>
+              </p>
+              <Accordion
+                multiple
+                className="mt-1"
+                defaultValue={roles.map((role) => role.application.applicationId)}
+              >
+                {roles.map((role) => (
+                  <AccordionItem
+                    key={role.application.applicationId}
+                    value={role.application.applicationId}
+                  >
+                    <AccordionTrigger className="py-2">
+                      <span className="font-semibold text-ink-900">
+                        {role.application.roleTitle}
+                      </span>
+                      <Badge tone={STAGE_TONE[role.progress.stage]}>{role.progress.label}</Badge>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-2">
+                      <AppliedLine entry={role} />
+                      <RoundChips entry={role} />
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </Card>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 /**
  * The student's own dashboard. PRD §17.1, and their landing route.
@@ -310,38 +429,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
               </p>
             </Card>
           ) : (
-            <ul className="flex flex-col gap-3">
-              {progressed.map(({ application, progress }) => (
-                <li key={application.applicationId}>
-                  <Card className="p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-heading font-bold text-ink-900">
-                          {application.companyName}
-                        </p>
-                        <p className="truncate text-sm text-ink-500">{application.roleTitle}</p>
-                        <p className="mt-0.5 text-xs text-ink-300">
-                          Applied {onDate(application.appliedAt)}
-                        </p>
-                      </div>
-                      <Badge tone={STAGE_TONE[progress.stage]}>{progress.label}</Badge>
-                    </div>
-
-                    {application.rounds.length > 0 && (
-                      <ol className="mt-4 flex flex-wrap gap-2">
-                        {[...application.rounds]
-                          .sort((a, b) => a.sequence - b.sequence)
-                          .map((round) => (
-                            <li key={round.sequence}>
-                              <Badge tone={ROUND_TONE(round)}>{round.name}</Badge>
-                            </li>
-                          ))}
-                      </ol>
-                    )}
-                  </Card>
-                </li>
-              ))}
-            </ul>
+            <ApplicationVisits entries={progressed} />
           )}
         </section>
 

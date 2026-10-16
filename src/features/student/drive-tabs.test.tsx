@@ -386,3 +386,113 @@ describe("the offer letter on a concluded drive", () => {
     expect(screen.queryByRole("link", { name: /letter/i })).toBeNull();
   });
 });
+
+/**
+ * UAT 2026-10-16: "on ui still the company show each roles seperate for
+ * students too it should show company name". Two applications raised under one
+ * company visit are one visit — the card names the company once and folds each
+ * role underneath, with its own round, its own money and its own record.
+ */
+describe("DriveTabs — one card per company visit", () => {
+  const pair = (driveType: ("placement" | "internship")[]): StudentDriveLists["inProgress"] => [
+    {
+      id: "d20",
+      companyName: "FACE Prep tst",
+      roleTitle: "SDE",
+      roleCategory: "software_technical",
+      driveType: driveType[0] ?? null,
+      companyDriveId: "e1",
+      locations: "Bengaluru",
+      appliedAt: "2026-09-01T00:00:00Z",
+      progressLabel: "Round 1 of 2 — Aptitude",
+      roundsCleared: 0,
+      totalRounds: 2,
+    },
+    {
+      id: "d21",
+      companyName: "FACE Prep tst",
+      roleTitle: "Data analyst",
+      roleCategory: "operations_business",
+      driveType: driveType[1] ?? null,
+      companyDriveId: "e1",
+      locations: "Bengaluru",
+      appliedAt: "2026-09-02T00:00:00Z",
+      progressLabel: "Round 2 of 3 — Technical Interview",
+      roundsCleared: 1,
+      totalRounds: 3,
+    },
+  ];
+
+  const openTab = async (name: RegExp) => {
+    const user = userEvent.setup();
+    render(
+      <DriveTabs
+        view={view({ ...LISTS, inProgress: pair(["placement", "internship"]) })}
+        now={NOW}
+      />,
+    );
+    await screen.findByText("Zoho");
+    await user.click(screen.getByRole("tab", { name }));
+    return screen.getByRole("tabpanel", { name: /in progress/i });
+  };
+
+  it("names the company once for two applications to one visit", async () => {
+    const panel = await openTab(/^In progress/);
+    expect(within(panel).getAllByText("FACE Prep tst")).toHaveLength(1);
+    expect(within(panel).getByText("2 roles")).toBeDefined();
+  });
+
+  it("keeps each role's own round beneath its own heading, both already open", async () => {
+    const panel = await openTab(/^In progress/);
+    expect(
+      within(panel)
+        .getByRole("button", { name: /data analyst/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(within(panel).getByText("Round 1 of 2 — Aptitude")).toBeDefined();
+    expect(within(panel).getByText("Round 2 of 3 — Technical Interview")).toBeDefined();
+  });
+
+  it("links each role to its own drive record, never to whichever came first", async () => {
+    const panel = await openTab(/^In progress/);
+    const links = within(panel).getAllByRole("link", { name: /view everything about/i });
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/drives/d20", "/drives/d21"]);
+  });
+
+  it("refuses to name one type for a visit that mixed an internship with a full-time role", async () => {
+    const panel = await openTab(/^In progress/);
+    expect(within(panel).getByText("Mixed types")).toBeDefined();
+    const analyst = within(panel).getByRole("button", { name: /data analyst/i });
+    expect(within(analyst).getByText("Internship")).toBeDefined();
+    expect(within(analyst).queryByText("Full time")).toBeNull();
+  });
+
+  it("says the shared type once when every role of the visit is the same kind", async () => {
+    const user = userEvent.setup();
+    render(
+      <DriveTabs
+        view={view({ ...LISTS, inProgress: pair(["placement", "placement"]) })}
+        now={NOW}
+      />,
+    );
+    await screen.findByText("Zoho");
+    await user.click(screen.getByRole("tab", { name: /^In progress/ }));
+    const panel = screen.getByRole("tabpanel", { name: /in progress/i });
+
+    expect(within(panel).getByText("Full time")).toBeDefined();
+    expect(within(panel).queryByText("Mixed types")).toBeNull();
+  });
+
+  it("leaves a single-role visit as the plain card it always was", async () => {
+    const [first] = pair(["placement", "placement"]);
+    const rows = first === undefined ? [] : [{ ...first, companyDriveId: null }];
+    const user = userEvent.setup();
+    render(<DriveTabs view={view({ ...LISTS, inProgress: rows })} now={NOW} />);
+    await screen.findByText("Zoho");
+    await user.click(screen.getByRole("tab", { name: /^In progress/ }));
+
+    expect(screen.queryByText("1 roles")).toBeNull();
+    expect(screen.getByText("FACE Prep tst")).toBeDefined();
+    expect(screen.getByText("SDE · Software / Technical")).toBeDefined();
+  });
+});

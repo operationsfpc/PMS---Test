@@ -1,5 +1,13 @@
 import { OfferLetterLink } from "@components/offer-letter-link";
-import { Badge, Card, PageHeader } from "@components/ui";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
+  Card,
+  PageHeader,
+} from "@components/ui";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
   DRIVE_TYPE_FILTERS,
@@ -17,7 +25,7 @@ import {
   parseLocations,
 } from "@domain/student-drive-lists";
 import type { DriveType, RoleCategory } from "@domain/types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { DrivesList, type DrivesView, type OpenDrive } from "./drives-list";
 
@@ -29,6 +37,8 @@ export interface ProgressDriveRow {
   readonly roleCategory: RoleCategory;
   /** 2026-08-27: filtered on, and tagged on every card. */
   readonly driveType?: DriveType | null;
+  /** The company visit this role belongs to; null for a legacy standalone drive. */
+  readonly companyDriveId?: string | null;
   readonly locations: string;
   readonly appliedAt: string;
   readonly progressLabel: string;
@@ -55,6 +65,7 @@ export interface ClosedDriveRow {
   readonly roleCategory: RoleCategory;
   /** 2026-08-27: filtered on, and tagged on every card. */
   readonly driveType?: DriveType | null;
+  readonly companyDriveId?: string | null;
   readonly ctcLabel: string;
   readonly locations: string;
   readonly closedOn: string;
@@ -346,19 +357,22 @@ export function DriveTabs({
           {filtered.inProgress.length === 0 ? (
             <Card className="p-6 text-sm text-ink-700">Nothing in progress right now.</Card>
           ) : (
-            filtered.inProgress.map((row) => (
-              <Card key={row.id} className="p-5">
-                <RowHead row={row} />
-                <p className="mt-2 text-sm">
-                  Now in: <span className="font-semibold text-[#3D3777]">{row.progressLabel}</span>
-                </p>
-                <p className="mt-0.5 text-xs text-ink-500">
-                  {row.roundsCleared} of {row.totalRounds} rounds cleared · applied{" "}
-                  {day(row.appliedAt)}
-                </p>
-                <FullRecordLink id={row.id} company={row.companyName} />
-              </Card>
-            ))
+            <TabVisits
+              rows={filtered.inProgress}
+              body={(row) => (
+                <>
+                  <p className="mt-2 text-sm">
+                    Now in:{" "}
+                    <span className="font-semibold text-[#3D3777]">{row.progressLabel}</span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-500">
+                    {row.roundsCleared} of {row.totalRounds} rounds cleared · applied{" "}
+                    {day(row.appliedAt)}
+                  </p>
+                  <FullRecordLink id={row.id} company={row.companyName} />
+                </>
+              )}
+            />
           )}
         </div>
       ) : tab === "not_applied_closed" ? (
@@ -366,16 +380,18 @@ export function DriveTabs({
           {filtered.notApplied.length === 0 ? (
             <Card className="p-6 text-sm text-ink-700">Nothing here — you missed no drive.</Card>
           ) : (
-            filtered.notApplied.map((row) => (
-              <Card key={row.id} className="p-5">
-                <RowHead row={row} />
-                <p className="mt-2 text-sm text-ink-700">
-                  {row.ctcLabel} · Closed {day(row.closedOn)} — you didn’t apply{" "}
-                  <Badge tone="neutral">Missed</Badge>
-                </p>
-                <FullRecordLink id={row.id} company={row.companyName} />
-              </Card>
-            ))
+            <TabVisits
+              rows={filtered.notApplied}
+              body={(row) => (
+                <>
+                  <p className="mt-2 text-sm text-ink-700">
+                    {row.ctcLabel} · Closed {day(row.closedOn)} — you didn’t apply{" "}
+                    <Badge tone="neutral">Missed</Badge>
+                  </p>
+                  <FullRecordLink id={row.id} company={row.companyName} />
+                </>
+              )}
+            />
           )}
         </div>
       ) : (
@@ -383,30 +399,125 @@ export function DriveTabs({
           {filtered.appliedClosed.length === 0 ? (
             <Card className="p-6 text-sm text-ink-700">No concluded applications yet.</Card>
           ) : (
-            filtered.appliedClosed.map((row) => (
-              <Card key={row.id} className="p-5">
-                <RowHead row={row} />
-                <p className="mt-2 text-sm">
-                  Outcome:{" "}
-                  <Badge tone={row.outcomeLabel === "Offer received" ? "success" : "neutral"}>
-                    {row.outcomeLabel}
-                  </Badge>
-                </p>
-                <p className="mt-0.5 text-xs text-ink-500">Applied {day(row.appliedAt)}</p>
-                {/* UAT 2026-08-27: "Offer received" now hands over the letter
-                    that says so. Filed by the CPC since 0062, shown to the
-                    student it belongs to since never. */}
-                <OfferLetterLink
-                  url={row.offerLetterUrl}
-                  name={row.offerLetterName}
-                  className="mt-2"
-                />
-                <FullRecordLink id={row.id} company={row.companyName} />
-              </Card>
-            ))
+            <TabVisits
+              rows={filtered.appliedClosed}
+              body={(row) => (
+                <>
+                  <p className="mt-2 text-sm">
+                    Outcome:{" "}
+                    <Badge tone={row.outcomeLabel === "Offer received" ? "success" : "neutral"}>
+                      {row.outcomeLabel}
+                    </Badge>
+                  </p>
+                  <p className="mt-0.5 text-xs text-ink-500">Applied {day(row.appliedAt)}</p>
+                  {/* UAT 2026-08-27: "Offer received" now hands over the letter
+                      that says so. Filed by the CPC since 0062, shown to the
+                      student it belongs to since never. */}
+                  <OfferLetterLink
+                    url={row.offerLetterUrl}
+                    name={row.offerLetterName}
+                    className="mt-2"
+                  />
+                  <FullRecordLink id={row.id} company={row.companyName} />
+                </>
+              )}
+            />
           )}
         </div>
       )}
+    </>
+  );
+}
+
+/** What every tab's row owes the visit card it lives in. */
+interface TabRow {
+  readonly id: string;
+  readonly companyName: string;
+  readonly roleTitle: string;
+  readonly roleCategory: RoleCategory;
+  readonly driveType?: DriveType | null;
+  readonly companyDriveId?: string | null;
+}
+
+/** The visit a row belongs to — its own id when it was raised standalone. */
+const visitKey = (row: TabRow) => row.companyDriveId || `standalone:${row.id}`;
+
+/**
+ * One card per company visit, whatever the tab (UAT 2026-10-16: a student with
+ * two applications to one visit counted two companies).
+ *
+ * A single-role visit keeps the plain card it always had. Only a visit that
+ * raised several roles folds, and its panels arrive open because the link to
+ * the drive record is the reason the card exists.
+ */
+function TabVisits<T extends TabRow>({
+  rows,
+  body,
+}: {
+  rows: readonly T[];
+  body: (row: T) => ReactNode;
+}) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = visitKey(row);
+    const existing = groups.get(key);
+    if (existing) existing.push(row);
+    else groups.set(key, [row]);
+  }
+
+  return (
+    <>
+      {[...groups.entries()].map(([eventId, roles]) => {
+        const head = roles[0];
+        if (head === undefined) return null;
+
+        if (roles.length === 1) {
+          return (
+            <Card key={eventId} className="p-5">
+              <RowHead row={head} />
+              {body(head)}
+            </Card>
+          );
+        }
+
+        const types = new Set(roles.map((role) => role.driveType ?? null));
+        const [singleType] = types;
+        const mixed = types.size > 1;
+
+        return (
+          <Card key={eventId} className="p-5">
+            <h2 className="flex flex-wrap items-center gap-2 font-[Raleway] text-lg font-bold text-ink-900">
+              <span className="max-w-[250px] truncate">{head.companyName}</span>
+              {/* Said once for the visit when every role shares a type; per role
+                  underneath when it mixes, because picking one at random lies. */}
+              {mixed ? <Badge tone="neutral">Mixed types</Badge> : null}
+              {!mixed && singleType != null && (
+                <Badge tone={driveTypeTone(singleType)}>{driveTypeLabel(singleType)}</Badge>
+              )}
+              <Badge tone="brand">{roles.length} roles</Badge>
+            </h2>
+
+            <Accordion multiple className="mt-2" defaultValue={roles.map((role) => role.id)}>
+              {roles.map((role) => (
+                <AccordionItem key={role.id} value={role.id}>
+                  <AccordionTrigger className="py-2">
+                    <span className="font-semibold text-ink-900">{role.roleTitle}</span>
+                    <span className="text-sm font-normal text-ink-500">
+                      {AREA_LABEL[role.roleCategory]}
+                    </span>
+                    {mixed && role.driveType != null && (
+                      <Badge tone={driveTypeTone(role.driveType)}>
+                        {driveTypeLabel(role.driveType)}
+                      </Badge>
+                    )}
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-2">{body(role)}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </Card>
+        );
+      })}
     </>
   );
 }

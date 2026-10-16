@@ -30,6 +30,7 @@ const orNull = (value: unknown): number | null => (value == null ? null : Number
  */
 export const AE_OVERVIEW_DRIVE_COLUMNS = `
   id, company_name, role_title, status, drive_type, ctc_min_lpa, ctc_max_lpa, created_at,
+  company_drive_id,
   drive_target_campuses(campuses(name)),
   applications(id, student_id, shortlist_entries(included))
 `;
@@ -80,6 +81,9 @@ export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverview
         const driveId = row.id as string;
         return {
           driveId,
+          // Without the event id two roles of one visit look like two visits,
+          // and the page prints the company twice.
+          companyDriveId: (row.company_drive_id as string | null) ?? null,
           companyName: (row.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (row.role_title as string | null) ?? null,
           status: (row.status as AeOverviewDrive["status"] | null) ?? "draft",

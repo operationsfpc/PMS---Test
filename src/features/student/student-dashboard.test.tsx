@@ -130,6 +130,47 @@ describe("StudentDashboard", () => {
     expect(within(applications).getByText("HR interview")).toBeDefined();
   });
 
+  /**
+   * UAT 2026-10-16: "single company, under it each role and its data". Two roles
+   * of one visit are one card, and each role keeps its own stage, its own date
+   * and its own rounds — nothing about one role is allowed to describe the other.
+   */
+  it("names the company visit once and keeps each role's own progress", async () => {
+    const [zoho] = SNAPSHOT.applications;
+    if (zoho === undefined) throw new Error("missing Zoho fixture");
+    const trainee = {
+      ...zoho,
+      applicationId: "app-9",
+      roleTitle: "Engineer Trainee",
+      appliedAt: "2026-06-28T04:30:00.000Z",
+      rounds: [],
+    };
+
+    show(
+      view({
+        applications: [
+          { ...zoho, companyDriveId: "e1" },
+          { ...trainee, companyDriveId: "e1" },
+        ],
+      }),
+    );
+
+    const applications = await screen.findByRole("region", { name: /my applications/i });
+    expect(within(applications).getAllByText("Zoho Corporation")).toHaveLength(1);
+    expect(within(applications).getByText("2 roles")).toBeDefined();
+    expect(
+      within(applications)
+        .getByRole("button", { name: /engineer trainee/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    // Each role keeps its own stage and its own date: nothing about one role is
+    // allowed to describe the other.
+    expect(within(applications).getByText("Round 2 of 3 — Technical interview")).toBeDefined();
+    expect(within(applications).getByText("Applied — awaiting shortlist")).toBeDefined();
+    expect(within(applications).getByText("Applied 1 Jul 2026")).toBeDefined();
+    expect(within(applications).getByText("Applied 28 Jun 2026")).toBeDefined();
+  });
+
   it("shows an offer with its company, category and CTC", async () => {
     show(
       view({

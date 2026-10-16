@@ -78,6 +78,28 @@ describe("createSupabaseAeOverviewView", () => {
     ]);
   });
 
+  /**
+   * The one column whose absence no schema test can catch: with the event id
+   * missing the read still succeeds, and the page prints one company visit
+   * twice (UAT 2026-10-16).
+   */
+  it("asks drives for their visit id and hands it to the page", async () => {
+    let select = "";
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
+        select = new URL(request.url).searchParams.get("select") ?? "";
+        return HttpResponse.json([{ ...DRIVE, company_drive_id: "e1" }]);
+      }),
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+      http.post(`${BASE}/rest/v1/rpc/placement_totals`, () => HttpResponse.json([TOTALS])),
+    );
+
+    const snapshot = await view().snapshot();
+
+    expect(decodeURIComponent(select)).toContain("company_drive_id");
+    expect(snapshot.drives[0]?.companyDriveId).toBe("e1");
+  });
+
   it("marks the applicant who holds an offer on that drive", async () => {
     stub({
       offers: [{ drive_id: "d1", student_id: "s1" }],

@@ -39,7 +39,7 @@ export const DASHBOARD_STUDENT_COLUMNS = `
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const DASHBOARD_APPLICATION_COLUMNS = `
   id, applied_at,
-  drives(id, company_name, role_title, drive_rounds(id, sequence, name))
+  drives(id, company_drive_id, company_name, role_title, drive_rounds(id, sequence, name))
 `;
 
 /**
@@ -163,6 +163,9 @@ export function createSupabaseStudentDashboardView(
 
         return {
           applicationId,
+          // The visit this application's role belongs to. Without it two roles
+          // of one visit print the company twice (UAT 2026-10-16).
+          companyDriveId: (drive?.company_drive_id as string | null) ?? null,
           companyName: (drive?.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (drive?.role_title as string | null) ?? "Role not specified",
           appliedAt: row.applied_at as string,

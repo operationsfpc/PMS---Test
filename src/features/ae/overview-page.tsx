@@ -1,6 +1,16 @@
 import { DrilldownModal } from "@components/drilldown-modal";
-import { Badge, Card, PageHeader, StatCard } from "@components/ui";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
+  Card,
+  PageHeader,
+  StatCard,
+} from "@components/ui";
 import { type AeApplicant, summariseAeDrives } from "@domain/ae-overview";
+import { groupDrivesByEvent } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import { orderDrives } from "@domain/drive-aging";
 import {
@@ -12,7 +22,7 @@ import {
 } from "@domain/drive-type";
 import { type PlacementCounts, summarisePlacementTotals } from "@domain/placement-totals";
 import type { DriveStatus, DriveType } from "@domain/types";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router";
 
 /**
@@ -31,6 +41,8 @@ import { Link } from "react-router";
  */
 export interface AeOverviewDrive {
   readonly driveId: string;
+  /** The company visit this role was raised under; null for a legacy drive. */
+  readonly companyDriveId: string | null;
   readonly companyName: string;
   readonly roleTitle: string | null;
   readonly status: DriveStatus;
@@ -132,8 +144,31 @@ function drivesBehindStat(
   }
 }
 
-function StatDriveRow({ drive }: { drive: AeOverviewDrive }) {
+/** The visit's own type, said once: only when every role agrees, or "Mixed types". */
+function visitTypes(roles: readonly AeOverviewDrive[]) {
+  const types = new Set(roles.map((role) => role.driveType));
+  const [singleType] = types;
+  return { mixed: types.size > 1, singleType: singleType ?? null };
+}
+
+function RoleFacts({ drive }: { drive: AeOverviewDrive }) {
   const funnel = summariseAeDrives([drive]);
+
+  return (
+    <>
+      <p className="mt-1 text-xs text-ink-500">
+        {drive.campuses.length === 0
+          ? "Open to every campus"
+          : `Open to: ${drive.campuses.join(", ")}`}
+      </p>
+      <p className="mt-1 text-xs font-medium text-ink-700">
+        {funnel.applicants} applied · {funnel.shortlisted} shortlisted · {funnel.offers} offers
+      </p>
+    </>
+  );
+}
+
+function StatDriveRow({ drive }: { drive: AeOverviewDrive }) {
   const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
 
   return (
@@ -157,14 +192,67 @@ function StatDriveRow({ drive }: { drive: AeOverviewDrive }) {
           </Badge>
         </div>
       </div>
-      <p className="mt-1 text-xs text-ink-500">
-        {drive.campuses.length === 0
-          ? "Open to every campus"
-          : `Open to: ${drive.campuses.join(", ")}`}
+      <RoleFacts drive={drive} />
+    </li>
+  );
+}
+
+/**
+ * One company visit in the popup: the company named once, then every role it
+ * raised with its own colleges and its own counts (UAT 2026-10-16, "same
+ * company shows as two"). A visit is one `<li>` and every role inside it keeps
+ * its own row, so the count that opened the popup is still the number of roles
+ * the AE raised — it is just said under one company.
+ */
+function StatVisit({ roles }: { roles: readonly AeOverviewDrive[] }) {
+  const [head] = roles;
+  if (head === undefined) return null;
+  if (roles.length === 1) return <StatDriveRow drive={head} />;
+
+  const { mixed, singleType } = visitTypes(roles);
+
+  return (
+    <li className="py-3">
+      <p className="flex flex-wrap items-center gap-2 font-semibold text-ink-900">
+        {head.companyName}
+        {!mixed && singleType !== null && (
+          <Badge tone={driveTypeTone(singleType)}>{driveTypeLabel(singleType)}</Badge>
+        )}
+        {mixed && <Badge tone="neutral">Mixed types</Badge>}
+        <Badge tone="brand">{roles.length} roles</Badge>
       </p>
-      <p className="mt-1 text-xs font-medium text-ink-700">
-        {funnel.applicants} applied · {funnel.shortlisted} shortlisted · {funnel.offers} offers
-      </p>
+      <Accordion multiple className="mt-1" defaultValue={roles.map((role) => role.driveId)}>
+        {roles.map((role) => {
+          const ctc = describeCtcRange(role.ctcMinLpa, role.ctcMaxLpa);
+          return (
+            <AccordionItem key={role.driveId} value={role.driveId}>
+              <AccordionTrigger className="py-2">
+                <span className="font-semibold text-ink-900">
+                  {role.roleTitle ?? "Role not specified"}
+                  {ctc !== null && ` · ${ctc}`}
+                </span>
+                {mixed && (
+                  <Badge tone={driveTypeTone(role.driveType)}>
+                    {driveTypeLabel(role.driveType)}
+                  </Badge>
+                )}
+                <Badge tone={STATUS_TONE(role.status)}>
+                  {STATUS_LABEL[role.status] ?? role.status}
+                </Badge>
+              </AccordionTrigger>
+              <AccordionContent className="pb-2">
+                <Link
+                  to={`/drives/${role.driveId}`}
+                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                >
+                  Open the drive record
+                </Link>
+                <RoleFacts drive={role} />
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
     </li>
   );
 }
@@ -221,12 +309,16 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
 
   const mine = summariseAeDrives(snapshot.drives);
   const org = summarisePlacementTotals(snapshot.totals);
-  const recent = orderDrives(snapshot.drives, "newest").slice(0, RECENT);
+  /** Newest visit first, cut by VISIT so one company's roles never split across the cut. */
+  const recentVisits = [
+    ...groupDrivesByEvent(orderDrives(snapshot.drives, "newest")).values(),
+  ].slice(0, RECENT);
   const hasPackages = snapshot.totals.highestLpa !== null;
   const statDrives = openStat === null ? [] : drivesBehindStat(openStat, snapshot.drives);
   const filteredStatDrives = statDrives.filter((d) =>
     matchesDriveType(d.driveType, statTypeFilter),
   );
+  const statVisits = [...groupDrivesByEvent(filteredStatDrives).values()];
 
   return (
     <div>
@@ -272,16 +364,17 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
             <p className="text-sm text-ink-500">Newest first — the whole list is under Drives.</p>
           </div>
 
-          {recent.length === 0 ? (
+          {recentVisits.length === 0 ? (
             <p className="text-sm text-ink-700">
               No drives yet. Raise one with the Position information form and it appears here.
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[540px] text-left text-sm">
+              <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                   <tr>
-                    <th className="px-3 py-2">Drive</th>
+                    <th className="px-3 py-2">Company visit</th>
+                    <th className="px-3 py-2">Role</th>
                     <th className="px-3 py-2">Status</th>
                     <th className="px-3 py-2">Applied</th>
                     <th className="px-3 py-2">Shortlisted</th>
@@ -289,35 +382,77 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {recent.map((drive) => {
-                    const funnel = summariseAeDrives([drive]);
-                    const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
+                  {recentVisits.map((roles) => {
+                    const [head] = roles;
+                    if (head === undefined) return null;
+                    // One visit owns one company cell; each role keeps its own row,
+                    // so the company is never printed twice for a multi-role drive.
                     return (
-                      <tr key={drive.driveId}>
-                        <td className="px-3 py-3">
-                          <p className="max-w-[200px] truncate font-semibold text-ink-900">
-                            <Link to={`/drives/${drive.driveId}`} className="hover:underline">
-                              {drive.companyName}
-                            </Link>
-                          </p>
-                          <p className="max-w-[200px] truncate text-xs text-ink-500">
-                            {drive.roleTitle ?? "Role not specified"}
-                            {ctc !== null && ` · ${ctc}`}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3">
-                          <Badge tone={STATUS_TONE(drive.status)}>
-                            {STATUS_LABEL[drive.status] ?? drive.status}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-3 font-semibold text-ink-900">
-                          {funnel.applicants}
-                        </td>
-                        <td className="px-3 py-3 font-semibold text-ink-900">
-                          {funnel.shortlisted}
-                        </td>
-                        <td className="px-3 py-3 font-semibold text-ink-900">{funnel.offers}</td>
-                      </tr>
+                      <Fragment key={head.driveId}>
+                        {roles.map((role, index) => {
+                          const funnel = summariseAeDrives([role]);
+                          const ctc = describeCtcRange(role.ctcMinLpa, role.ctcMaxLpa);
+                          const single = roles.length === 1;
+                          return (
+                            <tr key={role.driveId}>
+                              {index === 0 && (
+                                <td className="px-3 py-3 align-top" rowSpan={roles.length}>
+                                  <p className="max-w-[200px] truncate font-semibold text-ink-900">
+                                    {single ? (
+                                      <Link
+                                        to={`/drives/${head.driveId}`}
+                                        className="hover:underline"
+                                      >
+                                        {head.companyName}
+                                      </Link>
+                                    ) : (
+                                      head.companyName
+                                    )}
+                                  </p>
+                                  {!single && (
+                                    <p className="mt-0.5 text-xs text-ink-500">
+                                      <Badge tone="brand">{roles.length} roles</Badge>
+                                    </p>
+                                  )}
+                                </td>
+                              )}
+                              <td className="px-3 py-3">
+                                <p className="max-w-[200px] truncate text-ink-900">
+                                  {single ? (
+                                    (role.roleTitle ?? "Role not specified")
+                                  ) : (
+                                    <Link
+                                      to={`/drives/${role.driveId}`}
+                                      className="hover:underline"
+                                    >
+                                      {role.roleTitle ?? "Role not specified"}
+                                    </Link>
+                                  )}
+                                </p>
+                                {ctc !== null && (
+                                  <p className="max-w-[200px] truncate text-xs text-ink-500">
+                                    {ctc}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-3 py-3">
+                                <Badge tone={STATUS_TONE(role.status)}>
+                                  {STATUS_LABEL[role.status] ?? role.status}
+                                </Badge>
+                              </td>
+                              <td className="px-3 py-3 font-semibold text-ink-900">
+                                {funnel.applicants}
+                              </td>
+                              <td className="px-3 py-3 font-semibold text-ink-900">
+                                {funnel.shortlisted}
+                              </td>
+                              <td className="px-3 py-3 font-semibold text-ink-900">
+                                {funnel.offers}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -427,9 +562,10 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
             <p className="text-sm text-ink-700">No drives here yet.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {filteredStatDrives.map((drive) => (
-                <StatDriveRow key={drive.driveId} drive={drive} />
-              ))}
+              {statVisits.map((roles) => {
+                const [head] = roles;
+                return head === undefined ? null : <StatVisit key={head.driveId} roles={roles} />;
+              })}
             </ul>
           )}
         </DrilldownModal>

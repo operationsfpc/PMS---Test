@@ -3,7 +3,12 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import { AeOverviewPage, type AeOverviewSnapshot, type AeOverviewView } from "./overview-page";
+import {
+  type AeOverviewDrive,
+  AeOverviewPage,
+  type AeOverviewSnapshot,
+  type AeOverviewView,
+} from "./overview-page";
 
 /**
  * The Account Executive's landing page. Mockup approved 2026-08-26
@@ -21,6 +26,7 @@ const SNAPSHOT: AeOverviewSnapshot = {
   drives: [
     {
       driveId: "d1",
+      companyDriveId: null,
       companyName: "Accenture",
       roleTitle: "Junior Analyst",
       status: "live",
@@ -36,6 +42,7 @@ const SNAPSHOT: AeOverviewSnapshot = {
     },
     {
       driveId: "d2",
+      companyDriveId: null,
       companyName: "Zoho Corporation",
       roleTitle: "Member Technical Staff",
       status: "completed",
@@ -72,6 +79,50 @@ const show = (v: AeOverviewView = view()) =>
   );
 
 const inSection = async (name: RegExp) => within(await screen.findByRole("region", { name }));
+
+/**
+ * The `<li>` a visit owns, found by its "N roles" badge. The popup's filter
+ * chips carry the same type words as a visit's badges, so type assertions are
+ * made inside the visit rather than inside the dialog.
+ */
+const visitOf = (scope: HTMLElement) => {
+  const li = within(scope)
+    .getByText(/\d+ roles/)
+    .closest("li");
+  const head = li?.querySelector("p");
+  if (li === null || head == null) throw new Error("visit not found");
+  return { visit: within(li), head: within(head) };
+};
+
+/** One company visit that raised two roles — the shape that printed the company twice. */
+const role = (
+  driveId: string,
+  roleTitle: string,
+  over: Partial<AeOverviewDrive> = {},
+): AeOverviewDrive => ({
+  driveId,
+  companyDriveId: "e1",
+  companyName: "Wipro",
+  roleTitle,
+  status: "live",
+  driveType: "placement",
+  ctcMinLpa: 6,
+  ctcMaxLpa: 8,
+  createdAt: "2026-08-25T09:00:00.000Z",
+  campuses: ["PSG Tech"],
+  applicants: [{ shortlisted: true, hasOffer: false }],
+  ...over,
+});
+
+const VISIT: readonly AeOverviewDrive[] = [
+  role("d10", "SDE", {
+    applicants: [
+      { shortlisted: true, hasOffer: false },
+      { shortlisted: false, hasOffer: false },
+    ],
+  }),
+  role("d11", "Data analyst", { ctcMinLpa: 4, ctcMaxLpa: 5 }),
+];
 
 describe("AeOverviewPage — my drives", () => {
   it("counts the drives they brought in", async () => {
@@ -138,6 +189,90 @@ describe("AeOverviewPage — my drives", () => {
     expect(recent.getByRole("link", { name: /accenture/i }).getAttribute("href")).toBe(
       "/drives/d1",
     );
+  });
+
+  /**
+   * UAT 2026-10-16: "same company shows as two". Two roles of one visit are one
+   * visit. The table gives the visit one company cell and keeps a row per role,
+   * because each role has its own applicants, shortlist and offers.
+   */
+  it("names the visit once in the most-recent table, with a row per role", async () => {
+    show(view({ ...SNAPSHOT, drives: VISIT }));
+    const recent = await inSection(/most recent/i);
+
+    expect(recent.getAllByText("Wipro")).toHaveLength(1);
+    expect(recent.getByText("2 roles")).toBeDefined();
+    // The company headline of a multi-role visit is not a link: each role links
+    // to its own record, and one link would have to guess which role it meant.
+    expect(recent.queryByRole("link", { name: /wipro/i })).toBeNull();
+
+    const rows = recent.getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.textContent).toMatch(/sde/i);
+    expect(rows[1]?.textContent).toMatch(/data analyst/i);
+    expect(rows[1]?.textContent).not.toMatch(/wipro/i);
+    expect(recent.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      "/drives/d10",
+      "/drives/d11",
+    ]);
+  });
+
+  it("folds a visit's roles under the company in the popup", async () => {
+    const user = userEvent.setup();
+    show(view({ ...SNAPSHOT, drives: VISIT }));
+    const mine = await inSection(/my drives/i);
+
+    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
+
+    expect(within(dialog).getAllByText("Wipro")).toHaveLength(1);
+    expect(within(dialog).getByText("2 roles")).toBeDefined();
+    expect(
+      within(dialog)
+        .getByRole("button", { name: /data analyst/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(within(dialog).getAllByText(/applied · .* shortlisted · .* offers/i)).toHaveLength(2);
+    expect(
+      within(dialog)
+        .getAllByRole("link", { name: /open the drive record/i })
+        .map((link) => link.getAttribute("href")),
+    ).toEqual(["/drives/d10", "/drives/d11"]);
+  });
+
+  it("says the visit mixes drive types instead of claiming one", async () => {
+    const user = userEvent.setup();
+    show(
+      view({
+        ...SNAPSHOT,
+        drives: [role("d10", "SDE"), role("d11", "Intern", { driveType: "internship" })],
+      }),
+    );
+    const mine = await inSection(/my drives/i);
+
+    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
+    const { visit, head } = visitOf(dialog);
+
+    expect(head.getByText("Mixed types")).toBeDefined();
+    expect(head.queryByText("Full time")).toBeNull();
+    // A mixed visit says no single type, so each role badges its own.
+    expect(visit.getByRole("button", { name: /^intern ·/i }).textContent).toMatch(/internship/i);
+  });
+
+  it("says a visit's type once when every role shares it", async () => {
+    const user = userEvent.setup();
+    show(view({ ...SNAPSHOT, drives: VISIT }));
+    const mine = await inSection(/my drives/i);
+
+    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
+    const { visit, head } = visitOf(dialog);
+
+    expect(head.getAllByText("Full time")).toHaveLength(1);
+    expect(head.queryByText("Mixed types")).toBeNull();
+    // Said once means said once: the roles under it do not repeat it.
+    expect(visit.getByRole("button", { name: /^sde ·/i }).textContent).not.toMatch(/full time/i);
   });
 
   it("says so plainly when they have raised nothing yet", async () => {
