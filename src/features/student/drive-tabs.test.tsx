@@ -217,13 +217,18 @@ describe("DriveTabs", () => {
     render(<DriveTabs view={view()} now={NOW} />);
     await screen.findByText("Zoho");
 
+    // The card already names the company and the role, so the link says
+    // "View everything" and carries both in its accessible name.
     expect(
-      screen.getByRole<HTMLAnchorElement>("link", { name: /everything about Zoho/i }).href,
+      screen.getByRole<HTMLAnchorElement>("link", { name: /about .+ at Zoho/i }).textContent,
+    ).toBe("View everything");
+    expect(
+      screen.getByRole<HTMLAnchorElement>("link", { name: /about .+ at Zoho/i }).href,
     ).toContain("/drives/d1");
 
     await user.click(screen.getByRole("tab", { name: "In progress (1)" }));
     expect(
-      screen.getByRole<HTMLAnchorElement>("link", { name: /everything about Accenture/i }).href,
+      screen.getByRole<HTMLAnchorElement>("link", { name: /about .+ at Accenture/i }).href,
     ).toContain("/drives/d2");
   });
 

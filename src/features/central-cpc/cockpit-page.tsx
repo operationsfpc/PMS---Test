@@ -1,5 +1,6 @@
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
+import { StudentIdentity } from "@components/student-identity";
 import {
   Accordion,
   AccordionContent,
@@ -97,6 +98,8 @@ export interface DisbarmentReview {
   readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Which campus the student belongs to — this review spans all of them. */
+  readonly college: string | null;
   readonly absences: number;
 }
 
@@ -259,15 +262,22 @@ export function CockpitPage({
   const drives = typed === null ? null : orderDrives(typed, sort);
   const split = drives === null ? null : partitionExpired(drives, clock);
 
+  /**
+   * The chips count company visits, because that is what the list below shows:
+   * a visit that raised three full-time roles is one card, so it is one count
+   * (2026-10-17, same rule as the AE overview). A visit that mixes types is
+   * honestly in both of those buckets.
+   */
   const typeCounts =
     inScope === null
       ? undefined
       : {
-          "": inScope.length,
-          placement: inScope.filter((d) => d.driveType === "placement").length,
-          internship_convertible: inScope.filter((d) => d.driveType === "internship_convertible")
-            .length,
-          internship: inScope.filter((d) => d.driveType === "internship").length,
+          "": groupDrivesByEvent(inScope).size,
+          placement: groupDrivesByEvent(inScope.filter((d) => d.driveType === "placement")).size,
+          internship_convertible: groupDrivesByEvent(
+            inScope.filter((d) => d.driveType === "internship_convertible"),
+          ).size,
+          internship: groupDrivesByEvent(inScope.filter((d) => d.driveType === "internship")).size,
         };
 
   /** Q5 (2026-08-21): the venue is the Central CPC's to record — nobody else's. */
@@ -361,16 +371,13 @@ export function CockpitPage({
           <ul className="mt-3 divide-y divide-neutral-200">
             {reviews.map((review) => (
               <li key={review.studentId} className="flex items-center justify-between gap-4 py-2">
-                <div>
-                  <p className="font-medium text-ink-900">
-                    <Link to={`/students/${review.studentId}`} className="hover:underline">
-                      {review.studentName}
-                    </Link>
-                  </p>
-                  <p className="text-sm text-ink-500">
-                    {review.rollNumber} · {review.absences} absences
-                  </p>
-                </div>
+                <StudentIdentity
+                  name={review.studentName}
+                  rollNumber={review.rollNumber}
+                  college={review.college}
+                  studentId={review.studentId}
+                  detail={`${review.absences} absences`}
+                />
                 <Badge tone="warning">Needs review</Badge>
               </li>
             ))}
@@ -440,7 +447,10 @@ export function CockpitPage({
             <Accordion className="mt-4">
               <AccordionItem value="expired">
                 <AccordionTrigger className="py-3 text-sm font-medium text-ink-500">
-                  Expired — application deadline passed ({split.expired.length})
+                  {/* The list beneath counts company VISITS — DriveList folds a
+                      visit's roles into one card — so this number does too, or it
+                      promises more cards than the section holds. */}
+                  Expired — application deadline passed ({groupDrivesByEvent(split.expired).size})
                 </AccordionTrigger>
                 <AccordionContent className="pb-3">
                   <DriveList
@@ -863,12 +873,15 @@ function EventGroup({
           {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {statuses.map(([status, count]) => (
-            <Badge key={status} tone={STATUS_TONE[status]}>
-              {label(status)}
-              {count > 1 && ` ×${count}`}
+          {/* Only when every role stands where the visit does: one badge that
+              reads as "all three of these". A visit that mixes would only be
+              repeating the badges each role already wears below. */}
+          {statuses.length === 1 && (
+            <Badge tone={STATUS_TONE[statuses[0]?.[0] ?? "draft"]}>
+              {label(statuses[0]?.[0] ?? "draft")}
+              {(statuses[0]?.[1] ?? 0) > 1 && ` ×${statuses[0]?.[1]}`}
             </Badge>
-          ))}
+          )}
           {held > 0 && <Badge tone="warning">{held} on hold</Badge>}
           {stale > 0 && <Badge tone="warning">Pending too long ({stale})</Badge>}
         </div>

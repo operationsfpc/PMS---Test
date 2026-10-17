@@ -81,16 +81,18 @@ const show = (v: AeOverviewView = view()) =>
 const inSection = async (name: RegExp) => within(await screen.findByRole("region", { name }));
 
 /**
- * The `<li>` a visit owns, found by its "N roles" badge. The popup's filter
- * chips carry the same type words as a visit's badges, so type assertions are
- * made inside the visit rather than inside the dialog.
+ * The `<li>` a visit owns, found by its "N roles" badge. The popup's header now
+ * counts the same way ("1 drive · 2 roles"), so the badge is picked by element,
+ * and the filter chips carry the same type words as a visit's badges, so type
+ * assertions are made inside the visit rather than inside the dialog.
  */
 const visitOf = (scope: HTMLElement) => {
-  const li = within(scope)
-    .getByText(/\d+ roles/)
-    .closest("li");
+  const badge = within(scope)
+    .getAllByText(/\d+ roles/)
+    .find((element) => element.tagName === "SPAN");
+  const li = badge?.closest("li");
   const head = li?.querySelector("p");
-  if (li === null || head == null) throw new Error("visit not found");
+  if (li === null || li === undefined || head == null) throw new Error("visit not found");
   return { visit: within(li), head: within(head) };
 };
 
@@ -222,7 +224,9 @@ describe("AeOverviewPage — my drives", () => {
     show(view({ ...SNAPSHOT, drives: VISIT }));
     const mine = await inSection(/my drives/i);
 
-    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    // One company visit raised two roles, so the card counts ONE drive and the
+    // popup says so with the roles beside it.
+    await user.click(mine.getByRole("button", { name: /drives brought in 1/i }));
     const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
 
     expect(within(dialog).getAllByText("Wipro")).toHaveLength(1);
@@ -250,7 +254,7 @@ describe("AeOverviewPage — my drives", () => {
     );
     const mine = await inSection(/my drives/i);
 
-    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    await user.click(mine.getByRole("button", { name: /drives brought in 1/i }));
     const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
     const { visit, head } = visitOf(dialog);
 
@@ -265,7 +269,7 @@ describe("AeOverviewPage — my drives", () => {
     show(view({ ...SNAPSHOT, drives: VISIT }));
     const mine = await inSection(/my drives/i);
 
-    await user.click(mine.getByRole("button", { name: /drives brought in 2/i }));
+    await user.click(mine.getByRole("button", { name: /drives brought in 1/i }));
     const dialog = await screen.findByRole("dialog", { name: /drives brought in/i });
     const { visit, head } = visitOf(dialog);
 

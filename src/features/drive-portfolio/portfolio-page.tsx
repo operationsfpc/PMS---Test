@@ -8,10 +8,13 @@ import {
   AccordionItem,
   AccordionTrigger,
   Badge,
+  Button,
   Card,
   PageHeader,
   StatCard,
 } from "@components/ui";
+import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
+import { groupByVisitKey, isStandaloneVisit, visitKey } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import { type DriveOrder, orderDrives, partitionExpired } from "@domain/drive-aging";
 import { applicationWindow } from "@domain/drive-analytics";
@@ -56,17 +59,7 @@ interface PortfolioEvent {
 
 /** Groups portfolio drives by their parent company event. */
 function groupPortfolioByEvent(drives: readonly PortfolioDrive[]): PortfolioEvent[] {
-  const groups = new Map<string, PortfolioDrive[]>();
-
-  for (const drive of drives) {
-    const key = drive.companyDriveId || `standalone:${drive.driveId}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.push(drive);
-    } else {
-      groups.set(key, [drive]);
-    }
-  }
+  const groups = groupByVisitKey(drives, (drive) => visitKey(drive.companyDriveId, drive.driveId));
 
   return Array.from(groups.entries()).map(([key, roles]) => {
     const first = roles[0];
@@ -94,6 +87,25 @@ function visitType(roles: readonly PortfolioDrive[]) {
   const [single] = types;
   return { mixed: types.size > 1, single: types.size === 1 ? (single ?? null) : null };
 }
+
+/** The visit whose applicants the side pane is listing, and the role it opens on. */
+interface OpenVisit {
+  readonly company: string;
+  readonly when: string | null;
+  readonly roles: readonly PortfolioDrive[];
+  readonly activeId: string;
+}
+
+/** Pane headers read as a sentence under the company, so the date is spelled once here. */
+const visitDay = (iso: string | null) =>
+  iso === null
+    ? undefined
+    : new Date(iso).toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
 
 export interface PortfolioApplicant {
   readonly applicationId: string;
@@ -212,7 +224,12 @@ export function DrivePortfolioPage({
   const [drives, setDrives] = useState<readonly PortfolioDrive[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  /**
+   * The applicant roll is a read of one company visit, so it opens in the
+   * shared side pane rather than expanding inside the card: the card already
+   * carries the funnel, and a roll of names pushed everything below it down.
+   */
+  const [openVisit, setOpenVisit] = useState<OpenVisit | null>(null);
   /**
    * 2026-08-26 (Karthik): newest first, here and everywhere else. A
    * coordinator opening Live is looking for what just happened; the
@@ -381,8 +398,93 @@ export function DrivePortfolioPage({
           )}
         </>
       )}
+
+      {/* Gated on the rule as well as on the pane being open: a pane left open
+          must not keep showing the roll to a role that may not read it. */}
+      {openVisit !== null && mayViewApplicants && (
+        <VisitPane
+          open
+          onClose={() => setOpenVisit(null)}
+          company={openVisit.company}
+          description={visitDay(openVisit.when)}
+          roles={paneRoles(openVisit)}
+          activeId={openVisit.activeId}
+        />
+      )}
     </div>
   );
+
+  /** One role's roll of names, as the pane reads it. */
+  function applicantList(drive: PortfolioDrive) {
+    if (drive.applicants.length === 0) {
+      return (
+        <p className="text-sm text-ink-700">
+          Nobody has applied yet. Applicants appear the moment they apply.
+        </p>
+      );
+    }
+
+    return (
+      <ul className="divide-y divide-line">
+        {drive.applicants.map((applicant) => {
+          const stage = applicationProgress({
+            rounds: applicant.rounds,
+            hasOffer: applicant.hasOffer,
+          });
+
+          return (
+            <li
+              key={applicant.applicationId}
+              className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink-900">
+                  <Link to={`/students/${applicant.studentId}`} className="hover:underline">
+                    {applicant.studentName}
+                  </Link>
+                </p>
+                <p className="text-xs text-ink-500">
+                  <span>{applicant.rollNumber}</span> · {applicant.campus}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {applicant.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
+                <Badge tone={STAGE_TONE[stage.stage]}>{stage.label}</Badge>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  /** The visit's roles, one tab each. A visit that runs on one type says it on
+   * the card; only a mixed visit has to name the type per role. */
+  function paneRoles(visit: OpenVisit): readonly VisitPaneRole[] {
+    const mixed = new Set(visit.roles.map((role) => role.driveType)).size > 1;
+
+    return visit.roles.map((role) => ({
+      id: role.driveId,
+      label: role.roleTitle,
+      count: role.applicants.length,
+      badge: mixed ? (
+        <Badge tone={driveTypeTone(role.driveType)}>{driveTypeLabel(role.driveType)}</Badge>
+      ) : undefined,
+      content: (
+        <>
+          <p className="mb-3">
+            <Link
+              to={`/drives/${role.driveId}`}
+              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+            >
+              Open the drive record for {role.roleTitle}
+            </Link>
+          </p>
+          {applicantList(role)}
+        </>
+      ),
+    }));
+  }
 
   function renderEvent(event: PortfolioEvent) {
     const isMultiRole = event.roles.length > 1;
@@ -458,14 +560,14 @@ export function DrivePortfolioPage({
                         {progress.phase}
                       </Badge>
                     </AccordionTrigger>
-                    <AccordionContent>{renderDrive(drive, true)}</AccordionContent>
+                    <AccordionContent>{renderDrive(drive, true, event)}</AccordionContent>
                   </AccordionItem>
                 );
               })}
             </Accordion>
           ) : (
             event.roles.map((drive) => (
-              <Fragment key={drive.driveId}>{renderDrive(drive, false)}</Fragment>
+              <Fragment key={drive.driveId}>{renderDrive(drive, false, event)}</Fragment>
             ))
           )}
 
@@ -474,7 +576,7 @@ export function DrivePortfolioPage({
             <div className="border-t border-line bg-surface-muted p-3">
               <Link
                 to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${
-                  event.eventId.startsWith("standalone:") ? "" : event.eventId
+                  isStandaloneVisit(event.eventId) ? "" : event.eventId
                 }&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
                 className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
               >
@@ -487,7 +589,7 @@ export function DrivePortfolioPage({
     );
   }
 
-  function renderDrive(drive: PortfolioDrive, nested: boolean) {
+  function renderDrive(drive: PortfolioDrive, nested: boolean, event: PortfolioEvent) {
     const progress = driveProgress(drive);
     const funnel = summariseFunnel(drive.applicants);
     const window = applicationWindow(
@@ -498,7 +600,6 @@ export function DrivePortfolioPage({
       now,
     );
     const hats = involvementIn(drive, profileId);
-    const open = expanded === drive.driveId;
     const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
     const closeDate =
       drive.applicationEnd === null
@@ -511,9 +612,9 @@ export function DrivePortfolioPage({
           });
     const closed =
       drive.applicationEnd !== null && new Date(drive.applicationEnd).getTime() < now.getTime();
-    /** Inside a visit the company is already named by the header, so the role is
-     * what makes this panel's regions distinct. */
-    const who = nested ? `${drive.companyName} ${drive.roleTitle}` : drive.companyName;
+    /** The company is never repeated next to the role. Inside a visit the header
+     * already named it, so the role is what labels this panel's regions. */
+    const who = nested ? drive.roleTitle : drive.companyName;
 
     const content = (
       <section aria-label={who} className={nested ? "p-4" : "p-5"}>
@@ -619,15 +720,25 @@ export function DrivePortfolioPage({
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {mayViewApplicants && (
-            <button
-              type="button"
-              aria-expanded={open}
-              onClick={() => setExpanded(open ? null : drive.driveId)}
-              className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={
+                nested
+                  ? `View applicants for ${drive.roleTitle}`
+                  : `View applicants to ${drive.companyName}`
+              }
+              onClick={() =>
+                setOpenVisit({
+                  company: event.companyName,
+                  when: event.tentativeDate,
+                  roles: event.roles,
+                  activeId: drive.driveId,
+                })
+              }
             >
-              {open ? "Hide" : "Show"} applicants{" "}
-              {nested ? "for this role" : `to ${drive.companyName}`}
-            </button>
+              View applicants
+            </Button>
           )}
 
           {mayShortlist && funnel.applied > 0 && (
@@ -650,52 +761,6 @@ export function DrivePortfolioPage({
             </Link>
           )}
         </div>
-
-        {/* Gated on the rule as well as on `open`: a stale
-            expansion must not survive a role that may not read it. */}
-        {open && mayViewApplicants && (
-          <section
-            aria-label={`${who} applicant list`}
-            className="border-t border-line bg-surface-muted p-5"
-          >
-            {drive.applicants.length === 0 ? (
-              <p className="text-sm text-ink-700">
-                Nobody has applied yet. Applicants appear the moment they apply.
-              </p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {drive.applicants.map((applicant) => {
-                  const stage = applicationProgress({
-                    rounds: applicant.rounds,
-                    hasOffer: applicant.hasOffer,
-                  });
-
-                  return (
-                    <li
-                      key={applicant.applicationId}
-                      className="flex flex-wrap items-center justify-between gap-2 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink-900">
-                          <Link to={`/students/${applicant.studentId}`} className="hover:underline">
-                            {applicant.studentName}
-                          </Link>
-                        </p>
-                        <p className="text-xs text-ink-500">
-                          <span>{applicant.rollNumber}</span> · {applicant.campus}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {applicant.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
-                        <Badge tone={STAGE_TONE[stage.stage]}>{stage.label}</Badge>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        )}
       </section>
     );
 

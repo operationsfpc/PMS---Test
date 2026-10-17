@@ -1,4 +1,5 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { visitKey } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
@@ -354,11 +355,12 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
   const standalone: PendingPif[] = [];
   for (const pif of rows ?? []) {
     if (pif.companyDriveId !== null && pif.event !== null) {
-      const group = eventGroups.find((g) => g.key === pif.companyDriveId);
+      const key = visitKey(pif.companyDriveId, pif.id);
+      const group = eventGroups.find((g) => g.key === key);
       if (group) {
         group.roles.push(pif);
       } else {
-        eventGroups.push({ key: pif.companyDriveId, event: pif.event, roles: [pif] });
+        eventGroups.push({ key, event: pif.event, roles: [pif] });
       }
     } else {
       standalone.push(pif);

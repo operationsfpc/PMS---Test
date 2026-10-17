@@ -17,6 +17,7 @@ import {
   countAbsences,
   needsDisbarmentReview,
 } from "@domain/attendance";
+import { groupByVisitKey, visitKey } from "@domain/company-drive";
 import { condenseNotifications } from "@domain/notifications";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { describeOfferPay } from "@domain/offer-pay";
@@ -163,13 +164,9 @@ const RoundChips = ({ entry }: { entry: ProgressedApplication }) =>
  * own date and its own rounds — those are never summed.
  */
 function ApplicationVisits({ entries }: { entries: readonly ProgressedApplication[] }) {
-  const visits = new Map<string, ProgressedApplication[]>();
-  for (const entry of entries) {
-    const key = entry.application.companyDriveId ?? `standalone:${entry.application.applicationId}`;
-    const group = visits.get(key);
-    if (group !== undefined) group.push(entry);
-    else visits.set(key, [entry]);
-  }
+  const visits = groupByVisitKey(entries, (entry) =>
+    visitKey(entry.application.companyDriveId, entry.application.applicationId),
+  );
 
   return (
     <ul className="flex flex-col gap-3">

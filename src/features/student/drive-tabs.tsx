@@ -8,6 +8,7 @@ import {
   Card,
   PageHeader,
 } from "@components/ui";
+import { groupByVisitKey, visitKey } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
   DRIVE_TYPE_FILTERS,
@@ -369,7 +370,7 @@ export function DriveTabs({
                     {row.roundsCleared} of {row.totalRounds} rounds cleared · applied{" "}
                     {day(row.appliedAt)}
                   </p>
-                  <FullRecordLink id={row.id} company={row.companyName} />
+                  <FullRecordLink id={row.id} role={row.roleTitle} company={row.companyName} />
                 </>
               )}
             />
@@ -388,7 +389,7 @@ export function DriveTabs({
                     {row.ctcLabel} · Closed {day(row.closedOn)} — you didn’t apply{" "}
                     <Badge tone="neutral">Missed</Badge>
                   </p>
-                  <FullRecordLink id={row.id} company={row.companyName} />
+                  <FullRecordLink id={row.id} role={row.roleTitle} company={row.companyName} />
                 </>
               )}
             />
@@ -418,7 +419,7 @@ export function DriveTabs({
                     name={row.offerLetterName}
                     className="mt-2"
                   />
-                  <FullRecordLink id={row.id} company={row.companyName} />
+                  <FullRecordLink id={row.id} role={row.roleTitle} company={row.companyName} />
                 </>
               )}
             />
@@ -439,9 +440,6 @@ interface TabRow {
   readonly companyDriveId?: string | null;
 }
 
-/** The visit a row belongs to — its own id when it was raised standalone. */
-const visitKey = (row: TabRow) => row.companyDriveId || `standalone:${row.id}`;
-
 /**
  * One card per company visit, whatever the tab (UAT 2026-10-16: a student with
  * two applications to one visit counted two companies).
@@ -457,13 +455,7 @@ function TabVisits<T extends TabRow>({
   rows: readonly T[];
   body: (row: T) => ReactNode;
 }) {
-  const groups = new Map<string, T[]>();
-  for (const row of rows) {
-    const key = visitKey(row);
-    const existing = groups.get(key);
-    if (existing) existing.push(row);
-    else groups.set(key, [row]);
-  }
+  const groups = groupByVisitKey(rows, (row) => visitKey(row.companyDriveId, row.id));
 
   return (
     <>
@@ -549,14 +541,21 @@ function RowHead({
 }
 
 /** N1: every card opens the drive's one canonical page. */
-function FullRecordLink({ id, company }: { id: string; company: string }) {
+/**
+ * The row's way to the canonical drive record. The card above it already names
+ * the company and the role, so the link says neither twice — but both stay in
+ * the accessible name, because a student who pulls up the page's list of links
+ * has to be able to tell one visit's roles from another's.
+ */
+function FullRecordLink({ id, role, company }: { id: string; role: string; company: string }) {
   return (
     <p className="mt-3">
       <Link
         to={`/drives/${id}`}
+        aria-label={`View everything about ${role} at ${company}`}
         className="text-sm font-semibold text-[#3D3777] underline underline-offset-2"
       >
-        View everything about {company}
+        View everything
       </Link>
     </p>
   );

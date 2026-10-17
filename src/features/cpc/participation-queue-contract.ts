@@ -8,8 +8,11 @@
 
 export interface PendingOptOut {
   readonly id: string;
+  readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Which campus the student belongs to — the queues run across all of them. */
+  readonly college: string | null;
   readonly reason: string;
   /** Short-lived signed URL for the student's signed declaration (PRD §21.2). */
   readonly declarationUrl: string | null;
@@ -17,8 +20,10 @@ export interface PendingOptOut {
 
 export interface PendingSelfPlacement {
   readonly id: string;
+  readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  readonly college: string | null;
   readonly companyName: string;
   readonly ctcLpa: number;
   /** Short-lived signed URL for the offer letter (PRD §21.2). */

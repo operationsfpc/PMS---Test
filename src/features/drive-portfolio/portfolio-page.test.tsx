@@ -187,7 +187,7 @@ describe("DrivePortfolioPage", () => {
 
     await user.click(await screen.findByRole("button", { name: /applicants to zoho/i }));
 
-    const list = screen.getByRole("region", { name: "Zoho Corporation applicant list" });
+    const list = await screen.findByRole("dialog", { name: "Zoho Corporation" });
     expect(within(list).getByText("Anjali Subramanian")).toBeDefined();
     expect(within(list).getByText("21CSE1042")).toBeDefined();
     expect(within(list).getByText("Round 2 of 2 — Technical interview")).toBeDefined();
@@ -201,10 +201,10 @@ describe("DrivePortfolioPage", () => {
 
     await user.click(await screen.findByRole("button", { name: /applicants to zoho/i }));
 
-    const list = screen.getByRole("region", { name: "Zoho Corporation applicant list" });
+    const list = await screen.findByRole("dialog", { name: "Zoho Corporation" });
     expect(
       within(list)
-        .getAllByRole("link")
+        .getAllByRole("link", { name: /anjali subramanian|rahul nair/i })
         .map((l) => l.getAttribute("href")),
     ).toEqual(["/students/s-1", "/students/s-2"]);
   });
@@ -213,6 +213,19 @@ describe("DrivePortfolioPage", () => {
     show();
     await screen.findByRole("region", { name: "Zoho Corporation" });
 
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  it("leaves the pane the same way it was opened", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: /applicants to zoho/i }));
+    await screen.findByRole("dialog", { name: "Zoho Corporation" });
+
+    await user.click(screen.getByRole("button", { name: "Close panel" }));
+
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByText("Anjali Subramanian")).toBeNull();
   });
 
@@ -877,16 +890,12 @@ describe("one company visit is one card", () => {
       "true",
     );
 
-    const sdeFunnel = v.getByRole("region", {
-      name: "Zoho Corporation Member Technical Staff applicants",
-    });
+    const sdeFunnel = v.getByRole("region", { name: "Member Technical Staff applicants" });
     const applied = within(sdeFunnel).getByRole("link", { name: /applied/i });
     expect(within(applied).getByText("2")).toBeDefined();
     expect(applied.getAttribute("href")).toBe("/drives/d20?stage=applied");
 
-    const analystFunnel = v.getByRole("region", {
-      name: "Zoho Corporation Data Analyst applicants",
-    });
+    const analystFunnel = v.getByRole("region", { name: "Data Analyst applicants" });
     const analystApplied = within(analystFunnel).getByRole("link", { name: /applied/i });
     expect(within(analystApplied).getByText("0")).toBeDefined();
     expect(analystApplied.getAttribute("href")).toBe("/drives/d21?stage=applied");
@@ -894,6 +903,36 @@ describe("one company visit is one card", () => {
     expect(
       v.getAllByRole("link", { name: /open the drive record/i }).map((l) => l.getAttribute("href")),
     ).toEqual(["/drives/d20", "/drives/d21"]);
+  });
+
+  /**
+   * The roll of names is one read of the whole visit, so it opens in the shared
+   * side pane with a tab per role — not inline, where a long list pushed the
+   * next card off the screen, and not one pane per role, which would make the
+   * reader re-open the company for every role they wanted.
+   */
+  it("opens the visit's applicants in one pane with a tab per role", async () => {
+    const user = userEvent.setup();
+    const v = await visit([SDE, ANALYST]);
+
+    await user.click(v.getByRole("button", { name: "View applicants for Data Analyst" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Zoho Corporation" });
+    expect(
+      within(dialog)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent),
+    ).toEqual(["Member Technical Staff (2)", "Data Analyst (0)"]);
+    expect(within(dialog).getByText(/nobody has applied yet/i)).toBeDefined();
+
+    await user.click(within(dialog).getByRole("tab", { name: "Member Technical Staff (2)" }));
+
+    expect(within(dialog).getByText("Anjali Subramanian")).toBeDefined();
+    expect(
+      within(dialog)
+        .getByRole("link", { name: /open the drive record/i })
+        .getAttribute("href"),
+    ).toBe("/drives/d20");
   });
 
   it("says a type both roles share once, on the visit", async () => {

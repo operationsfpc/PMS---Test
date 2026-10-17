@@ -12,8 +12,11 @@ export class SemesterQueueError extends Error {}
  */
 export interface PendingSemester {
   readonly id: string;
+  readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Which campus the student belongs to — the queue runs across all of them. */
+  readonly college: string | null;
   readonly semesterNumber: number;
   readonly cgpa: number;
   /** What the student actually typed, on the scale they typed it. */
@@ -33,7 +36,7 @@ export interface SemesterQueueRepository {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the schema. */
 export const SEMESTER_QUEUE_COLUMNS =
-  "id, semester_number, cgpa, declared_marks, marks_scale, current_arrears, history_of_arrears, created_at, status, students!inner(full_name, roll_number, srf_status), student_documents(storage_path)";
+  "id, student_id, semester_number, cgpa, declared_marks, marks_scale, current_arrears, history_of_arrears, created_at, status, students!inner(full_name, roll_number, srf_status, campuses(name)), student_documents(storage_path)";
 
 /** Marksheets live in the marksheets bucket (0010, private). */
 const MARKSHEET_BUCKET = "marksheets";
@@ -98,14 +101,20 @@ export function createSupabaseSemesterQueueRepository(
       );
 
       return rows.map((row): PendingSemester => {
-        const student = one<{ full_name?: string; roll_number?: string }>(row.students);
+        const student = one<{
+          full_name?: string;
+          roll_number?: string;
+          campuses?: unknown;
+        }>(row.students);
         const document = one<{ storage_path?: string }>(row.student_documents);
         const path = document?.storage_path;
 
         return {
           id: row.id as string,
+          studentId: (row.student_id as string | null) ?? "",
           studentName: student?.full_name ?? "Unknown student",
           rollNumber: student?.roll_number ?? "—",
+          college: one<{ name?: string }>(student?.campuses)?.name ?? null,
           semesterNumber: Number(row.semester_number),
           cgpa: Number(row.cgpa),
           declaredMarks: row.declared_marks === null ? null : Number(row.declared_marks),

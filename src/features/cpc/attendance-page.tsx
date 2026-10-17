@@ -10,6 +10,8 @@ export interface ScheduledStudent {
   readonly studentId?: string | null;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Whose college it is — a round runs across every campus the drive targets. */
+  readonly college?: string | null;
   readonly status: AttendanceStatus;
   /** Absences already accrued across the whole tenure (R8). No reset. */
   readonly priorAbsences: number;
@@ -160,6 +162,11 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                   <label htmlFor={`att-${student.applicationId}`} className="text-sm">
                     <span className="font-medium">{student.studentName}</span>{" "}
                     <span className="text-ink-500">{student.rollNumber}</span>
+                    {student.college != null && student.college !== "" && (
+                      <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                        {student.college}
+                      </span>
+                    )}
                   </label>
                   {/* The name belongs to the checkbox — it is how the row is
                       ticked — so the record is reached from its own link. */}

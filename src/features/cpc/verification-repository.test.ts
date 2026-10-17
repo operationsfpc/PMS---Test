@@ -2,7 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseVerificationRepository, VerificationError } from "./verification-repository";
+import {
+  createSupabaseVerificationRepository,
+  VERIFICATION_QUEUE_COLUMNS,
+  VerificationError,
+} from "./verification-repository";
 
 /**
  * The CPC verification queue against real data.
@@ -28,7 +32,13 @@ describe("createSupabaseVerificationRepository", () => {
         http.get(`${BASE}/rest/v1/students`, ({ request }) => {
           url = request.url;
           return HttpResponse.json([
-            { id: "s1", full_name: "Asha R", roll_number: "TEC001", overall_cgpa: 8.2 },
+            {
+              id: "s1",
+              full_name: "Asha R",
+              roll_number: "TEC001",
+              campuses: [{ name: "PSG College of Technology" }],
+              overall_cgpa: 8.2,
+            },
           ]);
         }),
       );
@@ -38,6 +48,14 @@ describe("createSupabaseVerificationRepository", () => {
       expect(url).toContain("srf_status=eq.srf_submitted");
       expect(rows).toHaveLength(1);
       expect(rows[0]?.fullName).toBe("Asha R");
+      // The queue spans every campus a coordinator can see, so the row has to
+      // say which one the student belongs to. A to-one embed arrives as an
+      // object or a one-item array, and both are read.
+      expect(rows[0]?.college).toBe("PSG College of Technology");
+      // Registered in src/db/query-contract.test.ts; this proves it is sent.
+      expect(decodeURIComponent(new URL(url).searchParams.get("select") ?? "")).toBe(
+        VERIFICATION_QUEUE_COLUMNS.replace(/ /g, ""),
+      );
     });
   });
 

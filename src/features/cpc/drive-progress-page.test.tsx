@@ -88,12 +88,12 @@ describe("DriveProgressPage", () => {
   /**
    * 2026-10-16 (Karthik): "central placement coordinator same company shows as
    * two". Two roles raised on one company visit are ONE card now — the company
-   * named once, the visit counted once — with the roles folded into accordion
-   * rows that keep their own students. Folding must never merge: Priya applied
-   * to both roles and appears under both, because each was shortlisted, tested
-   * and offered on its own.
+   * named once, the visit counted once — and the roles are listed as rows of
+   * that one card. Folding must never merge: Priya applied to both roles and
+   * appears in both rosters, because each was shortlisted, tested and offered
+   * on its own.
    */
-  it("gives one company visit one card with each role inside it", async () => {
+  it("gives one company visit one card that lists each role once", async () => {
     const mts: DriveProgressEntry = {
       ...DRIVE,
       companyDriveId: "e1",
@@ -114,19 +114,22 @@ describe("DriveProgressPage", () => {
     expect(screen.getByText("2 roles")).toBeDefined();
     // The company no longer links: one visit, two drive records, and picking
     // one of them silently is how the old event strip sent readers to the
-    // wrong place. Each role links to its own record instead.
+    // wrong place. Each role links to its own record from inside the pane.
     expect(screen.queryByRole("link", { name: "Zoho" })).toBeNull();
-    expect(screen.getAllByRole("link", { name: /open the drive record/i })).toHaveLength(2);
 
-    expect(screen.getAllByText("Priya Ramesh")).toHaveLength(2);
-    expect(screen.getAllByText("Arjun Menon")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /view students for engineer/i })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: /view students for quality analyst/i }),
+    ).toBeDefined();
   });
 
   /**
-   * Arrived open: the students are the reason the card exists, and a collapsed
-   * row would hide them behind a click that buys nothing.
+   * A coordinator reads one role's students at a time, so the rosters live in
+   * the pane rather than stacked in one long card: the row opens it on that
+   * role, and the other role's students are one tab away.
    */
-  it("opens each role of the visit so its students are on screen", async () => {
+  it("opens the visit pane on the role the row named", async () => {
+    const user = userEvent.setup();
     const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1" };
     const qa: DriveProgressEntry = {
       ...DRIVE,
@@ -137,12 +140,26 @@ describe("DriveProgressPage", () => {
     };
 
     render(<DriveProgressPage view={view([mts, qa])} />);
+    await screen.findByText("2 roles");
 
-    const engineer = await screen.findByRole("button", { name: /Engineer/ });
-    expect(engineer.getAttribute("aria-expanded")).toBe("true");
+    await user.click(screen.getByRole("button", { name: /view students for engineer/i }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Zoho")).toBeDefined();
+    expect(within(dialog).getByRole("tab", { name: "Engineer (3)" })).toBeDefined();
+    expect(within(dialog).getByRole("tab", { name: "Quality Analyst (1)" })).toBeDefined();
+    expect(within(dialog).getByText("Arjun Menon")).toBeDefined();
     expect(
-      screen.getByRole("button", { name: /Quality Analyst/ }).getAttribute("aria-expanded"),
-    ).toBe("true");
+      within(dialog).getByRole("link", { name: /open the drive record for engineer/i }),
+    ).toBeDefined();
+
+    await user.click(within(dialog).getByRole("tab", { name: "Quality Analyst (1)" }));
+
+    expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
+    expect(within(dialog).queryByText("Arjun Menon")).toBeNull();
+    expect(
+      within(dialog).getByRole("link", { name: /open the drive record for quality analyst/i }),
+    ).toBeDefined();
   });
 
   /**

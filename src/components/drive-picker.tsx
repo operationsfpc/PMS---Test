@@ -5,7 +5,6 @@ import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import type { DriveType } from "@domain/types";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./accordion";
 import { DriveSort } from "./drive-sort";
 import { Badge, Card, type Tone } from "./ui";
 
@@ -185,11 +184,6 @@ function Visit({
   const [singleType] = types;
   const mixed = types.size > 1;
 
-  const statuses = [...new Set(visit.map((role) => role.status))].map((status) => ({
-    status,
-    count: visit.filter((role) => role.status === status).length,
-  }));
-
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -200,49 +194,63 @@ function Visit({
           </Badge>
           <Badge tone="brand">{visit.length} roles</Badge>
         </p>
-        <span className="flex flex-wrap items-center gap-2">
-          {statuses.map((entry) => (
-            <Badge key={entry.status} tone={STATUS_TONE[entry.status] ?? "neutral"}>
-              {entry.status.replaceAll("_", " ")}
-              {entry.count > 1 && ` ×${entry.count}`}
-            </Badge>
-          ))}
-        </span>
       </div>
 
-      {/* Roles fold, they never merge — and the panels arrive open, so choosing
-          one is still one click. */}
-      <Accordion multiple className="mt-2" defaultValue={visit.map((role) => role.driveId)}>
-        {visit.map((role) => (
-          <AccordionItem key={role.driveId} value={role.driveId}>
-            <AccordionTrigger className="py-2">
-              <span className="font-semibold text-ink-900">{role.roleTitle ?? "Role not set"}</span>
-              {mixed && (
-                <Badge tone={driveTypeTone(role.driveType ?? null)}>
-                  {driveTypeLabel(role.driveType ?? null)}
-                </Badge>
-              )}
-              <span className="text-sm font-normal text-ink-600">
+      {/* A picker's roles are choices, not reading matter. Folded into panels
+          they needed two clicks each — one to open, one to choose — and a panel
+          left open by default is a table that pays the height for nothing. So:
+          one row per role, each with its own link. */}
+      <table className="mt-2 w-full text-left text-sm">
+        <thead>
+          <tr className="text-xs uppercase tracking-wide text-ink-500">
+            <th scope="col" className="py-1 pr-3 font-medium">
+              Role
+            </th>
+            <th scope="col" className="py-1 pr-3 font-medium">
+              Details
+            </th>
+            <th scope="col" className="py-1 pr-3 font-medium">
+              Status
+            </th>
+            <th scope="col" className="py-1 font-medium">
+              <span className="sr-only">Choose a role</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {visit.map((role) => (
+            <tr key={role.driveId} className="border-t border-line align-top">
+              <td className="py-2 pr-3">
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-ink-900">
+                    {role.roleTitle ?? "Role not set"}
+                  </span>
+                  {mixed && (
+                    <Badge tone={driveTypeTone(role.driveType ?? null)}>
+                      {driveTypeLabel(role.driveType ?? null)}
+                    </Badge>
+                  )}
+                </span>
+              </td>
+              <td className="py-2 pr-3 text-xs text-ink-600">
                 {[raisedLabel(role.raisedOn), role.ctcLabel]
                   .filter((part) => part !== null)
                   .join(" · ")}
-              </span>
-              {statusBadge(role.status)}
-            </AccordionTrigger>
-            <AccordionContent className="pb-2">
-              {/* The choice itself. Kept inside the panel rather than folded
-                  into the heading: two roles of one visit are two different
-                  pages to open, and the reader should say which. */}
-              <Link
-                to={makeLink(role.driveId)}
-                className="text-xs font-semibold text-brand-700 underline underline-offset-2"
-              >
-                Choose {role.roleTitle ?? "this role"}
-              </Link>
-            </AccordionContent>
-          </AccordionItem>
-        ))}
-      </Accordion>
+              </td>
+              <td className="py-2 pr-3">{statusBadge(role.status)}</td>
+              <td className="py-2 text-right">
+                <Link
+                  to={makeLink(role.driveId)}
+                  aria-label={`Choose ${role.roleTitle ?? "this role"}`}
+                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                >
+                  Choose
+                </Link>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

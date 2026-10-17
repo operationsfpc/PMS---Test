@@ -23,6 +23,8 @@ export interface ShortlistApplicant {
   readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Their own college — a drive targets several, and rank is read across them. */
+  readonly college?: string | null;
   readonly overallCgpa: number;
   readonly currentArrears: number;
   readonly historyOfArrears: number;
@@ -693,8 +695,14 @@ export function ShortlistPage({
                           </Button>
                         </div>
                       )}
-                      <p className="text-sm text-ink-500">
-                        {applicant?.rollNumber} · CGPA {applicant?.overallCgpa}
+                      <p className="flex flex-wrap items-center gap-2 text-sm text-ink-500">
+                        <span>{applicant?.rollNumber}</span>
+                        {applicant?.college != null && applicant.college !== "" && (
+                          <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                            {applicant.college}
+                          </span>
+                        )}
+                        <span>CGPA {applicant?.overallCgpa}</span>
                       </p>
                       {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
                         skills" told the coordinator nothing about what the

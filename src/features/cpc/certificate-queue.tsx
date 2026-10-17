@@ -1,3 +1,4 @@
+import { StudentIdentity } from "@components/student-identity";
 import { Button, Card, PageHeader } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
@@ -114,8 +115,14 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
                     {certificate.fileName !== null && (
                       <p className="text-xs text-ink-500 font-mono">({certificate.fileName})</p>
                     )}
-                    <p className="mt-0.5 text-sm text-ink-700">{certificate.studentName}</p>
-                    <p className="text-xs text-ink-500">{certificate.rollNumber}</p>
+                    <div className="mt-1">
+                      <StudentIdentity
+                        name={certificate.studentName}
+                        rollNumber={certificate.rollNumber}
+                        college={certificate.college}
+                        studentId={certificate.studentId}
+                      />
+                    </div>
                   </div>
 
                   {certificate.url === null ? (

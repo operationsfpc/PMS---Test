@@ -9,6 +9,7 @@ import {
   PageHeader,
 } from "@components/ui";
 import { applicationEvidenceProblems } from "@domain/application-snapshot";
+import { groupByVisitKey, visitKey } from "@domain/company-drive";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import {
   type OfferCategory,
@@ -23,17 +24,7 @@ import { ApplyError } from "./apply-repository";
 
 /** Groups individual drives by their parent company event for multi-role display. */
 function groupDrivesByEvent(drives: readonly OpenDrive[]): OpenDriveEvent[] {
-  const groups = new Map<string, OpenDrive[]>();
-
-  for (const drive of drives) {
-    const key = drive.companyDriveId || `standalone:${drive.id}`;
-    const existing = groups.get(key);
-    if (existing) {
-      existing.push(drive);
-    } else {
-      groups.set(key, [drive]);
-    }
-  }
+  const groups = groupByVisitKey(drives, (drive) => visitKey(drive.companyDriveId, drive.id));
 
   return Array.from(groups.entries()).map(([key, roles]) => {
     const first = roles[0];
@@ -320,12 +311,15 @@ export function DrivesList({
                   <p className="mt-2">
                     <Link
                       to={`/drives/${drive.id}`}
+                      aria-label={`View everything about ${drive.roleTitle} at ${drive.companyName}`}
                       className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
                     >
-                      {/* Per-role: a multi-role event card holds one of these per
-                          role, and the company alone would name them all the
-                          same. */}
-                      View everything about {drive.companyName} — {drive.roleTitle}
+                      {/* F14's own words, and nothing after them: the card already
+                          names the company and the role, so repeating either made
+                          a fact say itself twice on every row. The accessible name
+                          still carries both, so a student tabbing through the links
+                          tells two visits apart. */}
+                      View everything
                     </Link>
                   </p>
                   {/* ⚠️ F14's "View more" expander DELIBERATELY REMOVED

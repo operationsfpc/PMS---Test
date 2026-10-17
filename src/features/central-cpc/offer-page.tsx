@@ -1,3 +1,4 @@
+import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import type { OfferCategory } from "@domain/offer-category";
 import { offerCountsAsPackage, offerPayProblem } from "@domain/offer-pay";
@@ -27,6 +28,8 @@ export interface OfferCandidate {
   readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Their own college — the offer list runs across every campus the drive hit. */
+  readonly college?: string | null;
   readonly declared: boolean;
   /** Spec B: the filed letter's display name, or null when none is on file. */
   readonly letterName?: string | null;
@@ -155,10 +158,12 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                 key={candidate.applicationId}
                 className="flex flex-wrap items-center justify-between gap-4 p-4"
               >
-                <div className="min-w-0">
-                  <p className="font-medium text-ink-900">{candidate.studentName}</p>
-                  <p className="text-sm text-ink-500">{candidate.rollNumber}</p>
-                </div>
+                <StudentIdentity
+                  name={candidate.studentName}
+                  rollNumber={candidate.rollNumber}
+                  college={candidate.college}
+                  studentId={candidate.studentId}
+                />
 
                 {candidate.declared ? (
                   <div className="flex flex-wrap items-center gap-3">

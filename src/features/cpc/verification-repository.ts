@@ -75,6 +75,8 @@ export interface PendingSrf {
   readonly id: string;
   readonly fullName: string;
   readonly rollNumber: string;
+  /** Which campus the student belongs to — the queue runs across all of them. */
+  readonly college: string | null;
   readonly overallCgpa: number | null;
   readonly currentArrears: number;
   readonly historyOfArrears: number;
@@ -150,7 +152,16 @@ export type GetActorId = () => Promise<string | null>;
  * We want the documents BELONGING to the student, which is the first key.
  */
 export const VERIFICATION_QUEUE_COLUMNS =
-  "id, full_name, roll_number, overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, tenth_grade, twelfth_board, twelfth_board_state, twelfth_board_other, twelfth_grade, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, role_category, storage_path, uploaded_at), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
+  "id, full_name, roll_number, campuses(name), overall_cgpa, current_arrears, history_of_arrears, tenth_percentage, twelfth_percentage, tenth_board, tenth_board_state, tenth_board_other, tenth_grade, twelfth_board, twelfth_board_state, twelfth_board_other, twelfth_grade, srf_rejection_reason, srf_submitted_at, student_documents!student_documents_student_id_fkey(kind, role_category, storage_path, uploaded_at), student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status, student_documents(storage_path)), student_certificates(id, name, status, student_documents(storage_path))";
+
+/**
+ * The college behind a student row. A to-one embed arrives as an object, but
+ * PostgREST has been known to hand back a one-item array, so both are read.
+ */
+function campusName(embedded: unknown): string | null {
+  const row = (Array.isArray(embedded) ? embedded[0] : embedded) as Record<string, unknown> | null;
+  return (row?.name as string | undefined) ?? null;
+}
 
 /**
  * Reads and decides the SRF verification queue.
@@ -455,6 +466,7 @@ export function createSupabaseVerificationRepository(
             id: row.id as string,
             fullName: row.full_name as string,
             rollNumber: row.roll_number as string,
+            college: campusName(row.campuses),
             overallCgpa: (row.overall_cgpa as number | null) ?? null,
             currentArrears,
             historyOfArrears,

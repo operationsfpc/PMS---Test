@@ -5,8 +5,8 @@ import { type ReactNode, useEffect } from "react";
  * whatever) the number counts, in place rather than behind a navigation.
  *
  * Presentation only — the contents decide what to list and how to filter.
- * Escape and the close button follow the established DriveProgressModal
- * pattern so every popup on the platform behaves the same.
+ * Escape and the close button follow the `Sheet` pattern so every popup on the
+ * platform behaves the same.
  */
 export function DrilldownModal({
   eyebrow,

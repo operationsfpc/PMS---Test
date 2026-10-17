@@ -41,9 +41,16 @@ const APPLICATION = {
     },
     resumeId: "resume-1",
   },
-  students: { full_name: "LIVE NAME", roll_number: "LIVE ROLL" },
+  students: {
+    full_name: "LIVE NAME",
+    roll_number: "LIVE ROLL",
+    campuses: { name: "PSG College of Technology" },
+  },
   shortlist_entries: [{ included: true }],
 };
+
+/** The applications `select=`, decoded — recorded by the handler that answers it. */
+let applicationsSelect = "";
 
 function stub(
   opts: {
@@ -55,6 +62,7 @@ function stub(
 ) {
   const writes: unknown[] = [];
   let skillsQueried = false;
+  applicationsSelect = "";
 
   server.use(
     http.get(`${BASE}/rest/v1/drives`, () =>
@@ -70,9 +78,12 @@ function stub(
           : opts.drive,
       ),
     ),
-    http.get(`${BASE}/rest/v1/applications`, () =>
-      HttpResponse.json(opts.applications ?? [APPLICATION]),
-    ),
+    http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
+      applicationsSelect = decodeURIComponent(
+        new URL(request.url).searchParams.get("select") ?? "",
+      );
+      return HttpResponse.json(opts.applications ?? [APPLICATION]);
+    }),
     http.get(`${BASE}/rest/v1/student_skill_scores`, () => {
       skillsQueried = true;
       return HttpResponse.json(opts.skills ?? []);
@@ -148,6 +159,23 @@ describe("the applicants (R7 — from the snapshot)", () => {
 
     expect(applicant?.studentName).toBe("LIVE NAME");
     expect(applicant?.rollNumber).toBe("LIVE ROLL");
+  });
+
+  it("reads the college from the live student row, since a snapshot never carried it", async () => {
+    stub();
+    const [applicant] = await view().applicants("d1");
+
+    // R7 freezes what the recruiter judged the student ON. Which campus the
+    // student belongs to is not a figure they declared, so it is read live —
+    // the one field on this row that deliberately ignores the snapshot.
+    expect(applicant?.college).toBe("PSG College of Technology");
+    expect(applicationsSelect).toContain("campuses(name)");
+  });
+
+  it("shows no college for an applicant whose student row did not come back", async () => {
+    stub({ applications: [{ ...APPLICATION, profile_snapshot: null, students: null }] });
+
+    expect((await view().applicants("d1"))[0]?.college).toBeNull();
   });
 
   it("names an applicant with neither, rather than rendering nothing", async () => {

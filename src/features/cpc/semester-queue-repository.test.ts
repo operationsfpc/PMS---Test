@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import {
   createSupabaseSemesterQueueRepository,
+  SEMESTER_QUEUE_COLUMNS,
   SemesterQueueError,
 } from "./semester-queue-repository";
 
@@ -27,6 +28,7 @@ const repo = (actor: string | null = "cpc-1") =>
 
 const ROW = {
   id: "sem-1",
+  student_id: "s1",
   semester_number: 3,
   cgpa: 7.5,
   declared_marks: 75,
@@ -35,7 +37,12 @@ const ROW = {
   history_of_arrears: 1,
   created_at: "2026-08-24T07:00:00Z",
   status: "pending",
-  students: { full_name: "Thanush Krishna", roll_number: "124", srf_status: "srf_approved" },
+  students: {
+    full_name: "Thanush Krishna",
+    roll_number: "124",
+    srf_status: "srf_approved",
+    campuses: { name: "PSG College of Technology" },
+  },
   student_documents: { storage_path: "s1/sem-3.pdf" },
 };
 
@@ -74,8 +81,10 @@ describe("pending", () => {
     expect(rows).toEqual([
       {
         id: "sem-1",
+        studentId: "s1",
         studentName: "Thanush Krishna",
         rollNumber: "124",
+        college: "PSG College of Technology",
         semesterNumber: 3,
         cgpa: 7.5,
         declaredMarks: 75,
@@ -88,6 +97,16 @@ describe("pending", () => {
     ]);
     expect(query()).toContain("status=eq.pending");
     expect(query()).toContain("srf_status=eq.srf_approved");
+  });
+
+  /** Registered in src/db/query-contract.test.ts; this proves it is what is sent. */
+  it("asks the database for the college instead of assuming it", async () => {
+    const { query } = stub();
+
+    await repo().pending();
+
+    const select = decodeURIComponent(new URLSearchParams(query()).get("select") ?? "");
+    expect(select).toBe(SEMESTER_QUEUE_COLUMNS.replace(/ /g, ""));
   });
 
   it("survives a marksheet that cannot be signed — the row still appears", async () => {

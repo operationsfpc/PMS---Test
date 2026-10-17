@@ -5,6 +5,17 @@ import { createSupabaseRoundsRepository } from "../central-cpc/rounds-repository
 import type { AttendanceView, ScheduledStudent } from "./attendance-page";
 
 /**
+ * PostgREST hands an embedded to-one row back as an object or as a one-item
+ * array depending on the foreign-key hint used to reach it. The college name
+ * is the same either way, and a missing row is no college rather than a
+ * blank one invented for it.
+ */
+function embeddedName(embedded: unknown): string | null {
+  const row = (Array.isArray(embedded) ? embedded[0] : embedded) as Record<string, unknown> | null;
+  return (row?.name as string | undefined) ?? null;
+}
+
+/**
  * Feeds the attendance screen.
  *
  * Prior absences are counted across the student's ENTIRE tenure (R8): there is
@@ -25,7 +36,7 @@ export function createSupabaseAttendanceView(
       const { data } = await client
         .from("attendance")
         .select(
-          "application_id, status, applications(student_id, profile_snapshot, students(full_name, roll_number))",
+          "application_id, status, applications(student_id, profile_snapshot, students(full_name, roll_number, campuses(name)))",
         )
         .eq("round_id", roundId);
 
@@ -49,6 +60,7 @@ export function createSupabaseAttendanceView(
             studentId: studentId ?? null,
             studentName: (student?.full_name as string | undefined) ?? "Unknown student",
             rollNumber: (student?.roll_number as string | undefined) ?? "—",
+            college: embeddedName(student?.campuses),
             status: row.status as AttendanceStatus,
             priorAbsences: countAbsences(
               (

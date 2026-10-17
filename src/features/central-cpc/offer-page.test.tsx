@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { OfferPage, type OfferView } from "./offer-page";
+
+/** Rows link to the student's record, so every render needs a router. */
+const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * Declaring the final selection.
@@ -28,6 +32,7 @@ const CANDIDATES = [
     studentId: "s1",
     studentName: "Priya Ramesh",
     rollNumber: "21CSE1042",
+    college: "PSG College of Technology",
     declared: false,
   },
   {
@@ -35,6 +40,7 @@ const CANDIDATES = [
     studentId: "s2",
     studentName: "Arjun Menon",
     rollNumber: "21CSE9001",
+    college: null,
     declared: true,
   },
 ];
@@ -54,6 +60,19 @@ describe("OfferPage", () => {
 
     expect(await screen.findByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByRole("heading", { name: /Zoho/ })).toBeDefined();
+  });
+
+  it("says which college each candidate belongs to", async () => {
+    render(<OfferPage driveId="d1" view={view()} />);
+
+    const college = await screen.findByText("PSG College of Technology");
+    expect(college.parentElement).toBe(screen.getByText("21CSE1042").parentElement);
+    // Arjun's record carries no college, so his row shows no chip rather than
+    // an empty one.
+    expect(screen.getAllByText(/College of Technology/)).toHaveLength(1);
+    // Declaring is the placement record (R9), so the row has to be openable at
+    // the student rather than trusted on a name alone.
+    expect(screen.getByRole("link", { name: /priya ramesh/i })).toBeDefined();
   });
 
   it("pre-fills the CTC from the drive but lets it be changed per student", async () => {

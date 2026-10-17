@@ -15,8 +15,11 @@ export class CertificateQueueError extends Error {}
  */
 export interface PendingCertificate {
   readonly id: string;
+  readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** Which campus the student belongs to — the queue runs across all of them. */
+  readonly college: string | null;
   /** The certificate's name, as the student gave it. */
   readonly name: string;
   readonly fileName: string | null;
@@ -32,7 +35,7 @@ export interface CertificateQueueRepository {
 
 /** Exported so src/db/query-contract.test.ts can prove it against the schema. */
 export const CERTIFICATE_QUEUE_COLUMNS =
-  "id, name, created_at, status, students(full_name, roll_number), student_documents(storage_path)";
+  "id, student_id, name, created_at, status, students(full_name, roll_number, campuses(name)), student_documents(storage_path)";
 
 /** Certificates live in the marksheets bucket (0034); it is private (0010). */
 const CERTIFICATE_BUCKET = "marksheets";
@@ -94,7 +97,11 @@ export function createSupabaseCertificateQueueRepository(
       );
 
       return rows.map((row): PendingCertificate => {
-        const student = one<{ full_name?: string; roll_number?: string }>(row.students);
+        const student = one<{
+          full_name?: string;
+          roll_number?: string;
+          campuses?: unknown;
+        }>(row.students);
         const document = one<{ storage_path?: string }>(row.student_documents);
         const path = document?.storage_path;
 
@@ -109,8 +116,10 @@ export function createSupabaseCertificateQueueRepository(
 
         return {
           id: row.id as string,
+          studentId: (row.student_id as string | null) ?? "",
           studentName: student?.full_name ?? "Unknown student",
           rollNumber: student?.roll_number ?? "—",
+          college: one<{ name?: string }>(student?.campuses)?.name ?? null,
           name,
           fileName,
           uploadedAt: (row.created_at as string | null) ?? null,

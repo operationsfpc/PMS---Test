@@ -1,3 +1,4 @@
+import { StudentIdentity } from "@components/student-identity";
 import { Button, Card, PageHeader } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
@@ -114,11 +115,18 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                         Declared as {semester.declaredMarks}% by the student
                       </p>
                     )}
-                    <p className="mt-0.5 text-sm text-ink-700">{semester.studentName}</p>
-                    <p className="text-xs text-ink-500">
-                      {semester.rollNumber} · {semester.currentArrears} standing,{" "}
-                      {semester.historyOfArrears} in history
-                    </p>
+                    <div className="mt-1">
+                      <StudentIdentity
+                        name={semester.studentName}
+                        rollNumber={semester.rollNumber}
+                        college={semester.college}
+                        studentId={semester.studentId}
+                      >
+                        <p className="text-xs text-ink-500">
+                          {semester.currentArrears} standing, {semester.historyOfArrears} in history
+                        </p>
+                      </StudentIdentity>
+                    </div>
                   </div>
 
                   {semester.url === null ? (

@@ -62,11 +62,7 @@ export function countDistinctEvents(
   const eventKeys = new Set<string>();
 
   for (const drive of drives) {
-    if (drive.companyDriveId) {
-      eventKeys.add(`event:${drive.companyDriveId}`);
-    } else {
-      eventKeys.add(`standalone:${drive.driveId}`);
-    }
+    eventKeys.add(visitKey(drive.companyDriveId, drive.driveId));
   }
 
   return eventKeys.size;
@@ -81,23 +77,51 @@ export function countDistinctApplicants(
   return new Set(applications.map((a) => a.studentId)).size;
 }
 
+/** Marks a legacy drive that is a visit on its own, rather than a real event id. */
+export const STANDALONE_VISIT_PREFIX = "standalone:";
+
 /**
- * Groups drives by their parent event ID (or by their own drive ID if standalone).
+ * The key one company visit is grouped under.
+ *
+ * Rows that list several roles of one visit and rows that list one application
+ * each arrive with different fields, so every caller passes its own ids here
+ * and shares one answer. The prefix is what keeps a legacy drive's own id from
+ * ever reading as somebody else's event id.
  */
-export function groupDrivesByEvent<
-  T extends { readonly driveId: string; readonly companyDriveId?: string | null },
->(drives: readonly T[]): Map<string, T[]> {
+export function visitKey(companyDriveId: string | null | undefined, ownId: string): string {
+  return companyDriveId || `${STANDALONE_VISIT_PREFIX}${ownId}`;
+}
+
+/** True when a visit key is a lone legacy drive rather than a shared event. */
+export function isStandaloneVisit(key: string): boolean {
+  return key.startsWith(STANDALONE_VISIT_PREFIX);
+}
+
+/** Groups any rows by the company visit they belong to. */
+export function groupByVisitKey<T>(
+  rows: readonly T[],
+  keyOf: (row: T) => string,
+): Map<string, T[]> {
   const groups = new Map<string, T[]>();
 
-  for (const drive of drives) {
-    const key = drive.companyDriveId || drive.driveId;
+  for (const row of rows) {
+    const key = keyOf(row);
     const existing = groups.get(key);
-    if (existing) {
-      existing.push(drive);
+    if (existing !== undefined) {
+      existing.push(row);
     } else {
-      groups.set(key, [drive]);
+      groups.set(key, [row]);
     }
   }
 
   return groups;
+}
+
+/**
+ * Groups drives by their parent event (a legacy drive becomes its own visit).
+ */
+export function groupDrivesByEvent<
+  T extends { readonly driveId: string; readonly companyDriveId?: string | null },
+>(drives: readonly T[]): Map<string, T[]> {
+  return groupByVisitKey(drives, (drive) => visitKey(drive.companyDriveId, drive.driveId));
 }

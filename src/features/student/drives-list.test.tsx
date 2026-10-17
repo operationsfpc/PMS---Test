@@ -152,7 +152,13 @@ describe("DrivesList — the card points at the one canonical page", () => {
 
     await screen.findByText("Zoho");
     expect(screen.queryByRole("button", { name: /view more/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /view everything about Zoho/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /about .+ at Zoho/i })).toBeDefined();
+    // The company and the role are the card's, not the link's — its own words
+    // are just the F14 phrase, so no row says the company a second time.
+    expect(screen.getByRole("link", { name: /about .+ at Zoho/i }).textContent).toBe(
+      "View everything",
+    );
+
     // The detail panel's content is gone with it.
     expect(screen.queryByText(/build and maintain backend services/i)).toBeNull();
   });

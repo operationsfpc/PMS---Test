@@ -412,7 +412,7 @@ export function createSupabaseResultsView(
         client
           .from("attendance")
           .select(
-            "application_id, status, applications(student_id, students(full_name, roll_number))",
+            "application_id, status, applications(student_id, students(full_name, roll_number, campuses(name)))",
           )
           .eq("round_id", roundId),
         client.from("round_results").select("application_id, result").eq("round_id", roundId),
@@ -441,7 +441,11 @@ export function createSupabaseResultsView(
       return (attendance ?? [])
         .map((row): RoundParticipant => {
           const application = one<{ student_id?: string; students: unknown }>(row.applications);
-          const student = one<{ full_name?: string; roll_number?: string }>(application?.students);
+          const student = one<{
+            full_name?: string;
+            roll_number?: string;
+            campuses?: unknown;
+          }>(application?.students);
           const slot = slotByApplication.get(row.application_id as string);
 
           return {
@@ -449,6 +453,7 @@ export function createSupabaseResultsView(
             studentId: application?.student_id ?? null,
             studentName: student?.full_name ?? "Unknown student",
             rollNumber: student?.roll_number ?? "—",
+            college: one<{ name?: string }>(student?.campuses)?.name ?? null,
             attendance: row.status as AttendanceStatus,
             result: resultByApplication.get(row.application_id as string) ?? null,
             meetingLink: slot?.meetingLink ?? null,

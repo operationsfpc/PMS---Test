@@ -32,6 +32,7 @@ const WEAK: ShortlistApplicant = {
   studentId: "s-weak",
   studentName: "Weak Candidate",
   rollNumber: "21CSE0002",
+  college: null,
   overallCgpa: 6,
   currentArrears: 2,
   historyOfArrears: 3,
@@ -46,6 +47,7 @@ const STRONG: ShortlistApplicant = {
   studentId: "s-strong",
   studentName: "Strong Candidate",
   rollNumber: "21CSE0001",
+  college: "PSG College of Technology",
   overallCgpa: 9.5,
   currentArrears: 0,
   historyOfArrears: 0,
@@ -93,6 +95,18 @@ describe("ShortlistPage", () => {
     const row = (await screen.findByText("Weak Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
     expect(within(row).getByText(/standing arrear/i)).toBeDefined();
+  });
+
+  it("says which college each applicant belongs to", async () => {
+    show(view());
+
+    const college = await screen.findByText("PSG College of Technology");
+    // On the roll-and-CGPA line, so the row reads as one identity instead of
+    // a fact the coordinator has to go and find elsewhere.
+    expect(college.parentElement).toBe(screen.getByText("21CSE0001").parentElement);
+    // Weak Candidate's record carries no college, so one row shows no chip
+    // rather than an empty one.
+    expect(screen.getAllByText(/College of Technology/)).toHaveLength(1);
   });
 
   /** #39: the roster is a list of people, and each one has a record to open. */

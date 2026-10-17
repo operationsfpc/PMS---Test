@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseCockpitView } from "./cockpit-view";
+import { COCKPIT_REVIEW_COLUMNS, createSupabaseCockpitView } from "./cockpit-view";
 
 /**
  * The drive cockpit's data layer — the Central CPC's, the Delivery Head's and
@@ -31,13 +31,19 @@ const DRIVE = {
   ],
 };
 
-const absence = (studentId: string, roundId: string, name = "Anjali", roll = "21CSE1042") => ({
+const absence = (
+  studentId: string,
+  roundId: string,
+  name = "Anjali",
+  roll = "21CSE1042",
+  college = "PSG College of Technology",
+) => ({
   status: "absent",
   round_id: roundId,
   applications: {
     student_id: studentId,
     drive_id: "d1",
-    students: { full_name: name, roll_number: roll },
+    students: { full_name: name, roll_number: roll, campuses: [{ name: college }] },
   },
 });
 
@@ -46,21 +52,26 @@ function stub(
 ): {
   driveQueries: string[];
   applicationQueries: string[];
+  reviewQueries: string[];
 } {
   const driveQueries: string[] = [];
   const applicationQueries: string[] = [];
+  const reviewQueries: string[] = [];
   server.use(
     http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
       driveQueries.push(request.url);
       return HttpResponse.json(opts.drives ?? [DRIVE]);
     }),
-    http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
+    http.get(`${BASE}/rest/v1/attendance`, ({ request }) => {
+      reviewQueries.push(request.url);
+      return HttpResponse.json(opts.attendance ?? []);
+    }),
     http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
       applicationQueries.push(request.url);
       return HttpResponse.json(opts.applications ?? []);
     }),
   );
-  return { driveQueries, applicationQueries };
+  return { driveQueries, applicationQueries, reviewQueries };
 }
 
 /** One row of `applications` — who applied to which drive. */
@@ -246,8 +257,43 @@ describe("cockpit disbarment reviews (R8)", () => {
     const reviews = await view().reviews();
 
     expect(reviews).toEqual([
-      { studentId: "s1", studentName: "Anjali", rollNumber: "21CSE1042", absences: 3 },
+      {
+        studentId: "s1",
+        studentName: "Anjali",
+        rollNumber: "21CSE1042",
+        college: "PSG College of Technology",
+        absences: 3,
+      },
     ]);
+  });
+
+  /**
+   * This is the one central queue that names students from every campus at
+   * once, so the college has to be read. A roll number alone leaves the Central
+   * CPC to guess which campus is about to lose a student.
+   */
+  it("reads the college off the student embed, and says so when it never came", async () => {
+    const { reviewQueries } = stub({
+      attendance: [absence("s1", "r1"), absence("s1", "r2"), absence("s1", "r3")],
+    });
+
+    expect(await view().reviews()).toHaveLength(1);
+    const select = decodeURIComponent(
+      new URL(reviewQueries[0] ?? "").searchParams.get("select") ?? "",
+    );
+    expect(select).toBe(COCKPIT_REVIEW_COLUMNS.replace(/ /g, ""));
+
+    stub({
+      attendance: ["r1", "r2", "r3"].map((roundId) => ({
+        ...absence("s1", roundId),
+        applications: { student_id: "s1", drive_id: "d1", students: null },
+      })),
+    });
+
+    const [review] = await view().reviews();
+    expect(review?.studentName).toBe("Unknown student");
+    // No college is guessed for a student whose row never arrived.
+    expect(review?.college).toBeNull();
   });
 
   it("does not raise a review below the limit", async () => {

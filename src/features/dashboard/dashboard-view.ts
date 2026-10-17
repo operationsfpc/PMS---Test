@@ -1,4 +1,4 @@
-import type { DriveProgressStudentItem } from "@components/drive-progress-modal";
+import type { DriveProgressStudentItem } from "@components/drive-roster";
 import { countDistinctEvents } from "@domain/company-drive";
 import type { PlacementCtc } from "@domain/ctc-statistics";
 import { isShortlisted, type RoundParticipant } from "@domain/drive-funnel";

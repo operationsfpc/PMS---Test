@@ -18,6 +18,14 @@ export const COCKPIT_DRIVE_COLUMNS = `
 `;
 
 /**
+ * The absence-review read. Registered with the drives above, because it is the
+ * one central queue that names students across EVERY campus — so it reads the
+ * college as well, or a Central CPC is shown a roll number and left to guess.
+ */
+export const COCKPIT_REVIEW_COLUMNS =
+  "status, round_id, applications(student_id, drive_id, students(full_name, roll_number, campuses(name)))";
+
+/**
  * Feeds the cockpit.
  *
  * One read of `applications(drive_id, student_id)` covers every drive's
@@ -124,9 +132,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
       const data = await readAllRows((from, to) =>
         client
           .from("attendance")
-          .select(
-            "status, round_id, applications(student_id, drive_id, students(full_name, roll_number))",
-          )
+          .select(COCKPIT_REVIEW_COLUMNS)
           .eq("status", "absent")
           .range(from, to),
       );
@@ -136,6 +142,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
         {
           name: string;
           roll: string;
+          college: string | null;
           records: { driveId: string; roundId: string; status: AttendanceStatus }[];
         }
       >();
@@ -144,13 +151,18 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
         const application = one<{ student_id?: string; drive_id?: string; students: unknown }>(
           row.applications,
         );
-        const student = one<{ full_name?: string; roll_number?: string }>(application?.students);
+        const student = one<{
+          full_name?: string;
+          roll_number?: string;
+          campuses?: unknown;
+        }>(application?.students);
         const studentId = application?.student_id;
         if (studentId === undefined) continue;
 
         const entry = byStudent.get(studentId) ?? {
           name: student?.full_name ?? "Unknown student",
           roll: student?.roll_number ?? "—",
+          college: one<{ name?: string }>(student?.campuses)?.name ?? null,
           records: [],
         };
         entry.records.push({
@@ -169,6 +181,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
           studentId,
           studentName: entry.name,
           rollNumber: entry.roll,
+          college: entry.college,
           absences,
         });
       }

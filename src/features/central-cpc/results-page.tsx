@@ -1,3 +1,4 @@
+import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
 import {
@@ -23,6 +24,9 @@ export interface RoundParticipant {
   readonly studentId?: string | null;
   readonly studentName: string;
   readonly rollNumber: string;
+  /** The student's own college. A round is run drive-wide, so a coordinator
+   * reading two campuses side by side cannot tell them apart by roll number. */
+  readonly college?: string | null;
   readonly attendance: AttendanceStatus;
   readonly result: RoundResult | null;
   /** F5 (UAT 2026-08-19): this student's own link and slot, when one is set. */
@@ -311,24 +315,16 @@ export function ResultsPage({
                           className="mt-1 size-4 accent-[#3D3777]"
                         />
                       )}
-                      <div className="min-w-0">
-                        <p className="font-medium text-ink-900">
-                          {participant.studentId != null ? (
-                            <Link
-                              to={`/students/${participant.studentId}`}
-                              className="hover:underline"
-                            >
-                              {participant.studentName}
-                            </Link>
-                          ) : (
-                            participant.studentName
-                          )}
-                        </p>
-                        <p className="text-sm text-ink-500">{participant.rollNumber}</p>
+                      <StudentIdentity
+                        name={participant.studentName}
+                        rollNumber={participant.rollNumber}
+                        college={participant.college}
+                        studentId={participant.studentId}
+                      >
                         {saveSlot !== undefined && (
                           <SlotEditor participant={participant} saveSlot={saveSlot} />
                         )}
-                      </div>
+                      </StudentIdentity>
                     </div>
 
                     <div className="flex items-center gap-3">

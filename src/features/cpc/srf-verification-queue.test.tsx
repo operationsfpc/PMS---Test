@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { SrfVerificationQueue } from "./srf-verification-queue";
 import { VerificationError, type VerificationRepository } from "./verification-repository";
+
+/** Each name now links to the student's record, so the screen needs a router. */
+const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * The CPC queue against a real repository.
@@ -16,6 +20,7 @@ const row = {
   id: "s1",
   fullName: "Asha Ramanathan",
   rollNumber: "TEC001",
+  college: "PSG College of Technology",
   overallCgpa: 8.2,
   currentArrears: 1,
   historyOfArrears: 2,
@@ -97,6 +102,13 @@ describe("SrfVerificationQueue", () => {
 
     expect(await screen.findByText("Asha Ramanathan")).toBeDefined();
     expect(screen.getByText("TEC001")).toBeDefined();
+  });
+
+  /** The queues run across every campus; the college is what separates two rows. */
+  it("names the college the student belongs to", async () => {
+    render(<SrfVerificationQueue repository={repo()} />);
+
+    expect(await screen.findByText(/PSG College of Technology/i)).toBeDefined();
   });
 
   it("says so plainly when nothing is waiting", async () => {

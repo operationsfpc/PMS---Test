@@ -28,10 +28,19 @@ const DRIVE = {
   ctc_max_lpa: 9,
 };
 
-const selected = (applicationId: string, studentId: string, name: string, roll: string) => ({
+const selected = (
+  applicationId: string,
+  studentId: string,
+  name: string,
+  roll: string,
+  college = "PSG College of Technology",
+) => ({
   application_id: applicationId,
   result: "selected",
-  applications: { student_id: studentId, students: { full_name: name, roll_number: roll } },
+  applications: {
+    student_id: studentId,
+    students: { full_name: name, roll_number: roll, campuses: { name: college } },
+  },
 });
 
 function stub(
@@ -134,6 +143,30 @@ describe("who may be declared", () => {
       "Anjali Subramanian",
       "Rahul Nair",
     ]);
+  });
+
+  it("says which college each declared candidate belongs to", async () => {
+    const { roundQueries } = stub({
+      results: [
+        selected("a2", "s2", "Rahul Nair", "21CSE1099", "Coimbatore Institute of Technology"),
+        selected("a1", "s1", "Anjali Subramanian", "21CSE1042", "PSG College of Technology"),
+      ],
+    });
+
+    // Alphabetical, so the colleges follow the names rather than the rows.
+    expect((await view().candidates("d1")).map((c) => c.college)).toEqual([
+      "PSG College of Technology",
+      "Coimbatore Institute of Technology",
+    ]);
+    // This screen writes the placement record (R9), and a college-blind list
+    // of same-named students is how the wrong one gets declared.
+    expect(decodeURIComponent(roundQueries[0] ?? "")).toContain("campuses(name)");
+  });
+
+  it("shows no college for a candidate whose student row did not come back", async () => {
+    stub({ results: [{ application_id: "a1", result: "selected", applications: null }] });
+
+    expect((await view().candidates("d1"))[0]?.college).toBeNull();
   });
 
   it("marks the candidates who already hold an offer, so nobody is declared twice", async () => {

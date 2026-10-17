@@ -1,15 +1,7 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-  Badge,
-  Button,
-  Card,
-  PageHeader,
-} from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
@@ -338,9 +330,14 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
  * One company visit, one card — 2026-10-16 (Karthik): "same company shows as
  * two". The header answers what two cards side by side never could: how many
  * roles the visit raised, how many students it holds, and how far they have
- * come. Each role keeps its own college and stage filters and its own student
- * list underneath, because shortlisting, rounds and offers are still decided
- * role by role — folding them must never merge them.
+ * come.
+ *
+ * A visit that raised several roles lists them as rows, because a coordinator
+ * reads one role's students at a time, never two side by side: the row opens
+ * the pane on that role, and the filters stay the role's own there too, since
+ * shortlisting, rounds and offers are still decided role by role. A single-role
+ * visit has nothing to choose between, so its students stay inline exactly as
+ * they were.
  */
 function VisitCard({
   roles,
@@ -351,6 +348,9 @@ function VisitCard({
   selection: Record<string, RoleSelection>;
   onSelect: (driveId: string, next: Partial<RoleSelection>) => void;
 }) {
+  /** The role whose students the pane is listing. */
+  const [openRole, setOpenRole] = useState<string | null>(null);
+
   const head = roles[0];
   if (head === undefined) return null;
 
@@ -388,6 +388,31 @@ function VisitCard({
     />
   );
 
+  const typeBadge = (drive: DriveProgressEntry) =>
+    !mixed || drive.driveType === undefined || drive.driveType === null ? undefined : (
+      <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
+    );
+
+  const paneRoles: readonly VisitPaneRole[] = roles.map((drive) => ({
+    id: drive.driveId,
+    label: drive.roleTitle ?? "Role not set",
+    count: countStage(drive.students).applicants,
+    badge: typeBadge(drive),
+    content: (
+      <>
+        <p className="mb-3">
+          <Link
+            to={`/drives/${drive.driveId}`}
+            className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+          >
+            Open the drive record for {drive.roleTitle ?? "this role"}
+          </Link>
+        </p>
+        {body(drive)}
+      </>
+    ),
+  }));
+
   return (
     <Card className="mb-6 overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
@@ -424,48 +449,69 @@ function VisitCard({
         </div>
       </div>
 
-      {/* Roles fold, they never merge. The panels arrive open: the students are
-          the reason the card exists, and a collapsed panel would hide them
-          behind a click that buys nothing. */}
       {isVisit ? (
-        <Accordion multiple className="px-4" defaultValue={roles.map((role) => role.driveId)}>
-          {roles.map((drive) => {
-            const own = countStage(drive.students);
-            return (
-              <AccordionItem key={drive.driveId} value={drive.driveId}>
-                <AccordionTrigger className="py-3">
-                  <span className="font-semibold text-ink-900">
-                    {drive.roleTitle ?? "Role not set"}
-                  </span>
-                  {mixed && drive.driveType !== undefined && drive.driveType !== null && (
-                    <Badge tone={driveTypeTone(drive.driveType)}>
-                      {driveTypeLabel(drive.driveType)}
-                    </Badge>
-                  )}
-                  <span className="text-sm font-normal text-ink-600">
-                    {own.applicants} applicants · {own.shortlisted} shortlisted · {own.offers}{" "}
-                    offers
-                  </span>
-                  <Badge tone="brand">{label(drive.status)}</Badge>
-                </AccordionTrigger>
-                <AccordionContent className="pb-4">
-                  <p className="mt-1 mb-2">
-                    <Link
-                      to={`/drives/${drive.driveId}`}
-                      className="text-xs font-semibold text-brand-700 underline underline-offset-2"
-                    >
-                      Open the drive record for {drive.roleTitle ?? "this role"}
-                    </Link>
-                  </p>
-                  {body(drive)}
-                </AccordionContent>
-              </AccordionItem>
-            );
-          })}
-        </Accordion>
+        <div className="p-4">
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">
+              Roles raised by {head.companyName}, and how far each one has come
+            </caption>
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-ink-500">
+                <th className="py-1 pr-3 font-semibold">Role</th>
+                <th className="py-1 pr-3 font-semibold">Students</th>
+                <th className="py-1 pr-3 font-semibold">Shortlisted</th>
+                <th className="py-1 pr-3 font-semibold">In rounds</th>
+                <th className="py-1 pr-3 font-semibold">Offers</th>
+                <th className="py-1 pr-3 font-semibold">Status</th>
+                <th className="py-1" aria-label="Open" />
+              </tr>
+            </thead>
+            <tbody>
+              {roles.map((drive) => {
+                const own = countStage(drive.students);
+                return (
+                  <tr key={drive.driveId} className="border-t border-line">
+                    <td className="py-2 pr-3 font-medium text-ink-900">
+                      <span className="flex flex-wrap items-center gap-2">
+                        {drive.roleTitle ?? "Role not set"}
+                        {typeBadge(drive) ?? null}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-3">{own.applicants}</td>
+                    <td className="py-2 pr-3">{own.shortlisted}</td>
+                    <td className="py-2 pr-3">{own.inRounds}</td>
+                    <td className="py-2 pr-3">{own.offers}</td>
+                    <td className="py-2 pr-3">
+                      <Badge tone="brand">{label(drive.status)}</Badge>
+                    </td>
+                    <td className="py-2 text-right">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        aria-label={`View students for ${drive.roleTitle ?? "this role"}`}
+                        onClick={() => setOpenRole(drive.driveId)}
+                      >
+                        View students
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
         body(head)
       )}
+
+      <VisitPane
+        open={openRole !== null}
+        onClose={() => setOpenRole(null)}
+        company={head.companyName}
+        description={when ?? undefined}
+        roles={paneRoles}
+        {...(openRole === null ? {} : { activeId: openRole })}
+      />
     </Card>
   );
 }

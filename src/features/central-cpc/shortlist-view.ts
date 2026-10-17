@@ -49,7 +49,7 @@ export function createSupabaseShortlistView(
       const { data: applications } = await client
         .from("applications")
         .select(
-          "id, student_id, profile_snapshot, students(full_name, roll_number, participation_status), shortlist_entries(included)",
+          "id, student_id, profile_snapshot, students(full_name, roll_number, participation_status, campuses(name)), shortlist_entries(included)",
         )
         .eq("drive_id", driveId);
 
@@ -90,6 +90,7 @@ export function createSupabaseShortlistView(
           full_name?: string;
           roll_number?: string;
           participation_status?: string;
+          campuses?: unknown;
         }>(row.students);
         const academics = (snapshot.academics ?? snapshot) as Record<string, unknown>;
 
@@ -99,6 +100,9 @@ export function createSupabaseShortlistView(
           studentName:
             (snapshot.fullName as string | undefined) ?? student?.full_name ?? "Unknown student",
           rollNumber: (snapshot.rollNumber as string | undefined) ?? student?.roll_number ?? "—",
+          // The snapshot carries no college, and this is not a figure a student
+          // declared — it is which campus they belong to, so it is read live.
+          college: one<{ name?: string }>(student?.campuses)?.name ?? null,
           overallCgpa: Number(academics.overallCgpa ?? 0),
           currentArrears: Number(academics.currentArrears ?? 0),
           historyOfArrears: Number(academics.historyOfArrears ?? 0),

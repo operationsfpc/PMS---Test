@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { OptOutQueue } from "./opt-out-queue";
 import type { ParticipationQueueView } from "./participation-queue-contract";
+
+/** Each name now links to the student's record, so the screen needs a router. */
+const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * Approving or declining an opt-out. Its own screen since F2 (UAT 2026-08-06).
@@ -15,8 +19,10 @@ import type { ParticipationQueueView } from "./participation-queue-contract";
  */
 const request = (over: Record<string, unknown> = {}) => ({
   id: "r1",
+  studentId: "s1",
   studentName: "Priya Ramesh",
   rollNumber: "21CSE1042",
+  college: "PSG College of Technology",
   reason: "Joining the family business",
   declarationUrl: "https://signed/declaration.pdf",
   ...over,
@@ -39,6 +45,13 @@ describe("OptOutQueue", () => {
 
     expect(await screen.findByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByText(/joining the family business/i)).toBeDefined();
+  });
+
+  /** These queues run across every campus, so a name alone is not enough. */
+  it("names the college the student belongs to", async () => {
+    render(<OptOutQueue view={view()} />);
+
+    expect(await screen.findByText(/PSG College of Technology/i)).toBeDefined();
   });
 
   it("says that approving cannot be undone", async () => {
@@ -97,8 +110,10 @@ describe("OptOutQueue", () => {
             selfPlacements: [
               {
                 id: "sp1",
+                studentId: "s2",
                 studentName: "Arjun",
                 rollNumber: "21CSE1043",
+                college: "Coimbatore Institute of Technology",
                 companyName: "Freshworks",
                 ctcLpa: 12,
                 offerLetterUrl: null,

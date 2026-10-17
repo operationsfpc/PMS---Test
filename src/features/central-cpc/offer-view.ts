@@ -67,7 +67,7 @@ export function createSupabaseOfferView(
         client
           .from("round_results")
           .select(
-            "application_id, result, applications(student_id, students(full_name, roll_number))",
+            "application_id, result, applications(student_id, students(full_name, roll_number, campuses(name)))",
           )
           .eq("round_id", lastRoundId)
           .eq("result", "selected"),
@@ -105,7 +105,11 @@ export function createSupabaseOfferView(
       return (results ?? [])
         .map((row): OfferCandidate => {
           const application = one<{ student_id?: string; students: unknown }>(row.applications);
-          const student = one<{ full_name?: string; roll_number?: string }>(application?.students);
+          const student = one<{
+            full_name?: string;
+            roll_number?: string;
+            campuses?: unknown;
+          }>(application?.students);
           const studentId = application?.student_id ?? "";
           const offer = offerByStudent.get(studentId);
           const path = (offer?.attachment_path as string | null) ?? null;
@@ -115,6 +119,7 @@ export function createSupabaseOfferView(
             studentId,
             studentName: student?.full_name ?? "Unknown student",
             rollNumber: student?.roll_number ?? "—",
+            college: one<{ name?: string }>(student?.campuses)?.name ?? null,
             declared: offer !== undefined,
             letterName: (offer?.attachment_name as string | null) ?? null,
             letterUrl: path === null ? null : (urlByPath.get(path) ?? null),

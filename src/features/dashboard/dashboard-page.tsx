@@ -1,8 +1,5 @@
 import { DrilldownModal } from "@components/drilldown-modal";
-import {
-  DriveProgressModal,
-  type DriveProgressStudentItem,
-} from "@components/drive-progress-modal";
+import { type DriveProgressStudentItem, DriveRoster } from "@components/drive-roster";
 import { type DrilldownPerson, StatDrilldown } from "@components/stat-drilldown";
 import {
   Accordion,
@@ -15,6 +12,7 @@ import {
   PageHeader,
   StatCard,
 } from "@components/ui";
+import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { groupDrivesByEvent } from "@domain/company-drive";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
@@ -123,6 +121,13 @@ export interface DriveProgressSnapshot {
 
 /** A row of the drive box: the snapshot plus the funnel its table prints. */
 type DriveWithFunnel = DriveProgressSnapshot & { readonly funnel: DriveFunnel };
+
+/** The visit the pane is reading, and the role the coordinator clicked. */
+interface OpenVisit {
+  readonly company: string;
+  readonly roles: readonly DriveWithFunnel[];
+  readonly activeId: string;
+}
 
 export interface LiveDrive {
   readonly driveId: string;
@@ -444,7 +449,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
   );
 
   const [drivePage, setDrivePage] = useState(1);
-  const [selectedModalDrive, setSelectedModalDrive] = useState<DriveProgressSnapshot | null>(null);
+  const [openVisit, setOpenVisit] = useState<OpenVisit | null>(null);
   /** The status row opened in the drill-down popup; null while closed. */
   const [statusOpen, setStatusOpen] = useState<string | null>(null);
   /**
@@ -698,6 +703,48 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
 
   /** One entry per company visit — the list and the "open now" hint both read this. */
   const openEvents = [...groupDrivesByEvent(snapshot.liveDrives).values()];
+
+  /** The college the roster lists: the filter box, else the campus in view. */
+  const rosterCollege =
+    collegeFilter === "" && campusName !== "All campuses" ? campusName : collegeFilter;
+
+  /** The students the campus and college filters leave on one role of a visit. */
+  function rosterOf(drive: DriveWithFunnel) {
+    return (drive.students ?? [])
+      .filter((s) => campusId === "" || s.campusId === campusId)
+      .filter((s) => collegeFilter === "" || s.campusName === collegeFilter);
+  }
+
+  /**
+   * One tab per role the visit raised, each holding its own students. The
+   * company is said once, in the pane's header: roles are not the same thing
+   * as companies, and a roster under the wrong company name is how a
+   * coordinator ends up phoning the wrong drive.
+   */
+  function paneRoles(visit: OpenVisit): readonly VisitPaneRole[] {
+    const mixed = new Set(visit.roles.map((role) => role.driveType)).size > 1;
+    return visit.roles.map((role) => ({
+      id: role.driveId,
+      label: role.roleTitle ?? "Role not set",
+      count: rosterOf(role).length,
+      badge: mixed ? (
+        <Badge tone={driveTypeTone(role.driveType)}>{driveTypeLabel(role.driveType)}</Badge>
+      ) : undefined,
+      content: (
+        <>
+          <p className="mb-3">
+            <Link
+              to={`/drives/${role.driveId}`}
+              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+            >
+              Open the drive record
+            </Link>
+          </p>
+          <DriveRoster students={rosterOf(role)} collegeFilter={rosterCollege} />
+        </>
+      ),
+    }));
+  }
 
   return (
     <div>
@@ -1273,7 +1320,13 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                     <button
                                       key={s.applicationId}
                                       type="button"
-                                      onClick={() => setSelectedModalDrive(drive)}
+                                      onClick={() =>
+                                        setOpenVisit({
+                                          company: drive.companyName,
+                                          roles,
+                                          activeId: drive.driveId,
+                                        })
+                                      }
                                       className="inline-flex items-center rounded-md bg-white border border-line px-2 py-0.5 text-xs text-ink-800 hover:border-brand-400 hover:text-brand-600 cursor-pointer transition-colors"
                                       title={`View placement details for ${s.studentName}`}
                                     >
@@ -1292,7 +1345,13 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                             {visibleStudents.length > 0 && (
                               <button
                                 type="button"
-                                onClick={() => setSelectedModalDrive(drive)}
+                                onClick={() =>
+                                  setOpenVisit({
+                                    company: drive.companyName,
+                                    roles,
+                                    activeId: drive.driveId,
+                                  })
+                                }
                                 className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline cursor-pointer py-1 px-2 rounded-md hover:bg-brand-50 transition-colors"
                               >
                                 <span>View all students</span>
@@ -1526,15 +1585,13 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
         />
       )}
 
-      {selectedModalDrive !== null && (
-        <DriveProgressModal
-          isOpen={true}
-          onClose={() => setSelectedModalDrive(null)}
-          driveName={selectedModalDrive.driveName}
-          students={(selectedModalDrive.students ?? [])
-            .filter((s) => campusId === "" || s.campusId === campusId)
-            .filter((s) => collegeFilter === "" || s.campusName === collegeFilter)}
-          collegeFilter={collegeFilter || (campusName !== "All campuses" ? campusName : "")}
+      {openVisit !== null && (
+        <VisitPane
+          open
+          onClose={() => setOpenVisit(null)}
+          company={openVisit.company}
+          roles={paneRoles(openVisit)}
+          activeId={openVisit.activeId}
         />
       )}
 

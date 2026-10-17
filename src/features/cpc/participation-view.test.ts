@@ -2,16 +2,21 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseParticipationQueueView } from "./participation-view";
+import {
+  createSupabaseParticipationQueueView,
+  OPT_OUT_QUEUE_COLUMNS,
+  SELF_PLACEMENT_QUEUE_COLUMNS,
+} from "./participation-view";
 
 /**
  * The coordinator's opt-out and self-placement queue.
  *
- * Both approvals are irreversible in practice, and each writes TWO rows: the
- * decision, and then the consequence — `students.participation_status` for an
- * opt-out (which 0009 locks forever), an `offers` row for a self-placement.
- * If the second write fails silently, a student is opted out with no record of
- * it, or approved with no offer. Both halves are asserted here.
+ * Both approvals are irreversible in practice, and each has TWO consequences:
+ * `students.participation_status` for an opt-out (which 0009 locks forever), an
+ * `offers` row for a self-placement. If the second half fails silently, a
+ * student is opted out with no record of it, or approved with no offer. So the
+ * opt-out half moved into one atomic database call (0096) and the offer half
+ * is asserted here as a second write the client has to make itself.
  */
 const BASE = "https://project.supabase.co";
 
@@ -28,10 +33,9 @@ function stub(
   opts: {
     optOuts?: unknown[];
     placements?: unknown[];
-    optOutUpdateFails?: boolean;
     placementUpdate?: unknown;
     placementUpdateFails?: boolean;
-    studentUpdateFails?: boolean;
+    approvalFails?: boolean;
     offerInsertFails?: boolean;
   } = {},
 ) {
@@ -46,11 +50,20 @@ function stub(
     http.get(`${BASE}/rest/v1/self_placement_requests`, () =>
       HttpResponse.json(opts.placements ?? []),
     ),
+    // 0096: approving an opt-out is one call, and the database does both
+    // halves inside one transaction.
+    http.post(`${BASE}/rest/v1/rpc/approve_opt_out_atomic`, async ({ request }) => {
+      await record("approve_opt_out_atomic", request);
+      return opts.approvalFails === true
+        ? HttpResponse.json(
+            { message: "Opt-out request not found or already decided" },
+            { status: 400 },
+          )
+        : HttpResponse.json("s1");
+    }),
     http.patch(`${BASE}/rest/v1/opt_out_requests`, async ({ request }) => {
       await record("opt_out_requests", request);
-      return opts.optOutUpdateFails === true
-        ? new HttpResponse(null, { status: 400 })
-        : HttpResponse.json({ student_id: "s1" });
+      return HttpResponse.json({ student_id: "s1" });
     }),
     http.patch(`${BASE}/rest/v1/self_placement_requests`, async ({ request }) => {
       await record("self_placement_requests", request);
@@ -64,11 +77,11 @@ function stub(
         },
       );
     }),
+    // Nothing should reach this any more — kept so that a client-side second
+    // write is recorded and asserted against, rather than erroring unhandled.
     http.patch(`${BASE}/rest/v1/students`, async ({ request }) => {
       await record("students", request);
-      return opts.studentUpdateFails === true
-        ? new HttpResponse(null, { status: 409 })
-        : HttpResponse.json({ id: "s1" });
+      return HttpResponse.json({ id: "s1" });
     }),
     http.post(`${BASE}/rest/v1/offers`, async ({ request }) => {
       await record("offers", request);
@@ -148,8 +161,14 @@ describe("the pending queue", () => {
       optOuts: [
         {
           id: "req-1",
+          student_id: "s1",
           reason: "Joining the family business",
-          students: { full_name: "Anjali Subramanian", roll_number: "21CSE1042" },
+          // An array embed, because PostgREST may return a to-one either way.
+          students: {
+            full_name: "Anjali Subramanian",
+            roll_number: "21CSE1042",
+            campuses: [{ name: "PSG College of Technology" }],
+          },
         },
       ],
     });
@@ -159,8 +178,10 @@ describe("the pending queue", () => {
     expect(optOuts).toEqual([
       {
         id: "req-1",
+        studentId: "s1",
         studentName: "Anjali Subramanian",
         rollNumber: "21CSE1042",
+        college: "PSG College of Technology",
         reason: "Joining the family business",
         // No document embedded in this fixture, so there is nothing to sign.
         declarationUrl: null,
@@ -168,14 +189,47 @@ describe("the pending queue", () => {
     ]);
   });
 
+  /**
+   * The coordinator's queues run across every campus at once, so a name and a
+   * roll number are not enough to say who is standing in front of them. The
+   * college has to be read, not assumed.
+   */
+  it("asks the database for the college beside every queued student", async () => {
+    const selects = new Map<string, string>();
+    stub();
+    // Registered after `stub`, so these win — the reads still answer empty.
+    const record = (table: string) =>
+      server.use(
+        http.get(`${BASE}/rest/v1/${table}`, ({ request }) => {
+          const search = new URL(request.url).searchParams.get("select");
+          selects.set(table, decodeURIComponent(search ?? ""));
+          return HttpResponse.json([]);
+        }),
+      );
+    record("opt_out_requests");
+    record("self_placement_requests");
+
+    await view().pending();
+
+    // supabase-js strips the spaces from the select before sending it.
+    const sent = (columns: string) => columns.replace(/ /g, "");
+    expect(selects.get("opt_out_requests")).toBe(sent(OPT_OUT_QUEUE_COLUMNS));
+    expect(selects.get("self_placement_requests")).toBe(sent(SELF_PLACEMENT_QUEUE_COLUMNS));
+  });
+
   it("shows a pending self-placement with the company and CTC", async () => {
     stub({
       placements: [
         {
           id: "sp-1",
+          student_id: "s2",
           company_name: "Freshworks",
           ctc_lpa: 7.5,
-          students: { full_name: "Rahul Nair", roll_number: "21CSE1099" },
+          students: {
+            full_name: "Rahul Nair",
+            roll_number: "21CSE1099",
+            campuses: { name: "Coimbatore Institute of Technology" },
+          },
         },
       ],
     });
@@ -184,6 +238,8 @@ describe("the pending queue", () => {
 
     expect(selfPlacements[0]?.companyName).toBe("Freshworks");
     expect(selfPlacements[0]?.ctcLpa).toBe(7.5);
+    expect(selfPlacements[0]?.studentId).toBe("s2");
+    expect(selfPlacements[0]?.college).toBe("Coimbatore Institute of Technology");
   });
 
   it("still shows a request whose student row did not come back", async () => {
@@ -197,8 +253,11 @@ describe("the pending queue", () => {
     expect(optOuts[0]?.studentName).toBe("Unknown student");
     expect(optOuts[0]?.rollNumber).toBe("—");
     expect(optOuts[0]?.reason).toBe("");
+    // No college is invented for a student whose row never arrived.
+    expect(optOuts[0]?.college).toBeNull();
     expect(selfPlacements[0]?.companyName).toBe("Unknown company");
     expect(selfPlacements[0]?.ctcLpa).toBe(0);
+    expect(selfPlacements[0]?.college).toBeNull();
   });
 
   it("shows an empty queue as empty", async () => {
@@ -209,20 +268,30 @@ describe("the pending queue", () => {
 });
 
 describe("approving an opt-out", () => {
-  it("records the decision and then opts the student out (PRD §16.1)", async () => {
+  it("makes the single atomic call that carries the decision and its doer (PRD §16.1)", async () => {
     const writes = stub();
 
     await view().approveOptOut("req-1");
 
-    expect(writes.map((w) => w.table)).toEqual(["opt_out_requests", "students"]);
-    expect(writes[0]?.body).toMatchObject({ status: "verified", decided_by: "cpc-1" });
-    expect(writes[1]?.body).toEqual({ participation_status: "opted_out" });
+    // 0096: the request and the student's `opted_out` status are written in one
+    // database transaction, so a student can never be opted out with no record
+    // of it. The client's whole job is to make that one call, attributed.
+    expect(writes.map((w) => w.table)).toEqual(["approve_opt_out_atomic"]);
+    expect(writes[0]?.body).toEqual({ request_id: "req-1", actor_id: "cpc-1" });
   });
 
-  it("says so loudly when the student's status did not change", async () => {
-    stub({ studentUpdateFails: true });
+  it("says so loudly when the database refuses the approval", async () => {
+    stub({ approvalFails: true });
 
-    await expect(view().approveOptOut("req-1")).rejects.toThrow(/did not change/i);
+    await expect(view().approveOptOut("req-1")).rejects.toThrow(/could not approve/i);
+  });
+
+  it("writes nothing anywhere else when the approval failed", async () => {
+    const writes = stub({ approvalFails: true });
+
+    await expect(view().approveOptOut("req-1")).rejects.toThrow(/could not approve/i);
+    // A client-side second write would put the atomicity back in JS's hands.
+    expect(writes.map((w) => w.table)).toEqual(["approve_opt_out_atomic"]);
   });
 
   it("refuses a role that may not approve participation changes", async () => {
@@ -237,13 +306,6 @@ describe("approving an opt-out", () => {
     await expect(view("campus_placement_coordinator", null).approveOptOut("req-1")).rejects.toThrow(
       /session has expired/i,
     );
-  });
-
-  it("does not touch the student when the decision itself failed", async () => {
-    const writes = stub({ optOutUpdateFails: true });
-
-    await expect(view().approveOptOut("req-1")).rejects.toThrow(/could not approve/i);
-    expect(writes.map((w) => w.table)).toEqual(["opt_out_requests"]);
   });
 });
 
@@ -346,12 +408,19 @@ describe("approving a self-placement", () => {
     });
   });
 
-  it("records a self-placed internship with no category — internships are never classified", async () => {
+  it("records a self-placed internship on its own rung, never as a category", async () => {
     const writes = stub();
 
     await view().approveSelfPlacement("sp-1", { driveType: "internship", offerCategory: null });
 
-    expect(writes[1]?.body).toMatchObject({ drive_type: "internship", offer_category: null });
+    // 0067: a check refuses an internship row whose offer_category is anything
+    // but 'internship', and the ladder orders it below every real rung — so an
+    // internship cannot be used to claim a dream offer.
+    expect(writes[1]?.body).toMatchObject({
+      drive_type: "internship",
+      offer_category: "internship",
+      ctc_lpa: null,
+    });
   });
 
   it("refuses a job offer with no category before anything is written (D6)", async () => {

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it, vi } from "vitest";
-import { DriveProgressModal, type DriveProgressStudentItem } from "./drive-progress-modal";
+import { describe, expect, it } from "vitest";
+import { type DriveProgressStudentItem, DriveRoster } from "./drive-roster";
 
 const SAMPLE_STUDENTS: DriveProgressStudentItem[] = [
   {
@@ -86,51 +86,37 @@ const SAMPLE_STUDENTS: DriveProgressStudentItem[] = [
   },
 ];
 
-describe("DriveProgressModal", () => {
-  /** Expanding a row links to the student's own record, so the modal needs a router. */
+describe("the one-role roster", () => {
+  /** Expanding a row links to the student's own record, so it needs a router. */
   const show = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
-
-  it("does not render when isOpen is false", () => {
+  const list = (props: { students: readonly DriveProgressStudentItem[]; collegeFilter?: string }) =>
     show(
-      <DriveProgressModal
-        isOpen={false}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
+      <DriveRoster
+        students={props.students}
+        {...(props.collegeFilter === undefined ? {} : { collegeFilter: props.collegeFilter })}
       />,
     );
 
-    expect(screen.queryByRole("dialog")).toBeNull();
-  });
+  it("names every student on the role, and says how many", () => {
+    list({ students: SAMPLE_STUDENTS });
 
-  it("renders when open with drive name, student list, and count", () => {
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
-
-    const dialog = screen.getByRole("dialog");
-    expect(dialog).toBeDefined();
-    expect(screen.getByText(/Zoho — Software Engineer/i)).toBeDefined();
     expect(screen.getByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByText("Arjun Menon")).toBeDefined();
     expect(screen.getByText("Sneha Nair")).toBeDefined();
+    expect(screen.getByText(/Showing 3 of 3 students/i)).toBeDefined();
   });
 
-  it("filters students by search input (name or roll number)", async () => {
+  it("keeps only the students of the college it was scoped to", () => {
+    list({ students: SAMPLE_STUDENTS, collegeFilter: "VIT Bangalore" });
+
+    expect(screen.getByText("Sneha Nair")).toBeDefined();
+    expect(screen.queryByText("Priya Ramesh")).toBeNull();
+    expect(screen.getByText(/Filtered to VIT Bangalore/i)).toBeDefined();
+  });
+
+  it("narrows to the student being looked for, by name or by roll number", async () => {
     const user = userEvent.setup();
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
+    list({ students: SAMPLE_STUDENTS });
 
     const searchInput = screen.getByPlaceholderText(/search student/i);
     await user.type(searchInput, "Arjun");
@@ -146,54 +132,33 @@ describe("DriveProgressModal", () => {
     expect(screen.queryByText("Arjun Menon")).toBeNull();
   });
 
-  it("filters students by stage buttons (offers, in rounds, shortlisted)", async () => {
+  it("lists the stage the coordinator asks about, not the whole cycle", async () => {
     const user = userEvent.setup();
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
+    list({ students: SAMPLE_STUDENTS });
 
-    // Click offers button
-    const offersBtn = screen.getByRole("button", { name: /offers/i });
-    await user.click(offersBtn);
+    await user.click(screen.getByRole("button", { name: /offers/i }));
 
     expect(screen.getByText("Priya Ramesh")).toBeDefined();
     expect(screen.queryByText("Arjun Menon")).toBeNull();
     expect(screen.queryByText("Sneha Nair")).toBeNull();
 
-    // Click in rounds button
-    const inRoundsBtn = screen.getByRole("button", { name: /in rounds/i });
-    await user.click(inRoundsBtn);
+    await user.click(screen.getByRole("button", { name: /in rounds/i }));
 
     expect(screen.getByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByText("Arjun Menon")).toBeDefined();
     expect(screen.queryByText("Sneha Nair")).toBeNull();
   });
 
-  it("expands a student to show placement details when clicked", async () => {
+  it("opens a student's whole cycle when their row is expanded", async () => {
     const user = userEvent.setup();
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
+    list({ students: SAMPLE_STUDENTS });
 
-    // Initially placement details are not visible
     expect(screen.queryByText(/Aptitude Assessment/i)).toBeNull();
     expect(screen.queryByText(/Placement Offer Details/i)).toBeNull();
 
-    // Click Priya Ramesh to expand
-    const studentBtn = screen.getByRole("button", { name: /Priya Ramesh/i });
-    await user.click(studentBtn);
+    const priya = screen.getByRole("button", { name: /Priya Ramesh/i });
+    await user.click(priya);
 
-    // Placement details are now visible
     expect(screen.getByText(/Aptitude Assessment/i)).toBeDefined();
     expect(screen.getByText(/Technical Interview/i)).toBeDefined();
     expect(screen.getByText(/Placement Offer Details/i)).toBeDefined();
@@ -201,21 +166,13 @@ describe("DriveProgressModal", () => {
     expect(screen.getAllByText(/Computer Science/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/8.85 CGPA/i).length).toBeGreaterThanOrEqual(1);
 
-    // Click again to collapse
-    await user.click(studentBtn);
+    await user.click(priya);
     expect(screen.queryByText("Aptitude Assessment")).toBeNull();
   });
 
   it("takes the expanded row to that student's own record", async () => {
     const user = userEvent.setup();
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
+    list({ students: SAMPLE_STUDENTS });
 
     await user.click(screen.getByRole("button", { name: /Priya Ramesh/i }));
 
@@ -228,52 +185,10 @@ describe("DriveProgressModal", () => {
     const [priya] = SAMPLE_STUDENTS;
     if (priya === undefined) throw new Error("fixture missing");
 
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={vi.fn()}
-        driveName="Zoho — Software Engineer"
-        students={[{ ...priya, studentId: undefined }]}
-      />,
-    );
-
+    list({ students: [{ ...priya, studentId: undefined }] });
     await user.click(screen.getByRole("button", { name: /Priya Ramesh/i }));
 
     expect(screen.getByText(/Aptitude Assessment/i)).toBeDefined();
     expect(screen.queryByRole("link", { name: /open the student record/i })).toBeNull();
-  });
-
-  it("calls onClose when close button is clicked", async () => {
-    const user = userEvent.setup();
-    const handleClose = vi.fn();
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={handleClose}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
-
-    const closeBtn = screen.getAllByRole("button", { name: /close/i })[0];
-    if (!closeBtn) throw new Error("Close button not found");
-    await user.click(closeBtn);
-
-    expect(handleClose).toHaveBeenCalledOnce();
-  });
-
-  it("calls onClose when Escape key is pressed", () => {
-    const handleClose = vi.fn();
-    show(
-      <DriveProgressModal
-        isOpen={true}
-        onClose={handleClose}
-        driveName="Zoho — Software Engineer"
-        students={SAMPLE_STUDENTS}
-      />,
-    );
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(handleClose).toHaveBeenCalledOnce();
   });
 });

@@ -23,6 +23,7 @@ const PRIYA: RoundParticipant = {
   applicationId: "app1",
   studentName: "Priya Ramesh",
   rollNumber: "21CSE1042",
+  college: "PSG College of Technology",
   attendance: "present",
   result: null,
 };
@@ -51,6 +52,21 @@ describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
 
     expect(await screen.findByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByText(/absent/i)).toBeDefined();
+  });
+
+  it("says which college each participant belongs to, beside their roll number", async () => {
+    render(<ResultsPage roundId="r1" view={view()} />);
+
+    const college = await screen.findByText("PSG College of Technology");
+    const roll = screen.getByText("21CSE1042");
+    // On the same line, so a coordinator reading a mixed-college round sees
+    // the college where the name is rather than somewhere else on the row.
+    expect(college.parentElement).toBe(roll.parentElement);
+
+    // Arjun's record carries no college, so his row shows no chip at all
+    // rather than an empty one.
+    const arjunRoll = screen.getByText("21CSE9001");
+    expect(arjunRoll.parentElement?.textContent).toBe("21CSE9001");
   });
 
   it("links each participant to their own record, and invents none", async () => {

@@ -320,6 +320,19 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
   );
   const statVisits = [...groupDrivesByEvent(filteredStatDrives).values()];
 
+  /**
+   * The three DRIVE cards count company visits, because a visit is exactly what
+   * the popup beneath each number lists. `summariseAeDrives` counts the role
+   * rows, so a visit that raised three roles said "3" on the card and showed one
+   * row under it. The people counts stay with the rows: a student applied to a
+   * role, never to a visit.
+   */
+  const visitTotals = {
+    broughtIn: groupDrivesByEvent(snapshot.drives).size,
+    liveNow: groupDrivesByEvent(snapshot.drives.filter((d) => d.status === "live")).size,
+    completed: groupDrivesByEvent(snapshot.drives.filter((d) => d.status === "completed")).size,
+  };
+
   return (
     <div>
       <PageHeader
@@ -336,12 +349,12 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {(
             [
-              ["broughtIn", "Drives brought in", mine.broughtIn, "brand"],
-              ["liveNow", "Live now", mine.liveNow, "success"],
+              ["broughtIn", "Drives brought in", visitTotals.broughtIn, "brand"],
+              ["liveNow", "Live now", visitTotals.liveNow, "success"],
               ["applicants", "Applicants", mine.applicants, undefined],
               ["shortlisted", "Shortlisted", mine.shortlisted, undefined],
               ["offers", "Offers made", mine.offers, "warning"],
-              ["completed", "Drives completed", mine.completed, undefined],
+              ["completed", "Drives completed", visitTotals.completed, undefined],
             ] as const
           ).map(([kind, label, value, tone]) => (
             <button
@@ -527,19 +540,25 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
         // The header counts what the list below actually shows. It used to count
         // `statDrives` while rendering `filteredStatDrives`, so filtering the
         // popup by drive type left the number alone while the rows changed.
+        // And because the list is one row per company VISIT, the count is visits
+        // too — with the roles named beside it when a visit raised several.
         <DrilldownModal
           eyebrow="My drives"
           title={STAT_TITLES[openStat]}
-          subtitle={`${filteredStatDrives.length} drive${
-            filteredStatDrives.length === 1 ? "" : "s"
+          subtitle={`${statVisits.length} drive${statVisits.length === 1 ? "" : "s"}${
+            filteredStatDrives.length === statVisits.length
+              ? ""
+              : ` · ${filteredStatDrives.length} role${filteredStatDrives.length === 1 ? "" : "s"}`
           }`}
           onClose={() => setOpenStat(null)}
         >
           <div className="mb-4 flex flex-wrap gap-2">
             {DRIVE_TYPE_FILTERS.map((option) => {
-              const count = statDrives.filter((d) =>
-                matchesDriveType(d.driveType, option.value),
-              ).length;
+              // Cards, not rows: a chip that counted role rows would promise
+              // more than the list beneath it holds.
+              const count = groupDrivesByEvent(
+                statDrives.filter((d) => matchesDriveType(d.driveType, option.value)),
+              ).size;
               const selected = statTypeFilter === option.value;
               return (
                 <button

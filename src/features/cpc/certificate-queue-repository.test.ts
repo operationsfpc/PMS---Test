@@ -3,6 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import {
+  CERTIFICATE_QUEUE_COLUMNS,
   CertificateQueueError,
   createSupabaseCertificateQueueRepository,
 } from "./certificate-queue-repository";
@@ -24,10 +25,15 @@ const repo = (actor: string | null = "cpc-1") =>
 
 const ROW = {
   id: "c1",
+  student_id: "s1",
   name: "AWS Cloud Practitioner",
   created_at: "2026-08-06T10:00:00Z",
   status: "pending",
-  students: { full_name: "Priya Ramesh", roll_number: "21CSE1042" },
+  students: {
+    full_name: "Priya Ramesh",
+    roll_number: "21CSE1042",
+    campuses: { name: "PSG College of Technology" },
+  },
   student_documents: { storage_path: "s1/aws.pdf" },
 };
 
@@ -78,6 +84,30 @@ describe("pending", () => {
   });
 
   /**
+   * The queue spans every campus a coordinator can see, so the college has to
+   * be read from the student row and the id carried to the screen — a name and
+   * a roll number are not enough to say who is waiting.
+   */
+  it("reads the student's college and id off the embed", async () => {
+    stub();
+
+    const [certificate] = await repo().pending();
+
+    expect(certificate?.college).toBe("PSG College of Technology");
+    expect(certificate?.studentId).toBe("s1");
+  });
+
+  /** Registered in src/db/query-contract.test.ts; this proves it is what is sent. */
+  it("asks the database for the college instead of assuming it", async () => {
+    const { query } = stub();
+
+    await repo().pending();
+
+    const select = decodeURIComponent(new URLSearchParams(query()).get("select") ?? "");
+    expect(select).toBe(CERTIFICATE_QUEUE_COLUMNS.replace(/ /g, ""));
+  });
+
+  /**
    * A certificate whose document cannot be signed shows as having none. A
    * coordinator must never believe they have checked something they have not.
    */
@@ -90,7 +120,11 @@ describe("pending", () => {
   it("survives a certificate whose student row did not come back", async () => {
     stub({ rows: [{ ...ROW, students: null }] });
 
-    expect((await repo().pending())[0]?.studentName).toBe("Unknown student");
+    const [certificate] = await repo().pending();
+
+    expect(certificate?.studentName).toBe("Unknown student");
+    // No college is guessed for a student whose row never arrived.
+    expect(certificate?.college).toBeNull();
   });
 
   it("reports a failed load rather than an empty queue", async () => {

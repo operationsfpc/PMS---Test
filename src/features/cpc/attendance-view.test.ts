@@ -18,19 +18,29 @@ const BASE = "https://project.supabase.co";
 const client = () =>
   createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } });
 
-const scheduled = (applicationId: string, name: string, roll: string, status = "scheduled") => ({
+const scheduled = (
+  applicationId: string,
+  name: string,
+  roll: string,
+  status = "scheduled",
+  college = "PSG College of Technology",
+) => ({
   application_id: applicationId,
   status,
   applications: {
     student_id: `stu-${applicationId}`,
     profile_snapshot: {},
-    students: { full_name: name, roll_number: roll },
+    students: { full_name: name, roll_number: roll, campuses: { name: college } },
   },
 });
+
+/** The roster's `select=`, decoded — recorded by the handler that answers it. */
+let rosterSelect = "";
 
 function stub(opts: { scheduled?: unknown[]; history?: unknown[]; markFails?: boolean } = {}) {
   const writes: { body: unknown; search: string }[] = [];
   const historyQueries: string[] = [];
+  rosterSelect = "";
 
   server.use(
     http.get(`${BASE}/rest/v1/attendance`, ({ request }) => {
@@ -40,6 +50,7 @@ function stub(opts: { scheduled?: unknown[]; history?: unknown[]; markFails?: bo
         historyQueries.push(url.search);
         return HttpResponse.json(opts.history ?? []);
       }
+      rosterSelect = decodeURIComponent(url.searchParams.get("select") ?? "");
       return HttpResponse.json(opts.scheduled ?? []);
     }),
     http.patch(`${BASE}/rest/v1/attendance`, async ({ request }) => {
@@ -68,6 +79,63 @@ describe("who is scheduled", () => {
     expect(student?.studentName).toBe("Anjali Subramanian");
     expect(student?.rollNumber).toBe("21CSE1042");
     expect(student?.status).toBe("scheduled");
+  });
+
+  it("says which college each student called for belongs to", async () => {
+    stub({
+      scheduled: [
+        scheduled("a1", "Anjali Subramanian", "21CSE1042"),
+        scheduled(
+          "a2",
+          "Rahul Nair",
+          "21CSE1099",
+          "scheduled",
+          "Coimbatore Institute of Technology",
+        ),
+      ],
+    });
+
+    expect((await view().scheduled("r1")).map((s) => s.college)).toEqual([
+      "PSG College of Technology",
+      "Coimbatore Institute of Technology",
+    ]);
+    // A roster spanning two colleges is only readable if the read fetched the
+    // college, not just the name and roll.
+    expect(rosterSelect).toContain("campuses(name)");
+  });
+
+  it("reads a college that arrived as a one-item array", async () => {
+    // PostgREST returns a to-one embed as either an object or a one-item
+    // array, so both shapes have to be read.
+    stub({
+      scheduled: [
+        {
+          application_id: "a1",
+          status: "scheduled",
+          applications: {
+            student_id: "stu-a1",
+            profile_snapshot: {},
+            students: { full_name: "A", roll_number: "R", campuses: [{ name: "KCT" }] },
+          },
+        },
+      ],
+    });
+
+    expect((await view().scheduled("r1"))[0]?.college).toBe("KCT");
+  });
+
+  it("shows no college rather than a blank chip when the embed is missing", async () => {
+    stub({
+      scheduled: [
+        {
+          application_id: "a1",
+          status: "scheduled",
+          applications: { student_id: "stu-a1", students: { full_name: "A", roll_number: "R" } },
+        },
+      ],
+    });
+
+    expect((await view().scheduled("r1"))[0]?.college).toBeNull();
   });
 
   it("still lists someone whose student row did not come back", async () => {

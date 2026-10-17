@@ -847,7 +847,11 @@ describe("the drive-specific box", () => {
     expect(within(section).getByText("Priya Ramesh")).toBeDefined();
   });
 
-  it("opens the modal and displays student placement details when clicked", async () => {
+  /**
+   * The visit pane, not a per-drive popup: the company is named once and the
+   * role's students are listed under it.
+   */
+  it("opens the visit pane and displays student placement details when clicked", async () => {
     const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 

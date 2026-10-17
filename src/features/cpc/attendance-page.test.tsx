@@ -21,6 +21,7 @@ const scheduled = [
     studentId: "s-1",
     studentName: "Asha Ramanathan",
     rollNumber: "TEC001",
+    college: "PSG College of Technology",
     status: "scheduled" as const,
     priorAbsences: 0,
   },
@@ -29,6 +30,7 @@ const scheduled = [
     studentId: "s-2",
     studentName: "Bala Subramanian",
     rollNumber: "TEC002",
+    college: null,
     status: "scheduled" as const,
     priorAbsences: 2,
   },
@@ -56,6 +58,20 @@ describe("AttendancePage", () => {
     show();
     expect(await screen.findByText("Asha Ramanathan")).toBeDefined();
     expect(screen.getAllByRole("checkbox")).toHaveLength(2);
+  });
+
+  it("says which college each called-in student belongs to", async () => {
+    show();
+
+    const college = await screen.findByText("PSG College of Technology");
+    // Beside the roll number, on the row the coordinator ticks.
+    expect(screen.getByText("TEC001").parentElement).toBe(college.parentElement);
+    // Bala's record carries no college, so his row shows no chip rather than
+    // an empty one.
+    expect(screen.getAllByText(/College of Technology|Institute of Technology/)).toHaveLength(1);
+    // The chip sits inside the row's label, so it must not swallow the
+    // checkbox's accessible name.
+    expect(screen.getByRole("checkbox", { name: /Asha Ramanathan/i })).toBeDefined();
   });
 
   /** #39: the roster names who is in the room, and each row reaches that student. */

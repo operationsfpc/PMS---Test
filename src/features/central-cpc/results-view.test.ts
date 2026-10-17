@@ -17,11 +17,20 @@ const BASE = "https://project.supabase.co";
 const client = () =>
   createClient(BASE, "anon-key", { auth: { persistSession: false, autoRefreshToken: false } });
 
-const attendee = (applicationId: string, name: string, roll: string, status = "present") => ({
+const attendee = (
+  applicationId: string,
+  name: string,
+  roll: string,
+  status = "present",
+  college = "PSG College of Technology",
+) => ({
   application_id: applicationId,
   status,
-  applications: { students: { full_name: name, roll_number: roll } },
+  applications: { students: { full_name: name, roll_number: roll, campuses: { name: college } } },
 });
+
+/** Every `select=` the client sent, decoded. `stub()` clears it before each test. */
+const selects: string[] = [];
 
 function stub(
   opts: {
@@ -32,9 +41,14 @@ function stub(
   } = {},
 ) {
   const writes: unknown[] = [];
+  selects.length = 0;
 
   server.use(
-    http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
+    http.get(`${BASE}/rest/v1/attendance`, ({ request }) => {
+      const raw = new URL(request.url).searchParams.get("select");
+      selects.push(raw === null ? "" : decodeURIComponent(raw));
+      return HttpResponse.json(opts.attendance ?? []);
+    }),
     /**
      * 2026-08-26: `participants()` has read `round_participants` since F5 gave
      * each student their own slot, and this helper never answered it. With
@@ -76,6 +90,35 @@ describe("who is on the results screen", () => {
       "Anjali Subramanian",
       "Rahul Nair",
     ]);
+  });
+
+  it("carries the college each student belongs to, and asks the database for it", async () => {
+    stub({
+      attendance: [
+        attendee("a1", "Anjali Subramanian", "21CSE1042", "present", "PSG College of Technology"),
+        attendee("a2", "Rahul Nair", "21CSE1099", "present", "Coimbatore Institute of Technology"),
+      ],
+    });
+
+    const participants = await view().participants("r1");
+
+    expect(participants.map((p) => p.college)).toEqual([
+      "PSG College of Technology",
+      "Coimbatore Institute of Technology",
+    ]);
+    // A coordinator reading three same-named students across colleges can
+    // only tell them apart if the read actually fetched the college.
+    expect(selects.some((s) => s.includes("campuses(name)"))).toBe(true);
+  });
+
+  it("shows no college rather than an empty chip when the embed did not come back", async () => {
+    stub({
+      attendance: [
+        { application_id: "a1", status: "present", applications: { students: { full_name: "A" } } },
+      ],
+    });
+
+    expect((await view().participants("r1"))[0]?.college).toBeNull();
   });
 
   it("carries each student's attendance through, since an absentee still needs a result", async () => {

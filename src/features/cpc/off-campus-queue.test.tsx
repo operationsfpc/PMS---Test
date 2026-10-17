@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { OffCampusQueue } from "./off-campus-queue";
 import type { ParticipationQueueView } from "./participation-queue-contract";
+
+/** Each name now links to the student's record, so the screen needs a router. */
+const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * Verifying an offer a student found themselves. Its own screen since F2 (UAT
@@ -15,8 +19,10 @@ import type { ParticipationQueueView } from "./participation-queue-contract";
  */
 const placement = (over: Record<string, unknown> = {}) => ({
   id: "sp1",
+  studentId: "s1",
   studentName: "Arjun Kumar",
   rollNumber: "21CSE1043",
+  college: "PSG College of Technology",
   companyName: "Freshworks",
   ctcLpa: 12,
   offerLetterUrl: "https://signed/offer.pdf",
@@ -41,6 +47,13 @@ describe("OffCampusQueue", () => {
     expect(await screen.findByText("Arjun Kumar")).toBeDefined();
     expect(screen.getByText(/freshworks/i)).toBeDefined();
     expect(screen.getByText(/12 LPA/)).toBeDefined();
+  });
+
+  /** These queues run across every campus, so a name alone is not enough. */
+  it("names the college the student belongs to", async () => {
+    render(<OffCampusQueue view={view()} />);
+
+    expect(await screen.findByText(/PSG College of Technology/i)).toBeDefined();
   });
 
   it("links to the offer letter", async () => {
@@ -94,6 +107,7 @@ describe("OffCampusQueue", () => {
       expect(approveSelfPlacement).toHaveBeenCalledWith("sp1", {
         driveType: "placement",
         offerCategory: "dream",
+        stipendMonthly: null,
       }),
     );
   });
@@ -104,12 +118,16 @@ describe("OffCampusQueue", () => {
     render(<OffCampusQueue view={view({ approveSelfPlacement })} />);
 
     await user.selectOptions(await screen.findByLabelText(/offer type/i), "internship");
+    // A self-placed internship still has to say what it pays: that is the
+    // figure the ladder and the reports read.
+    await user.type(screen.getByLabelText(/stipend/i), "15000");
     await user.click(screen.getByRole("button", { name: /approve/i }));
 
     await waitFor(() =>
       expect(approveSelfPlacement).toHaveBeenCalledWith("sp1", {
         driveType: "internship",
         offerCategory: null,
+        stipendMonthly: 15000,
       }),
     );
   });
@@ -140,8 +158,10 @@ describe("OffCampusQueue", () => {
             optOuts: [
               {
                 id: "r1",
+                studentId: "s2",
                 studentName: "Priya Ramesh",
                 rollNumber: "21CSE1042",
+                college: "Coimbatore Institute of Technology",
                 reason: "Family business",
                 declarationUrl: null,
               },

@@ -3,6 +3,7 @@ import { describeBoard } from "@domain/boards";
 import { decideSrf } from "@domain/srf-decision";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import {
   createSupabaseVerificationRepository,
   type PendingSrf,
@@ -175,7 +176,18 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                   className="border-t border-line hover:bg-surface-muted/30 transition-colors"
                 >
                   <td className="align-top px-3 py-3 text-sm min-w-[160px]">
-                    <div className="font-semibold text-ink-900">{student.fullName}</div>
+                    <div className="font-semibold text-ink-900">
+                      <Link to={`/students/${student.id}`} className="hover:underline">
+                        {student.fullName}
+                      </Link>
+                    </div>
+                    {/* The roll has its own column, so the college is what this
+                        cell adds — which campus's form the coordinator is on. */}
+                    {student.college != null && student.college !== "" && (
+                      <span className="mt-1 inline-block rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                        {student.college}
+                      </span>
+                    )}
                     {/* A resubmission is not a fresh form. Repeating what was
                         asked for is what stops the same defect being missed
                         twice - and the student has already been told it. */}

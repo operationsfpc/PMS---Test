@@ -188,9 +188,15 @@ describe("DrivePicker — one card per company visit", () => {
     expect(screen.getByText(/₹5–8 LPA/)).toBeDefined();
   });
 
-  it("opens both roles so choosing one is still a single click", () => {
+  /** A picker's roles are choices, so they are rows — not panels that have to
+   * be opened before the choice inside them can be reached. */
+  it("gives each role its own row, ready to choose", () => {
     pick(visit());
-    expect(screen.getByRole("button", { name: /sde/i }).getAttribute("aria-expanded")).toBe("true");
+    const rows = screen.getAllByRole("row").slice(1);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.some((row) => /SDE/.test(row.textContent ?? ""))).toBe(true);
+    expect(rows.some((row) => /Data analyst/.test(row.textContent ?? ""))).toBe(true);
     expect(screen.getByRole("link", { name: /choose data analyst/i })).toBeDefined();
   });
 
@@ -213,9 +219,20 @@ describe("DrivePicker — one card per company visit", () => {
   it("refuses to name one type for a visit that mixed an internship with a full-time role", () => {
     pick(visit());
     expect(screen.getByText("Mixed types")).toBeDefined();
-    // Each role still declares its own underneath.
-    const analyst = screen.getByRole("button", { name: /data analyst/i });
+    // Each role still declares its own in its own row.
+    const analyst = screen.getByRole("row", { name: /data analyst/i });
     expect(within(analyst).getByText("Internship")).toBeDefined();
+  });
+
+  /** The Status column below already says where each role stands, so the visit
+   * is not asked to repeat it — least of all with two badges when they differ. */
+  it("leaves the status to each role's own row", () => {
+    pick(visit([{ status: "live" }, { status: "applications_closed" }]));
+    expect(screen.getAllByText("live")).toHaveLength(1);
+    expect(within(screen.getByRole("row", { name: /sde/i })).getByText("live")).toBeDefined();
+    expect(
+      within(screen.getByRole("row", { name: /data analyst/i })).getByText("applications closed"),
+    ).toBeDefined();
   });
 
   it("keeps a legacy drive with no visit of its own as the single row it always was", () => {

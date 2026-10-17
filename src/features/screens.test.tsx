@@ -74,6 +74,7 @@ describe("SrfVerificationQueue", () => {
         id: "s1",
         fullName: "Asha Ramanathan",
         rollNumber: "TEC001",
+        college: "PSG College of Technology",
         overallCgpa: 8.2,
         currentArrears: 0,
         historyOfArrears: 1,

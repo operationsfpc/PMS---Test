@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { CertificateQueue } from "./certificate-queue";
 import type {
   CertificateQueueRepository,
   PendingCertificate,
 } from "./certificate-queue-repository";
+
+/** Each row now links to the student's record, so the screen needs a router. */
+const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * The coordinator's certificate queue (asked for 2026-08-06).
@@ -20,8 +24,10 @@ import type {
  */
 const AWS: PendingCertificate = {
   id: "c1",
+  studentId: "s1",
   studentName: "Priya Ramesh",
   rollNumber: "21CSE1042",
+  college: "PSG College of Technology",
   name: "AWS Cloud Practitioner",
   fileName: "aws.pdf",
   uploadedAt: "2026-08-06T10:00:00Z",
@@ -30,8 +36,10 @@ const AWS: PendingCertificate = {
 
 const AZURE: PendingCertificate = {
   id: "c2",
+  studentId: "s2",
   studentName: "Arjun Menon",
   rollNumber: "21CSE9001",
+  college: null,
   name: "Azure Fundamentals",
   fileName: null,
   uploadedAt: "2026-08-06T11:00:00Z",
@@ -63,6 +71,17 @@ describe("CertificateQueue", () => {
     expect(
       within(row).getByRole<HTMLAnchorElement>("link", { name: /open certificate/i }).href,
     ).toContain("/signed/aws.pdf");
+  });
+
+  /**
+   * The queues run across every campus, so the college is what tells two
+   * students apart once their names are on the same screen.
+   */
+  it("names the college the student belongs to", async () => {
+    render(<CertificateQueue repository={repo()} />);
+
+    const row = await rowFor("AWS Cloud Practitioner");
+    expect(within(row).getByText(/PSG College of Technology/i)).toBeDefined();
   });
 
   /** A coordinator must never think they checked something they could not open. */

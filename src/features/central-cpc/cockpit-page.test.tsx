@@ -245,7 +245,13 @@ describe("disbarment reviews", () => {
           view={{
             drives: async () => [],
             reviews: async () => [
-              { studentId: "s1", studentName: "Arjun Menon", rollNumber: "21CSE9001", absences: 3 },
+              {
+                studentId: "s1",
+                studentName: "Arjun Menon",
+                rollNumber: "21CSE9001",
+                college: "PSG College of Technology",
+                absences: 3,
+              },
             ],
           }}
           role={CENTRAL_CPC}
@@ -255,6 +261,8 @@ describe("disbarment reviews", () => {
 
     expect(await screen.findByText(/Arjun Menon/)).toBeDefined();
     expect(screen.getByText(/3 absences/i)).toBeDefined();
+    // The cockpit reviews every campus at once, so the row has to say which one.
+    expect(screen.getByText(/PSG College of Technology/i)).toBeDefined();
   });
 
   /** #39: a review is a person, and the reviewer's first move is to read them. */
@@ -265,7 +273,13 @@ describe("disbarment reviews", () => {
           view={{
             drives: async () => [],
             reviews: async () => [
-              { studentId: "s1", studentName: "Arjun Menon", rollNumber: "21CSE9001", absences: 3 },
+              {
+                studentId: "s1",
+                studentName: "Arjun Menon",
+                rollNumber: "21CSE9001",
+                college: "PSG College of Technology",
+                absences: 3,
+              },
             ],
           }}
           role={CENTRAL_CPC}
@@ -286,7 +300,13 @@ describe("disbarment reviews", () => {
           view={{
             drives: async () => [],
             reviews: async () => [
-              { studentId: "s1", studentName: "Arjun Menon", rollNumber: "21CSE9001", absences: 4 },
+              {
+                studentId: "s1",
+                studentName: "Arjun Menon",
+                rollNumber: "21CSE9001",
+                college: "PSG College of Technology",
+                absences: 4,
+              },
             ],
           }}
           role={CENTRAL_CPC}
@@ -867,6 +887,24 @@ describe("one company visit is one card", () => {
     expect(expanded("Intern")).toBe("false");
   });
 
+  it("says the visit's status once, as the aggregate it is, when every role shares it", async () => {
+    routed(view([MTS, QA]));
+
+    await screen.findByText(/2 roles/);
+    expect(screen.getByText(/approved ×2/)).toBeDefined();
+  });
+
+  /** A visit whose roles stand in different places has no single status, and
+   * each role already wears its own on the row below. */
+  it("leaves a mixed visit's statuses to the roles that wear them", async () => {
+    routed(view([MTS, LIVE_ROLE]));
+
+    await screen.findByText(/2 roles/);
+    expect(screen.queryByText(/×/)).toBeNull();
+    expect(screen.getAllByText("approved")).toHaveLength(1);
+    expect(screen.getAllByText("live")).toHaveLength(1);
+  });
+
   it("leaves a legacy single drive exactly the row it was", async () => {
     routed(view([APPROVED]));
 
@@ -956,6 +994,38 @@ describe("CockpitPage — filtering and tagging by drive type", () => {
     expect(within(list).getByText("Internship → Full time")).toBeDefined();
     expect(within(list).getByText("Full time")).toBeDefined();
     expect(within(list).getByText("Internship")).toBeDefined();
+  });
+
+  /** The list below shows one card per company visit, so a chip that counted
+   * roles would promise two cards and deliver one. */
+  it("counts the visits behind a type, not the roles inside them", async () => {
+    const visit = [
+      {
+        ...base,
+        driveId: "t4",
+        companyName: "Zoho",
+        driveType: "placement" as const,
+        companyDriveId: "e9",
+      },
+      {
+        ...base,
+        driveId: "t5",
+        companyName: "Zoho",
+        roleTitle: "QA Engineer",
+        driveType: "placement" as const,
+        companyDriveId: "e9",
+      },
+    ];
+    render(
+      <MemoryRouter>
+        <CockpitPage view={view(visit)} role={DELIVERY_HEAD} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(/2 roles/);
+    const filter = screen.getByRole("group", { name: /drive type/i });
+    expect(within(filter).getByRole("button", { name: /^All 1$/ })).toBeDefined();
+    expect(within(filter).getByRole("button", { name: /^Full time 1$/ })).toBeDefined();
   });
 
   it("narrows to the chosen type", async () => {

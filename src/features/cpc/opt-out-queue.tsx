@@ -1,3 +1,4 @@
+import { StudentIdentity } from "@components/student-identity";
 import { Button, Card } from "@components/ui";
 import { useState } from "react";
 import { DeclineForm, Evidence } from "./decline-form";
@@ -28,16 +29,19 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
           <ul className="divide-y divide-neutral-200">
             {pending.optOuts.map((request) => (
               <li key={request.id} className="flex flex-wrap items-start justify-between gap-4 p-4">
-                <div className="min-w-0">
-                  <p className="font-medium text-ink-900">{request.studentName}</p>
-                  <p className="text-sm text-ink-500">{request.rollNumber}</p>
+                <StudentIdentity
+                  name={request.studentName}
+                  rollNumber={request.rollNumber}
+                  college={request.college}
+                  studentId={request.studentId}
+                >
                   <p className="mt-1 text-sm text-ink-700">“{request.reason}”</p>
                   <Evidence
                     url={request.declarationUrl}
                     label="signed declaration"
                     missing="No signed declaration was uploaded with this request."
                   />
-                </div>
+                </StudentIdentity>
 
                 {declining === request.id ? (
                   <DeclineForm

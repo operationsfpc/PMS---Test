@@ -8,6 +8,16 @@ import type { ParticipationQueueView } from "./participation-queue-contract";
 
 export class ParticipationQueueError extends Error {}
 
+/**
+ * Registered in src/db/query-contract.test.ts — every hand-written select is.
+ * Both queues embed the student and the evidence behind their claim.
+ */
+export const OPT_OUT_QUEUE_COLUMNS =
+  "id, student_id, reason, students(full_name, roll_number, campuses(name)), student_documents(storage_path)";
+
+export const SELF_PLACEMENT_QUEUE_COLUMNS =
+  "id, student_id, company_name, ctc_lpa, students(full_name, roll_number, campuses(name)), student_documents(storage_path)";
+
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
 
@@ -81,20 +91,18 @@ export function createSupabaseParticipationQueueView(
   return {
     async pending() {
       const [{ data: optOuts }, { data: placements }] = await Promise.all([
-        client
-          .from("opt_out_requests")
-          .select("id, reason, students(full_name, roll_number), student_documents(storage_path)")
-          .eq("status", "pending"),
+        client.from("opt_out_requests").select(OPT_OUT_QUEUE_COLUMNS).eq("status", "pending"),
         client
           .from("self_placement_requests")
-          .select(
-            "id, company_name, ctc_lpa, students(full_name, roll_number), student_documents(storage_path)",
-          )
+          .select(SELF_PLACEMENT_QUEUE_COLUMNS)
           .eq("status", "pending"),
       ]);
 
       const name = (row: Record<string, unknown>) =>
         one<{ full_name?: string; roll_number?: string }>(row.students);
+
+      const college = (row: Record<string, unknown>) =>
+        one<{ name?: string }>(one<{ campuses?: unknown }>(row.students)?.campuses)?.name ?? null;
 
       const evidenceOf = (row: Record<string, unknown>) =>
         one<{ storage_path?: string }>(row.student_documents)?.storage_path;
@@ -105,8 +113,10 @@ export function createSupabaseParticipationQueueView(
             const student = name(row);
             return {
               id: row.id as string,
+              studentId: (row.student_id as string | null) ?? "",
               studentName: student?.full_name ?? "Unknown student",
               rollNumber: student?.roll_number ?? "—",
+              college: college(row),
               reason: (row.reason as string | null) ?? "",
               declarationUrl: await signedUrlFor(client, evidenceOf(row)),
             };
@@ -117,8 +127,10 @@ export function createSupabaseParticipationQueueView(
             const student = name(row);
             return {
               id: row.id as string,
+              studentId: (row.student_id as string | null) ?? "",
               studentName: student?.full_name ?? "Unknown student",
               rollNumber: student?.roll_number ?? "—",
+              college: college(row),
               companyName: (row.company_name as string | null) ?? "Unknown company",
               ctcLpa: (row.ctc_lpa as number | null) ?? 0,
               offerLetterUrl: await signedUrlFor(client, evidenceOf(row)),

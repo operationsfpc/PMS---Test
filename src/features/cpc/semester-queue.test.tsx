@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as renderRaw, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { SemesterQueue } from "./semester-queue";
 import type { PendingSemester, SemesterQueueRepository } from "./semester-queue-repository";
+
+/** Each row now links to the student's record, so the screen needs a router. */
+const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryRouter>);
 
 /**
  * The coordinator's semester (CGPA) queue — 2026-08-24 UAT: the missing
@@ -12,8 +16,10 @@ import type { PendingSemester, SemesterQueueRepository } from "./semester-queue-
  */
 const SEM3: PendingSemester = {
   id: "sem-1",
+  studentId: "s1",
   studentName: "Thanush Krishna",
   rollNumber: "124",
+  college: "PSG College of Technology",
   semesterNumber: 3,
   cgpa: 7.5,
   declaredMarks: 75,
@@ -26,8 +32,10 @@ const SEM3: PendingSemester = {
 
 const SEM2: PendingSemester = {
   id: "sem-2",
+  studentId: "s2",
   studentName: "Priya Ramesh",
   rollNumber: "21CSE1042",
+  college: null,
   semesterNumber: 2,
   cgpa: 8.1,
   declaredMarks: null,
@@ -69,8 +77,16 @@ describe("SemesterQueue", () => {
     render(<SemesterQueue repository={repo()} />);
 
     const row = await rowFor("Priya Ramesh");
-    expect(row.queryByRole("link")).toBeNull();
+    expect(row.queryByRole("link", { name: /open marksheet/i })).toBeNull();
     expect(row.getByText(/no marksheet available/i)).toBeDefined();
+  });
+
+  /** The queues run across every campus; the college is what separates two rows. */
+  it("names the college the student belongs to", async () => {
+    render(<SemesterQueue repository={repo()} />);
+
+    const row = await rowFor("Thanush Krishna");
+    expect(row.getByText(/PSG College of Technology/i)).toBeDefined();
   });
 
   it("verifies a semester and reloads the queue", async () => {

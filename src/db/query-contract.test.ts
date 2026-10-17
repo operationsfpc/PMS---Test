@@ -1,7 +1,7 @@
 import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repository";
 import { AE_OVERVIEW_DRIVE_COLUMNS } from "@features/ae/overview-view";
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
-import { COCKPIT_DRIVE_COLUMNS } from "@features/central-cpc/cockpit-view";
+import { COCKPIT_DRIVE_COLUMNS, COCKPIT_REVIEW_COLUMNS } from "@features/central-cpc/cockpit-view";
 import {
   PUBLISH_COHORT_COLUMNS,
   PUBLISH_COLLEGE_COLUMNS,
@@ -10,6 +10,10 @@ import {
 import { SKILL_STUDENT_COLUMNS } from "@features/central-cpc/skills-view";
 import { CERTIFICATE_QUEUE_COLUMNS } from "@features/cpc/certificate-queue-repository";
 import { PROGRESS_APPLICATION_COLUMNS } from "@features/cpc/drive-progress-view";
+import {
+  OPT_OUT_QUEUE_COLUMNS,
+  SELF_PLACEMENT_QUEUE_COLUMNS,
+} from "@features/cpc/participation-view";
 import { SEMESTER_QUEUE_COLUMNS } from "@features/cpc/semester-queue-repository";
 import { VERIFICATION_QUEUE_COLUMNS } from "@features/cpc/verification-repository";
 import {
@@ -282,11 +286,9 @@ describe("every hand-written select matches the schema", () => {
     // The college list the publish screen's targeting is chosen from, registered
     // when it grew the city it filters by and the retired ones it must still show.
     ["publish colleges", "campuses", PUBLISH_COLLEGE_COLUMNS],
-    [
-      "cockpit absence reviews",
-      "attendance",
-      "status, round_id, applications(student_id, drive_id, students(full_name, roll_number))",
-    ],
+    // The central absence review, registered when it grew the college — the
+    // one central queue that names students across every campus at once.
+    ["cockpit absence reviews", "attendance", COCKPIT_REVIEW_COLUMNS],
     ["campus list", "campuses", "id, name, code, is_active, cities(name, state)"],
     // The student's own dashboard and the DH/AE drive portfolio, added
     // 2026-08-05. The portfolio embeds three tables under drive_rounds, which
@@ -375,16 +377,8 @@ describe("every hand-written select matches the schema", () => {
       "opt_out_requests",
       "id, reason, status, decision_reason, created_at",
     ],
-    [
-      "coordinator opt-out queue",
-      "opt_out_requests",
-      "id, reason, students(full_name, roll_number), student_documents(storage_path)",
-    ],
-    [
-      "coordinator self-placement queue",
-      "self_placement_requests",
-      "id, company_name, ctc_lpa, students(full_name, roll_number), student_documents(storage_path)",
-    ],
+    ["coordinator opt-out queue", "opt_out_requests", OPT_OUT_QUEUE_COLUMNS],
+    ["coordinator self-placement queue", "self_placement_requests", SELF_PLACEMENT_QUEUE_COLUMNS],
     // The screen a coordinator does their actual job on, and the one that was
     // reported broken. It was never registered here, which is the only reason
     // this file stayed green while the queue returned PGRST201 in production.
