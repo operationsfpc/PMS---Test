@@ -36,6 +36,8 @@ function formatScoreWithGrade(
 export function SrfVerificationQueue({ repository }: { repository?: VerificationRepository }) {
   const [rows, setRows] = useState<readonly PendingSrf[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** What the last decision did, said aloud rather than left as a row that vanished. */
+  const [decided, setDecided] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   /**
    * Which student is being sent back, and what they are being told.
@@ -71,8 +73,12 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
   async function approve(student: PendingSrf) {
     setBusyId(student.id);
     setError(null);
+    setDecided(null);
     try {
       await repo.decide(student.id, "srf_submitted", { decision: "approve" });
+      // Approving is what unlocks the student's own placement record, so the
+      // screen says that rather than showing one fewer row.
+      setDecided(`${student.fullName}'s form is verified — they can now be shortlisted.`);
       setRows((current) => (current ?? []).filter((r) => r.id !== student.id));
     } catch (caught) {
       setError(
@@ -102,8 +108,10 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
 
     setBusyId(student.id);
     setError(null);
+    setDecided(null);
     try {
       await repo.decide(student.id, "srf_submitted", decision);
+      setDecided(`${student.fullName}'s form was sent back with your comment.`);
       setRows((current) => (current ?? []).filter((r) => r.id !== student.id));
       setSendingBack(null);
       setReason("");
@@ -127,6 +135,14 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
         <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
           <p role="alert" className="text-sm text-[#DD4820]">
             {error}
+          </p>
+        </Card>
+      )}
+
+      {decided !== null && (
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
+          <p role="status" className="text-sm text-ink-900">
+            {decided}
           </p>
         </Card>
       )}

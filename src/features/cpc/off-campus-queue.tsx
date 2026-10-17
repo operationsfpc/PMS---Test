@@ -62,7 +62,10 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                     label={`${placement.studentName}'s off-campus offer`}
                     onCancel={() => setDeclining(null)}
                     onDecline={(reason) => {
-                      run(() => view.declineSelfPlacement(placement.id, reason));
+                      run(
+                        () => view.declineSelfPlacement(placement.id, reason),
+                        `${placement.studentName}'s ${placement.companyName} offer was declined with a reason, so nothing was recorded.`,
+                      );
                       setDeclining(null);
                     }}
                   />
@@ -144,16 +147,18 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                       onClick={() => {
                         const driveType = kinds[placement.id];
                         if (driveType === undefined) return;
-                        run(() =>
-                          view.approveSelfPlacement(placement.id, {
-                            driveType,
-                            offerCategory:
-                              driveType === "internship"
-                                ? null
-                                : (categories[placement.id] ?? null),
-                            stipendMonthly:
-                              driveType === "internship" ? Number(stipends[placement.id]) : null,
-                          }),
+                        run(
+                          () =>
+                            view.approveSelfPlacement(placement.id, {
+                              driveType,
+                              offerCategory:
+                                driveType === "internship"
+                                  ? null
+                                  : (categories[placement.id] ?? null),
+                              stipendMonthly:
+                                driveType === "internship" ? Number(stipends[placement.id]) : null,
+                            }),
+                          `${placement.studentName}'s offer from ${placement.companyName} is recorded, and holds them on the category ladder.`,
                         );
                       }}
                     >

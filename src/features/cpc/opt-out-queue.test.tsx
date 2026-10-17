@@ -92,6 +92,22 @@ describe("OptOutQueue", () => {
     await waitFor(() => expect(approveOptOut).toHaveBeenCalledWith("r1"));
   });
 
+  /**
+   * 2026-10-17: a decision used to leave nothing but one fewer row, which reads
+   * as a page that did nothing. The consequence, not the click, is what gets
+   * said — and it is said about the student the row named.
+   */
+  it("says what approving did, instead of only removing the row", async () => {
+    const user = userEvent.setup();
+    render(<OptOutQueue view={view()} />);
+
+    await user.click(await screen.findByRole("button", { name: /approve/i }));
+
+    expect((await screen.findByRole("status")).textContent).toMatch(
+      /Priya Ramesh is opted out — they will be left off every future drive/i,
+    );
+  });
+
   it("says nothing is waiting rather than showing an empty list", async () => {
     render(
       <OptOutQueue view={view({ pending: async () => ({ optOuts: [], selfPlacements: [] }) })} />,

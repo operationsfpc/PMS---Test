@@ -48,7 +48,10 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
                     label={`${request.studentName}'s opt-out`}
                     onCancel={() => setDeclining(null)}
                     onDecline={(reason) => {
-                      run(() => view.declineOptOut(request.id, reason));
+                      run(
+                        () => view.declineOptOut(request.id, reason),
+                        `${request.studentName}'s opt-out was declined with a reason, so they stay in every drive.`,
+                      );
                       setDeclining(null);
                     }}
                   />
@@ -57,7 +60,15 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
                     <Button variant="secondary" size="sm" onClick={() => setDeclining(request.id)}>
                       Decline
                     </Button>
-                    <Button size="sm" onClick={() => run(() => view.approveOptOut(request.id))}>
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        run(
+                          () => view.approveOptOut(request.id),
+                          `${request.studentName} is opted out — they will be left off every future drive.`,
+                        )
+                      }
+                    >
                       Approve
                     </Button>
                   </div>

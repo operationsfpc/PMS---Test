@@ -187,6 +187,28 @@ describe("ShortlistPage", () => {
     expect(within(row).queryByRole("checkbox")).toBeNull();
   });
 
+  /**
+   * F16: the screen used to refuse to say what is actually ON the shortlist
+   * as opposed to what is merely ticked. A tick is a draft, so it gets its
+   * own words — and an unticked row gets none.
+   */
+  it("marks a ticked-but-unsaved row as a draft, not a decision", async () => {
+    const user = userEvent.setup();
+    show(view());
+
+    const strong = (await screen.findByText("Strong Candidate")).closest("li");
+    const weak = screen.getByText("Weak Candidate").closest("li");
+    if (strong === null || weak === null) throw new Error("row not found");
+    expect(within(strong).queryByText(/will shortlist on save/i)).toBeNull();
+
+    await user.click(within(strong).getByRole("checkbox", { name: /shortlist strong candidate/i }));
+
+    expect(within(strong).getByText(/will shortlist on save/i)).toBeDefined();
+    expect(within(weak).queryByText(/will shortlist on save/i)).toBeNull();
+    // A draft is not a decision — the decided word stays off the row.
+    expect(within(strong).queryByText(/^shortlisted$/i)).toBeNull();
+  });
+
   /** The save must not carry the already-shortlisted — they are decided. */
   it("never re-submits an already-shortlisted student with the save", async () => {
     const saveShortlist = vi.fn();

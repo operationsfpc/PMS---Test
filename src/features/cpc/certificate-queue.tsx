@@ -28,6 +28,8 @@ import {
 export function CertificateQueue({ repository }: { repository?: CertificateQueueRepository }) {
   const [rows, setRows] = useState<readonly PendingCertificate[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** What the last decision did, said aloud rather than left as a row that vanished. */
+  const [decided, setDecided] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
@@ -59,6 +61,7 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
   async function decide(certificate: PendingCertificate, verify: boolean) {
     setBusyId(certificate.id);
     setError(null);
+    setDecided(null);
     try {
       await repo.decide(
         certificate.id,
@@ -66,6 +69,11 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
         verify
           ? { decision: "verify" }
           : { decision: "reject", reason: reasons[certificate.id] ?? "" },
+      );
+      setDecided(
+        verify
+          ? `${certificate.studentName}'s certificate “${certificate.name}” is verified.`
+          : `${certificate.studentName}'s certificate “${certificate.name}” was sent back for correction.`,
       );
       await load();
     } catch (caught) {
@@ -88,6 +96,14 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
         <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
           <p role="alert" className="text-sm text-[#DD4820]">
             {error}
+          </p>
+        </Card>
+      )}
+
+      {decided !== null && (
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
+          <p role="status" className="text-sm text-ink-900">
+            {decided}
           </p>
         </Card>
       )}

@@ -2,8 +2,14 @@ import { Card, PageHeader } from "@components/ui";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { ParticipationQueueView, PendingParticipation } from "./participation-queue-contract";
 
-/** Runs a decision and reloads the queue, or says why it did not work. */
-export type RunDecision = (action: () => Promise<void>) => void;
+/**
+ * Runs a decision and reloads the queue, or says why it did not work.
+ *
+ * `said` is what the screen tells the coordinator once the decision landed.
+ * Every approval here removes the row, and a row that only vanishes reads as a
+ * page that did nothing at all.
+ */
+export type RunDecision = (action: () => Promise<void>, said: string) => void;
 
 /**
  * The loading, empty and error scaffolding both approval queues share.
@@ -29,6 +35,7 @@ export function QueueShell({
 }) {
   const [pending, setPending] = useState<PendingParticipation | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [decided, setDecided] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setPending(await view.pending());
@@ -39,11 +46,13 @@ export function QueueShell({
   }, [refresh]);
 
   const run = useCallback<RunDecision>(
-    (action) => {
+    (action, said) => {
       void (async () => {
         setError(null);
+        setDecided(null);
         try {
           await action();
+          setDecided(said);
           await refresh();
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : "Something went wrong.");
@@ -63,6 +72,15 @@ export function QueueShell({
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           {error}
+        </div>
+      )}
+
+      {decided !== null && (
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
+        >
+          {decided}
         </div>
       )}
 

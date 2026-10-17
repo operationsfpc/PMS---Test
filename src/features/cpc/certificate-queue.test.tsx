@@ -128,6 +128,23 @@ describe("CertificateQueue", () => {
     );
   });
 
+  /**
+   * 2026-10-17: a decision used to leave nothing but one fewer card, which a
+   * coordinator reads as the click having done nothing at all.
+   */
+  it("says which certificate the last decision settled", async () => {
+    const user = userEvent.setup();
+    render(<CertificateQueue repository={repo()} />);
+
+    const row = await rowFor("AWS Cloud Practitioner");
+    await user.click(within(row).getByRole("button", { name: /verify/i }));
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toMatch(/AWS Cloud Practitioner/i);
+    expect(status.textContent).toMatch(/priya ramesh/i);
+    expect(status.textContent).toMatch(/is verified/i);
+  });
+
   it("reports the domain's refusal when a rejection has no reason", async () => {
     const decide = vi.fn(async () => {
       throw new Error("A rejection needs a reason, so the student knows what to correct.");

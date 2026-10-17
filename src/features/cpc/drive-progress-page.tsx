@@ -1,5 +1,6 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
+import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
@@ -534,29 +535,14 @@ function RoleProgress({
   const selectedStage = selection.stage;
   const totals = countStage(drive.students);
 
-  // College-wise count aggregation
-  const collegeMap = new Map<
-    string,
-    { applied: number; shortlisted: number; inRounds: number; offers: number }
-  >();
-
-  for (const s of drive.students) {
-    const cName = s.campusName ?? "All Campuses";
-    const current = collegeMap.get(cName) ?? {
-      applied: 0,
-      shortlisted: 0,
-      inRounds: 0,
-      offers: 0,
-    };
-    collegeMap.set(cName, {
-      applied: current.applied + 1,
-      shortlisted: current.shortlisted + (s.shortlisted ? 1 : 0),
-      inRounds: current.inRounds + (s.rounds.length > 0 ? 1 : 0),
-      offers: current.offers + (s.offer !== null ? 1 : 0),
-    });
+  // How many of this role's students each college holds. The stage counts used
+  // to be printed per college as well, which said the same four numbers twice
+  // over — once for the role, once again inside every card.
+  const collegeCounts = new Map<string, number>();
+  for (const student of drive.students) {
+    const name = student.campusName ?? "All Campuses";
+    collegeCounts.set(name, (collegeCounts.get(name) ?? 0) + 1);
   }
-
-  const collegeList = [...collegeMap.entries()].map(([name, counts]) => ({ name, ...counts }));
 
   const filteredStudents = drive.students.filter((s) => {
     if (selectedCollege !== "" && (s.campusName ?? "All Campuses") !== selectedCollege) {
@@ -570,143 +556,82 @@ function RoleProgress({
 
   return (
     <>
-      {/* Stage quick filter buttons */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
-        <button
-          type="button"
-          onClick={() => onSelect({ stage: "all" })}
-          className={chipClass(selectedStage === "all", BRAND_ON, BRAND_OFF)}
-        >
-          {drive.students.length} Total Applicants
-        </button>
-        <button
-          type="button"
-          onClick={() =>
-            onSelect({ stage: selectedStage === "shortlisted" ? "all" : "shortlisted" })
-          }
-          className={chipClass(selectedStage === "shortlisted", BRAND_ON, BRAND_OFF)}
-        >
-          {totals.shortlisted} Shortlisted
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect({ stage: selectedStage === "in_rounds" ? "all" : "in_rounds" })}
-          className={chipClass(selectedStage === "in_rounds", BRAND_ON, GOLD_OFF)}
-        >
-          {totals.inRounds} In Rounds
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect({ stage: selectedStage === "offers" ? "all" : "offers" })}
-          className={chipClass(selectedStage === "offers", SUCCESS_ON, SUCCESS_OFF)}
-        >
-          {totals.offers} Offers
-        </button>
-      </div>
+      {/* One strip, and the people come straight under it. The page is read for
+          who is where, so the filters may not stack above the first name. */}
+      <div className="flex flex-wrap items-start gap-x-5 gap-y-3 border-b border-line px-4 py-3">
+        <fieldset className="flex flex-wrap items-center gap-2">
+          <legend className="sr-only">Stage in the cycle</legend>
+          <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
+            Stage
+          </span>
+          <button
+            type="button"
+            aria-pressed={selectedStage === "all"}
+            onClick={() => onSelect({ stage: "all" })}
+            className={chipClass(selectedStage === "all", BRAND_ON, BRAND_OFF)}
+          >
+            {drive.students.length} Total Applicants
+          </button>
+          <button
+            type="button"
+            aria-pressed={selectedStage === "shortlisted"}
+            onClick={() =>
+              onSelect({ stage: selectedStage === "shortlisted" ? "all" : "shortlisted" })
+            }
+            className={chipClass(selectedStage === "shortlisted", BRAND_ON, BRAND_OFF)}
+          >
+            {totals.shortlisted} Shortlisted
+          </button>
+          <button
+            type="button"
+            aria-pressed={selectedStage === "in_rounds"}
+            onClick={() => onSelect({ stage: selectedStage === "in_rounds" ? "all" : "in_rounds" })}
+            className={chipClass(selectedStage === "in_rounds", BRAND_ON, GOLD_OFF)}
+          >
+            {totals.inRounds} In Rounds
+          </button>
+          <button
+            type="button"
+            aria-pressed={selectedStage === "offers"}
+            onClick={() => onSelect({ stage: selectedStage === "offers" ? "all" : "offers" })}
+            className={chipClass(selectedStage === "offers", SUCCESS_ON, SUCCESS_OFF)}
+          >
+            {totals.offers} Offers
+          </button>
+        </fieldset>
 
-      {/* College-wise Clickable Count Cards */}
-      {collegeList.length > 0 && (
-        <div className="border-b border-line bg-surface px-4 py-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-500">
-            College Breakdown (Click card to filter college · Click counts to filter stage)
-          </p>
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Overall / All colleges button card */}
-            <div
-              className={`rounded-lg p-3 transition-all ${
-                selectedCollege === ""
-                  ? "bg-brand-50 border-2 border-brand-500 shadow-xs"
-                  : "bg-surface-muted/50 border border-line"
-              }`}
+        {/* The colleges filter beside the stages, not above them: the two
+            narrow the same list, and only their combination answers "whose
+            shortlist is this". The old card grid repeated the stage counts per
+            college and pushed the first name two screens down. */}
+        {collegeCounts.size > 1 && (
+          <fieldset className="flex flex-wrap items-center gap-2">
+            <legend className="sr-only">College</legend>
+            <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
+              College
+            </span>
+            <button
+              type="button"
+              aria-pressed={selectedCollege === ""}
+              onClick={() => onSelect({ college: "" })}
+              className={chipClass(selectedCollege === "", BRAND_ON, BRAND_OFF)}
             >
+              All Colleges
+            </button>
+            {[...collegeCounts.entries()].map(([name, applied]) => (
               <button
+                key={name}
                 type="button"
-                onClick={() => onSelect({ college: "" })}
-                className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
+                aria-pressed={selectedCollege === name}
+                onClick={() => onSelect({ college: selectedCollege === name ? "" : name })}
+                className={chipClass(selectedCollege === name, BRAND_ON, BRAND_OFF)}
               >
-                <span>All Colleges</span>
-                {selectedCollege === "" && <span className="text-brand-600 font-bold">✓</span>}
+                {name} <span className="opacity-70">{applied}</span>
               </button>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
-                <button
-                  type="button"
-                  onClick={() => onSelect({ college: "", stage: "all" })}
-                  className="hover:underline cursor-pointer"
-                >
-                  Applied: <strong className="text-ink-900">{drive.students.length}</strong>
-                </button>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={() => onSelect({ college: "", stage: "shortlisted" })}
-                  className="hover:underline cursor-pointer"
-                >
-                  Shortlisted: <strong className="text-ink-900">{totals.shortlisted}</strong>
-                </button>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={() => onSelect({ college: "", stage: "offers" })}
-                  className="hover:underline cursor-pointer"
-                >
-                  Offers: <strong className="text-brand-700">{totals.offers}</strong>
-                </button>
-              </div>
-            </div>
-
-            {/* Individual College cards */}
-            {collegeList.map((col) => (
-              <div
-                key={col.name}
-                className={`rounded-lg p-3 transition-all ${
-                  selectedCollege === col.name
-                    ? "bg-brand-50 border-2 border-brand-500 shadow-xs"
-                    : "bg-surface-muted/50 border border-line"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    onSelect({ college: selectedCollege === col.name ? "" : col.name })
-                  }
-                  className="w-full flex items-center justify-between font-semibold text-xs text-ink-800 hover:text-brand-600 cursor-pointer"
-                  title={col.name}
-                >
-                  <span className="truncate">{col.name}</span>
-                  {selectedCollege === col.name && (
-                    <span className="ml-1 text-brand-600 font-bold">✓</span>
-                  )}
-                </button>
-                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-600">
-                  <button
-                    type="button"
-                    onClick={() => onSelect({ college: col.name, stage: "all" })}
-                    className="hover:underline cursor-pointer"
-                  >
-                    Applied: <strong className="text-ink-900">{col.applied}</strong>
-                  </button>
-                  <span>·</span>
-                  <button
-                    type="button"
-                    onClick={() => onSelect({ college: col.name, stage: "shortlisted" })}
-                    className="hover:underline cursor-pointer"
-                  >
-                    Shortlisted: <strong className="text-ink-900">{col.shortlisted}</strong>
-                  </button>
-                  <span>·</span>
-                  <button
-                    type="button"
-                    onClick={() => onSelect({ college: col.name, stage: "offers" })}
-                    className="hover:underline cursor-pointer"
-                  >
-                    Offers: <strong className="text-brand-700">{col.offers}</strong>
-                  </button>
-                </div>
-              </div>
             ))}
-          </div>
-        </div>
-      )}
+          </fieldset>
+        )}
+      </div>
 
       {/* Student list for this role / selected college */}
       <ul className="divide-y divide-neutral-200">
@@ -721,22 +646,12 @@ function RoleProgress({
               className="flex flex-wrap items-start justify-between gap-4 p-4 hover:bg-surface-muted/20 transition-colors"
             >
               <div className="min-w-40">
-                {student.studentId ? (
-                  <Link
-                    to={`/students/${student.studentId}`}
-                    className="font-medium text-ink-900 hover:text-brand-600 hover:underline transition-colors block"
-                  >
-                    {student.studentName}
-                  </Link>
-                ) : (
-                  <p className="font-medium text-ink-900">{student.studentName}</p>
-                )}
-                <p className="text-sm text-ink-500">{student.rollNumber}</p>
-                {student.campusName && (
-                  <span className="mt-0.5 inline-block text-[11px] font-medium text-brand-700">
-                    {student.campusName}
-                  </span>
-                )}
+                <StudentIdentity
+                  name={student.studentName}
+                  rollNumber={student.rollNumber}
+                  college={student.campusName}
+                  studentId={student.studentId}
+                />
               </div>
               <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
                 {student.shortlisted ? (

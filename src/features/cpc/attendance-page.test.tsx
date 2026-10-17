@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -15,26 +15,27 @@ import { AttendancePage, type AttendanceView } from "./attendance-page";
  * Select all / Unselect all is a confirmed requirement: a coordinator with 200
  * students in a hall marks the exceptions, not the rule.
  */
-const scheduled = [
-  {
-    applicationId: "a1",
-    studentId: "s-1",
-    studentName: "Asha Ramanathan",
-    rollNumber: "TEC001",
-    college: "PSG College of Technology",
-    status: "scheduled" as const,
-    priorAbsences: 0,
-  },
-  {
-    applicationId: "a2",
-    studentId: "s-2",
-    studentName: "Bala Subramanian",
-    rollNumber: "TEC002",
-    college: null,
-    status: "scheduled" as const,
-    priorAbsences: 2,
-  },
-];
+const ASHA = {
+  applicationId: "a1",
+  studentId: "s-1",
+  studentName: "Asha Ramanathan",
+  rollNumber: "TEC001",
+  college: "PSG College of Technology",
+  status: "scheduled" as const,
+  priorAbsences: 0,
+};
+
+const BALA = {
+  applicationId: "a2",
+  studentId: "s-2",
+  studentName: "Bala Subramanian",
+  rollNumber: "TEC002",
+  college: null,
+  status: "scheduled" as const,
+  priorAbsences: 2,
+};
+
+const scheduled = [ASHA, BALA];
 
 function view(overrides: Partial<AttendanceView> = {}): AttendanceView {
   return {
@@ -82,6 +83,39 @@ describe("AttendancePage", () => {
     expect(
       screen.getAllByRole("link", { name: /open record/i }).map((l) => l.getAttribute("href")),
     ).toEqual(["/students/s-1", "/students/s-2"]);
+  });
+
+  /**
+   * 2026-10-17 (Karthik): "if status marked … I can see no changes on ui".
+   * A tick by itself reads as nothing decided, so the row says the mark it
+   * holds and moves it with the box.
+   */
+  it("states the mark each row holds, and moves it when the box is ticked", async () => {
+    const user = userEvent.setup();
+    show();
+
+    const row = (await screen.findByText("Asha Ramanathan")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByText("Absent")).toBeDefined();
+
+    await user.click(within(row).getByRole("checkbox"));
+
+    expect(within(row).getByText("Present")).toBeDefined();
+    expect(within(row).queryByText("Absent")).toBeNull();
+  });
+
+  /** Unticking a student already recorded present must not look like no change. */
+  it("says which recorded mark the change replaces", async () => {
+    const user = userEvent.setup();
+    show(view({ scheduled: async () => [{ ...ASHA, status: "present" as const }] }));
+
+    const row = (await screen.findByText("Asha Ramanathan")).closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).queryByText(/was/i)).toBeNull();
+
+    await user.click(within(row).getByRole("checkbox"));
+
+    expect(within(row).getByText(/was present/i)).toBeDefined();
   });
 
   it("says so when the recruiter has not shortlisted anyone yet", async () => {

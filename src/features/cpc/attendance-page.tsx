@@ -1,4 +1,4 @@
-import { Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { ABSENCE_LIMIT, needsDisbarmentReview } from "@domain/attendance";
 import type { AttendanceStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
@@ -150,50 +150,70 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
 
           <Card className="p-2">
             <ul className="divide-y divide-neutral-200">
-              {rows.map((student) => (
-                <li key={student.applicationId} className="flex items-center gap-3 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    id={`att-${student.applicationId}`}
-                    className="size-4 accent-[#3D3777]"
-                    checked={present.includes(student.applicationId)}
-                    onChange={() => toggle(student.applicationId)}
-                  />
-                  <label htmlFor={`att-${student.applicationId}`} className="text-sm">
-                    <span className="font-medium">{student.studentName}</span>{" "}
-                    <span className="text-ink-500">{student.rollNumber}</span>
-                    {student.college != null && student.college !== "" && (
-                      <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
-                        {student.college}
-                      </span>
+              {rows.map((student) => {
+                const isPresent = present.includes(student.applicationId);
+                /** What the record already holds. A round nobody has taken yet
+                 *  is `scheduled`, which is neither of the two marks. */
+                const recorded =
+                  student.status === "present" || student.status === "absent"
+                    ? student.status
+                    : null;
+                return (
+                  <li key={student.applicationId} className="flex items-center gap-3 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      id={`att-${student.applicationId}`}
+                      className="size-4 accent-[#3D3777]"
+                      checked={isPresent}
+                      onChange={() => toggle(student.applicationId)}
+                    />
+                    <label htmlFor={`att-${student.applicationId}`} className="text-sm">
+                      <span className="font-medium">{student.studentName}</span>{" "}
+                      <span className="text-ink-500">{student.rollNumber}</span>
+                      {student.college != null && student.college !== "" && (
+                        <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                          {student.college}
+                        </span>
+                      )}
+                    </label>
+                    {/* The name belongs to the checkbox — it is how the row is
+                        ticked — so the record is reached from its own link. */}
+                    {student.studentId != null && (
+                      <Link
+                        to={`/students/${student.studentId}`}
+                        className="text-xs font-semibold text-brand-600 hover:underline"
+                      >
+                        Open record
+                      </Link>
                     )}
-                  </label>
-                  {/* The name belongs to the checkbox — it is how the row is
-                      ticked — so the record is reached from its own link. */}
-                  {student.studentId != null && (
-                    <Link
-                      to={`/students/${student.studentId}`}
-                      className="text-xs font-semibold text-brand-600 hover:underline"
-                    >
-                      Open record
-                    </Link>
-                  )}
 
-                  <span className="ml-auto flex items-center gap-2 text-xs">
-                    <span className={student.priorAbsences > 0 ? "text-[#FF7200]" : "text-ink-500"}>
-                      {`${student.priorAbsences} of ${ABSENCE_LIMIT}`}
-                    </span>
-                    {/* Warn BEFORE the mark, not after: the coordinator is the
-                        last person who can check this was really an absence. */}
-                    {!present.includes(student.applicationId) &&
-                      needsDisbarmentReview(student.priorAbsences + 1) && (
+                    <span className="ml-auto flex items-center gap-2 text-xs">
+                      {/* The tick IS the mark, but a box alone reads as "nothing
+                          decided yet" — and ticking a student changed nothing a
+                          coordinator could see. Say the state the row holds, and
+                          say which recorded state it would replace. */}
+                      <Badge tone={isPresent ? "success" : "danger"}>
+                        {isPresent ? "Present" : "Absent"}
+                      </Badge>
+                      {recorded !== null && isPresent !== (recorded === "present") && (
+                        <span className="text-ink-500">was {recorded}</span>
+                      )}
+                      <span
+                        className={student.priorAbsences > 0 ? "text-[#FF7200]" : "text-ink-500"}
+                      >
+                        {`${student.priorAbsences} of ${ABSENCE_LIMIT}`}
+                      </span>
+                      {/* Warn BEFORE the mark, not after: the coordinator is the
+                          last person who can check this was really an absence. */}
+                      {!isPresent && needsDisbarmentReview(student.priorAbsences + 1) && (
                         <span className="rounded bg-[#FFF0EC] px-2 py-0.5 font-semibold text-[#DD4820]">
                           Triggers review
                         </span>
                       )}
-                  </span>
-                </li>
-              ))}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </Card>
 

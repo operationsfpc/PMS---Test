@@ -112,6 +112,20 @@ describe("OffCampusQueue", () => {
     );
   });
 
+  /** 2026-10-17: the row disappearing is not an acknowledgement. */
+  it("says the offer was recorded, and what recording it means", async () => {
+    const user = userEvent.setup();
+    render(<OffCampusQueue view={view()} />);
+
+    await user.selectOptions(await screen.findByLabelText(/offer type/i), "placement");
+    await user.selectOptions(screen.getByLabelText(/category/i), "dream");
+    await user.click(screen.getByRole("button", { name: /approve/i }));
+
+    expect((await screen.findByRole("status")).textContent).toMatch(
+      /Arjun Kumar's offer from Freshworks is recorded/i,
+    );
+  });
+
   it("an internship needs no category and is recorded as one", async () => {
     const approveSelfPlacement = vi.fn();
     const user = userEvent.setup();

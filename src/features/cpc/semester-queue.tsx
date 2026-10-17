@@ -27,6 +27,8 @@ import {
 export function SemesterQueue({ repository }: { repository?: SemesterQueueRepository }) {
   const [rows, setRows] = useState<readonly PendingSemester[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** What the last decision did, said aloud rather than left as a row that vanished. */
+  const [decided, setDecided] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
@@ -57,6 +59,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
   async function decide(semester: PendingSemester, verify: boolean) {
     setBusyId(semester.id);
     setError(null);
+    setDecided(null);
     try {
       await repo.decide(
         semester.id,
@@ -64,6 +67,13 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
         verify
           ? { decision: "verify" }
           : { decision: "reject", reason: reasons[semester.id] ?? "" },
+      );
+      // The CGPA the student is judged on moves with this click, so say that
+      // rather than leaving a row that simply disappeared from the queue.
+      setDecided(
+        verify
+          ? `Semester ${semester.semesterNumber} is verified, so ${semester.studentName}'s CGPA now counts ${semester.cgpa}.`
+          : `Semester ${semester.semesterNumber} was sent back for ${semester.studentName} to correct.`,
       );
       await load();
     } catch (caught) {
@@ -86,6 +96,14 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
         <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
           <p role="alert" className="text-sm text-[#DD4820]">
             {error}
+          </p>
+        </Card>
+      )}
+
+      {decided !== null && (
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
+          <p role="status" className="text-sm text-ink-900">
+            {decided}
           </p>
         </Card>
       )}

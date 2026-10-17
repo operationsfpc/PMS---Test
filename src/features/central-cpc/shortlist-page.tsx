@@ -439,32 +439,36 @@ export function ShortlistPage({
         <strong>schedules them for Round 1</strong>.
       </p>
 
-      {/* D8 (UAT 2026-08-19): "No specific skills required" with no detail told
-          the coordinator nothing. The drive's own skills, or an honest gap. */}
-      {drive !== null && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium text-ink-700">Skills required:</span>
-          {drive.mandatorySkills.length === 0 ? (
-            <span className="text-ink-500">
-              No specific skills recorded for this role — the PIF left them blank.
-            </span>
-          ) : (
-            drive.mandatorySkills.map((skill) => (
-              <span
-                key={skill}
-                className="rounded-full border border-accent/40 bg-accent/5 px-2.5 py-0.5 text-xs font-medium text-ink-900"
-              >
-                {skill}
+      {/* What the role asks for, and how many the recruiter wanted. Both
+          describe the drive rather than the decision in progress, so they are
+          one strip — and every other notice on this page is now conditional,
+          which is what keeps the applicants near the top. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-line px-4 py-3">
+        {/* D8 (UAT 2026-08-19): "No specific skills required" with no detail told
+            the coordinator nothing. The drive's own skills, or an honest gap. */}
+        {drive !== null && (
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-ink-700">Skills required:</span>
+            {drive.mandatorySkills.length === 0 ? (
+              <span className="text-ink-500">
+                No specific skills recorded for this role — the PIF left them blank.
               </span>
-            ))
-          )}
-        </div>
-      )}
+            ) : (
+              drive.mandatorySkills.map((skill) => (
+                <span
+                  key={skill}
+                  className="rounded-full border border-accent/40 bg-accent/5 px-2.5 py-0.5 text-xs font-medium text-ink-900"
+                >
+                  {skill}
+                </span>
+              ))
+            )}
+          </p>
+        )}
 
-      {/* D6 (UAT 2026-08-19): a number to steer by. Advisory — the recruiter
-          asked for so many, and the button never refuses more or fewer. */}
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+        {/* D6 (UAT 2026-08-19): a number to steer by. Advisory — the recruiter
+            asked for so many, and the button never refuses more or fewer. */}
+        <label className="flex items-end gap-2 text-xs font-medium text-ink-500">
           Target shortlist size (optional)
           <input
             type="number"
@@ -476,7 +480,7 @@ export function ShortlistPage({
               setAcknowledgedTarget(false);
               setTarget(e.target.value);
             }}
-            className="w-36 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
+            className="w-24 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
           />
         </label>
         {targetCheck.target !== null && (
@@ -496,21 +500,6 @@ export function ShortlistPage({
           </p>
         )}
       </div>
-
-      {(applicants ?? []).some((a) => a.optedOut && !a.shortlisted) && (
-        <div
-          role="alert"
-          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-ink-900"
-        >
-          <strong>Opted out after applying:</strong>{" "}
-          {(applicants ?? [])
-            .filter((a) => a.optedOut && !a.shortlisted)
-            .map((a) => a.studentName)
-            .join(", ")}
-          . They cannot be shortlisted and will receive no notifications. You can override per
-          student, with a reason.
-        </div>
-      )}
 
       {error !== null && (
         <div
@@ -561,6 +550,27 @@ export function ShortlistPage({
         </Card>
       ) : (
         <>
+          {/* D7 (2026-08-12): "applied but not yet shortlisted should not be
+              shortlisted. This is an alert. Central PC can override."
+
+              It sits with the rows it warns about rather than in the stack
+              above them: those rows already carry the "Opted out" badge and the
+              override button, so this line only says how many and which. */}
+          {applicants.some((a) => a.optedOut && !a.shortlisted) && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-ink-900"
+            >
+              <strong>Opted out after applying:</strong>{" "}
+              {applicants
+                .filter((a) => a.optedOut && !a.shortlisted)
+                .map((a) => a.studentName)
+                .join(", ")}
+              . They cannot be shortlisted and will receive no notifications. You can override per
+              student, with a reason.
+            </div>
+          )}
+
           {/* The two tabs (2026-08-21): decided people are read-only. */}
           <div className="mb-3 flex gap-2">
             <button
@@ -648,10 +658,15 @@ export function ShortlistPage({
                         )}
                         {/* F16: what is ON the shortlist, as opposed to what is
                           merely ticked, is the difference the screen used to
-                          refuse to show. */}
+                          refuse to show. A tick is not a decision, so the two
+                          never print the same word. */}
                         {applicant?.shortlisted === true && (
                           <Badge tone="success">Shortlisted</Badge>
                         )}
+                        {applicant?.shortlisted !== true &&
+                          selected.includes(candidate.applicationId) && (
+                            <Badge tone="brand">Will shortlist on save</Badge>
+                          )}
                         {blocked && <Badge tone="danger">Opted out</Badge>}
                       </p>
                       {tab === "pending" &&

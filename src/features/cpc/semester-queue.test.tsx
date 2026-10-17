@@ -100,6 +100,12 @@ describe("SemesterQueue", () => {
     await waitFor(() =>
       expect(decide).toHaveBeenCalledWith("sem-1", "pending", { decision: "verify" }),
     );
+
+    // 2026-10-17: verifying moves the CGPA the student is judged on, so the
+    // screen says that rather than leaving one fewer row to explain itself.
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toMatch(/Semester 3 is verified/i);
+    expect(status.textContent).toMatch(/Thanush Krishna's CGPA now counts 7\.5/i);
   });
 
   it("rejects with the typed reason", async () => {

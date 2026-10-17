@@ -128,6 +128,12 @@ describe("SrfVerificationQueue", () => {
     expect(decide.mock.calls[0]?.[0]).toBe("s1");
     expect(decide.mock.calls[0]?.[2]).toEqual({ decision: "approve" });
     await waitFor(() => expect(screen.queryByText("Asha Ramanathan")).toBeNull());
+
+    // 2026-10-17: approving is what lets this student be shortlisted at all, so
+    // the screen says that rather than leaving a vanished row to explain itself.
+    expect((await screen.findByRole("status")).textContent).toMatch(
+      /Asha Ramanathan's form is verified/i,
+    );
   });
 
   it("shows the refusal when a decision is rejected by the rules", async () => {

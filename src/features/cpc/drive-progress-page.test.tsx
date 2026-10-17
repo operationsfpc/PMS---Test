@@ -474,4 +474,25 @@ describe("DriveProgressPage — college-wise breakdown cards", () => {
     expect(screen.getByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByText("Arjun Menon")).toBeDefined();
   });
+
+  /** The strip replaces a card grid, so the chosen college has to be readable
+   *  off the chip itself rather than inferred from which rows survived. */
+  it("marks the chosen college chip as the one in effect", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={view([multiCollegeDrive])} />);
+
+    await screen.findAllByText("Alliance University");
+    expect(screen.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: /vit bangalore/i }));
+
+    expect(
+      screen.getByRole("button", { name: /vit bangalore/i }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
 });
