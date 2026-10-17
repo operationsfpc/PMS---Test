@@ -111,6 +111,7 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
 
           return {
             applicationId,
+            studentId: application.student_id as string,
             studentName: (profile.fullName as string | undefined) ?? "Unnamed applicant",
             rollNumber: (profile.rollNumber as string | undefined) ?? "—",
             campus: one<{ name?: string }>(campus?.campuses)?.name ?? "—",

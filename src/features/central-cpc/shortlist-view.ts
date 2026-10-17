@@ -95,6 +95,7 @@ export function createSupabaseShortlistView(
 
         return {
           applicationId: row.id as string,
+          studentId: row.student_id as string,
           studentName:
             (snapshot.fullName as string | undefined) ?? student?.full_name ?? "Unknown student",
           rollNumber: (snapshot.rollNumber as string | undefined) ?? student?.roll_number ?? "—",

@@ -1,6 +1,7 @@
 import { Badge } from "@components/ui";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 
 export interface StudentRoundDetail {
   readonly roundId: string;
@@ -300,6 +301,16 @@ export function DriveProgressModal({
                   {/* Expandable placement details drawer */}
                   {isExpanded && (
                     <div className="border-t border-line/60 bg-surface p-4 space-y-3.5 text-xs">
+                      {/* The row itself is the disclosure, so the record link
+                          lives in the drawer rather than inside that button. */}
+                      {student.studentId !== undefined && (
+                        <Link
+                          to={`/students/${student.studentId}`}
+                          className="block font-semibold text-brand-700 underline underline-offset-2"
+                        >
+                          Open the student record
+                        </Link>
+                      )}
                       {/* Academic & Profile Details */}
                       <div className="grid gap-2 sm:grid-cols-3 rounded-lg bg-surface-muted/40 p-3">
                         <div>

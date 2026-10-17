@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { DriveProgressModal, type DriveProgressStudentItem } from "./drive-progress-modal";
 
@@ -85,8 +87,11 @@ const SAMPLE_STUDENTS: DriveProgressStudentItem[] = [
 ];
 
 describe("DriveProgressModal", () => {
+  /** Expanding a row links to the student's own record, so the modal needs a router. */
+  const show = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
   it("does not render when isOpen is false", () => {
-    render(
+    show(
       <DriveProgressModal
         isOpen={false}
         onClose={vi.fn()}
@@ -99,7 +104,7 @@ describe("DriveProgressModal", () => {
   });
 
   it("renders when open with drive name, student list, and count", () => {
-    render(
+    show(
       <DriveProgressModal
         isOpen={true}
         onClose={vi.fn()}
@@ -118,7 +123,7 @@ describe("DriveProgressModal", () => {
 
   it("filters students by search input (name or roll number)", async () => {
     const user = userEvent.setup();
-    render(
+    show(
       <DriveProgressModal
         isOpen={true}
         onClose={vi.fn()}
@@ -143,7 +148,7 @@ describe("DriveProgressModal", () => {
 
   it("filters students by stage buttons (offers, in rounds, shortlisted)", async () => {
     const user = userEvent.setup();
-    render(
+    show(
       <DriveProgressModal
         isOpen={true}
         onClose={vi.fn()}
@@ -171,7 +176,7 @@ describe("DriveProgressModal", () => {
 
   it("expands a student to show placement details when clicked", async () => {
     const user = userEvent.setup();
-    render(
+    show(
       <DriveProgressModal
         isOpen={true}
         onClose={vi.fn()}
@@ -201,10 +206,47 @@ describe("DriveProgressModal", () => {
     expect(screen.queryByText("Aptitude Assessment")).toBeNull();
   });
 
+  it("takes the expanded row to that student's own record", async () => {
+    const user = userEvent.setup();
+    show(
+      <DriveProgressModal
+        isOpen={true}
+        onClose={vi.fn()}
+        driveName="Zoho — Software Engineer"
+        students={SAMPLE_STUDENTS}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Priya Ramesh/i }));
+
+    const link = screen.getByRole("link", { name: /open the student record/i });
+    expect(link.getAttribute("href")).toBe("/students/s-1");
+  });
+
+  it("offers no record link for a row whose student could not be read", async () => {
+    const user = userEvent.setup();
+    const [priya] = SAMPLE_STUDENTS;
+    if (priya === undefined) throw new Error("fixture missing");
+
+    show(
+      <DriveProgressModal
+        isOpen={true}
+        onClose={vi.fn()}
+        driveName="Zoho — Software Engineer"
+        students={[{ ...priya, studentId: undefined }]}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Priya Ramesh/i }));
+
+    expect(screen.getByText(/Aptitude Assessment/i)).toBeDefined();
+    expect(screen.queryByRole("link", { name: /open the student record/i })).toBeNull();
+  });
+
   it("calls onClose when close button is clicked", async () => {
     const user = userEvent.setup();
     const handleClose = vi.fn();
-    render(
+    show(
       <DriveProgressModal
         isOpen={true}
         onClose={handleClose}
@@ -222,7 +264,7 @@ describe("DriveProgressModal", () => {
 
   it("calls onClose when Escape key is pressed", () => {
     const handleClose = vi.fn();
-    render(
+    show(
       <DriveProgressModal
         isOpen={true}
         onClose={handleClose}

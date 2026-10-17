@@ -18,6 +18,9 @@ import { Link } from "react-router";
 
 export interface RoundParticipant {
   readonly applicationId: string;
+  /** Null when the row's application could not be read — then there is no
+   * record to open, and the screen must not invent a link to one. */
+  readonly studentId?: string | null;
   readonly studentName: string;
   readonly rollNumber: string;
   readonly attendance: AttendanceStatus;
@@ -309,7 +312,18 @@ export function ResultsPage({
                         />
                       )}
                       <div className="min-w-0">
-                        <p className="font-medium text-ink-900">{participant.studentName}</p>
+                        <p className="font-medium text-ink-900">
+                          {participant.studentId != null ? (
+                            <Link
+                              to={`/students/${participant.studentId}`}
+                              className="hover:underline"
+                            >
+                              {participant.studentName}
+                            </Link>
+                          ) : (
+                            participant.studentName
+                          )}
+                        </p>
                         <p className="text-sm text-ink-500">{participant.rollNumber}</p>
                         {saveSlot !== undefined && (
                           <SlotEditor participant={participant} saveSlot={saveSlot} />

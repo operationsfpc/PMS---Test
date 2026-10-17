@@ -362,7 +362,11 @@ export function CockpitPage({
             {reviews.map((review) => (
               <li key={review.studentId} className="flex items-center justify-between gap-4 py-2">
                 <div>
-                  <p className="font-medium text-ink-900">{review.studentName}</p>
+                  <p className="font-medium text-ink-900">
+                    <Link to={`/students/${review.studentId}`} className="hover:underline">
+                      {review.studentName}
+                    </Link>
+                  </p>
                   <p className="text-sm text-ink-500">
                     {review.rollNumber} · {review.absences} absences
                   </p>

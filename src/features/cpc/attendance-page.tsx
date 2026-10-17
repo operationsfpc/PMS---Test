@@ -2,9 +2,12 @@ import { Button, Card, PageHeader } from "@components/ui";
 import { ABSENCE_LIMIT, needsDisbarmentReview } from "@domain/attendance";
 import type { AttendanceStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 
 export interface ScheduledStudent {
   readonly applicationId: string;
+  /** Null when the row's application could not be read — no record to open. */
+  readonly studentId?: string | null;
   readonly studentName: string;
   readonly rollNumber: string;
   readonly status: AttendanceStatus;
@@ -158,6 +161,16 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                     <span className="font-medium">{student.studentName}</span>{" "}
                     <span className="text-ink-500">{student.rollNumber}</span>
                   </label>
+                  {/* The name belongs to the checkbox — it is how the row is
+                      ticked — so the record is reached from its own link. */}
+                  {student.studentId != null && (
+                    <Link
+                      to={`/students/${student.studentId}`}
+                      className="text-xs font-semibold text-brand-600 hover:underline"
+                    >
+                      Open record
+                    </Link>
+                  )}
 
                   <span className="ml-auto flex items-center gap-2 text-xs">
                     <span className={student.priorAbsences > 0 ? "text-[#FF7200]" : "text-ink-500"}>

@@ -46,6 +46,7 @@ export function createSupabaseAttendanceView(
 
           return {
             applicationId: row.application_id as string,
+            studentId: studentId ?? null,
             studentName: (student?.full_name as string | undefined) ?? "Unknown student",
             rollNumber: (student?.roll_number as string | undefined) ?? "—",
             status: row.status as AttendanceStatus,

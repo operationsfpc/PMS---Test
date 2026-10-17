@@ -2,7 +2,16 @@ import { DriveDateFilter } from "@components/drive-date-filter";
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
-import { Badge, Card, PageHeader, StatCard } from "@components/ui";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+  Badge,
+  Card,
+  PageHeader,
+  StatCard,
+} from "@components/ui";
 import { describeCtcRange } from "@domain/ctc";
 import { type DriveOrder, orderDrives, partitionExpired } from "@domain/drive-aging";
 import { applicationWindow } from "@domain/drive-analytics";
@@ -25,7 +34,7 @@ import {
 } from "@domain/drive-type";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AppRole, DriveStatus, DriveType } from "@domain/types";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
 /** Grouped portfolio drives by company event for multi-role display. */
@@ -77,8 +86,19 @@ function groupPortfolioByEvent(drives: readonly PortfolioDrive[]): PortfolioEven
   });
 }
 
+/** The type a visit runs on. One visit usually means one type, so the badge is
+ * said once on the visit; only a visit that genuinely mixes types puts a badge
+ * on each role instead. */
+function visitType(roles: readonly PortfolioDrive[]) {
+  const types = new Set(roles.map((role) => role.driveType));
+  const [single] = types;
+  return { mixed: types.size > 1, single: types.size === 1 ? (single ?? null) : null };
+}
+
 export interface PortfolioApplicant {
   readonly applicationId: string;
+  /** The student behind the application, so the AE can open their record. */
+  readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
   readonly campus: string;
@@ -366,6 +386,7 @@ export function DrivePortfolioPage({
 
   function renderEvent(event: PortfolioEvent) {
     const isMultiRole = event.roles.length > 1;
+    const types = visitType(event.roles);
 
     return (
       <li key={event.eventId}>
@@ -377,6 +398,10 @@ export function DrivePortfolioPage({
                 <h3 className="font-[Raleway] text-lg font-bold text-ink-900">
                   {event.companyName}
                 </h3>
+                {!types.mixed && types.single !== null && (
+                  <Badge tone={driveTypeTone(types.single)}>{driveTypeLabel(types.single)}</Badge>
+                )}
+                {types.mixed && <Badge tone="neutral">Mixed types</Badge>}
                 <Badge tone="brand">{event.roles.length} roles</Badge>
               </div>
               <div className="mt-1 flex flex-wrap gap-3 text-sm text-ink-600">
@@ -409,10 +434,40 @@ export function DrivePortfolioPage({
             </div>
           )}
 
-          {/* Roles List */}
-          <div className={isMultiRole ? "divide-y divide-line" : ""}>
-            {event.roles.map((drive) => renderDrive(drive, isMultiRole))}
-          </div>
+          {/* Each role keeps its own progress in its own open panel. The visit
+              is named once above; nothing here repeats it, and no role's counts
+              are summed with another's. */}
+          {isMultiRole ? (
+            <Accordion multiple defaultValue={event.roles.map((drive) => drive.driveId)}>
+              {event.roles.map((drive) => {
+                const progress = driveProgress(drive);
+                const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
+                return (
+                  <AccordionItem key={drive.driveId} value={drive.driveId}>
+                    <AccordionTrigger className="px-4 py-3">
+                      <span className="font-semibold text-ink-900">
+                        {drive.roleTitle}
+                        {ctc !== null && ` · ${ctc}`}
+                      </span>
+                      {types.mixed && (
+                        <Badge tone={driveTypeTone(drive.driveType)}>
+                          {driveTypeLabel(drive.driveType)}
+                        </Badge>
+                      )}
+                      <Badge tone={progress.terminal ? "neutral" : "warning"}>
+                        {progress.phase}
+                      </Badge>
+                    </AccordionTrigger>
+                    <AccordionContent>{renderDrive(drive, true)}</AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+          ) : (
+            event.roles.map((drive) => (
+              <Fragment key={drive.driveId}>{renderDrive(drive, false)}</Fragment>
+            ))
+          )}
 
           {/* Add Role Button */}
           {(role === "account_executive" || role === "admin") && (
@@ -432,7 +487,7 @@ export function DrivePortfolioPage({
     );
   }
 
-  function renderDrive(drive: PortfolioDrive, isMultiRoleEvent: boolean = false) {
+  function renderDrive(drive: PortfolioDrive, nested: boolean) {
     const progress = driveProgress(drive);
     const funnel = summariseFunnel(drive.applicants);
     const window = applicationWindow(
@@ -456,35 +511,55 @@ export function DrivePortfolioPage({
           });
     const closed =
       drive.applicationEnd !== null && new Date(drive.applicationEnd).getTime() < now.getTime();
+    /** Inside a visit the company is already named by the header, so the role is
+     * what makes this panel's regions distinct. */
+    const who = nested ? `${drive.companyName} ${drive.roleTitle}` : drive.companyName;
 
     const content = (
-      <section aria-label={drive.companyName} className={isMultiRoleEvent ? "p-4" : "p-5"}>
+      <section aria-label={who} className={nested ? "p-4" : "p-5"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
-              {!isMultiRoleEvent && (
-                <Link to={`/drives/${drive.driveId}`} className="hover:underline">
-                  {drive.companyName}
+            {!nested && (
+              <>
+                <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
+                  <Link to={`/drives/${drive.driveId}`} className="hover:underline">
+                    {drive.companyName}
+                  </Link>
+                  <Badge tone={driveTypeTone(drive.driveType)}>
+                    {driveTypeLabel(drive.driveType)}
+                  </Badge>
+                </p>
+                <p className="text-sm text-ink-500">
+                  {`${drive.roleTitle}${ctc !== null ? ` · ${ctc}` : ""}`}
+                  {closeDate !== null &&
+                    ` · applications ${closed ? "closed" : "close"} ${closeDate}`}
+                </p>
+              </>
+            )}
+            {nested && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-ink-500">
+                <Link
+                  to={`/drives/${drive.driveId}`}
+                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                >
+                  Open the drive record
                 </Link>
-              )}
-              {isMultiRoleEvent && (
-                <Link to={`/drives/${drive.driveId}`} className="hover:underline">
-                  {drive.roleTitle}
-                </Link>
-              )}
-              <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
-            </p>
-            <p className="text-sm text-ink-500">
-              {isMultiRoleEvent ? ctc : `${drive.roleTitle}${ctc !== null ? ` · ${ctc}` : ""}`}
-              {closeDate !== null && ` · applications ${closed ? "closed" : "close"} ${closeDate}`}
-            </p>
+                {closeDate !== null && (
+                  <span>
+                    applications {closed ? "closed" : "close"} {closeDate}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {hats.map((hat) => (
                 <Badge key={hat} tone="brand">
                   {ROLE_LABEL[hat]}
                 </Badge>
               ))}
-              <Badge tone={progress.terminal ? "neutral" : "warning"}>{progress.phase}</Badge>
+              {!nested && (
+                <Badge tone={progress.terminal ? "neutral" : "warning"}>{progress.phase}</Badge>
+              )}
               {window.urgent && <Badge tone="danger">Closing soon</Badge>}
               <Badge tone={window.state === "open" ? "success" : "neutral"}>{window.label}</Badge>
               {drive.totalRounds > 0 && (
@@ -499,7 +574,7 @@ export function DrivePortfolioPage({
             <div
               className="h-2 w-full overflow-hidden rounded-full bg-surface-muted"
               role="progressbar"
-              aria-label={`${drive.companyName} progress`}
+              aria-label={`${who} progress`}
               aria-valuenow={progress.percentComplete}
               aria-valuemin={0}
               aria-valuemax={100}
@@ -522,7 +597,7 @@ export function DrivePortfolioPage({
         )}
 
         <section
-          aria-label={`${drive.companyName} applicants`}
+          aria-label={`${who} applicants`}
           className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
         >
           <Link to={`/drives/${drive.driveId}?stage=applied`} className="block">
@@ -550,7 +625,8 @@ export function DrivePortfolioPage({
               onClick={() => setExpanded(open ? null : drive.driveId)}
               className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-ink-700 hover:border-brand-300"
             >
-              {open ? "Hide" : "Show"} applicants to {drive.companyName}
+              {open ? "Hide" : "Show"} applicants{" "}
+              {nested ? "for this role" : `to ${drive.companyName}`}
             </button>
           )}
 
@@ -563,7 +639,7 @@ export function DrivePortfolioPage({
             </Link>
           )}
 
-          {!isMultiRoleEvent && (role === "account_executive" || role === "admin") && (
+          {!nested && (role === "account_executive" || role === "admin") && (
             <Link
               to={`/ae/pif?companyName=${encodeURIComponent(drive.companyName)}&companyDriveId=${
                 drive.companyDriveId ?? ""
@@ -579,7 +655,7 @@ export function DrivePortfolioPage({
             expansion must not survive a role that may not read it. */}
         {open && mayViewApplicants && (
           <section
-            aria-label={`${drive.companyName} applicant list`}
+            aria-label={`${who} applicant list`}
             className="border-t border-line bg-surface-muted p-5"
           >
             {drive.applicants.length === 0 ? (
@@ -601,7 +677,9 @@ export function DrivePortfolioPage({
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-ink-900">
-                          {applicant.studentName}
+                          <Link to={`/students/${applicant.studentId}`} className="hover:underline">
+                            {applicant.studentName}
+                          </Link>
                         </p>
                         <p className="text-xs text-ink-500">
                           <span>{applicant.rollNumber}</span> · {applicant.campus}
@@ -621,14 +699,6 @@ export function DrivePortfolioPage({
       </section>
     );
 
-    if (isMultiRoleEvent) {
-      return <div key={drive.driveId}>{content}</div>;
-    }
-
-    return (
-      <li key={drive.driveId}>
-        <Card className="overflow-hidden">{content}</Card>
-      </li>
-    );
+    return content;
   }
 }

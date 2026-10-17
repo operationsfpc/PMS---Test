@@ -53,6 +53,25 @@ describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
     expect(screen.getByText(/absent/i)).toBeDefined();
   });
 
+  it("links each participant to their own record, and invents none", async () => {
+    render(
+      <MemoryRouter>
+        <ResultsPage
+          roundId="r1"
+          view={{ ...view(), participants: async () => [{ ...PRIYA, studentId: "s-1" }, ARJUN] }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("link", { name: /priya ramesh/i })).toBeDefined();
+    expect(screen.getByRole("link", { name: /priya ramesh/i }).getAttribute("href")).toBe(
+      "/students/s-1",
+    );
+    // Arjun's row carries no student id, so there is nothing to link to.
+    expect(screen.getByText("Arjun Menon")).toBeDefined();
+    expect(screen.queryByRole("link", { name: /arjun menon/i })).toBeNull();
+  });
+
   it("marks the checked students Selected — after ONE confirmation naming them", async () => {
     const record = vi.fn();
     const user = userEvent.setup();

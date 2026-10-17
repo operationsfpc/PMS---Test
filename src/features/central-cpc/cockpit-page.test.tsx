@@ -257,6 +257,28 @@ describe("disbarment reviews", () => {
     expect(screen.getByText(/3 absences/i)).toBeDefined();
   });
 
+  /** #39: a review is a person, and the reviewer's first move is to read them. */
+  it("takes the reviewer from the name to that student's record", async () => {
+    render(
+      <MemoryRouter>
+        <CockpitPage
+          view={{
+            drives: async () => [],
+            reviews: async () => [
+              { studentId: "s1", studentName: "Arjun Menon", rollNumber: "21CSE9001", absences: 3 },
+            ],
+          }}
+          role={CENTRAL_CPC}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText(/Arjun Menon/);
+    expect(screen.getByRole("link", { name: /arjun menon/i }).getAttribute("href")).toBe(
+      "/students/s1",
+    );
+  });
+
   it("says a review is required, never that the student is disbarred", async () => {
     render(
       <MemoryRouter>

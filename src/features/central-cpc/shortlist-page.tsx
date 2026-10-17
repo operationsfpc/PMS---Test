@@ -14,10 +14,13 @@ import { checkShortlistTarget } from "@domain/shortlist-target";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { buildRecruiterZip } from "./export-pack";
 
 export interface ShortlistApplicant {
   readonly applicationId: string;
+  /** The student behind the application, so a row can reach their record. */
+  readonly studentId: string;
   readonly studentName: string;
   readonly rollNumber: string;
   readonly overallCgpa: number;
@@ -634,7 +637,13 @@ export function ShortlistPage({
                     <div className="min-w-0 flex-1">
                       <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
                         <span className="text-ink-400">{index + 1}.</span>
-                        <span>{candidate.studentName}</span>
+                        {applicant === undefined ? (
+                          <span>{candidate.studentName}</span>
+                        ) : (
+                          <Link to={`/students/${applicant.studentId}`} className="hover:underline">
+                            {candidate.studentName}
+                          </Link>
+                        )}
                         {/* F16: what is ON the shortlist, as opposed to what is
                           merely ticked, is the difference the screen used to
                           refuse to show. */}

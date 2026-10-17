@@ -40,6 +40,7 @@ const DRIVE: PortfolioDrive = {
   applicants: [
     {
       applicationId: "a1",
+      studentId: "s-1",
       studentName: "Anjali Subramanian",
       rollNumber: "21CSE1042",
       campus: "Alliance University",
@@ -64,6 +65,7 @@ const DRIVE: PortfolioDrive = {
     },
     {
       applicationId: "a2",
+      studentId: "s-2",
       studentName: "Rahul Nair",
       rollNumber: "21CSE1099",
       campus: "VIT Bangalore",
@@ -190,6 +192,21 @@ describe("DrivePortfolioPage", () => {
     expect(within(list).getByText("21CSE1042")).toBeDefined();
     expect(within(list).getByText("Round 2 of 2 — Technical interview")).toBeDefined();
     expect(within(list).getByText(/awaiting shortlist/i)).toBeDefined();
+  });
+
+  /** #39: the list says who is there, and each name reaches their record. */
+  it("links each applicant to their own student record", async () => {
+    const user = userEvent.setup();
+    show();
+
+    await user.click(await screen.findByRole("button", { name: /applicants to zoho/i }));
+
+    const list = screen.getByRole("region", { name: "Zoho Corporation applicant list" });
+    expect(
+      within(list)
+        .getAllByRole("link")
+        .map((l) => l.getAttribute("href")),
+    ).toEqual(["/students/s-1", "/students/s-2"]);
   });
 
   it("keeps the applicant list closed until it is asked for", async () => {
@@ -814,5 +831,87 @@ describe("DrivePortfolioPage — filtering and tagging by drive type", () => {
     await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
 
     expect(screen.getByText(/no internship drives/i)).toBeDefined();
+  });
+});
+
+/**
+ * The company-visit card rule (UAT 2026-10-16, and again on 2026-10-17:
+ * "single company i need under role name and it data properly"). A visit that
+ * raised two roles is ONE card: the company is named once, and each role keeps
+ * its own numbers in its own open panel — they are never summed into one row.
+ */
+describe("one company visit is one card", () => {
+  const SDE: PortfolioDrive = { ...DRIVE, driveId: "d20", companyDriveId: "e1" };
+  const ANALYST: PortfolioDrive = {
+    ...DRIVE,
+    driveId: "d21",
+    roleTitle: "Data Analyst",
+    companyDriveId: "e1",
+    applicants: [],
+  };
+
+  /** The visit's own card. The drive-type chips above it carry the same type
+   * words, so every assertion here is scoped inside the card. */
+  const visit = async (roles: readonly PortfolioDrive[]) => {
+    show({ view: view(roles) });
+    const headline = await screen.findByRole("heading", { level: 3, name: /zoho corporation/i });
+    const card = headline.closest("li");
+    if (card === null) throw new Error("visit card not found");
+    return within(card);
+  };
+
+  it("names the company once and folds both roles under it", async () => {
+    const v = await visit([SDE, ANALYST]);
+
+    expect(v.getAllByText("Zoho Corporation")).toHaveLength(1);
+    expect(v.getByText("2 roles")).toBeDefined();
+  });
+
+  it("opens both roles and keeps each one's counts and record separate", async () => {
+    const v = await visit([SDE, ANALYST]);
+
+    expect(
+      v.getByRole("button", { name: /^member technical staff/i }).getAttribute("aria-expanded"),
+    ).toBe("true");
+    expect(v.getByRole("button", { name: /^data analyst/i }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+
+    const sdeFunnel = v.getByRole("region", {
+      name: "Zoho Corporation Member Technical Staff applicants",
+    });
+    const applied = within(sdeFunnel).getByRole("link", { name: /applied/i });
+    expect(within(applied).getByText("2")).toBeDefined();
+    expect(applied.getAttribute("href")).toBe("/drives/d20?stage=applied");
+
+    const analystFunnel = v.getByRole("region", {
+      name: "Zoho Corporation Data Analyst applicants",
+    });
+    const analystApplied = within(analystFunnel).getByRole("link", { name: /applied/i });
+    expect(within(analystApplied).getByText("0")).toBeDefined();
+    expect(analystApplied.getAttribute("href")).toBe("/drives/d21?stage=applied");
+
+    expect(
+      v.getAllByRole("link", { name: /open the drive record/i }).map((l) => l.getAttribute("href")),
+    ).toEqual(["/drives/d20", "/drives/d21"]);
+  });
+
+  it("says a type both roles share once, on the visit", async () => {
+    const v = await visit([SDE, ANALYST]);
+
+    expect(v.getAllByText("Full time")).toHaveLength(1);
+    expect(v.getByRole("button", { name: /^data analyst/i }).textContent).not.toContain(
+      "Full time",
+    );
+  });
+
+  it("says 'Mixed types' on the visit and each role's own type on its trigger", async () => {
+    const v = await visit([SDE, { ...ANALYST, driveType: "internship" }]);
+
+    expect(v.getByText("Mixed types")).toBeDefined();
+    expect(v.getByRole("button", { name: /^data analyst/i }).textContent).toContain("Internship");
+    expect(v.getByRole("button", { name: /^member technical staff/i }).textContent).toContain(
+      "Full time",
+    );
   });
 });

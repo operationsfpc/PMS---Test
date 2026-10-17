@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactElement } from "react";
+import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import {
   type ShortlistApplicant,
@@ -27,6 +29,7 @@ const DRIVE = {
 
 const WEAK: ShortlistApplicant = {
   applicationId: "app-weak",
+  studentId: "s-weak",
   studentName: "Weak Candidate",
   rollNumber: "21CSE0002",
   overallCgpa: 6,
@@ -40,6 +43,7 @@ const WEAK: ShortlistApplicant = {
 
 const STRONG: ShortlistApplicant = {
   applicationId: "app-strong",
+  studentId: "s-strong",
   studentName: "Strong Candidate",
   rollNumber: "21CSE0001",
   overallCgpa: 9.5,
@@ -71,24 +75,41 @@ function view(overrides: Partial<ShortlistView> = {}): ShortlistView {
 const confirmButton = async () =>
   within(await screen.findByRole("alertdialog")).getByRole("button", { name: /confirm/i });
 
+/** Every row now links to the student's record, so the screen needs a router. */
+const inRouter = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
+const show = (v: ShortlistView) => inRouter(<ShortlistPage driveId="d1" view={v} />);
+
 describe("ShortlistPage", () => {
   it("ranks the strongest applicant first, using the domain rule", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     const rows = await screen.findAllByRole("listitem");
     expect(within(rows[0] as HTMLElement).getByText("Strong Candidate")).toBeDefined();
   });
 
   it("shows why each candidate scored what they did", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     const row = (await screen.findByText("Weak Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
     expect(within(row).getByText(/standing arrear/i)).toBeDefined();
   });
 
+  /** #39: the roster is a list of people, and each one has a record to open. */
+  it("links each row to that student's record", async () => {
+    show(view());
+
+    await screen.findByText("Strong Candidate");
+    expect(screen.getByRole("link", { name: /strong candidate/i }).getAttribute("href")).toBe(
+      "/students/s-strong",
+    );
+    expect(screen.getByRole("link", { name: /weak candidate/i }).getAttribute("href")).toBe(
+      "/students/s-weak",
+    );
+  });
+
   it("warns that ranking is internal and never shown to students", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     expect(await screen.findByText(/never shown to students/i)).toBeDefined();
   });
@@ -101,7 +122,7 @@ describe("ShortlistPage", () => {
   it("saves the decision and the recommendation that produced it", async () => {
     const saveShortlist = vi.fn();
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+    show(view({ saveShortlist }));
 
     const row = (await screen.findByText("Weak Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
@@ -134,13 +155,10 @@ describe("ShortlistPage", () => {
    */
   it("keeps the already-shortlisted OFF the working tab — on their own, read-only", async () => {
     const user = userEvent.setup();
-    render(
-      <ShortlistPage
-        driveId="d1"
-        view={view({
-          applicants: async () => [{ ...STRONG, shortlisted: true }, WEAK],
-        })}
-      />,
+    show(
+      view({
+        applicants: async () => [{ ...STRONG, shortlisted: true }, WEAK],
+      }),
     );
 
     // The working tab holds only the undecided.
@@ -159,14 +177,11 @@ describe("ShortlistPage", () => {
   it("never re-submits an already-shortlisted student with the save", async () => {
     const saveShortlist = vi.fn();
     const user = userEvent.setup();
-    render(
-      <ShortlistPage
-        driveId="d1"
-        view={view({
-          applicants: async () => [{ ...STRONG, shortlisted: true }, WEAK],
-          saveShortlist,
-        })}
-      />,
+    show(
+      view({
+        applicants: async () => [{ ...STRONG, shortlisted: true }, WEAK],
+        saveShortlist,
+      }),
     );
 
     const row = (await screen.findByText("Weak Candidate")).closest("li");
@@ -181,22 +196,19 @@ describe("ShortlistPage", () => {
   });
 
   it("says so plainly when nobody has applied", async () => {
-    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [] })} />);
+    show(view({ applicants: async () => [] }));
 
     expect(await screen.findByText(/nobody has applied/i)).toBeDefined();
   });
 
   it("surfaces a failed save instead of pretending it worked", async () => {
     const user = userEvent.setup();
-    render(
-      <ShortlistPage
-        driveId="d1"
-        view={view({
-          saveShortlist: async () => {
-            throw new Error("Only the Central Placement Coordinator may shortlist.");
-          },
-        })}
-      />,
+    show(
+      view({
+        saveShortlist: async () => {
+          throw new Error("Only the Central Placement Coordinator may shortlist.");
+        },
+      }),
     );
 
     const row = (await screen.findByText("Weak Candidate")).closest("li");
@@ -233,7 +245,7 @@ describe("ShortlistPage \u2014 an opted-out applicant", () => {
   };
 
   it("is flagged with an alert and offered no checkbox", async () => {
-    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [OPTED, STRONG] })} />);
+    show(view({ applicants: async () => [OPTED, STRONG] }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/opted out/i);
@@ -247,12 +259,7 @@ describe("ShortlistPage \u2014 an opted-out applicant", () => {
   it("can be overridden with a reason, which the save carries", async () => {
     const saveShortlist = vi.fn();
     const user = userEvent.setup();
-    render(
-      <ShortlistPage
-        driveId="d1"
-        view={view({ applicants: async () => [OPTED, STRONG], saveShortlist })}
-      />,
-    );
+    show(view({ applicants: async () => [OPTED, STRONG], saveShortlist }));
 
     const row = (await screen.findByText("Opted Out Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
@@ -275,7 +282,7 @@ describe("ShortlistPage \u2014 an opted-out applicant", () => {
 
   it("refuses to confirm an override with no reason", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [OPTED] })} />);
+    show(view({ applicants: async () => [OPTED] }));
 
     const row = (await screen.findByText("Opted Out Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
@@ -289,7 +296,7 @@ describe("ShortlistPage \u2014 an opted-out applicant", () => {
 /** D8/D9: saving IS the communication, and the screen says so. */
 describe("ShortlistPage \u2014 what saving means", () => {
   it("says the save notifies the students and schedules Round 1", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     await screen.findByText("Strong Candidate");
     expect(screen.getByText(/notifies the shortlisted students/i)).toBeDefined();
@@ -324,7 +331,7 @@ describe("ShortlistPage \u2014 after saving", () => {
 
   it("confirms the shortlist was saved, and says how many are on it", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={persistingView()} />);
+    show(persistingView());
 
     await shortlistOne(user);
 
@@ -340,7 +347,7 @@ describe("ShortlistPage \u2014 after saving", () => {
    */
   it("moves the saved students to the Shortlisted tab", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={persistingView()} />);
+    show(persistingView());
 
     await shortlistOne(user);
     await screen.findByRole("status");
@@ -358,7 +365,7 @@ describe("ShortlistPage \u2014 after saving", () => {
 
   it("clears the confirmation as soon as the selection changes again", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={persistingView()} />);
+    show(persistingView());
 
     await shortlistOne(user);
     await screen.findByRole("status");
@@ -372,13 +379,10 @@ describe("ShortlistPage \u2014 after saving", () => {
 
   it("does not claim success when the save failed", async () => {
     const user = userEvent.setup();
-    render(
-      <ShortlistPage
-        driveId="d1"
-        view={persistingView(async () => {
-          throw new Error("Could not save the shortlist.");
-        })}
-      />,
+    show(
+      persistingView(async () => {
+        throw new Error("Could not save the shortlist.");
+      }),
     );
 
     await screen.findByText("Strong Candidate");
@@ -420,7 +424,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     const download = vi.fn();
     const logExport = vi.fn();
     const user = userEvent.setup();
-    render(
+    inRouter(
       <ShortlistPage
         driveId="d1"
         view={view({
@@ -461,7 +465,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     const download = vi.fn();
     const logExport = vi.fn();
     const user = userEvent.setup();
-    render(
+    inRouter(
       <ShortlistPage
         driveId="d1"
         view={view({
@@ -488,7 +492,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
 describe("ShortlistPage — UAT 2026-08-19", () => {
   it("selects every eligible applicant with one Select all (D9)", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     await screen.findByText("Strong Candidate");
     await user.click(screen.getByRole("checkbox", { name: /select all/i }));
@@ -508,7 +512,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
       optedOut: true,
     };
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [OPTED, STRONG] })} />);
+    show(view({ applicants: async () => [OPTED, STRONG] }));
 
     await screen.findByText("Strong Candidate");
     await user.click(screen.getByRole("checkbox", { name: /select all/i }));
@@ -519,7 +523,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
   it("asks before saving, and cancel saves nothing (F2)", async () => {
     const saveShortlist = vi.fn();
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+    show(view({ saveShortlist }));
 
     await screen.findByText("Strong Candidate");
     await user.click(screen.getByRole("checkbox", { name: /shortlist strong candidate/i }));
@@ -537,7 +541,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
 
   it("shows an advisory target and counts against it (D6)", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     await screen.findByText("Strong Candidate");
     await user.type(screen.getByLabelText(/target shortlist size/i), "5");
@@ -547,7 +551,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
   });
 
   it("shows the drive's required skills to the coordinator (D8)", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     await screen.findByText("Strong Candidate");
     expect(screen.getByText(/skills required/i)).toBeDefined();
@@ -555,7 +559,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
   });
 
   it("says plainly when the PIF recorded no skills, instead of nothing (D8)", async () => {
-    render(
+    inRouter(
       <ShortlistPage
         driveId="d1"
         view={view({ drive: async () => ({ ...DRIVE, mandatorySkills: [] }) })}
@@ -582,7 +586,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
  */
 describe("the match score is not shown", () => {
   it("shows no score figure on any row", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
     await screen.findByText(/strong candidate/i);
 
     expect(screen.queryAllByRole("figure")).toHaveLength(0);
@@ -590,7 +594,7 @@ describe("the match score is not shown", () => {
   });
 
   it("does not print the raw score anywhere on the row", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     const row = await screen.findByRole("listitem", { name: /weak candidate/i });
     // 24 was this applicant's score. The row still shows CGPA 6, so the
@@ -600,7 +604,7 @@ describe("the match score is not shown", () => {
   });
 
   it("no longer explains a score the screen does not show", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
     await screen.findByText(/strong candidate/i);
 
     const note = screen.getByText(/never shown to students/i).closest("p");
@@ -610,7 +614,7 @@ describe("the match score is not shown", () => {
 
   /** The order is still the ranking's, so removing the number changed nothing else. */
   it("still lists the stronger candidate first", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
     const rows = await screen.findAllByRole("listitem");
     expect(rows[0]?.textContent).toMatch(/strong candidate/i);
   });
@@ -618,7 +622,7 @@ describe("the match score is not shown", () => {
   /** PRD 13.1: the recommendation is still recorded, it is just not displayed. */
   it("still saves the score and rationale for the audit trail", async () => {
     const saved: ShortlistDecision[][] = [];
-    render(
+    inRouter(
       <ShortlistPage
         driveId="d1"
         view={view({
@@ -653,7 +657,7 @@ describe("the applicant's actual skills", () => {
         { skill: "SQL", score: 3 },
       ],
     };
-    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [skilled] })} />);
+    show(view({ applicants: async () => [skilled] }));
 
     const row = (await screen.findByText("Strong Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
@@ -662,7 +666,7 @@ describe("the applicant's actual skills", () => {
   });
 
   it("says plainly when no skill scores are recorded (G5a)", async () => {
-    render(<ShortlistPage driveId="d1" view={view({ applicants: async () => [WEAK] })} />);
+    show(view({ applicants: async () => [WEAK] }));
 
     const row = (await screen.findByText("Weak Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
@@ -675,7 +679,7 @@ describe("the applicant's actual skills", () => {
  */
 describe("the export button names what it produces", () => {
   it("offers a CSV export with resume links and an optional recruiter pack", async () => {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     const csvButton = await screen.findByRole("button", { name: /export shortlist \(csv\)/i });
     expect(csvButton).toBeDefined();
@@ -695,7 +699,7 @@ describe("the export button names what it produces", () => {
  */
 describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
   async function selectBoth(user: ReturnType<typeof userEvent.setup>, target: string) {
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
     await screen.findByText("Strong Candidate");
     await user.type(screen.getByLabelText(/target shortlist size/i), target);
     await user.click(screen.getByRole("checkbox", { name: /select all/i }));
@@ -723,7 +727,7 @@ describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
   it("makes the over-count an explicit second click, not a reflex Confirm", async () => {
     const saveShortlist = vi.fn();
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+    show(view({ saveShortlist }));
 
     await screen.findByText("Strong Candidate");
     await user.type(screen.getByLabelText(/target shortlist size/i), "1");
@@ -748,7 +752,7 @@ describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
 
   it("warns just as loudly when FEWER than the target are selected", async () => {
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view()} />);
+    show(view());
 
     await screen.findByText("Strong Candidate");
     await user.type(screen.getByLabelText(/target shortlist size/i), "5");
@@ -766,7 +770,7 @@ describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
 
   it("counts the already-shortlisted toward the target, as the page does", async () => {
     const user = userEvent.setup();
-    render(
+    inRouter(
       <ShortlistPage
         driveId="d1"
         view={view({ applicants: async () => [{ ...WEAK, shortlisted: true }, STRONG] })}
@@ -791,7 +795,7 @@ describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
   it("asks nothing extra when no target was set — the field is optional", async () => {
     const saveShortlist = vi.fn();
     const user = userEvent.setup();
-    render(<ShortlistPage driveId="d1" view={view({ saveShortlist })} />);
+    show(view({ saveShortlist }));
 
     await screen.findByText("Strong Candidate");
     await user.click(screen.getByRole("checkbox", { name: /select all/i }));
@@ -832,7 +836,7 @@ describe("the recruiter pack names resume files safely", () => {
   it("puts a slash-carrying name in one flat file, not a folder", async () => {
     const download = vi.fn();
     const user = userEvent.setup();
-    render(
+    inRouter(
       <ShortlistPage
         driveId="d1"
         view={view({

@@ -96,6 +96,14 @@ describe("createSupabasePortfolioView", () => {
     expect(drive?.applicants[0]?.campus).toBe("Alliance University");
   });
 
+  /** #39: the list says who, and each name has to reach that person's record. */
+  it("carries each applicant's student id through to the screen", async () => {
+    stub();
+    const [drive] = await view().drives();
+
+    expect(drive?.applicants[0]?.studentId).toBe("s1");
+  });
+
   it("still shows an applicant whose campus it is not allowed to read", async () => {
     stub([{ ...DRIVE, applications: [{ ...DRIVE.applications[0], students: null }] }]);
     const [drive] = await view().drives();

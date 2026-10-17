@@ -411,7 +411,9 @@ export function createSupabaseResultsView(
       const [{ data: attendance }, { data: results }, { data: slots }] = await Promise.all([
         client
           .from("attendance")
-          .select("application_id, status, applications(students(full_name, roll_number))")
+          .select(
+            "application_id, status, applications(student_id, students(full_name, roll_number))",
+          )
           .eq("round_id", roundId),
         client.from("round_results").select("application_id, result").eq("round_id", roundId),
         client
@@ -438,12 +440,13 @@ export function createSupabaseResultsView(
 
       return (attendance ?? [])
         .map((row): RoundParticipant => {
-          const application = one<{ students: unknown }>(row.applications);
+          const application = one<{ student_id?: string; students: unknown }>(row.applications);
           const student = one<{ full_name?: string; roll_number?: string }>(application?.students);
           const slot = slotByApplication.get(row.application_id as string);
 
           return {
             applicationId: row.application_id as string,
+            studentId: application?.student_id ?? null,
             studentName: student?.full_name ?? "Unknown student",
             rollNumber: student?.roll_number ?? "—",
             attendance: row.status as AttendanceStatus,
