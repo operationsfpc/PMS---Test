@@ -312,14 +312,14 @@ export function SkillsPage({
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
       )}
       {status !== null && (
-        <Card className="mb-4 border border-[#1EE0E1] bg-[#ECF1F0] p-4">
+        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             {status}
           </p>
@@ -385,7 +385,7 @@ export function SkillsPage({
           </p>
           {sheet.rejected.length > 0 && (
             <>
-              <p className="mt-1 text-sm text-[#DD4820]">
+              <p className="mt-1 text-sm text-danger-500">
                 {`${sheet.rejected.length} row${sheet.rejected.length === 1 ? "" : "s"} cannot be imported.`}
               </p>
               <ul className="mt-2 flex flex-col gap-1">
@@ -480,7 +480,7 @@ export function SkillsPage({
           </p>
         ) : (
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_var(--color-line,#DADADA)]">
+            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_var(--color-line)]">
               <tr className="border-b border-line text-left">
                 {!readOnly && (
                   <th scope="col" className="px-4 py-3">

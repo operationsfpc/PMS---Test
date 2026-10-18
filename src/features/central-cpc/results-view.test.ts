@@ -462,6 +462,13 @@ describe("managing rounds", () => {
 });
 
 describe("completing the drive (C3, answer 3b)", () => {
+  /**
+   * 2026-10-18: the round's participants, results and attendance come back as
+   * their own paged reads. Embedded, each of them hit PostgREST's thousand-row
+   * cap on its own, so a first round that called 1,400 students reported four
+   * hundred of them as never having been called — undecided, on a drive whose
+   * round had plainly run.
+   */
   it("counts the applicants still undecided", async () => {
     server.use(
       http.get(`${BASE}/rest/v1/applications`, () =>
@@ -471,17 +478,18 @@ describe("completing the drive (C3, answer 3b)", () => {
         ]),
       ),
       http.get(`${BASE}/rest/v1/drive_rounds`, () =>
+        HttpResponse.json([{ id: "r1", sequence: 1, name: "R1" }]),
+      ),
+      http.get(`${BASE}/rest/v1/round_participants`, () =>
         HttpResponse.json([
-          {
-            id: "r1",
-            sequence: 1,
-            name: "R1",
-            round_participants: [{ application_id: "a1" }, { application_id: "a2" }],
-            round_results: [{ application_id: "a1", result: "rejected" }],
-            attendance: [],
-          },
+          { round_id: "r1", application_id: "a1" },
+          { round_id: "r1", application_id: "a2" },
         ]),
       ),
+      http.get(`${BASE}/rest/v1/round_results`, () =>
+        HttpResponse.json([{ round_id: "r1", application_id: "a1", result: "rejected" }]),
+      ),
+      http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json([])),
       http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
     );
 
@@ -489,6 +497,35 @@ describe("completing the drive (C3, answer 3b)", () => {
 
     // a1 is rejected (terminal); a2 sat the round with no result (pending).
     expect(readiness).toEqual({ ready: false, undecided: 1 });
+  });
+
+  it("reads a round's whole attendance, past a thousand participants", async () => {
+    const ranges: string[] = [];
+    const many = Array.from({ length: 1001 }, (_, i) => ({
+      round_id: "r1",
+      application_id: `a${i + 1}`,
+      result: "rejected",
+    }));
+    server.use(
+      http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/drive_rounds`, () =>
+        HttpResponse.json([{ id: "r1", sequence: 1, name: "R1" }]),
+      ),
+      http.get(`${BASE}/rest/v1/round_participants`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/round_results`, ({ request }) => {
+        const p = new URL(request.url).searchParams;
+        ranges.push(`${p.get("offset")}-${p.get("limit")}`);
+        const from = Number(p.get("offset") ?? 0);
+        const size = Number(p.get("limit") ?? 1000);
+        return HttpResponse.json(many.slice(from, from + size));
+      }),
+      http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+    );
+
+    await view().completionFacts("d1");
+
+    expect(ranges).toEqual(["0-1000", "1000-1000"]);
   });
 
   it("completes the drive, storing the early reason only when one was needed", async () => {

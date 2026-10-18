@@ -1,3 +1,4 @@
+import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { describeDriveFreeze } from "@domain/drive-working";
@@ -5,17 +6,19 @@ import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
 import {
   buildRecruiterCsvRows,
   buildRecruiterExport,
+  describeResumeLinks,
   EXPORT_COLUMNS,
   RECRUITER_CSV_COLUMNS,
   recruiterPackProblem,
+  resumeLinkShortfall,
   resumePackFilename,
   type ShortlistEntry,
 } from "@domain/recruiter-export";
 import { checkShortlistTarget } from "@domain/shortlist-target";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { DriveStatus, RoleCategory } from "@domain/types";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import { buildRecruiterZip } from "./export-pack";
 
 export interface ShortlistApplicant {
@@ -26,6 +29,22 @@ export interface ShortlistApplicant {
   readonly rollNumber: string;
   /** Their own college — a drive targets several, and rank is read across them. */
   readonly college?: string | null;
+  /**
+   * What they study, when they finish, and how they marked in school — all of
+   * it frozen on the application (R7), like the CGPA the ranking runs on.
+   * #17 (UAT 2026-10-18): a coordinator scanning three hundred cards must be
+   * able to tell two same-named candidates apart without opening either.
+   *
+   * Optional because a snapshot written before these figures were captured
+   * carries none of them, and an absent fact is not the same as a zero.
+   */
+  readonly degree?: string | null;
+  readonly branch?: string | null;
+  readonly passingYear?: number | null;
+  readonly tenthPercentage?: number | null;
+  readonly twelfthPercentage?: number | null;
+  /** Their contact address, as it stood when they applied. */
+  readonly email?: string | null;
   readonly overallCgpa: number;
   readonly currentArrears: number;
   readonly historyOfArrears: number;
@@ -109,6 +128,33 @@ function browserDownload(filename: string, content: Blob | string): void {
 }
 
 /**
+ * What they study and when they leave, as one line: "B.E. CSE · Passing year
+ * 2026". Worded the way the student directory words the same two facts, so a
+ * coordinator reading both screens reads one language.
+ *
+ * Null when the snapshot carries neither — a candidate whose programme was
+ * never recorded gets a quiet card, not a card full of dashes.
+ */
+function describeProgramme(applicant: ShortlistApplicant): string | null {
+  const given = (value: string | null | undefined) => (value == null ? "" : value.trim());
+  const study = [given(applicant.degree), given(applicant.branch)]
+    .filter((p) => p !== "")
+    .join(" ");
+  const year = applicant.passingYear == null ? "" : `Passing year ${applicant.passingYear}`;
+  const line = [study, year].filter((part) => part !== "").join(" · ");
+  return line === "" ? null : line;
+}
+
+/** A labelled figure beside a candidate's name — "10th 91.4%". */
+function Detail({ label, value }: { readonly label: string; readonly value: string }) {
+  return (
+    <span className="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-700">
+      {label} {value}
+    </span>
+  );
+}
+
+/**
  * Internal shortlisting.
  *
  * The ranking is R11's, and it is ADVISORY. What gets saved is the
@@ -128,6 +174,8 @@ export function ShortlistPage({
 }) {
   const [drive, setDrive] = useState<ShortlistDrive | null>(null);
   const [applicants, setApplicants] = useState<readonly ShortlistApplicant[] | null>(null);
+  /** Bumped to re-run the first read after it failed. */
+  const [attempt, setAttempt] = useState(0);
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -169,19 +217,36 @@ export function ShortlistPage({
   const [tab, setTab] = useState<"pending" | "shortlisted">("pending");
 
   const refresh = useCallback(async () => {
-    const [loadedDrive, loadedApplicants] = await Promise.all([
-      view.drive(driveId),
-      view.applicants(driveId),
-    ]);
-    setDrive(loadedDrive);
-    setApplicants(loadedApplicants);
-    // Nothing is pre-selected: the shortlisted are decided, not "ticked".
-    setSelected([]);
+    /*
+     * #34 (UAT 2026-10-18): the applicants are read a page at a time now, and a
+     * paged read throws instead of quietly handing back a short list. Nothing
+     * caught it, so a refused read left the screen on "Loading applicants…"
+     * forever. A spinner is a worse answer than "this did not load".
+     */
+    try {
+      const [loadedDrive, loadedApplicants] = await Promise.all([
+        view.drive(driveId),
+        view.applicants(driveId),
+      ]);
+      setDrive(loadedDrive);
+      setApplicants(loadedApplicants);
+      // Nothing is pre-selected: the shortlisted are decided, not "ticked".
+      setSelected([]);
+      setError(null);
+    } catch (cause) {
+      setError(
+        describeReadFailure(
+          cause,
+          "We could not read the students who applied to this drive. Please try again.",
+        ),
+      );
+    }
   }, [view, driveId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, attempt]);
 
   const ranked = useMemo(() => {
     if (applicants === null || drive === null) return [];
@@ -305,8 +370,19 @@ export function ShortlistPage({
       download(`shortlist-${company}.csv`, csvContent);
 
       await view.logExport(driveId, columns, csvRows.length);
-      setExportFeedback(`Exported ${csvRows.length} shortlisted candidates with resume links.`);
-      setMissingResumes([]);
+      /*
+       * #78 (UAT 2026-10-18): the sentence used to be "Exported N shortlisted
+       * candidates with resume links" whether or not a single link came back.
+       * The links are minted per document row, and a candidate whose CV row is
+       * gone, whose bucket read was refused, or who was simply never counted,
+       * gets an empty cell. So the count says what it got, and the alert names
+       * who did not get one — they are the ones the recruiter must be sent
+       * separately.
+       */
+      setExportFeedback(
+        `Exported ${csvRows.length} shortlisted candidates. ${describeResumeLinks(csvRows)}`,
+      );
+      setMissingResumes(resumeLinkShortfall(csvRows));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
     } finally {
@@ -548,8 +624,8 @@ export function ShortlistPage({
           role="alert"
           className="mb-4 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-ink-900"
         >
-          Exported without a resume on file: {missingResumes.join(", ")}. The recruiter pack is
-          incomplete for them.
+          No resume link for {missingResumes.join(", ")} — their CV is not reachable from the file
+          you just sent. Ask them to upload one, or attach it yourself.
         </div>
       )}
 
@@ -565,9 +641,17 @@ export function ShortlistPage({
       )}
 
       {applicants === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading applicants…
-        </p>
+        error === null ? (
+          <p role="status" className="text-sm text-ink-500">
+            Loading applicants…
+          </p>
+        ) : (
+          /* The sentence is already in the alert above; this is the way out of
+              the dead end, so the screen does not stay empty with no control. */
+          <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+            Load the applicants again
+          </Button>
+        )
       ) : applicants.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">Nobody has applied to this drive yet.</p>
@@ -621,42 +705,49 @@ export function ShortlistPage({
             </button>
           </div>
 
-          <Card>
-            {/* D9: one box for the lot. Indeterminate states are more honest as
-                a plain label, so the box is checked only when ALL are.
-                A closed drive offers no selection at all — not a tick that
-                cannot be saved. */}
-            {tab === "pending" && visibleRanked.length > 0 && freeze === null && (
-              <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-3">
-                <input
-                  type="checkbox"
-                  aria-label="Select all applicants"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                />
-                <span className="text-sm font-medium text-ink-700">
-                  Select all ({selectable.length})
-                </span>
-              </div>
-            )}
-            {visibleRanked.length === 0 && (
+          {/* D9: one box for the lot. Indeterminate states are more honest as
+              a plain label, so the box is checked only when ALL are.
+              A closed drive offers no selection at all — not a tick that
+              cannot be saved. */}
+          {tab === "pending" && visibleRanked.length > 0 && freeze === null && (
+            <div className="mb-3 flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
+              <input
+                type="checkbox"
+                aria-label="Select all applicants"
+                checked={allSelected}
+                onChange={toggleAll}
+              />
+              <span className="text-sm font-medium text-ink-700">
+                Select all ({selectable.length})
+              </span>
+            </div>
+          )}
+          {visibleRanked.length === 0 && (
+            <Card>
               <p className="p-6 text-sm text-ink-700">
                 {tab === "pending"
                   ? "Everyone who applied is already on the shortlist."
                   : "Nobody is on the shortlist yet."}
               </p>
-            )}
-            <ul className="divide-y divide-neutral-200">
-              {visibleRanked.map(({ candidate, rank }) => {
-                const applicant = byId.get(candidate.applicationId);
-                const blocked = applicant?.optedOut === true;
-                const overridden = overrides[candidate.applicationId] !== undefined;
-                return (
-                  <li
-                    key={candidate.applicationId}
-                    aria-label={candidate.studentName}
-                    className="flex items-start gap-4 p-4"
-                  >
+            </Card>
+          )}
+          {/* #17 (UAT 2026-10-18): the rows became cards. A shortlist is read
+              as a set of people, not as a table of marks — each card now
+              carries the programme, the marksheet figures and the contact the
+              recruiter will ask for, so the decision is made on the card
+              instead of across thirty record pages. */}
+          <ul className="space-y-3">
+            {visibleRanked.map(({ candidate, rank }) => {
+              const applicant = byId.get(candidate.applicationId);
+              const blocked = applicant?.optedOut === true;
+              const overridden = overrides[candidate.applicationId] !== undefined;
+              return (
+                <li
+                  key={candidate.applicationId}
+                  aria-label={candidate.studentName}
+                  className="rounded-card border border-line bg-surface p-4 transition-shadow hover:shadow-sm"
+                >
+                  <div className="flex items-start gap-4">
                     {/* Decided rows carry NO checkbox — a shortlisted student
                         cannot be shortlisted again (2026-08-21). Neither does a
                         row on a drive whose shortlist is closed. */}
@@ -670,23 +761,18 @@ export function ShortlistPage({
                         aria-label={`Shortlist ${candidate.studentName}`}
                         checked={selected.includes(candidate.applicationId)}
                         onChange={() => toggle(candidate.applicationId)}
-                        className="mt-1"
+                        className="mt-1 size-4 accent-brand-500"
                       />
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
+                      <p className="flex flex-wrap items-center gap-2">
                         {/* The rank that is SAVED, spelled as such. This used to
                             print the position inside whichever tab was open, so
                             the "1." on a card and the rank in the audit trail
                             were two different numbers. */}
-                        <span className="text-ink-400">Rank {rank}</span>
-                        {applicant === undefined ? (
-                          <span>{candidate.studentName}</span>
-                        ) : (
-                          <Link to={`/students/${applicant.studentId}`} className="hover:underline">
-                            {candidate.studentName}
-                          </Link>
-                        )}
+                        <span className="rounded-full border border-line bg-surface-muted px-2 py-0.5 text-xs font-semibold text-ink-700">
+                          Rank {rank}
+                        </span>
                         {/* F16: what is ON the shortlist, as opposed to what is
                           merely ticked, is the difference the screen used to
                           refuse to show. A tick is not a decision, so the two
@@ -700,93 +786,110 @@ export function ShortlistPage({
                           )}
                         {blocked && <Badge tone="danger">Opted out</Badge>}
                       </p>
-                      {tab === "pending" &&
-                        freeze === null &&
-                        blocked &&
-                        !overridden &&
-                        overriding !== candidate.applicationId && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="mt-1"
-                            onClick={() => {
-                              setOverriding(candidate.applicationId);
-                              setOverrideDraft("");
-                            }}
-                          >
-                            Override with reason…
-                          </Button>
+                      {/* Name, roll and campus go through the one component
+                          every staff screen uses for them, so "Roll" and the
+                          campus chip mean the same thing here as next door. */}
+                      <StudentIdentity
+                        name={candidate.studentName}
+                        rollNumber={applicant?.rollNumber ?? ""}
+                        college={applicant?.college}
+                        studentId={applicant?.studentId}
+                        detail={applicant === undefined ? null : describeProgramme(applicant)}
+                      >
+                        {tab === "pending" &&
+                          freeze === null &&
+                          blocked &&
+                          !overridden &&
+                          overriding !== candidate.applicationId && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="mt-1"
+                              onClick={() => {
+                                setOverriding(candidate.applicationId);
+                                setOverrideDraft("");
+                              }}
+                            >
+                              Override with reason…
+                            </Button>
+                          )}
+                        {overriding === candidate.applicationId && (
+                          <div className="mt-2 flex flex-wrap items-end gap-2">
+                            <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                              Reason for overriding the opt-out
+                              <input
+                                type="text"
+                                value={overrideDraft}
+                                onChange={(e) => setOverrideDraft(e.target.value)}
+                                className="w-64 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
+                              />
+                            </label>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                if (overrideDraft.trim() === "") return;
+                                setOverrides((o) => ({
+                                  ...o,
+                                  [candidate.applicationId]: overrideDraft.trim(),
+                                }));
+                                setOverriding(null);
+                              }}
+                            >
+                              Confirm override
+                            </Button>
+                          </div>
                         )}
-                      {overriding === candidate.applicationId && (
-                        <div className="mt-2 flex flex-wrap items-end gap-2">
-                          <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                            Reason for overriding the opt-out
-                            <input
-                              type="text"
-                              value={overrideDraft}
-                              onChange={(e) => setOverrideDraft(e.target.value)}
-                              className="w-64 rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
-                            />
-                          </label>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              if (overrideDraft.trim() === "") return;
-                              setOverrides((o) => ({
-                                ...o,
-                                [candidate.applicationId]: overrideDraft.trim(),
-                              }));
-                              setOverriding(null);
-                            }}
-                          >
-                            Confirm override
-                          </Button>
-                        </div>
-                      )}
-                      {/* "1  KG-Test  CGPA 8.5" read as three unexplained
-                          tokens. Each now says what it is, and the CGPA is left
-                          to the reasoning line below rather than stated twice
-                          in one card. */}
-                      <p className="flex flex-wrap items-center gap-2 text-sm text-ink-500">
-                        {applicant !== undefined && <span>Roll {applicant.rollNumber}</span>}
-                        {applicant?.college != null && applicant.college !== "" && (
-                          <span
-                            title="College campus"
-                            className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700"
-                          >
-                            <span className="sr-only">College: </span>
-                            {applicant.college}
-                          </span>
-                        )}
-                      </p>
-                      {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
-                        skills" told the coordinator nothing about what the
-                        student HAS. Their own scores, or an honest gap. */}
-                      {applicant !== undefined &&
-                        (applicant.skillScores.length === 0 ? (
-                          /* Only a gap when the role actually asked for skills.
-                             Otherwise the reasoning line below already says "No
-                             specific skills required for this role." */
-                          drive !== null && drive.mandatorySkills.length > 0 ? (
-                            <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
-                          ) : null
-                        ) : (
-                          <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
-                            {applicant.skillScores.map(({ skill, score }) => (
-                              <span
-                                key={skill}
-                                className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
-                              >
-                                {skill} {score}/{SKILL_SCORE_MAX}
-                              </span>
-                            ))}
+                        {/* The school figures the recruiter asks for first,
+                            each labelled. CGPA stays out of this row — the
+                            reasoning below already states it, and a card that
+                            says a number twice invites a third reading. */}
+                        {applicant !== undefined &&
+                          (applicant.tenthPercentage != null ||
+                            applicant.twelfthPercentage != null) && (
+                            <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
+                              {applicant.tenthPercentage != null && (
+                                <Detail label="10th" value={`${applicant.tenthPercentage}%`} />
+                              )}
+                              {applicant.twelfthPercentage != null && (
+                                <Detail label="12th" value={`${applicant.twelfthPercentage}%`} />
+                              )}
+                            </p>
+                          )}
+                        {applicant?.email != null && applicant.email !== "" && (
+                          <p className="mt-1 break-all text-xs text-ink-500">
+                            <span className="sr-only">Email on file: </span>
+                            {applicant.email}
                           </p>
-                        ))}
-                      <ul className="mt-1 text-xs text-ink-500">
-                        {candidate.reasons.map((reason) => (
-                          <li key={reason}>{reason}</li>
-                        ))}
-                      </ul>
+                        )}
+                        {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
+                          skills" told the coordinator nothing about what the
+                          student HAS. Their own scores, or an honest gap. */}
+                        {applicant !== undefined &&
+                          (applicant.skillScores.length === 0 ? (
+                            /* Only a gap when the role actually asked for skills.
+                               Otherwise the reasoning line below already says "No
+                               specific skills required for this role." */
+                            drive !== null && drive.mandatorySkills.length > 0 ? (
+                              <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
+                            ) : null
+                          ) : (
+                            <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
+                              {applicant.skillScores.map(({ skill, score }) => (
+                                <span
+                                  key={skill}
+                                  className="rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
+                                >
+                                  {skill} {score}/{SKILL_SCORE_MAX}
+                                </span>
+                              ))}
+                            </p>
+                          ))}
+                        <ul className="mt-1 text-xs text-ink-500">
+                          {candidate.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      </StudentIdentity>
                     </div>
                     {/*
                      * The score used to be printed here. Removed 2026-08-17: it
@@ -796,11 +899,11 @@ export function ShortlistPage({
                      * because PRD 13.1 wants the recommendation kept beside the
                      * choice. It is simply not shown.
                      */}
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </>
       )}
 

@@ -98,15 +98,15 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
       )}
 
       {saved && (
-        <Card className="mb-4 border border-[#1EE0E1] bg-[#ECF1F0] p-4">
+        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             Attendance saved.
           </p>
@@ -162,7 +162,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                     <input
                       type="checkbox"
                       id={`att-${student.applicationId}`}
-                      className="size-4 accent-[#3D3777]"
+                      className="size-4 accent-brand-500"
                       checked={isPresent}
                       onChange={() => toggle(student.applicationId)}
                     />
@@ -201,14 +201,14 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                         <span className="text-ink-500">was {recorded}</span>
                       )}
                       <span
-                        className={student.priorAbsences > 0 ? "text-[#FF7200]" : "text-ink-500"}
+                        className={student.priorAbsences > 0 ? "text-orange-500" : "text-ink-500"}
                       >
                         {`${student.priorAbsences} of ${ABSENCE_LIMIT}`}
                       </span>
                       {/* Warn BEFORE the mark, not after: the coordinator is the
                           last person who can check this was really an absence. */}
                       {!isPresent && needsDisbarmentReview(student.priorAbsences + 1) && (
-                        <span className="rounded bg-[#FFF0EC] px-2 py-0.5 font-semibold text-[#DD4820]">
+                        <span className="rounded bg-danger-50 px-2 py-0.5 font-semibold text-danger-500">
                           Triggers review
                         </span>
                       )}
@@ -223,7 +223,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
             <Button isLoading={busy} onClick={() => void save()}>
               Save attendance
             </Button>
-            <p className="text-xs text-[#FF7200]">
+            <p className="text-xs text-orange-500">
               Anyone left unticked is recorded absent. Three absences trigger a disbarment review.
             </p>
           </div>

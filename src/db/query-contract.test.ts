@@ -1,5 +1,8 @@
 import { CAMPUS_PROGRAMME_COLUMNS } from "@features/admin/campus-programmes-repository";
-import { AE_OVERVIEW_DRIVE_COLUMNS } from "@features/ae/overview-view";
+import {
+  AE_OVERVIEW_APPLICATION_COLUMNS,
+  AE_OVERVIEW_DRIVE_COLUMNS,
+} from "@features/ae/overview-view";
 import { STUDENT_STANDING_COLUMNS } from "@features/auth/student-standing";
 import { COCKPIT_DRIVE_COLUMNS, COCKPIT_REVIEW_COLUMNS } from "@features/central-cpc/cockpit-view";
 import {
@@ -308,6 +311,11 @@ describe("every hand-written select matches the schema", () => {
     ["drive portfolio", "drives", PORTFOLIO_DRIVE_COLUMNS],
     // The AE's landing page (2026-08-26): their own drives and who applied.
     ["ae overview drives", "drives", AE_OVERVIEW_DRIVE_COLUMNS],
+    // Read as its own paged query since 2026-10-18: an embedded collection is
+    // capped separately from its parent, so a drive past a thousand
+    // applications silently lost the rest of them off the AE's cards.
+    ["ae overview applicants", "applications", AE_OVERVIEW_APPLICATION_COLUMNS],
+    ["ae overview shortlisted", "shortlist_entries", "application_id, included"],
     // The Central CPC's cockpit, whose select moved out of the query and here.
     ["cockpit drives", "drives", COCKPIT_DRIVE_COLUMNS],
     ["drive portfolio offers", "offers", "drive_id, student_id"],
@@ -315,6 +323,10 @@ describe("every hand-written select matches the schema", () => {
     ["final selection offers", "offers", "student_id, attachment_path, attachment_name"],
     // Answer 5a (2026-08-24): the pack fetches each resume by document id.
     ["recruiter pack resumes", "student_documents", "id, storage_path"],
+    // #79 (2026-10-18): the directory's CSV links each student's CV, read by
+    // student and kind, and needs the upload time to pick the newest of the
+    // one-resume-per-role-category rows.
+    ["directory resume links", "student_documents", "student_id, storage_path, uploaded_at"],
     // The ladder's evidence. Unregistered until 2026-08-12, which is how a
     // select naming a non-existent column (`status`) 400'd in silence and
     // let every placed student see every drive.

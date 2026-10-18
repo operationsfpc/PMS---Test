@@ -59,15 +59,15 @@ export function LoginPage() {
   if (auth.status === "signed-in") return <Navigate to="/" replace />;
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#F5F5F5] px-4">
+    <main className="grid min-h-dvh place-items-center bg-surface-muted px-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="font-[Raleway] text-2xl font-bold text-[#3D3777]">FACE Prep Campus</h1>
+        <h1 className="font-heading text-2xl font-bold text-brand-500">FACE Prep Campus</h1>
         <p className="mt-1 text-sm text-neutral-600">Placement Management System</p>
 
         {message !== null && (
           <p
             role="alert"
-            className="mt-6 rounded-lg border border-[#DD4820] bg-[#FFF0EC] p-3 text-sm text-[#DD4820]"
+            className="mt-6 rounded-lg border border-danger-500 bg-danger-50 p-3 text-sm text-danger-500"
           >
             {message}
           </p>

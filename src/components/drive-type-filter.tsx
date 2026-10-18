@@ -49,8 +49,8 @@ export function DriveTypeFilter({
             onClick={() => onChange(option.value)}
             className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
               selected
-                ? "border-[#3D3777] bg-[#3D3777] text-white"
-                : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
+                ? "border-brand-500 bg-brand-500 text-white"
+                : "border-line bg-white text-ink-700 hover:border-violet-400"
             }`}
           >
             {option.label}

@@ -135,14 +135,14 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
       </Card>
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
       )}
       {status !== null && (
-        <Card className="mb-4 border border-[#1EE0E1] bg-[#ECF1F0] p-4">
+        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             {status}
           </p>

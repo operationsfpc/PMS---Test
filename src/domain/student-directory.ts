@@ -44,6 +44,14 @@ export interface DirectoryStudent {
   readonly degree: string;
   readonly branch: string;
   readonly passingYear: number;
+  /**
+   * Overall CGPA as the roster holds it, null when none is recorded.
+   *
+   * 2026-10-18 (UAT): the overview's counts open a popup that prints a CGPA
+   * column, and the directory that popup links into had no CGPA at all. A
+   * figure shown in one view and absent from the next reads as invented.
+   */
+  readonly cgpa: number | null;
   readonly srfStatus: SrfStatus;
   readonly participationStatus: ParticipationStatus;
   readonly applications: number;

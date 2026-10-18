@@ -1,10 +1,11 @@
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { describeMarks } from "@domain/marks";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { OfferSource, ParticipationStatus, RoleCategory, SrfStatus } from "@domain/types";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 
 /**
  * G7 (UAT 2026-08-20, Q7 answer b): the canonical student record.
@@ -106,6 +107,8 @@ export function StudentRecordPage({
   view: StudentRecordView;
 }) {
   const [record, setRecord] = useState<StudentRecord | null | undefined>(undefined);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     let live = true;
@@ -125,12 +128,33 @@ export function StudentRecordPage({
     );
   }
 
+  /**
+   * UAT 2026-10-18: "there is no way to go back". A record reached from a list
+   * returns to that list. One loaded cold — bookmark, mail link, refresh — has
+   * no in-app history to step into, so it points at the reader's own overview
+   * instead of offering a button that would do nothing. `/` sends each role to
+   * their landing screen, so this never hands someone a page they cannot read.
+   */
+  const back =
+    location.key === "default" ? (
+      <ButtonLink variant="secondary" size="sm" to="/">
+        <ArrowLeft aria-hidden="true" className="size-4" />
+        Overview
+      </ButtonLink>
+    ) : (
+      <Button variant="secondary" size="sm" onClick={() => navigate(-1)}>
+        <ArrowLeft aria-hidden="true" className="size-4" />
+        Back
+      </Button>
+    );
+
   if (record === null) {
     return (
       <Card className="p-6">
         <p className="text-sm text-ink-700">
           This student record does not exist, or you cannot read it.
         </p>
+        <div className="mt-4">{back}</div>
       </Card>
     );
   }
@@ -140,6 +164,7 @@ export function StudentRecordPage({
       <PageHeader
         title={record.fullName}
         subtitle={`Roll ${record.rollNumber} · ${record.campusName}`}
+        actions={back}
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

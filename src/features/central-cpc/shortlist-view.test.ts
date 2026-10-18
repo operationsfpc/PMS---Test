@@ -194,6 +194,109 @@ describe("the applicants (R7 — from the snapshot)", () => {
     expect(applicant?.historyOfArrears).toBe(1);
   });
 
+  /**
+   * #17 (UAT 2026-10-18): "two Priyas, both at 8.4" — the card carried marks
+   * and nothing that identified the person behind them. Every field here is
+   * ALREADY frozen in the same snapshot the CGPA is read from, so this is a
+   * widening of the same source of truth, not a second one.
+   */
+  it("carries the programme, the school marks and the contact off the snapshot", async () => {
+    stub({
+      applications: [
+        {
+          ...APPLICATION,
+          profile_snapshot: {
+            profile: {
+              fullName: "Priya Ramesh",
+              rollNumber: "21CSE1042",
+              email: "priya.ramesh@example.in",
+              degree: "B.E.",
+              branch: "CSE",
+              passingYear: 2026,
+              tenthPercentage: 91.4,
+              twelfthPercentage: 88,
+              overallCgpa: 8.4,
+            },
+            resumeId: "resume-1",
+          },
+        },
+      ],
+    });
+    const [applicant] = await view().applicants("d1");
+
+    expect(applicant?.email).toBe("priya.ramesh@example.in");
+    expect(applicant?.degree).toBe("B.E.");
+    expect(applicant?.branch).toBe("CSE");
+    expect(applicant?.passingYear).toBe(2026);
+    expect(applicant?.tenthPercentage).toBe(91.4);
+    expect(applicant?.twelfthPercentage).toBe(88);
+  });
+
+  /** `buildApplicationSnapshot` copies the whole student, `academics` included,
+   *  so the nested block is where the verified figures actually live. */
+  it("reads them from the nested academics block when the snapshot carries one", async () => {
+    stub({
+      applications: [
+        {
+          ...APPLICATION,
+          profile_snapshot: {
+            profile: {
+              fullName: "Priya Ramesh",
+              rollNumber: "21CSE1042",
+              academics: {
+                degree: "B.Tech",
+                branch: "ECE",
+                passingYear: 2027,
+                tenthPercentage: 82.6,
+                twelfthPercentage: 90,
+              },
+            },
+            resumeId: null,
+          },
+        },
+      ],
+    });
+    const [applicant] = await view().applicants("d1");
+
+    expect(applicant?.degree).toBe("B.Tech");
+    expect(applicant?.branch).toBe("ECE");
+    expect(applicant?.passingYear).toBe(2027);
+    expect(applicant?.tenthPercentage).toBe(82.6);
+  });
+
+  /**
+   * A missing figure is left MISSING. `AcademicProfile` cannot hold null, so an
+   * unrecorded marksheet reaches the snapshot as `0` — and a card that prints
+   * "10th 0%" tells the coordinator this candidate sat the exam and failed it.
+   */
+  it("leaves an unrecorded figure silent instead of showing its zero", async () => {
+    stub({
+      applications: [
+        {
+          ...APPLICATION,
+          profile_snapshot: {
+            profile: {
+              fullName: "Rahul Nair",
+              rollNumber: "21CSE0001",
+              degree: "",
+              passingYear: 0,
+              tenthPercentage: 0,
+              twelfthPercentage: null,
+            },
+            resumeId: null,
+          },
+        },
+      ],
+    });
+    const [applicant] = await view().applicants("d1");
+
+    expect(applicant?.degree).toBeNull();
+    expect(applicant?.passingYear).toBeNull();
+    expect(applicant?.tenthPercentage).toBeNull();
+    expect(applicant?.twelfthPercentage).toBeNull();
+    expect(applicant?.email).toBeNull();
+  });
+
   it("reads a flat snapshot that has no nested academics block", async () => {
     stub({
       applications: [

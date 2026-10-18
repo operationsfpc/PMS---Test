@@ -31,6 +31,7 @@ const PLACED: DirectoryStudent = {
   degree: "B.E.",
   branch: "CSE",
   passingYear: 2026,
+  cgpa: 8.6,
   srfStatus: "srf_approved",
   participationStatus: "active",
   applications: 3,
@@ -52,6 +53,7 @@ const UNPLACED: DirectoryStudent = {
   degree: "B.E.",
   branch: "ECE",
   passingYear: 2026,
+  cgpa: 7.2,
   srfStatus: "srf_submitted",
   participationStatus: "active",
   applications: 1,
@@ -68,6 +70,8 @@ const OPTED_OUT: DirectoryStudent = {
   // not quietly inheriting ECE from the row above.
   branch: "IT",
   participationStatus: "opted_out",
+  // Her roster carries no overall figure: absence is a fact of its own.
+  cgpa: null,
   applications: 0,
 };
 

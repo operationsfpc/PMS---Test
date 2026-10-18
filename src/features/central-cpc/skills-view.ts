@@ -1,5 +1,6 @@
 import { normaliseSkillAreaName } from "@domain/skills";
 import type { AppRole } from "@domain/types";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ScoreChange, SkillArea, SkillStudentRow, SkillsView } from "./skills-page";
 
@@ -52,15 +53,15 @@ export function createSupabaseSkillsView(
     },
 
     async students() {
-      const { data, error } = await client
-        .from("students")
-        .select(SKILL_STUDENT_COLUMNS)
-        .order("full_name");
-      if (error !== null) {
-        throw new SkillsError("Could not load the students. Please try again.");
-      }
+      // Paged: this is the whole roster the repository ranks, and at a
+      // thousand rows PostgREST stops answering, so a skill matrix built for
+      // six thousand students showed the first thousand and called it the
+      // organisation.
+      const rows = await readAllRows((from, to) =>
+        client.from("students").select(SKILL_STUDENT_COLUMNS).order("full_name").range(from, to),
+      );
 
-      return (data ?? []).map((row): SkillStudentRow => {
+      return rows.map((row): SkillStudentRow => {
         const record = row as Record<string, unknown>;
         const campus = one<{ name?: string }>(record.campuses);
         const scoreRows = Array.isArray(record.student_skill_scores)

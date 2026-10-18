@@ -110,6 +110,55 @@ export function buildRecruiterCsvRows(
   });
 }
 
+/**
+ * How long a resume link in the recruiter's CSV keeps working.
+ *
+ * Stated once, here, because the same number has to appear in two places: the
+ * view signs the links for this long, and the screen tells the coordinator how
+ * long the file they are about to email stays openable (UAT 2026-10-18 — a CSV
+ * whose links quietly stop working in a month is not a permanent pack).
+ */
+export const RESUME_LINK_DAYS = 30;
+export const RESUME_LINK_TTL_SECONDS = RESUME_LINK_DAYS * 60 * 60 * 24;
+
+/**
+ * The two cells a link audit reads, in whichever CSV the row belongs to — the
+ * recruiter's shortlist (#78) and the student directory's own export (#79) both
+ * carry a "Resume link", and both have to say how many of them arrived empty.
+ */
+export interface ResumeLinkCells {
+  readonly "Roll number": string | number;
+  readonly "Resume link": string | number;
+}
+
+/**
+ * #78: which candidates the CSV left without a link.
+ *
+ * A signed URL is missing for a reason the coordinator cannot see from the
+ * file: the CV row was deleted, the storage read was refused, or the export
+ * asked for more paths than one request can carry. All of them arrive as an
+ * empty cell, and "Exported 42 candidates with resume links" over a CSV where
+ * none of them linked is the defect this answers.
+ */
+export function resumeLinkShortfall(rows: readonly ResumeLinkCells[]): readonly string[] {
+  return rows
+    .filter((row) => String(row["Resume link"]).trim() === "")
+    .map((row) => String(row["Roll number"]));
+}
+
+/** The same fact as one sentence, in the shape the screen prints. */
+export function describeResumeLinks(rows: readonly ResumeLinkCells[]): string {
+  const missing = resumeLinkShortfall(rows).length;
+  const linked = rows.length - missing;
+  if (missing === 0) {
+    return `All ${rows.length} carry a resume link, openable for ${RESUME_LINK_DAYS} days.`;
+  }
+  if (linked === 0) {
+    return `None of the ${rows.length} could be given a resume link — their CVs are not in this file.`;
+  }
+  return `${linked} of ${rows.length} carry a resume link, openable for ${RESUME_LINK_DAYS} days; ${missing} do not.`;
+}
+
 /** The folder every resume sits in, inside the pack. */
 export const RESUME_FOLDER = "resumes";
 

@@ -2,6 +2,7 @@ import { ErrorPanel } from "@components/error-panel";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
+import { describeResumeLinks } from "@domain/recruiter-export";
 import {
   type DirectoryFilter,
   type DirectoryStudent,
@@ -14,6 +15,13 @@ import { Link, useSearchParams } from "react-router";
 
 export interface StudentDirectoryView {
   students(): Promise<readonly DirectoryStudent[]>;
+  /**
+   * #79 (UAT 2026-10-18): the CV behind each row, for the CSV that leaves the
+   * building. Keyed by STUDENT id. Optional so the directory still renders for
+   * an older mock — absent means the column comes out empty, and the screen
+   * says how many of them did.
+   */
+  resumeLinks?(studentIds: readonly string[]): Promise<ReadonlyMap<string, string>>;
 }
 
 /**
@@ -70,6 +78,7 @@ const EXPORT_COLUMNS = [
   "Degree",
   "Branch",
   "Passing year",
+  "CGPA",
   "Registration",
   "Participation",
   "Applications",
@@ -78,6 +87,9 @@ const EXPORT_COLUMNS = [
   "CTC (LPA)",
   "Offer category",
   "Source",
+  // #79: the directory export used to describe a student without carrying their
+  // CV, so the coordinator had to open each record to send one.
+  "Resume link",
 ] as const;
 
 /** Real downloads go through a Blob; tests hand in a spy. */
@@ -122,6 +134,11 @@ export function StudentDirectoryPage({
   // tell the reader to refresh the whole page.
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
+  const [exporting, setExporting] = useState(false);
+  /** What the CSV actually carried, said once it is on its way. */
+  const [exportNote, setExportNote] = useState<string | null>(null);
+  /** The export failing — not the same complaint as the roster not loading. */
+  const [exportProblem, setExportProblem] = useState<string | null>(null);
 
   // The filter lives in the URL so the dashboard can link straight to a
   // breakdown, and so a coordinator can send someone the exact view they mean.
@@ -179,32 +196,57 @@ export function StudentDirectoryPage({
     [students],
   );
 
-  function exportCsv() {
-    const rows = visible.map((s) => ({
-      Student: s.fullName,
-      "Roll number": s.rollNumber,
-      Campus: s.campusName,
-      Degree: s.degree,
-      Branch: s.branch,
-      "Passing year": String(s.passingYear),
-      Registration: SRF_LABEL[s.srfStatus],
-      Participation: s.participationStatus.replaceAll("_", " "),
-      Applications: String(s.applications),
-      Company: s.placement?.companyName ?? "",
-      Role: s.placement?.roleTitle ?? "",
-      "CTC (LPA)": s.placement === null ? "" : String(s.placement.ctcLpa),
-      "Offer category":
-        s.placement?.offerCategory == null ? "" : offerCategoryLabel(s.placement.offerCategory),
-      Source:
-        s.placement === null
-          ? ""
-          : s.placement.source === "self_placed"
-            ? "Self-placed"
-            : "On-campus",
-    }));
+  async function exportCsv() {
+    setExporting(true);
+    setExportNote(null);
+    setExportProblem(null);
+    try {
+      const studentIds = visible.map((s) => s.studentId);
+      const links = (await view.resumeLinks?.(studentIds)) ?? new Map<string, string>();
 
-    // BOM-prefixed so Excel reads it as UTF-8 rather than mangling every name.
-    download(`students-${filter}.csv`, `\uFEFF${serialiseCsv([...EXPORT_COLUMNS], rows)}`);
+      const rows = visible.map((s) => ({
+        Student: s.fullName,
+        "Roll number": s.rollNumber,
+        Campus: s.campusName,
+        Degree: s.degree,
+        Branch: s.branch,
+        "Passing year": String(s.passingYear),
+        CGPA: s.cgpa === null ? "" : s.cgpa.toFixed(2),
+        Registration: SRF_LABEL[s.srfStatus],
+        Participation: s.participationStatus.replaceAll("_", " "),
+        Applications: String(s.applications),
+        Company: s.placement?.companyName ?? "",
+        Role: s.placement?.roleTitle ?? "",
+        "CTC (LPA)": s.placement === null ? "" : String(s.placement.ctcLpa),
+        "Offer category":
+          s.placement?.offerCategory == null ? "" : offerCategoryLabel(s.placement.offerCategory),
+        Source:
+          s.placement === null
+            ? ""
+            : s.placement.source === "self_placed"
+              ? "Self-placed"
+              : "On-campus",
+        "Resume link": links.get(s.studentId) ?? "",
+      }));
+
+      // BOM-prefixed so Excel reads it as UTF-8 rather than mangling every name.
+      download(`students-${filter}.csv`, `\uFEFF${serialiseCsv([...EXPORT_COLUMNS], rows)}`);
+      /*
+       * #78/#79 (UAT 2026-10-18): the file is not the same thing as the list.
+       * A resume link is minted per stored file, and a student whose CV row is
+       * gone or whose bucket read was refused gets an empty cell — so the count
+       * says what arrived, including when none of it did.
+       */
+      setExportNote(`Exported ${rows.length} students. ${describeResumeLinks(rows)}`);
+    } catch (cause) {
+      setExportProblem(
+        cause instanceof Error && cause.message !== ""
+          ? cause.message
+          : "The export did not run. Please try again.",
+      );
+    } finally {
+      setExporting(false);
+    }
   }
 
   if (failed) {
@@ -231,12 +273,35 @@ export function StudentDirectoryPage({
         actions={
           students !== null &&
           students.length > 0 && (
-            <Button variant="secondary" size="sm" onClick={exportCsv}>
+            <Button
+              variant="secondary"
+              size="sm"
+              isLoading={exporting}
+              onClick={() => void exportCsv()}
+            >
               Export {visible.length} to CSV
             </Button>
           )
         }
       />
+
+      {exportProblem !== null && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {exportProblem}
+        </div>
+      )}
+
+      {exportNote !== null && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
+        >
+          {exportNote}
+        </p>
+      )}
 
       {students === null ? (
         <p role="status" className="text-sm text-ink-500">
@@ -259,8 +324,8 @@ export function StudentDirectoryPage({
                     key={option.value}
                     className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
                       filter === option.value
-                        ? "border-[#3D3777] bg-[#3D3777] text-white"
-                        : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
+                        ? "border-brand-500 bg-brand-500 text-white"
+                        : "border-line bg-white text-ink-700 hover:border-violet-400"
                     }`}
                   >
                     <input
@@ -398,6 +463,10 @@ export function StudentDirectoryPage({
                         <p>{student.campusName}</p>
                         <p className="text-xs text-ink-500">
                           {student.degree} {student.branch} · {student.passingYear}
+                          {/* 2026-10-18 (UAT): the overview's count opens a
+                              popup with a CGPA column, and this is the list it
+                              links into — the same figure, same two decimals. */}
+                          {student.cgpa !== null && <> · {student.cgpa.toFixed(2)} CGPA</>}
                         </p>
                       </td>
                       <td className="px-4 py-3">

@@ -809,7 +809,11 @@ export function composeStudentNotificationEmail(
       subject = data.title || "Good News: PIF Approved as Super Dream";
       title = "Placement Initiation Form Approved";
       button = "View Sourced Drives";
-      url = `${portalUrl}/my-drives`;
+      // 2026-10-18: this was `/my-drives`, a page no sidebar links to — the
+      // AE followed the mail in, clicked a drive, and had no way back to it.
+      // `/ae/overview` is their landing entry, is in their sidebar, and its
+      // "My drives" section lists every drive they raised at every status.
+      url = `${portalUrl}/ae/overview`;
       break;
     }
     // A2: Account Executive — PIF Revision Requested

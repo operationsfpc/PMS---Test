@@ -676,7 +676,10 @@ describe("account executive notification emails (A1 through A3)", () => {
     );
     expect(email.html).toContain("Placement Initiation Form Approved");
     expect(email.html).toContain("View Sourced Drives &rarr;");
-    expect(email.html).toContain(`${portal}/my-drives`);
+    // The landing page the AE's own sidebar shows. `/my-drives` was reachable
+    // only from this mail, so leaving it there kept a page nobody can return to.
+    expect(email.html).toContain(`${portal}/ae/overview`);
+    expect(email.html).not.toContain(`${portal}/my-drives`);
   });
 
   it("composes A2 PIF revision requested", () => {

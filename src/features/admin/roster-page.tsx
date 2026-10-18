@@ -1,6 +1,7 @@
 import { ErrorPanel } from "@components/error-panel";
 import { Card } from "@components/ui";
 import { type EmailHolder, normaliseEmail } from "@domain/email-identity";
+import { readAllRows } from "@lib/postgrest-read";
 import { supabase } from "@lib/supabase";
 import { useEffect, useState } from "react";
 import { ExistingStudentsList } from "./existing-students-list";
@@ -55,35 +56,42 @@ export function AdminRosterPage() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let active = true;
+    /*
+     * Paged. This is a preview of the database's own refusal, and a preview
+     * built from the first thousand student emails says "free" about everyone
+     * past that line — so the check passed, the file uploaded, and 0040 refused
+     * at the very row this screen had just promised was clean.
+     */
     void Promise.all([
-      supabase().from("students").select("email"),
-      supabase().from("profiles").select("email"),
-      supabase().from("staff_invitations").select("email"),
-    ]).then(([students, profiles, invitations]) => {
-      if (!active) return;
-      // An empty map here is not "every address is free" — it is the preview
-      // check being off, and the administrator is told so before they upload.
-      if (students.error !== null || profiles.error !== null || invitations.error !== null) {
+      readAllRows((from, to) => supabase().from("students").select("email").range(from, to)),
+      readAllRows((from, to) => supabase().from("profiles").select("email").range(from, to)),
+      readAllRows((from, to) =>
+        supabase().from("staff_invitations").select("email").range(from, to),
+      ),
+    ])
+      .then(([students, profiles, invitations]) => {
+        if (!active) return;
+        setGuardProblem(null);
+        const claimed = new Map<string, EmailHolder>();
+        for (const row of profiles) claimed.set(normaliseEmail(String(row.email)), "staff");
+        for (const row of invitations) claimed.set(normaliseEmail(String(row.email)), "staff");
+        // Students last is deliberate: an address held by BOTH is the P8 state,
+        // and calling it a student clash would send an administrator to the
+        // wrong screen to fix it.
+        for (const row of students) {
+          const email = normaliseEmail(String(row.email));
+          if (!claimed.has(email)) claimed.set(email, "student");
+        }
+        setTaken(claimed);
+      })
+      .catch(() => {
+        if (!active) return;
+        // An empty map here is not "every address is free" — it is the preview
+        // check being off, and the administrator is told so before they upload.
         setGuardProblem(
           "We could not read the email addresses already on record, so a clash will not be caught until the import runs.",
         );
-        return;
-      }
-      setGuardProblem(null);
-      const claimed = new Map<string, EmailHolder>();
-      for (const row of profiles.data ?? [])
-        claimed.set(normaliseEmail(String(row.email)), "staff");
-      for (const row of invitations.data ?? [])
-        claimed.set(normaliseEmail(String(row.email)), "staff");
-      // Students last is deliberate: an address held by BOTH is the P8 state,
-      // and calling it a student clash would send an administrator to the
-      // wrong screen to fix it.
-      for (const row of students.data ?? []) {
-        const email = normaliseEmail(String(row.email));
-        if (!claimed.has(email)) claimed.set(email, "student");
-      }
-      setTaken(claimed);
-    });
+      });
     return () => {
       active = false;
     };

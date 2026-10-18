@@ -54,7 +54,7 @@ function CtcBandNote() {
     <aside
       role="note"
       aria-label="CTC bands for offer categories"
-      className="mb-4 rounded-card border border-[#A46AFC] bg-[#A46AFC]/5 p-4"
+      className="mb-4 rounded-card border border-violet-400 bg-violet-400/5 p-4"
     >
       <p className="text-sm font-semibold text-ink-900">How CTC maps to an offer category</p>
       <ul className="mt-2 flex flex-col gap-1 text-sm text-ink-700">
@@ -126,11 +126,11 @@ function PendingRoleCard({
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {standalone ? (
-          <h2 className="max-w-[300px] truncate font-[Raleway] text-lg font-bold text-ink-900">
+          <h2 className="max-w-[300px] truncate font-heading text-lg font-bold text-ink-900">
             {pif.companyName}
           </h2>
         ) : (
-          <h3 className="font-[Raleway] text-base font-bold text-ink-900">
+          <h3 className="font-heading text-base font-bold text-ink-900">
             {pif.roleTitle ?? "Role not specified"}
           </h3>
         )}
@@ -219,7 +219,7 @@ function PendingRoleCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-[#FF7200]">
+          <p className="mt-1 text-xs text-orange-500">
             {categoryIsFixed
               ? "This drive is an internship, so Internship is the only category it can carry. This cannot be changed later."
               : category === undefined
@@ -377,8 +377,8 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
@@ -405,7 +405,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
           {eventGroups.map(({ key, event, roles }) => (
             <Card key={key} className="p-5">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <h2 className="max-w-[300px] truncate font-[Raleway] text-lg font-bold text-ink-900">
+                <h2 className="max-w-[300px] truncate font-heading text-lg font-bold text-ink-900">
                   {event.companyName}
                 </h2>
                 <Badge tone="accent">

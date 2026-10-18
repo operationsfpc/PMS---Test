@@ -151,4 +151,38 @@ describe("StudentRecordPage", () => {
       await screen.findByText(/this student record does not exist, or you cannot read it/i),
     ).toBeDefined();
   });
+
+  /**
+   * 2026-10-18 (UAT): "there is no way to go back" from a student record.
+   * Press-shaped, like every other control — and honest about what it can do:
+   * a record loaded cold has no in-app history to step into, so it offers the
+   * reader's own overview rather than a button that would do nothing.
+   */
+  it("hands the reader back to the list they came from", async () => {
+    render(
+      <MemoryRouter initialEntries={["/central/students", "/students/s1"]} initialIndex={1}>
+        <StudentRecordPage studentId="s1" view={view()} />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+
+    expect(screen.getByRole("button", { name: /^back$/i })).toBeDefined();
+    expect(screen.queryByRole("link", { name: /overview/i })).toBeNull();
+  });
+
+  it("opens its own overview when there is nothing behind it", async () => {
+    show();
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+
+    const wayOut = screen.getByRole("link", { name: /overview/i });
+    expect(wayOut.getAttribute("href")).toBe("/");
+    expect(screen.queryByRole("button", { name: /^back$/i })).toBeNull();
+  });
+
+  it("does not leave the unreadable record a dead end", async () => {
+    show(view(null));
+    await screen.findByText(/cannot read it/i);
+
+    expect(screen.getByRole("link", { name: /overview/i })).toBeDefined();
+  });
 });

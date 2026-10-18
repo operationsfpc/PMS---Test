@@ -536,8 +536,8 @@ export function PifForm({
       />
 
       {failure !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {failure}
           </p>
         </Card>
@@ -661,7 +661,7 @@ export function PifForm({
                           setValue("companyDriveId", evt.id);
                           applyEventDefaults(evt);
                         }}
-                        className="mt-1 size-4 accent-[#3D3777]"
+                        className="mt-1 size-4 accent-brand-500"
                       />
                       <div className="flex-1 text-xs">
                         <div className="flex flex-wrap items-center gap-2">
@@ -726,7 +726,7 @@ export function PifForm({
                         autoContactSignatureRef.current = null;
                       }
                     }}
-                    className="mt-1 size-4 accent-[#3D3777]"
+                    className="mt-1 size-4 accent-brand-500"
                   />
                   <div className="flex-1 text-xs">
                     <span className="font-bold text-ink-900">
@@ -764,7 +764,7 @@ export function PifForm({
         </Section>
 
         <section id={ROLES_SECTION.id} className="mb-4 scroll-mt-24">
-          <h2 className="mb-1 font-[Raleway] text-lg font-bold text-[#3D3777]">
+          <h2 className="mb-1 font-heading text-lg font-bold text-brand-500">
             {ROLES_SECTION.title}
           </h2>
           <p className="mb-3 text-sm text-ink-700">{ROLES_SECTION.detail}</p>

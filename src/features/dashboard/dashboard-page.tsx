@@ -16,6 +16,7 @@ import {
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { groupDrivesByEvent } from "@domain/company-drive";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
+import { describeVisitDay } from "@domain/drive-aging";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
 import { type DriveFunnel, type DriveParticipation, driveFunnel } from "@domain/drive-funnel";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
@@ -1609,6 +1610,10 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 const head = roles[0];
                 if (head === undefined) return null;
                 const campuses = [...new Set(roles.flatMap((drive) => drive.campuses))];
+                // The visit day is the event's, and every drive card above
+                // this popup says it — a count that opens without it loses the
+                // one fact that separates two visits by the same company.
+                const day = describeVisitDay(head.tentativeDate);
                 return (
                   <li
                     key={head.driveId}
@@ -1628,6 +1633,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                       {roles.length > 1 && (
                         <span className="text-xs text-ink-500">{roles.length} roles</span>
                       )}
+                      {day !== null && <span className="text-xs text-ink-500">Visit on {day}</span>}
                     </p>
                     {/* Each role stays reachable: one visit is one row, but the
                         record pages are per role. */}

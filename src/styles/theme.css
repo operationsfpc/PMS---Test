@@ -34,6 +34,10 @@
   --color-violet-700: #6a3fc0;
   --color-violet-400: #a46afc;
   --color-violet-500: #8b45fa;
+  /* The saved-notice pair: a cyan rule around a wash pale enough to sit under
+     body copy. Written as a ramp step so the four screens that say "Attendance
+     saved" paint the same notice rather than four hand-typed hexes. */
+  --color-cyan-50: #ecf1f0;
   --color-cyan-400: #1ee0e1;
   --color-orange-500: #ff7200;
 

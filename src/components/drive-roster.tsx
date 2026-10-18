@@ -252,7 +252,9 @@ export function DriveRoster({
                   </div>
                 </button>
 
-                {/* Expandable placement details drawer */}
+                {/* Expandable placement details drawer. The row above already
+                    names the student, their college, programme and CGPA, so
+                    this holds only what the row cannot say. */}
                 {isExpanded && (
                   <div className="border-t border-line/60 bg-surface p-4 space-y-3.5 text-xs">
                     {/* The row itself is the disclosure, so the record link
@@ -267,31 +269,6 @@ export function DriveRoster({
                         View
                       </ButtonLink>
                     )}
-                    {/* Academic & Profile Details */}
-                    <div className="grid gap-2 sm:grid-cols-3 rounded-lg bg-surface-muted/40 p-3">
-                      <div>
-                        <span className="text-ink-500 block text-[11px] uppercase">College</span>
-                        <span className="font-medium text-ink-900">
-                          {student.campusName || "—"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-ink-500 block text-[11px] uppercase">
-                          Degree & Branch
-                        </span>
-                        <span className="font-medium text-ink-900">
-                          {student.degree} {student.branch ? `(${student.branch})` : "—"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-ink-500 block text-[11px] uppercase">
-                          Overall CGPA
-                        </span>
-                        <span className="font-medium text-ink-900">
-                          {student.cgpa !== undefined ? `${student.cgpa} CGPA` : "—"}
-                        </span>
-                      </div>
-                    </div>
 
                     {/* Offer Details if present */}
                     {hasOffer && student.offer && (

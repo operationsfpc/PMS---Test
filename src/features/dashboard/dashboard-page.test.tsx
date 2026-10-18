@@ -1379,6 +1379,36 @@ describe("DashboardPage — the drives behind a status count", () => {
     expect(within(dialog).getByText("Open to every campus")).toBeDefined();
   });
 
+  /**
+   * 2026-10-18 (UAT): the snapshot hands this popup every visit's date and it
+   * printed none of it, while every drive card above it says the day. Two
+   * visits by one company are told apart by nothing else.
+   */
+  it("prints the day of each visit the count opened", async () => {
+    const zoho = SNAPSHOT.statusDrives.find((drive) => drive.driveId === "d1");
+    if (zoho === undefined) throw new Error("fixture changed");
+
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          statusDrives: [
+            ...SNAPSHOT.statusDrives.filter((drive) => drive.driveId !== "d1"),
+            { ...zoho, tentativeDate: "2026-11-05" },
+          ],
+        })}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole("button", { name: /^live:/ }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Drives — live" });
+    expect(within(dialog).getByText("Visit on 5 Nov 2026")).toBeDefined();
+    // An undated visit says nothing rather than "()" or a dash.
+    expect(within(dialog).getAllByText(/^Visit on /)).toHaveLength(1);
+  });
+
   it("opens the drives of a different status when its row is clicked", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 

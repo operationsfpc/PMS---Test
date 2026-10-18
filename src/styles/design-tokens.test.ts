@@ -86,6 +86,46 @@ function undefinedColourUses(): string[] {
   return offenders;
 }
 
+function rampStepsWithoutValues(): string[] {
+  const offenders: string[] = [];
+
+  for (const file of componentFiles(SRC)) {
+    const lines = readFileSync(file, "utf8").split("\n");
+
+    lines.forEach((line, index) => {
+      // `-brand-500`, `-gold-300`, `-ink-900` — a utility's family and step,
+      // which Tailwind only resolves when the theme declares that exact step.
+      for (const token of line.match(
+        /-(?:brand|gold|ink|danger|success|violet|cyan|orange)-\d{2,3}/g,
+      ) ?? []) {
+        const name = token.slice(1);
+        if (!isDefined(name)) offenders.push(`${relative(SRC, file)}:${index + 1} — ${name}`);
+      }
+    });
+  }
+
+  return offenders;
+}
+
+function handTypedColours(): string[] {
+  const offenders: string[] = [];
+
+  for (const file of componentFiles(SRC)) {
+    const lines = readFileSync(file, "utf8").split("\n");
+
+    lines.forEach((line, index) => {
+      if (/\[#(?:[0-9a-fA-F]{3,8})\]/.test(line)) {
+        offenders.push(`${relative(SRC, file)}:${index + 1} — a hex painted into a class name`);
+      }
+      if (/font-\[[^\]]+\]/.test(line)) {
+        offenders.push(`${relative(SRC, file)}:${index + 1} — a font named in brackets`);
+      }
+    });
+  }
+
+  return offenders;
+}
+
 describe("the colour tokens the screens ask for", () => {
   it("are all defined in the theme", () => {
     // Read the other way round: every name below is a colour a component paints
@@ -97,6 +137,23 @@ describe("the colour tokens the screens ask for", () => {
     for (const name of ["warning", "accent", "destructive"]) {
       expect(THEME).toContain(`--color-${name}:`);
     }
+  });
+
+  it("cover every ramp step a component uses", () => {
+    // `undefinedColourUses` checks names, so `text-cyan-500` passed while
+    // `--color-cyan-500` did not exist and the text rendered inherited.
+    // A step is a token of its own, so it needs its own check.
+    expect(rampStepsWithoutValues()).toEqual([]);
+  });
+
+  it("are the only way a component names a colour", () => {
+    // UAT 2026-10-18: the palette lived in theme.css and then again inside a
+    // hundred and twenty-six class names — `text-[#3D3777]`, `bg-[#FFF0EC]`,
+    // `font-[Raleway]`. A rebrand meant editing every screen, and each hex was
+    // a shade the theme had never approved, so the same "saved" notice was
+    // painted four different ways. `-[#…]` is the escape hatch that makes the
+    // token file decorative; keeping it closed is the point of the token file.
+    expect(handTypedColours()).toEqual([]);
   });
 });
 

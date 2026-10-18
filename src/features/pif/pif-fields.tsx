@@ -218,7 +218,7 @@ export function ShiftField<T extends FieldValues>({ api }: { api: PifFieldApi<T>
         }}
       />
       {shiftType === "night" && (
-        <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
+        <div className="mt-3 border-l-[3px] border-violet-400 bg-violet-400/5 py-3 pl-4 pr-3">
           <Labelled label="Night shift timing" error={api.err("shiftNightTiming")}>
             {(id) => (
               <input
@@ -318,7 +318,7 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
               <input
                 type="checkbox"
                 value={year}
-                className="size-4 accent-[#3D3777]"
+                className="size-4 accent-brand-500"
                 {...api.register(api.field("eligiblePassingYears") as never)}
               />
               {year}
@@ -326,7 +326,7 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
           ))}
         </div>
         {api.err("eligiblePassingYears") !== undefined && (
-          <p className="mt-1 text-xs text-[#DD4820]" role="status">
+          <p className="mt-1 text-xs text-danger-500" role="status">
             {api.err("eligiblePassingYears")}
           </p>
         )}
@@ -490,7 +490,7 @@ export function DesignationsEditor<T extends FieldValues>({
       ))}
 
       {api.err("additionalDesignations") !== undefined && (
-        <p className="mt-1 text-xs text-[#DD4820]" role="status">
+        <p className="mt-1 text-xs text-danger-500" role="status">
           {api.err("additionalDesignations")}
         </p>
       )}
@@ -634,7 +634,7 @@ export function JobDescriptionField<T extends FieldValues>({
               id={id}
               type="file"
               accept="application/pdf,.pdf"
-              className={`${controlClass} file:mr-3 file:rounded-md file:border-0 file:bg-[#3D3777] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
+              className={`${controlClass} file:mr-3 file:rounded-md file:border-0 file:bg-brand-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
               onChange={(e) =>
                 api.setValue(
                   api.field("jobDescriptionFile") as never,
@@ -908,7 +908,7 @@ export function VenueAndModeField<T extends FieldValues>({ api }: { api: PifFiel
             }}
           />
           {venueStatus === "confirmed" && (
-            <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
+            <div className="mt-3 border-l-[3px] border-violet-400 bg-violet-400/5 py-3 pl-4 pr-3">
               <Labelled label="Venue" error={api.err("venue")}>
                 {(id) => (
                   <input
@@ -974,7 +974,7 @@ export function JoiningTimelineField<T extends FieldValues>({
         }}
       />
       {withComments && joiningTimeline !== "" && (
-        <div className="mt-3 border-l-[3px] border-[#A46AFC] bg-[#A46AFC]/5 py-3 pl-4 pr-3">
+        <div className="mt-3 border-l-[3px] border-violet-400 bg-violet-400/5 py-3 pl-4 pr-3">
           <JoiningCommentBox
             api={api}
             which={joiningTimeline === "immediate" ? "immediate" : "later"}

@@ -10,6 +10,7 @@ import {
   type DriveStatus,
   type RoundResult,
 } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DriveRoundsView, RoundParticipant } from "./results-page";
 import { createSupabaseRoundsRepository } from "./rounds-repository";
@@ -353,61 +354,148 @@ export function createSupabaseResultsView(
      * offered this job, and closing their row here would be a lie.
      */
     async offerHolders(driveId) {
-      const [{ data: offerRows }, { data: applicationRows }] = await Promise.all([
-        client.from("offers").select("student_id").eq("drive_id", driveId),
-        client.from("applications").select("id, student_id").eq("drive_id", driveId),
+      // Paged: a drive whose offers or applications pass a thousand used to
+      // answer with the first thousand, and a student past that line was read
+      // as still in the round — so their row stayed open after they were hired.
+      const [offerRows, applicationRows] = await Promise.all([
+        readAllRows((from, to) =>
+          client.from("offers").select("student_id").eq("drive_id", driveId).range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client
+            .from("applications")
+            .select("id, student_id")
+            .eq("drive_id", driveId)
+            .range(from, to),
+        ),
       ]);
 
-      const offered = new Set(
-        ((offerRows ?? []) as Array<Record<string, unknown>>).map((o) => o.student_id as string),
-      );
+      const offered = new Set(offerRows.map((o) => o.student_id as string));
 
       return new Set(
-        ((applicationRows ?? []) as Array<Record<string, unknown>>)
+        applicationRows
           .filter((a) => offered.has(a.student_id as string))
           .map((a) => a.id as string),
       );
     },
 
     async completionFacts(driveId) {
-      const [{ data: applications }, { data: roundRows }, { data: offerRows }] = await Promise.all([
-        client.from("applications").select("id, student_id").eq("drive_id", driveId),
-        client
-          .from("drive_rounds")
-          .select(
-            "id, sequence, name, round_participants(application_id), round_results(application_id, result), attendance(application_id, status)",
-          )
-          .eq("drive_id", driveId),
-        client.from("offers").select("student_id").eq("drive_id", driveId),
+      /*
+       * The round relations used to be EMBEDDED, and PostgREST caps each
+       * embedded collection at a thousand rows as well. On a drive whose first
+       * round called 1,400 students, four hundred of them had no participant
+       * row at all: their stage read as "applied", and the completion dialog
+       * said a round that had run was waiting to be attended to. Flat reads,
+       * paged and batched by round, exactly as /cpc/drives does it.
+       */
+      const [applicationRows, roundRows, offerRows] = await Promise.all([
+        readAllRows((from, to) =>
+          client
+            .from("applications")
+            .select("id, student_id")
+            .eq("drive_id", driveId)
+            .range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client
+            .from("drive_rounds")
+            .select("id, sequence, name")
+            .eq("drive_id", driveId)
+            .range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client.from("offers").select("student_id").eq("drive_id", driveId).range(from, to),
+        ),
       ]);
 
-      const offered = new Set(
-        ((offerRows ?? []) as Array<Record<string, unknown>>).map((o) => o.student_id as string),
+      const roundIds = roundRows.map((r) => r.id as string);
+      const [participantRows, resultRows, attendanceRows] = await Promise.all([
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_participants")
+              .select("round_id, application_id")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_results")
+              .select("round_id, application_id, result")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("attendance")
+              .select("round_id, application_id, status")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+      ]);
+
+      /**
+       * Round → the three per-application facts, indexed once instead of
+       * scanned for every applicant. An embedded read gave these as arrays hung
+       * off the round; the flat rows carry `round_id`, so the round is the key.
+       */
+      interface RoundFactsByRound {
+        participating: Set<string>;
+        attendance: Map<string, AttendanceStatus>;
+        result: Map<string, RoundResult>;
+      }
+      const byRound = new Map<string, RoundFactsByRound>();
+      const factsFor = (roundId: string): RoundFactsByRound => {
+        const existing = byRound.get(roundId);
+        if (existing !== undefined) return existing;
+        const created: RoundFactsByRound = {
+          participating: new Set(),
+          attendance: new Map(),
+          result: new Map(),
+        };
+        byRound.set(roundId, created);
+        return created;
+      };
+      for (const row of participantRows) {
+        factsFor(row.round_id as string).participating.add(row.application_id as string);
+      }
+      for (const row of resultRows) {
+        const facts = factsFor(row.round_id as string);
+        const applicationId = row.application_id as string;
+        if (!facts.result.has(applicationId)) {
+          facts.result.set(applicationId, row.result as RoundResult);
+        }
+      }
+      for (const row of attendanceRows) {
+        const facts = factsFor(row.round_id as string);
+        const applicationId = row.application_id as string;
+        if (!facts.attendance.has(applicationId)) {
+          facts.attendance.set(applicationId, row.status as AttendanceStatus);
+        }
+      }
+
+      const offered = new Set(offerRows.map((o) => o.student_id as string));
+      const orderedRounds = [...roundRows].sort(
+        (a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0),
       );
 
-      const stages = ((applications ?? []) as Array<Record<string, unknown>>).map((application) => {
+      const stages = applicationRows.map((application) => {
         const applicationId = application.id as string;
-        const roundFacts = ((roundRows ?? []) as Array<Record<string, unknown>>)
-          .map((round) => {
-            const rowsOf = (key: string) =>
-              (Array.isArray(round[key]) ? round[key] : []).filter(
-                (entry) => (entry as Record<string, unknown>).application_id === applicationId,
-              ) as Array<Record<string, unknown>>;
-            return {
-              sequence: Number(round.sequence ?? 0),
-              name: String(round.name ?? "Round"),
-              participating: rowsOf("round_participants").length > 0,
-              attendance:
-                (rowsOf("attendance")[0]?.status as
-                  | "scheduled"
-                  | "present"
-                  | "absent"
-                  | "provisional"
-                  | undefined) ?? null,
-              result: (rowsOf("round_results")[0]?.result as RoundResult | undefined) ?? null,
-            };
-          })
-          .sort((a, b) => a.sequence - b.sequence);
+        const roundFacts = orderedRounds.map((round) => {
+          const facts = byRound.get(round.id as string);
+          return {
+            sequence: Number(round.sequence ?? 0),
+            name: String(round.name ?? "Round"),
+            participating: facts?.participating.has(applicationId) ?? false,
+            attendance: facts?.attendance.get(applicationId) ?? null,
+            result: facts?.result.get(applicationId) ?? null,
+          };
+        });
 
         return applicationProgress({
           rounds: roundFacts,
@@ -429,25 +517,40 @@ export function createSupabaseResultsView(
     },
 
     async participants(roundId) {
-      const [{ data: attendance }, { data: results }, { data: slots }] = await Promise.all([
-        client
-          .from("attendance")
-          .select(
-            "application_id, status, applications(student_id, students(full_name, roll_number, campuses(name)))",
-          )
-          .eq("round_id", roundId),
-        client.from("round_results").select("application_id, result").eq("round_id", roundId),
-        client
-          .from("round_participants")
-          .select("application_id, meeting_link, participant_scheduled_at")
-          .eq("round_id", roundId),
+      // Paged like the facts above: a round sheet that stopped at a thousand
+      // rows silently left people off the list a coordinator was about to
+      // mark absent.
+      const [attendance, results, slots] = await Promise.all([
+        readAllRows((from, to) =>
+          client
+            .from("attendance")
+            .select(
+              "application_id, status, applications(student_id, students(full_name, roll_number, campuses(name)))",
+            )
+            .eq("round_id", roundId)
+            .range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client
+            .from("round_results")
+            .select("application_id, result")
+            .eq("round_id", roundId)
+            .range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client
+            .from("round_participants")
+            .select("application_id, meeting_link, participant_scheduled_at")
+            .eq("round_id", roundId)
+            .range(from, to),
+        ),
       ]);
 
       const resultByApplication = new Map(
-        (results ?? []).map((r) => [r.application_id as string, r.result as RoundResult]),
+        results.map((r) => [r.application_id as string, r.result as RoundResult]),
       );
       const slotByApplication = new Map(
-        (slots ?? []).map((s) => [
+        slots.map((s) => [
           s.application_id as string,
           {
             meetingLink: (s.meeting_link as string | null) ?? null,
@@ -459,7 +562,7 @@ export function createSupabaseResultsView(
       const one = <T>(value: unknown): T | null =>
         (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
 
-      return (attendance ?? [])
+      return attendance
         .map((row): RoundParticipant => {
           const application = one<{ student_id?: string; students: unknown }>(row.applications);
           const student = one<{

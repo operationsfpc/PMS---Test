@@ -47,7 +47,7 @@ const when = (iso: string | null) =>
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card className="p-5">
-      <h2 className="mb-3 inline-block border-b-2 border-[#FFB800] pb-0.5 font-[Raleway] text-sm font-bold uppercase tracking-wide text-[#3D3777]">
+      <h2 className="mb-3 inline-block border-b-2 border-gold-500 pb-0.5 font-heading text-sm font-bold uppercase tracking-wide text-brand-500">
         {title}
       </h2>
       {children}
@@ -123,8 +123,8 @@ export function DriveRecordPage({
 
   if (error !== null) {
     return (
-      <Card className="border border-[#DD4820] bg-[#FFF0EC] p-5">
-        <p role="alert" className="text-sm text-[#DD4820]">
+      <Card className="border border-danger-500 bg-danger-50 p-5">
+        <p role="alert" className="text-sm text-danger-500">
           {error}
         </p>
       </Card>
@@ -340,7 +340,7 @@ export function DriveRecordPage({
                   href={record.jobDescriptionUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-semibold text-[#3D3777] underline underline-offset-2"
+                  className="font-semibold text-brand-500 underline underline-offset-2"
                 >
                   {record.jobDescriptionName ?? "Job description (PDF)"}
                 </a>{" "}
@@ -399,7 +399,7 @@ export function DriveRecordPage({
                   aria-label={`Snapshot of ${applicant.fullName}`}
                   className="mt-3 rounded-lg bg-surface-muted p-4"
                 >
-                  <p className="mb-2 text-xs font-semibold text-[#8a6d00]">
+                  <p className="mb-2 text-xs font-semibold text-gold-800">
                     ⚠️ The profile as it was AT APPLY TIME — what the recruiter received, never the
                     live profile.
                   </p>

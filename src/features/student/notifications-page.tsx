@@ -117,8 +117,8 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                   key={option}
                   className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
                     filter === option
-                      ? "border-[#3D3777] bg-[#3D3777] text-white"
-                      : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
+                      ? "border-brand-500 bg-brand-500 text-white"
+                      : "border-line bg-white text-ink-700 hover:border-violet-400"
                   }`}
                 >
                   <input

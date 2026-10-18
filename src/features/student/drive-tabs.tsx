@@ -248,8 +248,8 @@ export function DriveTabs({
       )}
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
@@ -265,8 +265,8 @@ export function DriveTabs({
             onClick={() => setTab(t.key)}
             className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
               tab === t.key
-                ? "border-[#3D3777] bg-[#3D3777] text-white"
-                : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
+                ? "border-brand-500 bg-brand-500 text-white"
+                : "border-line bg-white text-ink-700 hover:border-violet-400"
             }`}
           >
             {t.label} ({counts[t.key]})
@@ -364,7 +364,7 @@ export function DriveTabs({
                 <>
                   <p className="mt-2 text-sm">
                     Now in:{" "}
-                    <span className="font-semibold text-[#3D3777]">{row.progressLabel}</span>
+                    <span className="font-semibold text-brand-500">{row.progressLabel}</span>
                   </p>
                   <p className="mt-0.5 text-xs text-ink-500">
                     {row.roundsCleared} of {row.totalRounds} rounds cleared · applied{" "}
@@ -478,7 +478,7 @@ function TabVisits<T extends TabRow>({
 
         return (
           <Card key={eventId} className="p-5">
-            <h2 className="flex flex-wrap items-center gap-2 font-[Raleway] text-lg font-bold text-ink-900">
+            <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
               <span className="max-w-[250px] truncate">{head.companyName}</span>
               {/* Said once for the visit when every role shares a type; per role
                   underneath when it mixes, because picking one at random lies. */}
@@ -526,7 +526,7 @@ function RowHead({
 }) {
   return (
     <>
-      <h2 className="flex flex-wrap items-center gap-2 font-[Raleway] text-lg font-bold text-ink-900">
+      <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
         <span className="max-w-[250px] truncate">{row.companyName}</span>
         {/* 2026-08-27: the type, on every drive summary the student sees. */}
         {row.driveType !== undefined && row.driveType !== null && (

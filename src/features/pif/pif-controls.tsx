@@ -41,7 +41,7 @@ export function Section({
                 {number}
               </span>
             )}
-            <h2 className="font-[Raleway] text-lg font-bold text-[#3D3777]">{title}</h2>
+            <h2 className="font-heading text-lg font-bold text-brand-500">{title}</h2>
           </div>
           {action}
         </div>
@@ -111,7 +111,7 @@ export function Labelled({
       </label>
       {children(id)}
       {error !== undefined && (
-        <p className="mt-1 text-xs text-[#DD4820]" role="status">
+        <p className="mt-1 text-xs text-danger-500" role="status">
           {error}
         </p>
       )}
@@ -173,14 +173,14 @@ export function RadioGroup({
               value={option.value}
               checked={value === option.value}
               onChange={() => onChange(option.value)}
-              className="size-4 accent-[#3D3777]"
+              className="size-4 accent-brand-500"
             />
             {option.label}
           </label>
         ))}
       </div>
       {error !== undefined && (
-        <p className="mt-1 text-xs text-[#DD4820]" role="status">
+        <p className="mt-1 text-xs text-danger-500" role="status">
           {error}
         </p>
       )}

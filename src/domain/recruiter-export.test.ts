@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   buildRecruiterCsvRows,
   buildRecruiterExport,
+  describeResumeLinks,
   EXPORT_COLUMNS,
   RECRUITER_CSV_COLUMNS,
+  RESUME_LINK_DAYS,
   recruiterPackProblem,
   resumeHyperlink,
+  resumeLinkShortfall,
   resumePackFilename,
 } from "./recruiter-export";
 
@@ -141,6 +144,44 @@ describe("buildRecruiterCsvRows", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.["Resume link"]).toBe("");
+  });
+});
+
+/**
+ * #78/#79 (UAT 2026-10-18): an empty "Resume link" cell is a fact, and the
+ * screen used to print "Exported 42 candidates with resume links" over a file
+ * where none of them linked. The count is said from the rows, so it cannot
+ * disagree with the file that went out.
+ */
+describe("the resume links a CSV actually carries", () => {
+  const cell = (roll: string, link: string) => ({ "Roll number": roll, "Resume link": link });
+
+  it("names the candidates left without a link", () => {
+    const rows = [cell("TEC001", "https://x/1"), cell("TEC002", ""), cell("TEC003", "  ")];
+
+    expect(resumeLinkShortfall(rows)).toEqual(["TEC002", "TEC003"]);
+  });
+
+  it("counts them against the rows that got one", () => {
+    const rows = [cell("TEC001", "https://x/1"), cell("TEC002", "")];
+
+    expect(describeResumeLinks(rows)).toBe(
+      `1 of 2 carry a resume link, openable for ${RESUME_LINK_DAYS} days; 1 do not.`,
+    );
+  });
+
+  it("says none of them linked, rather than a bare count", () => {
+    const rows = [cell("TEC001", ""), cell("TEC002", "")];
+
+    expect(describeResumeLinks(rows)).toMatch(/None of the 2 could be given a resume link/i);
+  });
+
+  it("says the whole file is linked when nothing is missing", () => {
+    const rows = [cell("TEC001", "https://x/1")];
+
+    expect(describeResumeLinks(rows)).toBe(
+      `All 1 carry a resume link, openable for ${RESUME_LINK_DAYS} days.`,
+    );
   });
 });
 

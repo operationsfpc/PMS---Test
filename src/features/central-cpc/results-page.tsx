@@ -336,7 +336,7 @@ export function ResultsPage({
                           aria-label={`Select ${participant.studentName}`}
                           checked={checked.has(participant.applicationId)}
                           onChange={() => toggle(participant.applicationId)}
-                          className="mt-1 size-4 accent-[#3D3777]"
+                          className="mt-1 size-4 accent-brand-500"
                         />
                       )}
                       <StudentIdentity
@@ -1186,7 +1186,7 @@ export function DriveRoundsPage({
                         thing standing between a coordinator and a
                         notification they cannot recall. */}
                     {staged !== null && (
-                      <p role="status" className="text-xs font-medium text-[#3D3777]">
+                      <p role="status" className="text-xs font-medium text-brand-500">
                         {links(staged.assignments.length)} ready for{" "}
                         {staged.assignments.length === 1
                           ? "1 student"

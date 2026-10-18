@@ -235,8 +235,8 @@ export function DrivesList({
       )}
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
@@ -298,8 +298,8 @@ export function DrivesList({
                         <p
                           className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${
                             left.urgent
-                              ? "bg-[#FF7200] text-white"
-                              : "bg-surface-muted text-[#3D3777]"
+                              ? "bg-orange-500 text-white"
+                              : "bg-surface-muted text-brand-500"
                           }`}
                         >
                           {left.urgent ? "🔥 " : "⏳ "}
@@ -377,7 +377,7 @@ export function DrivesList({
                           className="w-full rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
                         />
                         {problem !== null && (
-                          <p className="mt-1 text-xs font-medium text-[#DD4820]">{problem}</p>
+                          <p className="mt-1 text-xs font-medium text-danger-500">{problem}</p>
                         )}
                       </div>
 
@@ -398,12 +398,12 @@ export function DrivesList({
                       >
                         Apply
                       </Button>
-                      <p className="mt-2 text-xs text-[#FF7200]">
+                      <p className="mt-2 text-xs text-orange-500">
                         An application cannot be withdrawn once submitted.
                       </p>
                     </div>
                   ) : (
-                    <p className="mt-4 text-sm text-[#DD4820]">{drive.refusal}</p>
+                    <p className="mt-4 text-sm text-danger-500">{drive.refusal}</p>
                   )}
                 </>
               );
@@ -418,7 +418,7 @@ export function DrivesList({
                     share a date, a venue and one interview process. */}
                 <div className="border-b border-line bg-brand-50 p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-[Raleway] text-lg font-bold text-ink-900">
+                    <h2 className="font-heading text-lg font-bold text-ink-900">
                       {event.companyName}
                     </h2>
                     {/* A visit where no role declared a type says nothing rather

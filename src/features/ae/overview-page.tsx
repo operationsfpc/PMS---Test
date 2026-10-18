@@ -599,7 +599,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                   onClick={() => setStatTypeFilter(option.value)}
                   className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                     selected
-                      ? "bg-[#3D3777] text-white shadow-sm"
+                      ? "bg-brand-500 text-white shadow-sm"
                       : "border border-line bg-surface text-ink-700 hover:border-brand-300"
                   }`}
                 >

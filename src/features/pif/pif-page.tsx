@@ -133,7 +133,7 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
   if (outcome === "submitted") {
     return (
       <Card className="p-6">
-        <h1 className="font-[Raleway] text-xl font-bold text-[#3D3777]">
+        <h1 className="font-heading text-xl font-bold text-brand-500">
           {outcomeRoles === null
             ? "PIF submitted for approval"
             : "Company drive submitted for approval"}
@@ -159,7 +159,7 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
   return (
     <>
       {outcome === "draft" && (
-        <Card className="mb-4 border border-[#FFB800] bg-[#FFF9E8] p-4">
+        <Card className="mb-4 border border-gold-500 bg-gold-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             Draft saved. It has not gone to the Delivery Head yet.
           </p>

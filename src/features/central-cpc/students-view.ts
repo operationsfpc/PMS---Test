@@ -2,6 +2,8 @@ import type { Offer } from "@domain/offers";
 import { resolveDisplayedPlacement } from "@domain/offers";
 import type { DirectoryStudent } from "@domain/student-directory";
 import type { DriveType, ParticipationStatus, SrfStatus } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
+import { signedResumeLinks } from "@lib/resume-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { StudentDirectoryView } from "./students-page";
 
@@ -30,6 +32,7 @@ const STUDENT_COLUMNS = `
   full_name,
   roll_number,
   passing_year,
+  overall_cgpa,
   srf_status,
   participation_status,
   campuses ( name ),
@@ -39,49 +42,107 @@ const STUDENT_COLUMNS = `
 
 export function createSupabaseStudentDirectoryView(client: SupabaseClient): StudentDirectoryView {
   return {
+    /**
+     * #79 (UAT 2026-10-18): the CSV a coordinator hands to a recruiter or keeps
+     * as the academic record is worth one column more — the CV itself.
+     *
+     * Keyed by STUDENT, because that is what a directory row is. A student may
+     * hold one resume PER ROLE CATEGORY (0003's `one_resume_per_category`), so
+     * the link is the one they uploaded last: the file they would send today.
+     */
+    async resumeLinks(studentIds) {
+      if (studentIds.length === 0) return new Map();
+
+      const rows = await readAllRowsByIds(
+        studentIds,
+        (batch) => (from, to) =>
+          client
+            .from("student_documents")
+            .select("student_id, storage_path, uploaded_at")
+            .eq("kind", "resume")
+            .in("student_id", batch)
+            .order("uploaded_at")
+            .range(from, to),
+      );
+
+      const latestByStudent = new Map<string, string>();
+      for (const row of rows as Array<{ student_id: string; storage_path: string }>) {
+        // Ascending by upload time, so the last one written IS the newest.
+        latestByStudent.set(row.student_id as string, row.storage_path as string);
+      }
+
+      return signedResumeLinks(
+        client,
+        [...latestByStudent].map(([studentId, storagePath]) => ({ key: studentId, storagePath })),
+      );
+    },
+
     async students(): Promise<readonly DirectoryStudent[]> {
-      const { data: studentRows, error } = await client
-        .from("students")
-        .select(STUDENT_COLUMNS)
-        .order("full_name");
+      /*
+       * Paged, and every read failure raised. 2026-10-18 (UAT: "read all the
+       * page of all logins"): this asked for the roster once, so an organisation
+       * of six thousand students got the first thousand and the directory, its
+       * filters and its CSV answered for those thousand only. The offers and
+       * applications then went in by one `in=(...)` list of every id, which is a
+       * URL long enough for the gateway to refuse — and a refused list comes
+       * back empty rather than as an error, so a placed student was rendered as
+       * an unplaced one.
+       */
+      const rows = await readAllRows((from, to) =>
+        client.from("students").select(STUDENT_COLUMNS).order("full_name").range(from, to),
+      );
 
-      if (error !== null) throw new Error(error.message);
-
-      const rows = (studentRows ?? []) as Array<Record<string, unknown>>;
       const studentIds = rows.map((r) => r.id as string);
-
       if (studentIds.length === 0) return [];
 
-      const [{ data: offerRows }, { data: applicationRows }] = await Promise.all([
-        client
-          .from("offers")
-          .select(
-            // company_name and role_title live on the OFFER for a self-placed
-            // one (drive_id is null there) — C1's Thanush had both and the
-            // view never asked for them.
-            "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, company_name, role_title",
-          )
-          .in("student_id", studentIds),
-        client.from("applications").select("id, student_id").in("student_id", studentIds),
+      const [offerRows, applicationRows] = await Promise.all([
+        readAllRowsByIds(
+          studentIds,
+          (batch) => (from, to) =>
+            client
+              .from("offers")
+              .select(
+                // company_name and role_title live on the OFFER for a self-placed
+                // one (drive_id is null there) — C1's Thanush had both and the
+                // view never asked for them.
+                "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, company_name, role_title",
+              )
+              .in("student_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          studentIds,
+          (batch) => (from, to) =>
+            client
+              .from("applications")
+              .select("id, student_id")
+              .in("student_id", batch)
+              .range(from, to),
+        ),
       ]);
 
       // The company and role live on the drive, not on the offer, so the
       // offers have to be resolved before they can be named.
       const driveIds = [
         ...new Set(
-          ((offerRows ?? []) as Array<Record<string, unknown>>)
+          offerRows
             .map((o) => o.drive_id as string | null)
             .filter((id): id is string => id !== null),
         ),
       ];
 
-      const { data: driveRows } =
-        driveIds.length === 0
-          ? { data: [] }
-          : await client.from("drives").select("id, company_name, role_title").in("id", driveIds);
+      const driveRows = await readAllRowsByIds(
+        driveIds,
+        (batch) => (from, to) =>
+          client
+            .from("drives")
+            .select("id, company_name, role_title")
+            .in("id", batch)
+            .range(from, to),
+      );
 
       const drives = new Map(
-        ((driveRows ?? []) as Array<Record<string, unknown>>).map((d) => [
+        driveRows.map((d) => [
           d.id as string,
           {
             companyName: (d.company_name as string | null) ?? "Company not recorded",
@@ -97,7 +158,7 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
         string,
         { companyName: string | null; roleTitle: string | null }
       >();
-      for (const row of (offerRows ?? []) as Array<Record<string, unknown>>) {
+      for (const row of offerRows) {
         const studentId = row.student_id as string;
         const forStudent = offersByStudent.get(studentId) ?? [];
         forStudent.push({
@@ -117,7 +178,7 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
       }
 
       const applicationCounts = new Map<string, number>();
-      for (const row of (applicationRows ?? []) as Array<Record<string, unknown>>) {
+      for (const row of applicationRows) {
         const studentId = row.student_id as string;
         applicationCounts.set(studentId, (applicationCounts.get(studentId) ?? 0) + 1);
       }
@@ -139,6 +200,10 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
           degree: one<{ name?: string }>(row.degrees)?.name ?? "",
           branch: one<{ name?: string }>(row.branches)?.name ?? "",
           passingYear: Number(row.passing_year ?? 0),
+          cgpa:
+            row.overall_cgpa === null || row.overall_cgpa === undefined
+              ? null
+              : Number(row.overall_cgpa),
           srfStatus: row.srf_status as SrfStatus,
           participationStatus: row.participation_status as ParticipationStatus,
           applications: applicationCounts.get(studentId) ?? 0,

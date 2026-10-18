@@ -71,6 +71,77 @@ const ESCAPE = /\\u[0-9a-fA-F]{4}/;
  */
 const RULE_CODE = /\((?:[RDFQ]\d+|\u00a7[\d.]+)\)/;
 
+const POINTS_AT_NAV = /under (?:<strong>|“)([^<”]+?)(?:<\/strong>|”)/g;
+
+/**
+ * Every group heading and item label the sidebar actually renders.
+ *
+ * Read out of the source rather than imported: this file runs on the text of
+ * the screens, and a nav the test assembles by hand is a nav that can drift
+ * from the one the app builds.
+ */
+function sidebarLabels(): string[] {
+  const shell = readFileSync(join(SRC, "components", "app-shell.tsx"), "utf8");
+  return [...shell.matchAll(/(?:heading|label): "([^"]+)"/g)].map((m) => m[1] ?? "");
+}
+
+describe("a refusal that sends the reader somewhere", () => {
+  /**
+   * UAT 2026-10-18: the shortlisting door told a reader to follow the drive
+   * "under “My drives”", a sidebar label removed on 2026-08-18 when every
+   * non-student was given one Drives group of three status tabs. The sentence
+   * was polite, plausible and impossible to act on — the reader scanned the
+   * sidebar for a word that was not there and had no second move.
+   */
+  it("names a group the sidebar really shows", () => {
+    const nav = sidebarLabels();
+    expect(nav.length).toBeGreaterThan(0);
+
+    const offenders: string[] = [];
+    for (const file of tsxFiles(SRC)) {
+      if (file.endsWith("app-shell.tsx")) continue;
+      readFileSync(file, "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          for (const match of line.matchAll(POINTS_AT_NAV)) {
+            const phrase = (match[1] ?? "").trim();
+            if (!nav.some((label) => label.toLowerCase() === phrase.toLowerCase())) {
+              offenders.push(`${relative(SRC, file)}:${index + 1} — “${phrase}”`);
+            }
+          }
+        });
+    }
+
+    expect(
+      offenders,
+      "No sidebar entry carries these labels, so the sentence offers a way out " +
+        "that does not exist. Name a group the reader is actually given.\n" +
+        offenders.join("\n"),
+    ).toEqual([]);
+  });
+
+  it("leaves no link pointing at a page no sidebar can return to", () => {
+    // `/my-drives` was reachable only from PIF-approval mail: follow the link,
+    // click a drive, and there was no way back. A mail destination must be a
+    // page the recipient's own sidebar shows, or the reader lands on a screen
+    // the product no longer admits to having.
+    const shell = readFileSync(join(SRC, "components", "app-shell.tsx"), "utf8");
+    const navTargets = [...shell.matchAll(/to: "([^"]+)"/g)].map((m) => m[1] ?? "");
+    const mail = readFileSync(join(SRC, "domain", "email-delivery.ts"), "utf8");
+    const linkTargets = [...mail.matchAll(/portalUrl\}\/([a-z0-9/_-]+)/g)].map((m) => m[1] ?? "");
+
+    const orphans = linkTargets.filter(
+      (path) =>
+        // Sign-in is the one screen deliberately outside every sidebar.
+        path !== "login" && !navTargets.includes(`/${path}`),
+    );
+
+    expect(navTargets.length).toBeGreaterThan(0);
+    expect(linkTargets.length).toBeGreaterThan(0);
+    expect(orphans).toEqual([]);
+  });
+});
+
 describe("user-facing copy", () => {
   const files = tsxFiles(SRC);
 

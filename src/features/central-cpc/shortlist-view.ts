@@ -1,6 +1,8 @@
 import type { ShortlistEntry } from "@domain/recruiter-export";
 import { objectKeyIn } from "@domain/storage-path";
 import { type AppRole, DRIVE_STATUSES, type DriveStatus, type RoleCategory } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
+import { signedResumeLinks } from "@lib/resume-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortlistApplicant, ShortlistDrive, ShortlistView } from "./shortlist-page";
 
@@ -8,6 +10,27 @@ export class ShortlistError extends Error {}
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
+
+/** A snapshot's text, or null. An empty string on a card is a label with
+ *  nothing behind it, and "—" reads as a figure the student never gave. */
+const text = (value: unknown): string | null => {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed === "" ? null : trimmed;
+};
+
+/**
+ * A figure the snapshot actually carries.
+ *
+ * `0` is treated as "never recorded", not as a score of zero:
+ * `AcademicProfile` cannot hold null, so a student whose 10th marksheet was
+ * never entered applies with `0` frozen into their snapshot. A card that
+ * prints "10th 0%" says they sat it and failed — a different accusation from
+ * an exam the coordinator simply has no record of.
+ */
+const recorded = (value: unknown): number | null => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
 
 /**
  * Feeds the shortlisting workspace.
@@ -51,27 +74,42 @@ export function createSupabaseShortlistView(
     },
 
     async applicants(driveId) {
-      const { data: applications } = await client
-        .from("applications")
-        .select(
-          "id, student_id, profile_snapshot, students(full_name, roll_number, participation_status, campuses(name)), shortlist_entries(included)",
-        )
-        .eq("drive_id", driveId);
+      /*
+       * Paged, and a failed page now throws. PostgREST stops answering at a
+       * thousand rows, so a Super Dream visit that the whole roster applied to
+       * came back as whichever thousand arrived first — and this screen ranked
+       * them, counted them against the recruiter's ask and exported them without
+       * saying that people were missing.
+       */
+      const applications = await readAllRows((from, to) =>
+        client
+          .from("applications")
+          .select(
+            "id, student_id, profile_snapshot, students(full_name, roll_number, participation_status, campuses(name)), shortlist_entries(included)",
+          )
+          .eq("drive_id", driveId)
+          .range(from, to),
+      );
 
-      const studentIds = (applications ?? []).map((a) => a.student_id as string);
+      const studentIds = applications.map((a) => a.student_id as string);
       // The Central Student Skill Repository (0037). Scores are already on
       // the 0-100 scale R11 expects (A35), and each is named by its
       // skill-area row - the same names a drive's mandatory skills refer to.
-      const { data: skills } =
-        studentIds.length === 0
-          ? { data: [] }
-          : await client
-              .from("student_skill_scores")
-              .select("student_id, score, skill_areas(name)")
-              .in("student_id", studentIds);
+      // Batched by id: one `in=(...)` of every applicant is a URL long enough
+      // for the gateway to refuse, and a refused list reads as a student with
+      // no skills assessed.
+      const skills = await readAllRowsByIds(
+        studentIds,
+        (batch) => (from, to) =>
+          client
+            .from("student_skill_scores")
+            .select("student_id, score, skill_areas(name)")
+            .in("student_id", batch)
+            .range(from, to),
+      );
 
       const skillsByStudent = new Map<string, { skill: string; score: number }[]>();
-      for (const row of skills ?? []) {
+      for (const row of skills) {
         const area = one<{ name?: string }>(row.skill_areas);
         // No area row, no name - an unnameable score cannot be matched
         // against a drive's required skills, so it is dropped, not invented.
@@ -81,7 +119,7 @@ export function createSupabaseShortlistView(
         skillsByStudent.set(row.student_id as string, list);
       }
 
-      return (applications ?? []).map((row): ShortlistApplicant => {
+      return applications.map((row): ShortlistApplicant => {
         // R7: the snapshot is the truth for everything downstream.
         //
         // 🔴 2026-08-24 (UAT "CGPA showing 0"): the real envelope is
@@ -108,6 +146,20 @@ export function createSupabaseShortlistView(
           // The snapshot carries no college, and this is not a figure a student
           // declared — it is which campus they belong to, so it is read live.
           college: one<{ name?: string }>(student?.campuses)?.name ?? null,
+          /*
+           * #17 (UAT 2026-10-18): the card used to say everything about a
+           * candidate's marks and nothing about who they are — two applicants
+           * named Priya, both at 8.4, were indistinguishable without opening
+           * each record. All of it is ALREADY FROZEN in the same snapshot the
+           * CGPA comes from, so the card reads it from there (R7) and never
+           * from the live profile a student may have edited since applying.
+           */
+          degree: text(academics.degree ?? snapshot.degree),
+          branch: text(academics.branch ?? snapshot.branch),
+          passingYear: recorded(academics.passingYear ?? snapshot.passingYear),
+          tenthPercentage: recorded(academics.tenthPercentage ?? snapshot.tenthPercentage),
+          twelfthPercentage: recorded(academics.twelfthPercentage ?? snapshot.twelfthPercentage),
+          email: text(snapshot.email),
           overallCgpa: Number(academics.overallCgpa ?? 0),
           currentArrears: Number(academics.currentArrears ?? 0),
           historyOfArrears: Number(academics.historyOfArrears ?? 0),
@@ -168,14 +220,18 @@ export function createSupabaseShortlistView(
      * recruiter must receive what the shortlist was decided on.
      */
     async exportEntries(driveId) {
-      const { data, error } = await client
-        .from("applications")
-        .select("id, profile_snapshot, shortlist_entries(included)")
-        .eq("drive_id", driveId);
+      // The same thousand-row cap as the screen above, on the same table: an
+      // export that left people out is worse than one that failed, because the
+      // recruiter's list is the thing that leaves the building.
+      const rows = await readAllRows((from, to) =>
+        client
+          .from("applications")
+          .select("id, profile_snapshot, shortlist_entries(included)")
+          .eq("drive_id", driveId)
+          .range(from, to),
+      );
 
-      if (error !== null) throw new ShortlistError("Could not read the shortlist for export.");
-
-      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      return rows.map((row) => ({
         applicationId: row.id as string,
         included: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
         snapshot: row.profile_snapshot as ShortlistEntry["snapshot"],
@@ -190,15 +246,21 @@ export function createSupabaseShortlistView(
     async resumeFiles(resumeIds) {
       if (resumeIds.length === 0) return new Map();
 
-      const { data, error } = await client
-        .from("student_documents")
-        .select("id, storage_path")
-        .in("id", resumeIds);
-
-      if (error !== null) throw new ShortlistError("Could not read the resumes for the pack.");
+      // Batched by id, paged: a shortlist of three hundred sends three hundred
+      // UUIDs into one URL, and a URL the gateway refuses answers as an empty
+      // list — which used to read as "these candidates have no CV files".
+      const documents = await readAllRowsByIds(
+        resumeIds,
+        (batch) => (from, to) =>
+          client
+            .from("student_documents")
+            .select("id, storage_path")
+            .in("id", batch)
+            .range(from, to),
+      );
 
       const files = new Map<string, { data: ArrayBuffer; extension: string }>();
-      for (const row of (data ?? []) as Array<{ id: string; storage_path: string }>) {
+      for (const row of documents as Array<{ id: string; storage_path: string }>) {
         // 2026-08-26: an apply-time resume was recorded WITH its bucket in
         // front, so this asked the resumes bucket for `resumes/resumes/...`
         // and every export died on the first file it touched.
@@ -225,48 +287,37 @@ export function createSupabaseShortlistView(
 
     /**
      * DB / Storage direct signed links for resumes.
-     * Generates active signed URLs directly from the resumes bucket, avoiding the need
-     * to download all files into memory and package them in a zip.
+     * Generates active signed URLs directly from the resumes bucket, avoiding the
+     * need to download all files into memory and package them in a zip.
+     *
+     * #78 (UAT 2026-10-18): it answers with a link per RESUME ID IT FOUND, so a
+     * shorter map than the ids handed in is the honest result, not an error —
+     * the screen counts them and says which candidates are left out.
      */
-    async resumeSignedUrls(resumeIds, expiresInSeconds = 60 * 60 * 24 * 30) {
+    async resumeSignedUrls(resumeIds, expiresInSeconds) {
       if (resumeIds.length === 0) return new Map();
 
-      const { data, error } = await client
-        .from("student_documents")
-        .select("id, storage_path")
-        .in("id", resumeIds);
+      // Batched by id, paged: three hundred candidates put three hundred UUIDs
+      // into one URL, and a URL the gateway refuses answers as an empty list —
+      // which used to read as "nobody on this shortlist has a CV".
+      const rows = await readAllRowsByIds(
+        resumeIds,
+        (batch) => (from, to) =>
+          client
+            .from("student_documents")
+            .select("id, storage_path")
+            .in("id", batch)
+            .range(from, to),
+      );
 
-      if (error !== null) throw new ShortlistError("Could not read the resumes for export.");
-
-      const rows = (data ?? []) as Array<{ id: string; storage_path: string }>;
-      const paths = rows.map((r) => objectKeyIn("resumes", r.storage_path));
-
-      const { data: signedEntries, error: signError } = await client.storage
-        .from("resumes")
-        .createSignedUrls(paths, expiresInSeconds);
-
-      if (signError !== null || signedEntries === null) {
-        throw new ShortlistError("Could not generate signed resume links.");
-      }
-
-      const urlByPath = new Map<string, string>();
-      signedEntries.forEach((item, index) => {
-        const path = item.path ?? paths[index];
-        if (path && item.signedUrl) {
-          urlByPath.set(path, item.signedUrl);
-        }
-      });
-
-      const urlMap = new Map<string, string>();
-      for (const row of rows) {
-        const key = objectKeyIn("resumes", row.storage_path);
-        const signedUrl = urlByPath.get(key);
-        if (signedUrl) {
-          urlMap.set(row.id, signedUrl);
-        }
-      }
-
-      return urlMap;
+      return signedResumeLinks(
+        client,
+        (rows as Array<{ id: string; storage_path: string }>).map((row) => ({
+          key: row.id,
+          storagePath: row.storage_path,
+        })),
+        expiresInSeconds,
+      );
     },
 
     /** PRD §13.2: the data-sharing log. An unlogged export never happened. */

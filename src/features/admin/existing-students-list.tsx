@@ -1,5 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { Badge, Button, ButtonLink, Card, DataTable } from "@components/ui";
+import { readAllRows } from "@lib/postgrest-read";
 import { supabase } from "@lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import type { CampusOption } from "./roster-import-page";
@@ -33,21 +34,30 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let active = true;
-    void supabase()
-      .from("students")
-      .select("id, full_name, email, roll_number, campus_id, passing_year")
-      .order("full_name")
-      .then(({ data, error }) => {
+    /*
+     * Paged, and the failure is caught. One read of `students` stops at a
+     * thousand rows, and this list is exactly the six-thousand-row case an
+     * import screen exists to serve: the administrator saw "(1000) students",
+     * searched for a name in the second thousand, and concluded the import had
+     * dropped it.
+     */
+    void readAllRows((from, to) =>
+      supabase()
+        .from("students")
+        .select("id, full_name, email, roll_number, campus_id, passing_year")
+        .order("full_name")
+        .range(from, to),
+    )
+      .then((data) => {
         if (!active) return;
-        // `{ data }` alone: PostgREST answers with an error and supabase-js still
-        // resolves, so a refused read arrived as an empty list and the page told
-        // the administrator that no students had been added.
-        if (error !== null) {
-          setListProblem("We could not read the students already on record. Please try again.");
-          return;
-        }
         setListProblem(null);
-        setStudents((data ?? []) as Student[]);
+        setStudents(data as unknown as Student[]);
+      })
+      .catch(() => {
+        if (!active) return;
+        // An error and an empty roster mean opposite things, and only one of
+        // them is a reason to import.
+        setListProblem("We could not read the students already on record. Please try again.");
       });
     return () => {
       active = false;
@@ -94,7 +104,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
       {/* Header and Filter Controls */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-[Raleway] text-base font-bold text-ink-900">
+          <h2 className="font-heading text-base font-bold text-ink-900">
             Existing students{students === null ? "" : ` (${filtered.length})`}
           </h2>
           <p className="text-xs text-ink-500">

@@ -10,6 +10,7 @@ import {
 } from "@domain/offer-category";
 import type { Offer } from "@domain/offers";
 import type { AcademicProfile, DriveStatus, DriveType, RoleCategory } from "@domain/types";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   PublishCandidate,
@@ -228,26 +229,37 @@ export function createSupabasePublishView(
 
   return {
     async load() {
+      /*
+       * Four whole-table reads, none of them paged until now. The cohort is the
+       * eligibility pool this screen targets, so past a thousand rows PostgREST
+       * simply stopped answering: a six-thousand-student college got a publish
+       * screen whose counts, filters and candidate list described the first
+       * thousand it happened to receive, and nothing on screen said so.
+       */
       const [row, colleges, degrees, branches, students] = await Promise.all([
         loadDriveRow(),
-        client.from("campuses").select(PUBLISH_COLLEGE_COLUMNS).order("name"),
-        client.from("degrees").select("name").order("name"),
-        client.from("branches").select("name").order("name"),
-        client.from("students").select(PUBLISH_COHORT_COLUMNS),
+        readAllRows((from, to) =>
+          client.from("campuses").select(PUBLISH_COLLEGE_COLUMNS).order("name").range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client.from("degrees").select("name").order("name").range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client.from("branches").select("name").order("name").range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client.from("students").select(PUBLISH_COHORT_COLUMNS).range(from, to),
+        ),
       ]);
 
-      const names = (result: { data: unknown }): readonly string[] => [
-        ...new Set(
-          ((result.data ?? []) as Array<{ name: string }>).map((r) => r.name).filter(Boolean),
-        ),
+      const names = (rows: ReadonlyArray<Record<string, unknown>>): readonly string[] => [
+        ...new Set(rows.map((r) => (r.name as string | null) ?? "").filter(Boolean)),
       ];
 
       const options: TargetingOptions = {
         // The cities the screen offers are read off these colleges, so a city
         // can never be offered that holds nobody.
-        colleges: ((colleges.data ?? []) as Array<Record<string, unknown>>)
-          .map(collegeOption)
-          .filter((college) => college.name !== ""),
+        colleges: colleges.map(collegeOption).filter((college) => college.name !== ""),
         degrees: names(degrees),
         branches: names(branches),
       };
@@ -328,7 +340,7 @@ export function createSupabasePublishView(
           .sort((a, b) => a.sequence - b.sequence),
       };
 
-      const cohort = ((students.data ?? []) as Array<Record<string, unknown>>).map(toCandidate);
+      const cohort = students.map(toCandidate);
 
       return { drive, options, cohort };
     },

@@ -528,9 +528,7 @@ export function DrivePortfolioPage({
           {isMultiRole && (
             <div className="border-b border-line bg-brand-50 p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-[Raleway] text-lg font-bold text-ink-900">
-                  {event.companyName}
-                </h3>
+                <h3 className="font-heading text-lg font-bold text-ink-900">{event.companyName}</h3>
                 {!types.mixed && types.single !== null && (
                   <Badge tone={driveTypeTone(types.single)}>{driveTypeLabel(types.single)}</Badge>
                 )}

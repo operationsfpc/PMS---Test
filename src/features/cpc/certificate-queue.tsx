@@ -94,8 +94,8 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
@@ -132,7 +132,7 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
                 <Card className="p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="font-[Raleway] text-base font-bold text-ink-900">
+                      <p className="font-heading text-base font-bold text-ink-900">
                         {certificate.name}
                       </p>
                       {certificate.fileName !== null && (
@@ -151,7 +151,7 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
                     {certificate.url === null ? (
                       // Never a dead link: a coordinator must not believe they
                       // have checked something they could not open.
-                      <p className="text-sm text-[#DD4820]">{noDocument}</p>
+                      <p className="text-sm text-danger-500">{noDocument}</p>
                     ) : (
                       <ButtonAnchor
                         size="sm"

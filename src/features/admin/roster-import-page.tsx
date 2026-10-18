@@ -102,15 +102,15 @@ export function RosterImportPage({
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
       )}
 
       {done !== null && (
-        <Card className="mb-4 border border-[#1EE0E1] bg-[#ECF1F0] p-4">
+        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             Imported {done} student{done === 1 ? "" : "s"}. They can now sign in with the Google
             account on their roster row.
@@ -186,7 +186,7 @@ export function RosterImportPage({
               {`${parsed.accepted.length} student${parsed.accepted.length === 1 ? "" : "s"} ready to import.`}
             </p>
             {parsed.rejected.length > 0 && (
-              <p className="mt-1 text-sm text-[#DD4820]">
+              <p className="mt-1 text-sm text-danger-500">
                 {`${parsed.rejected.length} row${parsed.rejected.length === 1 ? "" : "s"} cannot be imported.`}
               </p>
             )}
@@ -204,7 +204,7 @@ export function RosterImportPage({
 
           {parsed.rejected.length > 0 && (
             <Card className="mb-4 border border-destructive/40 bg-destructive/5 p-5">
-              <h2 className="mb-3 font-[Raleway] text-base font-bold text-destructive">
+              <h2 className="mb-3 font-heading text-base font-bold text-destructive">
                 Rows that cannot be imported ({parsed.rejected.length})
               </h2>
               <ul className="flex flex-col gap-2 max-h-64 overflow-y-auto pr-1">

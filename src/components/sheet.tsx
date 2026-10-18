@@ -264,7 +264,7 @@ export function SheetTitle({
   return (
     <h3
       id={titleId}
-      className={`font-heading text-lg font-bold text-[#3D3777] ${className}`}
+      className={`font-heading text-lg font-bold text-brand-500 ${className}`}
       {...props}
     >
       {children}

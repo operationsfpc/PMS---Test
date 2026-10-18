@@ -17,7 +17,7 @@ export function NotificationBody({ body }: { body: string }) {
             href={segment.text}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-semibold text-[#3D3777] underline underline-offset-2"
+            className="font-semibold text-brand-500 underline underline-offset-2"
           >
             {segment.text}
           </a>

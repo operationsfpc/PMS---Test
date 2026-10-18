@@ -166,8 +166,8 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                     aria-pressed={active}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       active
-                        ? "border-[#3D3777] bg-[#3D3777] text-white"
-                        : "border-line bg-white text-ink-700 hover:border-[#A46AFC]"
+                        ? "border-brand-500 bg-brand-500 text-white"
+                        : "border-line bg-white text-ink-700 hover:border-violet-400"
                     }`}
                   >
                     {PRESET_LABELS[p]}
@@ -187,7 +187,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                 type="date"
                 value={criteria.startDate ?? ""}
                 onChange={(e) => handleDateChange("startDate", e.target.value)}
-                className="rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-[#A46AFC]"
+                className="rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
               />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-ink-700">
@@ -199,7 +199,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                 type="date"
                 value={criteria.endDate ?? ""}
                 onChange={(e) => handleDateChange("endDate", e.target.value)}
-                className="rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-[#A46AFC]"
+                className="rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
               />
             </div>
           </div>

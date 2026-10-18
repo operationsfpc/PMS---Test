@@ -78,11 +78,17 @@ function ShortlistersOnly({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const role = auth.status === "signed-in" ? auth.role : null;
 
+  // UAT 2026-10-18: this refusal told the reader to look under "My drives",
+  // which no sidebar has shown since 2026-08-18 (see app-shell's one Drives
+  // group). A door that says "try over there" is only a way out if there is
+  // something over there, so this names the group every role that reaches it
+  // is actually given.
   if (role !== null && !canShortlistFromPortfolio(role)) {
     return (
       <p className="p-8 text-sm text-ink-700">
         Shortlisting belongs to the placement coordinators. Choosing which students a recruiter sees
-        is their decision — you can follow this drive, and its results, under “My drives”.
+        is their decision — you can follow this drive under <strong>Drives</strong> in the sidebar,
+        and open its rounds and results from there.
       </p>
     );
   }
@@ -235,6 +241,13 @@ export function App() {
                     </RaisersOnly>
                   }
                 />
+                {/*
+                 * Not in any sidebar: 2026-08-18 gave every non-student one
+                 * Drives group of three status tabs, and this is the whole
+                 * portfolio those tabs split. PIF-approval mails written before
+                 * that still carry the link, so it keeps answering rather than
+                 * stranding someone in a content area with nothing in it.
+                 */}
                 <Route path="/my-drives" element={<DrivePortfolioRoute />} />
                 <Route
                   path="/delivery-head/pif-approvals"

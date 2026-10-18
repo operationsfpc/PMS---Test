@@ -283,6 +283,32 @@ describe("ShortlistPage", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/central placement coordinator/i);
   });
+
+  /**
+   * #34 (UAT 2026-10-18): the applicants are read a page at a time, and a paged
+   * read throws rather than returning a short list. Uncaught, the screen sat on
+   * "Loading applicants…" with no alert and no control — which reads as a slow
+   * page, not a broken one.
+   */
+  it("says the applicants did not load, instead of loading forever", async () => {
+    const user = userEvent.setup();
+    const applicants = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Could not read the applicants."))
+      .mockResolvedValueOnce(APPLICANTS);
+
+    show(view({ applicants }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not read the applicants/i);
+    expect(screen.queryByText(/loading applicants/i)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /load the applicants again/i }));
+
+    await waitFor(() => expect(applicants).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Strong Candidate")).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
 
 /**
@@ -540,6 +566,101 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
   });
 
   /**
+   * #78 (UAT 2026-10-18): the sentence used to be "Exported N candidates with
+   * resume links" whatever came back. A link is minted per stored file, so a
+   * deleted CV row or a refused bucket read leaves an empty cell — and the
+   * recruiter was told the file was complete.
+   */
+  it("says which candidates the CSV could not link", async () => {
+    const download = vi.fn();
+    const user = userEvent.setup();
+    inRouter(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          applicants: async () => [saved("R1", "Priya"), saved("R9", "Vetrivel")],
+          exportEntries: async () => [
+            {
+              applicationId: "a1",
+              included: true,
+              snapshot: { ...snapshot("R1", "Priya"), resumeId: "resume-1" },
+            },
+            {
+              applicationId: "a9",
+              included: true,
+              snapshot: { ...snapshot("R9", "Vetrivel"), resumeId: "resume-9" },
+            },
+          ],
+          // Only Priya's document came back.
+          resumeSignedUrls: async () => new Map([["resume-1", "https://x/priya.pdf"]]),
+        })}
+        download={download}
+      />,
+    );
+
+    // Everything on this drive is already saved onto the shortlist, so the
+    // pending tab is empty — what the click needs is the export coming alive.
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /export shortlist \(csv\)/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const [, content] = download.mock.calls[0] as [string, string];
+    expect(content).not.toContain("https://x/vetrivel");
+
+    expect(await screen.findByText(/1 of 2 carry a resume link/i)).toBeDefined();
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toMatch(/no resume link for R9/i);
+  });
+
+  /**
+   * The other half of #78: the links are fetched in batches now, because a
+   * three-hundred-candidate shortlist puts three hundred UUIDs into one URL and
+   * a refused URL answers as an empty list.
+   */
+  it("asks for the resumes by document in batches", async () => {
+    const user = userEvent.setup();
+    const requested: string[][] = [];
+    const resumeSignedUrls = vi.fn(async (ids: readonly string[]) => {
+      requested.push([...ids]);
+      return new Map<string, string>();
+    });
+    const entries = Array.from({ length: 3 }, (_, i) => ({
+      applicationId: `a${i}`,
+      included: true,
+      snapshot: { ...snapshot(`R${i}`, `Candidate ${i}`), resumeId: `resume-${i}` },
+    }));
+    inRouter(
+      <ShortlistPage
+        driveId="d1"
+        view={view({
+          applicants: async () => entries.map((e) => saved(e.applicationId, e.applicationId)),
+          exportEntries: async () => entries,
+          resumeSignedUrls,
+        })}
+        download={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /export shortlist \(csv\)/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+
+    await waitFor(() => expect(requested).toHaveLength(1));
+    expect(requested[0]).toEqual(["resume-0", "resume-1", "resume-2"]);
+    // Every candidate is left without one, and the screen says exactly that.
+    expect(await screen.findByText(/None of the 3 could be given a resume link/i)).toBeDefined();
+  });
+
+  /**
    * An empty shortlist used to answer the click with "No shortlisted candidates
    * to export." — a refusal for an action that could never have succeeded. The
    * controls are now greyed with the reason on the same line, and the guard in
@@ -760,6 +881,78 @@ describe("the applicant's actual skills", () => {
     const row = (await screen.findByText("Weak Candidate")).closest("li");
     if (row === null) throw new Error("row not found");
     expect(within(row).getByText(/no skill scores recorded/i)).toBeDefined();
+  });
+});
+
+/**
+ * #17 (UAT 2026-10-18): "two Priyas, both at 8.4 — which one is which?" The
+ * card carried the marks the ranking ran on and none of the person: no
+ * programme, no batch, no school marks, no contact. All of it arrives on the
+ * applicant now, read off the same frozen snapshot as the CGPA (R7), so a
+ * decision is made on the card instead of across thirty record pages.
+ */
+describe("what the card says about the person", () => {
+  const ENRICHED: ShortlistApplicant = {
+    ...STRONG,
+    degree: "B.E.",
+    branch: "CSE",
+    passingYear: 2026,
+    tenthPercentage: 91.4,
+    twelfthPercentage: 88,
+    email: "priya.ramesh@example.in",
+  };
+
+  const card = async (name: string) => {
+    const found = await screen.findByText(name);
+    const row = found.closest("li");
+    if (row === null) throw new Error("card not found");
+    return row;
+  };
+
+  it("names the programme and the batch it belongs to", async () => {
+    show(view({ applicants: async () => [ENRICHED] }));
+
+    expect(await card("Strong Candidate")).toBeDefined();
+    expect(screen.getByText(/B\.E\. CSE · Passing year 2026/i)).toBeDefined();
+  });
+
+  it("shows the school marks, each labelled with the exam it is from", async () => {
+    show(view({ applicants: async () => [ENRICHED] }));
+
+    const row = await card("Strong Candidate");
+    expect(within(row).getByText("10th 91.4%")).toBeDefined();
+    expect(within(row).getByText("12th 88%")).toBeDefined();
+  });
+
+  it("carries the contact address the application froze", async () => {
+    show(view({ applicants: async () => [ENRICHED] }));
+
+    const row = await card("Strong Candidate");
+    expect(within(row).getByText("priya.ramesh@example.in")).toBeDefined();
+  });
+
+  /**
+   * The other half of the rule: an applicant whose snapshot never carried these
+   * gets a card that says NOTHING about them, not one full of zeros and dashes.
+   * `AcademicProfile` cannot hold null, so an unrecorded marksheet is frozen as
+   * `0` — and "10th 0%" accuses a candidate of failing an exam they never sat.
+   */
+  it("prints no figure for a mark that was never recorded", async () => {
+    show(view({ applicants: async () => [WEAK] }));
+
+    const row = await card("Weak Candidate");
+    expect(row.textContent).not.toMatch(/10th/u);
+    expect(row.textContent).not.toMatch(/12th/u);
+    expect(row.textContent).not.toMatch(/Passing year/u);
+    expect(row.textContent).not.toMatch(/example\.in/u);
+  });
+
+  /** The rank the audit trail saves, kept legible as the card's own heading. */
+  it("still states the saved rank on every card", async () => {
+    show(view({ applicants: async () => [ENRICHED] }));
+
+    const row = await card("Strong Candidate");
+    expect(within(row).getByText(/^Rank \d+$/)).toBeDefined();
   });
 });
 

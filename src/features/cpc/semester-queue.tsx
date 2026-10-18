@@ -93,8 +93,8 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
@@ -125,7 +125,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
               <Card className="p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="font-[Raleway] text-base font-bold text-ink-900">
+                    <p className="font-heading text-base font-bold text-ink-900">
                       Semester {semester.semesterNumber} — CGPA {semester.cgpa}
                     </p>
                     {semester.declaredMarks !== null && semester.marksScale === "percentage" && (
@@ -150,7 +150,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                   {semester.url === null ? (
                     // Never a dead link: a coordinator must not believe they
                     // have checked something they could not open.
-                    <p className="text-sm text-[#DD4820]">No marksheet available</p>
+                    <p className="text-sm text-danger-500">No marksheet available</p>
                   ) : (
                     <ButtonAnchor
                       size="sm"

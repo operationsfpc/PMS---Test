@@ -25,15 +25,20 @@ const orNull = (value: unknown): number | null => (value == null ? null : Number
 /**
  * Exported so src/db/query-contract.test.ts can prove it against the real schema.
  *
- * `shortlist_entries` is embedded because the AE's own count of who was sent
- * to the recruiter is the point of the card; `0019` is what lets them read it.
+ * The applications are NOT embedded. PostgREST caps a collection at a thousand
+ * rows and caps each embedded one on its own, so a drive that 1,400 students
+ * applied to arrived here with a thousand of them: the AE's "Applicants" card
+ * counted the first thousand and the Shortlisted figure came from the same
+ * truncated set. Read separately, paged by drive.
  */
 export const AE_OVERVIEW_DRIVE_COLUMNS = `
   id, company_name, role_title, status, drive_type, ctc_min_lpa, ctc_max_lpa, created_at,
   company_drive_id,
-  drive_target_campuses(campuses(name)),
-  applications(id, student_id, shortlist_entries(included))
+  drive_target_campuses(campuses(name))
 `;
+
+/** Exported for the same reason. `shortlist_entries` is read by application id. */
+export const AE_OVERVIEW_APPLICATION_COLUMNS = "id, drive_id, student_id";
 
 export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverviewView {
   return {
@@ -58,24 +63,61 @@ export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverview
       }
 
       const driveIds = driveRows.map((d) => d.id as string);
-      const offerRows =
-        driveIds.length === 0
-          ? []
-          : await readAllRowsByIds(
-              driveIds,
-              (batch) => (from, to) =>
-                client
-                  .from("offers")
-                  .select("drive_id, student_id")
-                  .in("drive_id", batch)
-                  .range(from, to),
-            );
+      const [offerRows, applicationRows] = await Promise.all([
+        readAllRowsByIds(
+          driveIds,
+          (batch) => (from, to) =>
+            client
+              .from("offers")
+              .select("drive_id, student_id")
+              .in("drive_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          driveIds,
+          (batch) => (from, to) =>
+            client
+              .from("applications")
+              .select(AE_OVERVIEW_APPLICATION_COLUMNS)
+              .in("drive_id", batch)
+              .range(from, to),
+        ),
+      ]);
+
+      // Who was sent to the recruiter (0019 lets an AE read this; the embed
+      // could not carry it past a thousand applications).
+      const shortlistRows = await readAllRowsByIds(
+        applicationRows.map((a) => a.id as string),
+        (batch) => (from, to) =>
+          client
+            .from("shortlist_entries")
+            .select("application_id, included")
+            .in("application_id", batch)
+            .range(from, to),
+      );
+      const shortlistedApplications = new Set(
+        shortlistRows.filter((s) => s.included === true).map((s) => s.application_id as string),
+      );
 
       // An offer belongs to a student and a drive; an application is the same
       // pair. That pair is what ties the outcome back to the applicant.
       const won = new Set(
         offerRows.map((o) => `${o.drive_id as string}::${o.student_id as string}`),
       );
+
+      const applicantsByDrive = new Map<
+        string,
+        Array<{ shortlisted: boolean; hasOffer: boolean }>
+      >();
+      for (const application of applicationRows) {
+        const driveId = application.drive_id as string;
+        const list = applicantsByDrive.get(driveId) ?? [];
+        list.push({
+          shortlisted: shortlistedApplications.has(application.id as string),
+          hasOffer: won.has(`${driveId}::${application.student_id as string}`),
+        });
+        applicantsByDrive.set(driveId, list);
+      }
 
       const drives = driveRows.map((row): AeOverviewDrive => {
         const driveId = row.id as string;
@@ -94,10 +136,7 @@ export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverview
           campuses: rows(row.drive_target_campuses)
             .map((c) => (c.campuses as { name?: string } | null)?.name)
             .filter((name): name is string => typeof name === "string" && name !== ""),
-          applicants: rows(row.applications).map((application) => ({
-            shortlisted: rows(application.shortlist_entries).some((s) => s.included === true),
-            hasOffer: won.has(`${driveId}::${application.student_id as string}`),
-          })),
+          applicants: applicantsByDrive.get(driveId) ?? [],
         };
       });
 

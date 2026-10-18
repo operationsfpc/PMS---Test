@@ -295,7 +295,7 @@ export function ProfileEditPage({
                           : [...current.driveTypePreferences, option.value],
                       }))
                     }
-                    className="size-4 accent-[#3D3777]"
+                    className="size-4 accent-brand-500"
                   />
                   {option.label}
                 </label>

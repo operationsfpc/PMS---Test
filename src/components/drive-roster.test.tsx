@@ -165,8 +165,16 @@ describe("the one-role roster", () => {
     expect(screen.getByText(/Technical Interview/i)).toBeDefined();
     expect(screen.getByText(/Placement Offer Details/i)).toBeDefined();
     expect(screen.getByText(/Dream/i)).toBeDefined();
-    expect(screen.getAllByText(/Computer Science/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/8.85 CGPA/i).length).toBeGreaterThanOrEqual(1);
+    /*
+     * 2026-10-18 (UAT): "the same data again when I open it". The collapsed
+     * row already names the college, the programme and the CGPA, so the drawer
+     * holds only what the row cannot say — each of those once, on the screen.
+     */
+    expect(screen.getAllByText(/Computer Science/i)).toHaveLength(1);
+    expect(screen.getAllByText(/8\.85 CGPA/i)).toHaveLength(1);
+    expect(screen.queryByText(/^College$/)).toBeNull();
+    expect(screen.queryByText(/Degree & Branch/i)).toBeNull();
+    expect(screen.queryByText(/Overall CGPA/i)).toBeNull();
 
     await user.click(priya);
     expect(screen.queryByText("Aptitude Assessment")).toBeNull();

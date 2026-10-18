@@ -159,8 +159,8 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
       />
 
       {error !== null && (
-        <Card className="mb-4 border border-[#DD4820] bg-[#FFF0EC] p-4">
-          <p role="alert" className="text-sm text-[#DD4820]">
+        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
+          <p role="alert" className="text-sm text-danger-500">
             {error}
           </p>
         </Card>
@@ -241,7 +241,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                         twice - and the student has already been told it. */}
                       {student.previousRejectionReason !== null &&
                         student.previousRejectionReason.trim() !== "" && (
-                          <div className="mt-1.5 rounded bg-[#FFF0EC] border border-[#DD4820]/30 p-1.5 text-xs">
+                          <div className="mt-1.5 rounded bg-danger-50 border border-danger-500/30 p-1.5 text-xs">
                             <Badge tone="warning">Resubmitted</Badge>
                             <span className="mt-1 block text-xs font-normal text-ink-700">
                               You sent this back: “{student.previousRejectionReason}”
@@ -291,7 +291,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                     </td>
                     <td className="align-top px-3 py-3 text-sm min-w-[140px]">
                       {student.documents.length === 0 ? (
-                        <span className="text-xs text-[#DD4820] font-medium">None uploaded</span>
+                        <span className="text-xs text-danger-500 font-medium">None uploaded</span>
                       ) : (
                         <div className="flex flex-col gap-1.5">
                           {student.documents.map((doc) => (
@@ -300,7 +300,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                               href={doc.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline hover:text-ink-900"
+                              className="inline-flex items-center gap-1 text-xs text-brand-500 font-medium underline hover:text-ink-900"
                             >
                               📄 {doc.label}
                             </a>
@@ -312,7 +312,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                       beside the document that proves it. */}
                     <td className="align-top px-3 py-3 text-sm min-w-[180px]">
                       {student.semesters.length === 0 ? (
-                        <span className="text-xs text-[#DD4820] font-medium">
+                        <span className="text-xs text-danger-500 font-medium">
                           No semesters declared
                         </span>
                       ) : (
@@ -336,14 +336,14 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                                   history
                                 </span>
                                 {semester.marksheetUrl === null ? (
-                                  <span className="text-[#DD4820]">No marksheet</span>
+                                  <span className="text-danger-500">No marksheet</span>
                                 ) : (
                                   <a
                                     href={semester.marksheetUrl}
                                     target="_blank"
                                     rel="noreferrer"
                                     aria-label={`Semester ${semester.semesterNumber} marksheet for ${student.fullName}`}
-                                    className="text-[#3D3777] font-medium underline"
+                                    className="text-brand-500 font-medium underline"
                                   >
                                     Marksheet
                                   </a>
@@ -374,7 +374,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                               <div className="mt-1 flex items-center justify-between">
                                 {certificate.status === "pending" ? (
                                   certificate.url === null ? (
-                                    <span className="text-xs text-[#DD4820]">No document</span>
+                                    <span className="text-xs text-danger-500">No document</span>
                                   ) : (
                                     <ButtonAnchor
                                       size="sm"
@@ -405,7 +405,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                     {/* Resumes column: direct review of category-specific resumes */}
                     <td className="align-top px-3 py-3 text-sm min-w-[170px]">
                       {student.resumes.length === 0 ? (
-                        <span className="text-xs text-[#DD4820] font-medium">
+                        <span className="text-xs text-danger-500 font-medium">
                           No resume uploaded
                         </span>
                       ) : (
@@ -423,7 +423,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                               )}
                               <div className="mt-1">
                                 {resume.url === null ? (
-                                  <span className="text-xs text-[#DD4820]">No document</span>
+                                  <span className="text-xs text-danger-500">No document</span>
                                 ) : (
                                   <ButtonAnchor
                                     size="sm"
@@ -457,7 +457,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                       )}
                       {/* ...and, beside it, what there is nothing to commit to. */}
                       {unchecked !== null && (
-                        <p className="mb-2 text-xs font-medium text-[#DD4820] leading-tight">
+                        <p className="mb-2 text-xs font-medium text-danger-500 leading-tight">
                           {unchecked}
                         </p>
                       )}
@@ -474,7 +474,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                             rows={3}
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-[#3D3777] focus:outline-none focus:ring-1 focus:ring-[#3D3777]"
+                            className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                             placeholder="Name what is wrong, and what to change."
                           />
                           <div className="flex flex-wrap gap-2">

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { parseCsv } from "@domain/csv";
 import type { DirectoryStudent } from "@domain/student-directory";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -22,6 +23,7 @@ const PLACED: DirectoryStudent = {
   degree: "B.E.",
   branch: "CSE",
   passingYear: 2026,
+  cgpa: 8.6,
   srfStatus: "srf_approved",
   participationStatus: "active",
   applications: 3,
@@ -48,6 +50,7 @@ const SELF_PLACED: DirectoryStudent = {
   degree: "B.E.",
   branch: "CSE",
   passingYear: 2026,
+  cgpa: 7.4,
   srfStatus: "srf_approved",
   participationStatus: "active",
   applications: 2,
@@ -69,6 +72,7 @@ const UNPLACED: DirectoryStudent = {
   degree: "B.E.",
   branch: "ECE",
   passingYear: 2026,
+  cgpa: null,
   srfStatus: "srf_submitted",
   participationStatus: "active",
   applications: 1,
@@ -77,19 +81,22 @@ const UNPLACED: DirectoryStudent = {
 };
 
 const view = (
-  students: readonly DirectoryStudent[] = [PLACED, UNPLACED],
+  students: readonly DirectoryStudent[],
+  overrides: Partial<StudentDirectoryView> = {},
 ): StudentDirectoryView => ({
   students: async () => students,
+  ...overrides,
 });
 
 const show = (
   students: readonly DirectoryStudent[] = [PLACED, UNPLACED],
   path = "/central/students",
   download = vi.fn(),
+  overrides: Partial<StudentDirectoryView> = {},
 ) =>
   render(
     <MemoryRouter initialEntries={[path]}>
-      <StudentDirectoryPage view={view(students)} download={download} />
+      <StudentDirectoryPage view={view(students, overrides)} download={download} />
     </MemoryRouter>,
   );
 
@@ -203,11 +210,88 @@ describe("StudentDirectoryPage", () => {
     expect(csv).not.toMatch(/Rahul Nair/);
   });
 
+  /**
+   * 2026-10-18 (UAT): the overview's counts open a popup with a CGPA column,
+   * and this directory is the list those names link into. The same student
+   * cannot carry a figure there and none here.
+   */
+  it("prints the CGPA on the row of a student whose roster carries one", async () => {
+    show([PLACED, UNPLACED]);
+    const row = await screen.findByRole("row", { name: /anjali subramanian/i });
+
+    expect(within(row).getByText(/8\.60 CGPA/)).toBeDefined();
+  });
+
+  it("says nothing about CGPA for a student whose roster records none", async () => {
+    show([PLACED, UNPLACED]);
+    const row = await screen.findByRole("row", { name: /rahul nair/i });
+
+    expect(within(row).queryByText(/CGPA/)).toBeNull();
+  });
+
+  it("carries the CGPA into the export, blank when unrecorded", async () => {
+    const user = userEvent.setup();
+    const download = vi.fn();
+    show([PLACED, UNPLACED], "/central/students", download);
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /export/i }));
+
+    const table = parseCsv(download.mock.calls[0]?.[1] as string);
+    const header = table[0] ?? [];
+    const rows = table.slice(1);
+    const column = header.indexOf("CGPA");
+    expect(column).toBeGreaterThanOrEqual(0);
+    expect(rows[0]?.[column]).toBe("8.60");
+    expect(rows[1]?.[column]).toBe("");
+  });
+
+  /**
+   * #79 (UAT 2026-10-18): this CSV is the file a coordinator hands to a recruiter
+   * or keeps as the academic record, and it described a student without carrying
+   * their CV. One column — and the sentence that follows says how many of them
+   * arrived filled, which is #78's rule applied here.
+   */
+  it("links each student's resume in the export", async () => {
+    const user = userEvent.setup();
+    const download = vi.fn();
+    show([PLACED, UNPLACED], "/central/students", download, {
+      resumeLinks: async () => new Map([["s1", "https://x/anjali-cv.pdf"]]),
+    });
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /export/i }));
+
+    const table = parseCsv(download.mock.calls[0]?.[1] as string);
+    const column = (table[0] ?? []).indexOf("Resume link");
+    expect(column).toBeGreaterThanOrEqual(0);
+    const rows = table.slice(1);
+    expect(rows[0]?.[column]).toBe("https://x/anjali-cv.pdf");
+    expect(rows[1]?.[column]).toBe("");
+    expect(await screen.findByText(/1 of 2 carry a resume link/i)).toBeDefined();
+  });
+
+  it("says the export failed rather than sending a file with an empty column", async () => {
+    const user = userEvent.setup();
+    const download = vi.fn();
+    show([PLACED, UNPLACED], "/central/students", download, {
+      resumeLinks: async () => {
+        throw new Error("Could not generate the resume links. Try the export again.");
+      },
+    });
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /export/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not generate the resume links/i);
+    expect(download).not.toHaveBeenCalled();
+  });
+
   it("tells the reader how many students it is showing", async () => {
     show();
     expect(await screen.findByText(/2 students/i)).toBeDefined();
   });
-
   it("says the roster is empty rather than showing a bare table", async () => {
     show([]);
     expect(await screen.findByText(/no students yet/i)).toBeDefined();
