@@ -1,13 +1,14 @@
+import { ErrorPanel } from "@components/error-panel";
 import { NotificationBody } from "@components/notification-body";
 import { OfferLetterLink } from "@components/offer-letter-link";
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
 import {
   filterNotifications,
   NOTIFICATION_FILTERS,
   type NotificationFilter,
   sortNotifications,
 } from "@domain/notifications";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { StudentNotificationRow } from "./student-dashboard";
 
 /** The dashboard's view already answers both questions; this page needs no more. */
@@ -46,16 +47,31 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
 
   const [loadingError, setLoadingError] = useState(false);
 
-  useEffect(() => {
-    view
-      .notifications()
-      .then(setNotes)
-      .catch(() => setLoadingError(true));
+  const load = useCallback(async () => {
+    try {
+      setNotes(await view.notifications());
+      setLoadingError(false);
+    } catch {
+      // Never an empty list: "nothing has told you anything" and "we could not
+      // ask" mean opposite things, and only one of them is good news.
+      setLoadingError(true);
+      setNotes(null);
+    }
   }, [view]);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   async function markRead(id: string) {
-    await view.markRead(id);
-    setNotes(await view.notifications());
+    // The read state is the only thing this changes, so a failure leaves the
+    // row unread rather than throwing an unhandled rejection into the console.
+    try {
+      await view.markRead(id);
+      setNotes(await view.notifications());
+    } catch {
+      setLoadingError(true);
+    }
   }
 
   const sorted = sortNotifications(notes ?? []);
@@ -69,14 +85,12 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
         subtitle="Everything the placement process has told you, newest first."
       />
 
+      {loadingError && (
+        <ErrorPanel onRetry={() => void load()}>Could not load your notifications.</ErrorPanel>
+      )}
+
       {notes === null ? (
-        loadingError ? (
-          <Card className="p-6">
-            <p className="text-sm text-[#DD4820]">
-              Could not load notifications. Check your connection and try again.
-            </p>
-          </Card>
-        ) : (
+        loadingError ? null : (
           <p role="status" className="text-sm text-ink-500">
             Loading notifications…
           </p>
@@ -145,13 +159,9 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                   {note.read ? (
                     <span className="shrink-0 text-xs font-medium text-ink-500">✓ Read</span>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => void markRead(note.id)}
-                      className="shrink-0 text-xs font-medium text-brand-600 hover:underline"
-                    >
+                    <Button size="sm" variant="ghost" onClick={() => void markRead(note.id)}>
                       Mark read
-                    </button>
+                    </Button>
                   )}
                 </div>
               </li>

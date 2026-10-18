@@ -1,4 +1,5 @@
 import { Badge, Card, PageHeader } from "@components/ui";
+import { describeMarks } from "@domain/marks";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { OfferSource, ParticipationStatus, RoleCategory, SrfStatus } from "@domain/types";
@@ -138,7 +139,7 @@ export function StudentRecordPage({
     <div>
       <PageHeader
         title={record.fullName}
-        subtitle={`${record.rollNumber} · ${record.campusName}`}
+        subtitle={`Roll ${record.rollNumber} · ${record.campusName}`}
       />
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -225,7 +226,12 @@ export function StudentRecordPage({
                   >
                     <span className="text-ink-700">Semester {semester.semesterNumber}</span>
                     <span className="flex items-center gap-2">
-                      <span className="font-medium text-ink-900">{semester.cgpa}</span>
+                      {/* The figure says what scale it is on. Beside a Verified
+                          badge, a bare "8.2" is the number the badge claims to
+                          have checked, so the unit belongs on it. */}
+                      <span className="font-medium text-ink-900">
+                        {describeMarks(semester.cgpa, "cgpa")}
+                      </span>
                       <Badge tone={semester.verified ? "success" : "warning"}>
                         {semester.verified ? "Verified" : "Pending"}
                       </Badge>

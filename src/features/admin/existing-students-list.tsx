@@ -1,6 +1,8 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Badge, Button, Card, DataTable } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import type { CampusOption } from "./roster-import-page";
 
 interface Student {
@@ -20,27 +22,38 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
  */
 export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOption[] }) {
   const [students, setStudents] = useState<readonly Student[] | null>(null);
+  /** The roster read failing — not the same complaint as "nobody is enrolled yet". */
+  const [listProblem, setListProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [filterCampus, setFilterCampus] = useState<string>("");
   const [filterYear, setFilterYear] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [pageSize, setPageSize] = useState<number>(25);
   const [page, setPage] = useState<number>(1);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let active = true;
     void supabase()
       .from("students")
       .select("id, full_name, email, roll_number, campus_id, passing_year")
       .order("full_name")
-      .then(({ data }) => {
-        if (active) {
-          setStudents((data ?? []) as Student[]);
+      .then(({ data, error }) => {
+        if (!active) return;
+        // `{ data }` alone: PostgREST answers with an error and supabase-js still
+        // resolves, so a refused read arrived as an empty list and the page told
+        // the administrator that no students had been added.
+        if (error !== null) {
+          setListProblem("We could not read the students already on record. Please try again.");
+          return;
         }
+        setListProblem(null);
+        setStudents((data ?? []) as Student[]);
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [attempt]);
 
   // Compute available passing years
   const passingYears = useMemo(() => {
@@ -83,7 +96,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-[Raleway] text-base font-bold text-ink-900">
-            Existing students ({filtered.length})
+            Existing students{students === null ? "" : ` (${filtered.length})`}
           </h2>
           <p className="text-xs text-ink-500">
             Browse and search students currently enrolled in the placement management system
@@ -163,7 +176,17 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
         </div>
       </div>
 
-      {students === null ? (
+      {listProblem !== null ? (
+        <ErrorPanel
+          onRetry={() => {
+            setListProblem(null);
+            setAttempt((count) => count + 1);
+          }}
+          retryLabel="Load the roster again"
+        >
+          {listProblem} Until it loads, this list cannot say who is already on record.
+        </ErrorPanel>
+      ) : students === null ? (
         <p role="status" className="text-sm text-neutral-500 py-6 text-center">
           Loading students…
         </p>
@@ -199,12 +222,12 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                     {s.passing_year !== null ? <Badge tone="neutral">{s.passing_year}</Badge> : "—"}
                   </td>
                   <td className="px-3 py-2.5 text-right text-xs">
-                    <a
-                      href={`/students/${s.id}`}
+                    <Link
+                      to={`/students/${s.id}`}
                       className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
                     >
                       View profile →
-                    </a>
+                    </Link>
                   </td>
                 </tr>
               ))}

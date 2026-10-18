@@ -38,9 +38,14 @@ const VARIANTS = {
   secondary: "bg-surface text-ink-700 border border-line hover:border-brand-300",
   gold: "bg-gold-500 text-brand-900 hover:bg-gold-600 shadow-sm",
   danger: "bg-surface text-danger-700 border border-danger-500/40 hover:bg-danger-50",
-  // Text-coloured, so it needs something a shape cannot give it: underlining on
-  // hover is what tells the reader this line of words is a control.
-  ghost: "text-brand-500 underline-offset-2 hover:underline hover:bg-brand-50",
+  /*
+   * The quiet one — for actions that matter less than the primary but are
+   * still actions. It used to be brand-coloured text that underlined on hover,
+   * which is the exact drawing of a hyperlink: staff read "Remove", "Add
+   * another" and "Mark read" as navigation and stopped clicking them. A soft
+   * filled block says control; a link says page.
+   */
+  ghost: "bg-brand-50 text-brand-700 hover:bg-brand-100",
 } as const;
 
 const DISABLED = "disabled:cursor-not-allowed disabled:opacity-60";
@@ -82,11 +87,15 @@ export function Button({
   isLoading?: boolean | undefined;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
   const sizing = size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-sm";
+  // `||`, not `??`: a caller that passes `disabled={someGate}` for a state rule
+  // must not switch OFF the loading guard. With `??` a gated button became
+  // clickable again the moment it was spinning.
+  const locked = disabled || isLoading;
   return (
     <button
       type="button"
       aria-busy={isLoading}
-      disabled={disabled ?? isLoading}
+      disabled={locked}
       className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ${VARIANTS[variant]} ${sizing} ${DISABLED} ${className}`}
       {...props}
     >

@@ -1,4 +1,5 @@
 import { DrilldownModal } from "@components/drilldown-modal";
+import { ErrorPanel } from "@components/error-panel";
 import {
   Accordion,
   AccordionContent,
@@ -260,6 +261,9 @@ function StatVisit({ roles }: { roles: readonly AeOverviewDrive[] }) {
 export function AeOverviewPage({ view }: { view: AeOverviewView }) {
   const [snapshot, setSnapshot] = useState<AeOverviewSnapshot | null>(null);
   const [failed, setFailed] = useState(false);
+  // Bumping this re-runs the one read below; the failure card used to only
+  // tell the reader to refresh the whole page.
+  const [attempt, setAttempt] = useState(0);
   const [openStat, setOpenStat] = useState<StatKind | null>(null);
   const [statTypeFilter, setStatTypeFilter] = useState<DriveTypeFilter>("");
 
@@ -268,6 +272,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
     setOpenStat(kind);
   }
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let live = true;
     view
@@ -283,15 +288,20 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
     return () => {
       live = false;
     };
-  }, [view]);
+  }, [view, attempt]);
 
   if (failed) {
     return (
       <div>
         <PageHeader title="My overview" />
-        <p role="alert" className="rounded-card bg-danger-50 p-4 text-sm text-danger-700">
-          We could not load your overview. Refresh the page, or try again shortly.
-        </p>
+        <ErrorPanel
+          onRetry={() => {
+            setFailed(false);
+            setAttempt((count) => count + 1);
+          }}
+        >
+          We could not load your overview.
+        </ErrorPanel>
       </div>
     );
   }

@@ -66,7 +66,7 @@ describe("OfferPage", () => {
     render(<OfferPage driveId="d1" view={view()} />);
 
     const college = await screen.findByText("PSG College of Technology");
-    expect(college.parentElement).toBe(screen.getByText("21CSE1042").parentElement);
+    expect(college.parentElement).toBe(screen.getByText(/roll 21CSE1042/i).parentElement);
     // Arjun's record carries no college, so his row shows no chip rather than
     // an empty one.
     expect(screen.getAllByText(/College of Technology/)).toHaveLength(1);
@@ -352,5 +352,71 @@ describe("declaring an offer on an internship drive", () => {
 
     expect(await screen.findByLabelText(/CTC/i)).toBeDefined();
     expect(screen.queryByLabelText(/stipend/i)).toBeNull();
+  });
+});
+
+/**
+ * The state ABOVE the rows. A completed drive is a closed record (domain 6),
+ * and a list that never arrived is not an empty one — both used to be invisible
+ * here: every row kept its Declare button whatever the drive had become, and a
+ * rejected read left the screen on "Loading candidates…" for good.
+ */
+describe("what the drive itself decides about declaring", () => {
+  it("refuses to declare on a closed drive, and puts the reason on the screen", async () => {
+    const user = userEvent.setup();
+    const declare = vi.fn();
+    render(
+      <OfferPage
+        driveId="d1"
+        view={view({
+          declare,
+          drive: async () => ({ ...DRIVE, status: "completed" as const }),
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/record is closed/i)).toBeDefined();
+    const button = screen.getByRole("button", { name: /declare selected/i });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    await user.click(button);
+    expect(declare).not.toHaveBeenCalled();
+  });
+
+  it("still declares on a drive the students are still moving through", async () => {
+    const user = userEvent.setup();
+    const declare = vi.fn();
+    render(
+      <OfferPage
+        driveId="d1"
+        view={view({ declare, drive: async () => ({ ...DRIVE, status: "in_rounds" as const }) })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /declare selected/i }));
+    expect(declare).toHaveBeenCalledTimes(1);
+  });
+
+  it("says aloud when the candidates never arrived, and reads them again", async () => {
+    const user = userEvent.setup();
+    let firstRead = true;
+    const candidates = vi.fn(async () => {
+      if (firstRead) {
+        firstRead = false;
+        throw new Error("offline");
+      }
+      return CANDIDATES;
+    });
+
+    render(<OfferPage driveId="d1" view={view({ candidates })} />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not load/i);
+    // Not an empty list, and not a spinner that never stops.
+    expect(screen.queryByText(/nobody has reached/i)).toBeNull();
+    expect(screen.queryByText(/loading candidates/i)).toBeNull();
+
+    await user.click(within(alert).getByRole("button", { name: /load this drive again/i }));
+    expect(await screen.findByText("Priya Ramesh")).toBeDefined();
+    expect(candidates).toHaveBeenCalledTimes(2);
   });
 });

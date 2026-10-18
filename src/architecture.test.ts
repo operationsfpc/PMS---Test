@@ -48,6 +48,32 @@ function filesUnder(subdir: string): string[] {
   }
 }
 
+/**
+ * The opening tag of the `<button` found at `start`, or null when the file
+ * runs out before the tag closes.
+ *
+ * Brace depth is tracked because `onClick={() => …}` holds a `>` that is the
+ * end of an arrow, not the end of the tag.
+ */
+function buttonTag(source: string, start: number): string | null {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = start + "<button".length; i < source.length; i++) {
+    const char = source[i] as string;
+    if (quote !== null) {
+      if (char === quote && source[i - 1] !== "\\") quote = null;
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{") depth++;
+    else if (char === "}") {
+      if (depth === 0) return null;
+      depth--;
+    } else if (char === ">" && depth === 0) return source.slice(start, i + 1);
+  }
+  return null;
+}
+
 describe("src/domain is pure", () => {
   const domainFiles = filesUnder("domain");
 
@@ -77,7 +103,6 @@ describe("src/domain is pure", () => {
 
 describe("features are isolated", () => {
   const featureFiles = filesUnder("features");
-
   it.each(featureFiles.length > 0 ? featureFiles.map((f) => relative(SRC, f)) : ["(none yet)"])(
     "%s does not reach into a sibling feature",
     (relPath) => {
@@ -96,4 +121,53 @@ describe("features are isolated", () => {
       ).toEqual([]);
     },
   );
+});
+
+/**
+ * A control that changes something must look like a control.
+ *
+ * Reported 2026-10-18 against the UAT deploy: "the button are still hyper
+ * links". A dozen of them were hand-rolled `<button>`s wearing
+ * `text-brand-600 hover:underline` — the exact drawing of a link — and staff
+ * read "Save link", "Select all" and "Mark read" as pages to visit rather than
+ * things to press, so they stopped pressing them.
+ *
+ * Navigation keeps its underline: a `<Link>` and an `<a>` to a document are
+ * links, correctly. Only `<button>` is forbidden the styling.
+ */
+describe("an action never wears a link's clothes", () => {
+  const screens = sourceFiles(SRC).filter((file) => extname(file) === ".tsx");
+
+  it("has screens to check", () => {
+    expect(screens.length).toBeGreaterThan(0);
+  });
+
+  it.each(screens.map((file) => relative(SRC, file)))("%s gives no button an underline", (rel) => {
+    const source = readFileSync(join(SRC, rel), "utf8");
+    const offenders: string[] = [];
+    let at = source.indexOf("<button");
+    while (at !== -1) {
+      const tag = buttonTag(source, at);
+      if (tag === null) break;
+      if (tag.includes("underline")) {
+        offenders.push(`line ${source.slice(0, at).split("\n").length}`);
+      }
+      at = source.indexOf("<button", at + 1);
+    }
+
+    expect(
+      offenders,
+      `A button is a control, not a link — use <Button> from @components/ui. ` +
+        `Underlined at: ${offenders.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("keeps the shared Button's quiet variant a shaped control", () => {
+    const ui = readFileSync(join(SRC, "components/ui.tsx"), "utf8");
+    const ghost = /ghost:\s*"([^"]*)"/.exec(ui);
+    if (ghost?.[1] === undefined) throw new Error("Button has no ghost variant to check");
+
+    expect(ghost[1]).not.toMatch(/underline/);
+    expect(ghost[1]).toMatch(/bg-/);
+  });
 });

@@ -65,12 +65,24 @@ export function CampusProgrammes({
   const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
-    setRows(await view.programmes(campusId));
+    try {
+      setRows(await view.programmes(campusId));
+      setProblem(null);
+    } catch (cause) {
+      // `void refresh()` had no catch: a refused read left the list empty,
+      // which reads as "this campus runs no programmes".
+      setProblem(
+        cause instanceof Error ? cause.message : "Could not load the programmes of this campus.",
+      );
+    }
   }, [view, campusId]);
 
   useEffect(() => {
     void refresh();
-    void view.options().then(setOptions);
+    view
+      .options()
+      .then(setOptions)
+      .catch(() => setProblem("Could not load the degrees and branches to choose from."));
   }, [refresh, view]);
 
   /** Only this degree's branches — matched loosely, since the field is typed. */

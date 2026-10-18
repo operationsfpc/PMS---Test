@@ -249,25 +249,17 @@ function LiveDriveRole({
       <div className="min-w-0 flex-1">
         {drive.roleTitle !== null && <p className="text-sm text-ink-500">{drive.roleTitle}</p>}
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-500">
-          <span>
-            <button
-              type="button"
-              onClick={() => onTakeUp(drive)}
-              className="font-semibold text-ink-900 underline-offset-2 hover:underline"
-            >
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-500">
+          <span className="flex items-center gap-1.5">
+            <Button size="sm" variant="ghost" onClick={() => onTakeUp(drive)}>
               {drive.applied} of {drive.eligible} eligible
-            </button>{" "}
+            </Button>
             applied
           </span>
           <span className="font-semibold text-ink-900">{outcome.applicationRate}%</span>
-          <button
-            type="button"
-            onClick={() => onOffers(drive)}
-            className="underline-offset-2 hover:underline"
-          >
+          <Button size="sm" variant="ghost" onClick={() => onOffers(drive)}>
             {drive.offers} offers
-          </button>
+          </Button>
         </div>
 
         <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
@@ -723,27 +715,30 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
    */
   function paneRoles(visit: OpenVisit): readonly VisitPaneRole[] {
     const mixed = new Set(visit.roles.map((role) => role.driveType)).size > 1;
-    return visit.roles.map((role) => ({
-      id: role.driveId,
-      label: role.roleTitle ?? "Role not set",
-      count: rosterOf(role).length,
-      badge: mixed ? (
-        <Badge tone={driveTypeTone(role.driveType)}>{driveTypeLabel(role.driveType)}</Badge>
-      ) : undefined,
-      content: (
-        <>
-          <p className="mb-3">
-            <Link
-              to={`/drives/${role.driveId}`}
-              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
-            >
-              Open the drive record
-            </Link>
-          </p>
-          <DriveRoster students={rosterOf(role)} collegeFilter={rosterCollege} />
-        </>
-      ),
-    }));
+    return visit.roles.map((role) => {
+      const roster = rosterOf(role);
+      return {
+        id: role.driveId,
+        label: role.roleTitle ?? "Role not set",
+        count: { value: roster.length, unit: roster.length === 1 ? "student" : "students" },
+        badge: mixed ? (
+          <Badge tone={driveTypeTone(role.driveType)}>{driveTypeLabel(role.driveType)}</Badge>
+        ) : undefined,
+        content: (
+          <>
+            <p className="mb-3">
+              <Link
+                to={`/drives/${role.driveId}`}
+                className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+              >
+                Open the drive record
+              </Link>
+            </p>
+            <DriveRoster students={roster} collegeFilter={rosterCollege} />
+          </>
+        ),
+      };
+    });
   }
 
   return (
@@ -1133,14 +1128,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                         </p>
 
                         {roles.length > 1 && (
-                          <p className="mt-1 text-sm text-ink-500">
-                            <button
-                              type="button"
+                          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-ink-500">
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => openTakeUp(roles, head.companyName)}
-                              className="font-semibold text-ink-900 underline-offset-2 hover:underline"
                             >
                               {applied.size} of {eligible.size} students
-                            </button>{" "}
+                            </Button>
                             at this visit have applied to at least one role
                           </p>
                         )}
@@ -1343,8 +1338,9 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                             </div>
 
                             {visibleStudents.length > 0 && (
-                              <button
-                                type="button"
+                              <Button
+                                size="sm"
+                                variant="ghost"
                                 onClick={() =>
                                   setOpenVisit({
                                     company: drive.companyName,
@@ -1352,11 +1348,9 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                     activeId: drive.driveId,
                                   })
                                 }
-                                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline cursor-pointer py-1 px-2 rounded-md hover:bg-brand-50 transition-colors"
                               >
-                                <span>View all students</span>
-                                <span>&rarr;</span>
-                              </button>
+                                View all students
+                              </Button>
                             )}
                           </div>
 

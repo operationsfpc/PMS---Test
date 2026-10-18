@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Button, Card, PageHeader } from "@components/ui";
 import { canRecordSelfPlacement } from "@domain/participation";
 import { useAsyncAction } from "@lib/use-async-action";
@@ -15,6 +16,9 @@ import { RequestOutcome, submittedOn } from "./request-outcome";
  */
 export function OffCampusPage({ view }: { view: ParticipationView }) {
   const [status, setStatus] = useState<ParticipationStatusView | null>(null);
+  // The gate below reads this status, so a failed read is not a silent nothing:
+  // assuming "active" would hand a disbarred student a form they cannot file.
+  const [statusProblem, setStatusProblem] = useState<string | null>(null);
   const [company, setCompany] = useState("");
   const [roleTitle, setRoleTitle] = useState("");
   const [ctc, setCtc] = useState("");
@@ -22,7 +26,14 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
   const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
-    setStatus(await view.status());
+    try {
+      setStatus(await view.status());
+      setStatusProblem(null);
+    } catch {
+      // Anything already on screen stays — a failed re-read must not wipe the
+      // offers this page showed a moment ago.
+      setStatusProblem("We could not check your participation status.");
+    }
   }, [view]);
 
   useEffect(() => {
@@ -39,8 +50,16 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
       throw new Error("Enter the company and a valid CTC in LPA.");
     }
 
+    // An unknown status is not an "active" one. The read that answers this is
+    // the same read the panel above reports failing.
+    if (status === null) {
+      throw new Error(
+        "We could not check your participation status, so nothing has been recorded. Try again.",
+      );
+    }
+
     const decision = canRecordSelfPlacement({
-      participationStatus: status?.participationStatus ?? "active",
+      participationStatus: status.participationStatus,
       hasOfferLetter: offerLetter !== null,
     });
     if (!decision.allowed) {
@@ -75,6 +94,14 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
           className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
         >
           {actions.error}
+        </div>
+      )}
+
+      {statusProblem !== null && (
+        <div className="mb-4">
+          <ErrorPanel onRetry={() => void refresh()} retryLabel="Check again">
+            {statusProblem} Until it loads, an offer cannot be recorded.
+          </ErrorPanel>
         </div>
       )}
 

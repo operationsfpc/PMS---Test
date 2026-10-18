@@ -5,8 +5,18 @@ import { describe, expect, it, vi } from "vitest";
 import { VisitPane, type VisitPaneRole } from "./visit-pane";
 
 const ROLES: VisitPaneRole[] = [
-  { id: "d-1", label: "Software Engineer", count: 18, content: <p>Priya Menon</p> },
-  { id: "d-2", label: "QA Analyst", count: 5, content: <p>Rahul Verma</p> },
+  {
+    id: "d-1",
+    label: "Software Engineer",
+    count: { value: 18, unit: "applicants" },
+    content: <p>Priya Menon</p>,
+  },
+  {
+    id: "d-2",
+    label: "QA Analyst",
+    count: { value: 5, unit: "applicants" },
+    content: <p>Rahul Verma</p>,
+  },
 ];
 
 function show(props: {
@@ -37,7 +47,7 @@ describe("the company visit pane", () => {
       within(dialog)
         .getAllByRole("tab")
         .map((tab) => tab.textContent),
-    ).toEqual(["Software Engineer (18)", "QA Analyst (5)"]);
+    ).toEqual(["Software Engineer (18 applicants)", "QA Analyst (5 applicants)"]);
   });
 
   it("opens on the role the reader asked for and mounts only that roster", () => {
@@ -45,7 +55,9 @@ describe("the company visit pane", () => {
     const dialog = screen.getByRole("dialog");
 
     expect(
-      within(dialog).getByRole("tab", { name: "QA Analyst (5)" }).getAttribute("aria-selected"),
+      within(dialog)
+        .getByRole("tab", { name: "QA Analyst (5 applicants)" })
+        .getAttribute("aria-selected"),
     ).toBe("true");
     expect(within(dialog).getByText("Rahul Verma")).toBeDefined();
     expect(within(dialog).queryByText("Priya Menon")).toBeNull();
@@ -55,7 +67,7 @@ describe("the company visit pane", () => {
     show({ roles: ROLES });
     const dialog = screen.getByRole("dialog");
 
-    await userEvent.click(within(dialog).getByRole("tab", { name: "QA Analyst (5)" }));
+    await userEvent.click(within(dialog).getByRole("tab", { name: "QA Analyst (5 applicants)" }));
 
     expect(within(dialog).getByText("Rahul Verma")).toBeDefined();
     expect(within(dialog).queryByText("Priya Menon")).toBeNull();
@@ -86,6 +98,9 @@ describe("the company visit pane", () => {
 
     expect(within(dialog).queryByRole("tablist")).toBeNull();
     expect(within(dialog).getByText("Software Engineer")).toBeDefined();
+    // 2026-10-18: it used to print "18" alone, which is not a fact about
+    // anything. The page says what the number counts; the pane prints it.
+    expect(within(dialog).getByText("18 applicants")).toBeDefined();
     expect(within(dialog).getByText("Priya Menon")).toBeDefined();
   });
 

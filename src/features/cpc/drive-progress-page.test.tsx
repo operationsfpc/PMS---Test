@@ -183,14 +183,16 @@ describe("DriveProgressPage", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Zoho")).toBeDefined();
-    expect(within(dialog).getByRole("tab", { name: "Engineer (3)" })).toBeDefined();
-    expect(within(dialog).getByRole("tab", { name: "Quality Analyst (1)" })).toBeDefined();
+    expect(within(dialog).getByRole("tab", { name: "Engineer (3 applicants)" })).toBeDefined();
+    expect(
+      within(dialog).getByRole("tab", { name: "Quality Analyst (1 applicant)" }),
+    ).toBeDefined();
     expect(within(dialog).getByText("Arjun Menon")).toBeDefined();
     expect(
       within(dialog).getByRole("link", { name: /open the drive record for engineer/i }),
     ).toBeDefined();
 
-    await user.click(within(dialog).getByRole("tab", { name: "Quality Analyst (1)" }));
+    await user.click(within(dialog).getByRole("tab", { name: "Quality Analyst (1 applicant)" }));
 
     expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
     expect(within(dialog).queryByText("Arjun Menon")).toBeNull();

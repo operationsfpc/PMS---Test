@@ -2,6 +2,19 @@ import type { ReactNode } from "react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 
+/**
+ * A number the pane prints, and what it counts.
+ *
+ * 2026-10-18: the tab read "Software Engineer (18)" and the lone heading "18".
+ * Eighteen of what — applicants, shortlists, students in the room? Only the
+ * page knows, so the page says, in the form that reads for its own value:
+ * `unit` is "applicant" for 1 and "applicants" for 18.
+ */
+export interface VisitPaneCount {
+  readonly value: number;
+  readonly unit: string;
+}
+
 /** One role of a company visit, listed as its own tab in the pane. */
 export interface VisitPaneRole {
   /** The tab's key. The drive's own id keeps it stable across renders. */
@@ -9,7 +22,7 @@ export interface VisitPaneRole {
   readonly label: string;
   /** How many the role holds. Read inside the tab, because a count that belongs
    * to the visit would have to be summed across roles — and stages never sum. */
-  readonly count?: number | undefined;
+  readonly count?: VisitPaneCount | undefined;
   /** Only when the visit mixes types, so the tab has to say which one this is. */
   readonly badge?: ReactNode | undefined;
   readonly content: ReactNode;
@@ -95,7 +108,7 @@ export function VisitPane({
         {roles.map((role) => (
           <TabsTrigger key={role.id} value={role.id}>
             {role.label}
-            {role.count === undefined ? null : ` (${role.count})`}
+            {role.count === undefined ? null : ` (${role.count.value} ${role.count.unit})`}
             {role.badge === undefined ? null : <span className="ml-2">{role.badge}</span>}
           </TabsTrigger>
         ))}
@@ -126,7 +139,9 @@ export function VisitPane({
                   <span className="font-heading font-bold text-ink-900">{single.label}</span>
                   {single.badge ?? null}
                   {single.count === undefined ? null : (
-                    <span className="text-ink-500">{single.count}</span>
+                    <span className="text-ink-500">
+                      {single.count.value} {single.count.unit}
+                    </span>
                   )}
                 </p>
                 {single.content}

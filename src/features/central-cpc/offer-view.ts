@@ -1,6 +1,6 @@
 import { OFFER_LETTER_BUCKET } from "@domain/attachments";
 import type { OfferCategory } from "@domain/offer-category";
-import type { AppRole, DriveType } from "@domain/types";
+import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OfferCandidate, OfferDrive, OfferView } from "./offer-page";
 import { createSupabaseOffersRepository } from "./offers-repository";
@@ -27,7 +27,7 @@ export function createSupabaseOfferView(
       const { data } = await client
         .from("drives")
         .select(
-          "id, company_name, role_title, drive_type, offer_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly",
+          "id, company_name, role_title, drive_type, offer_category, status, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly",
         )
         .eq("id", driveId)
         .single();
@@ -40,6 +40,9 @@ export function createSupabaseOfferView(
         roleTitle: (row.role_title as string | null) ?? null,
         driveType: (row.drive_type as DriveType | null) ?? "placement",
         offerCategory: (row.offer_category as OfferCategory | null) ?? null,
+        // The screen refuses to declare against a closed record, and can only
+        // do that with the status itself.
+        status: (row.status as DriveStatus | null) ?? null,
         // A16: pre-fill only. The per-student figure is what R9 reads.
         suggestedCtcLpa:
           (row.ctc_max_lpa as number | null) ?? (row.ctc_min_lpa as number | null) ?? 0,

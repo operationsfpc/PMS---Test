@@ -44,6 +44,36 @@ export function describeRaisedOn(createdAt: string | null): string | null {
 }
 
 /**
+ * "19 Aug 2026" — the day of a visit, in the same calendar as every other date
+ * the placement office reads. Null when the drive has no date.
+ *
+ * 2026-10-18: two "Add Role to this Drive" links printed the stored value
+ * instead, so coordinators were asked to recognise a drive by "2026-11-19" —
+ * a system value, not a date, and the one place in the app where the raw
+ * column ever reached the screen.
+ */
+export function describeVisitDay(day: string | null | undefined): string | null {
+  if (day === null || day === undefined) return null;
+  const date = new Date(day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/**
+ * " (19 Aug 2026)" to append to a control that names a visit, and "" when the
+ * drive has no date — so an undated drive is not labelled "()".
+ */
+export function visitDayInParentheses(day: string | null | undefined): string {
+  const spelled = describeVisitDay(day);
+  return spelled === null ? "" : ` (${spelled})`;
+}
+
+/**
  * Oldest first — the natural order for clearing a backlog. A drive with no
  * recorded date cannot claim to be the oldest, so it sinks to the end.
  */

@@ -397,3 +397,59 @@ describe("the badge row", () => {
     expect(screen.queryByText("Type not set")).toBeNull();
   });
 });
+
+/**
+ * 2026-10-18 (UAT): the header's "+ Add Role to this Drive" was offered on
+ * drives nobody is hiring through any more. A new role attaches to the company
+ * visit, so the visit decides — this role plus its siblings — in the same words
+ * the AE's portfolio and the CPC's screens use.
+ */
+describe("what the visit decides about one more role", () => {
+  const show = async (record: DriveRecord) => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={view(record)} role={AE} driveId="d1" />
+      </MemoryRouter>,
+    );
+    await screen.findByRole("heading", { name: /accenture — jr\. software engineer/i });
+  };
+
+  const sibling = (status: DriveRecord["status"]): DriveRecord["siblingRoles"][number] => ({
+    driveId: "d2",
+    roleTitle: "Data Analyst",
+    driveType: "placement",
+    status,
+    ctcLabel: "₹4–6 LPA",
+    stipendLabel: null,
+  });
+
+  it("refuses the extra role on a closed drive and says why", async () => {
+    await show({ ...RECORD, status: "completed" });
+
+    expect(screen.queryByRole("link", { name: /add role to this drive/i })).toBeNull();
+    expect(screen.getByText(/record is closed/i)).toBeDefined();
+    expect(screen.getByText(/no further roles can be raised/i)).toBeDefined();
+  });
+
+  it("still offers it while a role under the same visit is running", async () => {
+    await show({ ...RECORD, status: "completed", siblingRoles: [sibling("in_rounds")] });
+
+    expect(screen.getByRole("link", { name: /add role to this drive/i })).toBeDefined();
+    expect(screen.queryByText(/no further roles can be raised/i)).toBeNull();
+  });
+
+  it("refuses it when every role of the visit is closed", async () => {
+    await show({ ...RECORD, status: "completed", siblingRoles: [sibling("completed")] });
+
+    expect(screen.queryByRole("link", { name: /add role to this drive/i })).toBeNull();
+    expect(screen.getByText(/no further roles can be raised/i)).toBeDefined();
+  });
+
+  it("offers it on a visit that is merely not published yet", async () => {
+    // §3.5: the roles are assembled BEFORE go live, so "draft" is not a reason
+    // to refuse one more of them.
+    await show({ ...RECORD, status: "draft" });
+
+    expect(screen.getByRole("link", { name: /add role to this drive/i })).toBeDefined();
+  });
+});

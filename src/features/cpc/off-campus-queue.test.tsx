@@ -64,6 +64,7 @@ describe("OffCampusQueue", () => {
   });
 
   it("says so when the offer letter cannot be opened at all", async () => {
+    const user = userEvent.setup();
     render(
       <OffCampusQueue
         view={view({
@@ -76,6 +77,36 @@ describe("OffCampusQueue", () => {
     );
 
     expect(await screen.findByText(/no offer letter/i)).toBeDefined();
+    // 2026-10-18: the sentence and the button used to disagree. Classified as
+    // well as letterless, so this proves the letter is what holds the button.
+    await user.selectOptions(screen.getByLabelText(/offer type/i), "placement");
+    await user.selectOptions(screen.getByLabelText(/category/i), "dream");
+    expect((screen.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  /** Declining is still the coordinator's right answer to a letterless request. */
+  it("still lets a coordinator decline the offer it cannot approve", async () => {
+    const declineSelfPlacement = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <OffCampusQueue
+        view={view({
+          pending: async () => ({
+            optOuts: [],
+            selfPlacements: [placement({ offerLetterUrl: null })],
+          }),
+          declineSelfPlacement,
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /^decline$/i }));
+    await user.type(screen.getByLabelText(/why are you declining/i), "No letter to verify.");
+    await user.click(screen.getByRole("button", { name: /send decline/i }));
+
+    await waitFor(() => expect(declineSelfPlacement).toHaveBeenCalledTimes(1));
   });
 
   /**

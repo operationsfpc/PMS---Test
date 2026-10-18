@@ -73,11 +73,18 @@ export function createSupabaseStudentDashboardView(
         throw new StudentDashboardError("Your session has expired. Please sign in again.");
       }
 
-      const { data: student } = await client
+      const { data: student, error: studentError } = await client
         .from("students")
         .select(DASHBOARD_STUDENT_COLUMNS)
         .eq("auth_user_id", userId)
         .maybeSingle();
+
+      // A refused read is reported as itself. Read past, `student` is null and
+      // the screen would tell a signed-in student "we could not find your
+      // student record" — the wrong sentence for a network failure.
+      if (studentError !== null) {
+        throw new StudentDashboardError("We could not read your details. Please try again.");
+      }
 
       if (student === null || student === undefined) {
         throw new StudentDashboardError(
@@ -87,7 +94,11 @@ export function createSupabaseStudentDashboardView(
 
       const studentId = student.id as string;
 
-      const [{ data: applications }, { data: offers }, openDrives] = await Promise.all([
+      const [
+        { data: applications, error: applicationsError },
+        { data: offers, error: offersError },
+        openDrives,
+      ] = await Promise.all([
         client
           .from("applications")
           .select(DASHBOARD_APPLICATION_COLUMNS)
@@ -97,14 +108,34 @@ export function createSupabaseStudentDashboardView(
         drivesView.openDrives(),
       ]);
 
+      // Neither of these may resolve into an empty list: "you have not applied
+      // to any drive yet" and "no offers yet" are the two sentences a student
+      // least expects to be handed by a read that never worked.
+      if (applicationsError !== null) {
+        throw new StudentDashboardError(
+          "We could not read the drives you have applied to. Please try again.",
+        );
+      }
+      if (offersError !== null) {
+        throw new StudentDashboardError("We could not read your offers. Please try again.");
+      }
+
       const applicationRows = rows(applications);
       const applicationIds = applicationRows.map((a) => a.id as string);
 
       // RLS already limits these to this student, but filtering by their own
       // application ids keeps the query honest if a policy ever widens.
-      const [{ data: participants }, { data: results }, { data: attendance }] =
+      const [
+        { data: participants, error: participantsError },
+        { data: results, error: resultsError },
+        { data: attendance, error: attendanceError },
+      ] =
         applicationIds.length === 0
-          ? [{ data: [] }, { data: [] }, { data: [] }]
+          ? [
+              { data: [], error: null },
+              { data: [], error: null },
+              { data: [], error: null },
+            ]
           : await Promise.all([
               client
                 .from("round_participants")
@@ -119,6 +150,14 @@ export function createSupabaseStudentDashboardView(
                 .select("round_id, application_id, status")
                 .in("application_id", applicationIds),
             ]);
+
+      // One of these three missing is what makes a round read as "not
+      // attended", a result as undecided, and the absence count as 0 of 3.
+      if (participantsError !== null || resultsError !== null || attendanceError !== null) {
+        throw new StudentDashboardError(
+          "We could not read what happened to you in the rounds. Please try again.",
+        );
+      }
 
       const key = (applicationId: string, roundId: string) => `${applicationId}::${roundId}`;
 
@@ -237,7 +276,7 @@ export function createSupabaseStudentDashboardView(
      * read to the student's own rows.
      */
     async notifications() {
-      const [{ data }, { data: offers }] = await Promise.all([
+      const [{ data, error }, { data: offers, error: offersError }] = await Promise.all([
         client
           .from("notifications")
           .select(NOTIFICATION_COLUMNS)
@@ -247,6 +286,18 @@ export function createSupabaseStudentDashboardView(
         // join would make one screen's failure the other's.
         client.from("offers").select(STUDENT_OFFER_COLUMNS),
       ]);
+
+      // Read past, both arrive as empty: the section would simply not render,
+      // and a student whose offer letter was waiting would never learn it
+      // existed. The screen reports which of the two did not arrive.
+      if (error !== null) {
+        throw new StudentDashboardError("We could not load your messages. Please try again.");
+      }
+      if (offersError !== null) {
+        throw new StudentDashboardError(
+          "We could not load your offer letters, so they are not shown with your messages. Please try again.",
+        );
+      }
 
       const offerRows = rows(offers);
       const letterByDrive = offerLettersByDrive(

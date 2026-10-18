@@ -1,6 +1,8 @@
 import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { attendanceLabel } from "@domain/attendance";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
+import { describeDriveFreeze } from "@domain/drive-working";
 import {
   buildMeetingSlotsTemplate,
   MEETING_SLOTS_HEADER,
@@ -12,7 +14,7 @@ import { describeRoundFreeze, type RoundFacts } from "@domain/round-editing";
 import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mode";
 import { describeParticipantOutcome } from "@domain/round-outcome";
 import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
-import type { AttendanceStatus, RoundResult } from "@domain/types";
+import type { AttendanceStatus, DriveStatus, RoundResult } from "@domain/types";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -65,6 +67,15 @@ export interface RoundDetailsUpdate {
  */
 export interface DriveRoundsView extends ResultsView {
   rounds(driveId: string): Promise<readonly DriveRoundInfo[]>;
+  /**
+   * Where the drive itself stands (2026-10-18). Asked of the drive, not
+   * assumed from the link the coordinator arrived on: a completed or rejected
+   * drive must not be offered new rounds, results or links.
+   *
+   * Null means the read did not carry a status this rule knows — which is not
+   * evidence of a closed drive, so the screen keeps its behaviour.
+   */
+  driveStatus(driveId: string): Promise<DriveStatus | null>;
   /**
    * Schedules the current round's `selected` into the next. Returns how many.
    * F3: an optional proof of the company's instruction travels with it.
@@ -125,6 +136,7 @@ export function ResultsPage({
   locked = EMPTY_LOCK,
   offered = EMPTY_LOCK,
   saveSlot,
+  closed = null,
   onRecorded,
 }: {
   roundId: string;
@@ -143,6 +155,12 @@ export function ResultsPage({
   offered?: ReadonlySet<string>;
   /** F5: when given, each row offers the student's own meeting link. */
   saveSlot?: (applicationId: string, meetingLink: string) => Promise<void>;
+  /**
+   * Why the whole round is closed to edits — the drive's own state, said by
+   * the screen that reads it (2026-10-18). Null while the drive still allows
+   * results to be recorded.
+   */
+  closed?: string | null;
   /**
    * UAT 2026-08-21 ("Advance button stuck until F5"): fires after results
    * land, so an embedding screen can re-read the state IT derives from them
@@ -223,7 +241,9 @@ export function ResultsPage({
     });
 
   /** The rows a result can still be recorded FOR: undecided and still open. */
-  const undecided = (participants ?? []).filter((p) => p.result === null && outcomeOf(p).editable);
+  const undecided = (participants ?? []).filter(
+    (p) => closed === null && p.result === null && outcomeOf(p).editable,
+  );
 
   const checkedNames = (participants ?? [])
     .filter((p) => checked.has(p.applicationId))
@@ -273,21 +293,23 @@ export function ResultsPage({
         </Card>
       ) : (
         <>
-          <div className="mb-2 flex flex-wrap items-center gap-4 text-sm">
-            <button
-              type="button"
-              onClick={() => setChecked(new Set(undecided.map((p) => p.applicationId)))}
-              className="font-medium text-brand-600 hover:underline"
-            >
-              Select all undecided
-            </button>
-            <button
-              type="button"
-              onClick={() => setChecked(new Set())}
-              className="font-medium text-brand-600 hover:underline"
-            >
-              Clear
-            </button>
+          <div className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+            {/* Both used to sit here as underlined words, and both stayed on
+                screen when there was nothing for them to do. */}
+            {undecided.length > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setChecked(new Set(undecided.map((p) => p.applicationId)))}
+              >
+                Select all undecided
+              </Button>
+            )}
+            {checked.size > 0 && (
+              <Button size="sm" variant="secondary" onClick={() => setChecked(new Set())}>
+                Clear
+              </Button>
+            )}
             <span className="text-ink-500">
               {checked.size} selected of {undecided.length} undecided
             </span>
@@ -297,6 +319,7 @@ export function ResultsPage({
             <ul className="divide-y divide-neutral-200">
               {participants.map((participant) => {
                 const outcome = outcomeOf(participant);
+                const open = outcome.editable && closed === null;
                 return (
                   <li
                     key={participant.applicationId}
@@ -305,8 +328,9 @@ export function ResultsPage({
                     <div className="flex min-w-0 items-start gap-3">
                       {/* Decided rows keep their checkbox — the old select
                         allowed corrections, and the bulk bar must too. A row
-                        closed by an advance or an offer does not. */}
-                      {outcome.editable && (
+                        closed by an advance or an offer does not, and neither
+                        does any row on a drive whose record is closed. */}
+                      {open && (
                         <input
                           type="checkbox"
                           aria-label={`Select ${participant.studentName}`}
@@ -321,15 +345,25 @@ export function ResultsPage({
                         college={participant.college}
                         studentId={participant.studentId}
                       >
-                        {saveSlot !== undefined && (
-                          <SlotEditor participant={participant} saveSlot={saveSlot} />
-                        )}
+                        {/* The row's own state decides whether a link can still
+                            be set. This checked only that the screen CAN save
+                            one, so a student whose offer was already declared —
+                            or who has advanced — was still offered a meeting to
+                            schedule for the round they left. */}
+                        {saveSlot !== undefined &&
+                          (open ? (
+                            <SlotEditor participant={participant} saveSlot={saveSlot} />
+                          ) : participant.meetingLink != null && participant.meetingLink !== "" ? (
+                            <p className="mt-2 text-xs text-ink-500">
+                              Meeting link set · this row is closed
+                            </p>
+                          ) : null)}
                       </StudentIdentity>
                     </div>
 
                     <div className="flex items-center gap-3">
                       <Badge tone={participant.attendance === "absent" ? "danger" : "neutral"}>
-                        {label(participant.attendance)}
+                        {attendanceLabel(participant.attendance)}
                       </Badge>
 
                       {/* F1's "(advanced)" and 2026-08-26's "Offer declared"
@@ -347,38 +381,42 @@ export function ResultsPage({
             </ul>
           </Card>
 
-          {/* M2: the bottom action bar — the ONE place results are recorded. */}
-          <div className="sticky bottom-2 mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-brand-600 p-3 text-white shadow-lg">
-            <span className="text-sm font-semibold">{checked.size} selected</span>
-            {/* Button takes an explicit `disabled` over `isLoading`, so both say it. */}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={checked.size === 0 || actions.busy}
-              isLoading={actions.isPending("record:selected")}
-              onClick={() => requestRecord("selected")}
-            >
-              Mark Selected
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={checked.size === 0 || actions.busy}
-              isLoading={actions.isPending("record:rejected")}
-              onClick={() => requestRecord("rejected")}
-            >
-              Mark Rejected
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={checked.size === 0 || actions.busy}
-              isLoading={actions.isPending("record:on_hold")}
-              onClick={() => requestRecord("on_hold")}
-            >
-              Mark On hold
-            </Button>
-          </div>
+          {/* M2: the bottom action bar — the ONE place results are recorded.
+              On a closed drive it is not offered at all: three buttons that
+              cannot be filled say less than the sentence above them. */}
+          {closed === null && (
+            <div className="sticky bottom-2 mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-brand-600 p-3 text-white shadow-lg">
+              <span className="text-sm font-semibold">{checked.size} selected</span>
+              {/* Button takes an explicit `disabled` over `isLoading`, so both say it. */}
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={checked.size === 0 || actions.busy}
+                isLoading={actions.isPending("record:selected")}
+                onClick={() => requestRecord("selected")}
+              >
+                Mark Selected
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={checked.size === 0 || actions.busy}
+                isLoading={actions.isPending("record:rejected")}
+                onClick={() => requestRecord("rejected")}
+              >
+                Mark Rejected
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={checked.size === 0 || actions.busy}
+                isLoading={actions.isPending("record:on_hold")}
+                onClick={() => requestRecord("on_hold")}
+              >
+                Mark On hold
+              </Button>
+            </div>
+          )}
         </>
       )}
 
@@ -437,34 +475,52 @@ function SlotEditor({
 }) {
   const [link, setLink] = useState(participant.meetingLink ?? "");
   const [saved, setSaved] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const fieldId = `meeting-link-${participant.applicationId}`;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
+      {/* The field had only an aria-label, so a coordinator scanning the row
+          saw a URL box with nothing saying what it was for. */}
+      <label htmlFor={fieldId} className="text-xs font-medium text-ink-500">
+        Meeting link
+      </label>
       <input
+        id={fieldId}
         type="url"
         aria-label={`Meeting link for ${participant.studentName}`}
         placeholder="https://…"
         value={link}
         onChange={(e) => {
           setSaved(false);
+          setFailed(false);
           setLink(e.target.value);
         }}
         className="w-64 rounded-lg border border-line px-2 py-1 text-xs text-ink-900"
       />
-      <button
-        type="button"
+      <Button
+        size="sm"
+        variant="secondary"
         onClick={() => {
           // Promise.resolve: a test double may return undefined, and a crash
           // in a click handler is a silent one.
-          void Promise.resolve(saveSlot(participant.applicationId, link.trim())).then(() =>
-            setSaved(true),
+          void Promise.resolve(saveSlot(participant.applicationId, link.trim())).then(
+            () => setSaved(true),
+            () => {
+              setSaved(false);
+              setFailed(true);
+            },
           );
         }}
-        className="text-xs font-medium text-brand-600 hover:underline"
       >
         Save link
-      </button>
+      </Button>
       {saved && <span className="text-xs text-success-700">✓ Saved</span>}
+      {failed && (
+        <span role="alert" className="text-xs text-danger-700">
+          Could not save — try again.
+        </span>
+      )}
     </div>
   );
 }
@@ -523,6 +579,8 @@ export function DriveRoundsPage({
   download?: (filename: string, text: string) => void;
 }) {
   const [rounds, setRounds] = useState<readonly DriveRoundInfo[] | null>(null);
+  /** 2026-10-18: the drive's own lifecycle state, which closes this whole screen. */
+  const [status, setStatus] = useState<DriveStatus | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   /** F1: applications sitting in any round after the active one. */
@@ -574,7 +632,11 @@ export function DriveRoundsPage({
   const actions = useAsyncAction();
 
   const loadRounds = useCallback(async () => {
-    const loaded = await view.rounds(driveId);
+    const [loaded, loadedStatus] = await Promise.all([
+      view.rounds(driveId),
+      view.driveStatus(driveId),
+    ]);
+    setStatus(loadedStatus);
     setRounds(loaded);
     setActive((current) => current ?? loaded[0]?.roundId ?? null);
   }, [view, driveId]);
@@ -654,6 +716,15 @@ export function DriveRoundsPage({
    * 0055's trigger enforces the same rule server-side.
    */
   const detailsFrozen = roundDetailsFrozen(participants ?? []);
+
+  /**
+   * 2026-10-18: what the DRIVE allows, as distinct from what this round's own
+   * facts allow. A completed or rejected drive closes the whole screen — new
+   * rounds, results, links and advancement — and says so once, at the top,
+   * rather than leaving a row of greyed buttons to be guessed at.
+   */
+  const closed = describeDriveFreeze("rounds", status);
+  const completionFreeze = describeDriveFreeze("completion", status);
 
   function openDetails() {
     if (activeRound === null) return;
@@ -900,6 +971,15 @@ export function DriveRoundsPage({
         </div>
       )}
 
+      {closed !== null && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg border border-line bg-surface-muted px-4 py-3 text-sm text-ink-700"
+        >
+          <strong>These rounds are closed.</strong> {closed}
+        </p>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {(rounds ?? []).map((round) => (
           <button
@@ -938,13 +1018,11 @@ export function DriveRoundsPage({
             </Button>
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded-lg border border-dashed border-line px-3 py-2 text-sm font-medium text-ink-500 hover:bg-surface-muted"
-          >
-            + Add round
-          </button>
+          closed === null && (
+            <Button variant="secondary" className="border-dashed" onClick={() => setAdding(true)}>
+              + Add round
+            </Button>
+          )
         )}
 
         <span className="ml-auto flex gap-2">
@@ -952,20 +1030,29 @@ export function DriveRoundsPage({
           <Button
             size="sm"
             variant="secondary"
+            disabled={closed !== null}
             isLoading={actions.isPending("rounds:facts")}
             onClick={() => void actions.run(openManage, "rounds:facts")}
           >
             Manage rounds…
           </Button>
-          {/* C3: the drive is done when every applicant has an outcome. */}
+          {/* C3: the drive is done when every applicant has an outcome — and a
+              drive that never ran, or is already finished, has nothing left to
+              complete. */}
           <Button
             size="sm"
             variant="secondary"
+            disabled={completionFreeze !== null}
             isLoading={actions.isPending("completion:facts")}
             onClick={() => void actions.run(openCompletion, "completion:facts")}
           >
             Mark drive completed…
           </Button>
+          {/* Said once: when the whole screen is closed, the banner above
+              already carries the reason and repeating it here is noise. */}
+          {closed === null && completionFreeze !== null && (
+            <span className="text-xs text-ink-500">{completionFreeze}</span>
+          )}
         </span>
       </div>
 
@@ -976,8 +1063,9 @@ export function DriveRoundsPage({
           <Card className="mb-4 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-ink-700">
-                <strong>Round {activeRound.sequence} details:</strong>{" "}
-                {roundModeLabel(activeRound.mode)}
+                {/* The tab above already numbers the round; repeating "Round 3"
+                    here made the card look like it described a different one. */}
+                <strong>This round:</strong> {roundModeLabel(activeRound.mode)}
                 {activeRound.scheduledAt !== null &&
                   ` · ${new Date(activeRound.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}`}
                 {activeRound.venue !== null && ` · at ${activeRound.venue}`}
@@ -990,7 +1078,10 @@ export function DriveRoundsPage({
                   Round details are locked — students have begun participating in this round.
                 </p>
               ) : (
-                !editingDetails && (
+                // The drive being closed is said once, in the banner above the
+                // tabs — this card just stops offering the edit.
+                !editingDetails &&
+                closed === null && (
                   <Button variant="secondary" size="sm" onClick={openDetails}>
                     Edit round details
                   </Button>
@@ -1143,6 +1234,7 @@ export function DriveRoundsPage({
             view={view}
             locked={locked}
             offered={offered}
+            closed={closed}
             onRecorded={loadParticipants}
             saveSlot={(applicationId, meetingLink) =>
               view.setParticipantSlot(
@@ -1155,7 +1247,11 @@ export function DriveRoundsPage({
           />
           <div className="mt-4">
             {nextRound !== null ? (
-              advancing > 0 ? (
+              closed !== null ? (
+                // Nobody can be marked selected on a closed drive either, so
+                // this is not the hint below — it is the banner above.
+                <Button disabled>Advance to Round {nextRound.sequence}</Button>
+              ) : advancing > 0 ? (
                 <Button
                   isLoading={actions.isPending("advance")}
                   // The confirmation closes as soon as it is accepted, so this

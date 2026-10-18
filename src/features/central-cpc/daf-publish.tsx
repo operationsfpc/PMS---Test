@@ -209,17 +209,17 @@ function MultiSelect({
       <div className="mb-1.5 flex items-center justify-between">
         <legend className="text-sm font-medium text-ink-700">{label}</legend>
         {onSelectAll && options.length > 0 && (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            variant="ghost"
             // Three of these sit on one panel, all named "Select all". The
             // section belongs in the name for a screen-reader user, and the
             // filter means the section's own name says what "all" covers.
             aria-label={`${allSelected ? "Clear all" : "Select all"} ${label}`}
-            className="text-xs font-medium text-brand-500 hover:text-brand-700"
             onClick={() => onSelectAll(toggleVisibleSelection(options, selected))}
           >
             {allSelected ? "Clear all" : "Select all"}
-          </button>
+          </Button>
         )}
       </div>
       <div className="flex flex-wrap gap-1.5">

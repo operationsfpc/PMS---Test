@@ -42,6 +42,19 @@ const RESULT_LABEL: Readonly<Record<RoundResult, string>> = {
 };
 
 /**
+ * One result, in the words every screen uses for it.
+ *
+ * A list that shows the result on its own — a roster's round history — needs
+ * the label without the editable/advanced decision that comes with
+ * `describeParticipantOutcome`. Leaving it to print `round.result` raw put
+ * "on_hold" on the screen, and a CSS `capitalize` would have spelled it
+ * "On_Hold".
+ */
+export function roundResultLabel(result: RoundResult): string {
+  return RESULT_LABEL[result];
+}
+
+/**
  * Precedence: offer > advanced > the recorded result.
  *
  * An offer outranks everything because it is the outcome — the same order

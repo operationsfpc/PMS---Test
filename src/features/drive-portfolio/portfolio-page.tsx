@@ -2,6 +2,7 @@ import { DriveDateFilter } from "@components/drive-date-filter";
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
+import { ErrorPanel } from "@components/error-panel";
 import {
   Accordion,
   AccordionContent,
@@ -16,7 +17,13 @@ import {
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { groupByVisitKey, isStandaloneVisit, visitKey } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
-import { type DriveOrder, orderDrives, partitionExpired } from "@domain/drive-aging";
+import {
+  type DriveOrder,
+  describeVisitDay,
+  orderDrives,
+  partitionExpired,
+  visitDayInParentheses,
+} from "@domain/drive-aging";
 import { applicationWindow } from "@domain/drive-analytics";
 import { type DateRangeFilterCriteria, filterDrivesByDateRange } from "@domain/drive-date-filter";
 import {
@@ -35,6 +42,7 @@ import {
   driveTypeTone,
   matchesDriveType,
 } from "@domain/drive-type";
+import { describeDriveFreeze } from "@domain/drive-working";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -55,6 +63,22 @@ interface PortfolioEvent {
     readonly offers: number;
     readonly notSelected: number;
   };
+}
+
+/**
+ * Why this visit cannot take one more role, or null when it can.
+ *
+ * A visit is finished with when EVERY role under it is. Raising a fifth role
+ * onto a Zoho visit whose four roles are all completed puts a job posting on a
+ * drive nobody is hiring through any more, and the AE used to be offered it
+ * anyway — the same rule the offer and shortlist screens read, in the same
+ * words.
+ */
+function visitRoleFreeze(event: PortfolioEvent): string | null {
+  const sentences = event.roles.map((role) => describeDriveFreeze("roles", role.status));
+  return sentences.length > 0 && sentences.every((sentence) => sentence !== null)
+    ? (sentences[0] ?? null)
+    : null;
 }
 
 /** Groups portfolio drives by their parent company event. */
@@ -97,15 +121,7 @@ interface OpenVisit {
 }
 
 /** Pane headers read as a sentence under the company, so the date is spelled once here. */
-const visitDay = (iso: string | null) =>
-  iso === null
-    ? undefined
-    : new Date(iso).toLocaleDateString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
+const visitDay = (iso: string | null) => describeVisitDay(iso) ?? undefined;
 
 export interface PortfolioApplicant {
   readonly applicationId: string;
@@ -223,6 +239,9 @@ export function DrivePortfolioPage({
   const mayViewApplicants = canViewDriveApplicants(role);
   const [drives, setDrives] = useState<readonly PortfolioDrive[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Bumping this re-runs the one read below. The failure card used to only
+  // tell the reader to refresh the whole page; a retry is a smaller ask.
+  const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
   /**
    * The applicant roll is a read of one company visit, so it opens in the
@@ -245,6 +264,7 @@ export function DrivePortfolioPage({
     endDate: null,
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let live = true;
     view
@@ -258,7 +278,7 @@ export function DrivePortfolioPage({
     return () => {
       live = false;
     };
-  }, [view]);
+  }, [view, attempt]);
 
   /**
    * The tab first, then the search. The status group is what the page IS; the
@@ -321,9 +341,14 @@ export function DrivePortfolioPage({
 
   if (failed) {
     return (
-      <p role="alert" className="rounded-card bg-danger-50 p-4 text-sm text-danger-700">
-        We could not load your drives. Refresh the page, or try again shortly.
-      </p>
+      <ErrorPanel
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((a) => a + 1);
+        }}
+      >
+        We could not load your drives.
+      </ErrorPanel>
     );
   }
 
@@ -444,7 +469,7 @@ export function DrivePortfolioPage({
                   </Link>
                 </p>
                 <p className="text-xs text-ink-500">
-                  <span>{applicant.rollNumber}</span> · {applicant.campus}
+                  <span>Roll {applicant.rollNumber}</span> · {applicant.campus}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -466,7 +491,10 @@ export function DrivePortfolioPage({
     return visit.roles.map((role) => ({
       id: role.driveId,
       label: role.roleTitle,
-      count: role.applicants.length,
+      count: {
+        value: role.applicants.length,
+        unit: role.applicants.length === 1 ? "applicant" : "applicants",
+      },
       badge: mixed ? (
         <Badge tone={driveTypeTone(role.driveType)}>{driveTypeLabel(role.driveType)}</Badge>
       ) : undefined,
@@ -571,17 +599,28 @@ export function DrivePortfolioPage({
             ))
           )}
 
-          {/* Add Role Button */}
+          {/* One or the other: an offer to raise a role, or the state that
+              refuses it. Both on screen at once reads as two controls. Said
+              once per visit — the roles listed above each used to repeat the
+              offer, so a single-role visit showed it twice on one card. */}
           {(role === "account_executive" || role === "admin") && (
             <div className="border-t border-line bg-surface-muted p-3">
-              <Link
-                to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${
-                  isStandaloneVisit(event.eventId) ? "" : event.eventId
-                }&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
-                className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
-              >
-                + Add Another Role to This Drive
-              </Link>
+              {(() => {
+                const refused = visitRoleFreeze(event);
+                return refused !== null ? (
+                  <p className="text-xs text-ink-500">{refused} No further roles can be raised.</p>
+                ) : (
+                  <Link
+                    to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${
+                      isStandaloneVisit(event.eventId) ? "" : event.eventId
+                    }&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
+                    className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                  >
+                    + Add Another Role to This Drive
+                    {isMultiRole ? "" : visitDayInParentheses(event.tentativeDate)}
+                  </Link>
+                );
+              })()}
             </div>
           )}
         </Card>
@@ -747,17 +786,6 @@ export function DrivePortfolioPage({
               className="text-xs font-semibold text-brand-600 hover:underline"
             >
               Shortlist applicants
-            </Link>
-          )}
-
-          {!nested && (role === "account_executive" || role === "admin") && (
-            <Link
-              to={`/ae/pif?companyName=${encodeURIComponent(drive.companyName)}&companyDriveId=${
-                drive.companyDriveId ?? ""
-              }&tentativeDate=${encodeURIComponent(drive.tentativeDate ?? "")}`}
-              className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
-            >
-              + Add Role to this Drive {drive.tentativeDate ? `(${drive.tentativeDate})` : ""}
             </Link>
           )}
         </div>

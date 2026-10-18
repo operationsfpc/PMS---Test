@@ -125,22 +125,33 @@ describe("SemesterQueue", () => {
     );
   });
 
-  it("surfaces the repository's refusal (an empty rejection reason)", async () => {
+  /**
+   * 2026-10-18: this refusal used to arrive only after the click, as an alert
+   * above a row that looked ready to decide. Reject is locked while the reason
+   * is blank, so the rule is read rather than discovered by pressing it.
+   */
+  it("locks Reject until the coordinator says what needs correcting", async () => {
+    const decide = vi.fn(async () => undefined);
     const user = userEvent.setup();
-    render(
-      <SemesterQueue
-        repository={repo({
-          decide: async () => {
-            throw new Error("A rejection needs a reason, so the student knows what to correct.");
-          },
-        })}
-      />,
-    );
+    render(<SemesterQueue repository={repo({ decide })} />);
 
     const row = await rowFor("Thanush Krishna");
-    await user.click(row.getByRole("button", { name: /reject/i }));
+    const reject = row.getByRole("button", { name: /reject/i }) as HTMLButtonElement;
+    expect(reject.disabled).toBe(true);
 
-    expect(await screen.findByRole("alert")).toBeDefined();
+    await user.type(row.getByLabelText(/reason/i), "Marksheet says 6.9");
+    expect(reject.disabled).toBe(false);
+
+    await user.click(reject);
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+  });
+
+  /** Verifying a CGPA with no marksheet behind it endorses the student's typing. */
+  it("refuses to verify a semester that has no marksheet", async () => {
+    render(<SemesterQueue repository={repo()} />);
+
+    const row = await rowFor("Priya Ramesh");
+    expect((row.getByRole("button", { name: /verify/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("says the queue is empty when it is, not when it failed", async () => {

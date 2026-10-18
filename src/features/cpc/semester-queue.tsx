@@ -181,9 +181,12 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                     />
                   </div>
 
+                  {/* 2026-10-18: the card said "No marksheet available" and
+                      offered Verify beside it. Verifying a typed CGPA against
+                      nothing is endorsing the student's own typing. */}
                   <Button
                     size="sm"
-                    disabled={busyId === semester.id}
+                    disabled={busyId === semester.id || semester.url === null}
                     onClick={() => void decide(semester, true)}
                   >
                     Verify
@@ -191,7 +194,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                   <Button
                     variant="danger"
                     size="sm"
-                    disabled={busyId === semester.id}
+                    disabled={busyId === semester.id || (reasons[semester.id] ?? "").trim() === ""}
                     onClick={() => void decide(semester, false)}
                   >
                     Reject

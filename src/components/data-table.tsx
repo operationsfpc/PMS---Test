@@ -456,13 +456,9 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                   <div className="flex flex-col items-center justify-center gap-1.5">
                     <p className="font-semibold text-ink-700">{emptyMessage}</p>
                     {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery("")}
-                        className="text-brand-600 underline text-[11px]"
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => setSearchQuery("")}>
                         Reset search filter
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </td>

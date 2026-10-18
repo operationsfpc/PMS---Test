@@ -139,6 +139,10 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
                     <Button
                       size="sm"
                       disabled={
+                        // There is no drive behind an off-campus offer, so the
+                        // letter is the only evidence an approval has to stand
+                        // on. The line above the row already says it is missing.
+                        placement.offerLetterUrl === null ||
                         kinds[placement.id] === undefined ||
                         (kinds[placement.id] === "placement" &&
                           categories[placement.id] === undefined) ||

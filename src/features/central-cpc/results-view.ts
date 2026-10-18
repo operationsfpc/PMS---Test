@@ -3,7 +3,13 @@ import type { SlotAssignment } from "@domain/meeting-slots";
 import type { RoundFacts } from "@domain/round-editing";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import { applicationProgress } from "@domain/student-progress";
-import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
+import {
+  type AppRole,
+  type AttendanceStatus,
+  DRIVE_STATUSES,
+  type DriveStatus,
+  type RoundResult,
+} from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DriveRoundsView, RoundParticipant } from "./results-page";
 import { createSupabaseRoundsRepository } from "./rounds-repository";
@@ -78,6 +84,21 @@ export function createSupabaseResultsView(
         // G6b: 0004's venue column, finally written by the screen it was for.
         venue: (row.venue as string | null) ?? null,
       }));
+    },
+
+    /**
+     * 2026-10-18: the drive's own lifecycle state. Read separately from the
+     * rounds because a round row does not carry it, and the screen must ask
+     * rather than assume — arriving by link is not evidence that a drive is
+     * still open.
+     */
+    async driveStatus(driveId) {
+      const { data } = await client.from("drives").select("status").eq("id", driveId).maybeSingle();
+
+      const status = (data as { status?: unknown } | null)?.status;
+      // An unrecognised value is no status, not a guessed one: the screen
+      // keeps the behaviour it had before this column was consulted.
+      return DRIVE_STATUSES.includes(status as DriveStatus) ? (status as DriveStatus) : null;
     },
 
     /** F4 (UAT 2026-08-19): the round's details, edited after creation. */

@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Card } from "@components/ui";
 import { type EmailHolder, normaliseEmail } from "@domain/email-identity";
 import { supabase } from "@lib/supabase";
@@ -13,23 +14,35 @@ import { type CampusOption, RosterImportPage } from "./roster-import-page";
  */
 export function AdminRosterPage() {
   const [campuses, setCampuses] = useState<readonly CampusOption[] | null>(null);
+  /** The campus read failing — reported apart from "this firm has no campuses". */
+  const [campusesProblem, setCampusesProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [taken, setTaken] = useState<ReadonlyMap<string, EmailHolder>>(new Map());
+  /** Set when the addresses already on record could not be read. */
+  const [guardProblem, setGuardProblem] = useState<string | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let active = true;
     void supabase()
       .from("campuses")
       .select("id, name")
       .order("name")
-      .then(({ data }) => {
-        if (active) {
-          setCampuses((data ?? []).map((c) => ({ id: c.id as string, name: c.name as string })));
+      .then(({ data, error }) => {
+        if (!active) return;
+        // Read past, an outage arrived as `[]` and the page told the
+        // administrator that no campuses had been set up.
+        if (error !== null) {
+          setCampusesProblem("We could not read the campuses. Please try again.");
+          return;
         }
+        setCampusesProblem(null);
+        setCampuses((data ?? []).map((c) => ({ id: c.id as string, name: c.name as string })));
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [attempt]);
 
   /**
    * Every address already spoken for (0040). The database refuses a clash
@@ -39,6 +52,7 @@ export function AdminRosterPage() {
    * Staff invitations are read as well as profiles: somebody invited but not
    * yet signed in holds their address just as firmly.
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let active = true;
     void Promise.all([
@@ -47,6 +61,15 @@ export function AdminRosterPage() {
       supabase().from("staff_invitations").select("email"),
     ]).then(([students, profiles, invitations]) => {
       if (!active) return;
+      // An empty map here is not "every address is free" — it is the preview
+      // check being off, and the administrator is told so before they upload.
+      if (students.error !== null || profiles.error !== null || invitations.error !== null) {
+        setGuardProblem(
+          "We could not read the email addresses already on record, so a clash will not be caught until the import runs.",
+        );
+        return;
+      }
+      setGuardProblem(null);
       const claimed = new Map<string, EmailHolder>();
       for (const row of profiles.data ?? [])
         claimed.set(normaliseEmail(String(row.email)), "staff");
@@ -64,7 +87,17 @@ export function AdminRosterPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [attempt]);
+
+  if (campusesProblem !== null) {
+    return (
+      <div className="p-6">
+        <ErrorPanel onRetry={() => setAttempt((count) => count + 1)} retryLabel="Load them again">
+          {campusesProblem} Until they load, no roster can be imported.
+        </ErrorPanel>
+      </div>
+    );
+  }
 
   if (campuses === null) {
     return (
@@ -87,6 +120,11 @@ export function AdminRosterPage() {
 
   return (
     <>
+      {guardProblem !== null && (
+        <div className="mb-4">
+          <ErrorPanel>{guardProblem}</ErrorPanel>
+        </div>
+      )}
       <RosterImportPage campuses={campuses} taken={taken} />
       <ExistingStudentsList campuses={campuses} />
     </>

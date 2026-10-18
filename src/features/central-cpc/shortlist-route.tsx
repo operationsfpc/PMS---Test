@@ -1,9 +1,10 @@
-import { DrivePicker, type PickerDrive } from "@components/drive-picker";
+import { DrivePicker } from "@components/drive-picker";
+import { ErrorPanel } from "@components/error-panel";
 import { Card } from "@components/ui";
 import { useAuth } from "@lib/auth-context";
-import { fetchPickerDrives } from "@lib/drive-picker-data";
 import { supabase } from "@lib/supabase";
-import { useEffect, useState } from "react";
+import { usePickerDrives } from "@lib/use-picker-drives";
+import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { ShortlistPage } from "./shortlist-page";
 import { createSupabaseShortlistView } from "./shortlist-view";
@@ -27,14 +28,16 @@ export function ShortlistRoute() {
 
   // M1 (2026-08-21): this page dead-ended at "Choose a drive…" with no
   // list at all — reported as "the shortlisting page is empty".
-  const [drives, setDrives] = useState<readonly PickerDrive[] | null>(null);
-
-  useEffect(() => {
-    if (driveId !== null) return;
-    void fetchPickerDrives(supabase()).then(setDrives);
-  }, [driveId]);
+  const { drives, failed, retry } = usePickerDrives(driveId === null);
 
   if (driveId === null) {
+    if (failed) {
+      return (
+        <ErrorPanel onRetry={() => void retry()}>
+          We could not load the drives to choose from.
+        </ErrorPanel>
+      );
+    }
     if (drives === null) {
       return (
         <Card className="p-6">

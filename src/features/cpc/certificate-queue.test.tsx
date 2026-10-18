@@ -145,20 +145,35 @@ describe("CertificateQueue", () => {
     expect(status.textContent).toMatch(/is verified/i);
   });
 
-  it("reports the domain's refusal when a rejection has no reason", async () => {
-    const decide = vi.fn(async () => {
-      throw new Error("A rejection needs a reason, so the student knows what to correct.");
-    });
+  /**
+   * 2026-10-18: this refusal used to arrive only after the click, as an alert
+   * above a row that looked ready to decide. Reject is locked while the reason
+   * is blank — the label above the field already says what is required.
+   */
+  it("locks Reject until a reason is written", async () => {
+    const decide = vi.fn(async () => undefined);
     const user = userEvent.setup();
     render(<CertificateQueue repository={repo({ decide })} />);
 
     const row = await rowFor("AWS Cloud Practitioner");
-    await user.click(within(row).getByRole("button", { name: /reject/i }));
+    const reject = within(row).getByRole("button", { name: /reject/i }) as HTMLButtonElement;
+    expect(reject.disabled).toBe(true);
 
-    expect(await screen.findByRole("alert")).toHaveProperty(
-      "textContent",
-      expect.stringContaining("needs a reason"),
-    );
+    await user.type(within(row).getByLabelText(/reason/i), "The document is a screenshot");
+    expect(reject.disabled).toBe(false);
+
+    await user.click(reject);
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+  });
+
+  /** Verify beside "no document" was a signature on the student's own typing. */
+  it("refuses to verify a certificate with no document behind it", async () => {
+    render(<CertificateQueue repository={repo()} />);
+
+    const row = await rowFor("Azure Fundamentals");
+    expect(
+      (within(row).getByRole("button", { name: /verify/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 
   it("says the queue is empty when nothing is waiting", async () => {

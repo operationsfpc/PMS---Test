@@ -1,8 +1,10 @@
+import { ErrorPanel } from "@components/error-panel";
 import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { describeDriveFreeze } from "@domain/drive-working";
 import type { OfferCategory } from "@domain/offer-category";
 import { offerCountsAsPackage, offerPayProblem } from "@domain/offer-pay";
-import type { DriveType } from "@domain/types";
+import type { DriveStatus, DriveType } from "@domain/types";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import type { DeclaredOffer } from "./offers-repository";
@@ -21,6 +23,11 @@ export interface OfferDrive {
    * is what recorded ₹10 LPA against ₹15,000 a month.
    */
   readonly suggestedStipendMonthly?: number | null;
+  /**
+   * The drive's own status. Without it this screen declared an offer against a
+   * completed or rejected drive, because it only ever looked at the row.
+   */
+  readonly status?: DriveStatus | null;
 }
 
 export interface OfferCandidate {
@@ -60,6 +67,11 @@ export interface OfferView {
 export function OfferPage({ driveId, view }: { driveId: string; view: OfferView }) {
   const [drive, setDrive] = useState<OfferDrive | null>(null);
   const [candidates, setCandidates] = useState<readonly OfferCandidate[] | null>(null);
+  // These two reads used to be a bare `void refresh()` in an effect: when the
+  // network refused, the screen sat on "Loading candidates…" forever and said
+  // nothing.
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [pay, setPay] = useState<Record<string, string>>({});
   const [letters, setLetters] = useState<Record<string, File | null>>({});
   // Keyed per student: declaring Nithya must not spin Arjun's button, and a
@@ -87,9 +99,18 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
     });
   }, [view, driveId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let live = true;
+    // A drive that never arrived is not a drive with nobody in it: this used to
+    // sit on "Loading candidates…" for ever with the request already rejected.
+    refresh().catch(() => {
+      if (live) setFailed(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [refresh, attempt]);
 
   // Thrown, not returned: `useAsyncAction` turns any rejection into the copy in
   // the alert, so a missing figure and a database refusal arrive the same way
@@ -126,6 +147,10 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
     await refresh();
   }
 
+  // An offer cannot be declared against a drive whose record is closed. This is
+  // the same rule the shortlisting and rounds screens read, in the same words.
+  const closed = describeDriveFreeze("offers", drive?.status ?? null);
+
   return (
     <div>
       <PageHeader
@@ -142,7 +167,29 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
         </div>
       )}
 
-      {candidates === null ? (
+      {/* The state, not the person, refused — so the reason is on the screen and
+          not merely a greyed button the coordinator has to guess at. */}
+      {closed !== null && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg border border-line bg-surface-muted px-4 py-3 text-sm text-ink-700"
+        >
+          <strong>Declaring is closed.</strong> {closed}
+        </p>
+      )}
+
+      {failed ? (
+        <ErrorPanel
+          onRetry={() => {
+            setFailed(false);
+            setAttempt((count) => count + 1);
+          }}
+          retryLabel="Load this drive again"
+        >
+          We could not load this drive or the students who reached its final round, so nothing here
+          can be declared.
+        </ErrorPanel>
+      ) : candidates === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading candidates…
         </p>
@@ -247,6 +294,7 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                       />
                     </div>
                     <Button
+                      disabled={closed !== null}
                       isLoading={actions.isPending(candidate.studentId)}
                       onClick={() =>
                         void actions.run(() => declare(candidate), candidate.studentId)

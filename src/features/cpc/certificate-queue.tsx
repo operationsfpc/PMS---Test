@@ -1,5 +1,6 @@
 import { StudentIdentity } from "@components/student-identity";
 import { Button, Card, PageHeader } from "@components/ui";
+import { evidenceProblem } from "@domain/verification";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -120,82 +121,89 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
         </Card>
       ) : (
         <ul className="flex flex-col gap-3">
-          {rows.map((certificate) => (
-            <li key={certificate.id}>
-              <Card className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="font-[Raleway] text-base font-bold text-ink-900">
-                      {certificate.name}
-                    </p>
-                    {certificate.fileName !== null && (
-                      <p className="text-xs text-ink-500 font-mono">({certificate.fileName})</p>
+          {rows.map((certificate) => {
+            // 2026-10-18: this row said "No document uploaded" and offered
+            // Verify beside the sentence, so a click endorsed the student's own
+            // typing. The state that says so now also refuses the button.
+            const noDocument = evidenceProblem(certificate.url !== null);
+            const reason = reasons[certificate.id] ?? "";
+            return (
+              <li key={certificate.id}>
+                <Card className="p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-[Raleway] text-base font-bold text-ink-900">
+                        {certificate.name}
+                      </p>
+                      {certificate.fileName !== null && (
+                        <p className="text-xs text-ink-500 font-mono">({certificate.fileName})</p>
+                      )}
+                      <div className="mt-1">
+                        <StudentIdentity
+                          name={certificate.studentName}
+                          rollNumber={certificate.rollNumber}
+                          college={certificate.college}
+                          studentId={certificate.studentId}
+                        />
+                      </div>
+                    </div>
+
+                    {certificate.url === null ? (
+                      // Never a dead link: a coordinator must not believe they
+                      // have checked something they could not open.
+                      <p className="text-sm text-[#DD4820]">{noDocument}</p>
+                    ) : (
+                      <a
+                        className="text-sm font-medium text-brand-600 underline"
+                        href={certificate.url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open certificate
+                      </a>
                     )}
-                    <div className="mt-1">
-                      <StudentIdentity
-                        name={certificate.studentName}
-                        rollNumber={certificate.rollNumber}
-                        college={certificate.college}
-                        studentId={certificate.studentId}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-end gap-3">
+                    <div className="min-w-0 flex-1">
+                      <label
+                        htmlFor={`reason-${certificate.id}`}
+                        className="mb-1 block text-sm font-medium text-ink-900"
+                      >
+                        Reason (required to reject)
+                      </label>
+                      <input
+                        id={`reason-${certificate.id}`}
+                        type="text"
+                        className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                        placeholder="What the student needs to correct"
+                        value={reason}
+                        onChange={(e) =>
+                          setReasons((r) => ({ ...r, [certificate.id]: e.target.value }))
+                        }
                       />
                     </div>
-                  </div>
 
-                  {certificate.url === null ? (
-                    // Never a dead link: a coordinator must not believe they
-                    // have checked something they could not open.
-                    <p className="text-sm text-[#DD4820]">No document uploaded</p>
-                  ) : (
-                    <a
-                      className="text-sm font-medium text-brand-600 underline"
-                      href={certificate.url}
-                      target="_blank"
-                      rel="noreferrer"
+                    <Button
+                      size="sm"
+                      disabled={busyId === certificate.id || noDocument !== null}
+                      onClick={() => void decide(certificate, true)}
                     >
-                      Open certificate
-                    </a>
-                  )}
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-end gap-3">
-                  <div className="min-w-0 flex-1">
-                    <label
-                      htmlFor={`reason-${certificate.id}`}
-                      className="mb-1 block text-sm font-medium text-ink-900"
+                      Verify
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={busyId === certificate.id || reason.trim() === ""}
+                      onClick={() => void decide(certificate, false)}
                     >
-                      Reason (required to reject)
-                    </label>
-                    <input
-                      id={`reason-${certificate.id}`}
-                      type="text"
-                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
-                      placeholder="What the student needs to correct"
-                      value={reasons[certificate.id] ?? ""}
-                      onChange={(e) =>
-                        setReasons((r) => ({ ...r, [certificate.id]: e.target.value }))
-                      }
-                    />
+                      Reject
+                    </Button>
                   </div>
-
-                  <Button
-                    size="sm"
-                    disabled={busyId === certificate.id}
-                    onClick={() => void decide(certificate, true)}
-                  >
-                    Verify
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    disabled={busyId === certificate.id}
-                    onClick={() => void decide(certificate, false)}
-                  >
-                    Reject
-                  </Button>
-                </div>
-              </Card>
-            </li>
-          ))}
+                </Card>
+              </li>
+            );
+          })}
         </ul>
       )}
     </>

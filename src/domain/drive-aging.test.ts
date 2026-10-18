@@ -5,11 +5,13 @@ import {
   type DriveOrder,
   daysPending,
   describeRaisedOn,
+  describeVisitDay,
   isExpiredDrive,
   isPendingTooLong,
   orderDrives,
   PENDING_FLAG_DAYS,
   partitionExpired,
+  visitDayInParentheses,
 } from "./drive-aging";
 
 /**
@@ -206,5 +208,30 @@ describe("orderDrives", () => {
     const original = [...drives];
     orderDrives(drives, "newest");
     expect(drives).toEqual(original);
+  });
+});
+
+describe("describeVisitDay", () => {
+  it("spells the stored ISO date the way a coordinator reads it", () => {
+    expect(describeVisitDay("2026-11-19")).toBe("19 Nov 2026");
+  });
+
+  it("says nothing when the drive has no date, rather than an empty bracket", () => {
+    expect(describeVisitDay(null)).toBeNull();
+    expect(describeVisitDay(undefined)).toBeNull();
+    expect(describeVisitDay("not a date")).toBeNull();
+  });
+});
+
+describe("visitDayInParentheses", () => {
+  it("appends the visit's day to a control that names it", () => {
+    expect(`Add Role to this Drive${visitDayInParentheses("2026-11-19")}`).toBe(
+      "Add Role to this Drive (19 Nov 2026)",
+    );
+  });
+
+  it("leaves an undated drive's label clean", () => {
+    expect(visitDayInParentheses(null)).toBe("");
+    expect(visitDayInParentheses(undefined)).toBe("");
   });
 });

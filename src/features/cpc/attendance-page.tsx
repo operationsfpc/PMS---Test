@@ -169,7 +169,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                     />
                     <label htmlFor={`att-${student.applicationId}`} className="text-sm">
                       <span className="font-medium">{student.studentName}</span>{" "}
-                      <span className="text-ink-500">{student.rollNumber}</span>
+                      <span className="text-ink-500">Roll {student.rollNumber}</span>
                       {student.college != null && student.college !== "" && (
                         <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
                           {student.college}

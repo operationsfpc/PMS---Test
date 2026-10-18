@@ -162,13 +162,14 @@ export function RosterImportPage({
              * a column added later cannot leave the template handing out a
              * header that looks official and no longer works.
              */}
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mt-2"
               onClick={() => download("add-students-template.csv", `${ROSTER_COLUMNS.join(",")}\n`)}
-              className="mt-2 text-xs font-semibold text-brand-600 hover:underline"
             >
               Download sample CSV
-            </button>
+            </Button>
             <p className="mt-1 text-xs text-ink-500">
               Headings only — fill in one student per row underneath.
             </p>

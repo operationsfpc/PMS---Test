@@ -346,21 +346,12 @@ export function EditStaffModal({
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={selectAllCampuses}
-                      className="text-xs font-semibold text-brand-600 hover:text-brand-800 hover:underline cursor-pointer"
-                    >
+                    <Button size="sm" variant="ghost" onClick={selectAllCampuses}>
                       Select all (All Organisations)
-                    </button>
-                    <span className="text-xs text-ink-300">|</span>
-                    <button
-                      type="button"
-                      onClick={clearAllCampuses}
-                      className="text-xs font-semibold text-ink-500 hover:text-ink-700 hover:underline cursor-pointer"
-                    >
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={clearAllCampuses}>
                       Clear
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { campusScopeFor, requiresCampusAssignment, validateCampusSelection } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
@@ -36,6 +37,9 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
   const [campusIds, setCampusIds] = useState<readonly string[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The staff list or its campus options failing — never the same complaint as a write. */
+  const [readProblem, setReadProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [confirmingMember, setConfirmingMember] = useState<StaffMember | null>(null);
   const [editingMember, setEditingMember] = useState<StaffMember | null>(null);
@@ -49,13 +53,27 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
   const [statusFilter, setStatusFilter] = useState<string>("");
 
   const refresh = useCallback(async () => {
-    setStaff(await repository.list());
+    try {
+      setStaff(await repository.list());
+      setReadProblem(null);
+    } catch (cause) {
+      // An empty table and a refused read are different answers, and `void
+      // refresh()` used to swallow the difference into an unhandled rejection.
+      // It is kept apart from `error`, which is about a write: every action here
+      // re-reads the list afterwards, and a successful re-read must not wipe the
+      // reason the action was refused.
+      setReadProblem(cause instanceof Error ? cause.message : "Could not load the staff list.");
+    }
   }, [repository]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void refresh();
-    void repository.campuses().then(setCampuses);
-  }, [refresh, repository]);
+    repository
+      .campuses()
+      .then(setCampuses)
+      .catch(() => setReadProblem("Could not load the campuses staff can be assigned to."));
+  }, [refresh, repository, attempt]);
 
   const needsCampus = requiresCampusAssignment(role);
 
@@ -189,6 +207,20 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
         title="Staff"
         subtitle="An invitation is a login. Only invited addresses can sign in."
       />
+
+      {readProblem !== null && (
+        <div className="mb-4">
+          <ErrorPanel
+            onRetry={() => {
+              setReadProblem(null);
+              setAttempt((count) => count + 1);
+            }}
+            retryLabel="Load the staff list again"
+          >
+            {readProblem} Until it loads, the list below cannot be trusted to be complete.
+          </ErrorPanel>
+        </div>
+      )}
 
       {error !== null && (
         <div
@@ -536,14 +568,13 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                                   No campuses assigned
                                 </span>
                               )}
-                              <button
-                                type="button"
+                              <Button
+                                size="sm"
+                                variant="ghost"
                                 onClick={() => setEditingMember(member)}
-                                className="text-xs text-brand-600 hover:text-brand-800 font-semibold hover:underline inline-flex items-center gap-1 cursor-pointer"
                               >
-                                <span>Manage campuses ({member.campuses.length})</span>
-                                <span aria-hidden="true">→</span>
-                              </button>
+                                Manage campuses ({member.campuses.length})
+                              </Button>
                             </div>
                           )}
                           {campusScopeFor(member.role) === "none" && (
@@ -623,7 +654,6 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                                 isLoading={resendingEmail === member.email}
                                 disabled={busy === member.email || resendingEmail === member.email}
                                 onClick={() => void handleResendInvite(member.email)}
-                                className="text-brand-600 hover:text-brand-800"
                               >
                                 Resend invite
                               </Button>

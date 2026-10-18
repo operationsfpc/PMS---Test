@@ -65,8 +65,9 @@ describe("AttendancePage", () => {
     show();
 
     const college = await screen.findByText("PSG College of Technology");
-    // Beside the roll number, on the row the coordinator ticks.
-    expect(screen.getByText("TEC001").parentElement).toBe(college.parentElement);
+    // Beside the roll number — which says what it is, so a "1" under a name is
+    // never left to be guessed at — on the row the coordinator ticks.
+    expect(screen.getByText("Roll TEC001").parentElement).toBe(college.parentElement);
     // Bala's record carries no college, so his row shows no chip rather than
     // an empty one.
     expect(screen.getAllByText(/College of Technology|Institute of Technology/)).toHaveLength(1);

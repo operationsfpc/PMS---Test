@@ -394,25 +394,28 @@ function VisitCard({
       <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
     );
 
-  const paneRoles: readonly VisitPaneRole[] = roles.map((drive) => ({
-    id: drive.driveId,
-    label: drive.roleTitle ?? "Role not set",
-    count: countStage(drive.students).applicants,
-    badge: typeBadge(drive),
-    content: (
-      <>
-        <p className="mb-3">
-          <Link
-            to={`/drives/${drive.driveId}`}
-            className="text-xs font-semibold text-brand-700 underline underline-offset-2"
-          >
-            Open the drive record for {drive.roleTitle ?? "this role"}
-          </Link>
-        </p>
-        {body(drive)}
-      </>
-    ),
-  }));
+  const paneRoles: readonly VisitPaneRole[] = roles.map((drive) => {
+    const applicants = countStage(drive.students).applicants;
+    return {
+      id: drive.driveId,
+      label: drive.roleTitle ?? "Role not set",
+      count: { value: applicants, unit: applicants === 1 ? "applicant" : "applicants" },
+      badge: typeBadge(drive),
+      content: (
+        <>
+          <p className="mb-3">
+            <Link
+              to={`/drives/${drive.driveId}`}
+              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+            >
+              Open the drive record for {drive.roleTitle ?? "this role"}
+            </Link>
+          </p>
+          {body(drive)}
+        </>
+      ),
+    };
+  });
 
   return (
     <Card className="mb-6 overflow-hidden">

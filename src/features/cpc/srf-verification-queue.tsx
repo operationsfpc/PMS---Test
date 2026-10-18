@@ -1,6 +1,7 @@
 import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
 import { describeBoard } from "@domain/boards";
 import { decideSrf } from "@domain/srf-decision";
+import { describeUncheckedClaims, type EvidenceClaim } from "@domain/verification";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -31,6 +32,32 @@ function formatScoreWithGrade(
   if (hasPct) return `${percentage}%`;
   if (hasGrade) return `Grade: ${grade.trim()}`;
   return "—";
+}
+
+/**
+ * Everything this form claims, each beside whether its document came with it.
+ *
+ * Resumes are absent on purpose: nobody verifies a resume, so a missing one is
+ * the student's to fix but not a reason to refuse the form. Semesters and
+ * pending certificates are not absent on purpose — approving writes verified
+ * onto both (0031, 0039), so without their files the coordinator would be
+ * signing the student's own typing.
+ */
+function claimsOf(student: PendingSrf): readonly EvidenceClaim[] {
+  return [
+    // The school figures belong to no semester, so they are the one column.
+    { label: "10th and 12th marksheets", hasDocument: student.documents.length > 0 },
+    ...student.semesters.map((semester) => ({
+      label: `Semester ${semester.semesterNumber} marksheet`,
+      hasDocument: semester.marksheetUrl !== null,
+    })),
+    ...student.certificates
+      .filter((certificate) => certificate.status === "pending")
+      .map((certificate) => ({
+        label: certificate.name,
+        hasDocument: certificate.url !== null,
+      })),
+  ];
 }
 
 export function SrfVerificationQueue({ repository }: { repository?: VerificationRepository }) {
@@ -186,300 +213,322 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                 "Decision",
               ]}
             >
-              {rows.map((student) => (
-                <tr
-                  key={student.id}
-                  className="border-t border-line hover:bg-surface-muted/30 transition-colors"
-                >
-                  <td className="align-top px-3 py-3 text-sm min-w-[160px]">
-                    <div className="font-semibold text-ink-900">
-                      <Link to={`/students/${student.id}`} className="hover:underline">
-                        {student.fullName}
-                      </Link>
-                    </div>
-                    {/* The roll has its own column, so the college is what this
+              {rows.map((student) => {
+                // 2026-10-18: this row already names every file it cannot open,
+                // and Approve sat beside that list anyway. The same sentence now
+                // also refuses the button, so the two cannot disagree.
+                const unchecked = describeUncheckedClaims(claimsOf(student));
+                return (
+                  <tr
+                    key={student.id}
+                    className="border-t border-line hover:bg-surface-muted/30 transition-colors"
+                  >
+                    <td className="align-top px-3 py-3 text-sm min-w-[160px]">
+                      <div className="font-semibold text-ink-900">
+                        <Link to={`/students/${student.id}`} className="hover:underline">
+                          {student.fullName}
+                        </Link>
+                      </div>
+                      {/* The roll has its own column, so the college is what this
                         cell adds — which campus's form the coordinator is on. */}
-                    {student.college != null && student.college !== "" && (
-                      <span className="mt-1 inline-block rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
-                        {student.college}
-                      </span>
-                    )}
-                    {/* A resubmission is not a fresh form. Repeating what was
+                      {student.college != null && student.college !== "" && (
+                        <span className="mt-1 inline-block rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                          {student.college}
+                        </span>
+                      )}
+                      {/* A resubmission is not a fresh form. Repeating what was
                         asked for is what stops the same defect being missed
                         twice - and the student has already been told it. */}
-                    {student.previousRejectionReason !== null &&
-                      student.previousRejectionReason.trim() !== "" && (
-                        <div className="mt-1.5 rounded bg-[#FFF0EC] border border-[#DD4820]/30 p-1.5 text-xs">
-                          <Badge tone="warning">Resubmitted</Badge>
-                          <span className="mt-1 block text-xs font-normal text-ink-700">
-                            You sent this back: “{student.previousRejectionReason}”
-                          </span>
+                      {student.previousRejectionReason !== null &&
+                        student.previousRejectionReason.trim() !== "" && (
+                          <div className="mt-1.5 rounded bg-[#FFF0EC] border border-[#DD4820]/30 p-1.5 text-xs">
+                            <Badge tone="warning">Resubmitted</Badge>
+                            <span className="mt-1 block text-xs font-normal text-ink-700">
+                              You sent this back: “{student.previousRejectionReason}”
+                            </span>
+                          </div>
+                        )}
+                    </td>
+                    <td className="align-top px-3 py-3 text-sm font-mono text-ink-700 whitespace-nowrap">
+                      {student.rollNumber}
+                    </td>
+                    {/* Every CGPA carries the scale it is on: 7.5 out of 10 is a
+                      claim a marksheet can contradict, 7.5% is not. */}
+                    <td className="align-top px-3 py-3 text-sm whitespace-nowrap font-medium text-ink-900">
+                      {student.overallCgpa === null ? "—" : `${student.overallCgpa}/10`}
+                    </td>
+                    {/* The figure and the board that issued it, together: they are
+                      checked against the one document. */}
+                    <td className="align-top px-3 py-3 text-sm whitespace-nowrap">
+                      <span className="font-medium text-ink-900">
+                        {formatScoreWithGrade(student.tenthPercentage, student.tenthGrade)}
+                      </span>
+                      <span className="block text-xs text-ink-500">
+                        {describeBoard(student.tenthBoard, "tenth")}
+                      </span>
+                    </td>
+                    <td className="align-top px-3 py-3 text-sm whitespace-nowrap">
+                      <span className="font-medium text-ink-900">
+                        {formatScoreWithGrade(student.twelfthPercentage, student.twelfthGrade)}
+                      </span>
+                      <span className="block text-xs text-ink-500">
+                        {describeBoard(student.twelfthBoard, "twelfth")}
+                      </span>
+                    </td>
+                    <td className="align-top px-3 py-3 text-sm text-center whitespace-nowrap">
+                      {student.currentArrears > 0 ? (
+                        <Badge tone="danger">{student.currentArrears}</Badge>
+                      ) : (
+                        <span className="text-ink-500">0</span>
+                      )}
+                    </td>
+                    <td className="align-top px-3 py-3 text-sm text-center whitespace-nowrap">
+                      {student.historyOfArrears > 0 ? (
+                        <Badge tone="warning">{student.historyOfArrears}</Badge>
+                      ) : (
+                        <span className="text-ink-500">0</span>
+                      )}
+                    </td>
+                    <td className="align-top px-3 py-3 text-sm min-w-[140px]">
+                      {student.documents.length === 0 ? (
+                        <span className="text-xs text-[#DD4820] font-medium">None uploaded</span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {student.documents.map((doc) => (
+                            <a
+                              key={doc.url}
+                              href={doc.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline hover:text-ink-900"
+                            >
+                              📄 {doc.label}
+                            </a>
+                          ))}
                         </div>
                       )}
-                  </td>
-                  <td className="align-top px-3 py-3 text-sm font-mono text-ink-700 whitespace-nowrap">
-                    {student.rollNumber}
-                  </td>
-                  <td className="align-top px-3 py-3 text-sm whitespace-nowrap font-medium text-ink-900">
-                    {student.overallCgpa ?? "—"}
-                  </td>
-                  {/* The figure and the board that issued it, together: they are
-                      checked against the one document. */}
-                  <td className="align-top px-3 py-3 text-sm whitespace-nowrap">
-                    <span className="font-medium text-ink-900">
-                      {formatScoreWithGrade(student.tenthPercentage, student.tenthGrade)}
-                    </span>
-                    <span className="block text-xs text-ink-500">
-                      {describeBoard(student.tenthBoard, "tenth")}
-                    </span>
-                  </td>
-                  <td className="align-top px-3 py-3 text-sm whitespace-nowrap">
-                    <span className="font-medium text-ink-900">
-                      {formatScoreWithGrade(student.twelfthPercentage, student.twelfthGrade)}
-                    </span>
-                    <span className="block text-xs text-ink-500">
-                      {describeBoard(student.twelfthBoard, "twelfth")}
-                    </span>
-                  </td>
-                  <td className="align-top px-3 py-3 text-sm text-center whitespace-nowrap">
-                    {student.currentArrears > 0 ? (
-                      <Badge tone="danger">{student.currentArrears}</Badge>
-                    ) : (
-                      <span className="text-ink-500">0</span>
-                    )}
-                  </td>
-                  <td className="align-top px-3 py-3 text-sm text-center whitespace-nowrap">
-                    {student.historyOfArrears > 0 ? (
-                      <Badge tone="warning">{student.historyOfArrears}</Badge>
-                    ) : (
-                      <span className="text-ink-500">0</span>
-                    )}
-                  </td>
-                  <td className="align-top px-3 py-3 text-sm min-w-[140px]">
-                    {student.documents.length === 0 ? (
-                      <span className="text-xs text-[#DD4820] font-medium">None uploaded</span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {student.documents.map((doc) => (
-                          <a
-                            key={doc.url}
-                            href={doc.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline hover:text-ink-900"
-                          >
-                            📄 {doc.label}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  {/* The reason this screen exists: every declared figure
+                    </td>
+                    {/* The reason this screen exists: every declared figure
                       beside the document that proves it. */}
-                  <td className="align-top px-3 py-3 text-sm min-w-[180px]">
-                    {student.semesters.length === 0 ? (
-                      <span className="text-xs text-[#DD4820] font-medium">
-                        No semesters declared
-                      </span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {student.semesters.map((semester) => (
-                          <div
-                            key={semester.semesterNumber}
-                            className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium text-ink-700">
-                                Semester {semester.semesterNumber}
-                              </span>
-                              <strong className="font-semibold text-ink-900">
-                                {semester.cgpa}
-                              </strong>
-                            </div>
-                            <div className="mt-1 flex items-center justify-between text-[11px] text-ink-500">
-                              <span>
-                                {semester.currentArrears} standing, {semester.historyOfArrears} in
-                                history
-                              </span>
-                              {semester.marksheetUrl === null ? (
-                                <span className="text-[#DD4820]">No marksheet</span>
-                              ) : (
-                                <a
-                                  href={semester.marksheetUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  aria-label={`Semester ${semester.semesterNumber} marksheet for ${student.fullName}`}
-                                  className="text-[#3D3777] font-medium underline"
-                                >
-                                  Marksheet
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  {/* Certificates column */}
-                  <td className="align-top px-3 py-3 text-sm min-w-[160px]">
-                    {student.certificates.length === 0 ? (
-                      <span className="text-xs text-ink-500">No certificates uploaded</span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {student.certificates.map((certificate) => (
-                          <div
-                            key={certificate.id}
-                            className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
-                          >
-                            <div className="font-medium text-ink-900">{certificate.name}</div>
-                            {certificate.fileName !== null && (
-                              <div className="text-[11px] text-ink-500 truncate max-w-[150px]">
-                                {certificate.fileName}
+                    <td className="align-top px-3 py-3 text-sm min-w-[180px]">
+                      {student.semesters.length === 0 ? (
+                        <span className="text-xs text-[#DD4820] font-medium">
+                          No semesters declared
+                        </span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {student.semesters.map((semester) => (
+                            <div
+                              key={semester.semesterNumber}
+                              className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium text-ink-700">
+                                  Semester {semester.semesterNumber}
+                                </span>
+                                <strong className="font-semibold text-ink-900">
+                                  {semester.cgpa}/10
+                                </strong>
                               </div>
-                            )}
-                            <div className="mt-1 flex items-center justify-between">
-                              {certificate.status === "pending" ? (
-                                certificate.url === null ? (
+                              <div className="mt-1 flex items-center justify-between text-[11px] text-ink-500">
+                                <span>
+                                  {semester.currentArrears} standing, {semester.historyOfArrears} in
+                                  history
+                                </span>
+                                {semester.marksheetUrl === null ? (
+                                  <span className="text-[#DD4820]">No marksheet</span>
+                                ) : (
+                                  <a
+                                    href={semester.marksheetUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-label={`Semester ${semester.semesterNumber} marksheet for ${student.fullName}`}
+                                    className="text-[#3D3777] font-medium underline"
+                                  >
+                                    Marksheet
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    {/* Certificates column */}
+                    <td className="align-top px-3 py-3 text-sm min-w-[160px]">
+                      {student.certificates.length === 0 ? (
+                        <span className="text-xs text-ink-500">No certificates uploaded</span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {student.certificates.map((certificate) => (
+                            <div
+                              key={certificate.id}
+                              className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
+                            >
+                              <div className="font-medium text-ink-900">{certificate.name}</div>
+                              {certificate.fileName !== null && (
+                                <div className="text-[11px] text-ink-500 truncate max-w-[150px]">
+                                  {certificate.fileName}
+                                </div>
+                              )}
+                              <div className="mt-1 flex items-center justify-between">
+                                {certificate.status === "pending" ? (
+                                  certificate.url === null ? (
+                                    <span className="text-xs text-[#DD4820]">No document</span>
+                                  ) : (
+                                    <a
+                                      href={certificate.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      aria-label={`Open ${certificate.name} for ${student.fullName}`}
+                                      className="text-xs text-[#3D3777] font-medium underline"
+                                    >
+                                      Open
+                                    </a>
+                                  )
+                                ) : (
+                                  <Badge
+                                    tone={certificate.status === "verified" ? "success" : "neutral"}
+                                  >
+                                    {certificate.status === "verified"
+                                      ? "Verified"
+                                      : "Not accepted"}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    {/* Resumes column: direct review of category-specific resumes */}
+                    <td className="align-top px-3 py-3 text-sm min-w-[170px]">
+                      {student.resumes.length === 0 ? (
+                        <span className="text-xs text-[#DD4820] font-medium">
+                          No resume uploaded
+                        </span>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          {student.resumes.map((resume) => (
+                            <div
+                              key={resume.roleCategory}
+                              className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
+                            >
+                              <div className="font-medium text-ink-900">{resume.label}</div>
+                              {resume.fileName !== null && (
+                                <div className="text-[11px] text-ink-500 truncate max-w-[150px]">
+                                  ({resume.fileName})
+                                </div>
+                              )}
+                              <div className="mt-1">
+                                {resume.url === null ? (
                                   <span className="text-xs text-[#DD4820]">No document</span>
                                 ) : (
                                   <a
-                                    href={certificate.url}
+                                    href={resume.url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    aria-label={`Open ${certificate.name} for ${student.fullName}`}
-                                    className="text-xs text-[#3D3777] font-medium underline"
+                                    aria-label={`Open ${resume.label} resume for ${student.fullName}`}
+                                    className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline"
                                   >
-                                    Open
+                                    Review
                                   </a>
-                                )
-                              ) : (
-                                <Badge
-                                  tone={certificate.status === "verified" ? "success" : "neutral"}
-                                >
-                                  {certificate.status === "verified" ? "Verified" : "Not accepted"}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  {/* Resumes column: direct review of category-specific resumes */}
-                  <td className="align-top px-3 py-3 text-sm min-w-[170px]">
-                    {student.resumes.length === 0 ? (
-                      <span className="text-xs text-[#DD4820] font-medium">No resume uploaded</span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {student.resumes.map((resume) => (
-                          <div
-                            key={resume.roleCategory}
-                            className="rounded border border-line bg-surface-muted/40 p-1.5 text-xs"
-                          >
-                            <div className="font-medium text-ink-900">{resume.label}</div>
-                            {resume.fileName !== null && (
-                              <div className="text-[11px] text-ink-500 truncate max-w-[150px]">
-                                ({resume.fileName})
+                                )}
                               </div>
-                            )}
-                            <div className="mt-1">
-                              {resume.url === null ? (
-                                <span className="text-xs text-[#DD4820]">No document</span>
-                              ) : (
-                                <a
-                                  href={resume.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  aria-label={`Open ${resume.label} resume for ${student.fullName}`}
-                                  className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline"
-                                >
-                                  Review
-                                </a>
-                              )}
                             </div>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    {/* Decision column */}
+                    <td className="align-top px-3 py-3 min-w-[200px]">
+                      {/* Says what the button commits them to */}
+                      {student.certificates.some((c) => c.status === "pending") && (
+                        <p className="mb-2 text-xs text-ink-500 leading-tight">
+                          {(() => {
+                            const n = student.certificates.filter(
+                              (c) => c.status === "pending",
+                            ).length;
+                            return `Approving will also verify ${n} certificate${n === 1 ? "" : "s"}.`;
+                          })()}
+                        </p>
+                      )}
+                      {/* ...and, beside it, what there is nothing to commit to. */}
+                      {unchecked !== null && (
+                        <p className="mb-2 text-xs font-medium text-[#DD4820] leading-tight">
+                          {unchecked}
+                        </p>
+                      )}
+                      {sendingBack === student.id ? (
+                        <div className="flex flex-col gap-2">
+                          <label
+                            htmlFor={`reason-${student.id}`}
+                            className="text-xs font-medium text-ink-700"
+                          >
+                            What does this student need to correct?
+                          </label>
+                          <textarea
+                            id={`reason-${student.id}`}
+                            rows={3}
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-[#3D3777] focus:outline-none focus:ring-1 focus:ring-[#3D3777]"
+                            placeholder="Name what is wrong, and what to change."
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              isLoading={busyId === student.id}
+                              onClick={() => void sendBack(student)}
+                            >
+                              Send back
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setSendingBack(null);
+                                setReason("");
+                                setError(null);
+                              }}
+                            >
+                              Cancel
+                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  {/* Decision column */}
-                  <td className="align-top px-3 py-3 min-w-[200px]">
-                    {/* Says what the button commits them to */}
-                    {student.certificates.some((c) => c.status === "pending") && (
-                      <p className="mb-2 text-xs text-ink-500 leading-tight">
-                        {(() => {
-                          const n = student.certificates.filter(
-                            (c) => c.status === "pending",
-                          ).length;
-                          return `Approving will also verify ${n} certificate${n === 1 ? "" : "s"}.`;
-                        })()}
-                      </p>
-                    )}
-                    {sendingBack === student.id ? (
-                      <div className="flex flex-col gap-2">
-                        <label
-                          htmlFor={`reason-${student.id}`}
-                          className="text-xs font-medium text-ink-700"
-                        >
-                          What does this student need to correct?
-                        </label>
-                        <textarea
-                          id={`reason-${student.id}`}
-                          rows={3}
-                          value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                          className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-[#3D3777] focus:outline-none focus:ring-1 focus:ring-[#3D3777]"
-                          placeholder="Name what is wrong, and what to change."
-                        />
-                        <div className="flex flex-wrap gap-2">
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
                           <Button
                             size="sm"
-                            variant="danger"
                             isLoading={busyId === student.id}
-                            onClick={() => void sendBack(student)}
+                            disabled={unchecked !== null}
+                            aria-label={`Approve ${student.fullName}`}
+                            onClick={() => void approve(student)}
                           >
-                            Send back
+                            Approve
                           </Button>
+                          {/* Stays open: a form that cannot be approved is exactly
+                            the one a coordinator can still act on, by sending
+                            back the file this row says is missing. */}
                           <Button
                             size="sm"
                             variant="secondary"
+                            aria-label={`Send back the form from ${student.fullName}`}
                             onClick={() => {
-                              setSendingBack(null);
+                              setSendingBack(student.id);
                               setReason("");
                               setError(null);
                             }}
                           >
-                            Cancel
+                            Send back for changes
                           </Button>
                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <Button
-                          size="sm"
-                          isLoading={busyId === student.id}
-                          aria-label={`Approve ${student.fullName}`}
-                          onClick={() => void approve(student)}
-                        >
-                          Approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          aria-label={`Send back the form from ${student.fullName}`}
-                          onClick={() => {
-                            setSendingBack(student.id);
-                            setReason("");
-                            setError(null);
-                          }}
-                        >
-                          Send back for changes
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </DataTable>
           </Card>
         </>

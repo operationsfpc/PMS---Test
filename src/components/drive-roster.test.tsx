@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import type { AttendanceStatus, RoundResult } from "@domain/types";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
@@ -38,7 +40,7 @@ const SAMPLE_STUDENTS: DriveProgressStudentItem[] = [
       ctcLpa: 8.5,
       stipendMonthly: 25000,
       driveType: "placement",
-      offerCategory: "Dream",
+      offerCategory: "dream",
     },
   },
   {
@@ -190,5 +192,97 @@ describe("the one-role roster", () => {
 
     expect(screen.getByText(/Aptitude Assessment/i)).toBeDefined();
     expect(screen.queryByRole("link", { name: /open the student record/i })).toBeNull();
+  });
+});
+
+/**
+ * 2026-10-18: this roster printed the database's own words — `on_hold`,
+ * `scheduled`, `super_dream` — because nothing between the row and the screen
+ * translated them, and a CSS `capitalize` was asked to spell a domain value.
+ * A coordinator reading their own students should never have to know the schema.
+ */
+describe("the words a roster may put on screen", () => {
+  const show = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
+
+  const withRound = (
+    attendance: AttendanceStatus,
+    result: RoundResult | null,
+    offerCategory: string | null = null,
+  ): DriveProgressStudentItem[] => [
+    {
+      applicationId: "app-9",
+      studentId: "s-9",
+      studentName: "Kanishka Devan",
+      rollNumber: "22CSE077",
+      campusId: "c-1",
+      campusName: "KGiSL Institute",
+      cgpa: 7.4,
+      shortlisted: true,
+      rounds: [{ roundId: "r-1", sequence: 1, name: "Technical Interview", attendance, result }],
+      offer:
+        offerCategory === null
+          ? null
+          : { ctcLpa: 12, stipendMonthly: null, driveType: "placement", offerCategory },
+    },
+  ];
+
+  const expand = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole("button", { name: /Kanishka Devan/i }));
+  };
+
+  it("spells a round's result instead of showing its column value", async () => {
+    const user = userEvent.setup();
+    show(<DriveRoster students={withRound("present", "on_hold")} />);
+    await expand(user);
+
+    expect(screen.getByText("Result: On hold")).toBeDefined();
+    expect(screen.queryByText(/on_hold/i)).toBeNull();
+  });
+
+  it("says a result was never recorded, rather than naming a status that is absent", async () => {
+    const user = userEvent.setup();
+    show(<DriveRoster students={withRound("present", null)} />);
+    await expand(user);
+
+    expect(screen.getByText("Result not recorded")).toBeDefined();
+  });
+
+  it("says nobody has marked the attendance yet, which is what `scheduled` means", async () => {
+    const user = userEvent.setup();
+    show(<DriveRoster students={withRound("scheduled", null)} />);
+    await expand(user);
+
+    expect(screen.getByText("Not marked yet")).toBeDefined();
+    expect(screen.queryByText(/^scheduled$/i)).toBeNull();
+  });
+
+  it("keeps the closed badge on the round's own words, not the raw enum", () => {
+    show(<DriveRoster students={withRound("scheduled", null)} />);
+
+    expect(screen.getByText(/Round 1 · Not marked yet/i)).toBeDefined();
+  });
+
+  it("capitalises a category the ladder holds, and leaves one it does not", async () => {
+    const user = userEvent.setup();
+    show(<DriveRoster students={withRound("present", "selected", "super_dream")} />);
+    await expand(user);
+
+    expect(screen.getByText("Super Dream")).toBeDefined();
+    expect(screen.queryByText(/super_dream/)).toBeNull();
+  });
+
+  it("calls an unclassified offer unclassified, not a category it never was", async () => {
+    const user = userEvent.setup();
+    // An offer the CPC declared without ever picking a category.
+    const unclassified = withRound("present", "selected", "regular").map((student) =>
+      student.offer === null
+        ? student
+        : { ...student, offer: { ...student.offer, offerCategory: null } },
+    );
+    show(<DriveRoster students={unclassified} />);
+    await expand(user);
+
+    expect(screen.getByText("Not classified")).toBeDefined();
+    expect(screen.queryByText("Standard")).toBeNull();
   });
 });

@@ -1,9 +1,10 @@
-import { DrivePicker, type PickerDrive } from "@components/drive-picker";
+import { DrivePicker } from "@components/drive-picker";
+import { ErrorPanel } from "@components/error-panel";
 import { Card } from "@components/ui";
 import { useAuth } from "@lib/auth-context";
-import { fetchPickerDrives } from "@lib/drive-picker-data";
 import { supabase } from "@lib/supabase";
-import { useEffect, useState } from "react";
+import { usePickerDrives } from "@lib/use-picker-drives";
+import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { DriveRoundsPage, ResultsPage } from "./results-page";
 import { createSupabaseResultsView } from "./results-view";
@@ -34,12 +35,7 @@ export function ResultsRoute() {
     ),
   );
 
-  const [drives, setDrives] = useState<readonly PickerDrive[] | null>(null);
-
-  useEffect(() => {
-    if (driveId !== null || roundId !== null) return;
-    void fetchPickerDrives(supabase()).then(setDrives);
-  }, [driveId, roundId]);
+  const { drives, failed, retry } = usePickerDrives(driveId === null && roundId === null);
 
   if (driveId !== null) {
     return <DriveRoundsPage driveId={driveId} view={view} />;
@@ -47,6 +43,14 @@ export function ResultsRoute() {
 
   if (roundId !== null) {
     return <ResultsPage roundId={roundId} view={view} />;
+  }
+
+  if (failed) {
+    return (
+      <ErrorPanel onRetry={() => void retry()}>
+        We could not load the drives to choose from.
+      </ErrorPanel>
+    );
   }
 
   if (drives === null) {

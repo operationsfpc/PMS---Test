@@ -16,6 +16,7 @@ const render = (ui: React.ReactElement) => renderRaw(<MemoryRouter>{ui}</MemoryR
  * pin that a decision actually reaches the repository, and that a refusal is
  * shown rather than swallowed.
  */
+/** A form with a document behind every figure it claims — what an approvable row looks like. */
 const row = {
   id: "s1",
   fullName: "Asha Ramanathan",
@@ -50,7 +51,7 @@ const row = {
       id: "c2",
       name: "NPTEL Data Structures",
       fileName: null,
-      url: null,
+      url: "https://signed/nptel",
       status: "pending" as const,
     },
   ],
@@ -87,6 +88,14 @@ const row = {
     },
   ],
 };
+
+/** The same form with one certificate whose document never arrived. */
+function withoutNptelFile() {
+  return {
+    ...row,
+    certificates: row.certificates.map((c) => (c.id === "c2" ? { ...c, url: null } : c)),
+  };
+}
 
 function repo(overrides: Partial<VerificationRepository> = {}): VerificationRepository {
   return {
@@ -221,8 +230,10 @@ describe("checking a declared CGPA against the marksheet that proves it", () => 
     render(<SrfVerificationQueue repository={repo()} />);
 
     expect(await screen.findByText(/semester 1/i)).toBeDefined();
-    expect(screen.getByText("8.1")).toBeDefined();
-    expect(screen.getByText("8.4")).toBeDefined();
+    // Each figure says the scale it is on: 8.1 out of 10 is what the marksheet
+    // is checked against; a bare 8.1 is not a claim anybody can verify.
+    expect(screen.getByText("8.1/10")).toBeDefined();
+    expect(screen.getByText("8.4/10")).toBeDefined();
   });
 
   it("links each semester's CGPA to the marksheet that evidences it", async () => {
@@ -295,11 +306,78 @@ describe("SrfVerificationQueue — certificates", () => {
 
   /** A coordinator must never believe they checked something they could not open. */
   it("says when a certificate has no document, rather than offering a dead link", async () => {
-    render(<SrfVerificationQueue repository={repo()} />);
+    render(
+      <SrfVerificationQueue repository={repo({ pending: async () => [withoutNptelFile()] })} />,
+    );
 
     await screen.findByText("NPTEL Data Structures");
     expect(screen.queryByRole("link", { name: /open nptel data structures/i })).toBeNull();
     expect(screen.getByText(/no document/i)).toBeDefined();
+  });
+
+  /**
+   * 2026-10-18: the row listed the files it could not open and Approve sat
+   * beside the list anyway. Approving writes `verified` onto every pending
+   * certificate (0039) and every declared semester (0031), so that click was a
+   * signature on the student's own typing — the hole this queue exists to close.
+   */
+  it("refuses to approve a certificate it has no document for", async () => {
+    render(
+      <SrfVerificationQueue repository={repo({ pending: async () => [withoutNptelFile()] })} />,
+    );
+
+    expect(
+      await screen.findByText(/nothing to check against: nptel data structures/i),
+    ).toBeDefined();
+    const approve = screen.getByRole("button", {
+      name: /approve asha/i,
+    }) as HTMLButtonElement;
+    expect(approve.disabled).toBe(true);
+  });
+
+  it("refuses to approve a declared CGPA with no marksheet behind it", async () => {
+    render(
+      <SrfVerificationQueue
+        repository={repo({
+          pending: async () => [
+            {
+              ...row,
+              semesters: row.semesters.slice(0, 1).map((s) => ({ ...s, marksheetUrl: null })),
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByText(/nothing to check against: semester 1 marksheet/i),
+    ).toBeDefined();
+    expect(
+      (screen.getByRole("button", { name: /approve asha/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  /**
+   * A locked Approve must never be a dead end. Sending the form back is the
+   * coordinator's remedy for exactly the file this row says is missing.
+   */
+  it("still lets a coordinator send back a form they cannot approve", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(
+      <SrfVerificationQueue
+        repository={repo({ pending: async () => [withoutNptelFile()], decide })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /send back .*asha/i }));
+    await user.type(
+      screen.getByLabelText(/what does this student need to correct/i),
+      "Upload the NPTEL completion certificate.",
+    );
+    await user.click(screen.getByRole("button", { name: /^send back$/i }));
+
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
   });
 
   /** The coordinator is told what approving will commit them to. */

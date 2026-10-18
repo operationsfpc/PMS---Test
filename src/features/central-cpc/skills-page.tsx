@@ -532,7 +532,7 @@ export function SkillsPage({
                     <td className="px-4 py-3 align-top">
                       <p className="font-medium text-ink-900">{student.studentName}</p>
                       <p className="text-xs text-ink-500">
-                        {student.rollNumber} · {student.campusName}
+                        Roll {student.rollNumber} · {student.campusName}
                       </p>
                     </td>
                     {areas.map((area) => (

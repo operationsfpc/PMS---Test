@@ -1,5 +1,6 @@
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
+import { describeDriveFreeze } from "@domain/drive-working";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
 import {
   buildRecruiterCsvRows,
@@ -12,7 +13,7 @@ import {
 } from "@domain/recruiter-export";
 import { checkShortlistTarget } from "@domain/shortlist-target";
 import { SKILL_SCORE_MAX } from "@domain/skills";
-import type { RoleCategory } from "@domain/types";
+import type { DriveStatus, RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { buildRecruiterZip } from "./export-pack";
@@ -41,6 +42,16 @@ export interface ShortlistDrive {
   readonly roleTitle: string | null;
   readonly roleCategory: RoleCategory | null;
   readonly mandatorySkills: readonly string[];
+  /**
+   * Where the drive is in its lifecycle — the fact that decides whether this
+   * screen may write anything at all (2026-10-18). Asking it of the drive
+   * rather than trusting the tab the coordinator arrived on is what stops a
+   * completed drive being shortlisted again.
+   *
+   * Null means the read did not carry it — which is not evidence of a closed
+   * drive, so the screen stays as it was instead of locking on a missing fact.
+   */
+  readonly status: DriveStatus | null;
 }
 
 /**
@@ -193,6 +204,14 @@ export function ShortlistPage({
     () => new Map((applicants ?? []).map((a) => [a.applicationId, a])),
     [applicants],
   );
+
+  /**
+   * Whether this drive's status still allows shortlisting at all — null while
+   * it does, the sentence to say while it does not. The lifecycle is the
+   * drive's, not the tab's, so a completed or unpublished drive is closed here
+   * even when it was opened straight from a link (2026-10-18).
+   */
+  const freeze = describeDriveFreeze("shortlist", drive?.status ?? null);
 
   /** The two tabs. Ranks stay OVERALL positions, so the audit trail's rank
    * means the same thing it always did (PRD 13.1). */
@@ -386,51 +405,56 @@ export function ShortlistPage({
         title={drive === null ? "Shortlisting" : `Shortlisting — ${drive.companyName}`}
         {...(drive?.roleTitle == null ? {} : { subtitle: drive.roleTitle })}
         actions={
-          <span className="flex flex-wrap gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
+              isLoading={exporting}
               onClick={() => void exportShortlistCsv()}
-              disabled={exporting}
-              className="inline-flex items-center gap-2"
+              disabled={exporting || alreadyShortlisted.length === 0 || freeze !== null}
+              title="Downloads the shortlist as it is saved in the database"
             >
-              {exporting ? (
-                <>
-                  <svg
-                    className="h-4 w-4 animate-spin text-ink-700"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                    />
-                  </svg>
-                  <span>Exporting CSV…</span>
-                </>
-              ) : (
-                "Export shortlist (CSV)"
-              )}
+              {exporting ? "Exporting CSV…" : "Export shortlist (CSV)"}
             </Button>
-            <Button variant="secondary" onClick={() => void exportShortlist()}>
+            {/* Both exports read the SAVED shortlist, so on a drive where nobody
+                is on it yet they could only refuse. A control that cannot do
+                anything is not offered — and a greyed button says why. */}
+            <Button
+              variant="secondary"
+              disabled={alreadyShortlisted.length === 0 || freeze !== null}
+              onClick={() => void exportShortlist()}
+              title="Downloads shortlist.xlsx beside the resume files"
+            >
               Export recruiter pack (ZIP)
             </Button>
-            <Button isLoading={saving} onClick={() => setConfirming(true)}>
+            {alreadyShortlisted.length === 0 && freeze === null && (
+              <span className="text-xs text-ink-500">
+                Both exports send the saved shortlist — shortlist someone first.
+              </span>
+            )}
+            <Button
+              isLoading={saving}
+              // "Shortlist 0" is a real decision: it records everyone still on
+              // this tab as left off. Refusing it would leave the exclusions
+              // unsaid.
+              disabled={freeze !== null}
+              onClick={() => setConfirming(true)}
+            >
               {`Shortlist ${selected.length}`}
             </Button>
           </span>
         }
       />
+
+      {/* The state, not the person, refused — so the reason is on the screen
+          and not merely a greyed button they have to guess at. */}
+      {freeze !== null && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg border border-line bg-surface-muted px-4 py-3 text-sm text-ink-700"
+        >
+          <strong>This shortlist is closed.</strong> {freeze}
+        </p>
+      )}
 
       <p className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-ink-700">
         Ranking and rationale are internal and are <strong>never shown to students</strong>. The
@@ -599,8 +623,10 @@ export function ShortlistPage({
 
           <Card>
             {/* D9: one box for the lot. Indeterminate states are more honest as
-                a plain label, so the box is checked only when ALL are. */}
-            {tab === "pending" && visibleRanked.length > 0 && (
+                a plain label, so the box is checked only when ALL are.
+                A closed drive offers no selection at all — not a tick that
+                cannot be saved. */}
+            {tab === "pending" && visibleRanked.length > 0 && freeze === null && (
               <div className="flex items-center gap-3 border-b border-neutral-200 px-4 py-3">
                 <input
                   type="checkbox"
@@ -621,7 +647,7 @@ export function ShortlistPage({
               </p>
             )}
             <ul className="divide-y divide-neutral-200">
-              {visibleRanked.map(({ candidate }, index) => {
+              {visibleRanked.map(({ candidate, rank }) => {
                 const applicant = byId.get(candidate.applicationId);
                 const blocked = applicant?.optedOut === true;
                 const overridden = overrides[candidate.applicationId] !== undefined;
@@ -632,8 +658,9 @@ export function ShortlistPage({
                     className="flex items-start gap-4 p-4"
                   >
                     {/* Decided rows carry NO checkbox — a shortlisted student
-                        cannot be shortlisted again (2026-08-21). */}
-                    {tab === "shortlisted" ? null : blocked && !overridden ? (
+                        cannot be shortlisted again (2026-08-21). Neither does a
+                        row on a drive whose shortlist is closed. */}
+                    {tab === "shortlisted" || freeze !== null ? null : blocked && !overridden ? (
                       <span className="mt-1 w-4 text-center text-ink-300" aria-hidden="true">
                         –
                       </span>
@@ -648,7 +675,11 @@ export function ShortlistPage({
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
-                        <span className="text-ink-400">{index + 1}.</span>
+                        {/* The rank that is SAVED, spelled as such. This used to
+                            print the position inside whichever tab was open, so
+                            the "1." on a card and the rank in the audit trail
+                            were two different numbers. */}
+                        <span className="text-ink-400">Rank {rank}</span>
                         {applicant === undefined ? (
                           <span>{candidate.studentName}</span>
                         ) : (
@@ -670,19 +701,21 @@ export function ShortlistPage({
                         {blocked && <Badge tone="danger">Opted out</Badge>}
                       </p>
                       {tab === "pending" &&
+                        freeze === null &&
                         blocked &&
                         !overridden &&
                         overriding !== candidate.applicationId && (
-                          <button
-                            type="button"
-                            className="mt-1 text-xs font-medium text-brand-600 hover:underline"
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="mt-1"
                             onClick={() => {
                               setOverriding(candidate.applicationId);
                               setOverrideDraft("");
                             }}
                           >
                             Override with reason…
-                          </button>
+                          </Button>
                         )}
                       {overriding === candidate.applicationId && (
                         <div className="mt-2 flex flex-wrap items-end gap-2">
@@ -710,21 +743,33 @@ export function ShortlistPage({
                           </Button>
                         </div>
                       )}
+                      {/* "1  KG-Test  CGPA 8.5" read as three unexplained
+                          tokens. Each now says what it is, and the CGPA is left
+                          to the reasoning line below rather than stated twice
+                          in one card. */}
                       <p className="flex flex-wrap items-center gap-2 text-sm text-ink-500">
-                        <span>{applicant?.rollNumber}</span>
+                        {applicant !== undefined && <span>Roll {applicant.rollNumber}</span>}
                         {applicant?.college != null && applicant.college !== "" && (
-                          <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                          <span
+                            title="College campus"
+                            className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700"
+                          >
+                            <span className="sr-only">College: </span>
                             {applicant.college}
                           </span>
                         )}
-                        <span>CGPA {applicant?.overallCgpa}</span>
                       </p>
                       {/* G5a (UAT 2026-08-20): "Scored on 0 of 1 required
                         skills" told the coordinator nothing about what the
                         student HAS. Their own scores, or an honest gap. */}
                       {applicant !== undefined &&
                         (applicant.skillScores.length === 0 ? (
-                          <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
+                          /* Only a gap when the role actually asked for skills.
+                             Otherwise the reasoning line below already says "No
+                             specific skills required for this role." */
+                          drive !== null && drive.mandatorySkills.length > 0 ? (
+                            <p className="mt-1 text-xs text-ink-500">No skill scores recorded.</p>
+                          ) : null
                         ) : (
                           <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
                             {applicant.skillScores.map(({ skill, score }) => (

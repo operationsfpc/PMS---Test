@@ -62,6 +62,11 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
                     </Button>
                     <Button
                       size="sm"
+                      // Approving is irreversible and 0009 will not move them
+                      // back, so the signed declaration is the only answer to
+                      // "I never asked to opt out". Without it there is nothing
+                      // to approve — the line above already says so.
+                      disabled={request.declarationUrl === null}
                       onClick={() =>
                         run(
                           () => view.approveOptOut(request.id),

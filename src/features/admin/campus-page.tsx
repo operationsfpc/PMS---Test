@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
 import { useAsyncAction } from "@lib/use-async-action";
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
@@ -57,6 +58,9 @@ export function CampusPage({
   const [values, setValues] = useState<Record<FieldName, string>>(EMPTY);
   const [missing, setMissing] = useState<readonly FieldName[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** The LIST read failing — kept apart from `error`, which is about a save. */
+  const [listProblem, setListProblem] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   // Keyed per college: the list shows ten of them at once, and deactivating
@@ -68,12 +72,21 @@ export function CampusPage({
   const [statusFilter, setStatusFilter] = useState<string>("");
 
   const refresh = useCallback(async () => {
-    setCampuses(await repository.list());
+    try {
+      setCampuses(await repository.list());
+      setListProblem(null);
+    } catch (cause) {
+      // `void refresh()` had no catch: a refused read left `campuses` null and
+      // the list said "Loading campuses…" for ever. An outage is not a spinner,
+      // and it is not the same complaint as a save that failed.
+      setListProblem(cause instanceof Error ? cause.message : "Could not load the campuses.");
+    }
   }, [repository]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, attempt]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -234,7 +247,17 @@ export function CampusPage({
         )}
       </div>
 
-      {campuses === null ? (
+      {listProblem !== null ? (
+        <ErrorPanel
+          onRetry={() => {
+            setListProblem(null);
+            setAttempt((count) => count + 1);
+          }}
+          retryLabel="Load the campuses again"
+        >
+          {listProblem} Until they load, no campus can be added to or taken from.
+        </ErrorPanel>
+      ) : campuses === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading campuses…
         </p>

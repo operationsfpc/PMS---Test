@@ -1,4 +1,4 @@
-import { Card, PageHeader } from "@components/ui";
+import { Button, Card, PageHeader } from "@components/ui";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { ParticipationQueueView, PendingParticipation } from "./participation-queue-contract";
 
@@ -38,7 +38,16 @@ export function QueueShell({
   const [decided, setDecided] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    setPending(await view.pending());
+    try {
+      setPending(await view.pending());
+    } catch (cause) {
+      // 2026-10-18: a rejected reload used to leave this screen on "Loading…"
+      // forever, having swallowed why. An empty queue and a failed load mean
+      // opposite things to a coordinator, so the list is cleared rather than
+      // defaulted to empty, and the failure is said.
+      setError(cause instanceof Error ? cause.message : "Could not load the queue.");
+      setPending(null);
+    }
   }, [view]);
 
   useEffect(() => {
@@ -85,9 +94,17 @@ export function QueueShell({
       )}
 
       {pending === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading…
-        </p>
+        // Nothing to list, and the alert above already says why. A coordinator
+        // is not told to refresh the browser: the load is one click away.
+        error === null ? (
+          <p role="status" className="text-sm text-ink-500">
+            Loading…
+          </p>
+        ) : (
+          <Button size="sm" variant="secondary" onClick={() => void refresh()}>
+            Try again
+          </Button>
+        )
       ) : isEmpty(pending) ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">{empty}</p>

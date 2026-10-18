@@ -1,4 +1,7 @@
 import { Badge } from "@components/ui";
+import { attendanceLabel } from "@domain/attendance";
+import { offerCategoryLabelOf } from "@domain/offer-category";
+import { roundResultLabel } from "@domain/round-outcome";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -211,7 +214,7 @@ export function DriveRoster({
                       <span className="font-semibold text-ink-900 text-sm">
                         {student.studentName}
                       </span>
-                      <span className="text-xs text-ink-500">({student.rollNumber})</span>
+                      <span className="text-xs text-ink-500">(Roll {student.rollNumber})</span>
                       {student.campusName && (
                         <span className="text-[11px] font-medium text-brand-700 bg-brand-50 px-1.5 py-0.5 rounded">
                           {student.campusName}
@@ -234,7 +237,9 @@ export function DriveRoster({
                     ) : latestRound !== null ? (
                       <Badge tone={RESULT_TONE(latestRound.result, latestRound.attendance)}>
                         Round {latestRound.sequence} ·{" "}
-                        {latestRound.result ?? latestRound.attendance}
+                        {latestRound.result === null
+                          ? attendanceLabel(latestRound.attendance)
+                          : roundResultLabel(latestRound.result)}
                       </Badge>
                     ) : student.shortlisted ? (
                       <Badge tone="brand">Shortlisted</Badge>
@@ -307,7 +312,16 @@ export function DriveRoster({
                               Offer Category
                             </span>
                             <span className="font-medium text-success-900">
-                              {student.offer.offerCategory || "Standard"}
+                              {/* An offer with no category is not a "Standard"
+                                  one — it is an unclassified offer, and the old
+                                  fallback invented a category the ladder has
+                                  never held. Anything the domain does not
+                                  recognise is handed back untouched, so a bad
+                                  value shows itself instead of going quiet. */}
+                              {student.offer.offerCategory === null ||
+                              student.offer.offerCategory === ""
+                                ? "Not classified"
+                                : offerCategoryLabelOf(student.offer.offerCategory)}
                             </span>
                           </div>
                           {student.offer.stipendMonthly ? (
@@ -350,13 +364,15 @@ export function DriveRoster({
                               <div className="flex items-center gap-2">
                                 <span className="text-ink-600">
                                   Attendance:{" "}
-                                  <strong className="text-ink-900 capitalize">
-                                    {round.attendance}
+                                  <strong className="text-ink-900">
+                                    {attendanceLabel(round.attendance)}
                                   </strong>
                                 </span>
                                 <span>·</span>
                                 <Badge tone={RESULT_TONE(round.result, round.attendance)}>
-                                  {round.result ? `Result: ${round.result}` : "Pending result"}
+                                  {round.result === null
+                                    ? "Result not recorded"
+                                    : `Result: ${roundResultLabel(round.result)}`}
                                 </Badge>
                               </div>
                             </div>

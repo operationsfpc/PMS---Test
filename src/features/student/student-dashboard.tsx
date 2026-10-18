@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { NotificationBody } from "@components/notification-body";
 import { OfferLetterLink } from "@components/offer-letter-link";
 import {
@@ -18,6 +19,7 @@ import {
   needsDisbarmentReview,
 } from "@domain/attendance";
 import { groupByVisitKey, visitKey } from "@domain/company-drive";
+import { describeMarks } from "@domain/marks";
 import { condenseNotifications } from "@domain/notifications";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { describeOfferPay } from "@domain/offer-pay";
@@ -28,6 +30,7 @@ import {
   studentPrompt,
 } from "@domain/student-progress";
 import type { DriveType, OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -232,6 +235,13 @@ function ApplicationVisits({ entries }: { entries: readonly ProgressedApplicatio
   );
 }
 
+/** A problem with the notifications section only, never with the page around it. */
+interface NotesProblem {
+  readonly message: string;
+  /** The note whose "Mark read" failed; null when the list itself never loaded. */
+  readonly retryNoteId: string | null;
+}
+
 /**
  * The student's own dashboard. PRD §17.1, and their landing route.
  *
@@ -245,9 +255,24 @@ function ApplicationVisits({ entries }: { entries: readonly ProgressedApplicatio
  */
 export function StudentDashboard({ view }: { view: StudentDashboardView }) {
   const [snapshot, setSnapshot] = useState<StudentDashboardSnapshot | null>(null);
-  const [failed, setFailed] = useState(false);
+  /** Which read failed, in its own words — "no applications" and "we could not
+   * ask" are opposite answers, and the page used to print one generic sentence
+   * for both. */
+  const [failure, setFailure] = useState<string | null>(null);
+  // Bumping this re-runs the one read below; the failure card used to only
+  // tell the reader to refresh the whole page.
+  const [attempt, setAttempt] = useState(0);
   const [notes, setNotes] = useState<readonly StudentNotificationRow[]>([]);
+  /**
+   * Why the notifications below are missing or still unread. The read used to
+   * fail into an empty catch and a "Mark read" click into an unhandled
+   * rejection — either way the student was left with no note telling them the
+   * note never arrived. `retryNoteId` separates "we could not ask" (ask the
+   * server again) from "that click did not land" (do that one note again).
+   */
+  const [notesProblem, setNotesProblem] = useState<NotesProblem | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let live = true;
     view
@@ -255,32 +280,58 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
       .then((next) => {
         if (live) setSnapshot(next);
       })
-      .catch(() => {
-        if (live) setFailed(true);
+      .catch((cause: unknown) => {
+        if (live)
+          setFailure(
+            describeReadFailure(
+              cause,
+              "We could not load your dashboard. If it keeps happening, contact your placement coordinator.",
+            ),
+          );
       });
     // Notifications failing must never take the dashboard down with them.
     view
       .notifications()
       .then((next) => {
-        if (live) setNotes(next);
+        if (!live) return;
+        setNotes(next);
+        setNotesProblem(null);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (live)
+          setNotesProblem({
+            message: "We could not load your notifications. Your other details are unaffected.",
+            retryNoteId: null,
+          });
+      });
     return () => {
       live = false;
     };
-  }, [view]);
+  }, [view, attempt]);
 
   async function markRead(id: string) {
-    await view.markRead(id);
-    setNotes(await view.notifications());
+    try {
+      await view.markRead(id);
+      setNotes(await view.notifications());
+      setNotesProblem(null);
+    } catch {
+      setNotesProblem({
+        message: "We could not mark that notification read. It is still waiting for you.",
+        retryNoteId: id,
+      });
+    }
   }
 
-  if (failed) {
+  if (failure !== null) {
     return (
-      <p role="alert" className="rounded-card bg-danger-50 p-4 text-sm text-danger-700">
-        We could not load your dashboard. Refresh the page, or contact your placement coordinator if
-        this keeps happening.
-      </p>
+      <ErrorPanel
+        onRetry={() => {
+          setFailure(null);
+          setAttempt((count) => count + 1);
+        }}
+      >
+        {failure}
+      </ErrorPanel>
     );
   }
 
@@ -316,8 +367,27 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
     <>
       <PageHeader
         title={snapshot.fullName}
-        subtitle={`${snapshot.rollNumber} · ${snapshot.degree} ${snapshot.branch} · Batch of ${snapshot.passingYear} · ${snapshot.campus}`}
+        subtitle={`Roll ${snapshot.rollNumber} · ${snapshot.degree} ${snapshot.branch} · Batch of ${snapshot.passingYear} · ${snapshot.campus}`}
       />
+
+      {notesProblem !== null &&
+        (() => {
+          const noteId = notesProblem.retryNoteId;
+          return (
+            <div className="mb-6">
+              <ErrorPanel
+                onRetry={
+                  noteId !== null
+                    ? () => void markRead(noteId)
+                    : () => setAttempt((count) => count + 1)
+                }
+                retryLabel={noteId !== null ? "Try marking it again" : "Load them again"}
+              >
+                {notesProblem.message}
+              </ErrorPanel>
+            </div>
+          );
+        })()}
 
       {notes.length > 0 &&
         (() => {
@@ -508,7 +578,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                         <span className="text-ink-800">Semester {semester.semesterNumber}</span>
                         <span className="flex items-center gap-2">
                           <span className="font-semibold text-ink-900">
-                            {semester.cgpa.toFixed(2)}
+                            {describeMarks(semester.cgpa, "cgpa")}
                           </span>
                           <Badge tone={semester.verified ? "success" : "warning"}>
                             {semester.verified ? "Verified" : "Awaiting verification"}

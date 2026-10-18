@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
@@ -117,6 +118,9 @@ export function StudentDirectoryPage({
   const [params, setParams] = useSearchParams();
   const [students, setStudents] = useState<readonly DirectoryStudent[] | null>(null);
   const [failed, setFailed] = useState(false);
+  // Bumping this re-runs the one read below; the failure card used to only
+  // tell the reader to refresh the whole page.
+  const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
 
   // The filter lives in the URL so the dashboard can link straight to a
@@ -144,6 +148,7 @@ export function StudentDirectoryPage({
     setParams(merged, { replace: true });
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let live = true;
     view
@@ -159,7 +164,7 @@ export function StudentDirectoryPage({
     return () => {
       live = false;
     };
-  }, [view]);
+  }, [view, attempt]);
 
   const summary = useMemo(() => summariseDirectory(students ?? []), [students]);
   const visible = useMemo(
@@ -206,9 +211,14 @@ export function StudentDirectoryPage({
     return (
       <div>
         <PageHeader title="Students" />
-        <p role="alert" className="rounded-card bg-danger-50 p-4 text-sm text-danger-700">
-          We could not load the students. Refresh the page, or try again shortly.
-        </p>
+        <ErrorPanel
+          onRetry={() => {
+            setFailed(false);
+            setAttempt((count) => count + 1);
+          }}
+        >
+          We could not load the students.
+        </ErrorPanel>
       </div>
     );
   }
@@ -329,24 +339,21 @@ export function StudentDirectoryPage({
 
           {/* G7 (UAT 2026-08-20): the counts are controls, not prose — each
               applies the filter behind its number. */}
-          <p className="mb-3 text-sm text-ink-500">
-            Showing <strong className="text-ink-900">{visible.length} students</strong> of{" "}
-            {summary.total} ·{" "}
-            <button
-              type="button"
-              onClick={() => update({ filter: "placed" })}
-              className="font-medium text-brand-600 hover:underline"
-            >
+          {/* G7 (UAT 2026-08-20): the counts are controls, not prose — each
+              applies the filter behind its number. They are buttons rather
+              than underlined words because underlined brand text reads as a
+              page to visit, not a filter to apply. */}
+          <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-500">
+            <span>
+              Showing <strong className="text-ink-900">{visible.length} students</strong> of{" "}
+              {summary.total}
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => update({ filter: "placed" })}>
               {summary.placed} placed
-            </button>{" "}
-            ·{" "}
-            <button
-              type="button"
-              onClick={() => update({ filter: "not_placed" })}
-              className="font-medium text-brand-600 hover:underline"
-            >
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => update({ filter: "not_placed" })}>
               {summary.notPlaced} not placed
-            </button>
+            </Button>
           </p>
 
           {visible.length === 0 ? (
@@ -376,7 +383,7 @@ export function StudentDirectoryPage({
                           </Link>
                         </p>
                         <p className="text-xs text-ink-500">
-                          {student.rollNumber}
+                          Roll {student.rollNumber}
                           {student.participationStatus !== "active" && (
                             <>
                               {" · "}

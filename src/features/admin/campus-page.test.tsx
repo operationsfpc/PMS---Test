@@ -60,6 +60,29 @@ describe("CampusPage", () => {
     expect(await screen.findByText(/no campuses yet/i)).toBeDefined();
   });
 
+  it("reports a refused campus read instead of loading for ever", async () => {
+    const user = userEvent.setup();
+    // `void refresh()` used to have no catch, so this left the reader staring at
+    // "Loading campuses…" — an outage wearing the clothes of a spinner.
+    let first = true;
+    const list = vi.fn(async () => {
+      if (first) {
+        first = false;
+        throw new Error("The campuses could not be read.");
+      }
+      return EXISTING;
+    });
+    render(<CampusPage repository={repo({ list })} />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("The campuses could not be read.");
+    await user.click(screen.getByRole("button", { name: /load the campuses again/i }));
+
+    expect(await screen.findByText("Alliance University")).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
   it("creates a campus with every mandatory field", async () => {
     const create = vi.fn();
     const user = userEvent.setup();

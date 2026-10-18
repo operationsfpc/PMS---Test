@@ -58,15 +58,15 @@ describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
     render(<ResultsPage roundId="r1" view={view()} />);
 
     const college = await screen.findByText("PSG College of Technology");
-    const roll = screen.getByText("21CSE1042");
+    const roll = screen.getByText(/roll 21CSE1042/i);
     // On the same line, so a coordinator reading a mixed-college round sees
     // the college where the name is rather than somewhere else on the row.
     expect(college.parentElement).toBe(roll.parentElement);
 
     // Arjun's record carries no college, so his row shows no chip at all
     // rather than an empty one.
-    const arjunRoll = screen.getByText("21CSE9001");
-    expect(arjunRoll.parentElement?.textContent).toBe("21CSE9001");
+    const arjunRoll = screen.getByText(/roll 21CSE9001/i);
+    expect(arjunRoll.parentElement?.textContent).toBe("Roll 21CSE9001");
   });
 
   it("links each participant to their own record, and invents none", async () => {
@@ -344,6 +344,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       completeDrive: async () => undefined,
       // 2026-08-26: nobody has been offered anything unless a test says so.
       offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
       ...overrides,
     };
   }
@@ -355,6 +356,61 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
 
     expect(await screen.findByRole("button", { name: /round 1 · aptitude/i })).toBeDefined();
     expect(screen.getByRole("button", { name: /round 2 · technical/i })).toBeDefined();
+  });
+
+  // 2026-10-18 (UAT, live): the screen offered every verb whatever the drive's
+  // status was. A drive that is finished with is closed here, in its words.
+  it("closes a completed drive: no new round, no results, no links", async () => {
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({
+          driveStatus: async () => "completed",
+          participants: async () => [{ ...PRIYA, result: null }],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/this drive is completed/i)).toBeDefined();
+    expect(screen.queryByRole("button", { name: /add round/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit round details/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /mark selected/i })).toBeNull();
+    // The controls that stay on screen say why they cannot be used.
+    expect(
+      (screen.getByRole("button", { name: /manage rounds/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByRole("button", { name: /advance to round 2/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // And a row that cannot be recorded carries nothing to tick.
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    expect(screen.queryByLabelText(/meeting link for priya/i)).toBeNull();
+  });
+
+  it("still lets an unpublished drive set its rounds up", async () => {
+    // §3.5 requires a round BEFORE go live — a draft drive is where rounds are
+    // built, so the freeze must not reach past the drive's own record.
+    routed(
+      <DriveRoundsPage driveId="d1" view={driveView({ driveStatus: async () => "approved" })} />,
+    );
+
+    expect(await screen.findByRole("button", { name: /add round/i })).toBeDefined();
+    expect(screen.queryByText(/this drive is completed/i)).toBeNull();
+  });
+
+  it("refuses to complete a drive that was never published", async () => {
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({ driveStatus: async () => "draft", addRound: async () => undefined })}
+      />,
+    );
+
+    await screen.findByRole("button", { name: /add round/i });
+    expect(
+      (screen.getByRole("button", { name: /mark drive completed/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(screen.getByText(/nothing to complete/i)).toBeDefined();
   });
 
   it("advances the selected into the next round, saying how many", async () => {
@@ -578,6 +634,7 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
       offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
       ...overrides,
     };
   }
@@ -833,6 +890,7 @@ describe("DriveRoundsPage — manage rounds (B2)", () => {
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
       offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
       ...overrides,
     };
   }
@@ -912,6 +970,7 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
       offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
       ...overrides,
     };
   }
@@ -1087,6 +1146,7 @@ describe("DriveRoundsPage — offers reach the round", () => {
     completionFacts: async () => ({ ready: true, undecided: 0 }),
     completeDrive: async () => undefined,
     offerHolders: async () => new Set<string>(),
+    driveStatus: async () => "live" as const,
     ...overrides,
   });
 
@@ -1185,6 +1245,7 @@ describe("DriveRoundsPage — the CSV template and the matching it guarantees", 
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
       offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
       ...overrides,
     };
   }
@@ -1474,6 +1535,7 @@ describe("the CSV upload waits for Save", () => {
       completionFacts: async () => ({ ready: true, undecided: 0 }),
       completeDrive: async () => undefined,
       offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
       ...overrides,
     }) as DriveRoundsView;
 

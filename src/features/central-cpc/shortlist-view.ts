@@ -1,6 +1,6 @@
 import type { ShortlistEntry } from "@domain/recruiter-export";
 import { objectKeyIn } from "@domain/storage-path";
-import type { AppRole, RoleCategory } from "@domain/types";
+import { type AppRole, DRIVE_STATUSES, type DriveStatus, type RoleCategory } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ShortlistApplicant, ShortlistDrive, ShortlistView } from "./shortlist-page";
 
@@ -25,12 +25,13 @@ export function createSupabaseShortlistView(
     async drive(driveId) {
       const { data } = await client
         .from("drives")
-        .select("id, company_name, role_title, role_category, mandatory_skills")
+        .select("id, company_name, role_title, role_category, mandatory_skills, status")
         .eq("id", driveId)
         .single();
 
       const row = (data ?? {}) as Record<string, unknown>;
       const skills = row.mandatory_skills;
+      const status = row.status;
 
       return {
         driveId,
@@ -42,6 +43,10 @@ export function createSupabaseShortlistView(
           : typeof skills === "string" && skills.trim() !== ""
             ? skills.split(",").map((s) => s.trim())
             : [],
+        // A value outside the lifecycle is read as no status, not guessed into
+        // one: the screen may then write, which is what it did before this
+        // column was consulted at all.
+        status: DRIVE_STATUSES.includes(status as DriveStatus) ? (status as DriveStatus) : null,
       } satisfies ShortlistDrive;
     },
 

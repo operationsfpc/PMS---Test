@@ -37,10 +37,17 @@ export function StudentIdentity({
           name
         )}
       </p>
+      {/* A bare "1" under a name is a roll number only to whoever already
+          knows the system. Every staff row goes through here, so the words
+          belong on this line rather than on eight screens. */}
       <p className="flex flex-wrap items-center gap-x-2 text-sm text-ink-500">
-        <span>{rollNumber}</span>
+        {rollNumber !== "" && <span>Roll {rollNumber}</span>}
         {college != null && college !== "" && (
-          <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+          <span
+            title="College campus"
+            className="rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700"
+          >
+            <span className="sr-only">College: </span>
             {college}
           </span>
         )}

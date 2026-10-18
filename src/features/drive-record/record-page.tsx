@@ -1,8 +1,10 @@
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { visitDayInParentheses } from "@domain/drive-aging";
 import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
+import { describeDriveFreeze } from "@domain/drive-working";
 import { offerCategoryLabel, offerCategoryRestatesType } from "@domain/offer-category";
-import type { AppRole } from "@domain/types";
+import type { AppRole, DriveStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import type { DriveRecord, DriveRecordView } from "./record-view";
@@ -139,6 +141,20 @@ export function DriveRecordPage({
 
   const staff = role !== "student";
   const driveType = asDriveType(record.driveType);
+  /**
+   * Whether this drive's visit still admits one more role. The visit, not just
+   * this row: a new role attaches to the company event, so it is refused only
+   * when every role under it is closed — the same rule the AE portfolio reads.
+   */
+  const visitStatuses: readonly DriveStatus[] = [
+    record.status,
+    ...record.siblingRoles.map((sibling) => sibling.status),
+  ];
+  const refusalPerRole = visitStatuses.map((status) => describeDriveFreeze("roles", status));
+  const rolesRefused =
+    refusalPerRole.length > 0 && refusalPerRole.every((sentence) => sentence !== null)
+      ? (refusalPerRole[0] ?? null)
+      : null;
 
   /**
    * C8 (2026-08-21, answer 5b): the list behind a clicked funnel number.
@@ -166,16 +182,23 @@ export function DriveRecordPage({
           .join(" · ")}
         actions={
           staff && (role === "account_executive" || role === "admin") ? (
-            <Link
-              to={`/ae/pif?companyName=${encodeURIComponent(record.companyName)}${
-                record.companyDriveId
-                  ? `&companyDriveId=${encodeURIComponent(record.companyDriveId)}`
-                  : ""
-              }&tentativeDate=${encodeURIComponent(record.tentativeDate ?? "")}`}
-              className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
-            >
-              + Add Role to this Drive {record.tentativeDate ? `(${record.tentativeDate})` : ""}
-            </Link>
+            rolesRefused === null ? (
+              <Link
+                to={`/ae/pif?companyName=${encodeURIComponent(record.companyName)}${
+                  record.companyDriveId
+                    ? `&companyDriveId=${encodeURIComponent(record.companyDriveId)}`
+                    : ""
+                }&tentativeDate=${encodeURIComponent(record.tentativeDate ?? "")}`}
+                className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+              >
+                + Add Role to this Drive{visitDayInParentheses(record.tentativeDate)}
+              </Link>
+            ) : (
+              // A closed visit cannot take a fifth role onto it. The offer is
+              // replaced by the reason, not removed: a missing button reads
+              // as a defect, a refused one that says why reads as a rule.
+              <p className="text-xs text-ink-500">{rolesRefused} No further roles can be raised.</p>
+            )
           ) : undefined
         }
       />
@@ -221,7 +244,7 @@ export function DriveRecordPage({
                         {applicant.fullName}
                       </Link>{" "}
                       <span className="text-sm text-ink-500">
-                        {applicant.rollNumber}
+                        Roll {applicant.rollNumber}
                         {applicant.campus !== "" && ` · ${applicant.campus}`}
                       </span>
                     </span>
@@ -346,9 +369,10 @@ export function DriveRecordPage({
                     <td className="py-2 pr-3">{applicant.campus}</td>
                     <td className="py-2 pr-3">{when(applicant.appliedAt)}</td>
                     <td className="py-2">
-                      <button
-                        type="button"
-                        className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-expanded={openSnapshot === applicant.applicationId}
                         onClick={() =>
                           setOpenSnapshot(
                             openSnapshot === applicant.applicationId
@@ -360,7 +384,7 @@ export function DriveRecordPage({
                         {openSnapshot === applicant.applicationId
                           ? "Hide snapshot"
                           : "View snapshot"}
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}

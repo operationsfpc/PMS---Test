@@ -1,5 +1,7 @@
+import { ErrorPanel } from "@components/error-panel";
 import { ToastContainer, useToast } from "@components/toast";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { asDriveStatus, describeDriveFreeze } from "@domain/drive-working";
 import { ROLE_CATEGORIES } from "@domain/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type FieldErrors, useFieldArray } from "react-hook-form";
@@ -326,6 +328,14 @@ export function PifForm({
   const joiningTimeline = (watch("joiningTimeline") ?? "") as string;
 
   const [eventsForCompany, setEventsForCompany] = useState<readonly ExistingDriveEvent[]>([]);
+  /**
+   * This read used to be a bare `.then()`: when it failed, the picker simply
+   * showed nothing, and an AE who had driven with Zoho in August wrote a second
+   * PIF for a visit that already existed. An empty list and an unreadable one
+   * are different facts, and only one of them is a reason to start fresh.
+   */
+  const [eventsProblem, setEventsProblem] = useState<string | null>(null);
+  const [eventsAttempt, setEventsAttempt] = useState(0);
   const [selectedEventIdState, setSelectedEventIdState] = useState<string | null>(
     initialValues?.companyDriveId ?? null,
   );
@@ -435,43 +445,53 @@ export function PifForm({
     [getValues, setValue],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     let active = true;
     if (getCompanyEvents && watchedCompanyName.trim().length >= 2) {
-      void getCompanyEvents(watchedCompanyName.trim()).then((events) => {
-        if (!active) return;
-        setEventsForCompany(events);
-        if (initialValues?.companyDriveId) {
-          const found = events.find((e) => e.id === initialValues.companyDriveId);
-          if (found) {
-            setSelectedEventId(found.id);
-            // Applied once per event: a refetch (the name re-typed) must not
-            // clobber what the AE edited since.
-            if (appliedEventRef.current !== found.id) {
-              appliedEventRef.current = found.id;
-              applyEventDefaults(found);
+      getCompanyEvents(watchedCompanyName.trim())
+        .then((events) => {
+          if (!active) return;
+          setEventsProblem(null);
+          setEventsForCompany(events);
+          if (initialValues?.companyDriveId) {
+            const found = events.find((e) => e.id === initialValues.companyDriveId);
+            if (found) {
+              setSelectedEventId(found.id);
+              // Applied once per event: a refetch (the name re-typed) must not
+              // clobber what the AE edited since.
+              if (appliedEventRef.current !== found.id) {
+                appliedEventRef.current = found.id;
+                applyEventDefaults(found);
+              }
+              return;
             }
-            return;
           }
-        }
-        // The name moved to a different company: a selection made under the
-        // previous one must not ride along and attach this drive to its event.
-        const previous = selectedEventIdRef.current;
-        if (previous !== null && previous !== "new" && !events.some((e) => e.id === previous)) {
-          setSelectedEventId(null);
-          setValue("companyDriveId", "");
-          const current = getValues("contacts") as ContactRow[] | undefined;
-          if (
-            autoContactSignatureRef.current !== null &&
-            contactSignature(current) === autoContactSignatureRef.current
-          ) {
-            setValue("contacts", []);
-            autoContactSignatureRef.current = null;
+          // The name moved to a different company: a selection made under the
+          // previous one must not ride along and attach this drive to its event.
+          const previous = selectedEventIdRef.current;
+          if (previous !== null && previous !== "new" && !events.some((e) => e.id === previous)) {
+            setSelectedEventId(null);
+            setValue("companyDriveId", "");
+            const current = getValues("contacts") as ContactRow[] | undefined;
+            if (
+              autoContactSignatureRef.current !== null &&
+              contactSignature(current) === autoContactSignatureRef.current
+            ) {
+              setValue("contacts", []);
+              autoContactSignatureRef.current = null;
+            }
           }
-        }
-      });
+        })
+        .catch(() => {
+          if (active) {
+            setEventsForCompany([]);
+            setEventsProblem("We could not read this company's existing drive dates.");
+          }
+        });
     } else {
       setEventsForCompany([]);
+      setEventsProblem(null);
     }
     return () => {
       active = false;
@@ -484,6 +504,7 @@ export function PifForm({
     setSelectedEventId,
     getValues,
     setValue,
+    eventsAttempt,
   ]);
 
   const selectedEvent =
@@ -558,13 +579,9 @@ export function PifForm({
                     Adding a drive for {watchedCompanyName || matchedCompany?.name}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={clearCompany}
-                  className="font-medium text-brand-700 underline hover:text-brand-900"
-                >
+                <Button size="sm" variant="secondary" onClick={clearCompany}>
                   Clear to create for another company
-                </button>
+                </Button>
               </div>
               <p className="mt-1 text-ink-600">
                 Industry, website and contacts come from this company's existing profile.
@@ -589,6 +606,18 @@ export function PifForm({
         </Section>
 
         <Section number={2} title={eventSection.title} id={eventSection.id}>
+          {eventsProblem !== null && (
+            <div className="sm:col-span-2">
+              <ErrorPanel
+                onRetry={() => setEventsAttempt((count) => count + 1)}
+                retryLabel="Read them again"
+              >
+                {eventsProblem} The form still works, but the drive dates this company already has
+                will not be offered in it.
+              </ErrorPanel>
+            </div>
+          )}
+
           {eventsForCompany.length > 0 && (
             <div className="sm:col-span-2 rounded-xl border-2 border-brand-200 bg-brand-50/60 p-4">
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -609,19 +638,24 @@ export function PifForm({
               <div className="mt-3 space-y-2">
                 {eventsForCompany.map((evt) => {
                   const isSelected = selectedEventId === evt.id;
+                  // A visit whose record is closed cannot take another role —
+                  // the same rule the AE's own drive cards read, in the same
+                  // words. The row stays on screen and says why it is locked.
+                  const refused = describeDriveFreeze("roles", asDriveStatus(evt.status));
                   return (
                     <label
                       key={evt.id}
-                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                      className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
                         isSelected
                           ? "border-brand-500 bg-white shadow-xs ring-1 ring-brand-500/20"
-                          : "border-line bg-white/70 hover:bg-white"
-                      }`}
+                          : "border-line bg-white/70"
+                      } ${refused === null ? "cursor-pointer hover:bg-white" : ""}`}
                     >
                       <input
                         type="radio"
                         name="companyDriveEventSelector"
                         checked={isSelected}
+                        disabled={refused !== null}
                         onChange={() => {
                           setSelectedEventId(evt.id);
                           setValue("companyDriveId", evt.id);
@@ -639,8 +673,8 @@ export function PifForm({
                             {EVENT_STATUS_LABELS[evt.status]?.label ?? evt.status}
                           </Badge>
                           {evt.driveMode && (
-                            <span className="text-ink-500 capitalize">
-                              · {evt.driveMode.replace(/_/g, " ")}
+                            <span className="text-ink-500">
+                              · {DRIVE_MODE_LABELS[evt.driveMode] ?? evt.driveMode}
                             </span>
                           )}
                         </div>
@@ -651,6 +685,11 @@ export function PifForm({
                           </p>
                         )}
                         {evt.venue && <p className="mt-0.5 text-ink-500">Venue: {evt.venue}</p>}
+                        {refused !== null && (
+                          <p className="mt-1 text-ink-500">
+                            {refused} Raise these roles on a new drive date instead.
+                          </p>
+                        )}
                       </div>
                     </label>
                   );

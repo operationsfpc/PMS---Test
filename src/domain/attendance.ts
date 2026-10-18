@@ -11,6 +11,26 @@ import type { AttendanceStatus, RoundResult } from "./types";
 /** Three cumulative absences trigger a Central CPC review. */
 export const ABSENCE_LIMIT = 3;
 
+/**
+ * What `attendance` is worth to a person reading the row.
+ *
+ * "scheduled" is the database's word for "nobody has marked this student yet",
+ * which is not what a reader would guess from the bare enum — and a roster that
+ * prints `on_hold` or `provisional` untranslated asks the reader to know the
+ * schema before they can read their own screen. Every list of students spells
+ * these four the same way, from here.
+ */
+export const ATTENDANCE_LABELS: Readonly<Record<AttendanceStatus, string>> = {
+  scheduled: "Not marked yet",
+  present: "Present",
+  absent: "Absent",
+  provisional: "Checked in, unconfirmed",
+};
+
+export function attendanceLabel(status: AttendanceStatus): string {
+  return ATTENDANCE_LABELS[status];
+}
+
 export interface AttendanceRecord {
   readonly driveId: string;
   readonly roundId: string;

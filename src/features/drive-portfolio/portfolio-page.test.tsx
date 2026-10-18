@@ -189,7 +189,7 @@ describe("DrivePortfolioPage", () => {
 
     const list = await screen.findByRole("dialog", { name: "Zoho Corporation" });
     expect(within(list).getByText("Anjali Subramanian")).toBeDefined();
-    expect(within(list).getByText("21CSE1042")).toBeDefined();
+    expect(within(list).getByText("Roll 21CSE1042")).toBeDefined();
     expect(within(list).getByText("Round 2 of 2 — Technical interview")).toBeDefined();
     expect(within(list).getByText(/awaiting shortlist/i)).toBeDefined();
   });
@@ -922,10 +922,12 @@ describe("one company visit is one card", () => {
       within(dialog)
         .getAllByRole("tab")
         .map((tab) => tab.textContent),
-    ).toEqual(["Member Technical Staff (2)", "Data Analyst (0)"]);
+    ).toEqual(["Member Technical Staff (2 applicants)", "Data Analyst (0 applicants)"]);
     expect(within(dialog).getByText(/nobody has applied yet/i)).toBeDefined();
 
-    await user.click(within(dialog).getByRole("tab", { name: "Member Technical Staff (2)" }));
+    await user.click(
+      within(dialog).getByRole("tab", { name: "Member Technical Staff (2 applicants)" }),
+    );
 
     expect(within(dialog).getByText("Anjali Subramanian")).toBeDefined();
     expect(
@@ -952,5 +954,64 @@ describe("one company visit is one card", () => {
     expect(v.getByRole("button", { name: /^member technical staff/i }).textContent).toContain(
       "Full time",
     );
+  });
+});
+
+/**
+ * 2026-10-18 (UAT): "+ Add Another Role to This Drive" was offered on visits
+ * that are over, so an AE could raise a fifth role onto a closed Zoho visit.
+ * The domain decides — the offer is replaced by the reason, said once for the
+ * visit rather than once per role.
+ */
+describe("a visit decides whether it can take one more role", () => {
+  const closedRole = (driveId: string, roleTitle: string): PortfolioDrive => ({
+    ...DRIVE,
+    driveId,
+    roleTitle,
+    companyDriveId: "e7",
+    tentativeDate: "2026-09-01",
+    status: "completed",
+    applicants: [],
+  });
+
+  const card = async () => {
+    const headline = await screen.findByRole("heading", { level: 3, name: /zoho corporation/i });
+    const visitCard = headline.closest("li");
+    if (visitCard === null) throw new Error("visit card not found");
+    return within(visitCard);
+  };
+
+  it("refuses the extra role once every role under the visit is closed", async () => {
+    show({
+      view: view([closedRole("d40", "Member Technical Staff"), closedRole("d41", "Data Analyst")]),
+    });
+
+    const v = await card();
+    expect(v.queryByRole("link", { name: /add another role/i })).toBeNull();
+    expect(v.getByText(/record is closed/i)).toBeDefined();
+    expect(v.getAllByText(/no further roles can be raised/i)).toHaveLength(1);
+  });
+
+  it("still offers it while any role of the visit is running", async () => {
+    show({
+      view: view([
+        closedRole("d42", "Member Technical Staff"),
+        { ...DRIVE, driveId: "d43", roleTitle: "Intern", companyDriveId: "e7" },
+      ]),
+    });
+
+    const v = await card();
+    expect(v.getByRole("link", { name: /add another role/i })).toBeDefined();
+    expect(v.queryByText(/no further roles can be raised/i)).toBeNull();
+  });
+
+  it("names the visit's day on a standalone drive, where it is not already printed", async () => {
+    show({
+      view: view([{ ...DRIVE, driveId: "d44", companyDriveId: "e8", tentativeDate: "2026-09-01" }]),
+    });
+
+    const link = await screen.findByRole("link", { name: /add another role to this drive/i });
+    expect(link.textContent).toContain("(1 Sept 2026)");
+    expect(screen.queryByText(/no further roles can be raised/i)).toBeNull();
   });
 });

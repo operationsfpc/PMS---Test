@@ -25,6 +25,8 @@ const DRIVE = {
   roleTitle: "MTS",
   roleCategory: "software_technical" as const,
   mandatorySkills: ["TypeScript"],
+  // A drive the students can see: the lifecycle gate is a separate test.
+  status: "live" as const,
 };
 
 const WEAK: ShortlistApplicant = {
@@ -89,6 +91,30 @@ describe("ShortlistPage", () => {
     expect(within(rows[0] as HTMLElement).getByText("Strong Candidate")).toBeDefined();
   });
 
+  // 2026-10-18 (UAT, live): arriving by link used to be enough to be offered
+  // the save. The drive's own status decides, and says so.
+  it("closes the shortlist of a completed drive", async () => {
+    show(view({ drive: async () => ({ ...DRIVE, status: "completed" as const }) }));
+
+    await screen.findByText("Strong Candidate");
+    expect(screen.getByText(/this shortlist is closed/i)).toBeDefined();
+    expect(screen.getByText(/its record is closed/i)).toBeDefined();
+    expect(
+      (screen.getByRole("button", { name: /shortlist 0/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    // Nothing to tick on a list that cannot be saved.
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("refuses to shortlist a drive the students have not been told about", async () => {
+    show(view({ drive: async () => ({ ...DRIVE, status: "approved" as const }) }));
+
+    expect(await screen.findByText(/has not been published yet/i)).toBeDefined();
+    expect(
+      (screen.getByRole("button", { name: /shortlist 0/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
   it("shows why each candidate scored what they did", async () => {
     show(view());
 
@@ -101,9 +127,10 @@ describe("ShortlistPage", () => {
     show(view());
 
     const college = await screen.findByText("PSG College of Technology");
-    // On the roll-and-CGPA line, so the row reads as one identity instead of
-    // a fact the coordinator has to go and find elsewhere.
-    expect(college.parentElement).toBe(screen.getByText("21CSE0001").parentElement);
+    // On the roll line, so the row reads as one identity instead of
+    // a fact the coordinator has to go and find elsewhere. The roll is
+    // labelled, because a bare "21CSE0001" — or a bare "1" — is not self-evident.
+    expect(college.parentElement).toBe(screen.getByText(/roll 21CSE0001/i).parentElement);
     // Weak Candidate's record carries no college, so one row shows no chip
     // rather than an empty one.
     expect(screen.getAllByText(/College of Technology/)).toHaveLength(1);
@@ -452,6 +479,20 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
   });
 
   /**
+   * The exports download what is SAVED, so every test that reaches one starts
+   * from a drive with somebody already on the shortlist. `shortlisted: false`
+   * rows would leave the control greyed out — which is its own test below.
+   */
+  const saved = (roll: string, name: string): ShortlistApplicant => ({
+    ...WEAK,
+    applicationId: `app-${roll}`,
+    studentId: `s-${roll}`,
+    studentName: name,
+    rollNumber: roll,
+    shortlisted: true,
+  });
+
+  /**
    * ⚠️ REWRITTEN 2026-08-24 (answers 5a/5b) — the CSV became the zip pack:
    * shortlist.xlsx + resumes/, hyperlinked, zipped; and a missing resume now
    * BLOCKS the export instead of merely being named beside a download.
@@ -464,6 +505,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
       <ShortlistPage
         driveId="d1"
         view={view({
+          applicants: async () => [saved("R1", "Priya"), STRONG],
           exportEntries: async () => [
             { applicationId: "a1", included: true, snapshot: snapshot("R1", "Priya") },
             { applicationId: "a2", included: false, snapshot: snapshot("R2", "Left Out") },
@@ -497,7 +539,13 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     expect(screen.getByRole("status").textContent).toMatch(/exported 1 shortlisted candidate/i);
   });
 
-  it("handles empty shortlist export gracefully with error message", async () => {
+  /**
+   * An empty shortlist used to answer the click with "No shortlisted candidates
+   * to export." — a refusal for an action that could never have succeeded. The
+   * controls are now greyed with the reason on the same line, and the guard in
+   * `exportShortlistCsv` stays as the last word.
+   */
+  it("offers no export while nobody is on the saved shortlist", async () => {
     const download = vi.fn();
     const logExport = vi.fn();
     const user = userEvent.setup();
@@ -513,9 +561,14 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     );
 
     await screen.findByText("Strong Candidate");
-    await user.click(screen.getByRole("button", { name: /export shortlist/i }));
+    const csvButton = screen.getByRole("button", { name: /export shortlist \(csv\)/i });
+    const zipButton = screen.getByRole("button", { name: /export recruiter pack \(zip\)/i });
+    expect((csvButton as HTMLButtonElement).disabled).toBe(true);
+    expect((zipButton as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/shortlist someone first/i)).toBeDefined();
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/no shortlisted candidates/i);
+    await user.click(csvButton);
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(download).not.toHaveBeenCalled();
     expect(logExport).not.toHaveBeenCalled();
   });
@@ -876,6 +929,9 @@ describe("the recruiter pack names resume files safely", () => {
       <ShortlistPage
         driveId="d1"
         view={view({
+          // Somebody must be on the saved shortlist before its pack can be
+          // downloaded; the export controls say so rather than refusing.
+          applicants: async () => [{ ...WEAK, shortlisted: true }, STRONG],
           exportEntries: async () => [
             { applicationId: "a1", included: true, snapshot: snapshotOf("124", "Anu/Priya") },
           ],

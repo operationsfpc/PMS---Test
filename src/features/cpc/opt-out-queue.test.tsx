@@ -80,6 +80,11 @@ describe("OptOutQueue", () => {
     );
 
     expect(await screen.findByText(/no signed declaration/i)).toBeDefined();
+    // 2026-10-18: the row said the declaration was missing and still offered an
+    // irreversible Approve beside the sentence.
+    expect((screen.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
   });
 
   it("approves the request the coordinator pressed", async () => {
@@ -114,6 +119,26 @@ describe("OptOutQueue", () => {
     );
 
     expect(await screen.findByText(/nothing waiting/i)).toBeDefined();
+  });
+
+  /**
+   * 2026-10-18: a rejected reload used to leave the screen reading "Loading…"
+   * forever with no reason, because the shell only guarded the decision.
+   */
+  it("shows a failed load as a failure, never as an empty queue", async () => {
+    render(
+      <OptOutQueue
+        view={view({
+          pending: async () => {
+            throw new Error("Could not reach the requests.");
+          },
+        })}
+      />,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/could not reach/i);
+    expect(screen.queryByText(/nothing waiting/i)).toBeNull();
+    expect(screen.queryByText(/loading/i)).toBeNull();
   });
 
   /** F2: this screen decides one kind of request. */

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { PifForm } from "./pif-form";
@@ -1021,6 +1021,49 @@ describe("PifForm — adding a role to an existing drive (the event picker)", ()
     expect((screen.getByLabelText(/^venue$/i) as HTMLInputElement).value).toBe(
       "Kamaraj College, Madurai",
     );
+  });
+
+  /**
+   * 2026-10-18 (UAT): a completed visit was still offered as a drive date, so
+   * an AE could raise a role onto a company that had stopped hiring. The date
+   * stays on the card and says why it cannot be picked.
+   */
+  it("refuses a drive date whose record is closed, in the domain's words", async () => {
+    const user = userEvent.setup();
+    render(
+      <PifForm
+        onSubmit={vi.fn()}
+        onSaveDraft={vi.fn()}
+        getCompanyEvents={vi.fn().mockResolvedValue([{ ...existingEvent, status: "completed" }])}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+
+    const date = (await screen.findByRole("radio", {
+      name: /drive date/i,
+    })) as HTMLInputElement;
+    expect(date.disabled).toBe(true);
+    expect(screen.getByText(/record is closed/i)).toBeDefined();
+    expect(screen.getByText(/raise these roles on a new drive date instead/i)).toBeDefined();
+  });
+
+  it("says aloud when this company's drive dates could not be read", async () => {
+    const user = userEvent.setup();
+    render(
+      <PifForm
+        onSubmit={vi.fn()}
+        onSaveDraft={vi.fn()}
+        getCompanyEvents={vi.fn().mockRejectedValue(new Error("offline"))}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not read this company/i);
+    // A failed read is not "this company has no drives" — the retry is offered.
+    expect(within(alert).getByRole("button", { name: /read them again/i })).toBeDefined();
   });
 
   it("never clobbers contacts the AE already typed", async () => {

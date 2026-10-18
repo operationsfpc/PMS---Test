@@ -1,6 +1,7 @@
+import { ErrorPanel } from "@components/error-panel";
 import { Card } from "@components/ui";
 import { supabase } from "@lib/supabase";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { PifForm } from "./pif-form";
 import {
@@ -54,12 +55,38 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
   const [skillAreas, setSkillAreas] = useState<readonly string[]>([]);
   const [existingCompanies, setExistingCompanies] = useState<readonly CompanySuggestion[]>([]);
 
-  useEffect(() => {
-    void repo.skillAreas().then(setSkillAreas);
-    if (repo.existingCompanies) {
-      void repo.existingCompanies().then(setExistingCompanies);
+  /**
+   * Both catalogues feed the form, and both used to be read with a bare
+   * `.then()`. A rejected one left the picker empty, which reads as "the
+   * college assesses no skills" or "no company has ever been on record" —
+   * never as the failed read it is.
+   */
+  const [catalogueProblem, setCatalogueProblem] = useState<string | null>(null);
+
+  const loadCatalogue = useCallback(async () => {
+    const missing: string[] = [];
+    try {
+      setSkillAreas(await repo.skillAreas());
+    } catch {
+      missing.push("the assessed-skills catalogue");
     }
+    if (repo.existingCompanies !== undefined) {
+      try {
+        setExistingCompanies(await repo.existingCompanies());
+      } catch {
+        missing.push("the companies already on record");
+      }
+    }
+    setCatalogueProblem(
+      missing.length === 0
+        ? null
+        : `We could not read ${missing.join(" and ")}. The form still works, but what those lists offer will be missing from it.`,
+    );
   }, [repo]);
+
+  useEffect(() => {
+    void loadCatalogue();
+  }, [loadCatalogue]);
 
   const initialValues = useMemo<Partial<MultiRolePifValues>>(() => {
     const init: Partial<MultiRolePifValues> = {};
@@ -137,6 +164,11 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
             Draft saved. It has not gone to the Delivery Head yet.
           </p>
         </Card>
+      )}
+      {catalogueProblem !== null && (
+        <div className="mb-4">
+          <ErrorPanel onRetry={() => void loadCatalogue()}>{catalogueProblem}</ErrorPanel>
+        </div>
       )}
       <PifForm
         onSubmit={(values) => write(values, "submitted")}
