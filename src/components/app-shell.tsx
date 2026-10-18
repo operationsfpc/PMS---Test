@@ -619,12 +619,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             {/* Campus machines are shared. Leaving no way out means the next
                 person to open the browser is signed in as the last one. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="cursor-pointer"
-              onClick={() => void signOut()}
-            >
+            <Button variant="secondary" size="sm" onClick={() => void signOut()}>
               <LogOut aria-hidden="true" className="size-3.5 shrink-0" />
               Sign out
             </Button>

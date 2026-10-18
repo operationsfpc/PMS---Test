@@ -200,7 +200,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
                     <Button disabled={busy} onClick={() => void rename(skill)}>
                       Save
                     </Button>
-                    <Button variant="ghost" onClick={() => setRenamingId(null)}>
+                    <Button variant="secondary" onClick={() => setRenamingId(null)}>
                       Cancel
                     </Button>
                   </div>
@@ -252,7 +252,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
                       <Button disabled={busy} onClick={() => void remove(skill)}>
                         Yes, remove
                       </Button>
-                      <Button variant="ghost" onClick={() => setConfirmingId(null)}>
+                      <Button variant="secondary" onClick={() => setConfirmingId(null)}>
                         Cancel
                       </Button>
                     </div>

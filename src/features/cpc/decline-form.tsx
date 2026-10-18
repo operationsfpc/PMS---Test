@@ -63,7 +63,7 @@ export function DeclineForm({
         <Button variant="danger" size="sm" onClick={send}>
           Send decline
         </Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button variant="secondary" size="sm" onClick={onCancel}>
           Cancel
         </Button>
       </div>

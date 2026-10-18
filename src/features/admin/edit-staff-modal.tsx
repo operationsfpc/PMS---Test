@@ -398,7 +398,7 @@ export function EditStaffModal({
 
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
+            <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
               Cancel
             </Button>
             <Button type="submit" size="sm" isLoading={saving}>

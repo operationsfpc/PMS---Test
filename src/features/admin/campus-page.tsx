@@ -181,7 +181,7 @@ export function CampusPage({
               Add campus
             </Button>
             {showAddForm && (
-              <Button variant="ghost" onClick={() => setShowAddForm(false)}>
+              <Button variant="secondary" onClick={() => setShowAddForm(false)}>
                 Cancel
               </Button>
             )}

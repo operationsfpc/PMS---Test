@@ -38,7 +38,9 @@ const VARIANTS = {
   secondary: "bg-surface text-ink-700 border border-line hover:border-brand-300",
   gold: "bg-gold-500 text-brand-900 hover:bg-gold-600 shadow-sm",
   danger: "bg-surface text-danger-700 border border-danger-500/40 hover:bg-danger-50",
-  ghost: "text-brand-500 hover:bg-brand-50",
+  // Text-coloured, so it needs something a shape cannot give it: underlining on
+  // hover is what tells the reader this line of words is a control.
+  ghost: "text-brand-500 underline-offset-2 hover:underline hover:bg-brand-50",
 } as const;
 
 const DISABLED = "disabled:cursor-not-allowed disabled:opacity-60";

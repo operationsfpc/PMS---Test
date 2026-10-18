@@ -92,7 +92,7 @@ export function RemoveStaffModal({ member, onClose, onConfirm }: RemoveStaffModa
           )}
 
           <div className="mt-6 flex items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>
+            <Button variant="secondary" size="sm" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
             <Button variant="danger" size="sm" onClick={handleRemove} isLoading={busy}>

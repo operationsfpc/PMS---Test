@@ -385,7 +385,7 @@ export function DrivesList({
                         <Button isLoading={busyId === drive.id} onClick={() => void confirm(drive)}>
                           Yes, apply
                         </Button>
-                        <Button variant="ghost" onClick={() => setConfirmingId(null)}>
+                        <Button variant="secondary" onClick={() => setConfirmingId(null)}>
                           Cancel
                         </Button>
                       </div>

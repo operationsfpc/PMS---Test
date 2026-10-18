@@ -74,6 +74,20 @@
    */
   --color-destructive: var(--color-danger-500);
 
+  /**
+   * The same fault, twice more. `warning` and `accent` are asked for by ten
+   * screens — `border-warning/50 bg-warning/5` is how a student's UNREAD
+   * notification is marked, and `bg-accent/5` is how the shortlist explains a
+   * ranking — and neither name had a value, so Tailwind emitted nothing and
+   * those elements rendered colourless. An unread notice that looks read is not
+   * a missing flourish; it is a wrong answer on the screen.
+   *
+   * Aliased to the ramps `Badge` already calls these tones (ui.tsx `TONES`), so
+   * a warning wash and a warning badge are the same amber.
+   */
+  --color-warning: var(--color-gold-700);
+  --color-accent: var(--color-violet-500);
+
   /* Neutrals */
   --color-brand-950: #0d0b19;
   --color-gold-800: #7d5900;
@@ -226,6 +240,26 @@
     font-family: var(--font-heading);
     font-weight: 700;
     letter-spacing: -0.01em;
+  }
+
+  /**
+   * Tailwind v4's preflight gives every button `cursor: default`, and nothing in
+   * this stylesheet ever overrode it — so a control that worked showed an arrow
+   * cursor, and the handful of call sites that hand-wrote `cursor-pointer` were
+   * the only ones that did not. Read the other way round, the eleven ghost
+   * buttons were not quiet by design; they were invisible as controls.
+   *
+   * Stated once here rather than per component, because an affordance that has
+   * to be remembered at every call site is an affordance that gets forgotten.
+   * Labels count only when they wrap a checkbox, radio or select — the thing
+   * they toggle — and not for a text field, which must keep its text cursor.
+   */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  summary,
+  select:not(:disabled),
+  label:has(:is(input[type="checkbox"], input[type="radio"], select)) {
+    cursor: pointer;
   }
 
   /* Visible focus for keyboard users — accessibility is not optional. */
