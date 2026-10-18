@@ -61,6 +61,23 @@ describe("the company visit pane", () => {
     expect(within(dialog).queryByText("Priya Menon")).toBeNull();
   });
 
+  /**
+   * A long roster scrolls. When the tabs sat in the scrolling body they slid
+   * out of view with it, leaving the reader in one role's students with no way
+   * to reach the other and no way to see which visit they were in — so the
+   * strip belongs inside the header, which stays pinned.
+   */
+  it("pins the role tabs with the company so a long roster cannot scroll them away", () => {
+    show({ roles: ROLES });
+    const dialog = screen.getByRole("dialog");
+
+    const tablist = within(dialog).getByRole("tablist");
+    const header = dialog.querySelector(".sticky");
+    if (header === null) throw new Error("no pinned header in the pane");
+    expect(header.contains(tablist)).toBe(true);
+    expect(tablist.getAttribute("aria-label")).toBe("TCS roles");
+  });
+
   it("says a single role in the pane rather than opening a tab of one", () => {
     const [software] = ROLES;
     if (software === undefined) throw new Error("fixture missing");

@@ -69,50 +69,70 @@ export function VisitPane({
   const isVisit = roles.length >= MIN_TABS;
   const active = roles.find((role) => role.id === activeId) ?? roles[0];
 
+  /**
+   * The heading, with the role strip inside it when there is one. The tabs ride
+   * in the sticky header rather than below it because they are how the reader
+   * changes role, and a control that scrolls out of view above a long roster is
+   * a control that says "scroll back to the top to do your job".
+   */
+  const header = (tabs: ReactNode) => (
+    <SheetHeader>
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+        <UsersGlyph />
+        {eyebrow}
+      </p>
+      <SheetTitle>{company}</SheetTitle>
+      {description === undefined || description === "" ? null : (
+        <SheetDescription>{description}</SheetDescription>
+      )}
+      {tabs}
+    </SheetHeader>
+  );
+
+  const tabStrip = (
+    <div className="-mb-1 overflow-x-auto pt-1">
+      <TabsList aria-label={`${company} roles`}>
+        {roles.map((role) => (
+          <TabsTrigger key={role.id} value={role.id}>
+            {role.label}
+            {role.count === undefined ? null : ` (${role.count})`}
+            {role.badge === undefined ? null : <span className="ml-2">{role.badge}</span>}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </div>
+  );
+
   return (
     <Sheet open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <SheetContent side="right" size="2xl">
-        <SheetHeader>
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
-            <UsersGlyph />
-            {eyebrow}
-          </p>
-          <SheetTitle>{company}</SheetTitle>
-          {description === undefined || description === "" ? null : (
-            <SheetDescription>{description}</SheetDescription>
-          )}
-        </SheetHeader>
-
         {isVisit ? (
           <Tabs defaultValue={active?.id}>
-            <TabsList aria-label={`${company} roles`}>
-              {roles.map((role) => (
-                <TabsTrigger key={role.id} value={role.id}>
-                  {role.label}
-                  {role.count === undefined ? null : ` (${role.count})`}
-                  {role.badge === undefined ? null : <span className="ml-2">{role.badge}</span>}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {header(tabStrip)}
             {roles.map((role) => (
               <TabsContent key={role.id} value={role.id} className="mt-4">
                 {role.content}
               </TabsContent>
             ))}
           </Tabs>
-        ) : single === undefined ? (
-          <p className="text-sm text-ink-500">This visit has no roles to list.</p>
         ) : (
-          <div className="mt-4">
-            <p className="mb-3 flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-heading font-bold text-ink-900">{single.label}</span>
-              {single.badge ?? null}
-              {single.count === undefined ? null : (
-                <span className="text-ink-500">{single.count}</span>
-              )}
-            </p>
-            {single.content}
-          </div>
+          <>
+            {header(null)}
+            {single === undefined ? (
+              <p className="text-sm text-ink-500">This visit has no roles to list.</p>
+            ) : (
+              <div className="mt-4">
+                <p className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-heading font-bold text-ink-900">{single.label}</span>
+                  {single.badge ?? null}
+                  {single.count === undefined ? null : (
+                    <span className="text-ink-500">{single.count}</span>
+                  )}
+                </p>
+                {single.content}
+              </div>
+            )}
+          </>
         )}
       </SheetContent>
     </Sheet>

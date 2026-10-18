@@ -451,20 +451,39 @@ function VisitCard({
       </div>
 
       {isVisit ? (
-        <div className="p-4">
-          <table className="w-full text-left text-sm">
+        // The card rounds its corners with `overflow-hidden`, and a table is
+        // never narrower than its own content — so on a phone, or with the
+        // sidebar open at a laptop width, the right-hand edge of this table fell
+        // off the card with no scrollbar to reach it, and the only way to open a
+        // role's students was cut away. Let the strip scroll instead.
+        <div className="overflow-x-auto p-4">
+          <table className="w-full min-w-[660px] text-left text-sm">
             <caption className="sr-only">
               Roles raised by {head.companyName}, and how far each one has come
             </caption>
             <thead>
               <tr className="text-xs uppercase tracking-wide text-ink-500">
-                <th className="py-1 pr-3 font-semibold">Role</th>
-                <th className="py-1 pr-3 font-semibold">Students</th>
-                <th className="py-1 pr-3 font-semibold">Shortlisted</th>
-                <th className="py-1 pr-3 font-semibold">In rounds</th>
-                <th className="py-1 pr-3 font-semibold">Offers</th>
-                <th className="py-1 pr-3 font-semibold">Status</th>
-                <th className="py-1" aria-label="Open" />
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  Role
+                </th>
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  Students
+                </th>
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  Shortlisted
+                </th>
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  In rounds
+                </th>
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  Offers
+                </th>
+                <th scope="col" className="py-1 pr-3 font-semibold">
+                  Status
+                </th>
+                <th scope="col" className="py-1 text-right font-semibold">
+                  <span className="sr-only">Action</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -485,7 +504,7 @@ function VisitCard({
                     <td className="py-2 pr-3">
                       <Badge tone="brand">{label(drive.status)}</Badge>
                     </td>
-                    <td className="py-2 text-right">
+                    <td className="py-2 text-right whitespace-nowrap">
                       <Button
                         size="sm"
                         variant="secondary"

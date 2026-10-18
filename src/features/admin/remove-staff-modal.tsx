@@ -43,7 +43,11 @@ export function RemoveStaffModal({ member, onClose, onConfirm }: RemoveStaffModa
       <div className="flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="h-1.5 w-full bg-destructive" />
 
-        <div className="p-6">
+        {/* The panel is capped at 90vh and hides what falls past it, so the
+            body — which ends in the buttons — has to scroll. Without this, a
+            short window left the reader staring at the message with no way to
+            confirm or back out. */}
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
           <div className="mb-4 flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <svg

@@ -203,13 +203,13 @@ export function SheetContent({
         tabIndex={-1}
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className={`relative z-50 flex h-full w-full flex-col border-line bg-surface p-6 shadow-2xl overflow-y-auto focus:outline-hidden ${sideClasses} ${sizeClasses} ${className}`}
+        className={`relative z-50 flex h-full w-full flex-col overflow-hidden border-line bg-surface shadow-2xl focus:outline-hidden ${sideClasses} ${sizeClasses} ${className}`}
       >
         <button
           type="button"
           aria-label="Close panel"
           onClick={close}
-          className="absolute right-4 top-4 rounded-lg p-1.5 text-ink-400 hover:bg-surface-muted hover:text-ink-700 transition-colors"
+          className="absolute right-4 top-4 z-20 rounded-lg p-1.5 text-ink-400 hover:bg-surface-muted hover:text-ink-700 transition-colors"
         >
           <svg
             aria-hidden="true"
@@ -223,17 +223,33 @@ export function SheetContent({
           </svg>
         </button>
 
-        {children}
+        {/*
+         * The scroll lives in here, not on the panel. As the panel's own
+         * overflow it carried the company name, the role tabs and the close
+         * button out of view the moment a roster was long enough to scroll — so
+         * the drawer could only be closed by scrolling back to the top first,
+         * and a footer pinned with `mt-auto` sat below its last row instead of
+         * at the bottom of the screen. Sticky headers and footers need a scroll
+         * container that is not the box they are pinned inside.
+         */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">{children}</div>
       </div>
     </div>,
     document.body,
   );
 }
 
+/**
+ * Stays at the top of the drawer while its roster scrolls beneath it. The
+ * company name and the role tabs are how the reader knows which visit they are
+ * looking at and which role they are on; both used to scroll away. `pr-12`
+ * reserves the corner the close button owns, so a long company name cannot run
+ * under it.
+ */
 export function SheetHeader({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`flex flex-col space-y-1.5 text-left pb-4 border-b border-line mb-4 ${className}`}
+      className={`sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex flex-col space-y-1.5 border-b border-line bg-surface pb-4 pl-6 pr-12 pt-6 text-left ${className}`}
       {...props}
     />
   );
@@ -273,10 +289,15 @@ export function SheetDescription({
   );
 }
 
+/**
+ * Pinned to the bottom of the drawer. `mt-auto` alone only pushed it below the
+ * last row, so on any list long enough to scroll the way out of the panel was
+ * off the bottom of the screen.
+ */
 export function SheetFooter({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`mt-auto flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 pt-4 border-t border-line ${className}`}
+      className={`sticky bottom-0 z-10 -mx-6 -mb-6 mt-auto flex flex-col-reverse gap-2 border-t border-line bg-surface px-6 pb-6 pt-4 sm:flex-row sm:justify-end ${className}`}
       {...props}
     />
   );

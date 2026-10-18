@@ -61,6 +61,91 @@ describe("Sheet Component", () => {
       expect(screen.queryByText("Student Details")).toBeNull();
     });
   });
+  /**
+   * UAT 2026-10-18: "the Drive Progress section and its popup are partially
+   * hidden." The drawer used to scroll as one block, so a roster long enough to
+   * scroll took the company name, the role tabs and the close button off the top
+   * with it. jsdom cannot measure a scroll, but it can hold the structure that
+   * makes sticking possible: the panel must not be the scroll container, and the
+   * header and footer must stick inside the one that is.
+   */
+  it("keeps the heading and the footer stuck while the body scrolls", () => {
+    render(
+      <Sheet open>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Wipro</SheetTitle>
+          </SheetHeader>
+          <div>34 students</div>
+          <SheetFooter>
+            <SheetClose>Dismiss</SheetClose>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>,
+    );
+
+    const panel = screen.getByRole("dialog");
+    const body = panel.querySelector(".overflow-y-auto");
+    expect(body).not.toBeNull();
+    expect(panel.className).not.toContain("overflow-y-auto");
+    expect(panel.className).toContain("overflow-hidden");
+
+    const header = screen.getByText("Wipro").closest(".sticky");
+    const footer = screen.getByRole("button", { name: /dismiss/i }).closest(".sticky");
+    expect(header).not.toBeNull();
+    expect(footer).not.toBeNull();
+    // Both must live inside the scrolling region, or they cannot stick to it.
+    expect(body?.contains(header)).toBe(true);
+    expect(body?.contains(footer)).toBe(true);
+    expect(header?.className).toContain("top-0");
+    expect(footer?.className).toContain("bottom-0");
+  });
+});
+
+describe("DataTable controls", () => {
+  const PEOPLE: readonly ColumnDef<{ id: string; name: string }>[] = [
+    { id: "name", header: "Student", accessorKey: "name", sortable: true },
+  ];
+
+  it("sorts from a real button, and says which way the column is ordered", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShadcnDataTable
+        data={[
+          { id: "1", name: "Zoya" },
+          { id: "2", name: "Asha" },
+        ]}
+        columns={PEOPLE}
+      />,
+    );
+
+    // A click handler on the cell itself was mouse-only: reachable by a pointer,
+    // invisible to a keyboard.
+    const sort = screen.getByRole("button", { name: /^student$/i });
+    expect(screen.getByRole("columnheader", { name: /student/i })).toBeDefined();
+    expect(sort.closest("th")?.getAttribute("aria-sort")).toBe("none");
+
+    await user.click(sort);
+    expect(sort.closest("th")?.getAttribute("aria-sort")).toBe("ascending");
+
+    await user.click(sort);
+    expect(sort.closest("th")?.getAttribute("aria-sort")).toBe("descending");
+  });
+
+  it("opens the column picker on request and shuts it on Escape", async () => {
+    const user = userEvent.setup();
+    render(<ShadcnDataTable data={[{ id: "1", name: "Asha" }]} columns={PEOPLE} />);
+
+    const toggle = screen.getByRole("button", { name: /columns/i });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Toggle Columns")).toBeDefined();
+
+    await user.keyboard("{Escape}");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
 });
 
 describe("AlertDialog Component", () => {

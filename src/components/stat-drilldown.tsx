@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { type ColumnDef, ShadcnDataTable } from "./data-table";
 import {
@@ -181,36 +181,52 @@ export function StatDrilldown({
       />
     );
 
+  /**
+   * The heading, with the filter strip inside it when the count spans more than
+   * one group. The filters ride in the sticky header because they are how the
+   * reader narrows the list, and a control that scrolls out of view above a long
+   * roster is a control that says "scroll back to the top to do your job".
+   */
+  const header = (filters: ReactNode) => (
+    <SheetHeader>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">{eyebrow}</p>
+      <SheetTitle>{title}</SheetTitle>
+      {/*
+        The header counts what the list below actually shows. A popup that
+        opened on "18 shortlisted" and printed 20 rows is worse than no
+        popup at all — the reader now doubts every other number on the page.
+      */}
+      <SheetDescription>
+        {shown.length} student{shown.length === 1 ? "" : "s"}
+        {isEmpty(note) ? "" : ` · ${note}`}
+      </SheetDescription>
+      {filters}
+    </SheetHeader>
+  );
+
+  const filterStrip = (
+    <div className="-mb-1 overflow-x-auto pt-1">
+      <TabsList aria-label={`${title} filters`}>
+        {groups.map((group) => (
+          <TabsTrigger key={group.key} value={group.key}>
+            {group.label} ({group.count})
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </div>
+  );
+
   return (
     <Sheet open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
       <SheetContent side="right" size="2xl">
-        <SheetHeader>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">
-            {eyebrow}
-          </p>
-          <SheetTitle>{title}</SheetTitle>
-          {/*
-            The header counts what the list below actually shows. A popup that
-            opened on "18 shortlisted" and printed 20 rows is worse than no
-            popup at all — the reader now doubts every other number on the page.
-          */}
-          <SheetDescription>
-            {shown.length} student{shown.length === 1 ? "" : "s"}
-            {isEmpty(note) ? "" : ` · ${note}`}
-          </SheetDescription>
-        </SheetHeader>
-
         {groups.length === 0 ? (
-          list
+          <>
+            {header(null)}
+            {list}
+          </>
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
-            <TabsList aria-label={`${title} filters`}>
-              {groups.map((group) => (
-                <TabsTrigger key={group.key} value={group.key}>
-                  {group.label} ({group.count})
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {header(filterStrip)}
             <TabsContent value={tab} className="mt-3">
               {list}
             </TabsContent>
@@ -218,7 +234,7 @@ export function StatDrilldown({
         )}
 
         {href !== undefined && (
-          <SheetFooter className="mt-4">
+          <SheetFooter>
             <Link
               to={href}
               onClick={onClose}

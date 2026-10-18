@@ -386,12 +386,24 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                   <tr>
-                    <th className="px-3 py-2">Company visit</th>
-                    <th className="px-3 py-2">Role</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Applied</th>
-                    <th className="px-3 py-2">Shortlisted</th>
-                    <th className="px-3 py-2">Offers</th>
+                    <th scope="col" className="px-3 py-2">
+                      Company visit
+                    </th>
+                    <th scope="col" className="px-3 py-2">
+                      Role
+                    </th>
+                    <th scope="col" className="px-3 py-2">
+                      Status
+                    </th>
+                    <th scope="col" className="px-3 py-2">
+                      Applied
+                    </th>
+                    <th scope="col" className="px-3 py-2">
+                      Shortlisted
+                    </th>
+                    <th scope="col" className="px-3 py-2">
+                      Offers
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -410,7 +422,10 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                             <tr key={role.driveId}>
                               {index === 0 && (
                                 <td className="px-3 py-3 align-top" rowSpan={roles.length}>
-                                  <p className="max-w-[200px] truncate font-semibold text-ink-900">
+                                  <p
+                                    title={head.companyName}
+                                    className="max-w-[200px] truncate font-semibold text-ink-900"
+                                  >
                                     {single ? (
                                       <Link
                                         to={`/drives/${head.driveId}`}
@@ -430,7 +445,10 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                                 </td>
                               )}
                               <td className="px-3 py-3">
-                                <p className="max-w-[200px] truncate text-ink-900">
+                                <p
+                                  title={role.roleTitle ?? "Role not specified"}
+                                  className="max-w-[200px] truncate text-ink-900"
+                                >
                                   {single ? (
                                     (role.roleTitle ?? "Role not specified")
                                   ) : (

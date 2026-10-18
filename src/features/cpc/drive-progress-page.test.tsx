@@ -124,6 +124,43 @@ describe("DriveProgressPage", () => {
   });
 
   /**
+   * The card rounds itself with `overflow-hidden`, and a table is never
+   * narrower than its own content, so a role table wider than the card used to
+   * lose its right-hand edge — including the only button that opens a role's
+   * students. The strip that scrolls has to be the table's own container, not
+   * the card.
+   */
+  it("keeps the role table's action column inside a strip that scrolls", async () => {
+    const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1" };
+    const qa: DriveProgressEntry = {
+      ...DRIVE,
+      driveId: "d2",
+      roleTitle: "Quality Analyst",
+      companyDriveId: "e1",
+      students: DRIVE.students.slice(0, 1),
+    };
+
+    render(<DriveProgressPage view={view([mts, qa])} />);
+    await screen.findByText("2 roles");
+
+    const table = screen.getByRole("table");
+    const strip = table.parentElement;
+    if (strip === null) throw new Error("the table is not wrapped in anything");
+    expect(strip.className).toContain("overflow-x-auto");
+    expect(strip.querySelector("tbody")).toBe(table.querySelector("tbody"));
+
+    // The last column has no words of its own, so a reader hearing the row
+    // needs the header to say what the button belongs to.
+    const headers = within(table).getAllByRole("columnheader");
+    const last = headers[headers.length - 1];
+    if (last === undefined) throw new Error("no column headers");
+    expect(last.querySelector(".sr-only")?.textContent).toBe("Action");
+    expect(
+      within(table).getByRole("button", { name: /view students for engineer/i }),
+    ).toBeDefined();
+  });
+
+  /**
    * A coordinator reads one role's students at a time, so the rosters live in
    * the pane rather than stacked in one long card: the row opens it on that
    * role, and the other role's students are one tab away.

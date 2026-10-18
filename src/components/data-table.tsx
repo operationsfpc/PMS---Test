@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button } from "./ui";
 
 export interface ColumnDef<T> {
@@ -50,6 +50,35 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
   const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(new Set());
   const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
+  const columnPickerRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * The picker used to stay open over the rows once clicked, with nothing to
+   * shut it — so the first press a reader made afterwards landed on a column
+   * checkbox rather than the row they aimed at. It also never told a screen
+   * reader whether the list of columns was up.
+   */
+  useEffect(() => {
+    if (!isColumnPickerOpen) return;
+
+    function onPointerDown(event: PointerEvent) {
+      const picker = columnPickerRef.current;
+      if (picker !== null && !picker.contains(event.target as Node)) {
+        setIsColumnPickerOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsColumnPickerOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isColumnPickerOpen]);
 
   // Filtered rows
   const filteredData = useMemo(() => {
@@ -201,7 +230,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               setPageIndex(0);
             }}
             placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs text-ink-900 placeholder:italic placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 placeholder:italic placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-1 focus:ring-brand-500"
           />
           {searchQuery && (
             <button
@@ -227,25 +256,35 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Density Toggle */}
           <button
             type="button"
-            aria-label="Toggle density"
+            aria-label="Toggle row density"
+            aria-pressed={density === "compact"}
+            title={density === "comfortable" ? "Compact the rows" : "Give the rows more room again"}
             onClick={() => setDensity((d) => (d === "comfortable" ? "compact" : "comfortable"))}
-            className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted transition-colors"
+            className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted transition-colors aria-pressed:border-brand-300 aria-pressed:bg-brand-50 aria-pressed:text-brand-700"
           >
             {density === "comfortable" ? "Compact" : "Comfortable"}
           </button>
 
           {/* Column Visibility Picker */}
-          <div className="relative">
+          <div className="relative" ref={columnPickerRef}>
             <button
               type="button"
               onClick={() => setIsColumnPickerOpen((o) => !o)}
+              aria-expanded={isColumnPickerOpen}
+              aria-haspopup="true"
               className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted transition-colors flex items-center gap-1.5"
             >
-              <span>Columns ▾</span>
+              <span>Columns</span>
+              <span
+                aria-hidden="true"
+                className={`transition-transform ${isColumnPickerOpen ? "rotate-180" : ""}`}
+              >
+                ▾
+              </span>
             </button>
 
             {isColumnPickerOpen && (
@@ -325,19 +364,36 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                 <th
                   key={col.id}
                   scope="col"
-                  onClick={() => col.sortable && handleSort(col.id)}
-                  className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-ink-600 ${
-                    col.sortable ? "cursor-pointer select-none hover:text-ink-900" : ""
-                  } ${col.className ?? ""}`}
+                  aria-sort={
+                    sortColumnId !== col.id
+                      ? "none"
+                      : sortDirection === "asc"
+                        ? "ascending"
+                        : "descending"
+                  }
+                  className={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-ink-600 ${col.className ?? ""}`}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span>{col.header}</span>
-                    {col.sortable && (
-                      <span className="text-[10px] text-ink-400">
+                  {/*
+                   * A click handler on the header cell itself was mouse-only: a
+                   * keyboard reader could reach the table but never order it, and
+                   * `aria-sort` on the cell says nothing about which control does
+                   * the ordering. The header is the button now.
+                   */}
+                  {col.sortable === true ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSort(col.id)}
+                      title={`Sort by ${typeof col.header === "string" ? col.header : col.id}`}
+                      className="flex items-center gap-1.5 rounded text-inherit hover:text-ink-900"
+                    >
+                      <span>{col.header}</span>
+                      <span aria-hidden="true" className="text-[10px] text-ink-400">
                         {sortColumnId === col.id ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                       </span>
-                    )}
-                  </div>
+                    </button>
+                  ) : (
+                    col.header
+                  )}
                 </th>
               ))}
             </tr>
@@ -382,7 +438,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       return (
                         <td
                           key={col.id}
-                          className={`px-3 text-xs text-ink-900 ${paddingY} ${col.className ?? ""}`}
+                          className={`px-3 text-sm text-ink-900 ${paddingY} ${col.className ?? ""}`}
                         >
                           {cellContent}
                         </td>

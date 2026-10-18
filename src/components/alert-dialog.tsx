@@ -115,7 +115,7 @@ export function AlertDialogContent({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4">
       {/* Backdrop */}
       <div
         aria-hidden="true"
@@ -130,7 +130,7 @@ export function AlertDialogContent({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className={`relative z-50 w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl animate-pop-in ${className}`}
+        className={`relative z-50 my-auto w-full max-w-lg rounded-xl border border-line bg-surface p-6 shadow-2xl animate-pop-in ${className}`}
       >
         {children}
       </div>

@@ -383,11 +383,11 @@ export function ResultsPage({
       )}
 
       {pending !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div
             role="alertdialog"
             aria-label="Confirm results"
-            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
               Mark {checked.size} {checked.size === 1 ? "student" : "students"} as{" "}
@@ -1195,11 +1195,11 @@ export function DriveRoundsPage({
           {/* F3 (UAT 2026-08-19): the advance asks first, and the company's
               own instruction — a mail, a screenshot — can travel with it. */}
           {advanceOpen && nextRound !== null && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
               <div
                 role="alertdialog"
                 aria-label="Confirm advancing"
-                className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+                className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
               >
                 <h2 className="font-heading text-lg font-bold text-ink-900">
                   Advance {advancing} to Round {nextRound.sequence}?
@@ -1255,11 +1255,11 @@ export function DriveRoundsPage({
 
       {/* B2 (M2): rename or remove rounds — frozen ones say why they refuse. */}
       {managing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div
             role="dialog"
             aria-label="Manage rounds"
-            className="w-full max-w-lg rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-lg rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">Manage rounds</h2>
             <p className="mt-1 text-sm text-ink-500">
@@ -1339,11 +1339,11 @@ export function DriveRoundsPage({
       )}
 
       {removing !== null && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div
             role="alertdialog"
             aria-label="Remove round"
-            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
               Remove Round {removing.sequence} — {removing.name}?
@@ -1368,11 +1368,11 @@ export function DriveRoundsPage({
 
       {/* C3 (answer 3b): completing the drive, with the early-reason path. */}
       {completing !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div
             role="alertdialog"
             aria-label="Complete drive"
-            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">Mark drive completed?</h2>
             {completing.ready ? (

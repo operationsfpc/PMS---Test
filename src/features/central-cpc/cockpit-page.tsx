@@ -470,11 +470,11 @@ export function CockpitPage({
 
       {/* UAT 2026-08-21 item 2: recording the confirmed venue. */}
       {venueEditing !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div
             role="dialog"
             aria-label="Update venue"
-            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
               Venue — {venueEditing.companyName}
@@ -519,11 +519,11 @@ export function CockpitPage({
 
       {/* G1c: the decision, from the list — same rules as the approval queue. */}
       {deciding !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
           <div
             role="alertdialog"
             aria-label={deciding.kind === "approve" ? "Approve drive" : "Reject drive"}
-            className="w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
               {deciding.kind === "approve" ? "Approve" : "Reject"} {deciding.drive.companyName}?
