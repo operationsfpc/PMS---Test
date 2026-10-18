@@ -292,7 +292,7 @@ describe("ProfileEditPage — certificates", () => {
   it("links to the document, so a name is never taken on trust", async () => {
     renderPage(repo());
 
-    const link = await screen.findByRole("link", { name: /view aws cloud practitioner/i });
+    const link = await screen.findByRole("link", { name: /open aws cloud practitioner/i });
     expect(link.getAttribute("href")).toBe("https://signed/aws.pdf");
   });
 

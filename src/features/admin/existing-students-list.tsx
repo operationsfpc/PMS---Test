@@ -1,8 +1,7 @@
 import { ErrorPanel } from "@components/error-panel";
-import { Badge, Button, Card, DataTable } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, DataTable } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import type { CampusOption } from "./roster-import-page";
 
 interface Student {
@@ -222,12 +221,14 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                     {s.passing_year !== null ? <Badge tone="neutral">{s.passing_year}</Badge> : "—"}
                   </td>
                   <td className="px-3 py-2.5 text-right text-xs">
-                    <Link
+                    <ButtonLink
+                      size="sm"
+                      variant="ghost"
                       to={`/students/${s.id}`}
-                      className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                      aria-label={`View ${s.full_name}`}
                     >
-                      View profile →
-                    </Link>
+                      View
+                    </ButtonLink>
                   </td>
                 </tr>
               ))}

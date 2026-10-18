@@ -5,6 +5,7 @@ import {
   AccordionTrigger,
   Badge,
   Button,
+  ButtonLink,
   Card,
   PageHeader,
 } from "@components/ui";
@@ -19,7 +20,6 @@ import {
 import { describeTimeLeft } from "@domain/student-drive-lists";
 import type { DriveType, RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import { ApplyError } from "./apply-repository";
 
 /** Groups individual drives by their parent company event for multi-role display. */
@@ -309,18 +309,18 @@ export function DrivesList({
                     })()}
                   {/* N1: the card links to the drive's one canonical page. */}
                   <p className="mt-2">
-                    <Link
+                    <ButtonLink
+                      size="sm"
+                      variant="ghost"
                       to={`/drives/${drive.id}`}
-                      aria-label={`View everything about ${drive.roleTitle} at ${drive.companyName}`}
-                      className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
+                      aria-label={`View ${drive.companyName} — ${drive.roleTitle}`}
                     >
-                      {/* F14's own words, and nothing after them: the card already
-                          names the company and the role, so repeating either made
-                          a fact say itself twice on every row. The accessible name
-                          still carries both, so a student tabbing through the links
-                          tells two visits apart. */}
-                      View everything
-                    </Link>
+                      {/* The card already names the company and the role, so
+                          the control says neither twice. The accessible name
+                          still carries both, so a student tabbing through the
+                          links tells two visits apart. */}
+                      View
+                    </ButtonLink>
                   </p>
                   {/* ⚠️ F14's "View more" expander DELIBERATELY REMOVED
                       2026-08-24 (Karthik): "view everything is sufficient."

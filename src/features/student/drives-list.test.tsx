@@ -147,17 +147,16 @@ describe("DrivesList", () => {
  * stay untouched below.
  */
 describe("DrivesList — the card points at the one canonical page", () => {
-  it("offers no View more — the record-page link is the way in", async () => {
+  it("offers no View more — the record-page control is the way in", async () => {
     render(<DrivesList view={view()} />);
 
     await screen.findByText("Zoho");
     expect(screen.queryByRole("button", { name: /view more/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /about .+ at Zoho/i })).toBeDefined();
-    // The company and the role are the card's, not the link's — its own words
-    // are just the F14 phrase, so no row says the company a second time.
-    expect(screen.getByRole("link", { name: /about .+ at Zoho/i }).textContent).toBe(
-      "View everything",
-    );
+    const record = screen.getByRole("link", { name: /^view zoho — /i });
+    // The company and the role live in the accessible name only — the card
+    // already says both, so the control's own word stays the one `View`.
+    expect(record.textContent).toBe("View");
+    expect(record.getAttribute("href")).toBe("/drives/d1");
 
     // The detail panel's content is gone with it.
     expect(screen.queryByText(/build and maintain backend services/i)).toBeNull();

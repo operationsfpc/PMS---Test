@@ -5,6 +5,7 @@ import {
   AccordionItem,
   AccordionTrigger,
   Badge,
+  ButtonLink,
   Card,
   PageHeader,
 } from "@components/ui";
@@ -27,7 +28,6 @@ import {
 } from "@domain/student-drive-lists";
 import type { DriveType, RoleCategory } from "@domain/types";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 import { DrivesList, type DrivesView, type OpenDrive } from "./drives-list";
 
 /** An application still moving: the card wears its current round (N7). */
@@ -542,21 +542,23 @@ function RowHead({
 
 /** N1: every card opens the drive's one canonical page. */
 /**
- * The row's way to the canonical drive record. The card above it already names
- * the company and the role, so the link says neither twice — but both stay in
- * the accessible name, because a student who pulls up the page's list of links
- * has to be able to tell one visit's roles from another's.
+ * The row's way to the canonical drive record is one `View` control. The card
+ * above it already names the company and the role, so the control says neither
+ * twice — but both stay in the accessible name, because a student who pulls up
+ * the page's list of links has to be able to tell one visit's roles from
+ * another's.
  */
 function FullRecordLink({ id, role, company }: { id: string; role: string; company: string }) {
   return (
     <p className="mt-3">
-      <Link
+      <ButtonLink
+        size="sm"
+        variant="ghost"
         to={`/drives/${id}`}
-        aria-label={`View everything about ${role} at ${company}`}
-        className="text-sm font-semibold text-[#3D3777] underline underline-offset-2"
+        aria-label={`View ${company} — ${role}`}
       >
-        View everything
-      </Link>
+        View
+      </ButtonLink>
     </p>
   );
 }

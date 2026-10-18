@@ -158,10 +158,10 @@ describe("CockpitPage", () => {
     expect(link.getAttribute("href")).toBe("/central/results?drive=d3");
   });
 
-  it("links a drive in rounds to final selection", async () => {
+  it("links a drive in rounds to the offers screen", async () => {
     routed(view([IN_ROUNDS]));
 
-    const link = await screen.findByRole("link", { name: /final selection/i });
+    const link = await screen.findByRole("link", { name: /^offers$/i });
     expect(link.getAttribute("href")).toBe("/central/offers?drive=d3");
   });
 
@@ -184,12 +184,6 @@ describe("CockpitPage", () => {
   });
 
   /**
-   * B2 (UAT 2026-08-19): "Complete and Publish is currently the only clickable
-   * action, and the only way to open a drive." A submitted drive waiting on
-   * the Delivery Head had NO link at all — the card was a dead end. Every
-   * card now opens the canonical /drives/:id record, whatever its status.
-   */
-  /**
    * C3 (UAT 2026-08-19): two drives from the same company are told apart by
    * role and CTC — so both sit on the card.
    */
@@ -205,7 +199,15 @@ describe("CockpitPage", () => {
     expect(fresh.textContent).toMatch(/₹4\.5 LPA/);
   });
 
-  it("every drive card links to the canonical drive record", async () => {
+  /**
+   * B2 (UAT 2026-08-19): "Complete and Publish is currently the only clickable
+   * action, and the only way to open a drive." A submitted drive waiting on
+   * the Delivery Head had NO link at all — the card was a dead end. Every card
+   * now carries exactly one `View`, which opens the canonical /drives/:id
+   * record whatever the status. The role it belongs to is in the accessible
+   * name, because a visit with three roles has three of these.
+   */
+  it("every drive card's one View opens the canonical drive record", async () => {
     const SUBMITTED: DriveSummary = {
       ...APPROVED,
       driveId: "d7",
@@ -216,18 +218,14 @@ describe("CockpitPage", () => {
 
     const waiting = (await screen.findByText("Waiting Co")).closest("li");
     if (waiting === null) throw new Error("row not found");
-    expect(
-      within(waiting)
-        .getByRole("link", { name: /view drive/i })
-        .getAttribute("href"),
-    ).toBe("/drives/d7");
+    const links = within(waiting).getAllByRole("link", { name: /^view\b/i });
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe("/drives/d7");
 
     const live = screen.getByText("Freshworks").closest("li");
     if (live === null) throw new Error("row not found");
     expect(
-      within(live)
-        .getByRole("link", { name: /view drive/i })
-        .getAttribute("href"),
+      within(live).getByRole("link", { name: "View Freshworks — SDE" }).getAttribute("href"),
     ).toBe("/drives/d2");
   });
 });

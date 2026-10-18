@@ -10,6 +10,7 @@ import {
   AccordionTrigger,
   Badge,
   Button,
+  ButtonLink,
   Card,
   PageHeader,
   StatCard,
@@ -501,12 +502,14 @@ export function DrivePortfolioPage({
       content: (
         <>
           <p className="mb-3">
-            <Link
+            <ButtonLink
+              size="sm"
+              variant="secondary"
               to={`/drives/${role.driveId}`}
-              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+              aria-label={`View ${role.roleTitle}`}
             >
-              Open the drive record for {role.roleTitle}
-            </Link>
+              View
+            </ButtonLink>
           </p>
           {applicantList(role)}
         </>
@@ -610,15 +613,16 @@ export function DrivePortfolioPage({
                 return refused !== null ? (
                   <p className="text-xs text-ink-500">{refused} No further roles can be raised.</p>
                 ) : (
-                  <Link
+                  <ButtonLink
+                    size="sm"
+                    variant="ghost"
                     to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${
                       isStandaloneVisit(event.eventId) ? "" : event.eventId
                     }&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
-                    className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
                   >
-                    + Add Another Role to This Drive
+                    + Add another role
                     {isMultiRole ? "" : visitDayInParentheses(event.tentativeDate)}
-                  </Link>
+                  </ButtonLink>
                 );
               })()}
             </div>
@@ -661,10 +665,11 @@ export function DrivePortfolioPage({
           <div className="min-w-0">
             {!nested && (
               <>
+                {/* The name is the fact; the card's one `View` below is the way
+                    in. Both being clickable to the same record is the duplicate
+                    the coordinator complained about. */}
                 <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
-                  <Link to={`/drives/${drive.driveId}`} className="hover:underline">
-                    {drive.companyName}
-                  </Link>
+                  {drive.companyName}
                   <Badge tone={driveTypeTone(drive.driveType)}>
                     {driveTypeLabel(drive.driveType)}
                   </Badge>
@@ -676,20 +681,10 @@ export function DrivePortfolioPage({
                 </p>
               </>
             )}
-            {nested && (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-ink-500">
-                <Link
-                  to={`/drives/${drive.driveId}`}
-                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
-                >
-                  Open the drive record
-                </Link>
-                {closeDate !== null && (
-                  <span>
-                    applications {closed ? "closed" : "close"} {closeDate}
-                  </span>
-                )}
-              </div>
+            {nested && closeDate !== null && (
+              <p className="text-sm text-ink-500">
+                applications {closed ? "closed" : "close"} {closeDate}
+              </p>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {hats.map((hat) => (
@@ -740,32 +735,56 @@ export function DrivePortfolioPage({
           aria-label={`${who} applicants`}
           className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
         >
-          <Link to={`/drives/${drive.driveId}?stage=applied`} className="block">
-            <StatCard label="Applied" value={funnel.applied} />
-          </Link>
-          <Link to={`/drives/${drive.driveId}?stage=shortlisted`} className="block">
-            <StatCard label="Shortlisted" value={funnel.shortlisted} tone="brand" />
-          </Link>
-          <Link to={`/drives/${drive.driveId}?stage=in_rounds`} className="block">
-            <StatCard label="In rounds" value={funnel.inRounds} tone="warning" />
-          </Link>
-          <Link to={`/drives/${drive.driveId}?stage=offers`} className="block">
-            <StatCard label="Offers" value={funnel.offers} tone="success" />
-          </Link>
-          <Link to={`/drives/${drive.driveId}?stage=not_selected`} className="block">
-            <StatCard label="Not selected" value={funnel.notSelected} />
-          </Link>
+          <StatCard
+            label="Applied"
+            value={funnel.applied}
+            to={`/drives/${drive.driveId}?stage=applied`}
+          />
+          <StatCard
+            label="Shortlisted"
+            value={funnel.shortlisted}
+            tone="brand"
+            to={`/drives/${drive.driveId}?stage=shortlisted`}
+          />
+          <StatCard
+            label="In rounds"
+            value={funnel.inRounds}
+            tone="warning"
+            to={`/drives/${drive.driveId}?stage=in_rounds`}
+          />
+          <StatCard
+            label="Offers"
+            value={funnel.offers}
+            tone="success"
+            to={`/drives/${drive.driveId}?stage=offers`}
+          />
+          <StatCard
+            label="Not selected"
+            value={funnel.notSelected}
+            to={`/drives/${drive.driveId}?stage=not_selected`}
+          />
         </section>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          {/* The card's ONE `View`: it opens the role's record, and the role it
+              belongs to is in the accessible name because a visit's panels sit
+              side by side on the same card. */}
+          <ButtonLink
+            size="sm"
+            to={`/drives/${drive.driveId}`}
+            aria-label={`View ${drive.companyName} — ${drive.roleTitle}`}
+          >
+            View
+          </ButtonLink>
+
           {mayViewApplicants && (
             <Button
               size="sm"
               variant="secondary"
               aria-label={
                 nested
-                  ? `View applicants for ${drive.roleTitle}`
-                  : `View applicants to ${drive.companyName}`
+                  ? `See the applicants for ${drive.roleTitle}`
+                  : `See the applicants to ${drive.companyName}`
               }
               onClick={() =>
                 setOpenVisit({
@@ -776,17 +795,18 @@ export function DrivePortfolioPage({
                 })
               }
             >
-              View applicants
+              See applicants
             </Button>
           )}
 
           {mayShortlist && funnel.applied > 0 && (
-            <Link
+            <ButtonLink
+              size="sm"
+              variant="secondary"
               to={`/central/shortlisting?drive=${drive.driveId}`}
-              className="text-xs font-semibold text-brand-600 hover:underline"
             >
-              Shortlist applicants
-            </Link>
+              Shortlist
+            </ButtonLink>
           )}
         </div>
       </section>

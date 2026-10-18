@@ -1,4 +1,4 @@
-import { Button, Card, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
 import { parseCsv } from "@domain/csv";
 import {
   parseSkillScore,
@@ -362,15 +362,17 @@ export function SkillsPage({
               />
               <p className="mt-1 text-xs text-ink-500">
                 Columns: roll_number, then one column per skill area. Blank cells leave the existing
-                score untouched.{" "}
-                <a
-                  className="font-medium text-brand-600 underline"
-                  href={templateHref}
-                  download="skill-scores-template.csv"
-                >
-                  Download template
-                </a>
+                score untouched.
               </p>
+              <ButtonAnchor
+                size="sm"
+                variant="ghost"
+                className="mt-1"
+                href={templateHref}
+                download="skill-scores-template.csv"
+              >
+                Download template
+              </ButtonAnchor>
             </div>
           </div>
         </Card>

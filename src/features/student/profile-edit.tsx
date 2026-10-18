@@ -1,5 +1,5 @@
 import { FormSection, TextField } from "@components/form";
-import { Button, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, PageHeader } from "@components/ui";
 import {
   canRemoveCertificate,
   canUploadCertificate,
@@ -381,15 +381,16 @@ export function ProfileEditPage({
                   </span>
                   <span className="flex items-center gap-3">
                     {certificate.url !== null && (
-                      <a
+                      <ButtonAnchor
+                        size="sm"
+                        variant="ghost"
                         href={certificate.url}
                         target="_blank"
                         rel="noreferrer"
-                        aria-label={`View ${certificate.name}`}
-                        className="text-sm font-semibold text-brand-600 underline underline-offset-4"
+                        aria-label={`Open ${certificate.name}`}
                       >
-                        View
-                      </a>
+                        Open
+                      </ButtonAnchor>
                     )}
                     {/* Q4: verified data is no longer the student's to
                         change, and removing it would destroy the

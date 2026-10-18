@@ -76,13 +76,13 @@ describe("AttendancePage", () => {
     expect(screen.getByRole("checkbox", { name: /Asha Ramanathan/i })).toBeDefined();
   });
 
-  /** #39: the roster names who is in the room, and each row reaches that student. */
+  /** #39: the roster names who is in the room, and each row's `View` reaches that student. */
   it("links each row to the student's own record", async () => {
     show();
 
     expect(await screen.findByText("Asha Ramanathan")).toBeDefined();
     expect(
-      screen.getAllByRole("link", { name: /open record/i }).map((l) => l.getAttribute("href")),
+      screen.getAllByRole("link", { name: /^view\b/i }).map((l) => l.getAttribute("href")),
     ).toEqual(["/students/s-1", "/students/s-2"]);
   });
 

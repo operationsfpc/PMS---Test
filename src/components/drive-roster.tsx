@@ -1,10 +1,9 @@
-import { Badge } from "@components/ui";
+import { Badge, ButtonLink } from "@components/ui";
 import { attendanceLabel } from "@domain/attendance";
 import { offerCategoryLabelOf } from "@domain/offer-category";
 import { roundResultLabel } from "@domain/round-outcome";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
 
 export interface StudentRoundDetail {
   readonly roundId: string;
@@ -259,12 +258,14 @@ export function DriveRoster({
                     {/* The row itself is the disclosure, so the record link
                         lives in the drawer rather than inside that button. */}
                     {student.studentId !== undefined && (
-                      <Link
+                      <ButtonLink
+                        size="sm"
+                        variant="ghost"
                         to={`/students/${student.studentId}`}
-                        className="block font-semibold text-brand-700 underline underline-offset-2"
+                        aria-label={`View ${student.studentName}`}
                       >
-                        Open the student record
-                      </Link>
+                        View
+                      </ButtonLink>
                     )}
                     {/* Academic & Profile Details */}
                     <div className="grid gap-2 sm:grid-cols-3 rounded-lg bg-surface-muted/40 p-3">

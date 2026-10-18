@@ -1,4 +1,4 @@
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonAnchor, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitKey } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
@@ -22,7 +22,6 @@ import {
 } from "@lib/approval-repository";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 
 /**
  * Delivery Head — PIF approval queue. PRD §17.5.
@@ -140,12 +139,13 @@ function PendingRoleCard({
         {pif.onHold && <Badge tone="warning">On hold</Badge>}
         {/* N1: "delivery head should be able to click and view all
             relevant fields of the drive." */}
-        <Link
+        <ButtonLink
+          size="sm"
           to={`/drives/${pif.id}`}
-          className="text-xs font-semibold text-[#3D3777] underline underline-offset-2"
+          aria-label={`View ${pif.companyName} — ${pif.roleTitle ?? "role not specified"}`}
         >
-          View the full drive
-        </Link>
+          View
+        </ButtonLink>
       </div>
       <p className="text-sm text-ink-500">
         {standalone ? `${pif.roleTitle ?? "Role not specified"} · ` : ""}
@@ -179,14 +179,16 @@ function PendingRoleCard({
               // permission.
               <span className="text-ink-500">No job description attached</span>
             ) : (
-              <a
+              <ButtonAnchor
+                size="sm"
+                variant="ghost"
                 href={pif.jobDescriptionUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="font-medium text-[#3D3777] underline underline-offset-2"
+                aria-label={`Open ${pif.jobDescriptionName ?? "the job description"} for ${pif.companyName}`}
               >
-                {pif.jobDescriptionName ?? "Open the job description (PDF)"}
-              </a>
+                {pif.jobDescriptionName ?? "Job description"}
+              </ButtonAnchor>
             )}
           </dd>
         </div>

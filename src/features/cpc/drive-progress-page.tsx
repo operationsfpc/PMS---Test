@@ -1,7 +1,7 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
 import { StudentIdentity } from "@components/student-identity";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
@@ -336,9 +336,14 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
  * A visit that raised several roles lists them as rows, because a coordinator
  * reads one role's students at a time, never two side by side: the row opens
  * the pane on that role, and the filters stay the role's own there too, since
- * shortlisting, rounds and offers are still decided role by role. A single-role
- * visit has nothing to choose between, so its students stay inline exactly as
- * they were.
+ * shortlisting, rounds and offers are still decided role by role.
+ *
+ * The students themselves never sit on the card. Asked on 2026-10-18 to stop
+ * this screen scrolling forever: one applicant row is about ninety pixels of
+ * round badges, so a visit holding forty students pushed the next company four
+ * screens down and the coordinator scrolled past all of them to find it. The
+ * card is now the same height whatever it holds — company, the four counts, the
+ * roles, and one `View` — and the names are in the slide-over.
  */
 function VisitCard({
   roles,
@@ -404,12 +409,14 @@ function VisitCard({
       content: (
         <>
           <p className="mb-3">
-            <Link
+            <ButtonLink
+              variant="secondary"
+              size="sm"
               to={`/drives/${drive.driveId}`}
-              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+              aria-label={`View ${drive.roleTitle ?? "this role"}`}
             >
-              Open the drive record for {drive.roleTitle ?? "this role"}
-            </Link>
+              View
+            </ButtonLink>
           </p>
           {body(drive)}
         </>
@@ -443,13 +450,25 @@ function VisitCard({
           </p>
           <p className="mt-1 text-sm text-ink-500">{meta.join(" · ")}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {statuses.map((entry) => (
             <Badge key={entry.status} tone="brand">
               {label(entry.status)}
               {entry.count > 1 && ` ×${entry.count}`}
             </Badge>
           ))}
+          {/* One role means nothing to choose between, so the whole visit is
+              one row and this is the card's single `View`. */}
+          {!isVisit && (
+            <Button
+              size="sm"
+              variant="secondary"
+              aria-label={`View the students of ${head.companyName}`}
+              onClick={() => setOpenRole(head.driveId)}
+            >
+              View
+            </Button>
+          )}
         </div>
       </div>
 
@@ -511,10 +530,10 @@ function VisitCard({
                       <Button
                         size="sm"
                         variant="secondary"
-                        aria-label={`View students for ${drive.roleTitle ?? "this role"}`}
+                        aria-label={`View the students of ${drive.roleTitle ?? "this role"}`}
                         onClick={() => setOpenRole(drive.driveId)}
                       >
-                        View students
+                        View
                       </Button>
                     </td>
                   </tr>
@@ -523,9 +542,7 @@ function VisitCard({
             </tbody>
           </table>
         </div>
-      ) : (
-        body(head)
-      )}
+      ) : null}
 
       <VisitPane
         open={openRole !== null}

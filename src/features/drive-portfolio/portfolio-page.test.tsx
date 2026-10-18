@@ -324,7 +324,7 @@ describe("DrivePortfolioPage \u2014 shortlisting access", () => {
   it("offers the Central Placement Coordinator a way into shortlisting", async () => {
     show({ role: "central_placement_coordinator", title: "All drives" });
 
-    const link = await screen.findByRole("link", { name: /shortlist applicants/i });
+    const link = await screen.findByRole("link", { name: /^shortlist$/i });
     expect(link.getAttribute("href")).toContain("/central/shortlisting?drive=");
   });
 
@@ -332,14 +332,14 @@ describe("DrivePortfolioPage \u2014 shortlisting access", () => {
     show({ role: "account_executive" });
 
     await screen.findByText("Zoho Corporation");
-    expect(screen.queryByRole("link", { name: /shortlist applicants/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^shortlist$/i })).toBeNull();
   });
 
   it("does not offer it to the Delivery Head", async () => {
     show({ role: "delivery_head" });
 
     await screen.findByText("Zoho Corporation");
-    expect(screen.queryByRole("link", { name: /shortlist applicants/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^shortlist$/i })).toBeNull();
   });
 });
 
@@ -900,9 +900,9 @@ describe("one company visit is one card", () => {
     expect(within(analystApplied).getByText("0")).toBeDefined();
     expect(analystApplied.getAttribute("href")).toBe("/drives/d21?stage=applied");
 
-    expect(
-      v.getAllByRole("link", { name: /open the drive record/i }).map((l) => l.getAttribute("href")),
-    ).toEqual(["/drives/d20", "/drives/d21"]);
+    expect(v.getAllByRole("link", { name: /^view\b/i }).map((l) => l.getAttribute("href"))).toEqual(
+      ["/drives/d20", "/drives/d21"],
+    );
   });
 
   /**
@@ -915,7 +915,7 @@ describe("one company visit is one card", () => {
     const user = userEvent.setup();
     const v = await visit([SDE, ANALYST]);
 
-    await user.click(v.getByRole("button", { name: "View applicants for Data Analyst" }));
+    await user.click(v.getByRole("button", { name: "See the applicants for Data Analyst" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Zoho Corporation" });
     expect(
@@ -932,7 +932,7 @@ describe("one company visit is one card", () => {
     expect(within(dialog).getByText("Anjali Subramanian")).toBeDefined();
     expect(
       within(dialog)
-        .getByRole("link", { name: /open the drive record/i })
+        .getByRole("link", { name: "View Member Technical Staff" })
         .getAttribute("href"),
     ).toBe("/drives/d20");
   });
@@ -1010,7 +1010,7 @@ describe("a visit decides whether it can take one more role", () => {
       view: view([{ ...DRIVE, driveId: "d44", companyDriveId: "e8", tentativeDate: "2026-09-01" }]),
     });
 
-    const link = await screen.findByRole("link", { name: /add another role to this drive/i });
+    const link = await screen.findByRole("link", { name: /add another role/i });
     expect(link.textContent).toContain("(1 Sept 2026)");
     expect(screen.queryByText(/no further roles can be raised/i)).toBeNull();
   });

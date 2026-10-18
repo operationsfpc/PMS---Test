@@ -217,18 +217,18 @@ describe("DriveTabs", () => {
     render(<DriveTabs view={view()} now={NOW} />);
     await screen.findByText("Zoho");
 
-    // The card already names the company and the role, so the link says
-    // "View everything" and carries both in its accessible name.
+    // The card already names the company and the role, so the control's own
+    // word is the one `View` and both names live in its accessible name.
     expect(
-      screen.getByRole<HTMLAnchorElement>("link", { name: /about .+ at Zoho/i }).textContent,
-    ).toBe("View everything");
-    expect(
-      screen.getByRole<HTMLAnchorElement>("link", { name: /about .+ at Zoho/i }).href,
-    ).toContain("/drives/d1");
+      screen.getByRole<HTMLAnchorElement>("link", { name: /^view zoho — /i }).textContent,
+    ).toBe("View");
+    expect(screen.getByRole<HTMLAnchorElement>("link", { name: /^view zoho — /i }).href).toContain(
+      "/drives/d1",
+    );
 
     await user.click(screen.getByRole("tab", { name: "In progress (1)" }));
     expect(
-      screen.getByRole<HTMLAnchorElement>("link", { name: /about .+ at Accenture/i }).href,
+      screen.getByRole<HTMLAnchorElement>("link", { name: /^view accenture — /i }).href,
     ).toContain("/drives/d2");
   });
 
@@ -460,7 +460,7 @@ describe("DriveTabs — one card per company visit", () => {
 
   it("links each role to its own drive record, never to whichever came first", async () => {
     const panel = await openTab(/^In progress/);
-    const links = within(panel).getAllByRole("link", { name: /view everything about/i });
+    const links = within(panel).getAllByRole("link", { name: /^view /i });
     expect(links.map((link) => link.getAttribute("href"))).toEqual(["/drives/d20", "/drives/d21"]);
   });
 

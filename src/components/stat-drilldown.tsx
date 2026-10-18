@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "./sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
-import { Badge } from "./ui";
+import { Badge, ButtonLink } from "./ui";
 
 /**
  * One person as a drill-down lists them.
@@ -235,13 +235,9 @@ export function StatDrilldown({
 
         {href !== undefined && (
           <SheetFooter>
-            <Link
-              to={href}
-              onClick={onClose}
-              className="text-xs font-semibold text-brand-700 hover:underline"
-            >
-              {linkLabel ?? "Open in All students"} →
-            </Link>
+            <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
+              {linkLabel ?? "Open in All students"}
+            </ButtonLink>
           </SheetFooter>
         )}
       </SheetContent>

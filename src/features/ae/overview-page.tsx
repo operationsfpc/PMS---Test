@@ -6,6 +6,7 @@ import {
   AccordionItem,
   AccordionTrigger,
   Badge,
+  ButtonLink,
   Card,
   PageHeader,
   StatCard,
@@ -242,12 +243,14 @@ function StatVisit({ roles }: { roles: readonly AeOverviewDrive[] }) {
                 </Badge>
               </AccordionTrigger>
               <AccordionContent className="pb-2">
-                <Link
+                <ButtonLink
+                  size="sm"
+                  variant="ghost"
                   to={`/drives/${role.driveId}`}
-                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                  aria-label={`View ${head.companyName} — ${role.roleTitle ?? "role not specified"}`}
                 >
-                  Open the drive record
-                </Link>
+                  View
+                </ButtonLink>
                 <RoleFacts drive={role} />
               </AccordionContent>
             </AccordionItem>

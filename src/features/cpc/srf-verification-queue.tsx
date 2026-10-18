@@ -1,4 +1,4 @@
-import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonAnchor, Card, DataTable, PageHeader } from "@components/ui";
 import { describeBoard } from "@domain/boards";
 import { decideSrf } from "@domain/srf-decision";
 import { describeUncheckedClaims, type EvidenceClaim } from "@domain/verification";
@@ -376,15 +376,16 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                                   certificate.url === null ? (
                                     <span className="text-xs text-[#DD4820]">No document</span>
                                   ) : (
-                                    <a
+                                    <ButtonAnchor
+                                      size="sm"
+                                      variant="ghost"
                                       href={certificate.url}
                                       target="_blank"
                                       rel="noreferrer"
                                       aria-label={`Open ${certificate.name} for ${student.fullName}`}
-                                      className="text-xs text-[#3D3777] font-medium underline"
                                     >
                                       Open
-                                    </a>
+                                    </ButtonAnchor>
                                   )
                                 ) : (
                                   <Badge
@@ -424,15 +425,16 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                                 {resume.url === null ? (
                                   <span className="text-xs text-[#DD4820]">No document</span>
                                 ) : (
-                                  <a
+                                  <ButtonAnchor
+                                    size="sm"
+                                    variant="ghost"
                                     href={resume.url}
                                     target="_blank"
                                     rel="noreferrer"
                                     aria-label={`Open ${resume.label} resume for ${student.fullName}`}
-                                    className="inline-flex items-center gap-1 text-xs text-[#3D3777] font-medium underline"
                                   >
-                                    Review
-                                  </a>
+                                    Open
+                                  </ButtonAnchor>
                                 )}
                               </div>
                             </div>

@@ -1,4 +1,4 @@
-import { Button } from "@components/ui";
+import { Button, ButtonAnchor } from "@components/ui";
 import { canDeclineParticipationRequest } from "@domain/participation";
 import type { AppRole } from "@domain/types";
 import { useState } from "react";
@@ -92,13 +92,16 @@ export function Evidence({
   }
 
   return (
-    <a
+    <ButtonAnchor
+      size="sm"
+      variant="ghost"
       href={url}
       target="_blank"
       rel="noreferrer"
-      className="mt-1 inline-block text-xs font-semibold text-brand-500 underline"
+      aria-label={`Open the ${label}`}
+      className="mt-1"
     >
-      View {label}
-    </a>
+      {label}
+    </ButtonAnchor>
   );
 }

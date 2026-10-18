@@ -1,5 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
-import { Button, Card, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -152,14 +152,15 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                     // have checked something they could not open.
                     <p className="text-sm text-[#DD4820]">No marksheet available</p>
                   ) : (
-                    <a
-                      className="text-sm font-medium text-brand-600 underline"
+                    <ButtonAnchor
+                      size="sm"
                       href={semester.url}
                       target="_blank"
                       rel="noreferrer"
+                      aria-label={`Open ${semester.studentName}'s marksheet`}
                     >
-                      Open marksheet
-                    </a>
+                      Marksheet
+                    </ButtonAnchor>
                   )}
                 </div>
 

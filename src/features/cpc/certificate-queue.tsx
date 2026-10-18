@@ -1,5 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
-import { Button, Card, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
 import { evidenceProblem } from "@domain/verification";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
@@ -153,14 +153,15 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
                       // have checked something they could not open.
                       <p className="text-sm text-[#DD4820]">{noDocument}</p>
                     ) : (
-                      <a
-                        className="text-sm font-medium text-brand-600 underline"
+                      <ButtonAnchor
+                        size="sm"
                         href={certificate.url}
                         target="_blank"
                         rel="noreferrer"
+                        aria-label={`Open ${certificate.studentName}'s certificate`}
                       >
-                        Open certificate
-                      </a>
+                        Certificate
+                      </ButtonAnchor>
                     )}
                   </div>
 

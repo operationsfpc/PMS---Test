@@ -69,7 +69,7 @@ describe("CertificateQueue", () => {
     expect(within(row).getByText(/priya ramesh/i)).toBeDefined();
     expect(within(row).getByText(/21CSE1042/)).toBeDefined();
     expect(
-      within(row).getByRole<HTMLAnchorElement>("link", { name: /open certificate/i }).href,
+      within(row).getByRole<HTMLAnchorElement>("link", { name: /open .* certificate/i }).href,
     ).toContain("/signed/aws.pdf");
   });
 
@@ -89,7 +89,7 @@ describe("CertificateQueue", () => {
     render(<CertificateQueue repository={repo()} />);
 
     const row = await rowFor("Azure Fundamentals");
-    expect(within(row).queryByRole("link", { name: /open certificate/i })).toBeNull();
+    expect(within(row).queryByRole("link", { name: /open .* certificate/i })).toBeNull();
     expect(within(row).getByText(/no document/i)).toBeDefined();
   });
 

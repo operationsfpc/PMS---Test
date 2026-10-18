@@ -178,8 +178,9 @@ describe("the one-role roster", () => {
 
     await user.click(screen.getByRole("button", { name: /Priya Ramesh/i }));
 
-    const link = screen.getByRole("link", { name: /open the student record/i });
+    const link = screen.getByRole("link", { name: /^view priya ramesh$/i });
     expect(link.getAttribute("href")).toBe("/students/s-1");
+    expect(link.textContent).toBe("View");
   });
 
   it("offers no record link for a row whose student could not be read", async () => {
@@ -191,7 +192,7 @@ describe("the one-role roster", () => {
     await user.click(screen.getByRole("button", { name: /Priya Ramesh/i }));
 
     expect(screen.getByText(/Aptitude Assessment/i)).toBeDefined();
-    expect(screen.queryByRole("link", { name: /open the student record/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^view /i })).toBeNull();
   });
 });
 

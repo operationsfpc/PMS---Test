@@ -1,8 +1,7 @@
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { ABSENCE_LIMIT, needsDisbarmentReview } from "@domain/attendance";
 import type { AttendanceStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 
 export interface ScheduledStudent {
   readonly applicationId: string;
@@ -177,14 +176,17 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                       )}
                     </label>
                     {/* The name belongs to the checkbox — it is how the row is
-                        ticked — so the record is reached from its own link. */}
+                        ticked — so the record is reached from its own control,
+                        named the same way every other card names its way in. */}
                     {student.studentId != null && (
-                      <Link
+                      <ButtonLink
+                        size="sm"
+                        variant="ghost"
                         to={`/students/${student.studentId}`}
-                        className="text-xs font-semibold text-brand-600 hover:underline"
+                        aria-label={`View ${student.studentName}`}
                       >
-                        Open record
-                      </Link>
+                        View
+                      </ButtonLink>
                     )}
 
                     <span className="ml-auto flex items-center gap-2 text-xs">

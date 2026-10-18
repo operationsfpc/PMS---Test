@@ -8,6 +8,7 @@ import {
   AccordionTrigger,
   Badge,
   Button,
+  ButtonLink,
   Card,
   PageHeader,
   StatCard,
@@ -727,12 +728,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
         content: (
           <>
             <p className="mb-3">
-              <Link
+              <ButtonLink
+                size="sm"
+                variant="ghost"
                 to={`/drives/${role.driveId}`}
-                className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                aria-label={`View ${role.driveName}`}
               >
-                Open the drive record
-              </Link>
+                View
+              </ButtonLink>
             </p>
             <DriveRoster students={roster} collegeFilter={rosterCollege} />
           </>
@@ -1272,12 +1275,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                 visit hands over the record rather than
                                 repeating both. */}
                               {nested ? (
-                                <Link
+                                <ButtonLink
+                                  size="sm"
+                                  variant="ghost"
                                   to={`/drives/${drive.driveId}`}
-                                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                                  aria-label={`View ${drive.driveName}`}
                                 >
-                                  Open the drive record
-                                </Link>
+                                  View
+                                </ButtonLink>
                               ) : (
                                 <Link
                                   to={`/drives/${drive.driveId}`}
@@ -1349,7 +1354,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                   })
                                 }
                               >
-                                View all students
+                                See all students
                               </Button>
                             )}
                           </div>

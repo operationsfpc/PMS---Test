@@ -1,4 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
+import { Link } from "react-router";
 
 /** Shared presentation primitives. Brand-styled, light-mode, accessible. */
 
@@ -51,6 +52,16 @@ const VARIANTS = {
 const DISABLED = "disabled:cursor-not-allowed disabled:opacity-60";
 
 /**
+ * The two heights every control comes in, shared by the press and the
+ * navigation below so a `View` button and a `View` link in one card are the
+ * same size and cannot drift apart.
+ */
+const SIZING = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2.5 text-sm" } as const;
+
+const SHAPE =
+  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors";
+
+/**
  * The design system had no spinner, so eleven buttons spelled "Saving…" out by
  * hand and nine fired writes with nothing to stop a second click.
  */
@@ -86,7 +97,6 @@ export function Button({
   size?: "sm" | "md";
   isLoading?: boolean | undefined;
 } & ButtonHTMLAttributes<HTMLButtonElement>) {
-  const sizing = size === "sm" ? "px-3 py-1.5 text-xs" : "px-4 py-2.5 text-sm";
   // `||`, not `??`: a caller that passes `disabled={someGate}` for a state rule
   // must not switch OFF the loading guard. With `??` a gated button became
   // clickable again the moment it was spinning.
@@ -96,12 +106,69 @@ export function Button({
       type="button"
       aria-busy={isLoading}
       disabled={locked}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors ${VARIANTS[variant]} ${sizing} ${DISABLED} ${className}`}
+      className={`${SHAPE} ${VARIANTS[variant]} ${SIZING[size]} ${DISABLED} ${className}`}
       {...props}
     >
       {isLoading && <Spinner />}
       {children}
     </button>
+  );
+}
+
+/**
+ * A way to open something, drawn as a control.
+ *
+ * `to=` changes nothing, so this stays a real `<Link>`: back button, open in a
+ * new tab, the destination visible before the press. What it drops is the
+ * underline — reported again on the 2026-10-18 UAT pass, where the cards on
+ * every role's screen offered "View drive", "Open the drive record", "View
+ * everything" and a company name in blue text, all as prose, and staff read
+ * them as sentences rather than the way in.
+ *
+ * So: one word on every card — `View` — with the entity carried in the
+ * accessible name the screen reader hears (`View Accenture — Jr. Software
+ * Engineer`). Which card it opens is answered by the card, not by the button.
+ */
+export function ButtonLink({
+  variant = "primary",
+  size = "md",
+  className = "",
+  children,
+  ...props
+}: {
+  variant?: keyof typeof VARIANTS;
+  size?: "sm" | "md";
+} & ComponentProps<typeof Link>) {
+  return (
+    <Link className={`${SHAPE} ${VARIANTS[variant]} ${SIZING[size]} ${className}`} {...props}>
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * `ButtonLink` for the one thing it cannot do: hand the file to the browser.
+ *
+ * A resume, marksheet or offer letter leaves the app, so it stays an `<a href>`
+ * and keeps the download/right-click it deserves — but the row's second
+ * affordance is still a control, not a sentence. It is never called `View`:
+ * that word belongs to the one link that opens the record, so this names its
+ * object ("Resume", "Marksheet") and is quieter by default.
+ */
+export function ButtonAnchor({
+  variant = "secondary",
+  size = "sm",
+  className = "",
+  children,
+  ...props
+}: {
+  variant?: keyof typeof VARIANTS;
+  size?: "sm" | "md";
+} & ComponentProps<"a">) {
+  return (
+    <a className={`${SHAPE} ${VARIANTS[variant]} ${SIZING[size]} ${className}`} {...props}>
+      {children}
+    </a>
   );
 }
 
@@ -131,6 +198,7 @@ export function StatCard({
   hint,
   tone = "neutral",
   onClick,
+  to,
 }: {
   label: string;
   value: string | number;
@@ -142,6 +210,13 @@ export function StatCard({
    * it always was.
    */
   onClick?: (() => void) | undefined;
+  /**
+   * Leads to a page instead of a popup. A count that navigates used to be a
+   * `Card` wrapped in a `Link`, which draws an unclickable figure and only
+   * works because the whole block happens to be an anchor. Same press, same
+   * hint, real `href`.
+   */
+  to?: string | undefined;
 }) {
   const accent =
     tone === "brand"
@@ -162,17 +237,12 @@ export function StatCard({
     </>
   );
 
-  if (onClick === undefined) {
+  if (onClick === undefined && to === undefined) {
     return <Card className="p-4">{body}</Card>;
   }
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-haspopup="dialog"
-      className="group flex cursor-pointer flex-col rounded-card border border-line bg-surface p-4 text-left shadow-sm transition-all hover:border-brand-300 hover:shadow-md"
-    >
+  const press = (
+    <>
       {body}
       <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 opacity-70 group-hover:opacity-100">
         See who
@@ -187,7 +257,20 @@ export function StatCard({
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
       </span>
+    </>
+  );
+
+  const shape =
+    "group flex cursor-pointer flex-col rounded-card border border-line bg-surface p-4 text-left shadow-sm transition-all hover:border-brand-300 hover:shadow-md";
+
+  return to === undefined ? (
+    <button type="button" onClick={onClick} aria-haspopup="dialog" className={shape}>
+      {press}
     </button>
+  ) : (
+    <Link to={to} className={shape}>
+      {press}
+    </Link>
   );
 }
 

@@ -49,16 +49,17 @@ function filesUnder(subdir: string): string[] {
 }
 
 /**
- * The opening tag of the `<button` found at `start`, or null when the file
- * runs out before the tag closes.
+ * The opening tag of the element found at `start`, or null when the file runs
+ * out before the tag closes.
  *
  * Brace depth is tracked because `onClick={() => …}` holds a `>` that is the
  * end of an arrow, not the end of the tag.
  */
-function buttonTag(source: string, start: number): string | null {
+function openingTag(source: string, start: number): string | null {
+  const name = /^<[a-z][a-zA-Z]*/.exec(source.slice(start))?.[0] ?? "<x";
   let depth = 0;
   let quote: string | null = null;
-  for (let i = start + "<button".length; i < source.length; i++) {
+  for (let i = start + name.length; i < source.length; i++) {
     const char = source[i] as string;
     if (quote !== null) {
       if (char === quote && source[i - 1] !== "\\") quote = null;
@@ -72,6 +73,45 @@ function buttonTag(source: string, start: number): string | null {
     } else if (char === ">" && depth === 0) return source.slice(start, i + 1);
   }
   return null;
+}
+
+/** Where the opening tag at `start` ends, or -1 when the file runs out. */
+function tagEnd(source: string, start: number): number {
+  const tag = openingTag(source, start);
+  return tag === null ? -1 : start + tag.length;
+}
+
+/**
+ * Every position of `<name…` in the file.
+ *
+ * The boundary check is what keeps `<a` from finding `<article` and `<button`
+ * from being read inside `<buttons>`.
+ */
+function tagPositions(source: string, name: string): number[] {
+  const found: number[] = [];
+  let at = source.indexOf(`<${name}`);
+  while (at !== -1) {
+    const after = source[at + name.length + 1];
+    if (after === undefined || /[\s/>]/.test(after)) found.push(at);
+    at = source.indexOf(`<${name}`, at + 1);
+  }
+  return found;
+}
+
+/**
+ * The words a control shows the reader, with `{…}` interpolations dropped.
+ *
+ * Stripping them is what separates the two kinds of link: a row's name is
+ * `{student.fullName}` and reads as nothing here, while a call to action spells
+ * itself out as literal text — "View drive", "Open the drive record".
+ */
+function visibleWords(source: string, from: number): string {
+  const close = source.indexOf("</", from);
+  const raw = source.slice(from, close === -1 ? from + 120 : Math.min(close, from + 120));
+  return raw
+    .replace(/\{[^{}]*\}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 describe("src/domain is pure", () => {
@@ -147,8 +187,9 @@ describe("an action never wears a link's clothes", () => {
     const offenders: string[] = [];
     let at = source.indexOf("<button");
     while (at !== -1) {
-      const tag = buttonTag(source, at);
-      if (tag === null) break;
+      const end = tagEnd(source, at);
+      if (end === -1) break;
+      const tag = source.slice(at, end);
       if (tag.includes("underline")) {
         offenders.push(`line ${source.slice(0, at).split("\n").length}`);
       }
@@ -169,5 +210,76 @@ describe("an action never wears a link's clothes", () => {
 
     expect(ghost[1]).not.toMatch(/underline/);
     expect(ghost[1]).toMatch(/bg-/);
+  });
+});
+
+/** The words that make text a command to press rather than a fact to read. */
+const ACTION_WORDS = new Set([
+  "view",
+  "open",
+  "review",
+  "see",
+  "download",
+  "edit",
+  "update",
+  "add",
+  "approve",
+  "reject",
+  "complete",
+  "shortlist",
+  "publish",
+  "mark",
+]);
+
+/**
+ * A card's way in is a control, whichever way the arrow points.
+ *
+ * Asked on the 2026-10-18 UAT pass for "a View button on the cards, not another
+ * ? on each card". Every screen had invented its own word for one affordance —
+ * "View drive", "Open the drive record", "View the full drive", "View
+ * everything", "Review" — and drew it as blue underlined prose, which a reader
+ * scans as a sentence and does not press.
+ *
+ * The vocabulary the screens are held to:
+ *   · every card carries AT MOST ONE `View`, and it opens that record;
+ *   · any second affordance names its object instead ("Certificate", "Resume");
+ *   · both are shaped controls — `<ButtonLink>` in the app, `<ButtonAnchor>`
+ *     for a file the browser leaves the app to open;
+ *   · the entity is in the accessible name: `View Accenture — Jr. Software
+ *     Engineer`.
+ *
+ * A student's or company's NAME stays an underlined link: it is inline text
+ * that happens to open a record, not a command to press.
+ */
+describe("a call to action is a control, on every card", () => {
+  const screens = filesUnder("features").filter((file) => extname(file) === ".tsx");
+
+  it("has screens to check", () => {
+    expect(screens.length).toBeGreaterThan(0);
+  });
+
+  it.each(screens.map((file) => relative(SRC, file)))("%s tells nobody to view a link", (rel) => {
+    const source = readFileSync(join(SRC, rel), "utf8");
+    const offenders: string[] = [];
+    for (const name of ["Link", "a"]) {
+      for (const at of tagPositions(source, name)) {
+        const end = tagEnd(source, at);
+        if (end === -1) continue;
+        const words = visibleWords(source, end);
+        const first = words
+          .split(" ")[0]
+          ?.toLowerCase()
+          .replace(/[^a-z]/g, "");
+        if (first !== undefined && ACTION_WORDS.has(first)) {
+          offenders.push(`line ${source.slice(0, at).split("\n").length}: ${words.slice(0, 48)}`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      `A card's way in is a control — use <ButtonLink> (in-app) or <ButtonAnchor> (a file) from ` +
+        `@components/ui and say "View" once. Found: ${offenders.join("; ")}`,
+    ).toEqual([]);
   });
 });

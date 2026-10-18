@@ -1,8 +1,7 @@
-import { Card } from "@components/ui";
+import { ButtonLink, Card } from "@components/ui";
 import { describeBoard, type SchoolBoard, type SchoolLevel } from "@domain/boards";
 import { certificateStanding } from "@domain/certificates";
 import type { SrfAccess } from "@domain/srf-access";
-import { Link } from "react-router";
 import { AddSemester, type AddSemesterView } from "./add-semester";
 import type { SrfProfile } from "./srf-profile";
 
@@ -81,12 +80,9 @@ export function SrfSummary({
              * still the student's own, and saying so prevents the support
              * ticket that follows a link promising more than it gives.
              */}
-            <Link
-              to="/student/profile"
-              className="text-sm font-semibold text-brand-600 underline underline-offset-4 hover:text-brand-700"
-            >
+            <ButtonLink size="sm" to="/student/profile">
               Update my skills, projects and links
-            </Link>
+            </ButtonLink>
           </p>
         )}
       </Card>

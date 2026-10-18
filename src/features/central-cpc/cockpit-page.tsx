@@ -1,3 +1,11 @@
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@components/alert-dialog";
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
 import { StudentIdentity } from "@components/student-identity";
@@ -8,8 +16,15 @@ import {
   AccordionTrigger,
   Badge,
   Button,
+  ButtonLink,
   Card,
   PageHeader,
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
 } from "@components/ui";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
@@ -41,7 +56,6 @@ import { describeStipendRange } from "@domain/stipend";
 import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
 
 export interface CockpitRound {
   readonly roundId: string;
@@ -403,12 +417,12 @@ export function CockpitPage({
           Loading drives…
         </p>
       ) : drives.length === 0 ? (
-        <Card className="p-6">
-          <p className="text-sm text-ink-700">
-            {scope?.empty ??
-              "No drives yet. An Account Executive raises one, and the Delivery Head approves it."}
+        <div className="rounded-lg border border-dashed border-line p-6 text-center">
+          <p className="text-sm font-medium text-ink-700">{scope?.empty ?? "No drives yet."}</p>
+          <p className="mt-1 text-sm text-ink-500">
+            An Account Executive raises a PIF, the Delivery Head approves it, and it appears here.
           </p>
-        </Card>
+        </div>
       ) : (
         <>
           {/* 2026-08-27 (Karthik): the type filter, above the list it filters. */}
@@ -425,11 +439,18 @@ export function CockpitPage({
           </div>
 
           {split.active.length === 0 ? (
-            <Card className="p-6">
-              <p className="text-sm text-ink-700">
+            <div className="rounded-lg border border-dashed border-line p-6 text-center">
+              <p className="text-sm font-medium text-ink-700">
                 {scope?.empty ?? "Nothing needs action right now."}
               </p>
-            </Card>
+              {/* The folded section below is the only other place a drive can
+                  be; saying so stops an empty queue reading as a lost one. */}
+              {split.expired.length > 0 && (
+                <p className="mt-1 text-sm text-ink-500">
+                  The drives past their application deadline are folded underneath.
+                </p>
+              )}
+            </div>
           ) : (
             <DriveList
               drives={split.active}
@@ -468,28 +489,32 @@ export function CockpitPage({
         </>
       )}
 
-      {/* UAT 2026-08-21 item 2: recording the confirmed venue. */}
+      {/* UAT 2026-08-21 item 2: recording the confirmed venue. It shares the
+          drawer the rosters open in, because a hand-rolled overlay closes on
+          nothing but its own Cancel — no Escape, no focus in, no focus back
+          out to the button that asked for it. */}
       {venueEditing !== null && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-          <div
-            role="dialog"
-            aria-label="Update venue"
-            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
-          >
-            <h2 className="font-heading text-lg font-bold text-ink-900">
-              Venue — {venueEditing.companyName}
-            </h2>
-            <p className="mt-1 text-sm text-ink-500">
-              As confirmed by the company. Students see it on the drive card.
-            </p>
+        <Sheet
+          open
+          onOpenChange={(next) => {
+            if (!next) setVenueEditing(null);
+          }}
+        >
+          <SheetContent side="right" size="sm">
+            <SheetHeader>
+              <SheetTitle>Venue — {venueEditing.companyName}</SheetTitle>
+              <SheetDescription>
+                As confirmed by the company. Students see it on the drive card.
+              </SheetDescription>
+            </SheetHeader>
 
             {venueError !== null && (
-              <p role="alert" className="mt-2 text-sm text-destructive">
+              <p role="alert" className="mb-2 text-sm text-danger-700">
                 {venueError}
               </p>
             )}
 
-            <div className="mt-3">
+            <div>
               <label
                 htmlFor="cockpit-venue"
                 className="mb-1 block text-sm font-medium text-ink-900"
@@ -505,38 +530,46 @@ export function CockpitPage({
               />
             </div>
 
-            <div className="mt-5 flex justify-end gap-3">
+            <SheetFooter>
               <Button variant="secondary" onClick={() => setVenueEditing(null)}>
                 Cancel
               </Button>
               <Button isLoading={savingVenue} onClick={() => void saveVenue()}>
                 Save venue
               </Button>
-            </div>
-          </div>
-        </div>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
       )}
 
       {/* G1c: the decision, from the list — same rules as the approval queue. */}
       {deciding !== null && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-          <div
-            role="alertdialog"
-            aria-label={deciding.kind === "approve" ? "Approve drive" : "Reject drive"}
-            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
-          >
-            <h2 className="font-heading text-lg font-bold text-ink-900">
-              {deciding.kind === "approve" ? "Approve" : "Reject"} {deciding.drive.companyName}?
-            </h2>
+        <AlertDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setDeciding(null);
+          }}
+        >
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {deciding.kind === "approve" ? "Approve" : "Reject"} {deciding.drive.companyName}?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {deciding.kind === "approve"
+                  ? "Approving lets the coordinators publish it to their students."
+                  : "Rejection is final — the PIF cannot be edited or resubmitted."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
 
             {decisionError !== null && (
-              <p role="alert" className="mt-2 text-sm text-destructive">
+              <p role="alert" className="mb-2 text-sm text-danger-700">
                 {decisionError}
               </p>
             )}
 
             {deciding.kind === "approve" ? (
-              <div className="mt-3">
+              <div>
                 <label
                   htmlFor="cockpit-category"
                   className="mb-1 block text-sm font-medium text-ink-900"
@@ -558,14 +591,14 @@ export function CockpitPage({
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-warning">
+                <p className="mt-1 text-xs text-gold-700">
                   {category === null
                     ? "No CTC on this PIF, so nothing is suggested — choose the category. This cannot be changed later."
                     : "Suggested from the CTC. This cannot be changed later."}
                 </p>
               </div>
             ) : (
-              <div className="mt-3">
+              <div>
                 <label
                   htmlFor="cockpit-reason"
                   className="mb-1 block text-sm font-medium text-ink-900"
@@ -578,22 +611,26 @@ export function CockpitPage({
                   onChange={(e) => setReason(e.target.value)}
                   className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
                 />
-                <p className="mt-1 text-xs text-ink-500">
-                  Required. Rejection is final — the PIF cannot be edited or resubmitted.
-                </p>
+                <p className="mt-1 text-xs text-ink-500">Required.</p>
               </div>
             )}
 
-            <div className="mt-5 flex justify-end gap-3">
+            {/* Not AlertDialogAction: it closes whatever the write did, and a
+                refusal has to stay on screen with the reason beside it. */}
+            <AlertDialogFooter>
               <Button variant="secondary" onClick={() => setDeciding(null)}>
                 Cancel
               </Button>
-              <Button isLoading={savingDecision} onClick={() => void confirmDecision()}>
+              <Button
+                variant={deciding.kind === "approve" ? "primary" : "danger"}
+                isLoading={savingDecision}
+                onClick={() => void confirmDecision()}
+              >
                 {deciding.kind === "approve" ? "Confirm — approve" : "Confirm — reject permanently"}
               </Button>
-            </div>
-          </div>
-        </div>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </div>
   );
@@ -612,135 +649,238 @@ interface RowProps {
 /**
  * 2026-10-16 (UAT): "same company shows as two" — two roles raised for one
  * visit are ONE event, and this queue is cleared event by event. A legacy
- * drive with no parent is an event of exactly one role and keeps the row it
- * always had; more than one role folds into an accordion whose header counts
- * the visit.
+ * drive with no parent is an event of exactly one role.
+ *
+ * 2026-10-18 gives this queue the card the coordinator's screens already had.
+ * Until now it was one `Card` of divided rows, which is exactly why "Yet to
+ * publish" read as a generation behind the Live and Completed lists beside it:
+ * the visit is the card, the card states it once, and the roles sit under it.
  */
 function DriveList({ drives, ...props }: { drives: readonly DriveSummary[] } & RowProps) {
   const events = [...groupDrivesByEvent(drives).values()];
 
   return (
-    <Card>
-      <ul className="divide-y divide-neutral-200">
-        {events.map((roles) => {
-          const head = roles[0];
-          if (head === undefined) return null;
-          return (
-            <li key={head.driveId} className="p-4">
-              {roles.length === 1 ? (
-                <DriveRow drive={head} {...props} />
-              ) : (
-                <EventGroup head={head} roles={roles} {...props} />
+    <ul className="space-y-6">
+      {events.map((roles) => {
+        const head = roles[0];
+        if (head === undefined) return null;
+        return (
+          <li key={head.driveId}>
+            <VisitCard roles={roles} {...props} />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** A drive awaiting someone's decision — publishing is the reader's own job. */
+const isUnpublished = (status: DriveStatus) =>
+  status === "draft" || status === "submitted" || status === "approved";
+
+/**
+ * How many STUDENTS a visit holds, not how many applications.
+ *
+ * The ids are the only way to de-duplicate a student who applied to two of the
+ * visit's roles; where a read brings none, the honest figure is the summed
+ * head-count, and mixing the two measures inside one number is worse than
+ * saying which one it is.
+ */
+function countVisitApplicants(roles: readonly DriveSummary[]): number {
+  const students = roles.flatMap((role) => [...(role.applicantStudentIds ?? [])]);
+  return students.length === 0
+    ? roles.reduce((sum, role) => sum + role.applicationCount, 0)
+    : countDistinctApplicants(students.map((studentId) => ({ studentId })));
+}
+
+/** Role, money, size: what tells two roles of one visit apart. */
+function roleFacts(drive: DriveSummary): string {
+  return [
+    drive.roleTitle ?? "Role not set",
+    describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa),
+    // An internship has no CTC — the stipend is the number.
+    describeStipendRange(drive.stipendMinMonthly ?? null, drive.stipendMaxMonthly ?? null),
+    `${drive.applicationCount} applicants`,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+}
+
+/**
+ * One company visit, one card: the band across the top is the visit — named
+ * once, counted once, aged once — and everything below belongs to a role.
+ *
+ * A visit that raised several roles folds them into an accordion opened on the
+ * roles that are waiting on the reader, because that is why the card exists.
+ */
+function VisitCard({ roles, ...props }: { roles: readonly DriveSummary[] } & RowProps) {
+  const head = roles[0];
+  if (head === undefined) return null;
+
+  const isVisit = roles.length > 1;
+  const raised = describeRaisedOn(head.createdAt);
+
+  // The type said once for the visit. A visit mixing an internship with a
+  // full-time role cannot pick one at random, so it says "Mixed types".
+  const types = new Set(roles.map((role) => role.driveType ?? null));
+  const [singleType] = types;
+  const mixed = types.size > 1;
+
+  const singleBadges = () => {
+    const stale = isUnpublished(head.status) && isPendingTooLong(head.createdAt, props.now);
+    return (
+      <>
+        <Badge tone={STATUS_TONE[head.status]}>{label(head.status)}</Badge>
+        {head.onHold && <Badge tone="warning">On hold</Badge>}
+        {/* G1a: the age of a submission, flagged only while it waits. */}
+        {stale && (
+          <Badge tone="warning">Pending {daysPending(head.createdAt, props.now)} days</Badge>
+        )}
+      </>
+    );
+  };
+
+  // Only when every role stands where the visit does: one badge that reads as
+  // "all three of these". A visit that mixes would only repeat the badges each
+  // role already wears on its own row.
+  const uniform = new Set(roles.map((role) => role.status));
+  const held = roles.filter((role) => role.onHold).length;
+  const staleRoles = roles.filter(
+    (role) => isUnpublished(role.status) && isPendingTooLong(role.createdAt, props.now),
+  ).length;
+  const awaiting = roles.filter((role) => awaitsReader(role, props));
+
+  // The role count is said once, as the badge beside the company; the line
+  // under it carries only what the badge cannot.
+  const meta = isVisit
+    ? [
+        `${countVisitApplicants(roles)} applicants`,
+        ...(awaiting.length > 0 ? [`${awaiting.length} awaiting you`] : []),
+      ].join(" · ")
+    : roleFacts(head);
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
+        <div className="min-w-0">
+          <p className="flex flex-wrap items-center gap-2 font-heading text-base font-bold text-ink-900">
+            {head.companyName}
+            <Badge tone={mixed ? "neutral" : driveTypeTone(singleType ?? null)}>
+              {mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)}
+            </Badge>
+            {isVisit && <Badge tone="brand">{roles.length} roles</Badge>}
+          </p>
+          <p className="mt-1 text-sm text-ink-500">{meta}</p>
+          {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {isVisit ? (
+            <>
+              {uniform.size === 1 && (
+                <Badge tone={STATUS_TONE[[...uniform][0] ?? "draft"]}>
+                  {label([...uniform][0] ?? "draft")}
+                  {roles.length > 1 && ` ×${roles.length}`}
+                </Badge>
               )}
-            </li>
-          );
-        })}
-      </ul>
+              {held > 0 && <Badge tone="warning">{held} on hold</Badge>}
+              {staleRoles > 0 && <Badge tone="warning">Pending too long ({staleRoles})</Badge>}
+            </>
+          ) : (
+            singleBadges()
+          )}
+        </div>
+      </div>
+
+      {isVisit ? (
+        <div className="p-4">
+          {/* Opened for the reader rather than making them hunt: the roles
+              awaiting an action are the reason the card exists. */}
+          <Accordion multiple className="mt-1" defaultValue={awaiting.map((r) => r.driveId)}>
+            {roles.map((drive) => (
+              <AccordionItem key={drive.driveId} value={drive.driveId}>
+                <AccordionTrigger className="py-3">
+                  <span className="font-medium text-ink-900">
+                    {drive.roleTitle ?? "Role not set"}
+                  </span>
+                  {" · "}
+                  {mixed && drive.driveType !== undefined && drive.driveType !== null && (
+                    <Badge tone={driveTypeTone(drive.driveType)}>
+                      {driveTypeLabel(drive.driveType)}
+                      {" · "}
+                    </Badge>
+                  )}
+                  <span>{drive.applicationCount} applicants</span>
+                  {" · "}
+                  <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
+                  {drive.onHold && (
+                    <>
+                      {" · "}
+                      <Badge tone="warning">On hold</Badge>
+                    </>
+                  )}
+                </AccordionTrigger>
+                <AccordionContent className="pb-4">
+                  <p className="text-xs text-ink-500">{roleFacts(drive)}</p>
+                  <RoleBlock drive={drive} {...props} />
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      ) : (
+        <div className="p-4">
+          <RoleBlock drive={head} {...props} />
+        </div>
+      )}
     </Card>
   );
 }
 
 /**
- * One role's facts and one role's actions — the row this card used to be.
- * `nested` is the same row inside an event accordion, where the trigger has
- * already said the company, the role, the money and the status.
+ * What one role still has to say after its visit has been named: where it
+ * happens, who it is open to, and the actions the reader may take on it.
  */
-function DriveRow({
+function RoleBlock({
   drive,
-  now,
   mayPublish,
   mayShortlist,
   onDecide,
   onEditVenue,
-  nested = false,
-}: { drive: DriveSummary; nested?: boolean } & RowProps) {
-  const raised = describeRaisedOn(drive.createdAt);
-  const pendingDays = daysPending(drive.createdAt, now);
-  const unpublished =
-    drive.status === "draft" || drive.status === "submitted" || drive.status === "approved";
+}: RowProps & { drive: DriveSummary }) {
+  // Who the drive is for, on the card — a CPC member should not have to open
+  // the record to learn it. Absent (older fixtures) stays silent; empty means
+  // every campus.
+  const venue = describeDriveVenue(
+    (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
+    drive.venue ?? null,
+  );
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          {!nested && (
-            <>
-              <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
-                {drive.companyName}
-                {/* 2026-08-27: the type, on every drive summary. */}
-                <Badge tone={driveTypeTone(drive.driveType ?? null)}>
-                  {driveTypeLabel(drive.driveType ?? null)}
-                </Badge>
-              </p>
-              <p className="text-sm text-ink-500">
-                {[
-                  drive.roleTitle ?? "Role not set",
-                  describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa),
-                  // An internship has no CTC — the stipend is the number.
-                  describeStipendRange(
-                    drive.stipendMinMonthly ?? null,
-                    drive.stipendMaxMonthly ?? null,
-                  ),
-                  `${drive.applicationCount} applicants`,
-                ]
-                  .filter((part): part is string => part !== null)
-                  .join(" · ")}
-              </p>
-              {/* G1a: the age of the submission, stated on the card. */}
-              {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
-            </>
-          )}
-          {/* UAT 2026-08-21 item 2: where an off-campus drive happens —
-              "to be confirmed" is said out loud, never left blank. */}
-          {describeDriveVenue(
-            (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
-            drive.venue ?? null,
-          ) !== null && (
-            <p className="mt-0.5 text-xs text-ink-500">
-              Venue:{" "}
-              {describeDriveVenue(
-                (drive.driveMode ?? null) as Parameters<typeof describeDriveVenue>[0],
-                drive.venue ?? null,
-              )}
-            </p>
-          )}
-          {/* Who the drive is for, on the card — a CPC member should
-              not have to open the record to learn it. Absent (older
-              fixtures) stays silent; empty means every campus. */}
-          {drive.campuses !== undefined && (
-            <p className="mt-0.5 text-xs text-ink-500">
-              {drive.campuses.length === 0
-                ? "Open to every campus"
-                : `Open to: ${drive.campuses.join(", ")}`}
-            </p>
-          )}
-        </div>
-        {!nested && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
-            {drive.onHold && <Badge tone="warning">On hold</Badge>}
-            {/* G1a: flagged only while it awaits someone's action. */}
-            {unpublished && isPendingTooLong(drive.createdAt, now) && (
-              <Badge tone="warning">Pending {pendingDays} days</Badge>
-            )}
-          </div>
-        )}
-      </div>
+      {venue !== null && <p className="mt-1 text-xs text-ink-500">Venue: {venue}</p>}
+      {drive.campuses !== undefined && (
+        <p className="mt-0.5 text-xs text-ink-500">
+          {drive.campuses.length === 0
+            ? "Open to every campus"
+            : `Open to: ${drive.campuses.join(", ")}`}
+        </p>
+      )}
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        {/* B2 (UAT 2026-08-19): every card opens the record page,
-            whatever its status — a submitted drive awaiting the
-            Delivery Head used to be a dead end with no link at all. */}
-        <Link
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {/* B2 (UAT 2026-08-19): every card opens the record page, whatever its
+            status. It is the card's ONE `View` — the rest of these name the
+            thing they do, because two controls that both read "View" leave the
+            reader to guess which is the person. */}
+        <ButtonLink
+          size="sm"
           to={`/drives/${drive.driveId}`}
-          className="font-medium text-brand-600 hover:underline"
+          aria-label={`View ${drive.companyName} — ${drive.roleTitle ?? "role not set"}`}
         >
-          View drive
-        </Link>
+          View
+        </ButtonLink>
 
-        {/* UAT 2026-08-21 item 2: the venue stays editable after
-            submission — the company confirms it late, the CPC records
-            it here. */}
+        {/* UAT 2026-08-21 item 2: the venue stays editable after submission —
+            the company confirms it late, the CPC records it here. */}
         {onEditVenue !== null &&
           drive.status !== "draft" &&
           driveVenueApplies(
@@ -764,155 +904,49 @@ function DriveRow({
         )}
 
         {mayPublish && (drive.status === "approved" || drive.status === "draft") && (
-          <Link
-            to={`/central/publish?drive=${drive.driveId}`}
-            className="font-medium text-brand-600 hover:underline"
-          >
-            Complete and publish
-          </Link>
+          <ButtonLink size="sm" variant="secondary" to={`/central/publish?drive=${drive.driveId}`}>
+            Publish
+          </ButtonLink>
         )}
 
         {mayShortlist &&
           (drive.status === "live" ||
             drive.status === "applications_closed" ||
             drive.status === "in_rounds") && (
-            <Link
+            <ButtonLink
+              size="sm"
+              variant="secondary"
               to={`/central/shortlisting?drive=${drive.driveId}`}
-              className="font-medium text-brand-600 hover:underline"
             >
-              Shortlist applicants
-            </Link>
+              Shortlist
+            </ButtonLink>
           )}
 
         {drive.rounds.map((round) => (
-          <Link
+          <ButtonLink
             key={round.roundId}
+            size="sm"
+            variant="ghost"
             to={`/central/results?drive=${drive.driveId}`}
-            className="font-medium text-brand-600 hover:underline"
           >
             {round.sequence}. {round.name}
-          </Link>
+          </ButtonLink>
         ))}
 
         {(drive.status === "in_rounds" || drive.status === "completed") && (
-          <Link
-            to={`/central/offers?drive=${drive.driveId}`}
-            className="font-medium text-brand-600 hover:underline"
-          >
-            Final selection
-          </Link>
+          <ButtonLink size="sm" variant="secondary" to={`/central/offers?drive=${drive.driveId}`}>
+            Offers
+          </ButtonLink>
         )}
 
-        {/* C3 (2026-08-21): the completion dialog lives on the rounds
-            screen; the card only takes the coordinator there. */}
+        {/* C3 (2026-08-21): the completion dialog lives on the rounds screen;
+            the card only takes the coordinator there. */}
         {mayShortlist && drive.status === "in_rounds" && (
-          <Link
-            to={`/central/results?drive=${drive.driveId}`}
-            className="font-medium text-brand-600 hover:underline"
-          >
-            Complete drive…
-          </Link>
+          <ButtonLink size="sm" variant="secondary" to={`/central/results?drive=${drive.driveId}`}>
+            Complete
+          </ButtonLink>
         )}
       </div>
-    </div>
-  );
-}
-
-/**
- * 2026-10-16 (UAT): the whole visit on one card. Each role keeps the row it
- * had — approval, publishing and the venue are decided per role — but the
- * queue is read and cleared event by event, so the header answers the questions
- * a list of same-company cards could not: how many roles, how many students,
- * and how many of them are waiting on the reader.
- */
-function EventGroup({
-  head,
-  roles,
-  ...props
-}: { head: DriveSummary; roles: readonly DriveSummary[] } & RowProps) {
-  const raised = describeRaisedOn(head.createdAt);
-  const students = roles.flatMap((role) => [...(role.applicantStudentIds ?? [])]);
-  // The ids are the only way to de-duplicate a student who applied to two of
-  // the visit's roles; without them the honest statement is a summed head-count.
-  const applicants =
-    students.length === 0
-      ? roles.reduce((sum, role) => sum + role.applicationCount, 0)
-      : countDistinctApplicants(students.map((studentId) => ({ studentId })));
-  const awaiting = roles.filter((role) => awaitsReader(role, props));
-
-  const types = new Set(roles.map((role) => role.driveType ?? null));
-  const [singleType] = types;
-  const uniform = types.size === 1 && singleType !== undefined;
-
-  const statuses = [...countBy(roles, (role) => role.status)];
-  const held = roles.filter((role) => role.onHold).length;
-  const stale = roles.filter(
-    (role) =>
-      (role.status === "draft" || role.status === "submitted" || role.status === "approved") &&
-      isPendingTooLong(role.createdAt, props.now),
-  ).length;
-
-  // Opened for the reader rather than making them hunt: the roles awaiting an
-  // action are the reason the card exists.
-  const openByDefault = awaiting.map((role) => role.driveId);
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 font-medium text-ink-900">
-            {head.companyName}
-            <Badge tone={uniform ? driveTypeTone(singleType ?? null) : "neutral"}>
-              {uniform ? driveTypeLabel(singleType ?? null) : "Mixed types"}
-            </Badge>
-          </p>
-          <p className="text-sm text-ink-500">
-            {roles.length} roles · {applicants} applicants
-            {awaiting.length > 0 && ` · ${awaiting.length} awaiting you`}
-          </p>
-          {raised !== null && <p className="mt-0.5 text-xs text-ink-500">{raised}</p>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Only when every role stands where the visit does: one badge that
-              reads as "all three of these". A visit that mixes would only be
-              repeating the badges each role already wears below. */}
-          {statuses.length === 1 && (
-            <Badge tone={STATUS_TONE[statuses[0]?.[0] ?? "draft"]}>
-              {label(statuses[0]?.[0] ?? "draft")}
-              {(statuses[0]?.[1] ?? 0) > 1 && ` ×${statuses[0]?.[1]}`}
-            </Badge>
-          )}
-          {held > 0 && <Badge tone="warning">{held} on hold</Badge>}
-          {stale > 0 && <Badge tone="warning">Pending too long ({stale})</Badge>}
-        </div>
-      </div>
-
-      <Accordion multiple className="mt-3" defaultValue={openByDefault}>
-        {roles.map((drive) => {
-          const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
-          const stipend = describeStipendRange(
-            drive.stipendMinMonthly ?? null,
-            drive.stipendMaxMonthly ?? null,
-          );
-          return (
-            <AccordionItem key={drive.driveId} value={drive.driveId}>
-              <AccordionTrigger className="py-3">
-                <span className="font-medium text-ink-900">
-                  {drive.roleTitle ?? "Role not set"}
-                </span>
-                {ctc !== null && <span>{ctc}</span>}
-                {stipend !== null && <span>{stipend}</span>}
-                <span>{drive.applicationCount} applicants</span>
-                <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
-                {drive.onHold && <Badge tone="warning">On hold</Badge>}
-              </AccordionTrigger>
-              <AccordionContent className="pb-4">
-                <DriveRow nested drive={drive} {...props} />
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
     </div>
   );
 }
@@ -928,16 +962,4 @@ function awaitsReader(
 ): boolean {
   if (props.onDecide !== null && drive.status === "submitted") return true;
   return props.mayPublish && (drive.status === "approved" || drive.status === "draft");
-}
-
-function countBy<T, K extends string>(
-  rows: readonly T[],
-  key: (row: T) => K,
-): readonly (readonly [K, number])[] {
-  const counts = new Map<K, number>();
-  for (const row of rows) {
-    const k = key(row);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  return [...counts];
 }

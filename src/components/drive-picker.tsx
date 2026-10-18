@@ -6,7 +6,7 @@ import type { DriveType } from "@domain/types";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { DriveSort } from "./drive-sort";
-import { Badge, Card, type Tone } from "./ui";
+import { Badge, ButtonLink, Card, type Tone } from "./ui";
 
 /**
  * M1 (approved 2026-08-21): the one drive picker behind Shortlisting,
@@ -239,13 +239,14 @@ function Visit({
               </td>
               <td className="py-2 pr-3">{statusBadge(role.status)}</td>
               <td className="py-2 text-right">
-                <Link
+                <ButtonLink
+                  size="sm"
+                  variant="secondary"
                   to={makeLink(role.driveId)}
                   aria-label={`Choose ${role.roleTitle ?? "this role"}`}
-                  className="text-xs font-semibold text-brand-700 underline underline-offset-2"
                 >
                   Choose
-                </Link>
+                </ButtonLink>
               </td>
             </tr>
           ))}

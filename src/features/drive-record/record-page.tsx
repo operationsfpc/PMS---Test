@@ -1,4 +1,4 @@
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitDayInParentheses } from "@domain/drive-aging";
 import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
@@ -183,16 +183,17 @@ export function DriveRecordPage({
         actions={
           staff && (role === "account_executive" || role === "admin") ? (
             rolesRefused === null ? (
-              <Link
+              <ButtonLink
+                size="sm"
+                variant="ghost"
                 to={`/ae/pif?companyName=${encodeURIComponent(record.companyName)}${
                   record.companyDriveId
                     ? `&companyDriveId=${encodeURIComponent(record.companyDriveId)}`
                     : ""
                 }&tentativeDate=${encodeURIComponent(record.tentativeDate ?? "")}`}
-                className="inline-flex items-center rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
               >
-                + Add Role to this Drive{visitDayInParentheses(record.tentativeDate)}
-              </Link>
+                + Add another role{visitDayInParentheses(record.tentativeDate)}
+              </ButtonLink>
             ) : (
               // A closed visit cannot take a fifth role onto it. The offer is
               // replaced by the reason, not removed: a missing button reads

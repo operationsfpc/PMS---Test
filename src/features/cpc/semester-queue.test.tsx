@@ -68,7 +68,7 @@ describe("SemesterQueue", () => {
     const row = await rowFor("Thanush Krishna");
     expect(row.getByText(/Semester 3 — CGPA 7\.5/)).toBeDefined();
     expect(row.getByText(/declared as 75%/i)).toBeDefined();
-    expect(row.getByRole("link", { name: /open marksheet/i }).getAttribute("href")).toBe(
+    expect(row.getByRole("link", { name: /open .* marksheet/i }).getAttribute("href")).toBe(
       "/signed/sem-3.pdf",
     );
   });
@@ -77,7 +77,7 @@ describe("SemesterQueue", () => {
     render(<SemesterQueue repository={repo()} />);
 
     const row = await rowFor("Priya Ramesh");
-    expect(row.queryByRole("link", { name: /open marksheet/i })).toBeNull();
+    expect(row.queryByRole("link", { name: /open .* marksheet/i })).toBeNull();
     expect(row.getByText(/no marksheet available/i)).toBeDefined();
   });
 

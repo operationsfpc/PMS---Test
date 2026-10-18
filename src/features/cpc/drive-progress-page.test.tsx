@@ -57,32 +57,65 @@ const view = (drives: readonly DriveProgressEntry[] = [DRIVE]): DriveProgressVie
   drives: async () => drives,
 });
 
+/**
+ * Open one card's slide-over and read inside it.
+ *
+ * Since 2026-10-18 the card keeps only what a visit IS — company, date, the
+ * four counts, its roles — and the students moved into the pane, because forty
+ * applicants at ninety pixels each pushed the next company four screens down.
+ * So a test that names a student has to press `View` first, exactly as the
+ * coordinator does.
+ */
+async function openVisit(user: ReturnType<typeof userEvent.setup>, entity: string) {
+  await screen.findByText("Zoho");
+  await user.click(screen.getByRole("button", { name: `View the students of ${entity}` }));
+  return within(screen.getByRole("dialog"));
+}
+
 describe("DriveProgressPage", () => {
   it("shows each drive with its students' full journey", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view()} />);
 
-    expect(await screen.findByText("Zoho")).toBeDefined();
-
-    const priya = screen.getByText("Priya Ramesh").closest("li");
+    const students = await openVisit(user, "Zoho");
+    const priya = students.getByText("Priya Ramesh").closest("li");
     if (priya === null) throw new Error("row not found");
     expect(within(priya).getByText(/round 1.*selected/i)).toBeDefined();
     expect(within(priya).getByText(/round 2/i)).toBeDefined();
   });
 
   it("shows the offer once it is made — the end of the cycle they asked to see", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view()} />);
 
-    const arjun = (await screen.findByText("Arjun Menon")).closest("li");
+    const students = await openVisit(user, "Zoho");
+    const arjun = students.getByText("Arjun Menon").closest("li");
     if (arjun === null) throw new Error("row not found");
     expect(within(arjun).getByText(/offer.*dream/i)).toBeDefined();
   });
 
   it("says who applied but was not shortlisted, rather than dropping them", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view()} />);
 
-    const meena = (await screen.findByText("Meena V")).closest("li");
+    const students = await openVisit(user, "Zoho");
+    const meena = students.getByText("Meena V").closest("li");
     if (meena === null) throw new Error("row not found");
     expect(within(meena).getByText(/not shortlisted/i)).toBeDefined();
+  });
+
+  /**
+   * The other half of the same report: the card's whole height is now the
+   * header, whatever the visit holds. A coordinator scanning five companies
+   * does not scroll through their cohorts to do it.
+   */
+  it("keeps a single-role visit to one card that says nothing about its students", async () => {
+    render(<DriveProgressPage view={view()} />);
+
+    expect(await screen.findByText("Zoho")).toBeDefined();
+    expect(screen.getByText(/Engineer · 3 applicants/)).toBeDefined();
+    expect(screen.queryByText("Priya Ramesh")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   /**
@@ -117,9 +150,9 @@ describe("DriveProgressPage", () => {
     // wrong place. Each role links to its own record from inside the pane.
     expect(screen.queryByRole("link", { name: "Zoho" })).toBeNull();
 
-    expect(screen.getByRole("button", { name: /view students for engineer/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /view the students of engineer/i })).toBeDefined();
     expect(
-      screen.getByRole("button", { name: /view students for quality analyst/i }),
+      screen.getByRole("button", { name: /view the students of quality analyst/i }),
     ).toBeDefined();
   });
 
@@ -156,7 +189,7 @@ describe("DriveProgressPage", () => {
     if (last === undefined) throw new Error("no column headers");
     expect(last.querySelector(".sr-only")?.textContent).toBe("Action");
     expect(
-      within(table).getByRole("button", { name: /view students for engineer/i }),
+      within(table).getByRole("button", { name: /view the students of engineer/i }),
     ).toBeDefined();
   });
 
@@ -179,7 +212,7 @@ describe("DriveProgressPage", () => {
     render(<DriveProgressPage view={view([mts, qa])} />);
     await screen.findByText("2 roles");
 
-    await user.click(screen.getByRole("button", { name: /view students for engineer/i }));
+    await user.click(screen.getByRole("button", { name: /view the students of engineer/i }));
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Zoho")).toBeDefined();
@@ -188,17 +221,13 @@ describe("DriveProgressPage", () => {
       within(dialog).getByRole("tab", { name: "Quality Analyst (1 applicant)" }),
     ).toBeDefined();
     expect(within(dialog).getByText("Arjun Menon")).toBeDefined();
-    expect(
-      within(dialog).getByRole("link", { name: /open the drive record for engineer/i }),
-    ).toBeDefined();
+    expect(within(dialog).getByRole("link", { name: /^view engineer$/i })).toBeDefined();
 
     await user.click(within(dialog).getByRole("tab", { name: "Quality Analyst (1 applicant)" }));
 
     expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
     expect(within(dialog).queryByText("Arjun Menon")).toBeNull();
-    expect(
-      within(dialog).getByRole("link", { name: /open the drive record for quality analyst/i }),
-    ).toBeDefined();
+    expect(within(dialog).getByRole("link", { name: /^view quality analyst$/i })).toBeDefined();
   });
 
   /**
@@ -223,13 +252,18 @@ describe("DriveProgressPage", () => {
     expect(await screen.findByText(/3 applicants · 3 shortlisted/)).toBeDefined();
   });
 
-  /** The company name of a one-role visit still links to its one record. */
+  /**
+   * The company name of a one-role visit still links to its one record, and
+   * the card offers exactly one way to its students: no role table to choose
+   * from, because there is only one role.
+   */
   it("keeps a standalone drive a single card that links straight to its record", async () => {
     render(<DriveProgressPage view={view([DRIVE])} />);
 
     expect(await screen.findByRole("link", { name: /Zoho/ })).toBeDefined();
     expect(screen.getByText(/Engineer · 3 applicants/)).toBeDefined();
-    expect(screen.queryByRole("button", { name: /Engineer/ })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /view the students of zoho/i })).toHaveLength(1);
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   /**
@@ -379,15 +413,19 @@ describe("the offer badge's spelling", () => {
   ];
 
   it("uses the domain's words for a rung", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view(withCategory("super_dream"))} />);
 
-    expect(await screen.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
+    const students = await openVisit(user, "Zoho");
+    expect(await students.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
   });
 
   it("uses them for an internship too", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view(withCategory("internship"))} />);
 
-    expect(await screen.findByText(/Offer · ₹12 LPA · Internship/)).toBeDefined();
+    const students = await openVisit(user, "Zoho");
+    expect(await students.findByText(/Offer · ₹12 LPA · Internship/)).toBeDefined();
   });
 });
 
@@ -413,6 +451,7 @@ describe("what the board says an internship offer paid", () => {
   ];
 
   it("quotes a stipend monthly, never as a package", async () => {
+    const user = userEvent.setup();
     render(
       <DriveProgressPage
         view={view(
@@ -426,10 +465,12 @@ describe("what the board says an internship offer paid", () => {
       />,
     );
 
-    expect(await screen.findByText(/Offer · ₹15,000 \/ month · Internship/)).toBeDefined();
+    const students = await openVisit(user, "Zoho");
+    expect(await students.findByText(/Offer · ₹15,000 \/ month · Internship/)).toBeDefined();
   });
 
   it("still quotes a salaried offer in LPA", async () => {
+    const user = userEvent.setup();
     render(
       <DriveProgressPage
         view={view(
@@ -443,7 +484,8 @@ describe("what the board says an internship offer paid", () => {
       />,
     );
 
-    expect(await screen.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
+    const students = await openVisit(user, "Zoho");
+    expect(await students.findByText(/Offer · ₹12 LPA · Super Dream/)).toBeDefined();
   });
 });
 
@@ -485,33 +527,34 @@ describe("DriveProgressPage — college-wise breakdown cards", () => {
   };
 
   it("shows clickable college breakdown cards with counts", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view([multiCollegeDrive])} />);
 
-    expect((await screen.findAllByText("Alliance University")).length).toBeGreaterThan(0);
-    expect((await screen.findAllByText("VIT Bangalore")).length).toBeGreaterThan(0);
-    expect(screen.getByText("All Colleges")).toBeDefined();
+    const students = await openVisit(user, "Zoho");
+    expect((await students.findAllByText("Alliance University")).length).toBeGreaterThan(0);
+    expect((await students.findAllByText("VIT Bangalore")).length).toBeGreaterThan(0);
+    expect(students.getByText("All Colleges")).toBeDefined();
   });
 
   it("filters students when a college card is clicked and resets on All Colleges", async () => {
     const user = userEvent.setup();
     render(<DriveProgressPage view={view([multiCollegeDrive])} />);
 
-    await screen.findAllByText("Alliance University");
+    const students = await openVisit(user, "Zoho");
+    await students.findAllByText("Alliance University");
 
     // Click VIT Bangalore card
-    const vitButton = screen.getByRole("button", { name: /vit bangalore/i });
-    await user.click(vitButton);
+    await user.click(students.getByRole("button", { name: /vit bangalore/i }));
 
-    expect(screen.getByText("Arjun Menon")).toBeDefined();
-    expect(screen.queryByText("Priya Ramesh")).toBeNull();
-    expect(screen.queryByText("Meena V")).toBeNull();
+    expect(students.getByText("Arjun Menon")).toBeDefined();
+    expect(students.queryByText("Priya Ramesh")).toBeNull();
+    expect(students.queryByText("Meena V")).toBeNull();
 
     // Click All Colleges
-    const allCollegesButton = screen.getByRole("button", { name: /all colleges/i });
-    await user.click(allCollegesButton);
+    await user.click(students.getByRole("button", { name: /all colleges/i }));
 
-    expect(screen.getByText("Priya Ramesh")).toBeDefined();
-    expect(screen.getByText("Arjun Menon")).toBeDefined();
+    expect(students.getByText("Priya Ramesh")).toBeDefined();
+    expect(students.getByText("Arjun Menon")).toBeDefined();
   });
 
   /** The strip replaces a card grid, so the chosen college has to be readable
@@ -520,18 +563,19 @@ describe("DriveProgressPage — college-wise breakdown cards", () => {
     const user = userEvent.setup();
     render(<DriveProgressPage view={view([multiCollegeDrive])} />);
 
-    await screen.findAllByText("Alliance University");
-    expect(screen.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
+    const students = await openVisit(user, "Zoho");
+    await students.findAllByText("Alliance University");
+    expect(
+      students.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed"),
+    ).toBe("true");
 
-    await user.click(screen.getByRole("button", { name: /vit bangalore/i }));
+    await user.click(students.getByRole("button", { name: /vit bangalore/i }));
 
     expect(
-      screen.getByRole("button", { name: /vit bangalore/i }).getAttribute("aria-pressed"),
+      students.getByRole("button", { name: /vit bangalore/i }).getAttribute("aria-pressed"),
     ).toBe("true");
-    expect(screen.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed")).toBe(
-      "false",
-    );
+    expect(
+      students.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed"),
+    ).toBe("false");
   });
 });

@@ -239,7 +239,7 @@ describe("AeOverviewPage — my drives", () => {
     expect(within(dialog).getAllByText(/applied · .* shortlisted · .* offers/i)).toHaveLength(2);
     expect(
       within(dialog)
-        .getAllByRole("link", { name: /open the drive record/i })
+        .getAllByRole("link", { name: /^view wipro — /i })
         .map((link) => link.getAttribute("href")),
     ).toEqual(["/drives/d10", "/drives/d11"]);
   });
