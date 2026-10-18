@@ -522,10 +522,23 @@ describe("the sidebar groups collapse to the one in use", () => {
     expect(groupHeadings()[0]).toMatch(/overview/i);
   });
 
-  /** The AE has no overview to promote, and must not grow one by accident. */
-  it("gives the Account Executive no Overview group to put first", () => {
+  /**
+   * 2026-08-26 gave the AE an Overview of their own, so this used to read "the
+   * AE has no Overview group to promote" — an assertion that had already been
+   * overtaken, and was only still passing because the collapsed chevron was a
+   * `›` TEXT glyph, which made `textContent` "Overview›" rather than
+   * "Overview". With a real icon the name is clean and the stale claim fails,
+   * so it is corrected to the thing that is still true: the AE's Overview holds
+   * their own page, and never the roster dashboard they cannot read.
+   */
+  it("gives the Account Executive an Overview of their own, not the roster's", () => {
     shellCollapsed(signedIn("account_executive"), async () => {}, "/my-drives");
-    expect(groupHeadings()).not.toContain("Overview");
+    expect(groupHeadings()[0]).toMatch(/overview/i);
+    expect(
+      within(screen.getByRole("navigation", { name: /main/i }))
+        .queryAllByRole("link")
+        .map((link) => link.getAttribute("href")),
+    ).not.toContain("/dashboard");
   });
 
   /** The heading is a real control, so the reader can open a collapsed group. */
@@ -535,6 +548,36 @@ describe("the sidebar groups collapse to the one in use", () => {
     expect(screen.getByRole("button", { name: /overview/i }).getAttribute("aria-expanded")).toBe(
       "true",
     );
+  });
+
+  /**
+   * #71: every row now carries a lucide icon, and the icon is decoration. If it
+   * leaked into the accessible name, every pinned `getByRole("link", { name:
+   * /^live$/i })` below would be matching a name the screen never says.
+   */
+  it("keeps the icon out of the accessible name of every heading and row", () => {
+    shellFor(signedIn("central_placement_coordinator"));
+
+    for (const name of ["Student details", "Drives in progress", "Requests"]) {
+      expect(screen.getByRole("button", { name })).toBeDefined();
+    }
+    for (const name of ["All students", "Skill repository", "Shortlisting", "Attendance"]) {
+      expect(screen.getByRole("link", { name })).toBeDefined();
+    }
+    // Nothing is left for an icon to have contributed to.
+    expect(screen.getAllByRole("link").every((l) => l.textContent?.trim() !== "")).toBe(true);
+  });
+
+  /** The active pill is a colour, so the current page needs a real answer. */
+  it("marks the row of the page the reader is on", () => {
+    shellCollapsed(signedIn("central_placement_coordinator"), async () => {}, "/central/skills");
+
+    expect(
+      screen.getByRole("link", { name: /skill repository/i }).getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      screen.getByRole("link", { name: /all students/i }).getAttribute("aria-current"),
+    ).toBeNull();
   });
 
   it("collapses the groups the reader is not in", () => {

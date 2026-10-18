@@ -3,19 +3,67 @@ import { openGroupHeadings } from "@domain/navigation";
 import { campusScopeFor } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
 import { useAuth, useAuthActions } from "@lib/auth-context";
+import {
+  Archive,
+  Award,
+  BadgeCheck,
+  Bell,
+  BookOpen,
+  Briefcase,
+  Building,
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  ChevronRight,
+  CircleUser,
+  ClipboardCheck,
+  ClipboardList,
+  Contact,
+  FileCheck2,
+  FileText,
+  GraduationCap,
+  House,
+  Inbox,
+  LayoutDashboard,
+  LineChart,
+  ListChecks,
+  LogOut,
+  type LucideIcon,
+  Menu,
+  Plane,
+  Radio,
+  Send,
+  ShieldCheck,
+  Star,
+  TrendingUp,
+  TriangleAlert,
+  Trophy,
+  Upload,
+  User,
+  UserCog,
+  Users,
+  UserX,
+  X,
+} from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
+import { Button, Card } from "./ui";
 
 /**
  * Application shell: brand header, role-scoped navigation.
  *
  * The role switcher exists ONLY in the mock, so the whole UI can be reviewed
  * without an auth backend. It is removed when real auth lands.
+ *
+ * Every entry carries an icon (#71, 2026-10-18: "all roles sidebar ui not nice?
+ * make is shadcn ui components with icons? im mentioning menu bar"). The icon is
+ * decoration, so each one is `aria-hidden`: the accessible name of a row stays
+ * exactly its label, which is what the pinned navigation assertions match on.
  */
-
 export interface NavItem {
   readonly to: string;
   readonly label: string;
+  readonly icon: LucideIcon;
 }
 
 /**
@@ -25,6 +73,7 @@ export interface NavItem {
  */
 export interface NavGroup {
   readonly heading: string;
+  readonly icon: LucideIcon;
   readonly items: readonly NavItem[];
 }
 
@@ -45,10 +94,11 @@ export interface NavGroup {
  */
 const DRIVES: NavGroup = {
   heading: "Drives",
+  icon: Briefcase,
   items: [
-    { to: "/central/drives/yet-to-publish", label: "Yet to publish" },
-    { to: "/central/drives/live", label: "Live" },
-    { to: "/central/drives/completed", label: "Completed" },
+    { to: "/central/drives/yet-to-publish", label: "Yet to publish", icon: Send },
+    { to: "/central/drives/live", label: "Live", icon: Radio },
+    { to: "/central/drives/completed", label: "Completed", icon: Archive },
   ],
 };
 
@@ -59,9 +109,10 @@ const DRIVES: NavGroup = {
  */
 const STUDENT_DETAILS: NavGroup = {
   heading: "Student details",
+  icon: Users,
   items: [
-    { to: "/central/students", label: "All students" },
-    { to: "/central/skills", label: "Skill repository" },
+    { to: "/central/students", label: "All students", icon: Users },
+    { to: "/central/skills", label: "Skill repository", icon: BookOpen },
   ],
 };
 
@@ -69,20 +120,26 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   student: [
     {
       heading: "Home",
+      icon: House,
       items: [
-        { to: "/student", label: "My dashboard" },
+        { to: "/student", label: "My dashboard", icon: LayoutDashboard },
         // G3 (UAT 2026-08-20): the full, filterable log — reachable from the
         // sidebar, not only from the dashboard's "Read all" link.
-        { to: "/student/notifications", label: "Notifications" },
+        { to: "/student/notifications", label: "Notifications", icon: Bell },
       ],
     },
     // N7: one entry; the four lists are tabs inside it.
-    { heading: "Drives", items: [{ to: "/student/drives", label: "Drives" }] },
+    {
+      heading: "Drives",
+      icon: Briefcase,
+      items: [{ to: "/student/drives", label: "Drives", icon: CalendarDays }],
+    },
     {
       heading: "My record",
+      icon: Contact,
       items: [
-        { to: "/srf", label: "My registration form" },
-        { to: "/student/profile", label: "My profile" },
+        { to: "/srf", label: "My registration form", icon: FileText },
+        { to: "/student/profile", label: "My profile", icon: User },
       ],
     },
     // F2 (UAT 2026-08-06): two unrelated decisions, two entries. Opting out is
@@ -90,9 +147,10 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
     // participation" invited them into the wrong one.
     {
       heading: "Requests",
+      icon: Inbox,
       items: [
-        { to: "/student/opt-out", label: "Opting out" },
-        { to: "/student/off-campus", label: "Off-campus offer" },
+        { to: "/student/opt-out", label: "Opting out", icon: UserX },
+        { to: "/student/off-campus", label: "Off-campus offer", icon: Plane },
       ],
     },
   ],
@@ -100,42 +158,50 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
   // is the campus placement coordinator's alone. RLS scopes them to their
   // campus.
   campus_placement_coordinator: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Campus overview", icon: LineChart }],
+    },
     {
       heading: "Verification",
+      icon: ShieldCheck,
       items: [
-        { to: "/cpc/verification", label: "Student verification" },
-        { to: "/cpc/certificates", label: "Certificate verification" },
+        { to: "/cpc/verification", label: "Student verification", icon: FileCheck2 },
+        { to: "/cpc/certificates", label: "Certificate verification", icon: BadgeCheck },
         // 2026-08-24: semesters added after SRF approval, decided like
         // certificates — the queue Karthik reported missing.
-        { to: "/cpc/semesters", label: "CGPA verification" },
+        { to: "/cpc/semesters", label: "CGPA verification", icon: GraduationCap },
       ],
     },
     // 2026-08-24 (Karthik): their students' details, view only. RLS scopes
     // the rows to their campuses; the skills page hides its editors.
     {
       heading: "Student details",
+      icon: Users,
       items: [
-        { to: "/central/students", label: "All students" },
-        { to: "/central/skills", label: "Skill repository" },
+        { to: "/central/students", label: "All students", icon: Users },
+        { to: "/central/skills", label: "Skill repository", icon: BookOpen },
       ],
     },
     DRIVES,
     {
       heading: "Drives in progress",
+      icon: ListChecks,
       items: [
         // D10: shortlist, every round, the offer — read-only, campus-scoped.
         // It stays: it answers "how are MY students doing", which is a
         // different question from "what is happening to this drive".
-        { to: "/cpc/drives", label: "Drive progress" },
-        { to: "/cpc/attendance", label: "Attendance" },
+        { to: "/cpc/drives", label: "Drive progress", icon: TrendingUp },
+        { to: "/cpc/attendance", label: "Attendance", icon: CalendarCheck },
       ],
     },
     {
       heading: "Requests",
+      icon: Inbox,
       items: [
-        { to: "/cpc/opt-outs", label: "Opt-out requests" },
-        { to: "/cpc/off-campus", label: "Off-campus offers" },
+        { to: "/cpc/opt-outs", label: "Opt-out requests", icon: UserX },
+        { to: "/cpc/off-campus", label: "Off-campus offers", icon: Plane },
       ],
     },
   ],
@@ -157,95 +223,138 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
      * which an AE cannot read (0018), so it would have greeted them with
      * "No students yet. Import a campus roster to begin."
      */
-    { heading: "Overview", items: [{ to: "/ae/overview", label: "My overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/ae/overview", label: "My overview", icon: LineChart }],
+    },
     {
       heading: "Drive initiation",
-      items: [{ to: "/ae/pif", label: "Position information form" }],
+      icon: ClipboardList,
+      items: [{ to: "/ae/pif", label: "Position information form", icon: FileText }],
     },
     DRIVES,
   ],
   campus_manager: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Campus overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Campus overview", icon: LineChart }],
+    },
     DRIVES,
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+      icon: ListChecks,
+      items: [{ to: "/cpc/drives", label: "Drive progress", icon: TrendingUp }],
     },
     // 2026-08-24 (Karthik): view-only student details, campus-scoped by RLS.
     {
       heading: "Student details",
+      icon: Users,
       items: [
-        { to: "/central/students", label: "All students" },
-        { to: "/central/skills", label: "Skill repository" },
+        { to: "/central/students", label: "All students", icon: Users },
+        { to: "/central/skills", label: "Skill repository", icon: BookOpen },
       ],
     },
   ],
   key_account_manager: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Account overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Account overview", icon: LineChart }],
+    },
     DRIVES,
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+      icon: ListChecks,
+      items: [{ to: "/cpc/drives", label: "Drive progress", icon: TrendingUp }],
     },
     // 2026-08-24 (Karthik): view-only student details for their campuses.
     {
       heading: "Student details",
+      icon: Users,
       items: [
-        { to: "/central/students", label: "All students" },
-        { to: "/central/skills", label: "Skill repository" },
+        { to: "/central/students", label: "All students", icon: Users },
+        { to: "/central/skills", label: "Skill repository", icon: BookOpen },
       ],
     },
   ],
   enterprise_relations: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Overview", icon: LineChart }],
+    },
     DRIVES,
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+      icon: ListChecks,
+      items: [{ to: "/cpc/drives", label: "Drive progress", icon: TrendingUp }],
     },
     STUDENT_DETAILS,
   ],
   er_head: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Overview", icon: LineChart }],
+    },
     DRIVES,
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+      icon: ListChecks,
+      items: [{ to: "/cpc/drives", label: "Drive progress", icon: TrendingUp }],
     },
     STUDENT_DETAILS,
   ],
   ceo: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Executive overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Executive overview", icon: LineChart }],
+    },
     DRIVES,
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+      icon: ListChecks,
+      items: [{ to: "/cpc/drives", label: "Drive progress", icon: TrendingUp }],
     },
     STUDENT_DETAILS,
   ],
   // Approving a PIF used to be the end of the Delivery Head's visibility.
   delivery_head: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Placement overview", icon: LineChart }],
+    },
     {
       heading: "Drive approval",
-      items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals" }],
+      icon: ClipboardCheck,
+      items: [{ to: "/delivery-head/pif-approvals", label: "PIF approvals", icon: FileCheck2 }],
     },
     // 2026-08-24 (Karthik): view-only student details, org-wide (is_org_reader).
     {
       heading: "Student details",
+      icon: Users,
       items: [
-        { to: "/central/students", label: "All students" },
-        { to: "/central/skills", label: "Skill repository" },
+        { to: "/central/students", label: "All students", icon: Users },
+        { to: "/central/skills", label: "Skill repository", icon: BookOpen },
       ],
     },
     DRIVES,
     {
       heading: "Drives in progress",
-      items: [{ to: "/cpc/drives", label: "Drive progress" }],
+      icon: ListChecks,
+      items: [{ to: "/cpc/drives", label: "Drive progress", icon: TrendingUp }],
     },
   ],
   central_placement_coordinator: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Placement overview", icon: LineChart }],
+    },
     // D2: approval stays with the Delivery Head; the Central CPC sees what is
     // waiting to be published and what already is, separately. The old
     // cockpit is absorbed into those two views.
@@ -273,47 +382,55 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
      */
     {
       heading: "Student details",
+      icon: Users,
       items: [
-        { to: "/central/students", label: "All students" },
+        { to: "/central/students", label: "All students", icon: Users },
         // PRD §5: view-only reference; feeds the shortlisting rank.
-        { to: "/central/skills", label: "Skill repository" },
+        { to: "/central/skills", label: "Skill repository", icon: BookOpen },
         // 2026-08-24 (answers 1a/2a/3a): the master list of assessed skills —
         // template columns, upload validation and the PIF picker all read it.
-        { to: "/central/skills-assessed", label: "Skills assessed" },
+        { to: "/central/skills-assessed", label: "Skills assessed", icon: ClipboardList },
       ],
     },
     {
       heading: "Drives in progress",
+      icon: ListChecks,
       items: [
-        { to: "/cpc/drives", label: "Drive progress" },
-        { to: "/central/shortlisting", label: "Shortlisting" },
-        { to: "/central/results", label: "Rounds & results" },
-        { to: "/cpc/attendance", label: "Attendance" },
-        { to: "/central/offers", label: "Final selection" },
+        { to: "/cpc/drives", label: "Drive progress", icon: TrendingUp },
+        { to: "/central/shortlisting", label: "Shortlisting", icon: Star },
+        { to: "/central/results", label: "Rounds & results", icon: Trophy },
+        { to: "/cpc/attendance", label: "Attendance", icon: CalendarCheck },
+        { to: "/central/offers", label: "Final selection", icon: Award },
       ],
     },
     // D3: no verification queues here — they are the campus CPC's alone.
     {
       heading: "Requests",
+      icon: Inbox,
       items: [
-        { to: "/cpc/opt-outs", label: "Opt-out requests" },
-        { to: "/cpc/off-campus", label: "Off-campus offers" },
+        { to: "/cpc/opt-outs", label: "Opt-out requests", icon: UserX },
+        { to: "/cpc/off-campus", label: "Off-campus offers", icon: Plane },
       ],
     },
   ],
   admin: [
-    { heading: "Overview", items: [{ to: "/dashboard", label: "Placement overview" }] },
+    {
+      heading: "Overview",
+      icon: LayoutDashboard,
+      items: [{ to: "/dashboard", label: "Placement overview", icon: LineChart }],
+    },
     DRIVES,
     STUDENT_DETAILS,
     {
       heading: "Organisation",
+      icon: Building2,
       items: [
-        { to: "/admin/campuses", label: "Campuses" },
-        { to: "/admin/staff", label: "Staff" },
+        { to: "/admin/campuses", label: "Campuses", icon: Building },
+        { to: "/admin/staff", label: "Staff", icon: UserCog },
         // F6: degrees and branches belong to a college, under Campuses.
         // Renamed 2026-08-17: the page is named for what it does, not for
         // the file it happens to eat.
-        { to: "/admin/roster", label: "Add students" },
+        { to: "/admin/roster", label: "Add students", icon: Upload },
       ],
     },
   ],
@@ -341,6 +458,42 @@ function Logo() {
 function initialsOf(email: string): string {
   const local = email.split("@")[0] ?? "";
   return local.slice(0, 2).toUpperCase();
+}
+
+/**
+ * Who this rail belongs to: the role, and the campuses it is scoped to.
+ *
+ * The campus sits under the role because for these roles it IS part of the
+ * role: a coordinator verifies their own campus's students and nobody else's.
+ * Mapped to nothing, every queue they open is empty - which reads as a quiet
+ * week rather than a broken account, so it says so outright.
+ */
+function RoleScope({ role, campuses }: { role: AppRole; campuses: readonly string[] }) {
+  const scoped = campusScopeFor(role) !== "none" && role !== "key_account_manager";
+  const broken = scoped && campuses.length === 0;
+
+  return (
+    <div className="mb-2 flex items-center gap-2.5 rounded-lg border border-line px-2.5 py-2">
+      <span className={broken ? "text-danger-700" : "text-brand-600"}>
+        {broken ? (
+          <TriangleAlert aria-hidden="true" className="size-4" />
+        ) : (
+          <CircleUser aria-hidden="true" className="size-4" />
+        )}
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-ink-500">
+          {role.replaceAll("_", " ")}
+        </p>
+        {scoped &&
+          (campuses.length > 0 ? (
+            <p className="truncate text-sm font-medium text-ink-700">{campuses.join(" · ")}</p>
+          ) : (
+            <p className="text-sm font-medium text-destructive">No campus mapped — ask an Admin</p>
+          ))}
+      </div>
+    </div>
+  );
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -387,9 +540,18 @@ export function AppShell({ children }: { children: ReactNode }) {
   const toggleGroup = (heading: string) =>
     setOverrides({ path: pathname, open: { ...effective, [heading]: !isOpen(heading) } });
 
+  /**
+   * One row shape for every destination: pressable, rounded, and current-page
+   * carries a weight the hover state cannot borrow (#71, on the shadcn sidebar
+   * rows). The active bar sits on the group's rule, so the eye reads which
+   * heading the current page belongs to without the heading having to stay open
+   * for the answer.
+   */
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
-    `block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-      isActive ? "bg-brand-500 text-white" : "text-ink-700 hover:bg-brand-50 hover:text-brand-600"
+    `relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+      isActive
+        ? "bg-brand-50 font-semibold text-brand-700"
+        : "font-medium text-ink-700 hover:bg-surface-muted hover:text-ink-900"
     }`;
 
   return (
@@ -400,14 +562,16 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
           <button
             type="button"
-            className="rounded-lg p-1.5 text-ink-700 hover:bg-surface-muted lg:hidden"
+            className="cursor-pointer rounded-lg p-1.5 text-ink-700 hover:bg-surface-muted lg:hidden"
             aria-label={menuOpen ? "Close navigation" : "Open navigation"}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            <span aria-hidden="true" className="block text-lg leading-none">
-              {menuOpen ? "✕" : "☰"}
-            </span>
+            {menuOpen ? (
+              <X aria-hidden="true" className="size-5" />
+            ) : (
+              <Menu aria-hidden="true" className="size-5" />
+            )}
           </button>
 
           <Logo />
@@ -455,94 +619,118 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             {/* Campus machines are shared. Leaving no way out means the next
                 person to open the browser is signed in as the last one. */}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
+              className="cursor-pointer"
               onClick={() => void signOut()}
-              className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted"
             >
+              <LogOut aria-hidden="true" className="size-3.5 shrink-0" />
               Sign out
-            </button>
+            </Button>
           </div>
         </div>
       </header>
 
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
+        {/*
+         * ONE nav element, moved rather than duplicated. The mobile drawer used
+         * to be the same <nav> swapped to `block`, which filled the whole row
+         * and pushed the page below it; it is now an off-canvas panel over a
+         * scrim. It stays one element because two copies of the same links
+         * would be two landmarks with the same name and two answers to "which
+         * page am I on".
+         */}
+        {menuOpen && (
+          <div
+            aria-hidden="true"
+            onClick={() => setMenuOpen(false)}
+            className="fixed inset-0 z-30 bg-ink-900/40 backdrop-blur-xs lg:hidden"
+          />
+        )}
         <nav
           aria-label="Main"
-          className={`${menuOpen ? "block" : "hidden"} w-full shrink-0 lg:block lg:w-60`}
+          className={`${
+            menuOpen
+              ? "fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto bg-surface p-3 shadow-xl lg:static lg:z-auto lg:w-64 lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none"
+              : "hidden lg:block lg:w-64"
+          } shrink-0 self-start`}
         >
-          <p className="px-3 text-xs font-semibold uppercase tracking-wide text-ink-300">
-            {role.replaceAll("_", " ")}
-          </p>
-          {/*
-           * The campus sits under the role because for these roles it IS part
-           * of the role: a coordinator verifies their own campus's students
-           * and nobody else's. Mapped to nothing, every queue they open is
-           * empty - which reads as a quiet week rather than a broken account,
-           * so it says so outright.
-           */}
-          {campusScopeFor(role) !== "none" &&
-            role !== "key_account_manager" &&
-            (campuses.length > 0 ? (
-              <p className="px-3 text-sm font-medium text-ink-700">{campuses.join(" · ")}</p>
-            ) : (
-              <p className="px-3 text-sm font-medium text-destructive">
-                No campus mapped — ask an Admin
-              </p>
-            ))}
-          <div className="mb-2" />
-          {groups.map((group) => {
-            const open = isOpen(group.heading);
-            return (
-              <section key={group.heading} className="mb-1">
-                {/*
-                 * The heading is now the control, and it is BIGGER and darker
-                 * than the links it governs (Karthik, 2026-08-17: "the size of
-                 * heading is smaller than the lines below them. Headings are
-                 * not prominent."). It was 11px uppercase accent over 14px
-                 * links - the one piece of text that organised the list was
-                 * the easiest thing in it to miss.
-                 */}
-                <h2 className="font-heading">
-                  <button
-                    type="button"
-                    aria-expanded={open}
-                    onClick={() => toggleGroup(group.heading)}
-                    className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-base font-bold text-ink-900 transition-colors hover:bg-brand-50"
-                  >
-                    <span>{group.heading}</span>
-                    <span
-                      aria-hidden="true"
-                      className={`text-xs text-ink-400 transition-transform ${open ? "rotate-90" : ""}`}
-                    >
-                      ›
-                    </span>
-                  </button>
-                </h2>
+          <div className="lg:sticky lg:top-[4.5rem]">
+            <Card className="p-2">
+              <RoleScope role={role} campuses={campuses} />
 
-                {open && (
-                  <ul className="mb-3 flex flex-col gap-1 border-l-2 border-line pl-2">
-                    {group.items.map((item) => (
-                      <li key={item.to}>
-                        <NavLink
-                          to={item.to}
-                          className={linkClass}
-                          onClick={() => setMenuOpen(false)}
-                        >
-                          {item.label}
-                        </NavLink>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            );
-          })}
+              {groups.map((group) => {
+                const open = isOpen(group.heading);
+                const GroupIcon = group.icon;
+                return (
+                  <section key={group.heading} className="mb-0.5">
+                    {/*
+                     * The heading is the control, and it stays BIGGER and darker
+                     * than the links it governs (Karthik, 2026-08-17: "the size
+                     * of heading is smaller than the lines below them. Headings
+                     * are not prominent.").
+                     */}
+                    <h2 className="font-heading">
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        onClick={() => toggleGroup(group.heading)}
+                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-base font-bold text-ink-900 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                      >
+                        <GroupIcon aria-hidden="true" className="size-4 shrink-0 text-brand-600" />
+                        <span className="min-w-0 flex-1 truncate">{group.heading}</span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={`size-4 shrink-0 text-ink-400 transition-transform ${
+                            open ? "rotate-90" : ""
+                          }`}
+                        />
+                      </button>
+                    </h2>
+
+                    {open && (
+                      <ul className="mb-2 ml-3 flex flex-col gap-0.5 border-l border-line pl-1.5">
+                        {group.items.map((item) => {
+                          const ItemIcon = item.icon;
+                          return (
+                            <li key={item.to}>
+                              <NavLink
+                                to={item.to}
+                                className={linkClass}
+                                onClick={() => setMenuOpen(false)}
+                              >
+                                {({ isActive }) => (
+                                  <>
+                                    {isActive && (
+                                      <span
+                                        aria-hidden="true"
+                                        className="absolute -left-[7px] h-4 w-[3px] rounded-full bg-brand-500"
+                                      />
+                                    )}
+                                    <ItemIcon
+                                      aria-hidden="true"
+                                      className={`size-4 shrink-0 ${
+                                        isActive ? "text-brand-600" : "text-ink-400"
+                                      }`}
+                                    />
+                                    <span className="min-w-0 truncate">{item.label}</span>
+                                  </>
+                                )}
+                              </NavLink>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </section>
+                );
+              })}
+            </Card>
+          </div>
         </nav>
 
-        <main className={`min-w-0 flex-1 ${menuOpen ? "hidden lg:block" : "block"}`}>
-          {children}
-        </main>
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
   );
