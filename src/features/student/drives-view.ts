@@ -8,6 +8,7 @@ import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AcademicProfile, DriveStatus, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
+import { readAll, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ApplyDrive,
@@ -151,18 +152,40 @@ export function createSupabaseDrivesView(
     const userId = await getAuthUserId();
     if (userId === null) throw new Error("No session");
 
-    const { data: row } = await client
+    const { data: row, error: studentError } = await client
       .from("students")
       .select(STUDENT_COLUMNS)
       .eq("auth_user_id", userId)
-      .single();
+      .maybeSingle();
 
-    if (!row) throw new Error("No student record");
+    // A refused read is not "you have no student record": one is a fault the
+    // student can retry, the other is a fact about them. Read past, the error
+    // was dropped and both looked identical.
+    if (studentError !== null) throw new Error("Could not read your details. Please try again.");
+    if (row === null || row === undefined) throw new Error("No student record");
 
-    const [{ data: drives }, { data: applications }, { data: offers }] = await Promise.all([
-      client.from("drives").select(DRIVE_COLUMNS).in("status", STUDENT_READABLE_STATUSES),
-      client.from("applications").select("id, drive_id, applied_at").eq("student_id", row.id),
-      client.from("offers").select(OFFER_LADDER_COLUMNS).eq("student_id", row.id),
+    // Paged, and every error raised. The drive list is the whole organisation's
+    // live openings: past a thousand rows the student's "Upcoming" tab stopped
+    // at the cap and they had no way to know a drive existed. A discarded
+    // `error` here answered `null` and the same tabs went empty.
+    const [drives, applications, offers] = await Promise.all([
+      readAll((from, to) =>
+        client
+          .from("drives")
+          .select(DRIVE_COLUMNS)
+          .in("status", STUDENT_READABLE_STATUSES)
+          .range(from, to),
+      ),
+      readAll((from, to) =>
+        client
+          .from("applications")
+          .select("id, drive_id, applied_at")
+          .eq("student_id", row.id)
+          .range(from, to),
+      ),
+      readAll((from, to) =>
+        client.from("offers").select(OFFER_LADDER_COLUMNS).eq("student_id", row.id).range(from, to),
+      ),
     ]);
 
     /**
@@ -249,7 +272,7 @@ export function createSupabaseDrivesView(
       // Mapped field by field: PostgREST rows are snake_case and the domain
       // is camelCase. The old blanket cast left driveType/source undefined,
       // so even a correct select fed the ladder nothing.
-      offers: ((offers ?? []) as Array<Record<string, unknown>>).map(
+      offers: offers.map(
         (o): Offer => ({
           id: o.id as string,
           driveId: (o.drive_id as string | null) ?? "",
@@ -262,7 +285,7 @@ export function createSupabaseDrivesView(
       ),
     };
 
-    const applicationRows = (applications ?? []) as Array<{
+    const applicationRows = applications as Array<{
       id: string;
       drive_id: string;
       applied_at: string;
@@ -270,12 +293,12 @@ export function createSupabaseDrivesView(
 
     return {
       student,
-      drives: (drives ?? []) as Array<Record<string, unknown>>,
+      drives: drives as Array<Record<string, unknown>>,
       applications: applicationRows,
       appliedIds: applicationRows.map((a) => a.drive_id),
       // The raw rows, kept alongside the domain `Offer`s: the ladder has no
       // business knowing about storage paths, and the screen does.
-      offerRows: (offers ?? []) as Array<Record<string, unknown>>,
+      offerRows: offers as Array<Record<string, unknown>>,
     };
   }
 
@@ -461,38 +484,52 @@ export function createSupabaseDrivesView(
       const applicationByDrive = new Map(applications.map((a) => [a.drive_id, a]));
       const applicationIds = applications.map((a) => a.id);
 
-      const [{ data: participants }, { data: results }, { data: attendance }] =
-        applicationIds.length === 0
-          ? [{ data: [] }, { data: [] }, { data: [] }]
-          : await Promise.all([
-              client
-                .from("round_participants")
-                .select("round_id, application_id")
-                .in("application_id", applicationIds),
-              client
-                .from("round_results")
-                .select("round_id, application_id, result")
-                .in("application_id", applicationIds),
-              client
-                .from("attendance")
-                .select("round_id, application_id, status")
-                .in("application_id", applicationIds),
-            ]);
+      // Batched by id and paged: a student who has applied to 201 drives, or
+      // sits in a round with more than a thousand participants, used to get a
+      // silently truncated answer here — and a truncated `sat` set means a
+      // round the student IS in renders as "not scheduled".
+      const [participants, results, attendance] = await Promise.all([
+        readAllRowsByIds(
+          applicationIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_participants")
+              .select("round_id, application_id")
+              .in("application_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          applicationIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_results")
+              .select("round_id, application_id, result")
+              .in("application_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          applicationIds,
+          (batch) => (from, to) =>
+            client
+              .from("attendance")
+              .select("round_id, application_id, status")
+              .in("application_id", batch)
+              .range(from, to),
+        ),
+      ]);
 
       const key = (applicationId: string, roundId: string) => `${applicationId}::${roundId}`;
       const sat = new Set(
-        ((participants ?? []) as Array<Record<string, unknown>>).map((p) =>
-          key(p.application_id as string, p.round_id as string),
-        ),
+        participants.map((p) => key(p.application_id as string, p.round_id as string)),
       );
       const resultBy = new Map(
-        ((results ?? []) as Array<Record<string, unknown>>).map((r) => [
+        results.map((r) => [
           key(r.application_id as string, r.round_id as string),
           r.result as ApplicantRound["result"],
         ]),
       );
       const attendanceBy = new Map(
-        ((attendance ?? []) as Array<Record<string, unknown>>).map((a) => [
+        attendance.map((a) => [
           key(a.application_id as string, a.round_id as string),
           a.status as ApplicantRound["attendance"],
         ]),

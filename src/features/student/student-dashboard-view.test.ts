@@ -522,3 +522,63 @@ describe("a notification can offer the letter its message is about", () => {
     expect((await view().notifications())[0]?.letterUrl).toBeNull();
   });
 });
+
+describe("reading a dashboard bigger than one page", () => {
+  const application = (n: number) => ({
+    id: `app-${n}`,
+    drive_id: `d${n}`,
+    applied_at: "2026-07-01T04:30:00Z",
+    drives: { id: `d${n}`, company_name: `Company ${n}`, role_title: "MTS", drive_rounds: [] },
+  });
+
+  it("asks for each list a page at a time", async () => {
+    stub({ applications: [APPLICATION] });
+    const urls: string[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
+        urls.push(new URL(request.url).search);
+        return HttpResponse.json([APPLICATION]);
+      }),
+      http.get(`${BASE}/rest/v1/notifications`, ({ request }) => {
+        urls.push(new URL(request.url).search);
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await view().snapshot();
+    await view().notifications();
+
+    expect(urls.filter((url) => url.includes("offset=0&limit=1000")).length).toBeGreaterThan(1);
+  });
+
+  it("splits the round filter into batches the gateway will answer", async () => {
+    stub({ applications: Array.from({ length: 450 }, (_, n) => application(n)), drives: [] });
+
+    const urls: string[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/round_participants`, ({ request }) => {
+        urls.push(new URL(request.url).search);
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await view().snapshot();
+
+    // One `in=()` of 450 uuids is a URL the edge answers with an empty list,
+    // and an empty set of participants makes every round the student sat read
+    // as "not scheduled" on their own dashboard.
+    expect(urls).toHaveLength(3);
+    expect(urls[0]).toContain("application_id=in.");
+  });
+
+  it("refuses rather than telling the student they have applied to nothing", async () => {
+    stub({ applications: [APPLICATION] });
+    server.use(
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().snapshot()).rejects.toThrow(/applied to/i);
+  });
+});

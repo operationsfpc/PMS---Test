@@ -37,14 +37,17 @@ export function LoginPage() {
   // an admin deactivated it - they need to know who to contact.
   const stranded = auth.status === "unrecognised";
   const deactivated = auth.status === "deactivated";
+  const unreadable = auth.status === "unreadable";
 
   const message = deactivated
     ? `The account ${auth.email} has been deactivated. Write to ${SUPPORT_EMAIL} or contact your administrator to restore access.`
     : stranded
       ? `You are signed in to Google as ${auth.email}, but that address is not set up for placements. Write to ${SUPPORT_EMAIL} to get invited, or sign out and use the account your college has on record.`
-      : error === null
-        ? null
-        : refusalMessage(params.get("error_description") ?? "");
+      : unreadable
+        ? `You are signed in to Google as ${auth.email}, but we could not check whether that address is set up for placements — the database did not answer. This is not a problem with your account. Try again.`
+        : error === null
+          ? null
+          : refusalMessage(params.get("error_description") ?? "");
 
   async function signIn() {
     await supabase().auth.signInWithOAuth({
@@ -73,7 +76,14 @@ export function LoginPage() {
           </p>
         )}
 
-        {stranded || deactivated ? (
+        {unreadable ? (
+          // Nothing is wrong with this account, so signing out is not the fix
+          // and signing in again only re-runs the same Google hop. Asking the
+          // question once more is.
+          <Button className="mt-6 w-full" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        ) : stranded || deactivated ? (
           <Button className="mt-6 w-full" onClick={() => void signOut()}>
             Use a different account
           </Button>

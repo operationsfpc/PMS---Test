@@ -1,4 +1,5 @@
 import type { RosterStudent } from "@domain/roster-import";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class RosterError extends Error {}
@@ -29,16 +30,36 @@ export function createSupabaseRosterRepository(client: SupabaseClient): RosterRe
     async importStudents(campusId, students) {
       if (students.length === 0) return { imported: 0 };
 
-      const [{ data: degrees }, { data: branches }] = await Promise.all([
-        client.from("degrees").select("id, name"),
-        client.from("branches").select("id, name"),
+      /*
+       * Neither read used to be checked, and this is the worst place in the
+       * app for that: an empty catalogue makes EVERY degree on the file look
+       * unrecognised, so a refused read told the Admin "these degrees are not
+       * set up in the system — add them first" about degrees that already
+       * existed. Following that advice would seed duplicates for the whole
+       * roster. A failed read now says it failed.
+       */
+      const [degrees, branches] = await Promise.all([
+        readAllRows((from, to) => client.from("degrees").select("id, name").range(from, to)).catch(
+          () => {
+            throw new RosterError(
+              "We could not read the degrees set up in the system, so nothing was imported. Please try again.",
+            );
+          },
+        ),
+        readAllRows((from, to) => client.from("branches").select("id, name").range(from, to)).catch(
+          () => {
+            throw new RosterError(
+              "We could not read the branches set up in the system, so nothing was imported. Please try again.",
+            );
+          },
+        ),
       ]);
 
       const degreeByName = new Map(
-        (degrees ?? []).map((d) => [String(d.name).toLowerCase(), d.id as string]),
+        degrees.map((d) => [String(d.name).toLowerCase(), d.id as string]),
       );
       const branchByName = new Map(
-        (branches ?? []).map((b) => [String(b.name).toLowerCase(), b.id as string]),
+        branches.map((b) => [String(b.name).toLowerCase(), b.id as string]),
       );
 
       const unknownDegrees = [

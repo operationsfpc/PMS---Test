@@ -1,3 +1,4 @@
+import { PostgrestReadError } from "@lib/postgrest-read";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -36,11 +37,13 @@ const scheduled = (
 
 /** The roster's `select=`, decoded — recorded by the handler that answers it. */
 let rosterSelect = "";
+const rosterQueries: string[] = [];
 
 function stub(opts: { scheduled?: unknown[]; history?: unknown[]; markFails?: boolean } = {}) {
   const writes: { body: unknown; search: string }[] = [];
   const historyQueries: string[] = [];
   rosterSelect = "";
+  rosterQueries.length = 0;
 
   server.use(
     http.get(`${BASE}/rest/v1/attendance`, ({ request }) => {
@@ -50,6 +53,7 @@ function stub(opts: { scheduled?: unknown[]; history?: unknown[]; markFails?: bo
         historyQueries.push(url.search);
         return HttpResponse.json(opts.history ?? []);
       }
+      rosterQueries.push(url.search);
       rosterSelect = decodeURIComponent(url.searchParams.get("select") ?? "");
       return HttpResponse.json(opts.scheduled ?? []);
     }),
@@ -160,8 +164,16 @@ describe("prior absences (R8 — whole tenure, no reset)", () => {
     stub({
       scheduled: [scheduled("a1", "Anjali", "21CSE1042")],
       history: [
-        { status: "absent", round_id: "r9", applications: { drive_id: "other-drive" } },
-        { status: "absent", round_id: "r8", applications: { drive_id: "another-drive" } },
+        {
+          status: "absent",
+          round_id: "r9",
+          applications: { student_id: "stu-a1", drive_id: "other-drive" },
+        },
+        {
+          status: "absent",
+          round_id: "r8",
+          applications: { student_id: "stu-a1", drive_id: "another-drive" },
+        },
       ],
     });
 
@@ -176,12 +188,44 @@ describe("prior absences (R8 — whole tenure, no reset)", () => {
     expect(historyQueries[0]).toMatch(/round_id=neq\.r1/);
   });
 
+  /**
+   * 2026-10-19: the roster used to ask for each student's history one query at
+   * a time. One grouped read answers for the whole sheet, so it has to route
+   * each row back to the student it belongs to — and a shared round must not
+   * put somebody else's absence on this name.
+   */
+  it("attributes a grouped history row to the student it names", async () => {
+    stub({
+      scheduled: [scheduled("a1", "Anjali", "21CSE1042"), scheduled("a2", "Vetrivel", "21CSE1099")],
+      history: [
+        {
+          status: "absent",
+          round_id: "r9",
+          applications: { student_id: "stu-a2", drive_id: "d2" },
+        },
+      ],
+    });
+
+    const roster = await view().scheduled("r1");
+
+    expect(roster[0]?.priorAbsences).toBe(0);
+    expect(roster[1]?.priorAbsences).toBe(1);
+  });
+
   it("does not count a present or scheduled round against the student", async () => {
     stub({
       scheduled: [scheduled("a1", "Anjali", "21CSE1042")],
       history: [
-        { status: "present", round_id: "r9", applications: { drive_id: "d2" } },
-        { status: "scheduled", round_id: "r8", applications: { drive_id: "d3" } },
+        {
+          status: "present",
+          round_id: "r9",
+          applications: { student_id: "stu-a1", drive_id: "d2" },
+        },
+        {
+          status: "scheduled",
+          round_id: "r8",
+          applications: { student_id: "stu-a1", drive_id: "d3" },
+        },
       ],
     });
 
@@ -192,7 +236,13 @@ describe("prior absences (R8 — whole tenure, no reset)", () => {
   it("does not count an unconfirmed QR check-in", async () => {
     stub({
       scheduled: [scheduled("a1", "Anjali", "21CSE1042")],
-      history: [{ status: "provisional", round_id: "r9", applications: { drive_id: "d2" } }],
+      history: [
+        {
+          status: "provisional",
+          round_id: "r9",
+          applications: { student_id: "stu-a1", drive_id: "d2" },
+        },
+      ],
     });
 
     expect((await view().scheduled("r1"))[0]?.priorAbsences).toBe(0);
@@ -201,10 +251,36 @@ describe("prior absences (R8 — whole tenure, no reset)", () => {
   it("counts an absence whose drive could not be resolved rather than dropping it", async () => {
     stub({
       scheduled: [scheduled("a1", "Anjali", "21CSE1042")],
-      history: [{ status: "absent", round_id: "r9", applications: null }],
+      history: [{ status: "absent", round_id: "r9", applications: { student_id: "stu-a1" } }],
     });
 
     expect((await view().scheduled("r1"))[0]?.priorAbsences).toBe(1);
+  });
+});
+
+/**
+ * The sheet is the one place a truncated read is not a cosmetic problem: a
+ * student whose row fell past the cap is not "missing from the list", they are
+ * absent from the record of who the recruiter called.
+ */
+describe("reading a round bigger than one page", () => {
+  it("asks for the roster a page at a time", async () => {
+    stub({ scheduled: [] });
+
+    await view().scheduled("r1");
+
+    expect(rosterQueries[0]).toContain("offset=0&limit=1000");
+  });
+
+  it("throws rather than marking a sheet it could not read", async () => {
+    stub();
+    server.use(
+      http.get(`${BASE}/rest/v1/attendance`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().scheduled("r1")).rejects.toThrow(PostgrestReadError);
   });
 });
 

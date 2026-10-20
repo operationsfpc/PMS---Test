@@ -319,6 +319,38 @@ describe("the applicants (R7 — from the snapshot)", () => {
   });
 
   /**
+   * #102: the pack skips an entry whose snapshot carries no resume and the CSV
+   * leaves its link cell blank, so the card has to say it BEFORE the decision.
+   * Read off the same frozen envelope the export reads (R7) — the card and the
+   * file the recruiter gets cannot end up disagreeing about who had a CV.
+   */
+  describe("saying whether the candidate has a CV on file", () => {
+    it("says yes when the snapshot froze a resume", async () => {
+      stub();
+
+      expect((await view().applicants("d1"))[0]?.resumeOnFile).toBe(true);
+    });
+
+    it("says no when the snapshot froze none", async () => {
+      stub({
+        applications: [
+          { ...APPLICATION, profile_snapshot: { profile: { fullName: "Anjali" }, resumeId: null } },
+        ],
+      });
+
+      expect((await view().applicants("d1"))[0]?.resumeOnFile).toBe(false);
+    });
+
+    /** An absent field is not a missing CV. Flagging a candidate whose snapshot
+     *  predates the field would tell a recruiter their file was lost. */
+    it("stays quiet for a snapshot that never carried the field", async () => {
+      stub({ applications: [{ ...APPLICATION, profile_snapshot: {} }] });
+
+      expect((await view().applicants("d1"))[0]).not.toHaveProperty("resumeOnFile");
+    });
+  });
+
+  /**
    * 2026-08-06: the invented `skill_scores` table (A12) is retired. Skills
    * now come from the Central Student Skill Repository (0037), where a score
    * is already on the 0-100 scale R11 expects (A35) and is NAMED by its

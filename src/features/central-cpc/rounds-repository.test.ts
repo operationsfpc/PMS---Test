@@ -192,5 +192,43 @@ describe("createSupabaseRoundsRepository", () => {
 
       expect(await repo().nextRoundParticipants("r1")).toEqual(["app1"]);
     });
+
+    /**
+     * 2026-10-19: one select answers a thousand rows. A campus-wide first
+     * round records more than that, and the student on row 1001 was never
+     * scheduled for round two — no error, just a name nobody called.
+     */
+    it("carries forward the selected on every page, not just the first thousand", async () => {
+      const results = [
+        ...Array.from({ length: 1000 }, (_, i) => ({
+          application_id: `filler-${i}`,
+          result: "rejected",
+        })),
+        { application_id: "app-late", result: "selected" },
+      ];
+
+      server.use(
+        http.get(`${BASE}/rest/v1/round_results`, ({ request }) => {
+          const url = new URL(request.url);
+          const offset = Number(url.searchParams.get("offset") ?? "0");
+          return HttpResponse.json(results.slice(offset, offset + 1000));
+        }),
+      );
+
+      expect(await repo().nextRoundParticipants("r1")).toEqual(["app-late"]);
+    });
+
+    it("refuses to name a next round it could not read", async () => {
+      server.use(
+        http.get(`${BASE}/rest/v1/round_results`, () =>
+          HttpResponse.json(
+            { message: 'invalid input syntax for type uuid: "r1"' },
+            { status: 400 },
+          ),
+        ),
+      );
+
+      await expect(repo().nextRoundParticipants("r1")).rejects.toThrow(RoundsError);
+    });
   });
 });

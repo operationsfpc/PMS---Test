@@ -1,6 +1,7 @@
 import { decideSemester, type SemesterDecision } from "@domain/academics";
 import type { MarksScale } from "@domain/marks";
 import type { VerificationStatus } from "@domain/types";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class SemesterQueueError extends Error {}
@@ -68,18 +69,23 @@ export function createSupabaseSemesterQueueRepository(
 ): SemesterQueueRepository {
   return {
     async pending() {
-      const { data, error } = await client
-        .from("student_semesters")
-        .select(SEMESTER_QUEUE_COLUMNS)
-        .eq("status", "pending")
-        .eq("students.srf_status", "srf_approved")
-        .order("created_at", { ascending: true });
-
-      if (error !== null) {
+      // Paged: a pending CGPA queue across the campus is more than one select
+      // answers, and the semesters past the cap sat unverifiable with nothing
+      // on screen to say they existed.
+      let rows: Array<Record<string, unknown>>;
+      try {
+        rows = await readAllRows((from, to) =>
+          client
+            .from("student_semesters")
+            .select(SEMESTER_QUEUE_COLUMNS)
+            .eq("status", "pending")
+            .eq("students.srf_status", "srf_approved")
+            .order("created_at", { ascending: true })
+            .range(from, to),
+        );
+      } catch {
         throw new SemesterQueueError("Could not load the CGPA verification queue.");
       }
-
-      const rows = (data ?? []) as Array<Record<string, unknown>>;
       const paths = rows.flatMap((row) => {
         const document = one<{ storage_path?: string }>(row.student_documents);
         return document?.storage_path === undefined ? [] : [document.storage_path];

@@ -1,3 +1,4 @@
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class ProgrammesError extends Error {}
@@ -31,15 +32,31 @@ export interface ProgrammesRepository {
 export function createSupabaseProgrammesRepository(client: SupabaseClient): ProgrammesRepository {
   return {
     async list() {
-      const [{ data: degrees, error }, { data: branches }] = await Promise.all([
-        client.from("degrees").select("id, name").order("name"),
-        client.from("branches").select("id, degree_id, name, is_active").order("name"),
+      /*
+       * Only the degrees half used to be checked. A refused branch read came
+       * back empty, so the catalogue showed every degree as running no branches
+       * — and the Admin added branches that already existed, or imported a
+       * roster the next screen then refused. Both halves are paged and raised.
+       */
+      const [degrees, branches] = await Promise.all([
+        readAllRows((from, to) =>
+          client.from("degrees").select("id, name").order("name").range(from, to),
+        ).catch(() => {
+          throw new ProgrammesError("Could not load the degrees.");
+        }),
+        readAllRows((from, to) =>
+          client
+            .from("branches")
+            .select("id, degree_id, name, is_active")
+            .order("name")
+            .range(from, to),
+        ).catch(() => {
+          throw new ProgrammesError("Could not load the branches.");
+        }),
       ]);
 
-      if (error !== null) throw new ProgrammesError("Could not load the degrees.");
-
       const byDegree = new Map<string, BranchItem[]>();
-      for (const branch of branches ?? []) {
+      for (const branch of branches) {
         const list = byDegree.get(branch.degree_id as string) ?? [];
         list.push({
           id: branch.id as string,
@@ -49,7 +66,7 @@ export function createSupabaseProgrammesRepository(client: SupabaseClient): Prog
         byDegree.set(branch.degree_id as string, list);
       }
 
-      return (degrees ?? []).map(
+      return degrees.map(
         (degree): DegreeItem => ({
           id: degree.id as string,
           name: degree.name as string,

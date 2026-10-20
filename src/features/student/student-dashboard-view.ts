@@ -3,6 +3,7 @@ import { notificationCarriesOfferLetter } from "@domain/notifications";
 import type { OfferCategory } from "@domain/offer-category";
 import type { ApplicantRound } from "@domain/student-progress";
 import type { AttendanceStatus, OfferSource, RoundResult } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseDrivesView } from "./drives-view";
 import { offerLettersByDrive, signOfferLetters } from "./offer-letters";
@@ -94,66 +95,78 @@ export function createSupabaseStudentDashboardView(
 
       const studentId = student.id as string;
 
-      const [
-        { data: applications, error: applicationsError },
-        { data: offers, error: offersError },
-        openDrives,
-      ] = await Promise.all([
-        client
-          .from("applications")
-          .select(DASHBOARD_APPLICATION_COLUMNS)
-          .eq("student_id", studentId)
-          .order("applied_at", { ascending: false }),
-        client.from("offers").select(STUDENT_OFFER_COLUMNS).eq("student_id", studentId),
+      // Paged, and each read keeps its own sentence: "you have not applied to
+      // any drive yet" and "no offers yet" are the two lines a student least
+      // expects to be handed by a read that never worked — or by one that
+      // stopped at the thousand-row cap.
+      const [applicationRows, offerRows, openDrives] = await Promise.all([
+        readAllRows((from, to) =>
+          client
+            .from("applications")
+            .select(DASHBOARD_APPLICATION_COLUMNS)
+            .eq("student_id", studentId)
+            .order("applied_at", { ascending: false })
+            .range(from, to),
+        ).catch(() => {
+          throw new StudentDashboardError(
+            "We could not read the drives you have applied to. Please try again.",
+          );
+        }),
+        readAllRows((from, to) =>
+          client
+            .from("offers")
+            .select(STUDENT_OFFER_COLUMNS)
+            .eq("student_id", studentId)
+            .range(from, to),
+        ).catch(() => {
+          throw new StudentDashboardError("We could not read your offers. Please try again.");
+        }),
         drivesView.openDrives(),
       ]);
 
-      // Neither of these may resolve into an empty list: "you have not applied
-      // to any drive yet" and "no offers yet" are the two sentences a student
-      // least expects to be handed by a read that never worked.
-      if (applicationsError !== null) {
-        throw new StudentDashboardError(
-          "We could not read the drives you have applied to. Please try again.",
-        );
-      }
-      if (offersError !== null) {
-        throw new StudentDashboardError("We could not read your offers. Please try again.");
-      }
-
-      const applicationRows = rows(applications);
       const applicationIds = applicationRows.map((a) => a.id as string);
 
       // RLS already limits these to this student, but filtering by their own
-      // application ids keeps the query honest if a policy ever widens.
-      const [
-        { data: participants, error: participantsError },
-        { data: results, error: resultsError },
-        { data: attendance, error: attendanceError },
-      ] =
-        applicationIds.length === 0
-          ? [
-              { data: [], error: null },
-              { data: [], error: null },
-              { data: [], error: null },
-            ]
-          : await Promise.all([
+      // application ids keeps the query honest if a policy ever widens. The
+      // ids go in batches: a long `in` list is a URL the gateway refuses with
+      // an empty list, not an error, and an empty `sat` set makes every round
+      // the student sat in read as "not scheduled".
+      let participantRows: Array<Record<string, unknown>>;
+      let resultRows: Array<Record<string, unknown>>;
+      let attendanceRows: Array<Record<string, unknown>>;
+      try {
+        [participantRows, resultRows, attendanceRows] = await Promise.all([
+          readAllRowsByIds(
+            applicationIds,
+            (batch) => (from, to) =>
               client
                 .from("round_participants")
                 .select("round_id, application_id")
-                .in("application_id", applicationIds),
+                .in("application_id", batch)
+                .range(from, to),
+          ),
+          readAllRowsByIds(
+            applicationIds,
+            (batch) => (from, to) =>
               client
                 .from("round_results")
                 .select("round_id, application_id, result")
-                .in("application_id", applicationIds),
+                .in("application_id", batch)
+                .range(from, to),
+          ),
+          readAllRowsByIds(
+            applicationIds,
+            (batch) => (from, to) =>
               client
                 .from("attendance")
                 .select("round_id, application_id, status")
-                .in("application_id", applicationIds),
-            ]);
-
-      // One of these three missing is what makes a round read as "not
-      // attended", a result as undecided, and the absence count as 0 of 3.
-      if (participantsError !== null || resultsError !== null || attendanceError !== null) {
+                .in("application_id", batch)
+                .range(from, to),
+          ),
+        ]);
+      } catch {
+        // One of these three missing is what makes a round read as "not
+        // attended", a result as undecided, and the absence count as 0 of 3.
         throw new StudentDashboardError(
           "We could not read what happened to you in the rounds. Please try again.",
         );
@@ -162,22 +175,21 @@ export function createSupabaseStudentDashboardView(
       const key = (applicationId: string, roundId: string) => `${applicationId}::${roundId}`;
 
       const sat = new Set(
-        rows(participants).map((p) => key(p.application_id as string, p.round_id as string)),
+        participantRows.map((p) => key(p.application_id as string, p.round_id as string)),
       );
       const resultBy = new Map(
-        rows(results).map((r) => [
+        resultRows.map((r) => [
           key(r.application_id as string, r.round_id as string),
           r.result as RoundResult,
         ]),
       );
       const attendanceBy = new Map(
-        rows(attendance).map((a) => [
+        attendanceRows.map((a) => [
           key(a.application_id as string, a.round_id as string),
           a.status as AttendanceStatus,
         ]),
       );
 
-      const offerRows = rows(offers);
       const wonDriveIds = new Set(
         offerRows.map((o) => o.drive_id).filter((id): id is string => typeof id === "string"),
       );
@@ -220,7 +232,7 @@ export function createSupabaseStudentDashboardView(
         ]),
       );
 
-      const attendanceRecords: AttendanceRecord[] = rows(attendance).map((a) => ({
+      const attendanceRecords: AttendanceRecord[] = attendanceRows.map((a) => ({
         driveId: appToDrive.get(a.application_id as string) ?? "",
         roundId: a.round_id as string,
         status: a.status as AttendanceStatus,
@@ -276,36 +288,37 @@ export function createSupabaseStudentDashboardView(
      * read to the student's own rows.
      */
     async notifications() {
-      const [{ data, error }, { data: offers, error: offersError }] = await Promise.all([
-        client
-          .from("notifications")
-          .select(NOTIFICATION_COLUMNS)
-          .order("created_at", { ascending: false }),
+      // Paged, and each keeps its own sentence. Read past, both arrive as
+      // empty: the section would simply not render, and a student whose offer
+      // letter was waiting would never learn it existed.
+      const [notificationRows, offerRows] = await Promise.all([
+        readAllRows((from, to) =>
+          client
+            .from("notifications")
+            .select(NOTIFICATION_COLUMNS)
+            .order("created_at", { ascending: false })
+            .range(from, to),
+        ).catch(() => {
+          throw new StudentDashboardError("We could not load your messages. Please try again.");
+        }),
         // UAT 2026-08-27: the letter the message is about. Read here rather
         // than joined, because RLS already scopes both to this student and a
         // join would make one screen's failure the other's.
-        client.from("offers").select(STUDENT_OFFER_COLUMNS),
+        readAllRows((from, to) =>
+          client.from("offers").select(STUDENT_OFFER_COLUMNS).range(from, to),
+        ).catch(() => {
+          throw new StudentDashboardError(
+            "We could not load your offer letters, so they are not shown with your messages. Please try again.",
+          );
+        }),
       ]);
 
-      // Read past, both arrive as empty: the section would simply not render,
-      // and a student whose offer letter was waiting would never learn it
-      // existed. The screen reports which of the two did not arrive.
-      if (error !== null) {
-        throw new StudentDashboardError("We could not load your messages. Please try again.");
-      }
-      if (offersError !== null) {
-        throw new StudentDashboardError(
-          "We could not load your offer letters, so they are not shown with your messages. Please try again.",
-        );
-      }
-
-      const offerRows = rows(offers);
       const letterByDrive = offerLettersByDrive(
         offerRows,
         await signOfferLetters(client, offerRows),
       );
 
-      return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+      return notificationRows.map((row) => {
         const driveId = (row.drive_id as string | null) ?? null;
         const kind = row.kind as string;
         // The domain decides WHICH message a letter belongs under — a placed

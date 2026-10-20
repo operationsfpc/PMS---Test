@@ -20,7 +20,11 @@ function fakeClient(opts: {
   student?: { id: string } | null;
   /** Campus rows as PostgREST returns them, with the name embedded. */
   campuses?: Array<{ campuses: { name: string } }>;
+  /** The read refused, as opposed to answering with no row. */
+  profileError?: boolean;
+  studentError?: boolean;
 }): SupabaseClient {
+  const refusal = { message: "permission denied for table" };
   return {
     auth: { getSession: async () => ({ data: { session: opts.session }, error: null }) },
     from: (table: string) => ({
@@ -33,13 +37,13 @@ function fakeClient(opts: {
             : {
                 maybeSingle: async () => ({
                   data: table === "profiles" ? (opts.profile ?? null) : (opts.student ?? null),
-                  error: null,
+                  error: table === "profiles" && opts.profileError === true ? refusal : null,
                 }),
               },
         or: () => ({
           maybeSingle: async () => ({
             data: opts.student ?? null,
-            error: null,
+            error: opts.studentError === true ? refusal : null,
           }),
         }),
       }),
@@ -97,6 +101,27 @@ describe("resolveAuthState", () => {
       fakeClient({ session: SESSION, profile: null, student: null }),
     );
     expect(state).toEqual({ status: "unrecognised", email: "someone@example.com" });
+  });
+
+  /**
+   * The accusation and the accident are different facts, and only one of them
+   * has an invitation to wait for. `profiles` refused — a network blip, a
+   * policy mid-change — used to fall through to the same "that address is not
+   * set up for placements" screen as a genuinely unknown account, and a
+   * Delivery Head was told to write to support about their own login.
+   */
+  it("says it could not check, rather than naming an outsider, when the staff read is refused", async () => {
+    const state = await resolveAuthState(
+      fakeClient({ session: SESSION, profileError: true, student: null }),
+    );
+    expect(state).toEqual({ status: "unreadable", email: "someone@example.com" });
+  });
+
+  it("says it could not check when the roster read is refused", async () => {
+    const state = await resolveAuthState(
+      fakeClient({ session: SESSION, profile: null, studentError: true }),
+    );
+    expect(state).toEqual({ status: "unreadable", email: "someone@example.com" });
   });
 });
 

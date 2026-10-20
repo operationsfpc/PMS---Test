@@ -3,7 +3,7 @@ import { setSupabaseClient } from "@lib/supabase";
 import { createClient } from "@supabase/supabase-js";
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { delay, HttpResponse, http } from "msw";
+import { HttpResponse, http } from "msw";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
@@ -482,8 +482,19 @@ describe("SRF submission", () => {
    * everywhere else: a spinner, `aria-busy`, and a refused second click.
    */
   it("disables the submit button while in flight", async () => {
+    /*
+     * The response is held by a promise the test releases, rather than by a
+     * `delay(80)`: under a loaded suite those 80ms expired between the two
+     * assertions, the form moved to its submitted state, and the button this
+     * test asks for by name no longer existed. Nothing about the component was
+     * wrong — the window it was being checked inside simply closed.
+     */
+    let release: () => void = () => {};
+    const inFlight = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     studentsPatch(async () => {
-      await delay(80);
+      await inFlight;
       return HttpResponse.json({ id: "s1", srf_status: "srf_submitted" });
     });
     signedIn();
@@ -495,10 +506,15 @@ describe("SRF submission", () => {
     const submit = () => screen.getByRole("button", { name: /submit for verification/i });
     await user.click(submit());
 
-    await waitFor(() => {
-      expect(submit().hasAttribute("disabled")).toBe(true);
-    });
-    expect(submit().getAttribute("aria-busy")).toBe("true");
+    try {
+      await waitFor(() => {
+        // Both halves of the same beat: a spinner and a refused second click.
+        expect(submit().hasAttribute("disabled")).toBe(true);
+        expect(submit().getAttribute("aria-busy")).toBe("true");
+      });
+    } finally {
+      release();
+    }
   });
 });
 

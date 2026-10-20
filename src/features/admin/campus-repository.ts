@@ -41,11 +41,21 @@ export function createSupabaseCampusRepository(client: SupabaseClient): CampusRe
    * it exists to break.
    */
   async function resolveCityId(name: string, state: string): Promise<string> {
-    const { data: existing } = await client
+    const { data: existing, error: findError } = await client
       .from("cities")
       .select("id")
       .ilike("name", name)
       .maybeSingle();
+
+    /*
+     * A refused lookup is not "this city does not exist". Falling through used
+     * to insert a second city row with the same name — and then the campus was
+     * attached to the new one, so the college silently left the city everyone
+     * else reads.
+     */
+    if (findError !== null) {
+      throw new CampusError("Could not check whether that city already exists.");
+    }
 
     if (existing !== null && existing !== undefined) return existing.id as string;
 

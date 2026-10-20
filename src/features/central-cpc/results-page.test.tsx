@@ -299,6 +299,90 @@ describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/central placement coordinator/i);
   });
+
+  /**
+   * The read behind this table throws now that a refused one cannot be mistaken
+   * for an empty round. Nothing caught it, so the screen stayed on "Loading
+   * participants…" forever — a table that never answers looks like a round
+   * nobody has been put into yet.
+   */
+  it("says the round's students could not be read, and offers the way out", async () => {
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({
+          participants: async () => {
+            throw new Error("permission denied for table attendance");
+          },
+        })}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/permission denied for table attendance/i);
+    expect(screen.queryByText(/loading participants/i)).toBeNull();
+    // The sentence is in the alert; the table still needs a control on it.
+    expect(screen.getByRole("button", { name: /load this round again/i })).toBeDefined();
+  });
+
+  /** A read that fails without saying why still gets a sentence of its own. */
+  it("draws the table when the retry succeeds", async () => {
+    const user = userEvent.setup();
+    let refuse = true;
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({
+          participants: async () => {
+            if (refuse) {
+              refuse = false;
+              throw new Error("");
+            }
+            return PARTICIPANTS;
+          },
+        })}
+      />,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /could not read the students in this round/i,
+    );
+    await user.click(screen.getByRole("button", { name: /load this round again/i }));
+
+    expect(await screen.findByText("Priya Ramesh")).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  /**
+   * Every write here re-reads the sheet. That re-read must not erase the reason
+   * the write was refused, or the coordinator is left looking at a table that
+   * silently kept the old results.
+   */
+  it("keeps the refusal of a save on screen after the re-read", async () => {
+    const user = userEvent.setup();
+    render(
+      <ResultsPage
+        roundId="r1"
+        view={view({
+          record: async () => {
+            throw new Error("Only the Central Placement Coordinator may record round results.");
+          },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+
+    await screen.findByRole("alert");
+    // The sheet re-loads after the write; a second later the sentence is still up.
+    await waitFor(() =>
+      expect(screen.getByRole("checkbox", { name: /priya ramesh/i })).toBeDefined(),
+    );
+    expect(screen.getByRole("alert").textContent).toMatch(/central placement coordinator/i);
+  });
 });
 
 /**
@@ -578,6 +662,52 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     expect(
       await screen.findByRole("button", { name: /advance 1 selected to round 2/i }),
     ).toBeDefined();
+  });
+
+  /**
+   * #34 rule, applied here on 2026-10-19: both loaders were called as
+   * `void loadRounds()` with no catch, while the reads now throw rather than
+   * answer empty. An outage showed no tabs at all — which is exactly what a
+   * drive nobody has scheduled looks like, and it handed "+ Add round" to
+   * someone whose rounds merely could not be read.
+   */
+  it("says the rounds could not be read, and offers no round to add", async () => {
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({
+          rounds: async () => {
+            throw new Error("Could not read this drive's rounds.");
+          },
+        })}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not read this drive's rounds/i);
+    expect(screen.queryByRole("button", { name: /add round/i })).toBeNull();
+    expect(screen.queryByText(/loading rounds/i)).toBeNull();
+  });
+
+  it("draws the tabs again when the retry is pressed", async () => {
+    let refuse = true;
+    const rounds = vi.fn(async () => {
+      if (refuse) {
+        refuse = false;
+        throw new Error("Could not read this drive's rounds.");
+      }
+      return ROUNDS;
+    });
+    const user = userEvent.setup();
+    routed(<DriveRoundsPage driveId="d1" view={driveView({ rounds })} />);
+
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("button", { name: /round 1 · aptitude/i })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /load them again/i }));
+
+    expect(await screen.findByRole("button", { name: /round 1 · aptitude/i })).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 

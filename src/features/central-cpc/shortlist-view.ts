@@ -46,11 +46,20 @@ export function createSupabaseShortlistView(
 ): ShortlistView {
   return {
     async drive(driveId) {
-      const { data } = await client
+      const { data, error } = await client
         .from("drives")
         .select("id, company_name, role_title, role_category, mandatory_skills, status")
         .eq("id", driveId)
         .single();
+
+      /*
+       * Every field below has a fallback, so a refused read used to land in all
+       * of them at once: "This drive", no mandatory skills, and — worst —
+       * `status: null`, which the screen reads as "nothing forbids this". A
+       * completed drive whose row could not be read was therefore offered the
+       * save, and the coordinator was told the PIF had left the skills blank.
+       */
+      if (error !== null) throw new ShortlistError("Could not read this drive.");
 
       const row = (data ?? {}) as Record<string, unknown>;
       const skills = row.mandatory_skills;
@@ -137,6 +146,17 @@ export function createSupabaseShortlistView(
         }>(row.students);
         const academics = (snapshot.academics ?? snapshot) as Record<string, unknown>;
 
+        /*
+         * The CV the recruiter will actually receive, frozen on the same
+         * snapshot as everything else here (R7) — so the card and the export
+         * cannot disagree. The pack skips an entry whose snapshot carries no
+         * resume and the CSV leaves its link cell blank, and until now a
+         * coordinator deciding on the card had no way to know either happened.
+         * Absent means the snapshot predates the field, which is not evidence
+         * of a missing CV.
+         */
+        const frozenResumeId = envelope.resumeId as string | null | undefined;
+
         return {
           applicationId: row.id as string,
           studentId: row.student_id as string,
@@ -160,6 +180,9 @@ export function createSupabaseShortlistView(
           tenthPercentage: recorded(academics.tenthPercentage ?? snapshot.tenthPercentage),
           twelfthPercentage: recorded(academics.twelfthPercentage ?? snapshot.twelfthPercentage),
           email: text(snapshot.email),
+          ...(frozenResumeId === undefined
+            ? {}
+            : { resumeOnFile: frozenResumeId !== null && frozenResumeId !== "" }),
           overallCgpa: Number(academics.overallCgpa ?? 0),
           currentArrears: Number(academics.currentArrears ?? 0),
           historyOfArrears: Number(academics.historyOfArrears ?? 0),

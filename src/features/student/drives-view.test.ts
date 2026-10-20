@@ -544,3 +544,74 @@ describe("createSupabaseDrivesView — the JD, the shift and the joining timelin
     expect(drive?.details.joining).toBe("Offers in Nov, joining in batches");
   });
 });
+
+describe("reading a drive list bigger than one page", () => {
+  /** Honouring offset/limit, because `readAll` stops on a short page. */
+  const paged = (table: string, all: readonly unknown[], urls: string[] = []) =>
+    http.get(`${BASE}/rest/v1/${table}`, ({ request }) => {
+      const url = new URL(request.url);
+      urls.push(url.search);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Number(url.searchParams.get("limit") ?? 1000);
+      return HttpResponse.json(all.slice(offset, offset + limit));
+    });
+
+  it("asks for the live drives a page at a time", async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json(studentRow)),
+      http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+      paged("drives", [], urls),
+    );
+
+    await view().openDrives();
+
+    // Uncapped, the student's own list stopped at whatever thousand arrived
+    // first and nothing on the screen said a drive existed past it.
+    expect(urls[0]).toContain("offset=0&limit=1000");
+  });
+
+  it("reads the drives past the first thousand", async () => {
+    const many = Array.from({ length: 1400 }, (_, n) => ({ ...driveRow, id: `d${n}` }));
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json(studentRow)),
+      http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+      paged("drives", many),
+    );
+
+    const open = await view().openDrives();
+
+    expect(open).toHaveLength(1400);
+  });
+
+  it("splits the round filter into batches the gateway will answer", async () => {
+    const applications = Array.from({ length: 450 }, (_, n) => ({
+      id: `a${n}`,
+      drive_id: `d${n}`,
+      applied_at: "2026-09-02T00:00:00Z",
+    }));
+    const participantUrls: string[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json(studentRow)),
+      http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json([])),
+      paged(
+        "drives",
+        Array.from({ length: 450 }, (_, n) => ({ ...driveRow, id: `d${n}` })),
+      ),
+      paged("applications", applications),
+      paged("round_participants", [], participantUrls),
+      paged("round_results", []),
+      paged("attendance", []),
+    );
+
+    await view().lists();
+
+    // 450 uuids in one `in=()` is a URL the edge answers with an empty list,
+    // and an empty result set makes every round the student sat in read as
+    // "not scheduled".
+    expect(participantUrls).toHaveLength(3);
+    expect(participantUrls[0]).toContain("offset=0&limit=1000");
+  });
+});

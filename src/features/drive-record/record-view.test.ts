@@ -1,8 +1,9 @@
+import { PostgrestReadError } from "@lib/postgrest-read";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseDriveRecordView } from "./record-view";
+import { createSupabaseDriveRecordView, DriveRecordError } from "./record-view";
 
 /**
  * N1 — the canonical drive record, assembled from live rows. The mapper is
@@ -59,9 +60,10 @@ const driveRow = {
   raised_by: { full_name: "AE Test" },
   approver: { full_name: "DH Test" },
   publisher: { full_name: "Radhika" },
+  // Deliberately out of order: the record sorts its rounds.
   drive_rounds: [
-    { sequence: 2, name: "Interview" },
-    { sequence: 1, name: "Aptitude" },
+    { id: "r2", sequence: 2, name: "Interview" },
+    { id: "r1", sequence: 1, name: "Aptitude" },
   ],
   drive_eligible_degrees: [{ degrees: { name: "B.E" } }],
   drive_eligible_branches: [{ branches: { name: "CSE" } }],
@@ -75,19 +77,38 @@ const applicationRow = {
   students: { full_name: "Thanush", roll_number: "21CSE1042", campuses: { name: "KGiSL" } },
 };
 
-function stub(opts: { drive?: unknown; applications?: unknown[]; offers?: unknown[] } = {}) {
+function stub(
+  opts: {
+    drive?: unknown;
+    applications?: unknown[];
+    offers?: unknown[];
+    participants?: unknown[];
+    results?: unknown[];
+    attendance?: unknown[];
+  } = {},
+) {
+  const applicationQueries: string[] = [];
+
   server.use(
     http.get(`${BASE}/rest/v1/drives`, () =>
       HttpResponse.json(opts.drive === undefined ? driveRow : opts.drive),
     ),
-    http.get(`${BASE}/rest/v1/applications`, () =>
-      HttpResponse.json(opts.applications ?? [applicationRow]),
-    ),
+    http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
+      applicationQueries.push(new URL(request.url).search);
+      return HttpResponse.json(opts.applications ?? [applicationRow]);
+    }),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
+    http.get(`${BASE}/rest/v1/round_participants`, () =>
+      HttpResponse.json(opts.participants ?? []),
+    ),
+    http.get(`${BASE}/rest/v1/round_results`, () => HttpResponse.json(opts.results ?? [])),
+    http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
     http.post(`${BASE}/storage/v1/object/sign/job-descriptions/d1/jd-1.pdf`, () =>
       HttpResponse.json({ signedURL: "/signed/jd-1.pdf" }),
     ),
   );
+
+  return { applicationQueries };
 }
 
 const view = () =>
@@ -150,23 +171,13 @@ describe("createSupabaseDriveRecordView", () => {
   /** C8 (2026-08-21): the stage facts the drill-through list filters on. */
   it("carries each applicant's shortlist, rounds and offer facts", async () => {
     stub({
-      drive: {
-        ...driveRow,
-        drive_rounds: [
-          {
-            id: "r1",
-            sequence: 1,
-            name: "Aptitude",
-            round_participants: [{ application_id: "a1" }],
-            round_results: [{ application_id: "a1", result: "selected" }],
-            attendance: [{ application_id: "a1", status: "present" }],
-          },
-        ],
-      },
       applications: [
         { ...applicationRow, student_id: "s1", shortlist_entries: [{ included: true }] },
       ],
       offers: [{ student_id: "s1" }],
+      participants: [{ round_id: "r1", application_id: "a1" }],
+      results: [{ round_id: "r1", application_id: "a1", result: "selected" }],
+      attendance: [{ round_id: "r1", application_id: "a1", status: "present" }],
     });
 
     const [applicant] = (await view().record("d1"))?.applicants ?? [];
@@ -181,7 +192,53 @@ describe("createSupabaseDriveRecordView", () => {
         attendance: "present",
         result: "selected",
       },
+      {
+        sequence: 2,
+        name: "Interview",
+        participating: false,
+        attendance: null,
+        result: null,
+      },
     ]);
+  });
+
+  /**
+   * 2026-10-19: these three were embedded under the drive, and PostgREST caps
+   * an embedded collection at 1000 rows FOR THE WHOLE DRIVE. A student whose
+   * participant row fell past the cap printed as "not scheduled for the
+   * round" — a wrong verdict about a person, not a missing column.
+   */
+  it("reads a round's participants, results and attendance as their own queries", async () => {
+    const { applicationQueries } = stub({
+      participants: [{ round_id: "r1", application_id: "a1" }],
+    });
+
+    const [applicant] = (await view().record("d1"))?.applicants ?? [];
+
+    expect(applicationQueries[0]).toContain("offset=0&limit=1000");
+    expect(applicant?.rounds[0]).toMatchObject({ participating: true });
+  });
+
+  it("throws rather than showing an applicant list it could not read", async () => {
+    stub();
+    server.use(
+      http.get(`${BASE}/rest/v1/applications`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().record("d1")).rejects.toThrow(PostgrestReadError);
+  });
+
+  it("throws rather than saying a drive does not exist when the read was refused", async () => {
+    stub();
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(view().record("d1")).rejects.toThrow(DriveRecordError);
   });
 
   it("an applicant nobody touched has no shortlist, no rounds sat, no offer", async () => {

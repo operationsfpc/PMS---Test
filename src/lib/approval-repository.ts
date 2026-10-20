@@ -3,6 +3,7 @@ import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { describeJoining } from "@domain/joining";
 import { describeShift } from "@domain/shift";
 import type { DriveStatus, DriveType } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class ApprovalError extends Error {}
@@ -94,15 +95,22 @@ export function createSupabaseApprovalRepository(
 ): ApprovalRepository {
   return {
     async pending() {
-      const { data, error } = await client
-        .from("drives")
-        .select(COLUMNS)
-        .eq("status", "submitted")
-        .order("created_at", { ascending: true });
-
-      if (error !== null) throw new ApprovalError("Could not load the approval queue.");
-
-      const rows = data ?? [];
+      // Paged: a Delivery Head queue longer than a thousand submitted roles
+      // used to silently stop at the cap, and the approvals past it were
+      // invisible rather than missing.
+      let rows: Array<Record<string, unknown>>;
+      try {
+        rows = await readAllRows((from, to) =>
+          client
+            .from("drives")
+            .select(COLUMNS)
+            .eq("status", "submitted")
+            .order("created_at", { ascending: true })
+            .range(from, to),
+        );
+      } catch {
+        throw new ApprovalError("Could not load the approval queue.");
+      }
 
       /**
        * One batch call for the whole queue rather than one per card, and no
@@ -146,54 +154,62 @@ export function createSupabaseApprovalRepository(
 
       const events = new Map<string, PendingDriveEvent>();
       if (eventIds.length > 0) {
-        const [{ data: eventRows, error: eventError }, { data: contactRows, error: contactError }] =
-          await Promise.all([
-            client
-              .from("company_drives")
-              .select("id, company_name, drive_mode, venue, tentative_date")
-              .in("id", eventIds),
-            client
-              .from("company_drive_contacts")
-              .select("company_drive_id, sequence, name, designation, email, phone")
-              .in("company_drive_id", eventIds)
-              .order("sequence", { ascending: true }),
+        /**
+         * Batched and paged like the queue itself: past two hundred events the
+         * `in` URL grew longer than what the gateway answers, and every card
+         * fell back to standalone with nothing said. Still degraded rather than
+         * fatal — the event is presentation context beside the decision.
+         */
+        try {
+          const [eventRows, contactRows] = await Promise.all([
+            readAllRowsByIds(
+              eventIds,
+              (batch) => (from, to) =>
+                client
+                  .from("company_drives")
+                  .select("id, company_name, drive_mode, venue, tentative_date")
+                  .in("id", batch)
+                  .range(from, to),
+            ),
+            readAllRowsByIds(
+              eventIds,
+              (batch) => (from, to) =>
+                client
+                  .from("company_drive_contacts")
+                  .select("company_drive_id, sequence, name, designation, email, phone")
+                  .in("company_drive_id", batch)
+                  .order("sequence", { ascending: true })
+                  .range(from, to),
+            ),
           ]);
 
-        if (eventError === null && contactError === null) {
           const contactsByEvent = new Map<string, PendingDriveEventContact[]>();
-          for (const contact of (contactRows ?? []) as readonly {
-            company_drive_id: string;
-            name: string | null;
-            designation: string | null;
-            email: string | null;
-            phone: string | null;
-          }[]) {
-            const list = contactsByEvent.get(contact.company_drive_id) ?? [];
+          for (const contact of contactRows) {
+            const eventId = contact.company_drive_id as string;
+            const list = contactsByEvent.get(eventId) ?? [];
             list.push({
-              name: contact.name,
-              designation: contact.designation,
-              email: contact.email,
-              phone: contact.phone,
+              name: (contact.name as string | null) ?? null,
+              designation: (contact.designation as string | null) ?? null,
+              email: (contact.email as string | null) ?? null,
+              phone: (contact.phone as string | null) ?? null,
             });
-            contactsByEvent.set(contact.company_drive_id, list);
+            contactsByEvent.set(eventId, list);
           }
 
-          for (const event of (eventRows ?? []) as readonly {
-            id: string;
-            company_name: string;
-            drive_mode: string | null;
-            venue: string | null;
-            tentative_date: string | null;
-          }[]) {
-            events.set(event.id, {
-              id: event.id,
-              companyName: event.company_name,
-              tentativeDate: event.tentative_date,
-              driveMode: event.drive_mode,
-              venue: event.venue,
-              contacts: contactsByEvent.get(event.id) ?? [],
+          for (const event of eventRows) {
+            const eventId = event.id as string;
+            events.set(eventId, {
+              id: eventId,
+              companyName: event.company_name as string,
+              tentativeDate: (event.tentative_date as string | null) ?? null,
+              driveMode: (event.drive_mode as string | null) ?? null,
+              venue: (event.venue as string | null) ?? null,
+              contacts: contactsByEvent.get(eventId) ?? [],
             });
           }
+        } catch {
+          // No event context: the queue shows the roles standalone.
+          events.clear();
         }
       }
 

@@ -1,8 +1,11 @@
 import type { Offer } from "@domain/offers";
 import { resolveDisplayedPlacement } from "@domain/offers";
 import type { DriveType, ParticipationStatus, RoleCategory, SrfStatus } from "@domain/types";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { StudentRecord, StudentRecordView } from "./student-record-page";
+
+export class StudentRecordError extends Error {}
 
 /**
  * The canonical student record, read live (G7, UAT 2026-08-20).
@@ -54,26 +57,60 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
       // a row exists but is forbidden would leak the roster through the URL.
       if (student === undefined) return null;
 
-      const [semesters, skills, preferences, applications, offers] = await Promise.all([
-        client
-          .from("student_semesters")
-          .select(RECORD_SEMESTER_COLUMNS)
-          .eq("student_id", studentId)
-          .order("semester_number"),
-        client
-          .from("student_skill_scores")
-          .select(RECORD_SKILL_COLUMNS)
-          .eq("student_id", studentId),
-        client.from("student_role_preferences").select("category").eq("student_id", studentId),
-        client
-          .from("applications")
-          .select(RECORD_APPLICATION_COLUMNS)
-          .eq("student_id", studentId)
-          .order("applied_at", { ascending: false }),
-        client.from("offers").select(RECORD_OFFER_COLUMNS).eq("student_id", studentId),
-      ]);
+      let semesterRows: Array<Record<string, unknown>>;
+      let skillRows: Array<Record<string, unknown>>;
+      let preferenceRows: Array<Record<string, unknown>>;
+      let applicationRows: Array<Record<string, unknown>>;
+      let offerRows: Array<Record<string, unknown>>;
+      try {
+        [semesterRows, skillRows, preferenceRows, applicationRows, offerRows] = await Promise.all([
+          readAllRows((from, to) =>
+            client
+              .from("student_semesters")
+              .select(RECORD_SEMESTER_COLUMNS)
+              .eq("student_id", studentId)
+              .order("semester_number")
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("student_skill_scores")
+              .select(RECORD_SKILL_COLUMNS)
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("student_role_preferences")
+              .select("category")
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("applications")
+              .select(RECORD_APPLICATION_COLUMNS)
+              .eq("student_id", studentId)
+              .order("applied_at", { ascending: false })
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("offers")
+              .select(RECORD_OFFER_COLUMNS)
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+        ]);
+      } catch {
+        // An empty list is a fact about this student; a refused read is not.
+        // Read past, a failed skills query rendered "No skill scores
+        // recorded." and a failed offers query rendered "Not placed."
+        throw new StudentRecordError(
+          "Could not read this student's full record. Please try again.",
+        );
+      }
 
-      const offerRows = rows(offers.data);
       const parsedOffers: Offer[] = offerRows.map((row) => ({
         id: row.id as string,
         driveId: (row.drive_id as string | null) ?? "",
@@ -86,7 +123,6 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
 
       const placementRecord = resolveDisplayedPlacement(parsedOffers);
 
-      const applicationRows = rows(applications.data);
       const driveNames = new Map(
         applicationRows.map((row) => {
           const drive = one<{ company_name?: string | null; role_title?: string | null }>(
@@ -128,16 +164,16 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
         tenthPercentage: student.tenth_percentage == null ? null : Number(student.tenth_percentage),
         twelfthPercentage:
           student.twelfth_percentage == null ? null : Number(student.twelfth_percentage),
-        semesters: rows(semesters.data).map((row) => ({
+        semesters: semesterRows.map((row) => ({
           semesterNumber: Number(row.semester_number),
           cgpa: Number(row.cgpa),
           verified: row.status === "verified",
         })),
-        skills: rows(skills.data).map((row) => ({
+        skills: skillRows.map((row) => ({
           skill: one<{ name?: string }>(row.skill_areas)?.name ?? "Unnamed skill",
           score: Number(row.score),
         })),
-        rolePreferences: rows(preferences.data).map((row) => row.category as RoleCategory),
+        rolePreferences: preferenceRows.map((row) => row.category as RoleCategory),
         applications: applicationRows.map((row) => {
           const drive = driveNames.get(row.drive_id as string);
           return {

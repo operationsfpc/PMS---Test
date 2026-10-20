@@ -59,6 +59,61 @@ describe("createSupabaseVerificationRepository", () => {
     });
   });
 
+  describe("reading a queue bigger than one page", () => {
+    const student = (n: number) => ({
+      id: `s${n}`,
+      full_name: `Student ${n}`,
+      roll_number: `TEC${n}`,
+      campuses: { name: "PSG College of Technology" },
+      overall_cgpa: 8,
+    });
+
+    /** Honouring offset/limit, because `readAll` stops on a short page. */
+    const paged = (all: readonly unknown[]) =>
+      http.get(`${BASE}/rest/v1/students`, ({ request }) => {
+        const url = new URL(request.url);
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        const limit = Number(url.searchParams.get("limit") ?? 1000);
+        return HttpResponse.json(all.slice(offset, offset + limit));
+      });
+
+    it("asks for the queue a page at a time", async () => {
+      const urls: string[] = [];
+      server.use(
+        http.get(`${BASE}/rest/v1/students`, ({ request }) => {
+          urls.push(request.url);
+          return HttpResponse.json([]);
+        }),
+      );
+
+      await repo().pending();
+
+      expect(urls[0]).toContain("offset=0&limit=1000");
+    });
+
+    it("reads the students past the first thousand", async () => {
+      const all = Array.from({ length: 1400 }, (_, n) => student(n));
+      server.use(paged(all));
+
+      const rows = await repo().pending();
+
+      // Uncapped, this stopped at 1000 and the last 400 forms were never
+      // approved because no coordinator could see them.
+      expect(rows).toHaveLength(1400);
+      expect(rows.at(-1)?.fullName).toBe("Student 1399");
+    });
+
+    it("refuses rather than handing the coordinator a short queue", async () => {
+      server.use(
+        http.get(`${BASE}/rest/v1/students`, () =>
+          HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+        ),
+      );
+
+      await expect(repo().pending()).rejects.toThrow(VerificationError);
+    });
+  });
+
   describe("decide()", () => {
     it("approves by moving the student to srf_approved and stamping the decider", async () => {
       let body: Record<string, unknown> = {};

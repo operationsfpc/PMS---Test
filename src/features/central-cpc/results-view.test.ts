@@ -361,6 +361,42 @@ describe("the drive's rounds", () => {
     expect(await view().advance("r1", "r2")).toBe(0);
     expect(scheduled.calls).toHaveLength(0);
   });
+
+  /**
+   * 2026-10-19: the dedupe list that closes the bug above was itself unpaged.
+   * On a round with more than a thousand seats, the read answered with the
+   * first thousand — so a student who WAS already in the round, on page two,
+   * counted as a newcomer, and the unique key refused the whole batch again.
+   */
+  it("reads the already-scheduled seats past the first page", async () => {
+    const scheduled = stubSchedule();
+    const slots = [
+      ...Array.from({ length: 1000 }, (_, i) => ({ application_id: `filler-${i}` })),
+      // The student who already advanced sits beyond the cap.
+      { application_id: "a1" },
+    ];
+
+    server.use(
+      http.get(`${BASE}/rest/v1/round_results`, () =>
+        HttpResponse.json([
+          { application_id: "a1", result: "selected" },
+          { application_id: "a2", result: "selected" },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/round_participants`, ({ request }) => {
+        const url = new URL(request.url);
+        const offset = Number(url.searchParams.get("offset") ?? "0");
+        return HttpResponse.json(slots.slice(offset, offset + 1000));
+      }),
+    );
+
+    const moved = await view().advance("r1", "r2");
+
+    expect(moved).toBe(1);
+    expect(scheduled.calls).toEqual([
+      { p_round_id: "r2", p_application_ids: ["a2"], p_added_by: "cpc-1" },
+    ]);
+  });
 });
 
 /**

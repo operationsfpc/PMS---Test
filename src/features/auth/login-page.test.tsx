@@ -168,4 +168,35 @@ describe("LoginPage", () => {
       expect(signOut).toHaveBeenCalledTimes(1);
     });
   });
+
+  /**
+   * The profile read was refused, not empty. Telling this person their address
+   * "is not set up for placements" would be a lie - and would send them off to
+   * write to support about a database fault. Nothing is wrong with their
+   * account, so signing out is not the fix either: asking once more is.
+   */
+  describe("when the database refused to say who this account is", () => {
+    const unreadable: AuthState = { status: "unreadable", email: "head@faceprep.in" };
+
+    it("blames the read, not the address", () => {
+      stubAuth();
+      renderAt("/login", unreadable);
+
+      const alert = screen.getByRole("alert");
+      expect(alert.textContent).toContain("head@faceprep.in");
+      expect(alert.textContent).toMatch(/could not check whether/i);
+      expect(alert.textContent).toMatch(/not a problem with your account/i);
+      expect(alert.textContent).not.toMatch(/not set up for placements/i);
+      expect(alert.textContent).not.toContain(SUPPORT_EMAIL);
+    });
+
+    it("offers a retry instead of signing them out of Google", () => {
+      stubAuth();
+      renderAt("/login", unreadable);
+
+      expect(screen.getByRole("button", { name: /try again/i })).toBeDefined();
+      expect(screen.queryByRole("button", { name: /use a different account/i })).toBeNull();
+      expect(screen.queryByRole("button", { name: /sign in with google/i })).toBeNull();
+    });
+  });
 });

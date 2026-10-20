@@ -1,6 +1,7 @@
 import { type CertificateDecision, decideCertificate } from "@domain/certificates";
 import { extractOriginalFilename, filenameToCertificateName } from "@domain/storage-path";
 import type { VerificationStatus } from "@domain/types";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class CertificateQueueError extends Error {}
@@ -65,17 +66,22 @@ export function createSupabaseCertificateQueueRepository(
 ): CertificateQueueRepository {
   return {
     async pending() {
-      const { data, error } = await client
-        .from("student_certificates")
-        .select(CERTIFICATE_QUEUE_COLUMNS)
-        .eq("status", "pending")
-        .order("created_at", { ascending: true });
-
-      if (error !== null) {
+      // Paged, for the same reason as every other queue here: one select
+      // answers a thousand rows, and a certificate queue that quietly stops at
+      // the cap leaves students waiting for a decision nobody can see.
+      let rows: Array<Record<string, unknown>>;
+      try {
+        rows = await readAllRows((from, to) =>
+          client
+            .from("student_certificates")
+            .select(CERTIFICATE_QUEUE_COLUMNS)
+            .eq("status", "pending")
+            .order("created_at", { ascending: true })
+            .range(from, to),
+        );
+      } catch {
         throw new CertificateQueueError("Could not load the certificate queue.");
       }
-
-      const rows = (data ?? []) as Array<Record<string, unknown>>;
       const paths = rows.flatMap((row) => {
         const document = one<{ storage_path?: string }>(row.student_documents);
         return document?.storage_path === undefined ? [] : [document.storage_path];

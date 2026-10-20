@@ -45,6 +45,15 @@ export interface ShortlistApplicant {
   readonly twelfthPercentage?: number | null;
   /** Their contact address, as it stood when they applied. */
   readonly email?: string | null;
+  /**
+   * Whether the CV travels with this application. The recruiter pack skips an
+   * entry without one and the CSV leaves its link cell blank, so the card has
+   * to say it while the decision is still being made (#102) — otherwise the
+   * gap surfaces only after the file is in the recruiter's hands.
+   *
+   * Absent means the snapshot predates the field: not evidence of a missing CV.
+   */
+  readonly resumeOnFile?: boolean | undefined;
   readonly overallCgpa: number;
   readonly currentArrears: number;
   readonly historyOfArrears: number;
@@ -295,6 +304,11 @@ export function ShortlistPage({
           (byId.get(candidate.applicationId)?.shortlisted === true) === (tab === "shortlisted"),
       ),
     [rankedWithPosition, byId, tab],
+  );
+
+  const withoutCv = useMemo(
+    () => (applicants ?? []).filter((a) => a.resumeOnFile === false),
+    [applicants],
   );
 
   /**
@@ -679,6 +693,21 @@ export function ShortlistPage({
             </div>
           )}
 
+          {/* #102: the same gap, counted. A card badge tells you who; this says
+              how many the recruiter would be missing before anyone presses
+              Export. It is a fact about the files, not a refusal, so it is a
+              quiet strip and not an alert. */}
+          {withoutCv.length > 0 && (
+            <p className="mb-4 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-ink-900">
+              <strong>
+                {withoutCv.length} {withoutCv.length === 1 ? "applicant has" : "applicants have"} no
+                CV on file
+              </strong>
+              : {withoutCv.map((a) => a.studentName).join(", ")}. Their shortlist row reaches the
+              recruiter without a resume — the ZIP skips them and the CSV link cell is blank.
+            </p>
+          )}
+
           {/* The two tabs (2026-08-21): decided people are read-only. */}
           <div className="mb-3 flex gap-2">
             <button
@@ -785,6 +814,14 @@ export function ShortlistPage({
                             <Badge tone="brand">Will shortlist on save</Badge>
                           )}
                         {blocked && <Badge tone="danger">Opted out</Badge>}
+                        {/* #102: the CV is the one thing the recruiter cannot
+                            work without, and it is the one thing this card used
+                            not to mention. Only the gap is printed — every other
+                            card carrying a "CV on file" tag would say nothing
+                            three hundred times. */}
+                        {applicant?.resumeOnFile === false && (
+                          <Badge tone="warning">No CV on file</Badge>
+                        )}
                       </p>
                       {/* Name, roll and campus go through the one component
                           every staff screen uses for them, so "Roll" and the

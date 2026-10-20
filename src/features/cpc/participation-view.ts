@@ -3,6 +3,7 @@ import {
   canDeclineParticipationRequest,
 } from "@domain/participation";
 import type { AppRole } from "@domain/types";
+import { describeReadFailure, readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ParticipationQueueView } from "./participation-queue-contract";
 
@@ -90,13 +91,37 @@ export function createSupabaseParticipationQueueView(
 
   return {
     async pending() {
-      const [{ data: optOuts }, { data: placements }] = await Promise.all([
-        client.from("opt_out_requests").select(OPT_OUT_QUEUE_COLUMNS).eq("status", "pending"),
-        client
-          .from("self_placement_requests")
-          .select(SELF_PLACEMENT_QUEUE_COLUMNS)
-          .eq("status", "pending"),
-      ]);
+      /**
+       * Paged, and the failure raised. Both queues used to be one unpaged
+       * select whose `error` was thrown away: past a thousand requests the
+       * screen showed the first thousand and called the rest nothing, and a
+       * refused read looked exactly like a clean queue. A request that is not
+       * on the list is not "waiting" — it is invisible.
+       */
+      let optOuts: Array<Record<string, unknown>>;
+      let placements: Array<Record<string, unknown>>;
+      try {
+        [optOuts, placements] = await Promise.all([
+          readAllRows((from, to) =>
+            client
+              .from("opt_out_requests")
+              .select(OPT_OUT_QUEUE_COLUMNS)
+              .eq("status", "pending")
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("self_placement_requests")
+              .select(SELF_PLACEMENT_QUEUE_COLUMNS)
+              .eq("status", "pending")
+              .range(from, to),
+          ),
+        ]);
+      } catch (cause) {
+        throw new ParticipationQueueError(
+          describeReadFailure(cause, "Could not load the participation queue."),
+        );
+      }
 
       const name = (row: Record<string, unknown>) =>
         one<{ full_name?: string; roll_number?: string }>(row.students);
@@ -109,7 +134,7 @@ export function createSupabaseParticipationQueueView(
 
       return {
         optOuts: await Promise.all(
-          (optOuts ?? []).map(async (row) => {
+          optOuts.map(async (row) => {
             const student = name(row);
             return {
               id: row.id as string,
@@ -123,7 +148,7 @@ export function createSupabaseParticipationQueueView(
           }),
         ),
         selfPlacements: await Promise.all(
-          (placements ?? []).map(async (row) => {
+          placements.map(async (row) => {
             const student = name(row);
             return {
               id: row.id as string,

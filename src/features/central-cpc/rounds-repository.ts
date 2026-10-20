@@ -1,5 +1,6 @@
 import { advancingParticipants, canMarkAttendance, canRecordResult } from "@domain/rounds";
 import type { AppRole, AttendanceStatus, RoundResult } from "@domain/types";
+import { readAll } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class RoundsError extends Error {}
@@ -148,15 +149,28 @@ export function createSupabaseRoundsRepository(
     },
 
     async nextRoundParticipants(roundId) {
-      const { data, error } = await client
-        .from("round_results")
-        .select("application_id, result")
-        .eq("round_id", roundId);
-
-      if (error !== null) throw new RoundsError("Could not read the round's results.");
+      /**
+       * Paged. A campus-wide first round records more results than one select
+       * answers, and the thousand-and-first student was never scheduled — no
+       * error, no warning, just a name that never got a call.
+       */
+      let rows: Array<{ application_id: string; result: string }>;
+      try {
+        rows = await readAll<{ application_id: string; result: string }>((from, to) =>
+          client
+            .from("round_results")
+            .select("application_id, result")
+            .eq("round_id", roundId)
+            .range(from, to),
+        );
+      } catch (cause) {
+        throw withDetail("Could not read the round's results.", {
+          message: cause instanceof Error ? cause.message : "",
+        });
+      }
 
       return advancingParticipants(
-        (data ?? []).map((row) => ({
+        rows.map((row) => ({
           studentId: row.application_id as string,
           result: row.result as RoundResult,
         })),

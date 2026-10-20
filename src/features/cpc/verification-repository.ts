@@ -11,6 +11,7 @@ import {
   type SrfStatus,
   type VerificationStatus,
 } from "@domain/types";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class VerificationError extends Error {}
@@ -422,18 +423,27 @@ export function createSupabaseVerificationRepository(
 ): VerificationRepository {
   return {
     async pending() {
-      const { data, error } = await client
-        .from("students")
-        .select(VERIFICATION_QUEUE_COLUMNS)
-        .eq("srf_status", "srf_submitted")
-        .order("srf_submitted_at", { ascending: true });
-
-      if (error !== null) {
+      /**
+       * Paged. Every campus's submitted forms together are more than one select
+       * answers, and the students past the cap were simply not in the queue —
+       * nobody approved their form, and nothing on screen said why.
+       */
+      let rows: Array<Record<string, unknown>>;
+      try {
+        rows = await readAllRows((from, to) =>
+          client
+            .from("students")
+            .select(VERIFICATION_QUEUE_COLUMNS)
+            .eq("srf_status", "srf_submitted")
+            .order("srf_submitted_at", { ascending: true })
+            .range(from, to),
+        );
+      } catch {
         throw new VerificationError("Could not load the verification queue.");
       }
 
       return await Promise.all(
-        (data ?? []).map(async (row) => {
+        rows.map(async (row) => {
           const rawSemesters = (row.student_semesters ?? []) as Array<Record<string, unknown>>;
           const rawDocuments = (row.student_documents ?? []) as Array<{
             kind: string;

@@ -107,26 +107,30 @@ export function StudentRecordPage({
   view: StudentRecordView;
 }) {
   const [record, setRecord] = useState<StudentRecord | null | undefined>(undefined);
+  const [failure, setFailure] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     let live = true;
-    void view.record(studentId).then((next) => {
-      if (live) setRecord(next);
-    });
+    view.record(studentId).then(
+      (next) => {
+        if (live) {
+          setRecord(next);
+          setFailure(null);
+        }
+      },
+      () => {
+        // A refused read is not "no such student". The record may exist and be
+        // perfectly readable — the network or a policy failed — and left
+        // unhandled this page sat on "Loading…" forever.
+        if (live) setFailure("Could not load this student record. Please try again.");
+      },
+    );
     return () => {
       live = false;
     };
   }, [view, studentId]);
-
-  if (record === undefined) {
-    return (
-      <p role="status" className="text-sm text-ink-500">
-        Loading the student record…
-      </p>
-    );
-  }
 
   /**
    * UAT 2026-10-18: "there is no way to go back". A record reached from a list
@@ -147,6 +151,25 @@ export function StudentRecordPage({
         Back
       </Button>
     );
+
+  if (record === undefined) {
+    if (failure !== null) {
+      return (
+        <Card className="border border-danger-500 bg-danger-50 p-5">
+          <p role="alert" className="text-sm text-danger-500">
+            {failure}
+          </p>
+          <div className="mt-4">{back}</div>
+        </Card>
+      );
+    }
+
+    return (
+      <p role="status" className="text-sm text-ink-500">
+        Loading the student record…
+      </p>
+    );
+  }
 
   if (record === null) {
     return (

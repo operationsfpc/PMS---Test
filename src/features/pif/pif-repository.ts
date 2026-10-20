@@ -4,6 +4,7 @@ import { joiningNotesFor } from "@domain/joining";
 import { normaliseToCgpa } from "@domain/marks";
 import { nightTimingFor } from "@domain/shift";
 import { sanitizeStorageFileName } from "@domain/storage-path";
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MultiRolePifValues, PifFormValues } from "./pif-schema";
 
@@ -481,11 +482,21 @@ export function createSupabasePifRepository(
     submitCompanyDrive: (values, existingEventId) =>
       writeCompanyDrive(values, "submitted", existingEventId),
     async skillAreas() {
-      const { data, error } = await client.from("skill_areas").select("name").order("name");
-      if (error !== null) return [];
-      return ((data ?? []) as Array<{ name?: unknown }>)
-        .map((r) => String(r.name ?? ""))
-        .filter((n) => n !== "");
+      /**
+       * Raised, not swallowed. The page has had the sentence "we could not
+       * read the assessed-skills catalogue" since it was written, and an empty
+       * array here kept it unsayable: the picker went blank and the AE read it
+       * as a college that assesses nothing.
+       */
+      let rows: Array<Record<string, unknown>>;
+      try {
+        rows = await readAllRows((from, to) =>
+          client.from("skill_areas").select("name").order("name").range(from, to),
+        );
+      } catch {
+        throw new PifError("Could not read the assessed-skills catalogue.");
+      }
+      return rows.map((r) => String((r.name as string | undefined) ?? "")).filter((n) => n !== "");
     },
     /*
      * THREE tables name a company and only one of them is the registry.
@@ -520,14 +531,28 @@ export function createSupabasePifRepository(
         byName.set(key, merged);
       };
 
-      /** A refused read costs one source, not the whole autocomplete. */
+      /**
+       * Paged, because `drives` is every role this organisation has ever
+       * raised: past a thousand rows the company someone is typing was not in
+       * the autocomplete at all, and nothing autofilled — which read as a
+       * brand-new company, not as a truncated list.
+       *
+       * A refused source costs one source, not the whole autocomplete. All
+       * three refused is a different fact, and the page can say it.
+       */
+      let refused = 0;
       const read = async (
         table: string,
         columns: string,
       ): Promise<readonly Record<string, unknown>[]> => {
-        const { data, error } = await client.from(table).select(columns);
-        if (error !== null || !Array.isArray(data)) return [];
-        return data as unknown as readonly Record<string, unknown>[];
+        try {
+          return await readAllRows((from, to) =>
+            client.from(table).select(columns).range(from, to),
+          );
+        } catch {
+          refused += 1;
+          return [];
+        }
       };
 
       for (const row of await read("companies", "id, name, industry, website")) remember(row);
@@ -535,99 +560,119 @@ export function createSupabasePifRepository(
       for (const row of await read("drives", "company_name, industry, company_website"))
         remember(row);
 
+      if (refused === 3) {
+        throw new PifError("Could not read the companies already on record.");
+      }
+
       return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
     },
     async getCompanyEvents(companyName: string): Promise<readonly ExistingDriveEvent[]> {
       const trimmed = companyName.trim();
       if (!trimmed) return [];
 
+      /**
+       * Paged, and a refusal counted rather than hidden. An empty result reads
+       * as "this company has never visited"; both READS refused looked exactly
+       * like it, and the AE re-typed a company's whole history because the
+       * picker claimed to have none. One source refusing still costs only the
+       * events that table knows about.
+       */
+      let refused = 0;
       const events: ExistingDriveEvent[] = [];
 
-      const { data: cdData, error: cdError } = await client
-        .from("company_drives")
-        .select(`
+      const cdRows = await readAllRows((from, to) =>
+        client
+          .from("company_drives")
+          .select(`
           id, company_name, drive_mode, venue, tentative_date, status,
           drives(id, role_title),
           company_drive_contacts(sequence, name, designation, email, phone)
         `)
-        .ilike("company_name", trimmed)
-        .order("tentative_date", { ascending: false });
+          .ilike("company_name", trimmed)
+          .order("tentative_date", { ascending: false })
+          .range(from, to),
+      ).catch(() => {
+        refused += 1;
+        return [];
+      });
 
-      if (cdError === null && Array.isArray(cdData)) {
-        for (const row of cdData) {
-          const roles = (Array.isArray(row.drives) ? row.drives : [])
-            .map((d: Record<string, unknown>) => String(d.role_title ?? "").trim())
-            .filter((r) => r !== "");
-          const contacts = (
-            Array.isArray(row.company_drive_contacts) ? row.company_drive_contacts : []
-          )
-            .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
-            .map((c: Record<string, unknown>) => ({
-              name: String(c.name ?? ""),
-              designation: String(c.designation ?? ""),
-              email: String(c.email ?? ""),
-              phone: String(c.phone ?? ""),
-            }));
+      for (const row of cdRows) {
+        const roles = (Array.isArray(row.drives) ? row.drives : [])
+          .map((d: Record<string, unknown>) => String(d.role_title ?? "").trim())
+          .filter((r) => r !== "");
+        const contacts = (
+          Array.isArray(row.company_drive_contacts) ? row.company_drive_contacts : []
+        )
+          .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
+          .map((c: Record<string, unknown>) => ({
+            name: String(c.name ?? ""),
+            designation: String(c.designation ?? ""),
+            email: String(c.email ?? ""),
+            phone: String(c.phone ?? ""),
+          }));
 
-          events.push({
-            id: row.id as string,
-            companyName: row.company_name as string,
-            tentativeDate: (row.tentative_date as string | null) ?? null,
-            driveMode: (row.drive_mode as string | null) ?? null,
-            venue: (row.venue as string | null) ?? null,
-            status: (row.status as string | null) ?? "draft",
-            existingRoles: roles,
-            contacts,
-          });
-        }
+        events.push({
+          id: row.id as string,
+          companyName: row.company_name as string,
+          tentativeDate: (row.tentative_date as string | null) ?? null,
+          driveMode: (row.drive_mode as string | null) ?? null,
+          venue: (row.venue as string | null) ?? null,
+          status: (row.status as string | null) ?? "draft",
+          existingRoles: roles,
+          contacts,
+        });
       }
 
-      const { data: drivesData, error: drivesError } = await client
-        .from("drives")
-        .select(`
+      const drivesRows = await readAllRows((from, to) =>
+        client
+          .from("drives")
+          .select(`
           id, company_drive_id, company_name, drive_mode, venue, tentative_date, status, role_title,
           drive_contacts(sequence, name, designation, email, phone)
         `)
-        .ilike("company_name", trimmed)
-        .order("tentative_date", { ascending: false });
+          .ilike("company_name", trimmed)
+          .order("tentative_date", { ascending: false })
+          .range(from, to),
+      ).catch(() => {
+        refused += 1;
+        return [];
+      });
 
-      if (drivesError === null && Array.isArray(drivesData)) {
-        const seenEventIds = new Set(events.map((e) => e.id));
-        for (const d of drivesData) {
-          const eventId = (d.company_drive_id as string | null) ?? (d.id as string);
-          if (seenEventIds.has(eventId)) {
-            const existing = events.find((e) => e.id === eventId);
-            if (
-              existing &&
-              d.role_title &&
-              !existing.existingRoles.includes(String(d.role_title))
-            ) {
-              (existing.existingRoles as string[]).push(String(d.role_title));
-            }
-            continue;
+      const seenEventIds = new Set(events.map((e) => e.id));
+      for (const d of drivesRows) {
+        const eventId = (d.company_drive_id as string | null) ?? (d.id as string);
+        if (seenEventIds.has(eventId)) {
+          const existing = events.find((e) => e.id === eventId);
+          if (existing && d.role_title && !existing.existingRoles.includes(String(d.role_title))) {
+            (existing.existingRoles as string[]).push(String(d.role_title));
           }
-          seenEventIds.add(eventId);
-
-          const contacts = (Array.isArray(d.drive_contacts) ? d.drive_contacts : [])
-            .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
-            .map((c: Record<string, unknown>) => ({
-              name: String(c.name ?? ""),
-              designation: String(c.designation ?? ""),
-              email: String(c.email ?? ""),
-              phone: String(c.phone ?? ""),
-            }));
-
-          events.push({
-            id: eventId,
-            companyName: d.company_name as string,
-            tentativeDate: (d.tentative_date as string | null) ?? null,
-            driveMode: (d.drive_mode as string | null) ?? null,
-            venue: (d.venue as string | null) ?? null,
-            status: (d.status as string | null) ?? "draft",
-            existingRoles: d.role_title ? [String(d.role_title)] : [],
-            contacts,
-          });
+          continue;
         }
+        seenEventIds.add(eventId);
+
+        const contacts = (Array.isArray(d.drive_contacts) ? d.drive_contacts : [])
+          .sort((a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0))
+          .map((c: Record<string, unknown>) => ({
+            name: String(c.name ?? ""),
+            designation: String(c.designation ?? ""),
+            email: String(c.email ?? ""),
+            phone: String(c.phone ?? ""),
+          }));
+
+        events.push({
+          id: eventId,
+          companyName: d.company_name as string,
+          tentativeDate: (d.tentative_date as string | null) ?? null,
+          driveMode: (d.drive_mode as string | null) ?? null,
+          venue: (d.venue as string | null) ?? null,
+          status: (d.status as string | null) ?? "draft",
+          existingRoles: d.role_title ? [String(d.role_title)] : [],
+          contacts,
+        });
+      }
+
+      if (refused === 2) {
+        throw new PifError("Could not read this company's previous drives.");
       }
 
       return events;

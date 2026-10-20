@@ -112,6 +112,33 @@ describe("createSupabaseCampusRepository", () => {
     expect(cityBody.state).toBe("Karnataka");
   });
 
+  /**
+   * A refused lookup is not "this city does not exist". Falling through used to
+   * insert a second city with the same name and attach the new campus to it —
+   * so the college silently left the city every other screen reads.
+   */
+  it("creates nothing when the city lookup was refused", async () => {
+    let cityInserts = 0;
+    let campusInserts = 0;
+    server.use(
+      http.get(`${BASE}/rest/v1/cities`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 403 }),
+      ),
+      http.post(`${BASE}/rest/v1/cities`, () => {
+        cityInserts += 1;
+        return HttpResponse.json({ id: "city-new" });
+      }),
+      http.post(`${BASE}/rest/v1/campuses`, () => {
+        campusInserts += 1;
+        return HttpResponse.json({ id: "c9" });
+      }),
+    );
+
+    await expect(repo().create(NEW_CAMPUS)).rejects.toThrow(/could not check whether that city/i);
+    expect(cityInserts).toBe(0);
+    expect(campusInserts).toBe(0);
+  });
+
   it("explains a duplicate code instead of leaking the constraint name", async () => {
     server.use(
       http.get(`${BASE}/rest/v1/cities`, () => HttpResponse.json({ id: "city1" })),

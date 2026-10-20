@@ -2,7 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseCampusProgrammesView } from "./campus-programmes-repository";
+import {
+  CampusProgrammeError,
+  createSupabaseCampusProgrammesView,
+} from "./campus-programmes-repository";
 
 /**
  * What a college runs, against live rows. F6 (UAT 2026-08-06).
@@ -194,5 +197,58 @@ describe("createSupabaseCampusProgrammesView", () => {
 
     expect(writes[0]?.method).toBe("DELETE");
     expect(writes[0]?.search).toContain("p1");
+  });
+
+  /**
+   * A refused read answers with an EMPTY collection, and an empty catalogue is
+   * what `add()` reads before deciding a degree has to be created. So a lookup
+   * that merely failed used to seed duplicate degrees and branches for whatever
+   * the Admin was already running — and the screen said nothing about it.
+   */
+  describe("when the catalogue cannot be read", () => {
+    const refuse = (table: string) =>
+      server.use(
+        http.get(`${BASE}/rest/v1/${table}`, () =>
+          HttpResponse.json({ message: "boom" }, { status: 500 }),
+        ),
+      );
+
+    it("says the programmes could not be loaded rather than showing none", async () => {
+      stub();
+      refuse("campus_programmes");
+
+      await expect(view().programmes("c1")).rejects.toThrow(
+        /could not load the programmes this college runs/i,
+      );
+    });
+
+    it("refuses to build the picker from a catalogue it could not read", async () => {
+      stub();
+      refuse("degrees");
+
+      await expect(view().options()).rejects.toBeInstanceOf(CampusProgrammeError);
+    });
+
+    it("creates nothing when the degree lookup was refused", async () => {
+      const { writes } = stub();
+      refuse("degrees");
+
+      await expect(
+        view().add({ campusId: "c1", degree: "B.E", branch: "CSE", passingYear: 2027 }),
+      ).rejects.toThrow(/could not read the degree catalogue/i);
+
+      expect(writes).toEqual([]);
+    });
+
+    it("creates nothing when the branch lookup was refused", async () => {
+      const { writes } = stub();
+      refuse("branches");
+
+      await expect(
+        view().add({ campusId: "c1", degree: "B.E", branch: "CSE", passingYear: 2027 }),
+      ).rejects.toThrow(/could not read the branch catalogue/i);
+
+      expect(writes).toEqual([]);
+    });
   });
 });

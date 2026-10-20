@@ -25,6 +25,16 @@ export type AuthState =
    */
   | { readonly status: "unrecognised"; readonly email: string }
   /**
+   * A session, and an identity this app could not check either way: the
+   * `profiles` or `students` read was refused.
+   *
+   * Distinct from `unrecognised` because that one ACCUSES the person of not
+   * being on record. Read before this existed, a network failure or a policy
+   * that refused `profiles` told a Delivery Head their own address "is not set
+   * up for placements" — the same screen as an account nobody invited.
+   */
+  | { readonly status: "unreadable"; readonly email: string }
+  /**
    * An admin deactivated this account (is_active = false). The database still
    * recognises them, but current_app_role() returns NULL so every RLS policy
    * blocks them. Without this status they saw a signed-in shell with empty

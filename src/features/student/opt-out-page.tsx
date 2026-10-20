@@ -1,5 +1,6 @@
 import { Button, Card, PageHeader } from "@components/ui";
 import { canRequestOptOut } from "@domain/participation";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -18,17 +19,39 @@ import { RequestOutcome, submittedOn } from "./request-outcome";
  */
 export function OptOutPage({ view }: { view: ParticipationView }) {
   const [status, setStatus] = useState<ParticipationStatusView | null>(null);
+  /** Separate from the action's error: this is about a read, not a request. */
+  const [readProblem, setReadProblem] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [declaration, setDeclaration] = useState<File | null>(null);
+  /** Bumped to re-run the read after it refused to answer. */
+  const [attempt, setAttempt] = useState(0);
   const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
-    setStatus(await view.status());
+    /*
+     * `status()` throws now — it used to answer "active" over a refused read,
+     * which offered this button to a student who had already opted out. Without
+     * a catch here the card sat on "Loading…" forever, so the failure is said
+     * and there is a way back.
+     */
+    try {
+      setStatus(await view.status());
+      setReadProblem(null);
+    } catch (cause) {
+      setStatus(null);
+      setReadProblem(
+        describeReadFailure(
+          cause,
+          "We could not read your participation status. Please try again.",
+        ),
+      );
+    }
   }, [view]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, attempt]);
 
   // Validation throws instead of calling setError: the hook turns a rejection
   // into the sentence the student reads, so a missing reason and a refused
@@ -86,6 +109,15 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
         </div>
       )}
 
+      {readProblem !== null && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {readProblem}
+        </div>
+      )}
+
       {/*
        * F3: every request the student has ever raised, with what happened to
        * it. It used to disappear the moment a coordinator touched it, so a
@@ -118,9 +150,22 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
         </p>
 
         {status === null ? (
-          <p role="status" className="mt-3 text-sm text-ink-500">
-            Loading…
-          </p>
+          readProblem === null ? (
+            <p role="status" className="mt-3 text-sm text-ink-500">
+              Loading…
+            </p>
+          ) : (
+            /* The sentence is already in the alert above; this is the way out of
+               the card, which otherwise shows the warning and no control. */
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-4"
+              onClick={() => setAttempt((n) => n + 1)}
+            >
+              Check my status again
+            </Button>
+          )
         ) : status.participationStatus === "opted_out" ? (
           <p className="mt-4 text-sm font-medium text-ink-900">
             You have opted out of campus placement.

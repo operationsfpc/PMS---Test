@@ -15,6 +15,7 @@ import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mo
 import { describeParticipantOutcome } from "@domain/round-outcome";
 import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
 import type { AttendanceStatus, DriveStatus, RoundResult } from "@domain/types";
+import { describeReadFailure } from "@lib/postgrest-read";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -172,6 +173,14 @@ export function ResultsPage({
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
+   * Kept apart from `error`, which is about a WRITE: recording a batch and
+   * then re-reading the sheet is one beat, and the re-read must not wipe the
+   * reason the batch was refused.
+   */
+  const [readProblem, setReadProblem] = useState<string | null>(null);
+  /** Bumped to re-run the sheet read after it refused to answer. */
+  const [attempt, setAttempt] = useState(0);
+  /**
    * M2 (approved 2026-08-21): results are recorded in BULK — checkboxes, a
    * bottom action bar, and one confirmation for the whole batch. F2's rule
    * survives it: `selected` and `rejected` notify the students the moment
@@ -188,12 +197,26 @@ export function ResultsPage({
   const actions = useAsyncAction();
 
   const refresh = useCallback(async () => {
-    setParticipants(await view.participants(roundId));
+    // #34 rule: the read throws now, and nothing caught it — a refused round
+    // sheet left this table on "Loading participants…" with no way out.
+    try {
+      setParticipants(await view.participants(roundId));
+      setReadProblem(null);
+    } catch (cause) {
+      setParticipants(null);
+      setReadProblem(
+        describeReadFailure(
+          cause,
+          "We could not read the students in this round. Please try again.",
+        ),
+      );
+    }
   }, [view, roundId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, attempt]);
 
   async function recordChecked(result: RoundResult) {
     setError(null);
@@ -273,6 +296,15 @@ export function ResultsPage({
         </div>
       )}
 
+      {readProblem !== null && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {readProblem}
+        </div>
+      )}
+
       {hasHeld && (
         <p className="mb-4 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm text-ink-700">
           Waitlisted and on-hold students are not scheduled for the next round. Promote them to
@@ -281,9 +313,17 @@ export function ResultsPage({
       )}
 
       {participants === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading participants…
-        </p>
+        readProblem === null ? (
+          <p role="status" className="text-sm text-ink-500">
+            Loading participants…
+          </p>
+        ) : (
+          /* The sentence is already in the alert above; this is the way out, so
+             the table does not stay empty with no control on it. */
+          <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+            Load this round again
+          </Button>
+        )
       ) : participants.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">
@@ -591,6 +631,14 @@ export function DriveRoundsPage({
   const [roundName, setRoundName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The reads get their own sentence, kept apart from `error`: every write here
+   * re-reads the drive afterwards, and a successful re-read must not wipe the
+   * reason the write was refused.
+   */
+  const [readProblem, setReadProblem] = useState<string | null>(null);
+  /** Bumped to re-run the reads after one of them refused to answer. */
+  const [attempt, setAttempt] = useState(0);
   /** Remounts the embedded ResultsPage when the world changes underneath it. */
   const [reloadKey, setReloadKey] = useState(0);
   /** F4: the details panel, opened per round. */
@@ -632,18 +680,35 @@ export function DriveRoundsPage({
   const actions = useAsyncAction();
 
   const loadRounds = useCallback(async () => {
-    const [loaded, loadedStatus] = await Promise.all([
-      view.rounds(driveId),
-      view.driveStatus(driveId),
-    ]);
-    setStatus(loadedStatus);
-    setRounds(loaded);
-    setActive((current) => current ?? loaded[0]?.roundId ?? null);
+    /*
+     * #34 rule, applied here on 2026-10-19: these reads throw now that a
+     * refused one cannot be mistaken for an empty drive, and both loaders were
+     * called as `void loadRounds()`. An unhandled rejection left the screen on
+     * an empty tab strip — which reads as "this drive has no rounds yet" and
+     * offers "+ Add round" over rounds that exist but could not be read.
+     */
+    try {
+      const [loaded, loadedStatus] = await Promise.all([
+        view.rounds(driveId),
+        view.driveStatus(driveId),
+      ]);
+      setStatus(loadedStatus);
+      setRounds(loaded);
+      setActive((current) => current ?? loaded[0]?.roundId ?? null);
+      setReadProblem(null);
+    } catch (cause) {
+      setRounds(null);
+      setStatus(null);
+      setReadProblem(
+        describeReadFailure(cause, "We could not read the rounds on this drive. Please try again."),
+      );
+    }
   }, [view, driveId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void loadRounds();
-  }, [loadRounds]);
+  }, [loadRounds, attempt]);
 
   /**
    * The active round's participants AND who has moved past it. Both reload
@@ -657,30 +722,39 @@ export function DriveRoundsPage({
     if (activeRound === undefined) return;
 
     setParticipants(null);
-    const later = rounds.filter((r) => r.sequence > activeRound.sequence);
-    const [own, ...beyond] = await Promise.all([
-      view.participants(active),
-      ...later.map((r) => view.participants(r.roundId)),
-    ]);
+    try {
+      const later = rounds.filter((r) => r.sequence > activeRound.sequence);
+      const [own, offeredNow, ...beyond] = await Promise.all([
+        view.participants(active),
+        // Asked on the same beat as the participants: a row closed by an offer
+        // must not re-open for the instant between two loads.
+        view.offerHolders(driveId),
+        ...later.map((r) => view.participants(r.roundId)),
+      ]);
 
-    // Asked on the same beat as the participants: a row closed by an offer
-    // must not re-open for the instant between two loads.
-    setOffered(await view.offerHolders(driveId));
-    setParticipants(own ?? []);
-    setLocked(
-      advancedBeyond(
-        activeRound.sequence,
-        later.map((r, i) => ({
-          sequence: r.sequence,
-          applicationIds: (beyond[i] ?? []).map((p) => p.applicationId),
-        })),
-      ),
-    );
+      setOffered(offeredNow);
+      setParticipants(own ?? []);
+      setLocked(
+        advancedBeyond(
+          activeRound.sequence,
+          later.map((r, i) => ({
+            sequence: r.sequence,
+            applicationIds: (beyond[i] ?? []).map((p) => p.applicationId),
+          })),
+        ),
+      );
+    } catch (cause) {
+      setParticipants(null);
+      setReadProblem(
+        describeReadFailure(cause, "We could not read who is in this round. Please try again."),
+      );
+    }
   }, [view, active, rounds, driveId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
     void loadParticipants();
-  }, [loadParticipants]);
+  }, [loadParticipants, attempt]);
 
   const activeRound = (rounds ?? []).find((r) => r.roundId === active) ?? null;
   const nextRound =
@@ -962,6 +1036,24 @@ export function DriveRoundsPage({
           {error}
         </div>
       )}
+      {readProblem !== null && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {readProblem}
+          {/* One way out for either read: the rounds, or this round's sheet. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            className="mt-2"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            Load them again
+          </Button>
+        </div>
+      )}
+
       {notice !== null && (
         <div
           role="status"
@@ -980,81 +1072,93 @@ export function DriveRoundsPage({
         </p>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {(rounds ?? []).map((round) => (
-          <button
-            key={round.roundId}
-            type="button"
-            onClick={() => {
-              setNotice(null);
-              setActive(round.roundId);
-            }}
-            className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-              round.roundId === active
-                ? "border-brand-500 bg-brand-500 text-white"
-                : "border-line bg-surface text-ink-700 hover:bg-surface-muted"
-            }`}
-          >
-            Round {round.sequence} · {round.name}
-          </button>
-        ))}
-        {adding ? (
-          <span className="flex items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-              Round name
-              <input
-                type="text"
-                value={roundName}
-                onChange={(e) => setRoundName(e.target.value)}
-                className="rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
-              />
-            </label>
+      {rounds === null ? (
+        /* An empty row of tabs looks exactly like a drive nobody has scheduled
+           yet, and hands "+ Add round" to someone whose rounds merely failed to
+           read. The strip is not drawn over that — the alert above already says
+           what failed and offers the retry. */
+        readProblem === null ? (
+          <p role="status" className="mb-4 text-sm text-ink-500">
+            Loading rounds…
+          </p>
+        ) : null
+      ) : (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {(rounds ?? []).map((round) => (
+            <button
+              key={round.roundId}
+              type="button"
+              onClick={() => {
+                setNotice(null);
+                setActive(round.roundId);
+              }}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                round.roundId === active
+                  ? "border-brand-500 bg-brand-500 text-white"
+                  : "border-line bg-surface text-ink-700 hover:bg-surface-muted"
+              }`}
+            >
+              Round {round.sequence} · {round.name}
+            </button>
+          ))}
+          {adding ? (
+            <span className="flex items-end gap-2">
+              <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                Round name
+                <input
+                  type="text"
+                  value={roundName}
+                  onChange={(e) => setRoundName(e.target.value)}
+                  className="rounded-lg border border-line px-2 py-1.5 text-sm text-ink-900"
+                />
+              </label>
+              <Button
+                size="sm"
+                isLoading={actions.isPending("round:create")}
+                onClick={() => void actions.run(createRound, "round:create")}
+              >
+                Create Round {(rounds?.length ?? 0) + 1}
+              </Button>
+            </span>
+          ) : (
+            closed === null && (
+              <Button variant="secondary" className="border-dashed" onClick={() => setAdding(true)}>
+                + Add round
+              </Button>
+            )
+          )}
+
+          <span className="ml-auto flex gap-2">
+            {/* B2: rename or knock off rounds the company dropped. */}
             <Button
               size="sm"
-              isLoading={actions.isPending("round:create")}
-              onClick={() => void actions.run(createRound, "round:create")}
+              variant="secondary"
+              disabled={closed !== null}
+              isLoading={actions.isPending("rounds:facts")}
+              onClick={() => void actions.run(openManage, "rounds:facts")}
             >
-              Create Round {(rounds?.length ?? 0) + 1}
+              Manage rounds…
             </Button>
-          </span>
-        ) : (
-          closed === null && (
-            <Button variant="secondary" className="border-dashed" onClick={() => setAdding(true)}>
-              + Add round
-            </Button>
-          )
-        )}
-
-        <span className="ml-auto flex gap-2">
-          {/* B2: rename or knock off rounds the company dropped. */}
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={closed !== null}
-            isLoading={actions.isPending("rounds:facts")}
-            onClick={() => void actions.run(openManage, "rounds:facts")}
-          >
-            Manage rounds…
-          </Button>
-          {/* C3: the drive is done when every applicant has an outcome — and a
+            {/* C3: the drive is done when every applicant has an outcome — and a
               drive that never ran, or is already finished, has nothing left to
               complete. */}
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={completionFreeze !== null}
-            isLoading={actions.isPending("completion:facts")}
-            onClick={() => void actions.run(openCompletion, "completion:facts")}
-          >
-            Mark drive completed…
-          </Button>
-          {/* Said once: when the whole screen is closed, the banner above
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={completionFreeze !== null}
+              isLoading={actions.isPending("completion:facts")}
+              onClick={() => void actions.run(openCompletion, "completion:facts")}
+            >
+              Mark drive completed…
+            </Button>
+            {/* Said once: when the whole screen is closed, the banner above
               already carries the reason and repeating it here is noise. */}
-          {closed === null && completionFreeze !== null && (
-            <span className="text-xs text-ink-500">{completionFreeze}</span>
-          )}
-        </span>
-      </div>
+            {closed === null && completionFreeze !== null && (
+              <span className="text-xs text-ink-500">{completionFreeze}</span>
+            )}
+          </span>
+        </div>
+      )}
 
       {active !== null && activeRound !== null && (
         <>

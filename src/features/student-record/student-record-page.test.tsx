@@ -153,6 +153,24 @@ describe("StudentRecordPage", () => {
   });
 
   /**
+   * The view now raises rather than handing back a record quietly missing a
+   * section. Unhandled, that rejection left this page on "Loading…" forever —
+   * which reads as a slow database, not as a failure anyone can act on.
+   */
+  it("says the read failed instead of loading forever", async () => {
+    show({
+      record: async () => {
+        throw new Error("Could not read this student's full record. Please try again.");
+      },
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not load this student record/i);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("link", { name: /overview/i })).toBeDefined();
+  });
+
+  /**
    * 2026-10-18 (UAT): "there is no way to go back" from a student record.
    * Press-shaped, like every other control — and honest about what it can do:
    * a record loaded cold has no in-app history to step into, so it offers the

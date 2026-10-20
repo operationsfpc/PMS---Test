@@ -26,11 +26,17 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
 
   const email = session.user.email ?? "";
 
-  const { data: profile } = await client
+  const { data: profile, error: profileError } = await client
     .from("profiles")
     .select("role, is_active")
     .eq("id", session.user.id)
     .maybeSingle();
+
+  // A refused read is not "this account belongs to nobody". Telling a Delivery
+  // Head their own address is not set up for placements — the sentence this
+  // function returns when a profile genuinely is absent — sends them to write
+  // to support about a fault in the network.
+  if (profileError !== null) return { status: "unreadable", email };
 
   if (profile) {
     // An admin toggled is_active off: the DB blocks every query for this
@@ -62,11 +68,13 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
     return { status: "signed-in", role: profile.role as AppRole, email, campuses };
   }
 
-  const { data: student } = await client
+  const { data: student, error: studentError } = await client
     .from("students")
     .select("id, auth_user_id")
     .or(`auth_user_id.eq.${session.user.id},email.eq.${email}`)
     .maybeSingle();
+
+  if (studentError !== null) return { status: "unreadable", email };
 
   if (student) {
     if (!student.auth_user_id) {

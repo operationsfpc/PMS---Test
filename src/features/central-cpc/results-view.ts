@@ -10,7 +10,7 @@ import {
   type DriveStatus,
   type RoundResult,
 } from "@domain/types";
-import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
+import { readAll, readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DriveRoundsView, RoundParticipant } from "./results-page";
 import { createSupabaseRoundsRepository } from "./rounds-repository";
@@ -94,7 +94,16 @@ export function createSupabaseResultsView(
      * still open.
      */
     async driveStatus(driveId) {
-      const { data } = await client.from("drives").select("status").eq("id", driveId).maybeSingle();
+      const { data, error } = await client
+        .from("drives")
+        .select("status")
+        .eq("id", driveId)
+        .maybeSingle();
+
+      // `null` means "no status this rule knows", and the screen reads that as
+      // permission to carry on. A refused read must not borrow that meaning:
+      // it used to re-open the write buttons of a completed drive.
+      if (error !== null) throw new ResultsViewError("Could not read this drive's state.");
 
       const status = (data as { status?: unknown } | null)?.status;
       // An unrecognised value is no status, not a guessed one: the screen
@@ -226,12 +235,19 @@ export function createSupabaseResultsView(
      * unique key on (drive_id, sequence) refuses the loser.
      */
     async addRound(driveId, name) {
-      const { data: existing } = await client
+      const { data: existing, error: existingError } = await client
         .from("drive_rounds")
         .select("sequence")
         .eq("drive_id", driveId)
         .order("sequence", { ascending: false })
         .limit(1);
+
+      // Read without its error, a refusal looked like "there are no rounds",
+      // and the insert that followed was aimed at sequence 1 — a collision the
+      // coordinator was told was a problem with the round they had asked for.
+      if (existingError !== null) {
+        throw new ResultsViewError("Could not read this drive's rounds to number the new one.");
+      }
 
       const next = Number(existing?.[0]?.sequence ?? 0) + 1;
 
@@ -260,14 +276,22 @@ export function createSupabaseResultsView(
        * same batch — "Could not schedule the participants", forever. Only
        * the not-yet-scheduled travel, and only they are counted.
        */
-      const { data: existing, error: existingError } = await client
-        .from("round_participants")
-        .select("application_id")
-        .eq("round_id", toRoundId);
-      if (existingError !== null) {
+      // Paged, because an uncapped dedupe list is the very bug above: read
+      // only the first thousand already-scheduled, and somebody who IS in the
+      // round counts as a newcomer, and the unique key refuses the batch again.
+      let existing: Array<{ application_id: string }>;
+      try {
+        existing = await readAll<{ application_id: string }>((from, to) =>
+          client
+            .from("round_participants")
+            .select("application_id")
+            .eq("round_id", toRoundId)
+            .range(from, to),
+        );
+      } catch {
         throw new ResultsViewError("Could not read who is already in the next round.");
       }
-      const already = new Set((existing ?? []).map((row) => row.application_id as string));
+      const already = new Set(existing.map((row) => row.application_id as string));
       const newcomers = advancing.filter((id) => !already.has(id));
       if (newcomers.length === 0) return 0;
 

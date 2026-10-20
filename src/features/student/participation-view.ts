@@ -88,7 +88,11 @@ export function createSupabaseParticipationView(
     async status() {
       const studentId = await student();
 
-      const [{ data: row }, { data: requests }, { data: placements }] = await Promise.all([
+      const [
+        { data: row, error: rowError },
+        { data: requests, error: requestsError },
+        { data: placements, error: placementsError },
+      ] = await Promise.all([
         client.from("students").select("participation_status").eq("id", studentId).single(),
         // F3: every request, decided or not. This used to ask only whether one
         // was pending, which is why an approved request could not be shown
@@ -106,6 +110,28 @@ export function createSupabaseParticipationView(
           .eq("student_id", studentId)
           .order("created_at", { ascending: false }),
       ]);
+
+      /*
+       * None of these were checked, and `?? "active"` turned a refused status
+       * read into a student who is taking part. This screen decides WRITES
+       * from what it reads — `requestOptOut` asks `status()` whether a request
+       * is already pending — so the silent failure both told an opted-out
+       * student they were participating and let them file over an existing
+       * request.
+       */
+      if (rowError !== null) {
+        throw new ParticipationError(
+          "We could not read your participation status. Please try again.",
+        );
+      }
+      if (requestsError !== null) {
+        throw new ParticipationError("We could not read your opt-out requests. Please try again.");
+      }
+      if (placementsError !== null) {
+        throw new ParticipationError(
+          "We could not read the placements you have reported. Please try again.",
+        );
+      }
 
       const decided = (value: unknown): RequestStatus =>
         value === "verified" || value === "rejected" ? value : "pending";

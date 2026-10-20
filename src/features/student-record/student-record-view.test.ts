@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseStudentRecordView } from "./student-record-view";
+import { createSupabaseStudentRecordView, StudentRecordError } from "./student-record-view";
 
 /**
  * G7 (UAT 2026-08-20): the student record, assembled from live rows. RLS
@@ -109,5 +109,94 @@ describe("the student record view", () => {
     server.use(http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json([])));
 
     expect(await createSupabaseStudentRecordView(client()).record("missing")).toBeNull();
+  });
+
+  /**
+   * Only the student row itself is allowed to be silent, because there a
+   * refusal and an absent row are the same answer to a stranger probing URLs.
+   * The satellites are not: a refused read used to return a record with an
+   * empty skills list, and the page said "no skill scores recorded" about a
+   * student whose scores exist.
+   */
+  describe("when a part of the record cannot be read", () => {
+    it("raises instead of returning a record that quietly lacks a section", async () => {
+      stubHappyPath();
+      server.use(
+        http.get(
+          `${BASE}/rest/v1/student_skill_scores`,
+          () => new HttpResponse(null, { status: 401 }),
+        ),
+      );
+
+      await expect(createSupabaseStudentRecordView(client()).record("s1")).rejects.toBeInstanceOf(
+        StudentRecordError,
+      );
+    });
+
+    it("names the record it could not read, not the student", async () => {
+      stubHappyPath();
+      server.use(http.get(`${BASE}/rest/v1/offers`, () => new HttpResponse(null, { status: 401 })));
+
+      await expect(createSupabaseStudentRecordView(client()).record("s1")).rejects.toThrow(
+        /full record/i,
+      );
+    });
+  });
+
+  describe("reading a record bigger than one page", () => {
+    /** Answers `readAllRows` page by page, the way PostgREST does. */
+    function paged(table: string, all: unknown[], urls: string[]) {
+      return http.get(`${BASE}/rest/v1/${table}`, ({ request }) => {
+        const params = new URL(request.url).searchParams;
+        const offset = Number(params.get("offset") ?? "0");
+        const limit = Number(params.get("limit") ?? String(all.length));
+        urls.push(request.url);
+        return HttpResponse.json(all.slice(offset, offset + limit));
+      });
+    }
+
+    it("asks for the first page at the cap, not everything at once", async () => {
+      stubHappyPath();
+      const urls: string[] = [];
+      server.use(paged("student_semesters", [], urls));
+
+      await createSupabaseStudentRecordView(client()).record("s1");
+
+      expect(urls[0]).toContain("offset=0&limit=1000");
+    });
+
+    it("keeps the semesters past the first thousand rows", async () => {
+      stubHappyPath();
+      const many = Array.from({ length: 1400 }, (_, i) => ({
+        semester_number: i + 1,
+        cgpa: "8.00",
+        status: "verified",
+      }));
+      const urls: string[] = [];
+      server.use(paged("student_semesters", many, urls));
+
+      const record = await createSupabaseStudentRecordView(client()).record("s1");
+
+      expect(urls).toHaveLength(2);
+      expect(record?.semesters).toHaveLength(1400);
+      expect(record?.semesters.at(-1)?.semesterNumber).toBe(1400);
+    });
+
+    it("keeps the applications past the first thousand rows", async () => {
+      stubHappyPath();
+      const many = Array.from({ length: 1250 }, (_, i) => ({
+        id: `a${i}`,
+        drive_id: `d${i}`,
+        applied_at: "2026-08-10T10:00:00Z",
+        drives: { company_name: `Company ${i}`, role_title: null },
+        shortlist_entries: [],
+      }));
+      server.use(paged("applications", many, []));
+
+      const record = await createSupabaseStudentRecordView(client()).record("s1");
+
+      expect(record?.applications).toHaveLength(1250);
+      expect(record?.applications.at(-1)?.companyName).toBe("Company 1249");
+    });
   });
 });

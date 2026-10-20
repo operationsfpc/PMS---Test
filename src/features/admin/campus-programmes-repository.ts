@@ -1,3 +1,4 @@
+import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CampusProgrammesView, DegreeOption, ProgrammeRow } from "./campus-programmes";
 
@@ -10,9 +11,6 @@ export const CAMPUS_PROGRAMME_COLUMNS = `
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
-
-const rows = (value: unknown): Array<Record<string, unknown>> =>
-  Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
 
 /**
  * What a college runs, against live rows. F6 (UAT 2026-08-06).
@@ -30,23 +28,43 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
  * "B.E" instead of seeding a near-duplicate.
  */
 export function createSupabaseCampusProgrammesView(client: SupabaseClient): CampusProgrammesView {
+  /*
+   * Both reads are whole collections, and neither used to look at `error`: a
+   * refused catalogue came back empty, and an empty catalogue is what `add()`
+   * reads before deciding a degree must be created — so the failure seeded
+   * duplicate degrees instead of saying anything. Paged past the 1000-row cap
+   * and raising now.
+   */
   async function catalogue() {
-    const [{ data: degrees }, { data: branches }] = await Promise.all([
-      client.from("degrees").select("id, name"),
-      client.from("branches").select("id, degree_id, name"),
+    const [degrees, branches] = await Promise.all([
+      readAllRows((from, to) => client.from("degrees").select("id, name").range(from, to)).catch(
+        () => {
+          throw new CampusProgrammeError("Could not read the degree catalogue.");
+        },
+      ),
+      readAllRows((from, to) =>
+        client.from("branches").select("id, degree_id, name").range(from, to),
+      ).catch(() => {
+        throw new CampusProgrammeError("Could not read the branch catalogue.");
+      }),
     ]);
 
-    return { degrees: rows(degrees), branches: rows(branches) };
+    return { degrees, branches };
   }
 
   return {
     async programmes(campusId) {
-      const { data } = await client
-        .from("campus_programmes")
-        .select(CAMPUS_PROGRAMME_COLUMNS)
-        .eq("campus_id", campusId);
+      const data = await readAllRows((from, to) =>
+        client
+          .from("campus_programmes")
+          .select(CAMPUS_PROGRAMME_COLUMNS)
+          .eq("campus_id", campusId)
+          .range(from, to),
+      ).catch(() => {
+        throw new CampusProgrammeError("Could not load the programmes this college runs.");
+      });
 
-      return rows(data).map(
+      return data.map(
         (row): ProgrammeRow => ({
           id: row.id as string,
           degree: one<{ name?: string }>(row.degrees)?.name ?? "",

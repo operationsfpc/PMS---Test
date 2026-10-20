@@ -695,14 +695,18 @@ describe("skillAreas", () => {
     expect(await repo.skillAreas()).toEqual(["Aptitude", "Communication skills"]);
   });
 
-  it("returns an empty catalogue when the read is refused, rather than failing the form", async () => {
+  it("raises when the catalogue cannot be read, rather than calling it empty", async () => {
     const { client } = storageStub();
     server.use(
       http.get(`${BASE}/rest/v1/skill_areas`, () => new HttpResponse(null, { status: 403 })),
     );
 
     const repo = createSupabasePifRepository(client, async () => "ae-1");
-    expect(await repo.skillAreas()).toEqual([]);
+
+    // The page has always had the sentence "we could not read the
+    // assessed-skills catalogue"; an empty array here kept it unsayable, and a
+    // blank picker read as a college that assesses nothing.
+    await expect(repo.skillAreas()).rejects.toBeInstanceOf(PifError);
   });
 });
 
@@ -917,6 +921,50 @@ describe("existingCompanies — every table that names a company", () => {
     ).existingCompanies?.();
 
     expect(found).toEqual([{ name: "TCS", industry: null, website: null }]);
+  });
+
+  it("raises when every source is refused, rather than claiming no company has ever visited", async () => {
+    const { client } = storageStub();
+    server.use(
+      http.get(`${BASE}/rest/v1/companies`, () => new HttpResponse(null, { status: 403 })),
+      http.get(`${BASE}/rest/v1/company_drives`, () => new HttpResponse(null, { status: 403 })),
+      http.get(`${BASE}/rest/v1/drives`, () => new HttpResponse(null, { status: 403 })),
+    );
+
+    await expect(
+      createSupabasePifRepository(client, async () => "ae-1").existingCompanies?.(),
+    ).rejects.toBeInstanceOf(PifError);
+  });
+
+  it("reads the companies past the first thousand rows of one source", async () => {
+    const { client } = storageStub();
+    const urls: string[] = [];
+    // `drives` is every role this organisation has ever raised. Uncapped, the
+    // company being typed was simply not offered and nothing autofilled.
+    const many = Array.from({ length: 1400 }, (_, n) => ({
+      company_name: `Company ${n}`,
+      industry: null,
+      company_website: null,
+    }));
+    server.use(
+      http.get(`${BASE}/rest/v1/companies`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/company_drives`, () => HttpResponse.json([])),
+      http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
+        const url = new URL(request.url);
+        urls.push(url.search);
+        const offset = Number(url.searchParams.get("offset") ?? 0);
+        const limit = Number(url.searchParams.get("limit") ?? 1000);
+        return HttpResponse.json(many.slice(offset, offset + limit));
+      }),
+    );
+
+    const found = await createSupabasePifRepository(
+      client,
+      async () => "ae-1",
+    ).existingCompanies?.();
+
+    expect(urls[0]).toContain("offset=0&limit=1000");
+    expect(found).toHaveLength(1400);
   });
 });
 

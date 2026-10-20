@@ -4,7 +4,8 @@ import { describeJoining } from "@domain/joining";
 import type { OfferCategory } from "@domain/offer-category";
 import { describeShift } from "@domain/shift";
 import type { ApplicantRound } from "@domain/student-progress";
-import type { DriveStatus, RoleCategory } from "@domain/types";
+import type { AttendanceStatus, DriveStatus, RoleCategory, RoundResult } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -117,11 +118,22 @@ export interface SiblingRole {
   readonly stipendLabel: string | null;
 }
 
+/** A read this record cannot be assembled without. The page already says so. */
+export class DriveRecordError extends Error {}
+
 export interface DriveRecordView {
   record(driveId: string): Promise<DriveRecord | null>;
 }
 
-/** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
+/**
+ * Exported so src/db/query-contract.test.ts can prove it against the real schema.
+ *
+ * `drive_rounds` carries only its own columns. Embedded, PostgREST caps each
+ * child collection at 1000 ROWS PER DRIVE — so on a big drive the round's
+ * participants, results and attendance arrive truncated, and the applicant
+ * list reads the missing rows as "this student did not sit the round". They
+ * are read as their own paged queries below instead.
+ */
 export const RECORD_DRIVE_COLUMNS = `
   id, company_drive_id, company_name, industry, company_website, role_title, additional_designations,
   role_category, status, drive_type, drive_mode, venue, offer_category, openings,
@@ -137,12 +149,7 @@ export const RECORD_DRIVE_COLUMNS = `
   raised_by:profiles!drives_created_by_fkey(full_name),
   approver:profiles!drives_approved_by_fkey(full_name),
   publisher:profiles!drives_published_by_fkey(full_name),
-  drive_rounds(
-    sequence, name,
-    round_participants(application_id),
-    round_results(application_id, result),
-    attendance(application_id, status)
-  ),
+  drive_rounds(id, sequence, name),
   drive_eligible_degrees(degrees(name)),
   drive_eligible_branches(branches(name)),
   drive_target_campuses(campuses(name))
@@ -167,6 +174,9 @@ function one<T>(value: unknown): T | null {
   if (Array.isArray(value)) return (value[0] as T | undefined) ?? null;
   return (value as T | null) ?? null;
 }
+
+const asRows = (value: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
 
 function linkedNames(rows: unknown, key: string): readonly string[] {
   if (!Array.isArray(rows)) return [];
@@ -209,19 +219,88 @@ const JD_LINK_TTL_SECONDS = 60 * 10;
 export function createSupabaseDriveRecordView(client: SupabaseClient): DriveRecordView {
   return {
     async record(driveId) {
-      const [{ data: raw }, { data: applications }, { data: offerRows }] = await Promise.all([
-        client.from("drives").select(RECORD_DRIVE_COLUMNS).eq("id", driveId).maybeSingle(),
-        client
-          .from("applications")
-          .select(RECORD_APPLICANT_COLUMNS)
-          .eq("drive_id", driveId)
-          .order("applied_at", { ascending: true }),
-        // C8: who this drive made an offer to — one flag per applicant.
-        client.from("offers").select("student_id").eq("drive_id", driveId),
-      ]);
+      const { data: raw, error: driveError } = await client
+        .from("drives")
+        .select(RECORD_DRIVE_COLUMNS)
+        .eq("id", driveId)
+        .maybeSingle();
 
+      // A refused read used to resolve with `data === null` and the page
+      // greeted the coordinator with "This drive does not exist".
+      if (driveError !== null) throw new DriveRecordError("Could not read this drive.");
       if (raw === null || raw === undefined) return null;
       const row = raw as Record<string, unknown>;
+
+      // C8: who this drive made an offer to — one flag per applicant.
+      const [applications, offerRows] = await Promise.all([
+        readAllRows((from, to) =>
+          client
+            .from("applications")
+            .select(RECORD_APPLICANT_COLUMNS)
+            .eq("drive_id", driveId)
+            .order("applied_at", { ascending: true })
+            .range(from, to),
+        ),
+        readAllRows((from, to) =>
+          client.from("offers").select("student_id").eq("drive_id", driveId).range(from, to),
+        ),
+      ]);
+
+      const roundRows = asRows(row.drive_rounds).sort(
+        (a, b) => Number(a.sequence ?? 0) - Number(b.sequence ?? 0),
+      );
+      const roundIds = roundRows.map((r) => r.id as string);
+
+      /**
+       * One query per satellite table, id-batched and paged. Embedded under the
+       * drive, each of these was capped at 1000 rows for the WHOLE drive — and
+       * the page then read a dropped row as "not scheduled", "did not sit the
+       * round", "no result declared". A truncated join is a wrong verdict, not
+       * a missing column.
+       */
+      const [participantRows, resultRows, attendanceRows] = await Promise.all([
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_participants")
+              .select("round_id, application_id")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_results")
+              .select("round_id, application_id, result")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("attendance")
+              .select("round_id, application_id, status")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+      ]);
+
+      const pair = (roundId: unknown, applicationId: unknown) =>
+        `${roundId as string}::${applicationId as string}`;
+      const scheduled = new Set(participantRows.map((p) => pair(p.round_id, p.application_id)));
+      const resultAt = new Map<string, RoundResult>(
+        resultRows.map((r) => [pair(r.round_id, r.application_id), r.result as RoundResult]),
+      );
+      const presentAt = new Map<string, AttendanceStatus>(
+        attendanceRows.map((a) => [
+          pair(a.round_id, a.application_id),
+          a.status as AttendanceStatus,
+        ]),
+      );
+      const offered = new Set(offerRows.map((o) => o.student_id as string));
 
       // The same signed-and-short-lived treatment as everywhere else (0051).
       let jobDescriptionUrl: string | null = null;
@@ -238,7 +317,7 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
       const companyDriveId = (row.company_drive_id as string | null) ?? null;
       let siblingRoles: SiblingRole[] = [];
       if (companyDriveId !== null) {
-        const { data: siblingRows } = await client
+        const { data: siblingRows, error: siblingError } = await client
           .from("drives")
           .select(
             "id, role_title, drive_type, status, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly",
@@ -246,7 +325,13 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
           .eq("company_drive_id", companyDriveId)
           .neq("id", driveId);
 
-        siblingRoles = ((siblingRows ?? []) as Array<Record<string, unknown>>).map((s) => {
+        // A refused read here used to answer `undefined`, and the card showed
+        // "no other roles under this visit" — a wrong fact about a live drive.
+        if (siblingError !== null) {
+          throw new DriveRecordError("Could not read the other roles under this visit.");
+        }
+
+        siblingRoles = asRows(siblingRows).map((s) => {
           const sMin = (s.ctc_min_lpa as number | null) ?? null;
           const sMax = (s.ctc_max_lpa as number | null) ?? null;
           const stipendMin = (s.stipend_min_monthly as number | null) ?? null;
@@ -340,12 +425,10 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
           branches: linkedNames(row.drive_eligible_branches, "branches"),
           campuses: linkedNames(row.drive_target_campuses, "campuses"),
         },
-        rounds: (Array.isArray(row.drive_rounds) ? row.drive_rounds : [])
-          .map((r) => ({
-            sequence: Number((r as Record<string, unknown>).sequence ?? 0),
-            name: String((r as Record<string, unknown>).name ?? "Round"),
-          }))
-          .sort((a, b) => a.sequence - b.sequence),
+        rounds: roundRows.map((r) => ({
+          sequence: Number(r.sequence ?? 0),
+          name: String(r.name ?? "Round"),
+        })),
         recruiters: recruiterContacts(row),
         provenance: {
           raisedBy: one<{ full_name?: string }>(row.raised_by)?.full_name ?? null,
@@ -355,41 +438,23 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
           publishedBy: one<{ full_name?: string }>(row.publisher)?.full_name ?? null,
           publishedAt: (row.published_at as string | null) ?? null,
         },
-        applicants: ((applications ?? []) as Array<Record<string, unknown>>).map((a) => {
+        applicants: applications.map((a) => {
           const student = one<Record<string, unknown>>(a.students);
           const applicationId = a.id as string;
-          const shortlistRows = (
-            Array.isArray(a.shortlist_entries) ? a.shortlist_entries : []
-          ) as Array<Record<string, unknown>>;
-          const offered = new Set(
-            ((offerRows ?? []) as Array<Record<string, unknown>>).map(
-              (o) => o.student_id as string,
-            ),
-          );
+          const shortlistRows = asRows(a.shortlist_entries);
 
           // C8: the same facts the portfolio's funnel counts, assembled per
           // applicant so `filterFunnelStage` gives this page the same answer.
-          const applicantRounds: ApplicantRound[] = (
-            Array.isArray(row.drive_rounds) ? (row.drive_rounds as unknown[]) : []
-          )
-            .map((r) => {
-              const round = r as Record<string, unknown>;
-              const inRows = (key: string) =>
-                (Array.isArray(round[key]) ? (round[key] as unknown[]) : []).filter(
-                  (entry) => (entry as Record<string, unknown>).application_id === applicationId,
-                ) as Array<Record<string, unknown>>;
-              const result = inRows("round_results")[0];
-              const attendanceRow = inRows("attendance")[0];
-              return {
-                sequence: Number(round.sequence ?? 0),
-                name: String(round.name ?? "Round"),
-                participating: inRows("round_participants").length > 0,
-                attendance:
-                  (attendanceRow?.status as ApplicantRound["attendance"] | undefined) ?? null,
-                result: (result?.result as ApplicantRound["result"] | undefined) ?? null,
-              };
-            })
-            .sort((x, y) => x.sequence - y.sequence);
+          const applicantRounds: ApplicantRound[] = roundRows.map((round) => {
+            const at = pair(round.id, applicationId);
+            return {
+              sequence: Number(round.sequence ?? 0),
+              name: String(round.name ?? "Round"),
+              participating: scheduled.has(at),
+              attendance: presentAt.get(at) ?? null,
+              result: resultAt.get(at) ?? null,
+            };
+          });
 
           const snapshotEnvelope = (a.profile_snapshot ?? {}) as Record<string, unknown>;
           const snapshotProfile = (snapshotEnvelope.profile ?? snapshotEnvelope) as Record<

@@ -157,3 +157,54 @@ describe("decide", () => {
     expect(updates()).toHaveLength(0);
   });
 });
+
+describe("reading a queue bigger than one page", () => {
+  const row = (n: number) => ({
+    ...ROW,
+    id: `sem-${n}`,
+    students: { full_name: `Student ${n}`, roll_number: `${n}`, srf_status: "srf_approved" },
+    student_documents: null,
+  });
+
+  /** Honouring offset/limit, because `readAll` stops on a short page. */
+  const paged = (all: readonly unknown[]) =>
+    http.get(`${BASE}/rest/v1/student_semesters`, ({ request }) => {
+      const url = new URL(request.url);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Number(url.searchParams.get("limit") ?? 1000);
+      return HttpResponse.json(all.slice(offset, offset + limit));
+    });
+
+  it("asks for the CGPA queue a page at a time", async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get(`${BASE}/rest/v1/student_semesters`, ({ request }) => {
+        urls.push(request.url);
+        return HttpResponse.json([]);
+      }),
+    );
+
+    await repo().pending();
+
+    expect(urls[0]).toContain("offset=0&limit=1000");
+  });
+
+  it("reads the requests past the first thousand", async () => {
+    server.use(paged(Array.from({ length: 1400 }, (_, n) => row(n))));
+
+    const rows = await repo().pending();
+
+    expect(rows).toHaveLength(1400);
+    expect(rows.at(-1)?.studentName).toBe("Student 1399");
+  });
+
+  it("refuses rather than handing the coordinator a short queue", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/student_semesters`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(repo().pending()).rejects.toBeInstanceOf(SemesterQueueError);
+  });
+});

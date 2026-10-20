@@ -954,6 +954,75 @@ describe("what the card says about the person", () => {
     const row = await card("Strong Candidate");
     expect(within(row).getByText(/^Rank \d+$/)).toBeDefined();
   });
+
+  /**
+   * #102: the CV is the one thing a recruiter cannot read a candidate without,
+   * and an entry whose snapshot froze none is silently skipped by the ZIP and
+   * left blank in the CSV. That gap used to surface only after the file had
+   * been sent — never while the decision was still being made.
+   */
+  describe("saying whether the CV travels with the application", () => {
+    const NO_CV: ShortlistApplicant = {
+      ...STRONG,
+      applicationId: "app-nocv",
+      studentId: "s-nocv",
+      studentName: "Anjali Noresume",
+      resumeOnFile: false,
+    };
+    const WITH_CV: ShortlistApplicant = {
+      ...STRONG,
+      applicationId: "app-cv",
+      studentId: "s-cv",
+      studentName: "Anjali Hasresume",
+      resumeOnFile: true,
+    };
+
+    it("flags the candidate the recruiter pack cannot carry", async () => {
+      show(view({ applicants: async () => [NO_CV] }));
+
+      const row = await card("Anjali Noresume");
+      expect(within(row).getByText(/no CV on file/i)).toBeDefined();
+    });
+
+    it("says nothing about a candidate whose CV is on file", async () => {
+      show(view({ applicants: async () => [WITH_CV] }));
+
+      expect((await card("Anjali Hasresume")).textContent).not.toMatch(/no CV on file/i);
+    });
+
+    /** Absent is not false: a snapshot older than the field does not mean the
+     *  CV went missing, and a badge would blame the candidate for it. */
+    it("says nothing when the snapshot never carried the field", async () => {
+      show(view({ applicants: async () => [ENRICHED] }));
+
+      expect((await card("Strong Candidate")).textContent).not.toMatch(/no CV on file/i);
+    });
+
+    it("counts them aloud before anyone presses Export", async () => {
+      show(
+        view({
+          applicants: async () => [
+            NO_CV,
+            { ...WEAK, studentName: "Anjali Also", resumeOnFile: false },
+            WITH_CV,
+          ],
+        }),
+      );
+
+      const strip = await screen.findByText(/reaches the recruiter without a resume/i);
+      expect(strip.textContent).toMatch(/2 applicants have no CV on file/i);
+      expect(strip.textContent).toContain("Anjali Noresume");
+      expect(strip.textContent).toContain("Anjali Also");
+      expect(strip.textContent).not.toContain("Anjali Hasresume");
+    });
+
+    it("says nothing when every applicant has a CV", async () => {
+      show(view({ applicants: async () => [WITH_CV, STRONG] }));
+      await screen.findByText("Anjali Hasresume");
+
+      expect(screen.queryByText(/reaches the recruiter without a resume/i)).toBeNull();
+    });
+  });
 });
 
 /**

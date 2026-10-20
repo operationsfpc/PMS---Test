@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { OptOutPage } from "./opt-out-page";
 import type { ParticipationView } from "./participation-contract";
+import { ParticipationError } from "./participation-view";
 
 /**
  * Opting out — its own screen since F2 (UAT 2026-08-06).
@@ -153,6 +154,57 @@ describe("OptOutPage", () => {
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/already waiting/i);
+  });
+
+  /**
+   * This screen decides WRITES from what it reads: `requestOptOut` asks
+   * `status()` whether a request is already waiting. So a refused read cannot
+   * be drawn as "no request pending" — the student would send a second one for
+   * the same thing, over a form that says nothing is outstanding.
+   */
+  it("says the status could not be read, and offers no request over it", async () => {
+    render(
+      <OptOutPage
+        view={view({
+          status: async () => {
+            throw new ParticipationError(
+              "We could not read your participation status. Please try again.",
+            );
+          },
+        })}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not read your participation status/i);
+    expect(screen.queryByRole("button", { name: /request opt-out/i })).toBeNull();
+    expect(screen.queryByText(/^Loading…$/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /check my status again/i })).toBeDefined();
+  });
+
+  /** A read that fails without saying why still gets a sentence of its own. */
+  it("draws the form when the retry finds the status", async () => {
+    const user = userEvent.setup();
+    let refuse = true;
+    render(
+      <OptOutPage
+        view={view({
+          status: async () => {
+            if (refuse) {
+              refuse = false;
+              throw new Error("permission denied for table students");
+            }
+            return { participationStatus: "active", optOutRequests: [], selfPlacements: [] };
+          },
+        })}
+      />,
+    );
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/permission denied/i);
+    await user.click(screen.getByRole("button", { name: /check my status again/i }));
+
+    expect(await screen.findByLabelText(/why are you opting out/i)).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   /**

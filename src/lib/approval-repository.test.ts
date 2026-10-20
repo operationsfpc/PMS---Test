@@ -209,3 +209,98 @@ describe("createSupabaseApprovalRepository — the JD, the shift and the joining
     expect(rows[0]?.joining).toBe("Offers in Nov, joining in batches");
   });
 });
+
+describe("reading an approval queue bigger than one page", () => {
+  const pif = (n: number) => ({
+    id: `d${n}`,
+    company_name: `Company ${n}`,
+    ctc_min_lpa: 6.5,
+    ctc_max_lpa: 9,
+    on_hold: false,
+  });
+
+  /** Honouring offset/limit, because `readAll` stops on a short page. */
+  const paged = (table: string, all: readonly unknown[], urls: string[]) =>
+    http.get(`${BASE}/rest/v1/${table}`, ({ request }) => {
+      const url = new URL(request.url);
+      urls.push(url.search);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Number(url.searchParams.get("limit") ?? 1000);
+      return HttpResponse.json(all.slice(offset, offset + limit));
+    });
+
+  it("asks for the queue a page at a time", async () => {
+    const urls: string[] = [];
+    server.use(paged("drives", [], urls));
+
+    await repo().pending();
+
+    expect(urls[0]).toContain("offset=0&limit=1000");
+  });
+
+  it("reads the roles past the first thousand", async () => {
+    server.use(
+      paged(
+        "drives",
+        Array.from({ length: 1400 }, (_, n) => pif(n)),
+        [],
+      ),
+    );
+
+    const rows = await repo().pending();
+
+    // Uncapped, the Delivery Head approved the first thousand and the rest of
+    // the organisation sat waiting with nothing on screen to explain why.
+    expect(rows).toHaveLength(1400);
+    expect(rows.at(-1)?.companyName).toBe("Company 1399");
+  });
+
+  it("splits the event filter into batches the gateway will answer", async () => {
+    const roles = Array.from({ length: 450 }, (_, n) => ({
+      ...pif(n),
+      company_drive_id: `cd-${n}`,
+    }));
+    const eventUrls: string[] = [];
+    const contactUrls: string[] = [];
+    server.use(
+      paged("drives", roles, []),
+      paged("company_drives", [], eventUrls),
+      paged("company_drive_contacts", [], contactUrls),
+    );
+
+    await repo().pending();
+
+    // 450 uuids in one `in=()` is a URL the edge refuses with an empty list,
+    // and every card silently lost its event header.
+    expect(eventUrls).toHaveLength(3);
+    expect(contactUrls).toHaveLength(3);
+  });
+
+  it("refuses rather than showing a short queue", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(repo().pending()).rejects.toBeInstanceOf(ApprovalError);
+  });
+
+  it("still loads the roles when the event context cannot be read", async () => {
+    server.use(
+      paged("drives", [{ ...pif(1), company_drive_id: "cd-1" }], []),
+      http.get(`${BASE}/rest/v1/company_drives`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+      paged("company_drive_contacts", [], []),
+    );
+
+    // The event is presentation beside the decision; losing it must not stop
+    // the Delivery Head from approving anything.
+    const rows = await repo().pending();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.companyDriveId).toBe("cd-1");
+    expect(rows[0]?.event).toBeNull();
+  });
+});

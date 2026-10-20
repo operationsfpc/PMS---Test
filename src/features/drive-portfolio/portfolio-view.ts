@@ -1,5 +1,6 @@
 import type { ApplicantRound } from "@domain/student-progress";
 import type { AttendanceStatus, DriveStatus, DriveType, RoundResult } from "@domain/types";
+import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioApplicant, PortfolioDrive, PortfolioView } from "./portfolio-page";
 
@@ -12,11 +13,13 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
 /**
  * Exported so src/db/query-contract.test.ts can prove it against the real schema.
  *
- * One round trip. The rounds and their three satellite tables are embedded
- * under the drive, and the applicants under it too, because a portfolio of ten
- * drives would otherwise be forty queries.
+ * Only the round LIST is embedded. A drive has a handful of rounds and each
+ * round has a participant row per applicant, so embedding those three
+ * satellites capped them at 1000 rows for the whole portfolio — an applicant
+ * whose row fell past the cap printed as "did not sit the round". Rounds and
+ * applications are read as their own paged queries below.
  *
- * `students(campuses(name))` is embedded rather than selected: an Account
+ * `students(campuses(name))` stays embedded rather than selected: an Account
  * Executive has no read policy on `students`, so PostgREST returns null there
  * and the applicant still appears - by name, from the snapshot. A Delivery
  * Head, who is an org reader, gets the campus.
@@ -27,18 +30,12 @@ export const PORTFOLIO_DRIVE_COLUMNS = `
   created_by, approved_by, published_by,
   application_start, application_end,
   tentative_date, openings, company_drive_id,
-  drive_rounds(
-    id, sequence, name,
-    round_participants(application_id),
-    round_results(application_id, result),
-    attendance(application_id, status)
-  ),
-  applications(
-    id, student_id, profile_snapshot,
-    students(campuses(name)),
-    shortlist_entries(included)
-  )
+  drive_rounds(id, sequence, name)
 `;
+
+/** Exported for the same reason. */
+export const PORTFOLIO_APPLICATION_COLUMNS =
+  "id, drive_id, student_id, profile_snapshot, students(campuses(name)), shortlist_entries(included)";
 
 /**
  * The drives one person owns, assembled from live rows.
@@ -55,25 +52,104 @@ export const PORTFOLIO_DRIVE_COLUMNS = `
 export function createSupabasePortfolioView(client: SupabaseClient): PortfolioView {
   return {
     async drives(): Promise<readonly PortfolioDrive[]> {
-      const { data } = await client
-        .from("drives")
-        .select(PORTFOLIO_DRIVE_COLUMNS)
-        .order("created_at", { ascending: false });
-
-      const driveRows = rows(data);
+      // Paged, with every error raised. This used to discard `{ error }` and
+      // answer `null`, so a refused read greeted an Account Executive with
+      // forty live drives with "No drives yet".
+      const driveRows = await readAllRows((from, to) =>
+        client
+          .from("drives")
+          .select(PORTFOLIO_DRIVE_COLUMNS)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      );
       if (driveRows.length === 0) return [];
 
       const driveIds = driveRows.map((d) => d.id as string);
-      const { data: offers } = await client
-        .from("offers")
-        .select("drive_id, student_id")
-        .in("drive_id", driveIds);
+      const applicationRows = await readAllRowsByIds(
+        driveIds,
+        (batch) => (from, to) =>
+          client
+            .from("applications")
+            .select(PORTFOLIO_APPLICATION_COLUMNS)
+            .in("drive_id", batch)
+            .range(from, to),
+      );
+
+      const roundIds = driveRows.flatMap((d) => rows(d.drive_rounds).map((r) => r.id as string));
+
+      /**
+       * Batched by id, and paged within each batch, because a long `in(...)`
+       * list is refused by the gateway and comes back as an EMPTY list rather
+       * than an error. The offers read below used to be one such URL over every
+       * drive the owner has: refused, and every applicant on the portfolio
+       * showed "no offer" — the ones who had one included.
+       */
+      const [participantRows, resultRows, attendanceRows, offerRows] = await Promise.all([
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_participants")
+              .select("round_id, application_id")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("round_results")
+              .select("round_id, application_id, result")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          roundIds,
+          (batch) => (from, to) =>
+            client
+              .from("attendance")
+              .select("round_id, application_id, status")
+              .in("round_id", batch)
+              .range(from, to),
+        ),
+        readAllRowsByIds(
+          driveIds,
+          (batch) => (from, to) =>
+            client
+              .from("offers")
+              .select("drive_id, student_id")
+              .in("drive_id", batch)
+              .range(from, to),
+        ),
+      ]);
+
+      const pair = (roundId: unknown, applicationId: unknown) =>
+        `${roundId as string}::${applicationId as string}`;
+      const scheduled = new Set(participantRows.map((p) => pair(p.round_id, p.application_id)));
+      const resultAt = new Map<string, RoundResult>(
+        resultRows.map((r) => [pair(r.round_id, r.application_id), r.result as RoundResult]),
+      );
+      const presentAt = new Map<string, AttendanceStatus>(
+        attendanceRows.map((a) => [
+          pair(a.round_id, a.application_id),
+          a.status as AttendanceStatus,
+        ]),
+      );
+      const decidedRounds = new Set(resultRows.map((r) => r.round_id as string));
 
       // An offer belongs to a student and a drive; an application is the same
       // pair. That pair is what ties the outcome back to the applicant.
       const won = new Set(
-        rows(offers).map((o) => `${o.drive_id as string}::${o.student_id as string}`),
+        offerRows.map((o) => `${o.drive_id as string}::${o.student_id as string}`),
       );
+
+      const applicantsByDrive = new Map<string, Array<Record<string, unknown>>>();
+      for (const application of applicationRows) {
+        const driveId = application.drive_id as string;
+        const list = applicantsByDrive.get(driveId) ?? [];
+        list.push(application);
+        applicantsByDrive.set(driveId, list);
+      }
 
       return driveRows.map((row): PortfolioDrive => {
         const driveId = row.id as string;
@@ -82,44 +158,40 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           (a, b) => Number(a.sequence) - Number(b.sequence),
         );
 
-        const applicants = rows(row.applications).map((application): PortfolioApplicant => {
-          const applicationId = application.id as string;
-          const snapshot = one<{ profile?: Record<string, unknown> }>(application.profile_snapshot);
-          const profile = snapshot?.profile ?? {};
+        const applicants = (applicantsByDrive.get(driveId) ?? []).map(
+          (application): PortfolioApplicant => {
+            const applicationId = application.id as string;
+            const snapshot = one<{ profile?: Record<string, unknown> }>(
+              application.profile_snapshot,
+            );
+            const profile = snapshot?.profile ?? {};
 
-          const applicantRounds: ApplicantRound[] = roundRows.map((round) => {
-            const participating = rows(round.round_participants).some(
-              (p) => p.application_id === applicationId,
-            );
-            const result = rows(round.round_results).find(
-              (r) => r.application_id === applicationId,
-            );
-            const attendance = rows(round.attendance).find(
-              (a) => a.application_id === applicationId,
-            );
+            const applicantRounds: ApplicantRound[] = roundRows.map((round) => {
+              const at = pair(round.id, applicationId);
+
+              return {
+                sequence: Number(round.sequence),
+                name: (round.name as string | null) ?? "Round",
+                participating: scheduled.has(at),
+                attendance: presentAt.get(at) ?? null,
+                result: resultAt.get(at) ?? null,
+              };
+            });
+
+            const campus = one<{ campuses?: unknown }>(application.students);
 
             return {
-              sequence: Number(round.sequence),
-              name: (round.name as string | null) ?? "Round",
-              participating,
-              attendance: (attendance?.status as AttendanceStatus | undefined) ?? null,
-              result: (result?.result as RoundResult | undefined) ?? null,
+              applicationId,
+              studentId: application.student_id as string,
+              studentName: (profile.fullName as string | undefined) ?? "Unnamed applicant",
+              rollNumber: (profile.rollNumber as string | undefined) ?? "—",
+              campus: one<{ name?: string }>(campus?.campuses)?.name ?? "—",
+              shortlisted: rows(application.shortlist_entries).some((s) => s.included === true),
+              hasOffer: won.has(`${driveId}::${application.student_id as string}`),
+              rounds: applicantRounds,
             };
-          });
-
-          const campus = one<{ campuses?: unknown }>(application.students);
-
-          return {
-            applicationId,
-            studentId: application.student_id as string,
-            studentName: (profile.fullName as string | undefined) ?? "Unnamed applicant",
-            rollNumber: (profile.rollNumber as string | undefined) ?? "—",
-            campus: one<{ name?: string }>(campus?.campuses)?.name ?? "—",
-            shortlisted: rows(application.shortlist_entries).some((s) => s.included === true),
-            hasOffer: won.has(`${driveId}::${application.student_id as string}`),
-            rounds: applicantRounds,
-          };
-        });
+          },
+        );
 
         return {
           driveId,
@@ -148,7 +220,7 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           totalRounds: roundRows.length,
           // A round counts as decided when a result has been declared in it -
           // not when it was merely scheduled or attended.
-          roundsDecided: roundRows.filter((round) => rows(round.round_results).length > 0).length,
+          roundsDecided: roundRows.filter((round) => decidedRounds.has(round.id as string)).length,
           applicants,
         };
       });

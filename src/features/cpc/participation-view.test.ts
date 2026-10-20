@@ -5,6 +5,7 @@ import { server } from "../../mocks/node";
 import {
   createSupabaseParticipationQueueView,
   OPT_OUT_QUEUE_COLUMNS,
+  ParticipationQueueError,
   SELF_PLACEMENT_QUEUE_COLUMNS,
 } from "./participation-view";
 
@@ -473,5 +474,65 @@ describe("approving a self-placement", () => {
         offerCategory: "regular",
       }),
     ).rejects.toThrow(/coordinator/i);
+  });
+});
+
+describe("reading a queue bigger than one page", () => {
+  const row = (n: number) => ({
+    id: `req-${n}`,
+    reason: "Higher studies",
+    students: { full_name: `Student ${n}`, roll_number: `${n}` },
+    student_documents: null,
+  });
+
+  /** Honouring offset/limit, because `readAll` stops on a short page. */
+  const paged = (table: string, all: readonly unknown[], urls: string[]) =>
+    http.get(`${BASE}/rest/v1/${table}`, ({ request }) => {
+      const url = new URL(request.url);
+      urls.push(url.search);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const limit = Number(url.searchParams.get("limit") ?? 1000);
+      return HttpResponse.json(all.slice(offset, offset + limit));
+    });
+
+  it("asks for both queues a page at a time", async () => {
+    const optOuts: string[] = [];
+    const placements: string[] = [];
+    server.use(
+      paged("opt_out_requests", [], optOuts),
+      paged("self_placement_requests", [], placements),
+    );
+
+    await view().pending();
+
+    expect(optOuts[0]).toContain("offset=0&limit=1000");
+    expect(placements[0]).toContain("offset=0&limit=1000");
+  });
+
+  it("reads the requests past the first thousand", async () => {
+    server.use(
+      paged(
+        "opt_out_requests",
+        Array.from({ length: 1400 }, (_, n) => row(n)),
+        [],
+      ),
+      paged("self_placement_requests", [], []),
+    );
+
+    const queue = await view().pending();
+
+    expect(queue.optOuts).toHaveLength(1400);
+    expect(queue.optOuts.at(-1)?.studentName).toBe("Student 1399");
+  });
+
+  it("refuses rather than showing the coordinator a clean queue", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/opt_out_requests`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+      paged("self_placement_requests", [], []),
+    );
+
+    await expect(view().pending()).rejects.toBeInstanceOf(ParticipationQueueError);
   });
 });

@@ -105,24 +105,50 @@ export function createSupabaseStaffRepository(
    * against the email instead.
    */
   async function profileIdFor(email: string): Promise<string | null> {
-    const { data } = await client
+    const { data, error } = await client
       .from("profiles")
       .select("id")
       .eq("email", email.trim().toLowerCase())
       .maybeSingle();
+
+    /*
+     * Null here is an instruction, not a missing value: it sends `setCampuses`
+     * to the STAGING table. So a refused read applied a campus mapping to
+     * someone who has signed in as a staged row that is never applied — their
+     * students stay invisible, with the screen saying the mapping was saved.
+     */
+    if (error !== null) {
+      throw new StaffError(
+        "We could not check whether that person has signed in. Please try again.",
+      );
+    }
 
     return (data?.id as string | undefined) ?? null;
   }
 
   const repository: StaffRepository = {
     async list() {
-      const [{ data: invitations, error }, { data: profiles }, campuses] = await Promise.all([
+      const [
+        { data: invitations, error: invitationsError },
+        { data: profiles, error: profilesError },
+        campuses,
+      ] = await Promise.all([
         client.from("staff_invitations").select("email, full_name, role, accepted_at"),
         client.from("profiles").select("id, email, is_active"),
         repository.campuses(),
       ]);
 
-      if (error !== null) throw new StaffError("Could not load the staff list.");
+      if (invitationsError !== null) throw new StaffError("Could not load the staff list.");
+
+      /*
+       * `isActive` comes from profiles, and `contextFor` counts ACTIVE Admins
+       * before letting one be demoted or removed. A refused profiles read used
+       * to fall back to `?? true`, so every deactivated Admin counted as cover
+       * — which is how the organisation could be left with no usable Admin.
+       */
+      if (profilesError !== null) {
+        throw new StaffError("We could not read who has signed in. Please try again.");
+      }
 
       const activeByEmail = new Map(
         (profiles ?? []).map((p) => [String(p.email).toLowerCase(), p.is_active as boolean]),
@@ -136,10 +162,21 @@ export function createSupabaseStaffRepository(
       // still staged against the email for anyone who has not. Reading only
       // the applied half would show an invited coordinator as having no
       // campus when one is already waiting for them.
-      const [{ data: assignments }, { data: staged }] = await Promise.all([
-        client.from("staff_campus_assignments").select("profile_id, campus_id"),
-        client.from("staff_campus_invitations").select("email, campus_id"),
-      ]);
+      const [{ data: assignments, error: assignmentsError }, { data: staged, error: stagedError }] =
+        await Promise.all([
+          client.from("staff_campus_assignments").select("profile_id, campus_id"),
+          client.from("staff_campus_invitations").select("email, campus_id"),
+        ]);
+
+      /*
+       * An empty mapping is a real, deliberately visible state on this screen
+       * (see StaffMember.campuses) — which is exactly why a refused read may
+       * not be allowed to produce one: "no campus" and "we could not tell"
+       * must not look alike here.
+       */
+      if (assignmentsError !== null || stagedError !== null) {
+        throw new StaffError("We could not read which campuses staff are mapped to.");
+      }
 
       const campusesByEmail = new Map<string, CampusOption[]>();
       const add = (email: string | undefined, campusId: string) => {
