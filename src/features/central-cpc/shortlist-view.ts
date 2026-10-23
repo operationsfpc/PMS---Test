@@ -1,3 +1,4 @@
+import { canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import type { ShortlistEntry } from "@domain/recruiter-export";
 import { objectKeyIn } from "@domain/storage-path";
 import { type AppRole, DRIVE_STATUSES, type DriveStatus, type RoleCategory } from "@domain/types";
@@ -203,8 +204,18 @@ export function createSupabaseShortlistView(
     },
 
     async saveShortlist(_driveId, decisions) {
-      if ((await getActorRole()) !== "central_placement_coordinator") {
-        throw new ShortlistError("Only the Central Placement Coordinator may shortlist.");
+      /**
+       * The route guard and the portfolio button already ask
+       * `canShortlistFromPortfolio`; this used to ask a different question and
+       * answer "Central only", so a campus coordinator was invited onto the
+       * screen and refused at Save. One rule, asked in one place.
+       *
+       * Campus scope is not enforced here — 0018's `applications_read_staff`
+       * already hides another campus's applicants, and 0122 repeats the same
+       * `my_student_ids()` bound at the row being written.
+       */
+      if (!canShortlistFromPortfolio(await getActorRole())) {
+        throw new ShortlistError("Shortlisting belongs to the placement coordinators.");
       }
 
       const actorId = await getActorId();

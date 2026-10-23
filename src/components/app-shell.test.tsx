@@ -309,6 +309,18 @@ describe("AppShell navigation", () => {
   });
 
   /**
+   * 0122: a campus coordinator shortlists their own students, so the screen
+   * they write from belongs in their sidebar — not only behind a drive card
+   * they first have to find.
+   */
+  it("gives the campus coordinator the shortlisting screen", () => {
+    shellFor(signedIn("campus_placement_coordinator"));
+    expect(screen.getByRole("link", { name: "Shortlisting" }).getAttribute("href")).toBe(
+      "/central/shortlisting",
+    );
+  });
+
+  /**
    * D3 (2026-08-12): verification belongs to the campus placement
    * coordinator ALONE. The Central CPC ran both queues while the seat was
    * empty; the seat is filled now and the client keeps it that way.

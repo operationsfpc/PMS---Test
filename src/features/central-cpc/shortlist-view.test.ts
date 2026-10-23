@@ -1,3 +1,4 @@
+import type { AppRole } from "@domain/types";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -102,11 +103,11 @@ function stub(
   };
 }
 
-const view = (role = "central_placement_coordinator", actorId: string | null = "cpc-1") =>
+const view = (role: AppRole = "central_placement_coordinator", actorId: string | null = "cpc-1") =>
   createSupabaseShortlistView(
     client(),
     async () => actorId,
-    async () => role as "central_placement_coordinator",
+    async () => role,
   );
 
 describe("the drive being shortlisted for", () => {
@@ -479,12 +480,36 @@ describe("saving the shortlist", () => {
     ]);
   });
 
-  it("refuses anyone but the Central Placement Coordinator", async () => {
+  /**
+   * 0122: the campus coordinator shortlists their own students. The screen has
+   * always invited them in — `canShortlistFromPortfolio` and the route guard say
+   * so — so this write must ask the same question rather than a narrower one and
+   * refuse someone the interface just authorised.
+   */
+  it("lets the campus placement coordinator save their decision", async () => {
     const { writes } = stub();
 
-    await expect(
-      view("campus_placement_coordinator").saveShortlist("d1", [decision]),
-    ).rejects.toThrow(/Central Placement Coordinator/i);
+    await view("campus_placement_coordinator").saveShortlist("d1", [decision]);
+
+    expect(writes[0]).toEqual([
+      {
+        application_id: "app-1",
+        included: true,
+        rank: 1,
+        score: 91.5,
+        rationale: "Top coding score",
+        decided_by: "cpc-1",
+        opt_out_override_reason: null,
+      },
+    ]);
+  });
+
+  it("refuses a role that chooses nothing, like the AE who raised the drive", async () => {
+    const { writes } = stub();
+
+    await expect(view("account_executive").saveShortlist("d1", [decision])).rejects.toThrow(
+      /placement coordinators/i,
+    );
     expect(writes).toHaveLength(0);
   });
 

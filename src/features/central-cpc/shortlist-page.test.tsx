@@ -269,7 +269,7 @@ describe("ShortlistPage", () => {
     show(
       view({
         saveShortlist: async () => {
-          throw new Error("Only the Central Placement Coordinator may shortlist.");
+          throw new Error("Shortlisting belongs to the placement coordinators.");
         },
       }),
     );
@@ -281,7 +281,7 @@ describe("ShortlistPage", () => {
     await user.click(await confirmButton());
 
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toMatch(/central placement coordinator/i);
+    expect(alert.textContent).toMatch(/placement coordinators/i);
   });
 
   /**

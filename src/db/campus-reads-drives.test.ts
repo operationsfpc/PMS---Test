@@ -54,10 +54,63 @@ describe("campus staff read their students' shortlist standing (0045)", () => {
     expect(rows.map((r) => r.student_id)).toEqual([ids.priya]);
   });
 
-  it("still lets them decide nothing \u2014 an update is silently filtered", async () => {
-    await t.asUser(ids.cpcUser, `update shortlist_entries set included = false`);
-    const rows = await t.sql(`select included from shortlist_entries`);
-    expect(rows.every((r) => r.included === true)).toBe(true);
+  /**
+   * 0122: this used to assert the campus coordinator "decides nothing". The
+   * interface had already invited them onto the shortlisting screen for years \u2014
+   * `canShortlistFromPortfolio` and the route guard both let them through \u2014 so
+   * the write is now the same width as the read: their own students' rows.
+   * Arjun's row is still silently filtered, which is the campus bound holding.
+   */
+  it("lets them decide their own student's shortlist, and only that", async () => {
+    await t.asUser(
+      ids.cpcUser,
+      `update shortlist_entries set included = false
+        where application_id in (select id from applications where student_id = $1)`,
+      [ids.priya],
+    );
+
+    const rows = await t.sql(
+      `select a.student_id, se.included from shortlist_entries se
+         join applications a on a.id = se.application_id`,
+    );
+    const byStudent = new Map(rows.map((r) => [r.student_id as string, r.included as boolean]));
+    expect(byStudent.get(ids.priya)).toBe(false);
+    expect(byStudent.get(ids.arjun)).toBe(true);
+  });
+
+  it("still refuses them a shortlist row for another campus's applicant", async () => {
+    // A fresh drive and a fresh application, so the rejection below can only
+    // come from the campus bound in `shortlist_campus_write` — not from a row
+    // that already existed and shrugged the insert off.
+    const drive = (
+      await t.sql(
+        `insert into drives (company_name, created_by, status)
+         values ('Fresh Corp', $1, 'draft') returning id`,
+        [ids.centralUser],
+      )
+    )[0]?.id as string;
+    const application = (
+      await t.sql(
+        `insert into applications (drive_id, student_id, profile_snapshot)
+         values ($1, $2, '{}'::jsonb) returning id`,
+        [drive, ids.arjun],
+      )
+    )[0]?.id as string;
+
+    await t.expectRejection(
+      () =>
+        t.asUser(
+          ids.cpcUser,
+          `insert into shortlist_entries (application_id, included) values ($1, true)`,
+          [application],
+        ),
+      /row-level security|policy/i,
+    );
+
+    const rows = await t.sql(`select 1 from shortlist_entries where application_id = $1`, [
+      application,
+    ]);
+    expect(rows).toHaveLength(0);
   });
 });
 

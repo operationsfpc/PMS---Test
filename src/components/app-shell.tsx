@@ -193,6 +193,9 @@ export const ROLE_NAVS: Readonly<Record<AppRole, readonly NavGroup[]>> = {
         // It stays: it answers "how are MY students doing", which is a
         // different question from "what is happening to this drive".
         { to: "/cpc/drives", label: "Drive progress", icon: TrendingUp },
+        // 0122: choosing which of their own students advance is theirs too,
+        // so the screen they can now write from is reachable from here.
+        { to: "/central/shortlisting", label: "Shortlisting", icon: Star },
         { to: "/cpc/attendance", label: "Attendance", icon: CalendarCheck },
       ],
     },
