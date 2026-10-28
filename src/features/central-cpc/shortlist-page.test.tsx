@@ -81,7 +81,7 @@ const confirmButton = async () =>
 
 /** Every row now links to the student's record, so the screen needs a router. */
 const inRouter = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
-const show = (v: ShortlistView) => inRouter(<ShortlistPage driveId="d1" view={v} />);
+const show = (v: ShortlistView) => inRouter(<ShortlistPage driveId="d1" view={v} canExport />);
 
 describe("ShortlistPage", () => {
   it("ranks the strongest applicant first, using the domain rule", async () => {
@@ -530,6 +530,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({
           applicants: async () => [saved("R1", "Priya"), STRONG],
           exportEntries: async () => [
@@ -577,6 +578,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({
           applicants: async () => [saved("R1", "Priya"), saved("R9", "Vetrivel")],
           exportEntries: async () => [
@@ -637,6 +639,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({
           applicants: async () => entries.map((e) => saved(e.applicationId, e.applicationId)),
           exportEntries: async () => entries,
@@ -673,6 +676,7 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({
           exportEntries: async () => [],
           logExport,
@@ -692,6 +696,109 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(download).not.toHaveBeenCalled();
     expect(logExport).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 0122 gave the campus coordinator the shortlist decision; it did not give
+   * them the recruiter's copy. The export writes a row in the data-sharing log
+   * (`recruiter_exports`), and `exports_operator_insert` (0043) refuses that
+   * write for every role but Central and Admin — so for a campus reader the
+   * button could only ever refuse, halfway through. The screen is told who may
+   * export and offers the pair to nobody else.
+   */
+  it("offers the recruiter export only to the roles that can log it", async () => {
+    inRouter(
+      <ShortlistPage
+        driveId="d1"
+        canExport={false}
+        view={view({ applicants: async () => [saved("R1", "Priya"), STRONG] })}
+      />,
+    );
+
+    await screen.findByText("Strong Candidate");
+    expect(screen.queryByRole("button", { name: /export shortlist/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /export recruiter pack/i })).toBeNull();
+    expect(screen.queryByText(/shortlist someone first/i)).toBeNull();
+    // Their own decision is untouched — shortlisting theirs still is.
+    expect(screen.getByRole("button", { name: /^shortlist \d/i })).toBeDefined();
+  });
+
+  /**
+   * The log exists so an audit can answer "who was this sent to, when?".
+   * Handing the file over first meant the failure arrived afterwards: the
+   * candidates' CVs had already left the browser while the record of it did
+   * not. So the log lands, and only then does the file.
+   */
+  it("writes the export log before the file is handed over", async () => {
+    const order: string[] = [];
+    const download = vi.fn(() => order.push("download"));
+    const user = userEvent.setup();
+    inRouter(
+      <ShortlistPage
+        driveId="d1"
+        canExport
+        view={view({
+          applicants: async () => [saved("R1", "Priya"), STRONG],
+          exportEntries: async () => [
+            { applicationId: "a1", included: true, snapshot: snapshot("R1", "Priya") },
+          ],
+          resumeSignedUrls: async () => new Map(),
+          logExport: async () => {
+            order.push("log");
+          },
+        })}
+        download={download}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /export shortlist \(csv\)/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    await user.click(screen.getByRole("button", { name: /export shortlist \(csv\)/i }));
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    expect(order).toEqual(["log", "download"]);
+  });
+
+  /** The other half of the same rule: a refused log means no pack either. */
+  it("sends no pack when the export log is refused", async () => {
+    const download = vi.fn();
+    const user = userEvent.setup();
+    inRouter(
+      <ShortlistPage
+        driveId="d1"
+        canExport
+        view={view({
+          applicants: async () => [saved("R1", "Priya"), STRONG],
+          exportEntries: async () => [
+            { applicationId: "a1", included: true, snapshot: snapshot("R1", "Priya") },
+          ],
+          resumeFiles: async () =>
+            new Map([["resume-1", { data: new Uint8Array([37]).buffer, extension: ".pdf" }]]),
+          logExport: async () => {
+            throw new Error("Could not record the export: row-level security blocked the write.");
+          },
+        })}
+        download={download}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: /export recruiter pack \(zip\)/i,
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    await user.click(screen.getByRole("button", { name: /export recruiter pack \(zip\)/i }));
+
+    expect(await screen.findByText(/could not record the export/i)).toBeDefined();
+    expect(download).not.toHaveBeenCalled();
   });
 });
 
@@ -772,6 +879,7 @@ describe("ShortlistPage — UAT 2026-08-19", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({ drive: async () => ({ ...DRIVE, mandatorySkills: [] }) })}
       />,
     );
@@ -835,6 +943,7 @@ describe("the match score is not shown", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({
           saveShortlist: async (_drive, decisions) => {
             saved.push([...decisions]);
@@ -1124,6 +1233,7 @@ describe("shortlisting against the recruiter's target (UAT 2026-08-26)", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({ applicants: async () => [{ ...WEAK, shortlisted: true }, STRONG] })}
       />,
     );
@@ -1190,6 +1300,7 @@ describe("the recruiter pack names resume files safely", () => {
     inRouter(
       <ShortlistPage
         driveId="d1"
+        canExport
         view={view({
           // Somebody must be on the saved shortlist before its pack can be
           // downloaded; the export controls say so rather than refusing.

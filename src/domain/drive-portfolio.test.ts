@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type ApplicantFacts,
   canApproveDrive,
+  canExportShortlist,
   canPublishDrive,
   canRaiseDrive,
   canShortlistFromPortfolio,
@@ -233,6 +234,34 @@ describe("canShortlistFromPortfolio", () => {
   /** The campus coordinator shortlists their own campus's applicants (§13.1). */
   it("lets the campus coordinator shortlist", () => {
     expect(canShortlistFromPortfolio("campus_placement_coordinator")).toBe(true);
+  });
+});
+
+/**
+ * 0122 widened shortlisting to the campus coordinator. It did not widen the
+ * export, and this is where the two diverge: sending the shortlist to the
+ * recruiter is a data-sharing event that must be logged (PRD §13.2), and
+ * `exports_operator_insert` (0043) refuses that log row for anyone outside
+ * `is_operator()`. A campus coordinator given the button watched the file
+ * download and then failed to record that it had left.
+ */
+describe("canExportShortlist", () => {
+  it("matches the roles that may write the export log", () => {
+    expect(canExportShortlist("central_placement_coordinator")).toBe(true);
+    expect(canExportShortlist("admin")).toBe(true);
+  });
+
+  /** They decide the shortlist; they do not ship it. */
+  it("does not let the campus coordinator send the recruiter's copy", () => {
+    expect(canExportShortlist("campus_placement_coordinator")).toBe(false);
+  });
+
+  it("lets nobody else near it", () => {
+    for (const role of APP_ROLES.filter(
+      (r) => r !== "central_placement_coordinator" && r !== "admin",
+    )) {
+      expect(canExportShortlist(role)).toBe(false);
+    }
   });
 });
 

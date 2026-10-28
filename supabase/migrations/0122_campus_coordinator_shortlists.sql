@@ -24,6 +24,25 @@
 -- which Postgres runs as INSERT plus UPDATE-on-conflict. Both commands need both
 -- clauses, so `using` and `with check` carry the identical predicate — as 0043 does
 -- for attendance, the other campus-marked-at-the-venue table.
+--
+-- Two consequences, accepted rather than fixed (2026-10-23):
+--
+--   * `rank` is now per-reader. The screen writes the rank of the list the
+--     person can see, and a campus coordinator sees only their own students —
+--     so their save renumbers the same rows from 1 over their campus, while the
+--     Central CPC's save numbers them over the whole drive. Whichever of the
+--     two saved last owns the ordering, and the recruiter's pack sorts by it.
+--     The same holds for the advisory target count: a coordinator whose tab
+--     holds 8 of the 40 applicants is warned about a shortfall against a
+--     recruiter's ask it cannot see the whole of. Both are left as they are —
+--     rank and target are advisory, the decision itself is what is recorded.
+--   * The export stays Central. `exports_operator_insert` (0043) still requires
+--     `is_operator()`, so a campus coordinator who pressed "Export shortlist
+--     (CSV)" got the file and then failed to write the `recruiter_exports` row
+--     that says it left. The screen now hides both export buttons from that
+--     role (`canExportShortlist`) instead of walking them into that dead end.
+--     Widening it means widening the policy — a new data-sharing right, which
+--     is the client's call and not this file's.
 
 drop policy if exists shortlist_campus_write on public.shortlist_entries;
 

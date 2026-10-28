@@ -175,10 +175,17 @@ function Detail({ label, value }: { readonly label: string; readonly value: stri
 export function ShortlistPage({
   driveId,
   view,
+  canExport,
   download = browserDownload,
 }: {
   driveId: string;
   view: ShortlistView;
+  /**
+   * Whether this reader may hand the shortlist to the recruiter at all. The
+   * route answers it with `canExportShortlist`; the screen does not guess,
+   * because the thing being refused is a row in the data-sharing log.
+   */
+  canExport: boolean;
   download?: (filename: string, content: Blob | string) => void;
 }) {
   const [drive, setDrive] = useState<ShortlistDrive | null>(null);
@@ -381,9 +388,15 @@ export function ShortlistPage({
       const company = companyName.toLowerCase().replaceAll(/\s+/g, "-");
       const columns = [...RECRUITER_CSV_COLUMNS];
       const csvContent = `\uFEFF${serialiseCsv(columns, csvRows)}`;
-      download(`shortlist-${company}.csv`, csvContent);
-
+      /*
+       * Logged BEFORE the file is handed over. The comment below has always
+       * said an unlogged export never happened, and the code had it backwards:
+       * the CSV left the browser at the line above and the refusal arrived
+       * after, so the one case the log exists for — a shipment nobody
+       * recorded — was the failure mode.
+       */
       await view.logExport(driveId, columns, csvRows.length);
+      download(`shortlist-${company}.csv`, csvContent);
       /*
        * #78 (UAT 2026-10-18): the sentence used to be "Exported N shortlisted
        * candidates with resume links" whether or not a single link came back.
@@ -448,8 +461,10 @@ export function ShortlistPage({
       const companyName = drive?.companyName ?? "drive";
       const blob = await buildRecruiterZip(companyName, pack.rows, files);
       const company = companyName.toLowerCase().replaceAll(/\s+/g, "-");
-      download(`shortlist-${company}.zip`, blob);
+      // Same rule as the CSV: the pack is only handed over once the log row
+      // that says it left has been written.
       await view.logExport(driveId, [...EXPORT_COLUMNS, "Resume"], pack.rows.length);
+      download(`shortlist-${company}.zip`, blob);
       setMissingResumes([]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
@@ -496,30 +511,34 @@ export function ShortlistPage({
         {...(drive?.roleTitle == null ? {} : { subtitle: drive.roleTitle })}
         actions={
           <span className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              isLoading={exporting}
-              onClick={() => void exportShortlistCsv()}
-              disabled={exporting || alreadyShortlisted.length === 0 || freeze !== null}
-              title="Downloads the shortlist as it is saved in the database"
-            >
-              {exporting ? "Exporting CSV…" : "Export shortlist (CSV)"}
-            </Button>
-            {/* Both exports read the SAVED shortlist, so on a drive where nobody
-                is on it yet they could only refuse. A control that cannot do
-                anything is not offered — and a greyed button says why. */}
-            <Button
-              variant="secondary"
-              disabled={alreadyShortlisted.length === 0 || freeze !== null}
-              onClick={() => void exportShortlist()}
-              title="Downloads shortlist.xlsx beside the resume files"
-            >
-              Export recruiter pack (ZIP)
-            </Button>
-            {alreadyShortlisted.length === 0 && freeze === null && (
-              <span className="text-xs text-ink-500">
-                Both exports send the saved shortlist — shortlist someone first.
-              </span>
+            {canExport && (
+              <>
+                <Button
+                  variant="secondary"
+                  isLoading={exporting}
+                  onClick={() => void exportShortlistCsv()}
+                  disabled={exporting || alreadyShortlisted.length === 0 || freeze !== null}
+                  title="Downloads the shortlist as it is saved in the database"
+                >
+                  {exporting ? "Exporting CSV…" : "Export shortlist (CSV)"}
+                </Button>
+                {/* Both exports read the SAVED shortlist, so on a drive where nobody
+                    is on it yet they could only refuse. A control that cannot do
+                    anything is not offered — and a greyed button says why. */}
+                <Button
+                  variant="secondary"
+                  disabled={alreadyShortlisted.length === 0 || freeze !== null}
+                  onClick={() => void exportShortlist()}
+                  title="Downloads shortlist.xlsx beside the resume files"
+                >
+                  Export recruiter pack (ZIP)
+                </Button>
+                {alreadyShortlisted.length === 0 && freeze === null && (
+                  <span className="text-xs text-ink-500">
+                    Both exports send the saved shortlist — shortlist someone first.
+                  </span>
+                )}
+              </>
             )}
             <Button
               isLoading={saving}

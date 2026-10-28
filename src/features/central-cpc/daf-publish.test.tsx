@@ -343,7 +343,59 @@ describe("DafPublish — area targeting", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Bengaluru" }));
 
     await waitFor(() => expect(count()).toBe(1));
-    expect(screen.getByText(/Does not meet eligibility/i)).toBeDefined();
+    /**
+     * Not "does not meet eligibility": a CGPA bar and a college this screen
+     * chose are two different decisions, and the coordinator has to be able to
+     * see which one took a college out (TravClan, 2026-10-23).
+     */
+    expect(screen.getByText(/Their college is not in this drive/i)).toBeDefined();
+    expect(screen.queryByText(/Do not meet the academic bars/i)).toBeNull();
+  });
+
+  it("counts a student who misses the cutoff AND the college against the college", async () => {
+    routed(
+      withDrive({ minOverallCgpa: 9 }, {}, [
+        candidate("s1", "Low CGPA, other college", {
+          academics: academics({
+            overallCgpa: 6.5,
+            campus: "VIT Bangalore",
+            city: "Bengaluru",
+          }),
+        }),
+      ]),
+    );
+    // With every college in the audience, the only thing failing is the cutoff.
+    await waitFor(() => expect(screen.getByText(/Do not meet the academic bars/i)).toBeDefined());
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chennai" }));
+
+    // Same student, same two failures — now the audience says so, because the
+    // audience is what this screen is setting.
+    await waitFor(() =>
+      expect(screen.getByText(/Their college is not in this drive/i)).toBeDefined(),
+    );
+    expect(screen.queryByText(/Do not meet the academic bars/i)).toBeNull();
+  });
+
+  /**
+   * The chips are the only place the audience used to appear, and the note under
+   * them vanishes as soon as one college is ticked — so the screen could reach
+   * four colleges and never say which, or say "open to all" and mean nothing.
+   */
+  it("says the audience in words, and changes the sentence with the chips", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+    expect(screen.getByText(/reaches every college on the roster/i)).toBeDefined();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Bengaluru" }));
+
+    expect(await screen.findByText(/reaches 1 of 3 colleges: VIT Bangalore/i)).toBeDefined();
+  });
+
+  it("tells the override what it cannot reach", async () => {
+    routed(view());
+
+    expect(await screen.findByText(/opens no new college/i)).toBeDefined();
   });
 
   it("publishes the colleges the area resolved to, not the area itself", async () => {
@@ -574,7 +626,10 @@ describe("DafPublish — the override the drive already carries", () => {
     );
 
     await waitFor(() => expect(count()).toBe(1));
-    expect(screen.getByText("Does not meet eligibility")).toBeDefined();
+    expect(screen.getByText("Do not meet the academic bars")).toBeDefined();
+    // The audience line is for colleges this screen chose, and none was.
+    expect(screen.queryByText(/Their college is not in this drive/i)).toBeNull();
+    expect(screen.getByText(/reaches every college on the roster/i)).toBeDefined();
   });
 });
 

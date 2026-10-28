@@ -160,11 +160,32 @@ function toLocalInput(value: Date | null): string {
   )}:${pad(value.getMinutes())}`;
 }
 
-const EXCLUSION_LABEL: Record<Exclude<VisibilityReason, "visible">, string> = {
+/**
+ * Every line the Excluded list can wear: the domain's reasons, plus the two
+ * audience rules pulled out of `not_eligible` below.
+ */
+type ExclusionKey =
+  | Exclude<VisibilityReason, "visible">
+  | "campus_not_targeted"
+  | "city_not_targeted";
+
+const EXCLUSION_LABEL: Record<ExclusionKey, string> = {
   srf_not_approved: "SRF not yet verified",
   opted_out: "Opted out of placements",
   disbarred: "Disbarred",
-  not_eligible: "Does not meet eligibility",
+  not_eligible: "Do not meet the academic bars",
+  /**
+   * Pulled out of `not_eligible` on 2026-10-23, after a drive that targeted four
+   * colleges hid a whole fifth one behind the same sentence as a CGPA cutoff.
+   * The academic bars are approved on the PIF; these two lists are chosen HERE,
+   * and a coordinator has to be able to tell which of the two took students out.
+   *
+   * The city line exists because `targetCities` is derived from the colleges: a
+   * college with no city on record fails its own students out of a drive that
+   * targeted it, and nothing on screen can see the difference without this.
+   */
+  campus_not_targeted: "Their college is not in this drive's audience",
+  city_not_targeted: "Their college's city is not in this drive's audience",
   // "Area" means the ROLE area here, not a city — the two share a word in this
   // product and the panel below is all about cities (UAT 2026-10-15).
   area_not_chosen: "Did not choose this role area",
@@ -307,8 +328,13 @@ export function DafPublish({ view }: { view: PublishView }) {
   const [publishing, setPublishing] = useState(false);
 
   /**
-   * A VIEW filter over the college list, not a targeting: only `campuses` is
-   * ever persisted. It shares a name with nothing the drive says about itself.
+   * Which cities the college list below is narrowed to.
+   *
+   * A city is never persisted on its own — but this is not only a view filter:
+   * ticking one puts every college in it into the drive, and unticking one takes
+   * them out (`toggleCityChip`, and `@domain/drive-targeting`'s header for why).
+   * `campuses` is what publish receives. Calling this a filter alone is how a
+   * coordinator could believe a city costs them nothing they chose by hand.
    */
   const [cityFilter, setCityFilter] = useState<readonly string[]>([]);
   const [campuses, setCampuses] = useState<readonly string[]>([]);
@@ -471,12 +497,33 @@ export function DafPublish({ view }: { view: PublishView }) {
 
   const audience = useMemo(() => {
     const included: string[] = [];
-    const excluded = new Map<string, number>();
+    const excluded = new Map<ExclusionKey, number>();
     if (drive !== null) {
       for (const student of cohort) {
         const result = isDriveVisibleToStudent(student, drive);
-        if (result.visible) included.push(student.name);
-        else excluded.set(result.reason, (excluded.get(result.reason) ?? 0) + 1);
+        if (result.visible) {
+          included.push(student.name);
+          continue;
+        }
+        /**
+         * One student, one line. The audience rules are checked before the rest
+         * because the audience is what this screen is setting, and a student who
+         * fails both a college and the CGPA would otherwise be counted against
+         * the CGPA alone.
+         *
+         * `reason` is only ever "visible" beside `visible: true`, which the
+         * branch above already returned on — the fallback feeds the type, not
+         * the logic.
+         */
+        const codes = result.failures?.map((failure) => failure.code) ?? [];
+        const key: ExclusionKey = codes.includes("campus")
+          ? "campus_not_targeted"
+          : codes.includes("city")
+            ? "city_not_targeted"
+            : result.reason === "visible"
+              ? "not_eligible"
+              : result.reason;
+        excluded.set(key, (excluded.get(key) ?? 0) + 1);
       }
     }
     return { included, excluded: [...excluded.entries()] };
@@ -909,7 +956,9 @@ export function DafPublish({ view }: { view: PublishView }) {
                 </label>
                 <p className="mt-1 text-sm text-ink-500">
                   Ignores the category ladder and the internship cap, so already-placed students can
-                  apply. Does <strong>not</strong> override eligibility, opt-outs or disbarments.
+                  apply. Does <strong>not</strong> override eligibility, opt-outs or disbarments —
+                  and it reaches only the colleges the audience above already covers. This box opens
+                  no new college.
                 </p>
                 {/* Said out loud, WITH the reason, because the box now reads back
                     what the drive already carries: unticking it is a decision, not
@@ -964,6 +1013,18 @@ export function DafPublish({ view }: { view: PublishView }) {
             </div>
 
             <div className="p-4">
+              {/* The audience in words. The chips above are the only other place
+                  it exists, and the note that explains them disappears the
+                  moment one college is ticked — so a drive that stopped reaching
+                  a college left no sentence saying so (TravClan, 2026-10-23). */}
+              <p className="mb-3 text-sm text-ink-700" data-testid="audience-colleges">
+                {campuses.length === 0
+                  ? "This drive reaches every college on the roster."
+                  : `This drive reaches ${campuses.length} of ${colleges.length} colleges: ${campuses.join(
+                      ", ",
+                    )}`}
+              </p>
+
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-500">
                 Excluded
               </p>
@@ -973,9 +1034,7 @@ export function DafPublish({ view }: { view: PublishView }) {
                 <ul className="flex flex-col gap-1.5">
                   {audience.excluded.map(([reason, count]) => (
                     <li key={reason} className="flex items-start justify-between gap-2 text-sm">
-                      <span className="text-ink-500">
-                        {EXCLUSION_LABEL[reason as Exclude<VisibilityReason, "visible">]}
-                      </span>
+                      <span className="text-ink-500">{EXCLUSION_LABEL[reason]}</span>
                       <span className="font-semibold text-ink-900">{count}</span>
                     </li>
                   ))}

@@ -309,7 +309,18 @@ export function DriveRecordPage({
             <Fact label="Must-have skills" value={record.eligibility.mandatorySkills} />
             <Fact label="Degrees" value={record.eligibility.degrees.join(", ")} />
             <Fact label="Branches" value={record.eligibility.branches.join(", ")} />
-            <Fact label="Campuses" value={record.eligibility.campuses.join(", ")} />
+            {/* An empty audience means EVERY college, which is the opposite of
+                what a hidden fact reads as. Four other screens already say it in
+                words; this one dropped the row, so a drive that stopped reaching
+                a college and a drive open to all looked identical here. */}
+            <Fact
+              label="Campuses"
+              value={
+                record.eligibility.campuses.length === 0
+                  ? "Open to every campus"
+                  : `Open to: ${record.eligibility.campuses.join(", ")}`
+              }
+            />
           </dl>
         </Section>
 

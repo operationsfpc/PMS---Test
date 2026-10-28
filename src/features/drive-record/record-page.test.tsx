@@ -140,6 +140,34 @@ describe("DriveRecordPage", () => {
     expect(screen.getByText(/visible to you alone/i)).toBeDefined();
   });
 
+  /**
+   * A drive with no rows in `drive_target_campuses` is open to EVERY college,
+   * and `Fact` hides an empty value — so the audience line simply vanished and
+   * "open to all" was indistinguishable from "the targeting was lost". The other
+   * four screens that show a drive already say it in words (UAT 2026-10-23).
+   */
+  it("says which colleges a drive reaches, and says so when it reaches all of them", async () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <DriveRecordPage view={view()} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Open to: KGiSL")).toBeDefined();
+    unmount();
+
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, eligibility: { ...RECORD.eligibility, campuses: [] } })}
+          role={CENTRAL}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Open to every campus")).toBeDefined();
+  });
+
   /** A4/A5 (UAT 2026-08-19): several contacts, or an honest "none". */
   it("lists every contact the drive carries, for the AE", async () => {
     const two = {

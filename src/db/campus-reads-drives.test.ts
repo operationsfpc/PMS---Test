@@ -78,6 +78,61 @@ describe("campus staff read their students' shortlist standing (0045)", () => {
     expect(byStudent.get(ids.arjun)).toBe(true);
   });
 
+  /**
+   * The direction the screen actually goes in: a tick, an INSERT, and the
+   * student being reached by it. `shortlist_reaches_student` (0043/0075) is
+   * SECURITY DEFINER, so its inserts into `round_participants`, `attendance`
+   * and `notifications` do not need a campus write policy of their own — this
+   * is the proof that they do not.
+   */
+  it("reaches the student when they include one of their own", async () => {
+    const live = (
+      await t.sql(
+        `insert into drives (company_name, created_by, status, drive_type, offer_category,
+                             application_start, application_end, role_title, job_description,
+                             work_locations, ctc_min_lpa, role_category)
+         values ('TCS', $1, 'live', 'placement', 'dream',
+                 '2026-08-01T00:00:00Z', '2036-08-31T00:00:00Z', 'Engineer', 'Build',
+                 'Chennai', 6, 'software_technical') returning id`,
+        [ids.centralUser],
+      )
+    )[0]?.id as string;
+    const round = (
+      await t.sql(
+        `insert into drive_rounds (drive_id, sequence, name)
+         values ($1, 1, 'Aptitude') returning id`,
+        [live],
+      )
+    )[0]?.id as string;
+    const application = (
+      await t.sql(
+        `insert into applications (drive_id, student_id, profile_snapshot)
+         values ($1, $2, '{}'::jsonb) returning id`,
+        [live, ids.priya],
+      )
+    )[0]?.id as string;
+
+    await t.asUser(
+      ids.cpcUser,
+      `insert into shortlist_entries (application_id, included, decided_by, rank, score)
+       values ($1, true, $2, 1, 88)`,
+      [application, ids.cpcUser],
+    );
+
+    const scheduled = await t.sql(
+      `select status from attendance where round_id = $1 and application_id = $2`,
+      [round, application],
+    );
+    expect(scheduled[0]?.status).toBe("scheduled");
+
+    const notes = await t.sql(
+      `select title from notifications
+        where student_id = $1 and kind = 'shortlisted' and title like '%TCS%'`,
+      [ids.priya],
+    );
+    expect(notes).toHaveLength(1);
+  });
+
   it("still refuses them a shortlist row for another campus's applicant", async () => {
     // A fresh drive and a fresh application, so the rejection below can only
     // come from the campus bound in `shortlist_campus_write` — not from a row

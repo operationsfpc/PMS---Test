@@ -1,6 +1,7 @@
 import { DrivePicker } from "@components/drive-picker";
 import { ErrorPanel } from "@components/error-panel";
 import { Card } from "@components/ui";
+import { canExportShortlist } from "@domain/drive-portfolio";
 import { useAuth } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { usePickerDrives } from "@lib/use-picker-drives";
@@ -15,6 +16,10 @@ export function ShortlistRoute() {
   const auth = useAuth();
   const driveId = params.get("drive");
 
+  // Asked at the moment it matters, not captured once at first render: the
+  // session's role may not be resolved yet when this route mounts.
+  const currentRole = () => (auth.status === "signed-in" ? auth.role : ("student" as const));
+
   const [view] = useState(() =>
     createSupabaseShortlistView(
       supabase(),
@@ -22,7 +27,7 @@ export function ShortlistRoute() {
         const { data } = await supabase().auth.getSession();
         return data.session?.user.id ?? null;
       },
-      async () => (auth.status === "signed-in" ? auth.role : "student"),
+      async () => currentRole(),
     ),
   );
 
@@ -56,5 +61,7 @@ export function ShortlistRoute() {
     );
   }
 
-  return <ShortlistPage driveId={driveId} view={view} />;
+  return (
+    <ShortlistPage driveId={driveId} view={view} canExport={canExportShortlist(currentRole())} />
+  );
 }

@@ -31,6 +31,22 @@ export function canShortlistFromPortfolio(role: AppRole): boolean {
 }
 
 /**
+ * Who may send the shortlist out to the recruiter.
+ *
+ * Not the same person as the one who may shortlist. Every export is a
+ * data-sharing event and has to be logged (PRD §13.2), and the log row is
+ * gated by `exports_operator_insert` (0043) on `is_operator()` — admin and the
+ * Central Placement Coordinator. A campus placement coordinator who was offered
+ * the button watched the file download and then failed to write the row that
+ * says it left, which is the one outcome the log exists to prevent.
+ *
+ * Widening this means widening that policy, and that is the client's call.
+ */
+export function canExportShortlist(role: AppRole): boolean {
+  return role === "central_placement_coordinator" || role === "admin";
+}
+
+/**
  * Who may publish a drive. 2026-08-17 (Karthik).
  *
  * "The AE should only be able to view the students shortlisted or selected or
