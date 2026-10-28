@@ -977,7 +977,7 @@ describe("every card opens the students behind it", () => {
   }
 
   const directory = (dialog: HTMLElement) =>
-    within(dialog).getByRole("link", { name: /open in all students/i });
+    within(dialog).getByRole("link", { name: /open this list in all students/i });
 
   /*
    * 2026-08-26 (Karthik): "make the cards in Placement Overview clickable to
@@ -1260,7 +1260,7 @@ describe("the package figures", () => {
       .filter((row) => within(row).queryAllByRole("columnheader").length === 0);
 
   const directory = (dialog: HTMLElement) =>
-    within(dialog).getByRole("link", { name: /open in all students/i });
+    within(dialog).getByRole("link", { name: /open this list in all students/i });
 
   it("names the holders of the highest and the lowest package", async () => {
     render(<DashboardPage view={view(TWO)} title="Placement overview" />);

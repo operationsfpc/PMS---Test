@@ -157,7 +157,7 @@ describe("the count→who popup", () => {
     renderDrilldown({ people: [ASHA], onClose, href: "/central/students" });
     const dialog = screen.getByRole("dialog");
 
-    const footer = within(dialog).getByRole("link", { name: /open in all students/i });
+    const footer = within(dialog).getByRole("link", { name: /open this list in all students/i });
     expect(footer.getAttribute("href")).toBe("/central/students");
 
     await user.click(footer);

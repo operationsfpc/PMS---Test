@@ -292,12 +292,14 @@ export function SheetDescription({
 /**
  * Pinned to the bottom of the drawer. `mt-auto` alone only pushed it below the
  * last row, so on any list long enough to scroll the way out of the panel was
- * off the bottom of the screen.
+ * off the bottom of the screen — hence `sticky`. `mt-auto` is gone too: in the
+ * drawer's own flex column it pushed a short list's footer to the bottom of
+ * the viewport, leaving a foot of empty band under three rows.
  */
 export function SheetFooter({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`sticky bottom-0 z-10 -mx-6 -mb-6 mt-auto flex flex-col-reverse gap-2 border-t border-line bg-surface px-6 pb-6 pt-4 sm:flex-row sm:justify-end ${className}`}
+      className={`sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-col-reverse gap-2 border-t border-line bg-surface px-6 pb-6 pt-4 sm:flex-row sm:justify-end ${className}`}
       {...props}
     />
   );

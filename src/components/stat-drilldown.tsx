@@ -235,8 +235,13 @@ export function StatDrilldown({
 
         {href !== undefined && (
           <SheetFooter>
+            {/*
+             * The popup's second affordance, so it names its own object: the
+             * row names are the way to a student, this is the way to the whole
+             * list with more room around it.
+             */}
             <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
-              {linkLabel ?? "Open in All students"}
+              {linkLabel ?? "Open this list in All students"}
             </ButtonLink>
           </SheetFooter>
         )}

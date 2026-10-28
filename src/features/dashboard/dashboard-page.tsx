@@ -589,7 +589,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     status?: (student: DashboardStudent) => string;
     /** Splits the list into filter tabs — "Applied" / "Not applied". */
     group?: (student: DashboardStudent) => string;
-    note?: string;
+    note?: string | undefined;
     /** Which campus the list is for, when the row answers for its own. */
     where?: string;
   }) {
@@ -886,7 +886,12 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                               href: studentsLink({ filter: FUNNEL_FILTER[stage.key] }),
                               rows: cohort.filter(FUNNEL_STAGE_MATCH[stage.key]),
                               status: stageOf,
-                              note: `${stage.percentOfRoster}% of the roster`,
+                              // The first stage is everybody, so its share is
+                              // always 100% and the line says nothing.
+                              note:
+                                stage.percentOfRoster === 100
+                                  ? undefined
+                                  : `${stage.percentOfRoster}% of the roster`,
                             })
                           }
                           className="block w-full rounded-lg text-left transition-colors hover:bg-brand-50"

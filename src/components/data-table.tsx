@@ -378,13 +378,19 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                    * keyboard reader could reach the table but never order it, and
                    * `aria-sort` on the cell says nothing about which control does
                    * the ordering. The header is the button now.
+                   *
+                   * `uppercase text-left` is repeated from the `<th>` because a
+                   * button is not a span: `text-transform` is a property that does
+                   * not inherit and the browser's own button style centres its
+                   * text, so without them every sortable column rendered as
+                   * "Student" beside a static column's "PROGRAMME".
                    */}
                   {col.sortable === true ? (
                     <button
                       type="button"
                       onClick={() => handleSort(col.id)}
                       title={`Sort by ${typeof col.header === "string" ? col.header : col.id}`}
-                      className="flex items-center gap-1.5 rounded text-inherit hover:text-ink-900"
+                      className="flex items-center gap-1.5 rounded text-left uppercase text-inherit hover:text-ink-900"
                     >
                       <span>{col.header}</span>
                       <span aria-hidden="true" className="text-[10px] text-ink-400">
@@ -468,8 +474,14 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         </table>
       </div>
 
-      {/* Pagination Footer */}
-      {sortedData.length > 0 && (
+      {/*
+       * Pagination Footer — only when there is something to paginate.
+       * `totalPages` is at least 1 even for an empty table, so this also covers
+       * the "no rows" case the old `sortedData.length > 0` guard was for. Three
+       * rows used to sit under "Showing 1 to 3 of 3 records, Page 1 of 1" and
+       * two disabled buttons: controls that can do nothing read as broken.
+       */}
+      {totalPages > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-600 pt-1">
           <div className="flex items-center gap-2">
             <span>
