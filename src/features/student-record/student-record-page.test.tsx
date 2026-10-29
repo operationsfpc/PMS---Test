@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import type { Hold, HoldsView } from "@lib/holds-view";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -221,10 +221,12 @@ const LIVE: Hold = {
   endsAt: "2099-01-09",
   heldAt: "2026-10-29T06:30:00Z",
   heldBy: "Karthik Subramanian",
+  confirmedAt: "2026-10-29T06:30:00Z",
   releasedAt: null,
   releasedBy: null,
   releaseNote: null,
   documentPath: null,
+  declarationPath: null,
 };
 
 const EARLIER: Hold = {
@@ -232,18 +234,35 @@ const EARLIER: Hold = {
   id: "h0",
   kind: "idle",
   reason: "Applied to nothing in September.",
-  endsAt: null,
+  endsAt: "2026-09-30",
   releasedAt: "2026-09-30T10:00:00Z",
   releasedBy: "Meena Krishnan",
   releaseNote: "Cleared on request — they were mid-project.",
 };
 
+const PENDING: Hold = {
+  ...LIVE,
+  id: "h2",
+  kind: "self_placed",
+  reason: "Self-placed at Freshworks (SDE).",
+  endsAt: "2099-03-01",
+  heldBy: null,
+  confirmedAt: null,
+  documentPath: "s1/1730000000000-offer.pdf",
+  declarationPath: "s1/1730000000001-declaration.jpg",
+};
+
 const holdsView = (overrides: Partial<HoldsView> = {}): HoldsView => ({
   live: async () => LIVE,
+  pendingFor: async () => null,
+  pendingIds: async () => [],
   history: async () => [LIVE, EARLIER],
   place: async () => "h1",
+  confirm: async () => {},
   release: async () => {},
+  extend: async () => {},
   orderUrl: async () => null,
+  evidenceUrl: async () => null,
   ...overrides,
 });
 
@@ -407,6 +426,93 @@ describe("StudentRecordPage hold", () => {
     expect(within(card).getByText(/two semesters of fees unpaid\./i)).toBeDefined();
   });
 
+  /** Extend shares Release's gate: it is the Campus Manager's verb alone. */
+  it("offers no extend to a role the route did not hand the verb to", async () => {
+    showHold(holdsView());
+
+    const card = await block();
+    expect(within(card).queryByRole("button", { name: /extend review date/i })).toBeNull();
+  });
+
+  /** 0131: the fee dispute outlived the date the hold guessed at. */
+  it("extends the review only once a strictly later date is chosen, and re-reads both halves", async () => {
+    const user = userEvent.setup();
+    const extend = vi.fn(async () => {});
+    let liveReads = 0;
+    let recordReads = 0;
+
+    render(
+      <MemoryRouter>
+        <StudentRecordPage
+          studentId="s1"
+          view={{
+            record: async () => {
+              recordReads += 1;
+              return { ...PRIYA, participationStatus: "on_hold" };
+            },
+          }}
+          holds={holdsView({
+            live: async () => {
+              liveReads += 1;
+              return LIVE;
+            },
+            history: async () => [],
+            extend,
+          })}
+          release={async () => {}}
+        />
+      </MemoryRouter>,
+    );
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /extend review date/i }));
+    // One press opens the form; nothing is extended until a date is chosen.
+    expect(extend).not.toHaveBeenCalled();
+
+    const confirm = within(card).getByRole("button", {
+      name: /extend review date/i,
+    }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText("Extend the review to"), {
+      target: { value: "2099-04-01" },
+    });
+    expect(confirm.disabled).toBe(false);
+    await user.click(confirm);
+
+    await waitFor(() => expect(extend).toHaveBeenCalledTimes(1));
+    expect(extend).toHaveBeenCalledWith("h1", "2099-04-01");
+    expect(liveReads).toBe(2);
+    expect(recordReads).toBe(2);
+
+    await waitFor(() => expect(within(card).queryByLabelText(/extend the review to/i)).toBeNull());
+  });
+
+  /** The database is the one that knows the date went stale underneath. */
+  it("shows what the extension failed on instead of leaving it quiet", async () => {
+    const user = userEvent.setup();
+    showHold(
+      holdsView({
+        history: async () => [],
+        extend: async () => {
+          throw new Error("The new review date must fall after the current one (2099-01-09).");
+        },
+      }),
+      async () => {},
+    );
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /extend review date/i }));
+    fireEvent.change(screen.getByLabelText("Extend the review to"), {
+      target: { value: "2099-02-01" },
+    });
+    await user.click(within(card).getByRole("button", { name: /extend review date/i }));
+
+    const alert = await within(card).findByRole("alert");
+    expect(alert.textContent).toMatch(/must fall after the current one \(2099-01-09\)/i);
+    expect(within(card).getByText(/two semesters of fees unpaid\./i)).toBeDefined();
+  });
+
   /** A review date that has gone by is a reminder, not a release (0125). */
   it("marks a passed review date overdue and keeps the student held", async () => {
     showHold(holdsView({ live: async () => ({ ...LIVE, endsAt: "2020-01-09" }) }), undefined, {
@@ -441,5 +547,130 @@ describe("StudentRecordPage hold", () => {
     await screen.findByRole("heading", { name: /priya ramesh/i });
 
     expect(screen.queryByRole("region", { name: /placement hold/i })).toBeNull();
+  });
+});
+
+/**
+ * 0130: the student files a self-placed request with two documents; the Campus
+ * Manager is the one who turns it into a hold, or declines it.
+ */
+describe("StudentRecordPage — a student's self-placed request", () => {
+  const requested = (overrides: Partial<HoldsView> = {}) =>
+    holdsView({
+      live: async () => null,
+      pendingFor: async () => PENDING,
+      history: async () => [],
+      ...overrides,
+    });
+
+  it("shows the request, its window and both documents as a request", async () => {
+    showHold(requested(), undefined, PRIYA);
+
+    const card = await block();
+    expect(within(card).getByText(/requested — self-placed/i)).toBeDefined();
+    expect(within(card).getByText(/self-placed at freshworks \(sde\)\./i)).toBeDefined();
+    expect(within(card).getByText(/awaiting confirmation/i)).toBeDefined();
+    expect(within(card).getByText(/offer letter on file: offer\.pdf/i)).toBeDefined();
+    expect(within(card).getByText(/declaration on file: declaration\.jpg/i)).toBeDefined();
+    // The student's drives are still open, and the card says so.
+    expect(within(card).getByText(/drives stay open until you confirm/i)).toBeDefined();
+    // A request is not a hold: no "in force" badge and no release.
+    expect(within(card).queryByText(/in force/i)).toBeNull();
+    expect(within(card).queryByRole("button", { name: /release hold/i })).toBeNull();
+  });
+
+  it("links both documents only once they sign", async () => {
+    showHold(
+      requested({
+        evidenceUrl: async (bucket) =>
+          bucket === "offer-letters" ? "https://signed/offer" : "https://signed/declaration",
+      }),
+      undefined,
+      PRIYA,
+    );
+
+    const card = await block();
+    const offerLink = await within(card).findByRole("link", { name: /open the offer letter/i });
+    expect(offerLink.getAttribute("href")).toBe("https://signed/offer");
+    expect(
+      within(card)
+        .getByRole("link", { name: /open the signed declaration/i })
+        .getAttribute("href"),
+    ).toBe("https://signed/declaration");
+  });
+
+  it("confirms the request and re-reads, so the card cannot lie", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.fn(async () => {});
+    let pendingReads = 0;
+
+    showHold(
+      requested({
+        confirm,
+        pendingFor: async () => {
+          pendingReads += 1;
+          return pendingReads === 1 ? PENDING : null;
+        },
+      }),
+      async () => {},
+      PRIYA,
+    );
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /confirm hold/i }));
+
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith("h2"));
+    expect(pendingReads).toBe(2);
+  });
+
+  it("declines with a reason, through the release the manager already has", async () => {
+    const user = userEvent.setup();
+    const release = vi.fn(async () => {});
+    showHold(requested(), release, PRIYA);
+
+    const card = await block();
+    // One press opens the note form; the request is declined on the second.
+    await user.click(within(card).getByRole("button", { name: /decline request/i }));
+    expect(release).not.toHaveBeenCalled();
+
+    await user.type(
+      within(card).getByRole("textbox", { name: /why are you declining/i }),
+      "The letter names another student.",
+    );
+    await user.click(within(card).getByRole("button", { name: /decline request/i }));
+
+    await waitFor(() =>
+      expect(release).toHaveBeenCalledWith("h2", "The letter names another student."),
+    );
+  });
+
+  /** Only the Campus Manager decides; an org reader sees the request as fact. */
+  it("offers no confirm or decline to a reader who was not handed the verb", async () => {
+    showHold(requested(), undefined, PRIYA);
+
+    const card = await block();
+    expect(within(card).getByText(/requested — self-placed/i)).toBeDefined();
+    expect(within(card).queryByRole("button", { name: /confirm hold/i })).toBeNull();
+    expect(within(card).queryByRole("button", { name: /decline request/i })).toBeNull();
+  });
+
+  /** 0130 raises a sentence ("This request was already declined on ..."). */
+  it("shows what the confirmation failed on", async () => {
+    const user = userEvent.setup();
+    showHold(
+      requested({
+        confirm: async () => {
+          throw new Error("This request was already declined on 2026-11-01.");
+        },
+      }),
+      async () => {},
+      PRIYA,
+    );
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /confirm hold/i }));
+
+    const alert = await within(card).findByRole("alert");
+    expect(alert.textContent).toMatch(/already declined on 2026-11-01/i);
   });
 });

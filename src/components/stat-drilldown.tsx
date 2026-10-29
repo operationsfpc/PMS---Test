@@ -1,14 +1,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { type ColumnDef, ShadcnDataTable } from "./data-table";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "./sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { Badge, ButtonLink } from "./ui";
 
@@ -175,10 +168,30 @@ export function StatDrilldown({
         data={shown}
         columns={columns}
         defaultPageSize={25}
+        stickyPagination
         searchPlaceholder="Search name, roll number or campus…"
         caption={title}
         emptyMessage="No student here matches that search."
       />
+    );
+
+  /**
+   * The popup's second affordance, so it names its own object: the row names
+   * are the way to a student, this is the way to the whole list with more room
+   * around it.
+   *
+   * It sits in the flow under the list rather than in a sticky `SheetFooter`
+   * (2026-10-29): that pinned band floated over the table's own pagination on
+   * any roster long enough to scroll, so the paging controls sat underneath a
+   * second footer and could not be clicked.
+   */
+  const moreRoom =
+    href === undefined ? null : (
+      <div className="mt-1 flex justify-end">
+        <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
+          {linkLabel ?? "Open this list in All students"}
+        </ButtonLink>
+      </div>
     );
 
   /**
@@ -223,27 +236,16 @@ export function StatDrilldown({
           <>
             {header(null)}
             {list}
+            {moreRoom}
           </>
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
             {header(filterStrip)}
             <TabsContent value={tab} className="mt-3">
               {list}
+              {moreRoom}
             </TabsContent>
           </Tabs>
-        )}
-
-        {href !== undefined && (
-          <SheetFooter>
-            {/*
-             * The popup's second affordance, so it names its own object: the
-             * row names are the way to a student, this is the way to the whole
-             * list with more room around it.
-             */}
-            <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
-              {linkLabel ?? "Open this list in All students"}
-            </ButtonLink>
-          </SheetFooter>
         )}
       </SheetContent>
     </Sheet>

@@ -310,6 +310,117 @@ describe("recording a self-placement", () => {
 });
 
 /**
+ * 0130: the offer and the hold request leave together, through one RPC, so the
+ * student is never left with half of what they sent.
+ */
+describe("requesting a self-placement hold", () => {
+  const doc = () => new File(["evidence"], "evidence.pdf", { type: "application/pdf" });
+
+  const HOLD = {
+    companyName: "Freshworks",
+    roleTitle: "SDE",
+    ctcLpa: 7.5,
+    offerLetter: doc(),
+    declaration: doc(),
+    reason: "Offer in hand.",
+    startsAt: "2026-11-02",
+    endsAt: "2027-01-15",
+  };
+
+  function stubHold(
+    overrides: { student?: Record<string, unknown> | null; rpcFails?: boolean } = {},
+  ) {
+    const writes = stub(overrides.student === undefined ? {} : { student: overrides.student });
+    const rpcs: Array<{ body: Record<string, unknown> }> = [];
+
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/request_self_placed_hold`, async ({ request }) => {
+        rpcs.push({ body: (await request.clone().json()) as Record<string, unknown> });
+        return overrides.rpcFails === true
+          ? HttpResponse.json(
+              {
+                message: "There is already a hold, or a request waiting, on your placements.",
+                code: "P0001",
+              },
+              { status: 400 },
+            )
+          : HttpResponse.json("hold-1");
+      }),
+    );
+
+    return { writes, rpcs };
+  }
+
+  it("sends the offer, the window and both document ids in one call", async () => {
+    const { rpcs, writes } = stubHold();
+
+    await view().requestSelfPlacedHold(HOLD);
+
+    expect(rpcs[0]?.body).toMatchObject({
+      p_company_name: "Freshworks",
+      p_role_title: "SDE",
+      p_ctc_lpa: 7.5,
+      p_reason: "Offer in hand.",
+      p_starts_at: "2026-11-02",
+      p_ends_at: "2027-01-15",
+    });
+    // The two rows are the RPC's job (0130) — no second client-side insert.
+    expect(writes.some((w) => w.table === "self_placement_requests")).toBe(false);
+  });
+
+  it("puts the letter in offer-letters and the declaration in declarations", async () => {
+    const { writes } = stubHold();
+    const { client, uploads } = withStorage();
+
+    await createSupabaseParticipationView(client, async () => "s1").requestSelfPlacedHold(HOLD);
+
+    expect(uploads[0]).toMatch(/^offer-letters\/s1\//);
+    expect(uploads[1]).toMatch(/^declarations\/s1\//);
+    expect(
+      writes
+        .filter((w) => w.table === "student_documents")
+        .map((w) => (w.body as { kind?: string }).kind),
+    ).toEqual(["offer_letter", "self_placement_declaration"]);
+  });
+
+  it("refuses a student who is already on hold before uploading anything", async () => {
+    const { rpcs } = stubHold({ student: { participation_status: "on_hold" } });
+    const { client, uploads } = withStorage();
+
+    await expect(
+      createSupabaseParticipationView(client, async () => "s1").requestSelfPlacedHold(HOLD),
+    ).rejects.toThrow(/already on hold/i);
+    expect(uploads).toHaveLength(0);
+    expect(rpcs).toHaveLength(0);
+  });
+
+  it("refuses a review date before the hold starts", async () => {
+    const { rpcs } = stubHold();
+
+    await expect(
+      view().requestSelfPlacedHold({ ...HOLD, startsAt: "2027-02-01", endsAt: "2027-01-15" }),
+    ).rejects.toThrow(/cannot fall before/i);
+    expect(rpcs).toHaveLength(0);
+  });
+
+  it("asks for the review date 0130 made mandatory", async () => {
+    const { rpcs } = stubHold();
+
+    await expect(view().requestSelfPlacedHold({ ...HOLD, endsAt: "" })).rejects.toThrow(
+      /should be reviewed/i,
+    );
+    expect(rpcs).toHaveLength(0);
+  });
+
+  /** The RPC's raised sentence is the student's only explanation. */
+  it("shows the database's refusal", async () => {
+    stubHold({ rpcFails: true });
+
+    await expect(view().requestSelfPlacedHold(HOLD)).rejects.toThrow(/already a hold/i);
+  });
+});
+
+/**
  * Uploading the evidence (UAT 2026-08-05).
  *
  * The file goes to a private bucket under the student's own folder, a

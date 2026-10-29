@@ -118,6 +118,30 @@ const day = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
 
 /**
+ * One colour per company visit (2026-10-29, UAT: "use some colours for
+ * batches"). Three visits stacked as identical white cards were told apart
+ * only by reading every name; the rail and its band now carry the visit.
+ *
+ * Assigned by position in the list, not by hashing the visit id: two visits
+ * that happen to hash alike would wear the same colour, which is the exact
+ * confusion these are here to end. Neighbouring cards always differ, and the
+ * order is the one the data already arrives in, so colours do not jump between
+ * reads.
+ */
+const VISIT_ACCENTS = [
+  { rail: "border-l-brand-500", band: "bg-brand-50" },
+  { rail: "border-l-violet-500", band: "bg-violet-50" },
+  { rail: "border-l-success-500", band: "bg-success-50" },
+  { rail: "border-l-gold-500", band: "bg-gold-50" },
+  { rail: "border-l-sky-500", band: "bg-sky-50" },
+  { rail: "border-l-rose-500", band: "bg-rose-50" },
+] as const;
+
+export function visitAccent(index: number): (typeof VISIT_ACCENTS)[number] {
+  return VISIT_ACCENTS[index % VISIT_ACCENTS.length] ?? VISIT_ACCENTS[0];
+}
+
+/**
  * What tells one role on a visit apart from its siblings: its category when
  * that is not simply the type worded again, its own type when the visit as a
  * whole cannot name one, and whether this student has already applied.
@@ -256,14 +280,23 @@ export function DrivesList({
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
-          {events.map((event) => {
+          {events.map((event, index) => {
             const isMultiRole = event.roles.length > 1;
+            const accent = visitAccent(index);
             /* The visit's type, said once: a Zoho that raised three SDE roles is
                three rows of the same kind, and a visit that mixes an internship
                with a full-time role says so rather than picking one at random. */
             const types = new Set(event.roles.map((role) => role.driveType ?? null));
             const [singleType] = types;
             const visitType = types.size === 1 ? (singleType ?? null) : undefined;
+
+            /* The visit's deadline (2026-10-29 UAT: "swap the dates of published
+               and closing dates"). The 📅 slot held the tentative drive day,
+               which is routinely already past while a window is still open — the
+               header read as stale and the one date that decides whether a
+               student can act sat two lines down. ISO stamps sort as written, so
+               the first is the first window to shut. */
+            const closesOn = event.roles.map((role) => role.applicationEnd).sort()[0] ?? null;
 
             /** A single-role visit needs no folding, so its name is a plain row. */
             const roleLine = (drive: OpenDrive) => (
@@ -293,9 +326,15 @@ export function DrivesList({
                   );
               return (
                 <>
-                  <p className="mt-1 text-xs text-ink-500">
-                    Applications close {day(drive.applicationEnd)}
-                  </p>
+                  {/* The deadline is the card's headline date and is said in the
+                      band above. A row names its own only when it shuts on a
+                      different day than the visit — the one case where the
+                      header's date would be a lie beside this role. */}
+                  {drive.applicationEnd !== closesOn && (
+                    <p className="mt-1 text-xs text-ink-500">
+                      Applications close {day(drive.applicationEnd)}
+                    </p>
+                  )}
                   {/* N7: closing time SHOWN, hot under 24 hours. */}
                   {left !== null && (
                     <p
@@ -316,10 +355,13 @@ export function DrivesList({
               const confirming = confirmingId === drive.id;
               return (
                 <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end">
-                  {/* N1: the card links to the drive's one canonical page. */}
+                  {/* N1: the card links to the drive's one canonical page.
+                      Same size and a filled block as the Apply beside it
+                      (2026-10-29 UAT): a small white, hairline-bordered
+                      control next to a big dark one reads as the disabled
+                      half of the pair, so students pressed neither. */}
                   <ButtonLink
-                    size="sm"
-                    variant="secondary"
+                    variant="ghost"
                     to={`/drives/${drive.id}`}
                     aria-label={`View ${drive.companyName} — ${drive.roleTitle}`}
                   >
@@ -430,13 +472,13 @@ export function DrivesList({
             };
 
             return (
-              <Card key={event.eventId} className="overflow-hidden">
+              <Card key={event.eventId} className={`overflow-hidden border-l-4 ${accent.rail}`}>
                 {/* One company visit is one card, and the COMPANY is its headline
                     whatever the number of roles under it (2026-10-16: "it should
                     show company name"). A student decides whether to give an
                     afternoon to Zoho, not to a list of job titles that happen to
                     share a date, a venue and one interview process. */}
-                <div className="border-b border-line bg-brand-50 p-4 sm:px-5">
+                <div className={`border-b border-line ${accent.band} p-4 sm:px-5`}>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="font-heading text-lg font-bold text-ink-900">
@@ -455,14 +497,8 @@ export function DrivesList({
                       {isMultiRole && <Badge tone="brand">{event.roles.length} roles</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-3 text-sm text-ink-600 sm:justify-end">
-                      {event.tentativeDate && (
-                        <span>
-                          📅{" "}
-                          {new Date(event.tentativeDate).toLocaleDateString("en-IN", {
-                            timeZone: "Asia/Kolkata",
-                          })}
-                        </span>
-                      )}
+                      <span>📅 Applications close {day(closesOn)}</span>
+                      {event.tentativeDate && <span>· Drive day {day(event.tentativeDate)}</span>}
                       {event.driveMode && <span>· {event.driveMode.replace(/_/g, " ")}</span>}
                       {event.venue && event.venue !== "Venue to be confirmed" && (
                         <span>· {event.venue}</span>

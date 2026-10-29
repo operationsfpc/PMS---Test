@@ -84,6 +84,7 @@ export type DirectoryFilter =
   | "on_campus"
   | "self_placed"
   | "not_placed"
+  | "never_applied"
   | "opted_out"
   | "on_hold"
   | "submitted"
@@ -145,6 +146,15 @@ const matchesFilter = (student: DirectoryStudent, filter: DirectoryFilter): bool
       return student.hasSelfPlacement;
     case "not_placed":
       return !isPlaced(student);
+    /**
+     * The population the `idle` hold kind (0130) is for: still in placements,
+     * no placement record, and not one application to their name. A student
+     * already opted out or held is somebody's decision, not an idle one.
+     */
+    case "never_applied":
+      return (
+        student.participationStatus === "active" && !isPlaced(student) && student.applications === 0
+      );
     case "opted_out":
       return student.participationStatus === "opted_out";
     case "on_hold":

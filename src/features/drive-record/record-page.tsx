@@ -1,4 +1,4 @@
-import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonAnchor, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitDayInParentheses } from "@domain/drive-aging";
 import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
@@ -55,12 +55,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function Fact({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
   if (value.trim() === "" || value === "—") return null;
   return (
-    <div>
+    <div className={`min-w-0 ${className}`}>
       <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">{label}</dt>
-      <dd className="mt-0.5 text-sm text-ink-800">{value}</dd>
+      <dd className="mt-0.5 text-sm text-ink-800 break-words [overflow-wrap:anywhere]">{value}</dd>
     </div>
   );
 }
@@ -169,7 +177,7 @@ export function DriveRecordPage({
     activeStage === null ? null : filterFunnelStage(record.applicants, activeStage);
 
   return (
-    <>
+    <div className="pb-24">
       <PageHeader
         title={`${record.companyName} — ${record.roleTitle}`}
         subtitle={[
@@ -272,265 +280,361 @@ export function DriveRecordPage({
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Section title="Compensation">
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Fact label="CTC" value={record.ctcLabel} />
-            <Fact label="Breakup" value={record.ctcBreakup} />
-            <Fact label="Bond / service agreement" value={record.bondDetails} />
-            <Fact
-              label="Openings"
-              value={record.openings === null ? "" : String(record.openings)}
-            />
-          </dl>
-        </Section>
-
-        <Section title="Where and when">
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Fact label="Locations" value={record.locations} />
-            <Fact label="Mode" value={record.driveMode.replaceAll("_", " ")} />
-            {/* UAT 2026-08-21 item 2: worded by the domain; null hides it. */}
-            <Fact label="Venue" value={record.venue ?? ""} />
-            <Fact label="Applications open" value={when(record.applicationStart)} />
-            <Fact label="Applications close" value={when(record.applicationEnd)} />
-            <Fact label="Tentative drive date" value={when(record.tentativeDate)} />
-            <Fact label="Shift" value={record.shift} />
-            <Fact label="Joining" value={record.joining} />
-          </dl>
-        </Section>
-
-        <Section title="Eligibility as published">
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <Fact label="CGPA cutoff" value={record.eligibility.cgpaLabel} />
-            <Fact label="10th standard" value={record.eligibility.tenthLabel} />
-            <Fact label="12th standard" value={record.eligibility.twelfthLabel} />
-            <Fact label="Arrears" value={record.eligibility.arrearsLabel} />
-            <Fact label="Passing years" value={record.eligibility.passingYears.join(", ")} />
-            <Fact label="Must-have skills" value={record.eligibility.mandatorySkills} />
-            <Fact label="Degrees" value={record.eligibility.degrees.join(", ")} />
-            <Fact label="Branches" value={record.eligibility.branches.join(", ")} />
-            {/* An empty audience means EVERY college, which is the opposite of
-                what a hidden fact reads as. Four other screens already say it in
-                words; this one dropped the row, so a drive that stopped reaching
-                a college and a drive open to all looked identical here. */}
-            <Fact
-              label="Campuses"
-              value={
-                record.eligibility.campuses.length === 0
-                  ? "Open to every campus"
-                  : `Open to: ${record.eligibility.campuses.join(", ")}`
-              }
-            />
-          </dl>
-        </Section>
-
-        <Section title="Selection process">
-          {record.rounds.length === 0 ? (
-            <p className="text-sm text-ink-500">No rounds declared yet.</p>
-          ) : (
-            <ol className="space-y-1">
-              {record.rounds.map((round) => (
-                <li key={round.sequence} className="text-sm text-ink-800">
-                  <span className="font-semibold">Round {round.sequence}</span> — {round.name}
-                </li>
-              ))}
-            </ol>
-          )}
-        </Section>
+      {/* Quick Highlights Strip */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
+            Package / CTC
+          </span>
+          <p className="mt-1 font-heading text-base font-bold text-ink-900 break-words [overflow-wrap:anywhere] leading-snug">
+            {record.ctcLabel ? `${record.ctcLabel} (CTC)` : "—"}
+          </p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
+            Location
+          </span>
+          <p
+            className="mt-1 text-sm font-medium text-ink-800 break-words [overflow-wrap:anywhere] leading-snug"
+            title={record.locations || "—"}
+          >
+            {record.locations || "—"}
+          </p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
+            Drive Mode
+          </span>
+          <p className="mt-1 text-sm font-medium capitalize text-ink-800 break-words leading-snug">
+            {record.driveMode ? `${record.driveMode.replaceAll("_", " ")} drive` : "—"}
+          </p>
+        </div>
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
+            Apply Deadline
+          </span>
+          <p className="mt-1 text-sm font-medium text-ink-800 break-words leading-snug">
+            {record.applicationEnd ? when(record.applicationEnd) : "Open"}
+          </p>
+        </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-4">
-        {(record.jobDescription !== "" || record.jobDescriptionUrl !== null) && (
-          <Section title="Job description">
-            {record.jobDescription !== "" && (
-              <p className="whitespace-pre-line text-sm text-ink-800">{record.jobDescription}</p>
-            )}
-            {record.jobDescriptionUrl !== null && (
-              <p className="mt-3 text-sm">
-                <a
-                  href={record.jobDescriptionUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-brand-500 underline underline-offset-2"
-                >
-                  {record.jobDescriptionName ?? "Job description (PDF)"}
-                </a>{" "}
-                <span className="text-ink-500">— the recruiter’s own document</span>
-              </p>
-            )}
-          </Section>
-        )}
-
-        {staff && record.applicants.length > 0 && (
-          <Section title={`Applicants (${record.applicants.length})`}>
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-xs uppercase tracking-wide text-ink-500">
-                  <th className="py-1 pr-3">Student</th>
-                  <th className="py-1 pr-3">Roll number</th>
-                  <th className="py-1 pr-3">Campus</th>
-                  <th className="py-1 pr-3">Applied</th>
-                  <th className="py-1" />
-                </tr>
-              </thead>
-              <tbody>
-                {record.applicants.map((applicant) => (
-                  <tr key={applicant.applicationId} className="border-t border-line">
-                    <td className="py-2 pr-3 font-medium text-ink-900">{applicant.fullName}</td>
-                    <td className="py-2 pr-3">{applicant.rollNumber}</td>
-                    <td className="py-2 pr-3">{applicant.campus}</td>
-                    <td className="py-2 pr-3">{when(applicant.appliedAt)}</td>
-                    <td className="py-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        aria-expanded={openSnapshot === applicant.applicationId}
-                        onClick={() =>
-                          setOpenSnapshot(
-                            openSnapshot === applicant.applicationId
-                              ? null
-                              : applicant.applicationId,
-                          )
-                        }
-                      >
-                        {openSnapshot === applicant.applicationId
-                          ? "Hide snapshot"
-                          : "View snapshot"}
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {record.applicants
-              .filter((a) => a.applicationId === openSnapshot)
-              .map((applicant) => (
-                <section
-                  key={applicant.applicationId}
-                  aria-label={`Snapshot of ${applicant.fullName}`}
-                  className="mt-3 rounded-lg bg-surface-muted p-4"
-                >
-                  <p className="mb-2 text-xs font-semibold text-gold-800">
-                    ⚠️ The profile as it was AT APPLY TIME — what the recruiter received, never the
-                    live profile.
-                  </p>
-                  <dl className="grid gap-3 sm:grid-cols-3">
-                    <Fact label="CGPA" value={fromSnapshot(applicant.snapshot, "overallCgpa")} />
-                    <Fact
-                      label="10th %"
-                      value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
-                    />
-                    <Fact
-                      label="12th %"
-                      value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
-                    />
-                    <Fact
-                      label="Current arrears"
-                      value={fromSnapshot(applicant.snapshot, "currentArrears")}
-                    />
-                    <Fact label="Degree" value={fromSnapshot(applicant.snapshot, "degree")} />
-                    <Fact label="Branch" value={fromSnapshot(applicant.snapshot, "branch")} />
-                  </dl>
-                </section>
-              ))}
-          </Section>
-        )}
-
-        {role === "account_executive" && (
-          <Section title="Recruiter contacts — visible to you alone">
-            {record.recruiters.length === 0 ? (
-              // A5 (UAT 2026-08-19): an honest "none", with the routing stated.
-              <p className="text-sm text-ink-700">
-                No contact recorded for this company — communication goes through the{" "}
-                <strong>Central Placement Coordinator</strong>.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {record.recruiters.map((contact) => (
-                  <dl
-                    // Contacts have no id of their own; the four fields together are the identity.
-                    key={`${contact.name}|${contact.designation}|${contact.email}|${contact.phone}`}
-                    className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-2"
-                  >
-                    <Fact label="Name" value={contact.name} />
-                    <Fact label="Designation" value={contact.designation} />
-                    <Fact label="Email" value={contact.email} />
-                    <Fact label="Phone" value={contact.phone} />
-                  </dl>
-                ))}
-              </div>
-            )}
-          </Section>
-        )}
-
-        {staff && (
-          <Section title="Provenance">
-            <p className="text-sm text-ink-700">
-              Raised by <strong>{record.provenance.raisedBy ?? "—"}</strong> ·{" "}
-              {when(record.provenance.raisedAt)}
-              {record.provenance.approvedBy !== null && (
-                <>
-                  {" "}
-                  → Approved by <strong>{record.provenance.approvedBy}</strong> ·{" "}
-                  {when(record.provenance.approvedAt)}
-                </>
+      {/* Main asymmetric 3-column layout */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Main Column (2 cols) */}
+        <div className="space-y-6 lg:col-span-2">
+          {(record.jobDescription !== "" || record.jobDescriptionUrl !== null) && (
+            <Section title="Job description">
+              {record.jobDescription !== "" && (
+                <p className="whitespace-pre-line text-sm leading-relaxed text-ink-800 break-words [overflow-wrap:anywhere]">
+                  {record.jobDescription}
+                </p>
               )}
-              {record.provenance.publishedBy !== null && (
-                <>
-                  {" "}
-                  → Published by <strong>{record.provenance.publishedBy}</strong> ·{" "}
-                  {when(record.provenance.publishedAt)}
-                </>
-              )}
-            </p>
-            <p className="mt-2 text-xs italic text-ink-500">
-              This page edits nothing. Actions stay on their own screens.
-            </p>
-          </Section>
-        )}
-
-        {record.siblingRoles.length > 0 && (
-          <Section title="Other Roles in This Drive">
-            <p className="mb-3 text-sm text-ink-600">
-              This company is hiring for {record.siblingRoles.length + 1} roles under the same
-              recruitment drive.
-            </p>
-            <ul className="space-y-2">
-              {record.siblingRoles.map((sibling) => (
-                <li
-                  key={sibling.driveId}
-                  className="rounded-lg border border-line bg-surface-muted/30 p-3"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <Link
-                        to={`/drives/${sibling.driveId}`}
-                        className="font-semibold text-brand-600 hover:underline"
+              {record.jobDescriptionUrl !== null && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-muted/40 p-3.5">
+                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                    <span className="text-xl shrink-0" aria-hidden="true">
+                      📄
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={record.jobDescriptionUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 break-all"
                       >
-                        {sibling.roleTitle || "Unnamed role"}
-                      </Link>
-                      {sibling.driveType !== null && (
-                        <span className="ml-2">
-                          <Badge tone={driveTypeTone(asDriveType(sibling.driveType))}>
-                            {driveTypeLabel(asDriveType(sibling.driveType))}
-                          </Badge>
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                      <Badge tone="neutral">{STATUS_LABEL[sibling.status] ?? sibling.status}</Badge>
-                      <span className="text-ink-600">{sibling.ctcLabel}</span>
-                      {sibling.stipendLabel !== null && (
-                        <span className="text-ink-600">{sibling.stipendLabel}</span>
-                      )}
+                        {record.jobDescriptionName ?? "Job description (PDF)"}
+                      </a>
+                      <p className="text-xs text-ink-500">
+                        Official document provided by recruiter
+                      </p>
                     </div>
                   </div>
-                </li>
-              ))}
-            </ul>
+                  {/* The row already names the document beside it, so this
+                      affordance names its object — "View" belongs to the one
+                      link that opens the record (architecture rule). */}
+                  <ButtonAnchor
+                    href={record.jobDescriptionUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0"
+                    aria-label={`Open the job description PDF for ${record.companyName} — ${record.roleTitle}`}
+                  >
+                    PDF
+                  </ButtonAnchor>
+                </div>
+              )}
+            </Section>
+          )}
+
+          <Section title="Eligibility as published">
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <Fact label="CGPA cutoff" value={record.eligibility.cgpaLabel} />
+              <Fact label="10th standard" value={record.eligibility.tenthLabel} />
+              <Fact label="12th standard" value={record.eligibility.twelfthLabel} />
+              <Fact label="Arrears" value={record.eligibility.arrearsLabel} />
+              <Fact label="Passing years" value={record.eligibility.passingYears.join(", ")} />
+              <Fact
+                label="Must-have skills"
+                value={record.eligibility.mandatorySkills}
+                className="sm:col-span-2"
+              />
+              <Fact
+                label="Degrees"
+                value={record.eligibility.degrees.join(", ")}
+                className="sm:col-span-2"
+              />
+              <Fact
+                label="Branches"
+                value={record.eligibility.branches.join(", ")}
+                className="sm:col-span-2"
+              />
+              {/* College targeting is staff-internal; students do not see which campuses are targeted */}
+              {staff && (
+                <Fact
+                  label="Campuses"
+                  value={
+                    record.eligibility.campuses.length === 0
+                      ? "Open to every campus"
+                      : `Open to: ${record.eligibility.campuses.join(", ")}`
+                  }
+                  className="sm:col-span-2"
+                />
+              )}
+            </dl>
           </Section>
-        )}
+
+          <Section title="Selection process">
+            {record.rounds.length === 0 ? (
+              <p className="text-sm text-ink-500">No rounds declared yet.</p>
+            ) : (
+              <ol className="space-y-2">
+                {record.rounds.map((round) => (
+                  <li
+                    key={round.sequence}
+                    className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted/30 px-3.5 py-2.5 text-sm text-ink-800"
+                  >
+                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600">
+                      {round.sequence}
+                    </span>
+                    <span className="min-w-0 flex-1 break-words font-medium">
+                      <span className="font-semibold text-ink-900">Round {round.sequence}</span> —{" "}
+                      {round.name}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Section>
+
+          {staff && record.applicants.length > 0 && (
+            <Section title={`Applicants (${record.applicants.length})`}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wide text-ink-500">
+                      <th className="py-1 pr-3 whitespace-nowrap">Student</th>
+                      <th className="py-1 pr-3 whitespace-nowrap">Roll number</th>
+                      <th className="py-1 pr-3 whitespace-nowrap">Campus</th>
+                      <th className="py-1 pr-3 whitespace-nowrap">Applied</th>
+                      <th className="py-1 whitespace-nowrap" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {record.applicants.map((applicant) => (
+                      <tr key={applicant.applicationId} className="border-t border-line">
+                        <td className="py-2 pr-3 font-medium text-ink-900 break-words max-w-[200px]">
+                          {applicant.fullName}
+                        </td>
+                        <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">
+                          {applicant.rollNumber}
+                        </td>
+                        <td className="py-2 pr-3 break-words max-w-[180px]">{applicant.campus}</td>
+                        <td className="py-2 pr-3 whitespace-nowrap text-ink-600">
+                          {when(applicant.appliedAt)}
+                        </td>
+                        <td className="py-2 whitespace-nowrap text-right">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-expanded={openSnapshot === applicant.applicationId}
+                            onClick={() =>
+                              setOpenSnapshot(
+                                openSnapshot === applicant.applicationId
+                                  ? null
+                                  : applicant.applicationId,
+                              )
+                            }
+                          >
+                            {openSnapshot === applicant.applicationId
+                              ? "Hide snapshot"
+                              : "View snapshot"}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {record.applicants
+                .filter((a) => a.applicationId === openSnapshot)
+                .map((applicant) => (
+                  <section
+                    key={applicant.applicationId}
+                    aria-label={`Snapshot of ${applicant.fullName}`}
+                    className="mt-3 rounded-lg bg-surface-muted p-4"
+                  >
+                    <p className="mb-2 text-xs font-semibold text-gold-800">
+                      ⚠️ The profile as it was AT APPLY TIME — what the recruiter received, never the
+                      live profile.
+                    </p>
+                    <dl className="grid gap-3 sm:grid-cols-3">
+                      <Fact label="CGPA" value={fromSnapshot(applicant.snapshot, "overallCgpa")} />
+                      <Fact
+                        label="10th %"
+                        value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
+                      />
+                      <Fact
+                        label="12th %"
+                        value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
+                      />
+                      <Fact
+                        label="Current arrears"
+                        value={fromSnapshot(applicant.snapshot, "currentArrears")}
+                      />
+                      <Fact label="Degree" value={fromSnapshot(applicant.snapshot, "degree")} />
+                      <Fact label="Branch" value={fromSnapshot(applicant.snapshot, "branch")} />
+                    </dl>
+                  </section>
+                ))}
+            </Section>
+          )}
+
+          {record.siblingRoles.length > 0 && (
+            <Section title="Other Roles in This Drive">
+              <p className="mb-3 text-sm text-ink-600">
+                This company is hiring for {record.siblingRoles.length + 1} roles under the same
+                recruitment drive.
+              </p>
+              <ul className="space-y-2">
+                {record.siblingRoles.map((sibling) => (
+                  <li
+                    key={sibling.driveId}
+                    className="rounded-lg border border-line bg-surface-muted/30 p-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0 max-w-full">
+                        <Link
+                          to={`/drives/${sibling.driveId}`}
+                          className="font-semibold text-brand-600 hover:underline break-words"
+                        >
+                          {sibling.roleTitle || "Unnamed role"}
+                        </Link>
+                        {sibling.driveType !== null && (
+                          <span className="ml-2">
+                            <Badge tone={driveTypeTone(asDriveType(sibling.driveType))}>
+                              {driveTypeLabel(asDriveType(sibling.driveType))}
+                            </Badge>
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm shrink-0">
+                        <Badge tone="neutral">
+                          {STATUS_LABEL[sibling.status] ?? sibling.status}
+                        </Badge>
+                        <span className="text-ink-600">{sibling.ctcLabel}</span>
+                        {sibling.stipendLabel !== null && (
+                          <span className="text-ink-600">{sibling.stipendLabel}</span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+        </div>
+
+        {/* Sidebar Column (1 col) */}
+        <div className="space-y-6 lg:col-span-1">
+          <Section title="Compensation">
+            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <Fact label="CTC" value={record.ctcLabel} />
+              <Fact label="Breakup" value={record.ctcBreakup} />
+              <Fact label="Bond / service agreement" value={record.bondDetails} />
+              <Fact
+                label="Openings"
+                value={record.openings === null ? "" : String(record.openings)}
+              />
+            </dl>
+          </Section>
+
+          <Section title="Where and when">
+            <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <Fact label="Locations" value={record.locations} />
+              <Fact label="Mode" value={record.driveMode.replaceAll("_", " ")} />
+              {/* UAT 2026-08-21 item 2: worded by the domain; null hides it. */}
+              <Fact label="Venue" value={record.venue ?? ""} />
+              <Fact label="Applications open" value={when(record.applicationStart)} />
+              <Fact label="Applications close" value={when(record.applicationEnd)} />
+              <Fact label="Tentative drive date" value={when(record.tentativeDate)} />
+              <Fact label="Shift" value={record.shift} />
+              <Fact label="Joining" value={record.joining} />
+            </dl>
+          </Section>
+
+          {role === "account_executive" && (
+            <Section title="Recruiter contacts — visible to you alone">
+              {record.recruiters.length === 0 ? (
+                // A5 (UAT 2026-08-19): an honest "none", with the routing stated.
+                <p className="text-sm text-ink-700">
+                  No contact recorded for this company — communication goes through the{" "}
+                  <strong>Central Placement Coordinator</strong>.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {record.recruiters.map((contact) => (
+                    <dl
+                      // Contacts have no id of their own; the four fields together are the identity.
+                      key={`${contact.name}|${contact.designation}|${contact.email}|${contact.phone}`}
+                      className="grid gap-2.5 rounded-lg border border-line p-3"
+                    >
+                      <Fact label="Name" value={contact.name} />
+                      <Fact label="Designation" value={contact.designation} />
+                      <Fact label="Email" value={contact.email} className="break-all" />
+                      <Fact label="Phone" value={contact.phone} />
+                    </dl>
+                  ))}
+                </div>
+              )}
+            </Section>
+          )}
+
+          {staff && (
+            <Section title="Provenance">
+              <p className="text-sm leading-relaxed text-ink-700 break-words [overflow-wrap:anywhere]">
+                Raised by <strong>{record.provenance.raisedBy ?? "—"}</strong> ·{" "}
+                {when(record.provenance.raisedAt)}
+                {record.provenance.approvedBy !== null && (
+                  <>
+                    <br />→ Approved by <strong>{record.provenance.approvedBy}</strong> ·{" "}
+                    {when(record.provenance.approvedAt)}
+                  </>
+                )}
+                {record.provenance.publishedBy !== null && (
+                  <>
+                    <br />→ Published by <strong>{record.provenance.publishedBy}</strong> ·{" "}
+                    {when(record.provenance.publishedAt)}
+                  </>
+                )}
+              </p>
+              <p className="mt-2 text-xs italic text-ink-500">
+                This page edits nothing. Actions stay on their own screens.
+              </p>
+            </Section>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }

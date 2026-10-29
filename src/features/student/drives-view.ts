@@ -8,7 +8,7 @@ import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AcademicProfile, DriveStatus, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
-import { readAll, readAllRowsByIds } from "@lib/postgrest-read";
+import { describeReadFailure, readAll, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ApplyDrive,
@@ -17,14 +17,12 @@ import {
   createSupabaseApplyRepository,
 } from "./apply-repository";
 import type {
-  ClosedDriveRow,
-  ConcludedDriveRow,
   ProgressDriveRow,
   StudentDriveLists,
   StudentDriveListsView,
+  StudentHoldNotice,
 } from "./drive-tabs";
 import type { OpenDrive } from "./drives-list";
-import { offerLettersByDrive, signOfferLetters } from "./offer-letters";
 
 /**
  * PostgREST returns an embedded to-one relation as an object, but the generated
@@ -97,8 +95,10 @@ export const DRIVE_COLUMNS = `
 `;
 
 /**
- * N7: every status a student may read (0030's policy). The closed statuses
- * feed the two closed lists; `openDrives` still drops everything not live.
+ * N7: every status a student may read (0030's policy). A drive leaves `live`
+ * while an application is still being decided, so the closed statuses stay
+ * readable — an application in its rounds must keep its drive. `openDrives`
+ * still drops everything not live.
  */
 const STUDENT_READABLE_STATUSES = ["live", "applications_closed", "in_rounds", "completed"];
 
@@ -296,9 +296,43 @@ export function createSupabaseDrivesView(
       drives: drives as Array<Record<string, unknown>>,
       applications: applicationRows,
       appliedIds: applicationRows.map((a) => a.drive_id),
-      // The raw rows, kept alongside the domain `Offer`s: the ladder has no
-      // business knowing about storage paths, and the screen does.
-      offerRows: offers as Array<Record<string, unknown>>,
+    };
+  }
+
+  /**
+   * The student's own unreleased hold (0125), pending or confirmed.
+   *
+   * A pending self-placed request is `released_at is null` too, which is the
+   * same row 0125's student policy already lets them read — the screen is told
+   * which of the two it is by `confirmed_at`, not by a second read.
+   *
+   * The attachment is not selected: the reason and the window are the whole
+   * explanation the student gets (0126 stops their mail), and the evidence is
+   * the Campus Manager's to read.
+   */
+  async function readHold(studentId: string): Promise<StudentHoldNotice | null> {
+    const { data, error } = await client
+      .from("student_holds")
+      .select("kind, reason, starts_at, ends_at, confirmed_at")
+      .eq("student_id", studentId)
+      .is("released_at", null)
+      .limit(1);
+
+    if (error !== null) {
+      throw new Error(
+        describeReadFailure(error, "Could not check whether your placements are on hold."),
+      );
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+    if (row === null || row === undefined) return null;
+
+    return {
+      kind: row.kind as StudentHoldNotice["kind"],
+      reason: (row.reason as string | null) ?? "",
+      startsAt: row.starts_at as string,
+      endsAt: row.ends_at as string,
+      confirmedAt: (row.confirmed_at as string | null) ?? null,
     };
   }
 
@@ -453,6 +487,17 @@ export function createSupabaseDrivesView(
       return buildOpenCards(student, drives, appliedIds, clock());
     },
 
+    async openDrive(driveId: string): Promise<OpenDrive | null> {
+      const { student, drives, appliedIds } = await load();
+      const [card] = await buildOpenCards(
+        student,
+        drives.filter((drive) => drive.id === driveId),
+        appliedIds,
+        clock(),
+      );
+      return card ?? null;
+    },
+
     async apply(driveId, resume) {
       const { student, drives, appliedIds } = await load();
       const raw = drives.find((d) => d.id === driveId);
@@ -463,23 +508,22 @@ export function createSupabaseDrivesView(
     },
 
     /**
-     * N7 — the four lists (approved 2026-08-19). One pass over everything the
-     * student can read; `classifyStudentDrive` decides the list, so each
-     * drive lands in exactly one.
+     * The two lists the student's Drives area shows (N7, approved 2026-08-19;
+     * narrowed to future drives on 2026-10-29).
+     *
+     * `classifyStudentDrive` still decides where a drive lands, and the two
+     * closed answers are dropped here: a drive whose window has closed is not
+     * one the student can act on, and a concluded application belongs to the
+     * dashboard's "My applications", which carries its outcome and letter.
+     * Showing them here would be a door that is already shut.
      *
      * An APPLIED drive is never re-judged by R5: eligibility was settled at
      * apply time and snapshotted (R7). Re-hiding it now would disappear a
      * drive the student is mid-interview with.
      */
     async lists(): Promise<StudentDriveLists> {
-      const { student, drives, applications, appliedIds, offerRows } = await load();
+      const { student, drives, applications, appliedIds } = await load();
       const now = clock();
-
-      // UAT 2026-08-27: the letter behind "Offer received".
-      const letterByDrive = offerLettersByDrive(
-        offerRows,
-        await signOfferLetters(client, offerRows),
-      );
 
       const applicationByDrive = new Map(applications.map((a) => [a.drive_id, a]));
       const applicationIds = applications.map((a) => a.id);
@@ -488,7 +532,7 @@ export function createSupabaseDrivesView(
       // sits in a round with more than a thousand participants, used to get a
       // silently truncated answer here — and a truncated `sat` set means a
       // round the student IS in renders as "not scheduled".
-      const [participants, results, attendance] = await Promise.all([
+      const [participants, results, attendance, hold] = await Promise.all([
         readAllRowsByIds(
           applicationIds,
           (batch) => (from, to) =>
@@ -516,6 +560,7 @@ export function createSupabaseDrivesView(
               .in("application_id", batch)
               .range(from, to),
         ),
+        readHold(student.id),
       ]);
 
       const key = (applicationId: string, roundId: string) => `${applicationId}::${roundId}`;
@@ -537,8 +582,6 @@ export function createSupabaseDrivesView(
 
       const toApplyIds = new Set<string>();
       const inProgress: ProgressDriveRow[] = [];
-      const notApplied: ClosedDriveRow[] = [];
-      const appliedClosed: ConcludedDriveRow[] = [];
 
       for (const raw of drives) {
         const drive = toDrive(raw);
@@ -589,17 +632,9 @@ export function createSupabaseDrivesView(
             totalRounds: progress.totalRounds,
           };
 
-          if (list === "applied_closed") {
-            const letter = letterByDrive.get(drive.id) ?? null;
-            appliedClosed.push({
-              ...row,
-              outcomeLabel: progress.label,
-              offerLetterUrl: letter?.url ?? null,
-              offerLetterName: letter?.name ?? null,
-            });
-          } else {
-            inProgress.push(row);
-          }
+          // A concluded application is history, not a drive to act on: it is
+          // the dashboard's "My applications" that reports the outcome.
+          if (list === "in_progress") inProgress.push(row);
           continue;
         }
 
@@ -629,23 +664,9 @@ export function createSupabaseDrivesView(
           now,
         );
 
-        if (list === "to_apply") {
-          toApplyIds.add(drive.id);
-        } else {
-          const min = raw.ctc_min_lpa as number | null;
-          const max = raw.ctc_max_lpa as number | null;
-          notApplied.push({
-            id: drive.id,
-            companyName: raw.company_name as string,
-            roleTitle: (raw.role_title as string | null) ?? "Role not specified",
-            roleCategory: drive.roleCategory,
-            driveType: drive.driveType,
-            companyDriveId: (raw.company_drive_id as string | null) ?? null,
-            ctcLabel: max === null ? `₹${min ?? "—"} LPA` : `₹${min}–${max} LPA`,
-            locations: text(raw.work_locations),
-            closedOn: raw.application_end as string,
-          });
-        }
+        // `not_applied_closed` is a drive whose window has shut. It is not
+        // shown: the list is for drives the student can still act on.
+        if (list === "to_apply") toApplyIds.add(drive.id);
       }
 
       // The open cards go through the SAME builder as `openDrives`, so the
@@ -656,8 +677,7 @@ export function createSupabaseDrivesView(
       return {
         toApply: openCards.filter((card) => toApplyIds.has(card.id)),
         inProgress,
-        notApplied,
-        appliedClosed,
+        hold,
         // C2 (UAT 2026-08-19): the rung they hold, so the tabs can say what
         // remains open instead of looking shut.
         placedAt: highestOfferCategory(student.offers),

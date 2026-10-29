@@ -466,4 +466,32 @@ describe("ShadcnDataTable Component", () => {
 
     expect(screen.getByText(/4 selected/i)).toBeDefined();
   });
+
+  /**
+   * 2026-10-29 UAT: the "See who" drawer kept the old page number when the
+   * list shrank under it (the group tabs), printing "Page 2 of 1" over nothing.
+   */
+  it("returns to a page that exists when the rows shrink under it", async () => {
+    const user = userEvent.setup();
+    const many: TestCandidate[] = Array.from({ length: 30 }, (_, i) => ({
+      id: `c${i}`,
+      name: `Candidate ${i}`,
+      cgpa: 7,
+      branch: "CSE",
+    }));
+
+    const { rerender } = render(
+      <ShadcnDataTable data={many} columns={columns} defaultPageSize={10} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Page 3 of 3")).toBeDefined();
+
+    rerender(<ShadcnDataTable data={many.slice(0, 4)} columns={columns} defaultPageSize={10} />);
+
+    await waitFor(() => expect(screen.getByText("Page 1 of 1")).toBeDefined());
+    expect(screen.queryByText("Page 3 of 1")).toBeNull();
+    expect(screen.getByText("Candidate 0")).toBeDefined();
+  });
 });

@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import {
   DafPublish,
+  type ProgrammeLink,
   type PublishCandidate,
   type PublishDrive,
   type PublishView,
@@ -97,14 +98,25 @@ const COLLEGES: readonly CollegeOption[] = [
   { name: "VIT Bangalore", city: "Bengaluru", isActive: true },
 ];
 
+/**
+ * The programmes the roster holds, which is what interlocks the three tickers:
+ * Alliance runs B.E/CSE and BCA (no branch); VIT runs B.E/CSE only.
+ */
+const PROGRAMMES: readonly ProgrammeLink[] = [
+  { campus: "Alliance University", degree: "B.E", branch: "CSE" },
+  { campus: "Alliance University", degree: "BCA", branch: "" },
+  { campus: "VIT Bangalore", degree: "B.E", branch: "CSE" },
+];
+
 const OPTIONS: TargetingOptions = {
   colleges: COLLEGES,
   degrees: ["BCA", "B.E"],
   branches: ["AI and DS", "CSE"],
+  programmes: PROGRAMMES,
 };
 
 /** A roster that has declared nothing yet — no chips to choose from. */
-const NO_OPTIONS: TargetingOptions = { colleges: [], degrees: [], branches: [] };
+const NO_OPTIONS: TargetingOptions = { colleges: [], degrees: [], branches: [], programmes: [] };
 
 /** A drive in the state the TCS drive was actually in: approved, but bare. */
 const BARE_DRIVE: PublishDrive = {
@@ -247,9 +259,14 @@ describe("DafPublish — starts from the approved criteria", () => {
     );
 
     expect(await screen.findByRole("checkbox", { name: "BCA", checked: true })).toBeDefined();
-    expect(screen.getByRole("checkbox", { name: "AI and DS", checked: true })).toBeDefined();
+    // The drive arrived targeting a branch the roster does not pair with BCA.
+    // It stays on the board, marked, so the coordinator can see and untick it —
+    // a chip the screen cannot show is a chip nobody can untick.
+    expect(screen.getByRole("checkbox", { name: /^AI and DS/, checked: true })).toBeDefined();
     expect(screen.getByRole("checkbox", { name: "Chennai", checked: true })).toBeDefined();
-    expect(screen.getByRole("checkbox", { name: "CSE", checked: false })).toBeDefined();
+    // The interlock: under Alliance + BCA the roster offers no branch at all,
+    // so CSE — a B.E branch — is not offered here.
+    expect(screen.queryByRole("checkbox", { name: /^CSE/ })).toBeNull();
   });
 
   /**
@@ -434,6 +451,7 @@ describe("DafPublish — area targeting", () => {
             colleges: [...COLLEGES, { name: "Hostel Field Site", city: null, isActive: true }],
             degrees: [],
             branches: [],
+            programmes: [],
           },
           cohort: COHORT,
         }),
@@ -777,7 +795,12 @@ describe("DafPublish \u2014 the rounds the AE declared", () => {
     view({
       load: async () => ({
         drive: { ...BARE_DRIVE, rounds, declaredRoundCount },
-        options: { colleges: COLLEGES, degrees: ["B.E"], branches: ["CSE"] },
+        options: {
+          colleges: COLLEGES,
+          degrees: ["B.E"],
+          branches: ["CSE"],
+          programmes: PROGRAMMES,
+        },
         cohort: [candidate("s1", "Sai Naveen")],
       }),
     });
@@ -1035,5 +1058,75 @@ describe("the role's must-have skills, on the publish screen", () => {
     );
 
     expect(await screen.findByText(/no must-have skills declared/i)).toBeDefined();
+  });
+});
+
+/**
+ * 2026-10-29 UAT: the three tickers used to be three independent catalogues —
+ * a coordinator could tick B.E beside MBA, or a branch no ticked college runs,
+ * and publish a combination the roster does not contain. Campuses now narrow
+ * degrees, and degrees narrow branches.
+ */
+describe("DafPublish — the three tickers interlock", () => {
+  it("narrows the degrees to what the ticked campuses run", async () => {
+    routed(view());
+    await screen.findByRole("checkbox", { name: "BCA" });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "VIT Bangalore" }));
+
+    // VIT runs B.E/CSE and nothing else: BCA leaves the board.
+    expect(screen.getByText("Degrees the ticked campuses run")).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "B.E" })).toBeDefined();
+    expect(screen.queryByRole("checkbox", { name: /^BCA/ })).toBeNull();
+  });
+
+  it("narrows the branches again under a ticked degree", async () => {
+    routed(view());
+    await screen.findByRole("checkbox", { name: "B.E" });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "Alliance University" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "B.E" }));
+
+    expect(screen.getByText("Branches on the ticked degrees")).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "CSE" })).toBeDefined();
+    expect(screen.queryByRole("checkbox", { name: /^AI and DS/ })).toBeNull();
+  });
+
+  it("keeps a ticked chip that fell out of the narrowed list on the board", async () => {
+    routed(view());
+    await screen.findByRole("checkbox", { name: "B.E" });
+
+    // Ticked while nothing narrowed the list; BCA carries no branch, so it
+    // falls out the moment BCA narrows the branches.
+    await userEvent.click(screen.getByRole("checkbox", { name: "AI and DS" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "BCA" }));
+
+    const chip = screen.getByRole("checkbox", { name: /^AI and DS/ });
+    expect((chip as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("publishes what is ticked, including the chip the narrowed list dropped", async () => {
+    const publish = vi.fn().mockResolvedValue(undefined);
+    routed(view({ publish }));
+    await screen.findByRole("checkbox", { name: "B.E" });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "AI and DS" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "BCA" }));
+    await userEvent.click(screen.getByRole("button", { name: /publish to \d+ student/i }));
+
+    await waitFor(() => expect(publish).toHaveBeenCalledTimes(1));
+    expect(publish.mock.calls[0]?.[0]).toMatchObject({ degrees: ["BCA"], branches: ["AI and DS"] });
+  });
+
+  it("offers the whole catalogue again once the narrowing tick is removed", async () => {
+    routed(view());
+    await screen.findByRole("checkbox", { name: "BCA" });
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "VIT Bangalore" }));
+    expect(screen.queryByRole("checkbox", { name: /^BCA/ })).toBeNull();
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "VIT Bangalore" }));
+    expect(screen.getByRole("checkbox", { name: "BCA" })).toBeDefined();
+    expect(screen.getByText("Degrees")).toBeDefined();
   });
 });

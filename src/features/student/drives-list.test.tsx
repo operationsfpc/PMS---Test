@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { ApplyError } from "./apply-repository";
-import { DrivesList, type DrivesView } from "./drives-list";
+import { DrivesList, type DrivesView, visitAccent } from "./drives-list";
 
 /** The card carries a Link to /drives/:id (N1), so a router must be present. */
 const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
@@ -410,5 +410,134 @@ describe("DrivesList — several roles under one company event", () => {
 
     await waitFor(() => expect(apply).toHaveBeenCalledWith("d2", expect.any(File)));
     expect(apply).not.toHaveBeenCalledWith("d1", expect.anything());
+  });
+});
+
+/**
+ * 2026-10-29 UAT: "use some colours for batches". Company visits stacked as
+ * identical white cards were told apart only by reading every name, so each
+ * visit now carries its own colour on the rail and the header band.
+ */
+describe("a colour per company visit", () => {
+  it("gives neighbouring visits different rails", async () => {
+    const other = { ...open, id: "d9", companyName: "Freshworks", roleTitle: "SDE" };
+    const { container } = render(
+      <DrivesList view={view({ openDrives: async () => [open, other] })} />,
+    );
+    await screen.findByText("Zoho");
+
+    const cards = container.querySelectorAll(".border-l-4");
+    expect(cards).toHaveLength(2);
+    expect(cards[0]?.className).toContain(visitAccent(0).rail);
+    expect(cards[1]?.className).toContain(visitAccent(1).rail);
+    expect(visitAccent(0).rail).not.toBe(visitAccent(1).rail);
+  });
+
+  it("paints the visit's header band in the colour of its rail", async () => {
+    const { container } = render(<DrivesList view={view()} />);
+    await screen.findByText("Zoho");
+
+    const card = container.querySelector(`.${visitAccent(0).rail}`);
+    expect(card).not.toBeNull();
+    expect(card?.querySelector(`.${visitAccent(0).band}`)).not.toBeNull();
+  });
+
+  it("colours a multi-role visit once, not once per role", async () => {
+    const mts = { ...open, companyDriveId: "evt-1" };
+    const qa = { ...open, id: "d2", roleTitle: "QA Engineer", companyDriveId: "evt-1" };
+    const { container } = render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+    await screen.findByText("Zoho");
+
+    expect(container.querySelectorAll(".border-l-4")).toHaveLength(1);
+  });
+});
+
+/**
+ * 2026-10-29 UAT: "fix the button to same size and make it in solid colours to
+ * display as enabled". A small white, hairline-bordered `View` beside a big
+ * dark `Apply` read as the disabled half of the pair, so students pressed
+ * neither — the two now share one height and both sit on a filled ground.
+ */
+describe("the card's two controls", () => {
+  const sizing = (el: HTMLElement) =>
+    el.className
+      .split(/\s+/)
+      .filter((cls) => /^(px|py)-/.test(cls))
+      .sort();
+
+  it("draws View and Apply at one size, both on a solid ground", async () => {
+    render(<DrivesList view={view()} />);
+
+    const viewLink = await screen.findByRole("link", {
+      name: "View Zoho — Member Technical Staff",
+    });
+    const apply = screen.getByRole("button", { name: "Apply to Zoho — Member Technical Staff" });
+
+    expect(sizing(viewLink)).toEqual(["px-4", "py-2.5"]);
+    expect(sizing(viewLink)).toEqual(sizing(apply));
+    expect(viewLink.className).toMatch(/bg-brand-50\b/);
+    expect(apply.className).toMatch(/bg-brand-500\b/);
+  });
+});
+
+/**
+ * 2026-10-29 UAT: "swap the dates of published and closing dates". The 📅 in the
+ * visit band held the tentative drive day, which is routinely already past while
+ * the window is still open, so the card's headline date read as stale and the
+ * deadline that actually decides the student's next hour sat below it.
+ */
+describe("the card leads with the deadline", () => {
+  it("puts the closing date in the band and the drive day beside it", async () => {
+    render(
+      <DrivesList
+        view={view({
+          openDrives: async () => [{ ...open, tentativeDate: "2026-11-05T00:00:00Z" }],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText(/applications close \d/i)).toBeDefined();
+    expect(screen.getByText(/drive day/i)).toBeDefined();
+    // Said once: the role's own row defers to the band above it.
+    expect(screen.getAllByText(/applications close \d/i)).toHaveLength(1);
+  });
+
+  it("says the visit's drive day once, whatever the number of roles under it", async () => {
+    const mts = { ...open, companyDriveId: "evt-1", tentativeDate: "2026-11-05T00:00:00Z" };
+    const qa = {
+      ...open,
+      id: "d2",
+      roleTitle: "QA Engineer",
+      companyDriveId: "evt-1",
+      tentativeDate: "2026-11-05T00:00:00Z",
+    };
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+    await screen.findByText("Zoho");
+
+    expect(screen.getAllByText(/drive day/i)).toHaveLength(1);
+    expect(screen.getAllByText(/applications close \d/i)).toHaveLength(1);
+  });
+
+  it("lets a role whose window shuts on another day state its own", async () => {
+    const mts = { ...open, companyDriveId: "evt-1" };
+    const qa = {
+      ...open,
+      id: "d2",
+      roleTitle: "QA Engineer",
+      companyDriveId: "evt-1",
+      applicationEnd: "2026-09-14T00:00:00Z",
+    };
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+    await screen.findByText("Zoho");
+
+    // The band names the first window to shut; only the later row contradicts it.
+    expect(screen.getAllByText(/applications close \d/i)).toHaveLength(2);
+  });
+
+  it("still heads the card when a visit never declared a drive day", async () => {
+    render(<DrivesList view={view()} />);
+
+    expect(await screen.findByText(/applications close \d/i)).toBeDefined();
+    expect(screen.queryByText(/drive day/i)).toBeNull();
   });
 });

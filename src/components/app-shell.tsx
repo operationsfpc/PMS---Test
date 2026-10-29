@@ -90,7 +90,7 @@ export interface NavGroup {
  * were the same list, narrowed by RLS either way, and the cockpit was a third
  * name for a subset of it.
  *
- * The student is deliberately excluded - they get four lists of their own.
+ * The student is deliberately excluded — their Drives area is its own page.
  */
 const DRIVES: NavGroup = {
   heading: "Drives",

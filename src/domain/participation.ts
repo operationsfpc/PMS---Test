@@ -93,6 +93,54 @@ export function canRecordSelfPlacement(context: {
   return { allowed: true };
 }
 
+/**
+ * Asking the Campus Manager for a self-placed hold (0130).
+ *
+ * Student-filed, manager-confirmed. Two documents are required — the offer
+ * letter and a handwritten, signed declaration — because the manager closes the
+ * student's drives on the strength of this request alone. Nothing is closed
+ * until that confirmation: an unconfirmed row is just a request.
+ */
+export function canRequestSelfPlacedHold(context: {
+  readonly participationStatus: ParticipationStatus;
+  readonly hasOfferLetter: boolean;
+  readonly hasDeclaration: boolean;
+}): Decision {
+  if (context.participationStatus === "disbarred") {
+    return {
+      allowed: false,
+      reason: "A disbarred student cannot request a hold. Speak to your placement coordinator.",
+    };
+  }
+  if (context.participationStatus === "opted_out") {
+    return {
+      allowed: false,
+      reason: "You have already opted out, so there are no drives left to hold.",
+    };
+  }
+  if (context.participationStatus === "on_hold") {
+    return {
+      allowed: false,
+      reason: "Your placements are already on hold. Your Campus Manager releases it.",
+    };
+  }
+  if (!context.hasOfferLetter) {
+    return {
+      allowed: false,
+      reason: "Upload your offer letter. Your Campus Manager reads it before confirming the hold.",
+    };
+  }
+  // Asked last of the ones about documents: it is the second one they need.
+  if (!context.hasDeclaration) {
+    return {
+      allowed: false,
+      reason:
+        "Upload a handwritten declaration, signed by you, confirming that you have taken this offer.",
+    };
+  }
+  return { allowed: true };
+}
+
 /** The two roles that decide either request. Approving and declining are one authority. */
 const APPROVERS: readonly AppRole[] = [
   "campus_placement_coordinator",

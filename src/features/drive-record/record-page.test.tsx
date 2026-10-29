@@ -168,6 +168,32 @@ describe("DriveRecordPage", () => {
     expect(await screen.findByText("Open to every campus")).toBeDefined();
   });
 
+  it("hides the campuses list from a student reader", async () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <DriveRecordPage view={view()} role={STUDENT} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /accenture/i })).toBeDefined();
+    expect(screen.queryByText(/campuses/i)).toBeNull();
+    expect(screen.queryByText("Open to: KGiSL")).toBeNull();
+    unmount();
+
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, eligibility: { ...RECORD.eligibility, campuses: [] } })}
+          role={STUDENT}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { name: /accenture/i })).toBeDefined();
+    expect(screen.queryByText("Open to every campus")).toBeNull();
+  });
+
   /** A4/A5 (UAT 2026-08-19): several contacts, or an honest "none". */
   it("lists every contact the drive carries, for the AE", async () => {
     const two = {
@@ -209,6 +235,50 @@ describe("DriveRecordPage", () => {
     expect(screen.queryByText("Thanush Krishna")).toBeNull();
     expect(screen.queryByText(/Raised by/)).toBeNull();
     expect(screen.queryByText("testabcd@example.com")).toBeNull();
+  });
+
+  it("renders long text fields without crashing and keeps full text content", async () => {
+    const longRecord: DriveRecord = {
+      ...RECORD,
+      locations: "Bengaluru, Chennai, Hyderabad, Coimbatore, Pune, Mumbai, Gurugram, Noida",
+      eligibility: {
+        ...RECORD.eligibility,
+        mandatorySkills:
+          "React, Next.js, TypeScript, PostgreSQL, Docker, Kubernetes, Microservices",
+        degrees: [
+          "B.E Computer Science",
+          "B.Tech Information Technology",
+          "B.Sc Artificial Intelligence",
+        ],
+        branches: [
+          "Computer Science and Engineering",
+          "Information Technology",
+          "Artificial Intelligence and Data Science",
+        ],
+      },
+      rounds: [
+        {
+          sequence: 1,
+          name: "Online Cognitive, Verbal Ability and Technical Coding Assessment on HackerRank Platform",
+        },
+      ],
+    };
+
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={view(longRecord)} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findAllByText(
+        /Bengaluru, Chennai, Hyderabad, Coimbatore, Pune, Mumbai, Gurugram, Noida/,
+      ),
+    ).toHaveLength(2);
+    expect(
+      screen.getByText(/Online Cognitive, Verbal Ability and Technical Coding Assessment/),
+    ).toBeDefined();
+    expect(screen.getByText(/React, Next\.js, TypeScript, PostgreSQL/)).toBeDefined();
   });
 
   it("opens the APPLY-TIME snapshot, saying that is what it is", async () => {

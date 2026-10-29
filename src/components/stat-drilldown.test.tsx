@@ -151,6 +151,36 @@ describe("the count→who popup", () => {
     expect(screen.queryByRole("tab")).toBeNull();
   });
 
+  /**
+   * 2026-10-29 UAT: paging the full count and then narrowing to a smaller
+   * group left the table on a page the group did not have — "Page 2 of 1" over
+   * an empty roster. The list starts over at page one.
+   */
+  it("starts a smaller group at page one instead of showing an empty page", async () => {
+    const user = userEvent.setup();
+    renderDrilldown({
+      people: [
+        ...Array.from({ length: 30 }, (_, i) => ({
+          id: `m${i}`,
+          name: `Main student ${i}`,
+          group: "Main campus",
+        })),
+        { id: "s1", name: "Deepa Shree", group: "Side campus" },
+        { id: "s2", name: "Farida Noor", group: "Side campus" },
+      ],
+    });
+    const dialog = screen.getByRole("dialog");
+
+    await user.click(within(dialog).getByRole("button", { name: "Next" }));
+    expect(within(dialog).getByText("Page 2 of 2")).toBeDefined();
+
+    await user.click(within(dialog).getByRole("tab", { name: "Side campus (2)" }));
+
+    expect(within(dialog).getByText(/^2 students/)).toBeDefined();
+    expect(within(dialog).getByText("Deepa Shree")).toBeDefined();
+    expect(within(dialog).getByText("Page 1 of 1")).toBeDefined();
+  });
+
   it("offers the same list with more room, and closes on the way out", async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();

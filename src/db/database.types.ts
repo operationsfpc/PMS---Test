@@ -9,11 +9,11 @@ export interface Enums {
   app_role: "admin" | "student" | "campus_placement_coordinator" | "campus_manager" | "account_executive" | "delivery_head" | "central_placement_coordinator" | "key_account_manager" | "enterprise_relations" | "er_head" | "ceo";
   arrear_policy: "no_standing" | "no_history" | "flexible";
   attendance_status: "scheduled" | "present" | "absent" | "provisional";
-  document_kind: "tenth_marksheet" | "twelfth_marksheet" | "semester_marksheet" | "resume" | "offer_letter" | "opt_out_declaration" | "ug_consolidated_marksheet" | "diploma_marksheet" | "certificate" | "hold_order";
+  document_kind: "tenth_marksheet" | "twelfth_marksheet" | "semester_marksheet" | "resume" | "offer_letter" | "opt_out_declaration" | "ug_consolidated_marksheet" | "diploma_marksheet" | "certificate" | "hold_order" | "self_placement_declaration";
   drive_mode: "on_campus" | "physical_outside_campus" | "virtual" | "pooled";
   drive_status: "draft" | "submitted" | "approved" | "live" | "applications_closed" | "in_rounds" | "completed" | "rejected";
   drive_type: "placement" | "internship_convertible" | "internship";
-  hold_kind: "fees" | "self_placed" | "idle";
+  hold_kind: "fees" | "self_placed" | "idle" | "pause";
   joining_timeline: "immediate" | "later";
   marks_scale: "cgpa" | "percentage";
   offer_category: "internship" | "regular" | "dream" | "super_dream";
@@ -521,16 +521,19 @@ export interface StudentHoldsRow {
   kind: Enums["hold_kind"];
   reason: string;
   starts_at: string;
-  ends_at: string | null;
+  ends_at: string;
   document_id: string | null;
-  held_by: string;
+  declaration_id: string | null;
+  held_by: string | null;
   held_at: string;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
   released_by: string | null;
   released_at: string | null;
   release_note: string | null;
 }
 
-export type StudentHoldsInsert = Pick<StudentHoldsRow, "student_id" | "kind" | "reason" | "held_by"> & Partial<Pick<StudentHoldsRow, "id" | "starts_at" | "ends_at" | "document_id" | "held_at" | "released_by" | "released_at" | "release_note">>;
+export type StudentHoldsInsert = Pick<StudentHoldsRow, "student_id" | "kind" | "reason" | "ends_at"> & Partial<Pick<StudentHoldsRow, "id" | "starts_at" | "document_id" | "declaration_id" | "held_by" | "held_at" | "confirmed_by" | "confirmed_at" | "released_by" | "released_at" | "release_note">>;
 
 export interface StudentRolePreferencesRow {
   student_id: string;

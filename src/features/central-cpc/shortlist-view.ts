@@ -199,6 +199,8 @@ export function createSupabaseShortlistView(
           // D7: read LIVE, not from the snapshot — the whole point is that
           // the student opted out AFTER the snapshot was taken.
           optedOut: student?.participation_status === "opted_out",
+          // The same live question, for the college's own hold (0125/0126).
+          onHold: student?.participation_status === "on_hold",
         };
       });
     },

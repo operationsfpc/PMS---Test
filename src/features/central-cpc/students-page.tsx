@@ -71,7 +71,14 @@ const FILTERS: readonly { readonly value: DirectoryFilter; readonly label: strin
   { value: "on_campus", label: "Placed on campus" },
   { value: "self_placed", label: "Self-placed" },
   { value: "not_placed", label: "Not placed" },
+  // 2026-10-29: the students the `idle` hold kind (0130) exists for — in
+  // placements, unplaced, and never having applied to a single drive.
+  { value: "never_applied", label: "Never applied" },
   { value: "opted_out", label: "Opted out" },
+  // 2026-10-29: the roster's participation status is already shown on every
+  // row, but the chip is the way a manager reaches the held students without
+  // scrolling. The domain supports it; the chip was simply missing.
+  { value: "on_hold", label: "On hold" },
 ];
 
 const EXPORT_COLUMNS = [
@@ -152,6 +159,10 @@ export function StudentDirectoryPage({
   const [holding, setHolding] = useState<HoldTarget | null>(null);
   /** Which student is now held, said once the write has landed. */
   const [holdNote, setHoldNote] = useState<string | null>(null);
+  /** Students whose self-placed request is waiting on this manager (0130). */
+  const [pending, setPending] = useState<readonly string[]>([]);
+  /** The queue read failing — a request nobody can see is one nobody answers. */
+  const [pendingProblem, setPendingProblem] = useState<string | null>(null);
 
   // The filter lives in the URL so the dashboard can link straight to a
   // breakdown, and so a coordinator can send someone the exact view they mean.
@@ -196,6 +207,30 @@ export function StudentDirectoryPage({
     };
   }, [view, attempt]);
 
+  // The queue of requests waiting on this manager, read once for the roster
+  // rather than once per row.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt retries the read on purpose
+  useEffect(() => {
+    if (holds === undefined) return;
+    let live = true;
+    holds
+      .pendingIds()
+      .then((ids) => {
+        if (live) setPending(ids);
+      })
+      .catch((cause: unknown) => {
+        if (!live) return;
+        setPendingProblem(
+          cause instanceof Error && cause.message !== ""
+            ? cause.message
+            : "Could not check for requests waiting on you.",
+        );
+      });
+    return () => {
+      live = false;
+    };
+  }, [holds, attempt]);
+
   const summary = useMemo(() => summariseDirectory(students ?? []), [students]);
   const visible = useMemo(
     () => filterDirectory(students ?? [], { filter, query, campus, ctc, category }),
@@ -207,6 +242,12 @@ export function StudentDirectoryPage({
     () =>
       [...new Set((students ?? []).map((s) => s.campusName))].sort((a, b) => a.localeCompare(b)),
     [students],
+  );
+
+  const pendingSet = useMemo(() => new Set(pending), [pending]);
+  const pendingStudents = useMemo(
+    () => (students ?? []).filter((s) => pendingSet.has(s.studentId)),
+    [students, pendingSet],
   );
 
   async function exportCsv() {
@@ -316,6 +357,16 @@ export function StudentDirectoryPage({
         </p>
       )}
 
+      {/* A queue that could not be read is not an empty queue. */}
+      {pendingProblem !== null && (
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {pendingProblem}
+        </div>
+      )}
+
       {/* Said out loud because a hold that landed silently is a hold the next
           manager believes was never placed. */}
       {holdNote !== null && (
@@ -339,6 +390,37 @@ export function StudentDirectoryPage({
         </Card>
       ) : (
         <>
+          {/* 0130: a self-placed request closes nothing until this manager
+              confirms it, so the waiting ones are said at the top rather than
+              left for whoever happens to open the right record. */}
+          {pendingStudents.length > 0 && (
+            <div
+              role="status"
+              className="mb-4 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-ink-900"
+            >
+              <p className="font-semibold">
+                {pendingStudents.length === 1
+                  ? "1 self-placed request is waiting on you."
+                  : `${pendingStudents.length} self-placed requests are waiting on you.`}
+              </p>
+              <p className="mt-1 text-ink-700">
+                Their drives stay open until you confirm the hold.{" "}
+                {pendingStudents.map((student, index) => (
+                  <span key={student.studentId}>
+                    {index > 0 && ", "}
+                    <Link
+                      to={`/students/${student.studentId}`}
+                      aria-label={`Open the request from ${student.fullName}`}
+                      className="font-medium text-brand-600 underline underline-offset-2 hover:text-brand-700"
+                    >
+                      {student.fullName}
+                    </Link>
+                  </span>
+                ))}
+              </p>
+            </div>
+          )}
+
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <fieldset>
               <legend className="sr-only">Filter students</legend>
@@ -531,6 +613,10 @@ export function StudentDirectoryPage({
                               button whose only answer would be a failure. */}
                           {student.participationStatus === "on_hold" ? (
                             <Badge tone="warning">On hold</Badge>
+                          ) : pendingSet.has(student.studentId) ? (
+                            // A request waiting is the student's own words; a
+                            // second Hold button would just be refused by 0130.
+                            <Badge tone="warning">Request waiting</Badge>
                           ) : (
                             <Button
                               variant="secondary"

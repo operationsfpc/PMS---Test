@@ -23,6 +23,7 @@ function view(overrides: Partial<ParticipationView> = {}): ParticipationView {
     }),
     requestOptOut: async () => undefined,
     recordSelfPlacement: async () => undefined,
+    requestSelfPlacedHold: async () => undefined,
     ...overrides,
   };
 }

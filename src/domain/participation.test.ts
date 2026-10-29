@@ -4,6 +4,7 @@ import {
   canDeclineParticipationRequest,
   canRecordSelfPlacement,
   canRequestOptOut,
+  canRequestSelfPlacedHold,
   participationOutcome,
 } from "./participation";
 import { APP_ROLES } from "./types";
@@ -105,6 +106,49 @@ describe("canRecordSelfPlacement", () => {
     expect(
       canRecordSelfPlacement({ participationStatus: "on_hold", hasOfferLetter: true }),
     ).toEqual({ allowed: true });
+  });
+});
+
+describe("canRequestSelfPlacedHold", () => {
+  const ready = {
+    participationStatus: "active" as const,
+    hasOfferLetter: true,
+    hasDeclaration: true,
+  };
+
+  it("lets an active student with both documents ask", () => {
+    expect(canRequestSelfPlacedHold(ready)).toEqual({ allowed: true });
+  });
+
+  it("asks for the offer letter first", () => {
+    const decision = canRequestSelfPlacedHold({ ...ready, hasOfferLetter: false });
+    expect(decision.allowed).toBe(false);
+    expect(decision.allowed === false && decision.reason).toMatch(/offer letter/i);
+  });
+
+  /** The manager closes their drives on this document, so it is not optional. */
+  it("asks for the handwritten declaration", () => {
+    const decision = canRequestSelfPlacedHold({ ...ready, hasDeclaration: false });
+    expect(decision.allowed).toBe(false);
+    expect(decision.allowed === false && decision.reason).toMatch(/handwritten declaration/i);
+  });
+
+  it("refuses a student who already opted out — there is nothing left to hold", () => {
+    const decision = canRequestSelfPlacedHold({ ...ready, participationStatus: "opted_out" });
+    expect(decision.allowed).toBe(false);
+    expect(decision.allowed === false && decision.reason).toMatch(/opted out/i);
+  });
+
+  it("refuses a student already held, and names who releases it", () => {
+    const decision = canRequestSelfPlacedHold({ ...ready, participationStatus: "on_hold" });
+    expect(decision.allowed).toBe(false);
+    expect(decision.allowed === false && decision.reason).toMatch(/Campus Manager releases/i);
+  });
+
+  it("refuses a disbarred student", () => {
+    const decision = canRequestSelfPlacedHold({ ...ready, participationStatus: "disbarred" });
+    expect(decision.allowed).toBe(false);
+    expect(decision.allowed === false && decision.reason).toMatch(/disbarred/i);
   });
 });
 

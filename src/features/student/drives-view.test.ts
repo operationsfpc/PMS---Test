@@ -69,6 +69,7 @@ function stub(
     http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [driveRow])),
     http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json(opts.applications ?? [])),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
+    http.get(`${BASE}/rest/v1/student_holds`, () => HttpResponse.json([])),
   );
 }
 
@@ -262,6 +263,41 @@ describe("createSupabaseDrivesView", () => {
     const rows = await view().openDrives();
 
     expect(rows[0]?.ctcLabel).toBe("₹6.5 LPA");
+  });
+});
+
+/**
+ * The canonical record page asks about ONE drive (2026-10-29: it had no Apply).
+ * The answer must be the same R5 card the list would have shown — including
+ * "null", so a page the student reached by URL cannot hand them a drive the
+ * list hid from them.
+ */
+describe("createSupabaseDrivesView — one drive on its own page", () => {
+  it("answers with the card for exactly the drive asked about", async () => {
+    stub({
+      drives: [driveRow, { ...driveRow, id: "d2", company_name: "Freshworks", role_title: "SDE" }],
+    });
+
+    const card = await view().openDrive("d2");
+
+    expect(card?.id).toBe("d2");
+    expect(card?.companyName).toBe("Freshworks");
+    expect(card?.canApply).toBe(true);
+  });
+
+  it("answers null for a drive the list would have hidden", async () => {
+    stub({ drives: [{ ...driveRow, min_overall_cgpa: 9.5 }] });
+
+    expect(await view().openDrive("d1")).toBeNull();
+  });
+
+  it("says a drive already applied to cannot be applied to again", async () => {
+    stub({ applications: [{ drive_id: "d1" }] });
+
+    const card = await view().openDrive("d1");
+
+    expect(card?.applied).toBe(true);
+    expect(card?.canApply).toBe(false);
   });
 });
 
@@ -604,6 +640,7 @@ describe("reading a drive list bigger than one page", () => {
       paged("round_participants", [], participantUrls),
       paged("round_results", []),
       paged("attendance", []),
+      http.get(`${BASE}/rest/v1/student_holds`, () => HttpResponse.json([])),
     );
 
     await view().lists();

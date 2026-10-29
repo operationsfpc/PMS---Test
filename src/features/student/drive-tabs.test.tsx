@@ -8,8 +8,8 @@ import { DriveTabs, type StudentDriveLists, type StudentDriveListsView } from ".
 import type { OpenDrive } from "./drives-list";
 
 /**
- * N7 — four tabs, one drive in exactly one, filters that mean the same thing
- * on every tab (approved mockup 2026-08-19).
+ * N7 — the two lists the Drives area kept after 2026-10-29: future drives and
+ * applications still moving. Filters mean the same thing on both.
  */
 const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
 
@@ -63,37 +63,13 @@ const LISTS: StudentDriveLists = {
       totalRounds: 3,
     },
   ],
-  notApplied: [
-    {
-      id: "d3",
-      companyName: "Cognizant",
-      roleTitle: "Process Executive",
-      roleCategory: "operations_business",
-      ctcLabel: "₹3.5 LPA",
-      locations: "Chennai",
-      closedOn: "2026-08-12T00:00:00Z",
-    },
-  ],
-  appliedClosed: [
-    {
-      id: "d4",
-      companyName: "Wipro",
-      roleTitle: "Project Engineer",
-      roleCategory: "software_technical",
-      locations: "Pune",
-      appliedAt: "2026-08-02T00:00:00Z",
-      progressLabel: "Not selected — Round 2",
-      roundsCleared: 1,
-      totalRounds: 3,
-      outcomeLabel: "Not selected — Round 2",
-    },
-  ],
 };
 
 function view(lists: StudentDriveLists = LISTS): StudentDriveListsView {
   return {
     lists: async () => lists,
     openDrives: async () => lists.toApply,
+    openDrive: async (driveId) => lists.toApply.find((drive) => drive.id === driveId) ?? null,
     apply: async () => undefined,
   };
 }
@@ -142,13 +118,12 @@ describe("DriveTabs — a placed student is not locked out (C2, UAT 2026-08-19)"
 });
 
 describe("DriveTabs", () => {
-  it("shows the four tabs with their counts, To apply selected first", async () => {
+  it("shows both lists with their counts, To apply selected first", async () => {
     render(<DriveTabs view={view()} now={NOW} />);
 
     expect(await screen.findByRole("tab", { name: "To apply (1)" })).toBeDefined();
     expect(screen.getByRole("tab", { name: "In progress (1)" })).toBeDefined();
-    expect(screen.getByRole("tab", { name: "Not applied · closed (1)" })).toBeDefined();
-    expect(screen.getByRole("tab", { name: "Applied · closed (1)" })).toBeDefined();
+    expect(screen.queryByRole("tab", { name: /closed/i })).toBeNull();
     expect(screen.getByRole("tab", { name: "To apply (1)" }).getAttribute("aria-selected")).toBe(
       "true",
     );
@@ -158,7 +133,7 @@ describe("DriveTabs", () => {
     expect(screen.getByText(/4 days left to apply/)).toBeDefined();
   });
 
-  it("switches tabs: the current round, the missed drive, the outcome", async () => {
+  it("switches to the application still moving and names its current round", async () => {
     const user = userEvent.setup();
     render(<DriveTabs view={view()} now={NOW} />);
     await screen.findByText("Zoho");
@@ -166,15 +141,9 @@ describe("DriveTabs", () => {
     await user.click(screen.getByRole("tab", { name: "In progress (1)" }));
     const progress = screen.getByRole("tabpanel", { name: "In progress" });
     expect(within(progress).getByText("Round 2 of 3 — Technical Interview")).toBeDefined();
-
-    await user.click(screen.getByRole("tab", { name: "Not applied · closed (1)" }));
-    expect(screen.getByText(/you didn’t apply/)).toBeDefined();
-
-    await user.click(screen.getByRole("tab", { name: "Applied · closed (1)" }));
-    expect(screen.getByText("Not selected — Round 2")).toBeDefined();
   });
 
-  it("searches every tab with one box", async () => {
+  it("searches both lists with one box", async () => {
     const user = userEvent.setup();
     render(<DriveTabs view={view()} now={NOW} />);
     await screen.findByText("Zoho");
@@ -185,7 +154,7 @@ describe("DriveTabs", () => {
     expect(screen.getByRole("tab", { name: "In progress (1)" })).toBeDefined();
   });
 
-  it("filters by location across tabs", async () => {
+  it("filters by location across both lists", async () => {
     const user = userEvent.setup();
     render(<DriveTabs view={view()} now={NOW} />);
     await screen.findByText("Zoho");
@@ -196,19 +165,14 @@ describe("DriveTabs", () => {
 
     expect(screen.getByRole("tab", { name: "To apply (1)" })).toBeDefined();
     expect(screen.getByRole("tab", { name: "In progress (0)" })).toBeDefined();
-    expect(screen.getByRole("tab", { name: "Not applied · closed (1)" })).toBeDefined();
   });
 
-  it("offers the closing-time filter only on To apply, and applies it", async () => {
-    const user = userEvent.setup();
+  it("carries no closing-time filter — the cards already show the deadline", async () => {
     render(<DriveTabs view={view()} now={NOW} />);
     await screen.findByText("Zoho");
 
-    const closing = screen.getByRole("combobox", { name: "Filter by closing time" });
-    await user.selectOptions(closing, ["today"]);
-    expect(screen.getByRole("tab", { name: "To apply (0)" })).toBeDefined();
-
-    await user.click(screen.getByRole("tab", { name: "In progress (1)" }));
+    expect(screen.queryByRole("combobox", { name: "Filter by closing time" })).toBeNull();
+    await userEvent.setup().click(screen.getByRole("tab", { name: "In progress (1)" }));
     expect(screen.queryByRole("combobox", { name: "Filter by closing time" })).toBeNull();
   });
 
@@ -234,12 +198,7 @@ describe("DriveTabs", () => {
 
   it("says when a list is empty rather than showing nothing", async () => {
     const user = userEvent.setup();
-    render(
-      <DriveTabs
-        view={view({ toApply: [], inProgress: [], notApplied: [], appliedClosed: [] })}
-        now={NOW}
-      />,
-    );
+    render(<DriveTabs view={view({ toApply: [], inProgress: [] })} now={NOW} />);
 
     await screen.findByRole("tab", { name: "To apply (0)" });
     await user.click(screen.getByRole("tab", { name: "In progress (0)" }));
@@ -272,8 +231,6 @@ describe("DriveTabs — filtering and tagging by drive type", () => {
       },
     ],
     inProgress: [],
-    notApplied: [],
-    appliedClosed: [],
   };
 
   it("tags each drive with its type", async () => {
@@ -338,57 +295,70 @@ describe("DriveTabs — filtering and tagging by drive type", () => {
 });
 
 /**
- * 🔴 UAT 2026-08-27 — the Drives half of "the student cannot see the offer
- * letter". The concluded row already said "Offer received"; it now hands over
- * the letter that says so.
+ * 2026-10-29: "campus manager can able to hold drives from student and no
+ * notification can able to get to students". With 0126 stopping their mail,
+ * these words are the whole explanation a held student gets.
  */
-describe("the offer letter on a concluded drive", () => {
-  const concluded = (over: Record<string, unknown> = {}) => ({
-    id: "d9",
-    companyName: "XYZ",
-    roleTitle: "Jr. Software engineer",
-    roleCategory: "software_technical" as const,
-    driveType: "internship" as const,
-    locations: "Chennai",
-    appliedAt: "2026-08-20T04:30:00.000Z",
-    progressLabel: "Offer received",
-    roundsCleared: 3,
-    totalRounds: 3,
-    outcomeLabel: "Offer received",
-    offerLetterUrl: "https://signed.example/offer.pdf?token=abc",
-    offerLetterName: "XYZ-offer-letter.pdf",
-    ...over,
+describe("a hold on the student's own screen", () => {
+  const HELD = {
+    kind: "fees" as const,
+    reason: "Two semesters of fees unpaid.",
+    startsAt: "2026-09-01",
+    endsAt: "2026-12-15",
+    confirmedAt: "2026-09-01T10:00:00Z",
+  };
+
+  it("says why, what kind, and for how long", async () => {
+    render(<DriveTabs view={view({ ...LISTS, hold: HELD })} now={NOW} />);
+
+    const card = await screen.findByRole("region", { name: /placement hold/i });
+    expect(within(card).getByText(/your placements are on hold — fees/i)).toBeDefined();
+    expect(within(card).getByText("Two semesters of fees unpaid.")).toBeDefined();
+    // en-GB abbreviates September as "Sept"; the day and year are the claim.
+    expect(within(card).getByText(/from 01 Sep[a-z]* 2026, review by 15 Dec 2026/i)).toBeDefined();
+    expect(within(card).getByText("In force")).toBeDefined();
   });
 
-  it("offers the letter by name from the Applied · closed tab", async () => {
-    const user = userEvent.setup();
-    render(<DriveTabs view={view({ ...LISTS, appliedClosed: [concluded()] })} now={NOW} />);
+  it("says plainly that no drive can be applied to while it runs", async () => {
+    render(<DriveTabs view={view({ ...LISTS, hold: HELD })} now={NOW} />);
 
-    await user.click(await screen.findByRole("tab", { name: /^Applied · closed/ }));
-
-    const link = await screen.findByRole<HTMLAnchorElement>("link", {
-      name: /XYZ-offer-letter\.pdf/,
-    });
-    expect(link.href).toBe("https://signed.example/offer.pdf?token=abc");
-    expect(link.rel).toContain("noreferrer");
+    const card = await screen.findByRole("region", { name: /placement hold/i });
+    expect(within(card).getByText(/cannot apply to any drive/i)).toBeDefined();
+    expect(within(card).getByText(/stops mailing you/i)).toBeDefined();
+    expect(within(card).getByText(/only your campus manager can release it/i)).toBeDefined();
   });
 
-  it("shows no link when no letter is attached", async () => {
-    const user = userEvent.setup();
+  it("reads a self-placed request as waiting, not as a hold", async () => {
     render(
       <DriveTabs
         view={view({
           ...LISTS,
-          appliedClosed: [concluded({ offerLetterUrl: null, offerLetterName: null })],
+          hold: { ...HELD, kind: "self_placed", confirmedAt: null },
         })}
         now={NOW}
       />,
     );
 
-    await user.click(await screen.findByRole("tab", { name: /^Applied · closed/ }));
+    const card = await screen.findByRole("region", { name: /placement hold/i });
+    expect(within(card).getByText(/waiting for your campus manager/i)).toBeDefined();
+    expect(within(card).getByText(/awaiting confirmation/i)).toBeDefined();
+    expect(within(card).getByText(/you can still apply/i)).toBeDefined();
+    expect(within(card).queryByText("In force")).toBeNull();
+  });
 
-    expect(await screen.findByText("Offer received")).toBeDefined();
-    expect(screen.queryByRole("link", { name: /letter/i })).toBeNull();
+  /** The attachment is the Campus Manager's evidence, not a student document. */
+  it("offers no link to the hold's own evidence", async () => {
+    render(<DriveTabs view={view({ ...LISTS, hold: HELD })} now={NOW} />);
+
+    const card = await screen.findByRole("region", { name: /placement hold/i });
+    expect(within(card).queryByRole("link")).toBeNull();
+  });
+
+  it("says nothing when there is no hold", async () => {
+    render(<DriveTabs view={view({ ...LISTS, hold: null })} now={NOW} />);
+    await screen.findByText("Zoho");
+
+    expect(screen.queryByRole("region", { name: /placement hold/i })).toBeNull();
   });
 });
 

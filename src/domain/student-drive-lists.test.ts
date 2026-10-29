@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CLOSING_FILTERS,
   classifyStudentDrive,
-  closesWithin,
   describeTimeLeft,
   matchesLocation,
   parseLocations,
@@ -168,29 +166,6 @@ describe("describeTimeLeft", () => {
       label: "4 days left to apply",
       urgent: false,
     });
-  });
-});
-
-describe("closesWithin", () => {
-  it("carries the four options", () => {
-    expect(CLOSING_FILTERS).toEqual(["any", "today", "3_days", "7_days"]);
-  });
-
-  it("'any' admits everything still open, and nothing closed", () => {
-    expect(closesWithin(future, now, "any")).toBe(true);
-    expect(closesWithin(past, now, "any")).toBe(false);
-  });
-
-  it("bounds each option by its horizon", () => {
-    const in6Hours = new Date("2026-08-20T18:00:00Z");
-    const in2Days = new Date("2026-08-22T12:00:00Z");
-    const in6Days = new Date("2026-08-26T12:00:00Z");
-
-    expect(closesWithin(in6Hours, now, "today")).toBe(true);
-    expect(closesWithin(in2Days, now, "today")).toBe(false);
-    expect(closesWithin(in2Days, now, "3_days")).toBe(true);
-    expect(closesWithin(in6Days, now, "3_days")).toBe(false);
-    expect(closesWithin(in6Days, now, "7_days")).toBe(true);
   });
 });
 

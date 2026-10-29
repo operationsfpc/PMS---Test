@@ -299,6 +299,26 @@ describe("loading the publish screen", () => {
     expect(candidate?.academics.degree).toBe("B.E");
   });
 
+  /**
+   * The triples the screen's interlocking tickers narrow by. One student per
+   * combination is enough — the load dedupes, and a student with no campus or
+   * degree contributes nothing to narrow with.
+   */
+  it("derives the campus–degree–branch triples the interlock narrows by", async () => {
+    stub({
+      students: [
+        STUDENT,
+        { ...STUDENT, id: "s2", branches: { name: "ECE" } },
+        { ...STUDENT, id: "s3", campuses: null },
+      ],
+    });
+
+    expect((await view().load()).options.programmes).toEqual([
+      { campus: "Alliance University", degree: "B.E", branch: "CSE" },
+      { campus: "Alliance University", degree: "B.E", branch: "ECE" },
+    ]);
+  });
+
   it("reads a student's existing offers, which is what R3 and R4 need", async () => {
     stub({
       students: [

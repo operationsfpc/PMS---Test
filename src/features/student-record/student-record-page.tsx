@@ -105,6 +105,10 @@ const onDate = (iso: string) =>
     year: "numeric",
   });
 
+/** The first date a hold's review may be pushed to: the day after it ends (0131). */
+const dayAfter = (iso: string) =>
+  new Date(new Date(`${iso}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
 export function StudentRecordPage({
   studentId,
   view,
@@ -126,11 +130,22 @@ export function StudentRecordPage({
   const [record, setRecord] = useState<StudentRecord | null | undefined>(undefined);
   const [failure, setFailure] = useState<string | null>(null);
   const [hold, setHold] = useState<Hold | null>(null);
+  /** A student's self-placed request, waiting on this Campus Manager (0130). */
+  const [pending, setPending] = useState<Hold | null>(null);
+  const [evidence, setEvidence] = useState<{
+    readonly offer: string | null;
+    readonly declaration: string | null;
+  }>({ offer: null, declaration: null });
   const [pastHolds, setPastHolds] = useState<readonly Hold[]>([]);
   const [holdProblem, setHoldProblem] = useState<string | null>(null);
   const [orderUrl, setOrderUrl] = useState<string | null>(null);
   const [lifting, setLifting] = useState(false);
   const [releaseNote, setReleaseNote] = useState("");
+  /** 0131: moving a live hold's review date forward. */
+  const [extending, setExtending] = useState(false);
+  const [extendDate, setExtendDate] = useState("");
+  const [declining, setDeclining] = useState(false);
+  const [declineNote, setDeclineNote] = useState("");
   // One bump re-reads both halves: `release_student_hold` flips the student
   // back to active in the same transaction that lifts the row.
   const [reload, setReload] = useState(0);
@@ -165,10 +180,15 @@ export function StudentRecordPage({
     if (holds === undefined) return;
     let live = true;
 
-    Promise.all([holds.live(studentId), holds.history(studentId)]).then(
-      ([current, every]) => {
+    Promise.all([
+      holds.live(studentId),
+      holds.pendingFor(studentId),
+      holds.history(studentId),
+    ]).then(
+      ([current, request, every]) => {
         if (!live) return;
         setHold(current);
+        setPending(request);
         setPastHolds(every.filter((past) => past.releasedAt !== null));
         setHoldProblem(null);
 
@@ -179,6 +199,20 @@ export function StudentRecordPage({
         if (path !== null) {
           void holds.orderUrl(path).then((url) => {
             if (live) setOrderUrl(url);
+          });
+        }
+
+        // The two documents a self-placed request stands on (0130). Same rule:
+        // a refused signing is said to be on file, not offered as a dead link.
+        setEvidence({ offer: null, declaration: null });
+        if (request?.documentPath != null) {
+          void holds.evidenceUrl("offer-letters", request.documentPath).then((url) => {
+            if (live) setEvidence((seen) => ({ ...seen, offer: url }));
+          });
+        }
+        if (request?.declarationPath != null) {
+          void holds.evidenceUrl("declarations", request.declarationPath).then((url) => {
+            if (live) setEvidence((seen) => ({ ...seen, declaration: url }));
           });
         }
       },
@@ -205,6 +239,43 @@ export function StudentRecordPage({
     if (await actions.run(() => release(hold.id, note))) {
       setLifting(false);
       setReleaseNote("");
+      setReload((count) => count + 1);
+    }
+  }
+
+  /**
+   * 0131: the fee dispute outlived the review date it was guessed at. The
+   * database refuses anything not strictly later — this only keeps the
+   * disabled button honest before the round trip.
+   */
+  async function extendHold() {
+    if (hold === null || holds === undefined) return;
+    if (await actions.run(() => holds.extend(hold.id, extendDate))) {
+      setExtending(false);
+      setExtendDate("");
+      setReload((count) => count + 1);
+    }
+  }
+
+  /**
+   * 0130: the one statement that turns a student's request into the hold it
+   * asked to be. The database re-checks the manager's college and the student's
+   * status, and its sentence is what this page shows if it refuses.
+   */
+  async function confirmRequest() {
+    if (pending === null || holds === undefined) return;
+    if (await actions.run(() => holds.confirm(pending.id))) {
+      setReload((count) => count + 1);
+    }
+  }
+
+  /** Declining is the release RPC: the request is lifted before it ever bound. */
+  async function declineRequest() {
+    if (pending === null || release === undefined) return;
+    const note = declineNote.trim() === "" ? null : declineNote.trim();
+    if (await actions.run(() => release(pending.id, note))) {
+      setDeclining(false);
+      setDeclineNote("");
       setReload((count) => count + 1);
     }
   }
@@ -291,8 +362,120 @@ export function StudentRecordPage({
         </p>
       )}
 
-      {(hold !== null || pastHolds.length > 0) && (
+      {(hold !== null || pending !== null || pastHolds.length > 0) && (
         <section aria-label="Placement hold" className="mb-4 flex flex-col gap-3">
+          {/*
+           * 0130: the student's own self-placed request. It changes nothing
+           * until the manager here confirms it — their drives are still open,
+           * and the card says so before the button.
+           */}
+          {pending !== null && (
+            <Card className="border-brand-500/40 bg-brand-50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  Requested — {HOLD_KIND_LABELS[pending.kind]}
+                </h2>
+                <Badge tone="brand">Awaiting confirmation</Badge>
+              </div>
+
+              <p className="mt-2 text-sm text-ink-900">{pending.reason}</p>
+              <p className="mt-1 text-xs text-ink-500">
+                {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
+              </p>
+              <p className="mt-1 text-xs text-ink-500">
+                Their drives stay open until you confirm this. Confirming closes them.
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {pending.documentPath !== null &&
+                  (evidence.offer === null ? (
+                    <span className="text-sm text-ink-500">
+                      Offer letter on file: {extractOriginalFilename(pending.documentPath)}
+                    </span>
+                  ) : (
+                    <ButtonAnchor
+                      href={evidence.offer}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`Open the offer letter — ${extractOriginalFilename(pending.documentPath)}`}
+                    >
+                      Offer letter
+                    </ButtonAnchor>
+                  ))}
+                {pending.declarationPath !== null &&
+                  (evidence.declaration === null ? (
+                    <span className="text-sm text-ink-500">
+                      Declaration on file: {extractOriginalFilename(pending.declarationPath)}
+                    </span>
+                  ) : (
+                    <ButtonAnchor
+                      href={evidence.declaration}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`Open the signed declaration — ${extractOriginalFilename(pending.declarationPath)}`}
+                    >
+                      Signed declaration
+                    </ButtonAnchor>
+                  ))}
+              </div>
+
+              {release !== undefined && (
+                <div className="mt-4">
+                  {declining ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="decline-note" className="text-sm font-medium text-ink-700">
+                        Why are you declining?{" "}
+                        <span className="font-normal text-ink-500">(optional)</span>
+                      </label>
+                      <textarea
+                        id="decline-note"
+                        rows={2}
+                        value={declineNote}
+                        onChange={(e) => setDeclineNote(e.target.value)}
+                        placeholder="The letter names a different student. Ask for a signed copy."
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="danger"
+                          isLoading={actions.isPending()}
+                          onClick={() => void declineRequest()}
+                        >
+                          Decline request
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          disabled={actions.busy}
+                          onClick={() => setDeclining(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <Button isLoading={actions.isPending()} onClick={() => void confirmRequest()}>
+                        Confirm hold
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
+                        Decline request
+                      </Button>
+                    </div>
+                  )}
+
+                  {actions.error !== null && (
+                    <p
+                      role="alert"
+                      className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                    >
+                      {actions.error}
+                    </p>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
+
           {hold !== null && (
             <Card className="border-warning/40 bg-warning/5 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -366,10 +549,53 @@ export function StudentRecordPage({
                         </Button>
                       </div>
                     </div>
+                  ) : extending ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
+                        Extend the review to
+                      </label>
+                      <input
+                        id="extend-date"
+                        type="date"
+                        min={dayAfter(hold.endsAt)}
+                        value={extendDate}
+                        onChange={(e) => setExtendDate(e.target.value)}
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                      />
+                      <p className="text-xs text-ink-500">
+                        Only forward — pulling a review earlier is what Release is for. The old date
+                        stays in the audit log.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          isLoading={actions.isPending()}
+                          disabled={extendDate === "" || extendDate <= hold.endsAt}
+                          onClick={() => void extendHold()}
+                        >
+                          Extend review date
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={actions.busy}
+                          onClick={() => setExtending(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
                   ) : (
-                    <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
-                      Release hold
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
+                        Release hold
+                      </Button>
+                      {/* 0131: a fee dispute outliving the date it was guessed
+                          at has somewhere to go that is not release-and-replace. */}
+                      <Button variant="secondary" size="sm" onClick={() => setExtending(true)}>
+                        Extend review date
+                      </Button>
+                    </div>
                   )}
 
                   {actions.error !== null && (

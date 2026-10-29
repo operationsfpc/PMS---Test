@@ -62,6 +62,13 @@ export interface ShortlistApplicant {
   readonly shortlisted: boolean;
   /** D7 (2026-08-12): opted out after applying — not shortlistable without an override. */
   readonly optedOut: boolean;
+  /**
+   * 2026-10-29: the same gate, for a student their own college is holding
+   * (0125). 0126's `shortlist_respects_opt_out` already refuses any
+   * non-active status without an explicit reason — reading it here is what
+   * stops the coordinator discovering that from a failed save.
+   */
+  readonly onHold: boolean;
 }
 
 export interface ShortlistDrive {
@@ -350,7 +357,7 @@ export function ShortlistPage({
     () =>
       (applicants ?? [])
         .filter((a) => !a.shortlisted)
-        .filter((a) => !a.optedOut || overrides[a.applicationId] !== undefined)
+        .filter((a) => !(a.optedOut || a.onHold) || overrides[a.applicationId] !== undefined)
         .map((a) => a.applicationId),
     [applicants, overrides],
   );
@@ -712,6 +719,23 @@ export function ShortlistPage({
             </div>
           )}
 
+          {/* 0126 refuses the write for a held student unless the reason is
+              given, so the card says who is held before a save has to fail. */}
+          {applicants.some((a) => a.onHold && !a.shortlisted) && (
+            <div
+              role="alert"
+              className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-ink-900"
+            >
+              <strong>On a hold placed by their college:</strong>{" "}
+              {applicants
+                .filter((a) => a.onHold && !a.shortlisted)
+                .map((a) => a.studentName)
+                .join(", ")}
+              . Every drive is closed to them and they receive no notifications. You can override
+              per student, with a reason.
+            </div>
+          )}
+
           {/* #102: the same gap, counted. A card badge tells you who; this says
               how many the recruiter would be missing before anyone presses
               Export. It is a fact about the files, not a refusal, so it is a
@@ -787,7 +811,9 @@ export function ShortlistPage({
           <ul className="space-y-3">
             {visibleRanked.map(({ candidate, rank }) => {
               const applicant = byId.get(candidate.applicationId);
-              const blocked = applicant?.optedOut === true;
+              // One gate, two reasons: their own opt-out, or their college's
+              // hold. The database treats both the same (0126), so the card does.
+              const blocked = applicant?.optedOut === true || applicant?.onHold === true;
               const overridden = overrides[candidate.applicationId] !== undefined;
               return (
                 <li
@@ -832,7 +858,8 @@ export function ShortlistPage({
                           selected.includes(candidate.applicationId) && (
                             <Badge tone="brand">Will shortlist on save</Badge>
                           )}
-                        {blocked && <Badge tone="danger">Opted out</Badge>}
+                        {applicant?.optedOut === true && <Badge tone="danger">Opted out</Badge>}
+                        {applicant?.onHold === true && <Badge tone="warning">On hold</Badge>}
                         {/* #102: the CV is the one thing the recruiter cannot
                             work without, and it is the one thing this card used
                             not to mention. Only the gap is printed — every other
@@ -872,7 +899,7 @@ export function ShortlistPage({
                         {overriding === candidate.applicationId && (
                           <div className="mt-2 flex flex-wrap items-end gap-2">
                             <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                              Reason for overriding the opt-out
+                              Reason for overriding the block
                               <input
                                 type="text"
                                 value={overrideDraft}

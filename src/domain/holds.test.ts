@@ -103,10 +103,6 @@ describe("holdStanding", () => {
     expect(late).not.toBe("released");
   });
 
-  it("has no review date to be overdue against", () => {
-    expect(holdStanding(windowOf({ endsAt: null }), today)).toBe("open");
-  });
-
   /** `ends_at` is a day, and a day is not over until the whole of it has passed. */
   it("keeps today's review date open until the day itself has gone", () => {
     expect(holdStanding(windowOf({ endsAt: "2026-11-10" }), day("2026-11-10"))).toBe("open");
@@ -118,7 +114,7 @@ describe("holdStanding", () => {
       holdStanding(windowOf({ endsAt: "2026-11-01", releasedAt: "2026-11-05T09:00:00Z" }), today),
     ).toBe("released");
     expect(
-      holdStanding(windowOf({ endsAt: null, releasedAt: "2026-11-05T09:00:00Z" }), today),
+      holdStanding(windowOf({ endsAt: "2026-12-31", releasedAt: "2026-11-05T09:00:00Z" }), today),
     ).toBe("released");
   });
 });
@@ -133,13 +129,6 @@ describe("holdWindowLine", () => {
   it("changes the tense once it has gone by, without changing the standing", () => {
     expect(holdWindowLine(windowOf({ endsAt: "2026-11-01" }), day("2026-11-10"))).toBe(
       "from 29 Oct 2026, review was due 01 Nov 2026",
-    );
-  });
-
-  /** Leaving the box empty was a decision, so it is said rather than left blank. */
-  it("says no review date when nobody set one", () => {
-    expect(holdWindowLine(windowOf({ endsAt: null }), day("2026-11-10"))).toBe(
-      "from 29 Oct 2026, no review date",
     );
   });
 
@@ -159,10 +148,7 @@ describe("holdWindowLine", () => {
       "from 29 Oct 2026",
     );
     expect(
-      holdWindowLine(
-        windowOf({ endsAt: null, releasedAt: "2026-10-29T23:30:00+05:30" }),
-        day("2026-11-10"),
-      ),
+      holdWindowLine(windowOf({ releasedAt: "2026-10-29T23:30:00+05:30" }), day("2026-11-10")),
     ).toBe("released 29 Oct 2026");
   });
 });
@@ -178,8 +164,12 @@ describe("holdDraftProblem", () => {
 
   it("accepts what the database accepts", () => {
     expect(holdDraftProblem(draft())).toBeNull();
-    expect(holdDraftProblem(draft({ endsAt: "" }))).toBeNull();
     expect(holdDraftProblem(draft({ endsAt: "2026-10-29" }))).toBeNull();
+  });
+
+  /** 0130: both ends of the window are named, so nobody leaves the review to fate. */
+  it("refuses a hold with no review date", () => {
+    expect(holdDraftProblem(draft({ endsAt: "" }))).toMatch(/should be reviewed/i);
   });
 
   it("asks for the kind before anything else", () => {

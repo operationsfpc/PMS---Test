@@ -33,6 +33,7 @@ import { DriveRecordRoute } from "@features/drive-record/record-route";
 import { PifPage } from "@features/pif/pif-page";
 import { SrfRoute } from "@features/srf/srf-route";
 import { StudentDrivesPage } from "@features/student/drives-page";
+import { createSupabaseDrivesView } from "@features/student/drives-view";
 import { StudentOffCampusRoute, StudentOptOutRoute } from "@features/student/participation-routes";
 import { StudentProfileRoute } from "@features/student/profile-route";
 import {
@@ -41,6 +42,7 @@ import {
 } from "@features/student/student-dashboard-route";
 import { StudentRecordRoute } from "@features/student-record/student-record-route";
 import { useAuth } from "@lib/auth-context";
+import { supabase } from "@lib/supabase";
 import type { ReactNode } from "react";
 import { Route, Routes } from "react-router";
 
@@ -189,7 +191,14 @@ export function App() {
                 <Route path="/student/notifications" element={<StudentNotificationsRoute />} />
                 <Route path="/student/drives" element={<StudentDrivesPage />} />
                 {/* N1: the one canonical drive page, for every role. */}
-                <Route path="/drives/:driveId" element={<DriveRecordRoute />} />
+                <Route
+                  path="/drives/:driveId"
+                  element={
+                    <DriveRecordRoute
+                      studentApplyView={() => createSupabaseDrivesView(supabase())}
+                    />
+                  }
+                />
                 {/* G7 (UAT 2026-08-20, Q7b): the canonical student record —
                     N1's second canonical page. RLS scopes who reads whom. */}
                 <Route path="/students/:studentId" element={<StudentRecordRoute />} />

@@ -1,4 +1,3 @@
-import { OfferLetterLink } from "@components/offer-letter-link";
 import {
   Accordion,
   AccordionContent,
@@ -18,17 +17,12 @@ import {
   driveTypeTone,
   matchesDriveType,
 } from "@domain/drive-type";
+import { HOLD_KIND_LABELS, holdWindowLine } from "@domain/holds";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
-import {
-  CLOSING_FILTERS,
-  type ClosingFilter,
-  closesWithin,
-  matchesLocation,
-  parseLocations,
-} from "@domain/student-drive-lists";
-import type { DriveType, RoleCategory } from "@domain/types";
+import { matchesLocation, parseLocations } from "@domain/student-drive-lists";
+import type { DriveType, HoldKind, RoleCategory } from "@domain/types";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { DrivesList, type DrivesView, type OpenDrive } from "./drives-list";
+import { DrivesList, type DrivesView, type OpenDrive, visitAccent } from "./drives-list";
 
 /** An application still moving: the card wears its current round (N7). */
 export interface ProgressDriveRow {
@@ -47,36 +41,30 @@ export interface ProgressDriveRow {
   readonly totalRounds: number;
 }
 
-/** Applied and concluded: the outcome is the headline. */
-export interface ConcludedDriveRow extends ProgressDriveRow {
-  readonly outcomeLabel: string;
-  /**
-   * UAT 2026-08-27: the letter the CPC attached to the offer. Both halves
-   * travel together — a name with no URL opens nothing.
-   */
-  readonly offerLetterUrl?: string | null;
-  readonly offerLetterName?: string | null;
-}
-
-/** Never applied, chance gone: when it closed is the fact that matters. */
-export interface ClosedDriveRow {
-  readonly id: string;
-  readonly companyName: string;
-  readonly roleTitle: string;
-  readonly roleCategory: RoleCategory;
-  /** 2026-08-27: filtered on, and tagged on every card. */
-  readonly driveType?: DriveType | null;
-  readonly companyDriveId?: string | null;
-  readonly ctcLabel: string;
-  readonly locations: string;
-  readonly closedOn: string;
+/**
+ * The student's own unreleased hold (0125/0130), as their own screen says it.
+ * The attachment is deliberately absent: it is the Campus Manager's evidence,
+ * and the student is told the reason and the window in words.
+ */
+export interface StudentHoldNotice {
+  readonly kind: HoldKind;
+  readonly reason: string;
+  /** ISO `YYYY-MM-DD`. */
+  readonly startsAt: string;
+  /** The review date — required since 0130, and never a switch. */
+  readonly endsAt: string;
+  /** Null while a self-placed request waits for its Campus Manager. */
+  readonly confirmedAt: string | null;
 }
 
 export interface StudentDriveLists {
   readonly toApply: readonly OpenDrive[];
   readonly inProgress: readonly ProgressDriveRow[];
-  readonly notApplied: readonly ClosedDriveRow[];
-  readonly appliedClosed: readonly ConcludedDriveRow[];
+  /**
+   * Present while the student is held or waiting for a hold request to be
+   * confirmed. Absent for an adapter that never read it (tests, old callers).
+   */
+  readonly hold?: StudentHoldNotice | null;
   /**
    * C2 (UAT 2026-08-19): the rung the student already holds, or absent. A
    * placed student LOOKED locked out — the list quietly hid same-and-lower
@@ -94,13 +82,23 @@ export interface StudentDriveLists {
 
 export interface StudentDriveListsView extends DrivesView {
   lists(): Promise<StudentDriveLists>;
+  /**
+   * R5/R6 answered for ONE drive, so the canonical record page offers the same
+   * Apply the card does rather than deciding eligibility a second time.
+   * Null when the drive is not visible to this student at all.
+   */
+  openDrive(driveId: string): Promise<OpenDrive | null>;
 }
 
+/**
+ * 2026-10-29: two lists, not four. "Only show future drives" — a drive whose
+ * window has closed is not one a student can act on, so it leaves this page
+ * entirely; a concluded application is the dashboard's "My applications",
+ * which carries the outcome and the offer letter.
+ */
 const TABS = [
   { key: "to_apply", label: "To apply" },
   { key: "in_progress", label: "In progress" },
-  { key: "not_applied_closed", label: "Not applied · closed" },
-  { key: "applied_closed", label: "Applied · closed" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -114,19 +112,13 @@ const AREA_LABEL: Record<RoleCategory, string> = {
   operations_business: "Operations and Business Roles",
 };
 
-const CLOSING_LABEL: Record<ClosingFilter, string> = {
-  any: "Any closing time",
-  today: "Closes within 24 hours",
-  "3_days": "Closes within 3 days",
-  "7_days": "Closes within 7 days",
-};
-
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
 
 /**
- * N7 — the student's Drives area: four tabs, one drive in exactly one of
- * them, search and filters on every tab (approved mockup 2026-08-19).
+ * N7 — the student's Drives area: the lists they can still act on, search and
+ * filters on each (approved mockup 2026-08-19; narrowed to future drives on
+ * 2026-10-29).
  *
  * Mobile-first (PRD §21.2): stacked cards, controls that wrap, no tables.
  */
@@ -152,7 +144,6 @@ export function DriveTabs({
   const [location, setLocation] = useState("");
   const [area, setArea] = useState<"" | RoleCategory>("");
   const [type, setType] = useState<DriveTypeFilterValue>("");
-  const [closing, setClosing] = useState<ClosingFilter>("any");
 
   const load = useCallback(async () => {
     try {
@@ -174,8 +165,6 @@ export function DriveTabs({
     const all = [
       ...lists.toApply.map((d) => d.details.locations),
       ...lists.inProgress.map((d) => d.locations),
-      ...lists.notApplied.map((d) => d.locations),
-      ...lists.appliedClosed.map((d) => d.locations),
     ].flatMap((text) => parseLocations(text));
     return [...new Set(all)].sort((a, b) => a.localeCompare(b));
   }, [lists]);
@@ -201,22 +190,14 @@ export function DriveTabs({
   const filtered = useMemo(() => {
     if (lists === null) return null;
     return {
-      toApply: lists.toApply.filter(
-        (d) =>
-          matches(d, d.details.locations) &&
-          closesWithin(new Date(d.applicationEnd), now(), closing),
-      ),
+      toApply: lists.toApply.filter((d) => matches(d, d.details.locations)),
       inProgress: lists.inProgress.filter((d) => matches(d, d.locations)),
-      notApplied: lists.notApplied.filter((d) => matches(d, d.locations)),
-      appliedClosed: lists.appliedClosed.filter((d) => matches(d, d.locations)),
     };
-  }, [lists, matches, closing, now]);
+  }, [lists, matches]);
 
   const counts: Record<TabKey, number> = {
     to_apply: filtered?.toApply.length ?? 0,
     in_progress: filtered?.inProgress.length ?? 0,
-    not_applied_closed: filtered?.notApplied.length ?? 0,
-    applied_closed: filtered?.appliedClosed.length ?? 0,
   };
 
   /** Tab 1 reuses the full apply flow; its rows come from the loaded lists. */
@@ -233,7 +214,12 @@ export function DriveTabs({
 
   return (
     <>
-      <PageHeader title="Drives" subtitle="Everything a drive can be to you, in four lists." />
+      <PageHeader
+        title="Drives"
+        subtitle="Every drive still open to you, and every application still moving."
+      />
+
+      <HoldNotice hold={lists?.hold} now={now} />
 
       {lists?.placedAt != null && (
         <Card className="mb-4 border border-success-500/40 bg-success-50 p-4">
@@ -323,20 +309,6 @@ export function DriveTabs({
             </option>
           ))}
         </select>
-        {tab === "to_apply" && (
-          <select
-            aria-label="Filter by closing time"
-            value={closing}
-            onChange={(e) => setClosing(e.target.value as ClosingFilter)}
-            className="rounded-lg border border-line px-2 py-2 text-sm"
-          >
-            {CLOSING_FILTERS.map((value) => (
-              <option key={value} value={value}>
-                {CLOSING_LABEL[value]}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
 
       {lists === null && error === null ? (
@@ -347,13 +319,13 @@ export function DriveTabs({
         <div role="tabpanel" aria-label="To apply">
           {/* keyed so a filter change re-reads the adapter's rows */}
           <DrivesList
-            key={`${query}|${location}|${area}|${closing}|${filtered.toApply.length}`}
+            key={`${query}|${location}|${area}|${filtered.toApply.length}`}
             view={toApplyView}
             embedded
             now={now}
           />
         </div>
-      ) : tab === "in_progress" ? (
+      ) : (
         <div role="tabpanel" aria-label="In progress" className="flex flex-col gap-4">
           {filtered.inProgress.length === 0 ? (
             <Card className="p-6 text-sm text-ink-700">Nothing in progress right now.</Card>
@@ -376,57 +348,56 @@ export function DriveTabs({
             />
           )}
         </div>
-      ) : tab === "not_applied_closed" ? (
-        <div role="tabpanel" aria-label="Not applied · closed" className="flex flex-col gap-4">
-          {filtered.notApplied.length === 0 ? (
-            <Card className="p-6 text-sm text-ink-700">Nothing here — you missed no drive.</Card>
-          ) : (
-            <TabVisits
-              rows={filtered.notApplied}
-              body={(row) => (
-                <>
-                  <p className="mt-2 text-sm text-ink-700">
-                    {row.ctcLabel} · Closed {day(row.closedOn)} — you didn’t apply{" "}
-                    <Badge tone="neutral">Missed</Badge>
-                  </p>
-                  <FullRecordLink id={row.id} role={row.roleTitle} company={row.companyName} />
-                </>
-              )}
-            />
-          )}
-        </div>
-      ) : (
-        <div role="tabpanel" aria-label="Applied · closed" className="flex flex-col gap-4">
-          {filtered.appliedClosed.length === 0 ? (
-            <Card className="p-6 text-sm text-ink-700">No concluded applications yet.</Card>
-          ) : (
-            <TabVisits
-              rows={filtered.appliedClosed}
-              body={(row) => (
-                <>
-                  <p className="mt-2 text-sm">
-                    Outcome:{" "}
-                    <Badge tone={row.outcomeLabel === "Offer received" ? "success" : "neutral"}>
-                      {row.outcomeLabel}
-                    </Badge>
-                  </p>
-                  <p className="mt-0.5 text-xs text-ink-500">Applied {day(row.appliedAt)}</p>
-                  {/* UAT 2026-08-27: "Offer received" now hands over the letter
-                      that says so. Filed by the CPC since 0062, shown to the
-                      student it belongs to since never. */}
-                  <OfferLetterLink
-                    url={row.offerLetterUrl}
-                    name={row.offerLetterName}
-                    className="mt-2"
-                  />
-                  <FullRecordLink id={row.id} role={row.roleTitle} company={row.companyName} />
-                </>
-              )}
-            />
-          )}
-        </div>
       )}
     </>
+  );
+}
+
+/**
+ * 0126 stops every mail to a held student, so this block is the only place
+ * they are told why their drives went quiet. It says the kind, the reason and
+ * the window — never the attachment, which is the Campus Manager's evidence.
+ *
+ * A pending request is a different sentence on purpose: nothing has changed
+ * for the student yet, and a banner that read like a hold would make them stop
+ * applying over a request the college has not answered.
+ */
+function HoldNotice({
+  hold,
+  now,
+}: {
+  hold: StudentHoldNotice | null | undefined;
+  now: () => Date;
+}) {
+  if (hold === undefined || hold === null) return null;
+
+  const pending = hold.confirmedAt === null;
+
+  return (
+    <Card
+      className={`mb-4 border p-4 ${pending ? "border-brand-500/40 bg-brand-50" : "border-warning/40 bg-warning/5"}`}
+    >
+      <section aria-label="Placement hold">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-heading text-base font-bold text-ink-900">
+            {pending ? "Waiting for your Campus Manager" : "Your placements are on hold"} —{" "}
+            {HOLD_KIND_LABELS[hold.kind]}
+          </h2>
+          <Badge tone={pending ? "brand" : "warning"}>
+            {pending ? "Awaiting confirmation" : "In force"}
+          </Badge>
+        </div>
+        <p className="mt-1 text-sm text-ink-900">{hold.reason}</p>
+        <p className="mt-0.5 text-xs text-ink-500">
+          {holdWindowLine({ ...hold, releasedAt: null }, now())}
+        </p>
+        <p className="mt-2 text-sm text-ink-700">
+          {pending
+            ? "Until they confirm it, nothing changes — you can still apply, and every drive stays open to you."
+            : "While this is in force you cannot apply to any drive, and the placement office stops mailing you. Only your Campus Manager can release it; the review date is a reminder, not a release."}
+        </p>
+      </section>
+    </Card>
   );
 }
 
@@ -459,13 +430,14 @@ function TabVisits<T extends TabRow>({
 
   return (
     <>
-      {[...groups.entries()].map(([eventId, roles]) => {
+      {[...groups.entries()].map(([eventId, roles], index) => {
         const head = roles[0];
         if (head === undefined) return null;
+        const accent = visitAccent(index);
 
         if (roles.length === 1) {
           return (
-            <Card key={eventId} className="p-5">
+            <Card key={eventId} className={`border-l-4 p-5 ${accent.rail}`}>
               <RowHead row={head} />
               {body(head)}
             </Card>
@@ -477,7 +449,7 @@ function TabVisits<T extends TabRow>({
         const mixed = types.size > 1;
 
         return (
-          <Card key={eventId} className="p-5">
+          <Card key={eventId} className={`border-l-4 p-5 ${accent.rail}`}>
             <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
               <span className="max-w-[250px] truncate">{head.companyName}</span>
               {/* Said once for the visit when every role shares a type; per role
@@ -551,12 +523,9 @@ function RowHead({
 function FullRecordLink({ id, role, company }: { id: string; role: string; company: string }) {
   return (
     <p className="mt-3">
-      <ButtonLink
-        size="sm"
-        variant="secondary"
-        to={`/drives/${id}`}
-        aria-label={`View ${company} — ${role}`}
-      >
+      {/* Drawn exactly as the `View` on the To-apply card, so one word never
+          arrives in two shapes on one screen. */}
+      <ButtonLink variant="ghost" to={`/drives/${id}`} aria-label={`View ${company} — ${role}`}>
         View
       </ButtonLink>
     </p>

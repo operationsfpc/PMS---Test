@@ -205,6 +205,39 @@ describe("filterDirectory — the held", () => {
 });
 
 /**
+ * 2026-10-29: the student who has not tried — the population the `idle` hold
+ * kind (0130) is placed on. "Never applied" is narrower than "not placed":
+ * it also asks whether they are still in placements at all, and whether they
+ * have put in a single application.
+ */
+const IDLE: DirectoryStudent = {
+  ...UNPLACED,
+  studentId: "s8",
+  fullName: "Farhan Ali",
+  branch: "CSE",
+  applications: 0,
+};
+
+describe("filterDirectory — the never-applied", () => {
+  const ROSTER = [PLACED, UNPLACED, OPTED_OUT, HELD, IDLE];
+
+  it("lists a student in placements with no application at all", () => {
+    expect(names(filterDirectory(ROSTER, { filter: "never_applied", query: "" }))).toEqual([
+      "Farhan Ali",
+    ]);
+  });
+
+  it("leaves out the opted out, the placed, and anyone who did apply", () => {
+    const rows = names(filterDirectory(ROSTER, { filter: "never_applied", query: "" }));
+    // Meera has zero applications too, but she has already left placements.
+    expect(rows).not.toContain("Meera Iyer");
+    expect(rows).not.toContain("Anjali Subramanian");
+    // Kavya is held and has applied; idleness is not her story.
+    expect(rows).not.toContain("Kavya Reddy");
+  });
+});
+
+/**
  * 2026-08-26 (answer 3): the overview's "Placed on campus" counts
  * `hasOnCampusPlacement` — self-placed excluded, PRD §16.2 — while `placed`
  * here counts any placement record, self-placed INCLUDED (C1, deliberate).

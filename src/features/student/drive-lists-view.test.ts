@@ -5,12 +5,13 @@ import { server } from "../../mocks/node";
 import { createSupabaseDrivesView } from "./drives-view";
 
 /**
- * N7 — the four lists, assembled from live rows (approved 2026-08-19).
+ * N7 — the lists the Drives area shows, assembled from live rows (approved
+ * 2026-08-19; narrowed to future drives on 2026-10-29).
  *
  * The classification itself is `@domain/student-drive-lists`; these tests
  * prove the view feeds it honestly: applications joined to their rounds, the
- * ladder's R5 still hiding what it always hid, and a drive landing in
- * EXACTLY one list.
+ * ladder's R5 still hiding what it always hid, closed drives and concluded
+ * applications kept off the page, and the student's own hold read out.
  */
 const BASE = "https://project.supabase.co";
 
@@ -69,6 +70,7 @@ function stub(
     offers?: unknown[];
     participants?: unknown[];
     results?: unknown[];
+    holds?: unknown[];
   } = {},
 ) {
   server.use(
@@ -76,6 +78,7 @@ function stub(
     http.get(`${BASE}/rest/v1/drives`, () => HttpResponse.json(opts.drives ?? [openDrive])),
     http.get(`${BASE}/rest/v1/applications`, () => HttpResponse.json(opts.applications ?? [])),
     http.get(`${BASE}/rest/v1/offers`, () => HttpResponse.json(opts.offers ?? [])),
+    http.get(`${BASE}/rest/v1/student_holds`, () => HttpResponse.json(opts.holds ?? [])),
     http.get(`${BASE}/rest/v1/round_participants`, () =>
       HttpResponse.json(opts.participants ?? []),
     ),
@@ -91,7 +94,7 @@ const view = () =>
     () => NOW,
   );
 
-describe("lists — each drive lands in exactly one of the four", () => {
+describe("lists — future drives and applications still moving", () => {
   it("puts a live, open, unapplied drive under To apply, with its role area and locations", async () => {
     stub();
     const lists = await view().lists();
@@ -99,11 +102,9 @@ describe("lists — each drive lands in exactly one of the four", () => {
     expect(lists.toApply.map((d) => d.companyName)).toEqual(["Zoho"]);
     expect(lists.toApply[0]?.roleCategory).toBe("software_technical");
     expect(lists.inProgress).toEqual([]);
-    expect(lists.notApplied).toEqual([]);
-    expect(lists.appliedClosed).toEqual([]);
   });
 
-  it("moves a closed, never-applied drive to Not applied, with when it closed", async () => {
+  it("stops showing a drive whose window has closed", async () => {
     stub({
       drives: [
         { ...openDrive, status: "applications_closed", application_end: "2026-09-02T00:00:00Z" },
@@ -112,16 +113,10 @@ describe("lists — each drive lands in exactly one of the four", () => {
     const lists = await view().lists();
 
     expect(lists.toApply).toEqual([]);
-    expect(lists.notApplied).toEqual([
-      expect.objectContaining({
-        id: "d1",
-        companyName: "Zoho",
-        closedOn: "2026-09-02T00:00:00Z",
-      }),
-    ]);
+    expect(lists.inProgress).toEqual([]);
   });
 
-  it("still hides what R5 hides — a missed drive they were never eligible for is not 'missed'", async () => {
+  it("still hides what R5 hides — a drive they were never eligible for", async () => {
     stub({
       drives: [
         {
@@ -134,8 +129,8 @@ describe("lists — each drive lands in exactly one of the four", () => {
     });
     const lists = await view().lists();
 
-    expect(lists.notApplied).toEqual([]);
     expect(lists.toApply).toEqual([]);
+    expect(lists.inProgress).toEqual([]);
   });
 
   it("an application mid-rounds is In progress, wearing its current round", async () => {
@@ -153,10 +148,14 @@ describe("lists — each drive lands in exactly one of the four", () => {
         progressLabel: "Round 1 of 2 — Aptitude",
       }),
     ]);
-    expect(lists.appliedClosed).toEqual([]);
   });
 
-  it("a rejection is Applied-closed with the outcome, even while the drive runs on", async () => {
+  /**
+   * The outcome is still the student's to read — on the dashboard's "My
+   * applications", which carries every application and its stage. This page
+   * is for doors still open, and a rejection is not one.
+   */
+  it("leaves a concluded application off the page, even while the drive runs on", async () => {
     stub({
       drives: [{ ...openDrive, status: "in_rounds", application_end: "2026-09-02T00:00:00Z" }],
       applications: [{ id: "a1", drive_id: "d1", applied_at: "2026-09-01T12:00:00Z" }],
@@ -166,12 +165,10 @@ describe("lists — each drive lands in exactly one of the four", () => {
     const lists = await view().lists();
 
     expect(lists.inProgress).toEqual([]);
-    expect(lists.appliedClosed).toEqual([
-      expect.objectContaining({ id: "d1", outcomeLabel: "Not selected — Aptitude" }),
-    ]);
+    expect(lists.toApply).toEqual([]);
   });
 
-  it("an offer is Applied-closed saying so", async () => {
+  it("leaves a completed drive off the page even when it carried an offer", async () => {
     stub({
       drives: [{ ...openDrive, status: "completed", application_end: "2026-09-02T00:00:00Z" }],
       applications: [{ id: "a1", drive_id: "d1", applied_at: "2026-09-01T12:00:00Z" }],
@@ -189,9 +186,8 @@ describe("lists — each drive lands in exactly one of the four", () => {
     });
     const lists = await view().lists();
 
-    expect(lists.appliedClosed).toEqual([
-      expect.objectContaining({ id: "d1", outcomeLabel: "Offer received" }),
-    ]);
+    expect(lists.inProgress).toEqual([]);
+    expect(lists.toApply).toEqual([]);
   });
 
   /** Q2 (UAT 2026-08-21): the banner's honesty about the internship cap. */
@@ -256,55 +252,40 @@ describe("lists — each drive lands in exactly one of the four", () => {
 });
 
 /**
- * 🔴 UAT 2026-08-27: "the student is not able to view the offer letter
- * attachment, attached by the CPC in both the drives and notifications
- * section". This is the Drives half — the concluded row that already says
- * "Offer received" and gave the student nothing to open.
+ * 0125/0130: the student reads their own unreleased hold row. A pending
+ * self-placed request is the same row with `confirmed_at` still null, so the
+ * screen can tell "held" from "waiting" without a second read.
  */
-describe("the offer letter on the concluded drive", () => {
-  const won = (offerOver: Record<string, unknown> = {}) => ({
-    drives: [{ ...openDrive, status: "completed", application_end: "2026-09-02T00:00:00Z" }],
-    applications: [{ id: "a1", drive_id: "d1", applied_at: "2026-09-01T12:00:00Z" }],
-    offers: [
-      {
-        id: "o1",
-        drive_id: "d1",
-        drive_type: "placement",
-        offer_category: "dream",
-        ctc_lpa: 8,
-        declared_at: "2026-09-04T00:00:00Z",
-        source: "on_campus",
-        attachment_path: "s1/d1/offer.pdf",
-        attachment_name: "Zoho-offer.pdf",
-        ...offerOver,
-      },
-    ],
+describe("the student's own hold", () => {
+  const heldRow = {
+    kind: "fees",
+    reason: "Two semesters of fees unpaid.",
+    starts_at: "2026-09-01",
+    ends_at: "2026-12-15",
+    confirmed_at: "2026-09-01T10:00:00Z",
+  };
+
+  it("carries the kind, reason and window of a live hold", async () => {
+    stub({ holds: [heldRow] });
+
+    expect((await view().lists()).hold).toEqual({
+      kind: "fees",
+      reason: "Two semesters of fees unpaid.",
+      startsAt: "2026-09-01",
+      endsAt: "2026-12-15",
+      confirmedAt: "2026-09-01T10:00:00Z",
+    });
   });
 
-  const signing = () =>
-    server.use(
-      http.post(`${BASE}/storage/v1/object/sign/offer-letters`, () =>
-        HttpResponse.json([{ path: "s1/d1/offer.pdf", signedURL: "/signed/offer.pdf" }]),
-      ),
-    );
+  it("carries a pending request with no confirmation yet", async () => {
+    stub({ holds: [{ ...heldRow, kind: "self_placed", confirmed_at: null }] });
 
-  it("carries the signed letter and its name on the row", async () => {
-    stub(won());
-    signing();
-
-    const [row] = (await view().lists()).appliedClosed;
-
-    expect(row?.outcomeLabel).toBe("Offer received");
-    expect(row?.offerLetterName).toBe("Zoho-offer.pdf");
-    expect(row?.offerLetterUrl).toContain("/signed/offer.pdf");
+    expect((await view().lists()).hold?.confirmedAt).toBeNull();
   });
 
-  it("leaves the row alone when no letter was attached", async () => {
-    stub(won({ attachment_path: null, attachment_name: null }));
+  it("says there is no hold when the student has none", async () => {
+    stub();
 
-    const [row] = (await view().lists()).appliedClosed;
-
-    expect(row?.offerLetterUrl).toBeNull();
-    expect(row?.offerLetterName).toBeNull();
+    expect((await view().lists()).hold).toBeNull();
   });
 });

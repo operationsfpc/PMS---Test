@@ -2,7 +2,7 @@
 import { parseCsv } from "@domain/csv";
 import type { DirectoryStudent } from "@domain/student-directory";
 import type { HoldsView } from "@lib/holds-view";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -289,6 +289,28 @@ describe("StudentDirectoryPage", () => {
     expect(download).not.toHaveBeenCalled();
   });
 
+  /**
+   * 2026-10-29: the Participation column is the only place the CSV says what
+   * a student's status is. "on hold" must come out as two words, not the
+   * database's `on_hold` — the file is read by people, not machines.
+   */
+  it("prints the participation as two words for a held student in the export", async () => {
+    const user = userEvent.setup();
+    const download = vi.fn();
+    const held: DirectoryStudent = { ...UNPLACED, participationStatus: "on_hold" };
+    show([PLACED, held], "/central/students", download);
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /export/i }));
+
+    const table = parseCsv(download.mock.calls[0]?.[1] as string);
+    const header = table[0] ?? [];
+    const rows = table.slice(1);
+    const column = header.indexOf("Participation");
+    expect(column).toBeGreaterThanOrEqual(0);
+    expect(rows[1]?.[column]).toBe("on hold");
+  });
+
   it("tells the reader how many students it is showing", async () => {
     show();
     expect(await screen.findByText(/2 students/i)).toBeDefined();
@@ -493,6 +515,67 @@ describe("arriving from the placement overview", () => {
     show(EVERYONE, "/central/students?ctc=abc");
     expect(await screen.findByText("Anjali Subramanian")).toBeDefined();
   });
+
+  /**
+   * 2026-10-29: the roster's participation status is already shown on every
+   * row, but the chip is the way a manager reaches the held students without
+   * scrolling. The domain supports it; the chip was simply missing.
+   */
+  const HELD: DirectoryStudent = {
+    ...UNPLACED,
+    studentId: "s5",
+    fullName: "Meera Iyer",
+    rollNumber: "21CSE1200",
+    participationStatus: "on_hold",
+  };
+
+  it("filters to the held student for filter=on_hold", async () => {
+    show([...EVERYONE, HELD], "/central/students?filter=on_hold");
+    await screen.findByText("Meera Iyer");
+
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+    expect(screen.queryByText("Thanush Krishna")).toBeNull();
+  });
+
+  it("shows the arriving on-hold filter as the selected chip", async () => {
+    show([...EVERYONE, HELD], "/central/students?filter=on_hold");
+    await screen.findByText("Meera Iyer");
+
+    expect((screen.getByRole("radio", { name: /on hold/i }) as HTMLInputElement).checked).toBe(
+      true,
+    );
+  });
+
+  /**
+   * 2026-10-29: "idle — like students not even tried to apply" (the `idle`
+   * hold kind, 0130). The chip is how a manager finds them to place one.
+   */
+  const IDLE: DirectoryStudent = {
+    ...UNPLACED,
+    studentId: "s6",
+    fullName: "Farhan Ali",
+    rollNumber: "21CSE1300",
+    applications: 0,
+  };
+
+  it("filters to the student who never applied for filter=never_applied", async () => {
+    show([...EVERYONE, HELD, IDLE], "/central/students?filter=never_applied");
+    await screen.findByText("Farhan Ali");
+
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+    expect(screen.queryByText("Meera Iyer")).toBeNull();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  it("shows the arriving never-applied filter as the selected chip", async () => {
+    show([...EVERYONE, HELD, IDLE], "/central/students?filter=never_applied");
+    await screen.findByText("Farhan Ali");
+
+    expect(
+      (screen.getByRole("radio", { name: /never applied/i }) as HTMLInputElement).checked,
+    ).toBe(true);
+  });
 });
 
 /**
@@ -502,10 +585,15 @@ describe("arriving from the placement overview", () => {
  */
 const holdsView = (overrides: Partial<HoldsView> = {}): HoldsView => ({
   live: async () => null,
+  pendingFor: async () => null,
+  pendingIds: async () => [],
   history: async () => [],
   place: async () => "hold-1",
+  confirm: async () => {},
   release: async () => {},
+  extend: async () => {},
   orderUrl: async () => null,
+  evidenceUrl: async () => null,
   ...overrides,
 });
 
@@ -564,6 +652,10 @@ describe("StudentDirectoryPage holds", () => {
       within(dialog).getByRole("textbox", { name: /reason/i }),
       "Two semesters of fees unpaid.",
     );
+    // 0130 made the review date mandatory, so the dialog will not send without one.
+    fireEvent.change(within(dialog).getByLabelText(/review by/i), {
+      target: { value: "2026-12-15" },
+    });
     await user.click(within(dialog).getByRole("button", { name: /place hold/i }));
 
     expect(await screen.findByText(/is on hold/)).toBeDefined();
@@ -572,7 +664,7 @@ describe("StudentDirectoryPage holds", () => {
       kind: "fees",
       reason: "Two semesters of fees unpaid.",
       startsAt: expect.any(String),
-      endsAt: null,
+      endsAt: "2026-12-15",
       order: null,
     });
 
@@ -621,9 +713,57 @@ describe("StudentDirectoryPage holds", () => {
       within(dialog).getByRole("textbox", { name: /reason/i }),
       "Offer already in hand.",
     );
+    fireEvent.change(within(dialog).getByLabelText(/review by/i), {
+      target: { value: "2026-12-15" },
+    });
     await user.click(within(dialog).getByRole("button", { name: /place hold/i }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(/Only a Campus Manager/);
     expect(screen.queryByText(/is on hold/)).toBeNull();
+  });
+
+  /**
+   * 0130: the student's request closes nothing until a manager confirms it, so
+   * the directory says who is waiting rather than hoping the right record gets
+   * opened — and the row offers no second Hold button the database would
+   * refuse.
+   */
+  it("says a self-placed request is waiting, and links to the student who filed it", async () => {
+    showHolds([PLACED, UNPLACED], holdsView({ pendingIds: async () => ["s2"] }));
+    await screen.findByText(/1 self-placed request is waiting on you/);
+
+    const door = screen.getByRole("link", { name: "Open the request from Rahul Nair" });
+    expect(door.getAttribute("href")).toBe("/students/s2");
+
+    const row = await screen.findByRole("row", { name: /rahul nair/i });
+    expect(within(row).getByText("Request waiting")).toBeDefined();
+    expect(within(row).queryByRole("button", { name: /hold/i })).toBeNull();
+
+    // The student nobody asked about still offers the action.
+    expect(screen.getByRole("button", { name: "Hold Anjali Subramanian" })).toBeDefined();
+  });
+
+  it("draws no queue when nothing is waiting", async () => {
+    showHolds([PLACED, UNPLACED], holdsView());
+    await screen.findByRole("button", { name: "Hold Rahul Nair" });
+
+    expect(screen.queryByText(/waiting on you/i)).toBeNull();
+  });
+
+  /** A queue read that fails is not an empty queue, and not a silent one. */
+  it("says when the waiting requests could not be read", async () => {
+    showHolds(
+      [PLACED, UNPLACED],
+      holdsView({
+        pendingIds: async () => {
+          throw new Error("Could not read the requests waiting on you.");
+        },
+      }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /Could not read the requests waiting on you/,
+    );
+    // The roster itself is untouched.
+    expect(screen.getByRole("button", { name: "Hold Rahul Nair" })).toBeDefined();
   });
 });

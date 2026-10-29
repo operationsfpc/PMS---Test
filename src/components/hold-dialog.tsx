@@ -73,7 +73,7 @@ export function HoldDialog({
         kind,
         reason: draft.reason,
         startsAt: draft.startsAt,
-        endsAt: draft.endsAt === "" ? null : draft.endsAt,
+        endsAt: draft.endsAt,
         order,
       }),
     );
@@ -162,7 +162,7 @@ export function HoldDialog({
           </div>
           <div>
             <label htmlFor="hold-ends" className="mb-1 block text-sm font-medium text-ink-700">
-              Review by <span className="font-normal text-ink-500">(optional)</span>
+              Review by <span className="text-destructive">*</span>
             </label>
             <input
               id="hold-ends"

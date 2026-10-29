@@ -183,11 +183,13 @@ export function PageHeader({
 }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
-        <h1 className="text-2xl text-ink-900">{title}</h1>
-        {subtitle !== undefined && <p className="mt-1 text-sm text-ink-500">{subtitle}</p>}
+      <div className="min-w-0 max-w-full flex-1">
+        <h1 className="text-2xl text-ink-900 break-words">{title}</h1>
+        {subtitle !== undefined && (
+          <p className="mt-1 text-sm text-ink-500 break-words">{subtitle}</p>
+        )}
       </div>
-      {actions !== undefined && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions !== undefined && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }

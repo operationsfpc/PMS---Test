@@ -2,10 +2,15 @@ import type { ApplicationStage } from "./student-progress";
 import type { DriveStatus } from "./types";
 
 /**
- * N7 — the student's Drives area is four lists (spec 2026-08-18, approved;
- * Karthik's list names recorded in the handover). A drive a student can see
- * is in EXACTLY one of them: two lists would show the same drive twice, zero
- * would hide a drive they can read — both are bugs by definition.
+ * N7 — the four answers a drive can have for one student (spec 2026-08-18,
+ * approved; Karthik's list names recorded in the handover). Exactly one
+ * applies: two would show the same drive twice, zero would hide a drive they
+ * can read — both are bugs by definition.
+ *
+ * Since 2026-10-29 the Drives area renders only `to_apply` and `in_progress`:
+ * a drive whose window has closed is not one the student can act on, and a
+ * concluded application belongs to the dashboard's "My applications". The two
+ * closed answers are still how the view excludes them.
  */
 export const STUDENT_DRIVE_LISTS = [
   "to_apply",
@@ -103,29 +108,6 @@ export function describeTimeLeft(
     label: `${minutes} ${minutes === 1 ? "minute" : "minutes"} left to apply`,
     urgent: true,
   };
-}
-
-/** The closing-time filter's options, in the order the screen offers them. */
-export const CLOSING_FILTERS = ["any", "today", "3_days", "7_days"] as const;
-
-export type ClosingFilter = (typeof CLOSING_FILTERS)[number];
-
-const CLOSING_HORIZON: Readonly<Record<Exclude<ClosingFilter, "any">, number>> = {
-  today: DAY,
-  "3_days": 3 * DAY,
-  "7_days": 7 * DAY,
-};
-
-/**
- * Whether a drive's window closes inside the filter's horizon. A closed
- * window matches nothing — including "any": this filter only ever runs over
- * the To-apply list, where a closed drive has no business appearing.
- */
-export function closesWithin(applicationEnd: Date, now: Date, filter: ClosingFilter): boolean {
-  const left = applicationEnd.getTime() - now.getTime();
-  if (left <= 0) return false;
-  if (filter === "any") return true;
-  return left <= CLOSING_HORIZON[filter];
 }
 
 /** "Bengaluru, Chennai" → ["Bengaluru", "Chennai"]. Free text, so trimmed and de-blanked. */

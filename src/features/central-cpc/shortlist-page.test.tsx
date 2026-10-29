@@ -42,6 +42,7 @@ const WEAK: ShortlistApplicant = {
   preferredRoleCategories: [],
   shortlisted: false,
   optedOut: false,
+  onHold: false,
 };
 
 const STRONG: ShortlistApplicant = {
@@ -57,6 +58,7 @@ const STRONG: ShortlistApplicant = {
   preferredRoleCategories: ["software_technical"],
   shortlisted: false,
   optedOut: false,
+  onHold: false,
 };
 
 const APPLICANTS: readonly ShortlistApplicant[] = [WEAK, STRONG];
@@ -379,6 +381,56 @@ describe("ShortlistPage \u2014 an opted-out applicant", () => {
     await user.click(within(row).getByRole("button", { name: /confirm/i }));
 
     expect(within(row).queryByRole("checkbox")).toBeNull();
+  });
+});
+
+/**
+ * 2026-10-29: the college's own hold blocks the same write 0126 already
+ * refuses — the card says so before a save has to come back refused.
+ */
+describe("ShortlistPage — an applicant on a college hold", () => {
+  const HELD: ShortlistApplicant = {
+    ...WEAK,
+    applicationId: "app-held",
+    studentName: "Held Candidate",
+    rollNumber: "21CSE0004",
+    onHold: true,
+  };
+
+  it("names them in an alert and offers no checkbox", async () => {
+    show(view({ applicants: async () => [HELD, STRONG] }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/hold placed by their college/i);
+    expect(alert.textContent).toMatch(/Held Candidate/);
+
+    const row = screen.getByText("Held Candidate").closest("li");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+    expect(within(row).getByText("On hold")).toBeDefined();
+  });
+
+  it("never sweeps a held applicant into Select all", async () => {
+    const user = userEvent.setup();
+    show(view({ applicants: async () => [HELD, STRONG] }));
+
+    await screen.findByText("Strong Candidate");
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+
+    expect(screen.getByRole("button", { name: /shortlist 1/i })).toBeDefined();
+  });
+
+  it("lets an explicit reason open the checkbox, like the opt-out does", async () => {
+    const user = userEvent.setup();
+    show(view({ applicants: async () => [HELD] }));
+
+    const row = (await screen.findByText("Held Candidate")).closest("li");
+    if (row === null) throw new Error("row not found");
+    await user.click(within(row).getByRole("button", { name: /override/i }));
+    await user.type(within(row).getByLabelText(/reason/i), "The hold was for fees; now cleared.");
+    await user.click(within(row).getByRole("button", { name: /confirm/i }));
+
+    expect(within(row).getByRole("checkbox")).toBeDefined();
   });
 });
 

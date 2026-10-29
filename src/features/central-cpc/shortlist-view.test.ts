@@ -438,6 +438,22 @@ describe("the opt-out flag (D7)", () => {
     const rows = await view().applicants("d1");
     expect(rows[0]?.optedOut).toBe(false);
   });
+
+  /**
+   * 2026-10-29: the same live question for a college's own hold (0125) — the
+   * card must block before 0126's write guard has to refuse.
+   */
+  it("marks an applicant whose student row says on_hold", async () => {
+    stub({
+      applications: [
+        { ...APPLICATION, students: { ...APPLICATION.students, participation_status: "on_hold" } },
+      ],
+    });
+
+    const rows = await view().applicants("d1");
+    expect(rows[0]?.onHold).toBe(true);
+    expect(rows[0]?.optedOut).toBe(false);
+  });
 });
 
 describe("saving the shortlist", () => {

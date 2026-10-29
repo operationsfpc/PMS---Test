@@ -23,6 +23,12 @@ export interface ShadcnDataTableProps<T> {
   defaultPageSize?: number | undefined;
   emptyMessage?: string | undefined;
   caption?: string | undefined;
+  /**
+   * For a table that scrolls inside a drawer (the "See who" popup): keeps the
+   * paging controls on screen instead of leaving them at the end of a roster
+   * nobody scrolls past by accident.
+   */
+  stickyPagination?: boolean | undefined;
   className?: string | undefined;
 }
 
@@ -38,6 +44,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
   defaultPageSize = 10,
   emptyMessage = "No records found.",
   caption = "Data table",
+  stickyPagination = false,
   className = "",
 }: ShadcnDataTableProps<T>) {
   // State
@@ -143,6 +150,16 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
     const start = pageIndex * pageSize;
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, pageIndex, pageSize]);
+
+  /**
+   * The rows can shrink under the reader without any paging click: the
+   * "See who" popup switches to a smaller group tab, or a search narrows the
+   * list. Page 3 of a list now one page long printed "Page 3 of 1" over an
+   * empty table.
+   */
+  useEffect(() => {
+    setPageIndex((current) => Math.min(current, totalPages - 1));
+  }, [totalPages]);
 
   // Visible columns
   const visibleColumns = useMemo(
@@ -468,7 +485,13 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
        * At the page edges the Previous/Next buttons sit disabled, as elsewhere.
        */}
       {sortedData.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-600 pt-1">
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 text-xs text-ink-600 ${
+            stickyPagination
+              ? "sticky bottom-0 z-10 -mx-6 border-t border-line bg-surface px-6 py-2"
+              : "pt-1"
+          }`}
+        >
           <div className="flex items-center gap-2">
             <span>
               Showing {Math.min(pageIndex * pageSize + 1, sortedData.length)} to{" "}

@@ -13,6 +13,7 @@ import type { AcademicProfile, DriveStatus, DriveType, RoleCategory } from "@dom
 import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  ProgrammeLink,
   PublishCandidate,
   PublishDrive,
   PublishInput,
@@ -256,12 +257,29 @@ export function createSupabasePublishView(
         ...new Set(rows.map((r) => (r.name as string | null) ?? "").filter(Boolean)),
       ];
 
+      const cohort = students.map(toCandidate);
+
+      /**
+       * The (campus, degree, branch) triples the interlocking tickers narrow by
+       * (2026-10-29 UAT). Read off the cohort rather than `campus_programmes`:
+       * this screen sets an audience from the roster, so a programme with no
+       * student in it has nothing to give a drive — and no extra table read is
+       * spent finding that out.
+       */
+      const programmeIndex = new Map<string, ProgrammeLink>();
+      for (const student of cohort) {
+        const { campus, degree, branch } = student.academics;
+        if (campus === "" || degree === "") continue;
+        programmeIndex.set(`${campus}\u0000${degree}\u0000${branch}`, { campus, degree, branch });
+      }
+
       const options: TargetingOptions = {
         // The cities the screen offers are read off these colleges, so a city
         // can never be offered that holds nobody.
         colleges: colleges.map(collegeOption).filter((college) => college.name !== ""),
         degrees: names(degrees),
         branches: names(branches),
+        programmes: [...programmeIndex.values()],
       };
 
       const roundRows = (Array.isArray(row.drive_rounds) ? row.drive_rounds : []) as Array<
@@ -339,8 +357,6 @@ export function createSupabasePublishView(
           .map((r) => ({ sequence: Number(r.sequence), name: r.name as string }))
           .sort((a, b) => a.sequence - b.sequence),
       };
-
-      const cohort = students.map(toCandidate);
 
       return { drive, options, cohort };
     },

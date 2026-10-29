@@ -1,4 +1,9 @@
-import { canRecordSelfPlacement, canRequestOptOut } from "@domain/participation";
+import { holdDraftProblem } from "@domain/holds";
+import {
+  canRecordSelfPlacement,
+  canRequestOptOut,
+  canRequestSelfPlacedHold,
+} from "@domain/participation";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { ParticipationStatus } from "@domain/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -14,6 +19,9 @@ export class ParticipationError extends Error {}
 const BUCKETS = {
   offer_letter: "offer-letters",
   opt_out_declaration: "declarations",
+  // The same declarations bucket as an opt-out: handwritten, photographed, and
+  // read by staff through 0022's shared policy. 0130 adds the kind label.
+  self_placement_declaration: "declarations",
 } as const;
 
 /**
@@ -65,6 +73,17 @@ async function uploadEvidence(
 
   return data.id as string;
 }
+
+/**
+ * The RPC's raised sentence is the student's only explanation ("There is
+ * already a hold, or a request waiting, on your placements."), so it is kept.
+ */
+const withDetail = (summary: string, error: { message?: string }): ParticipationError =>
+  new ParticipationError(
+    typeof error.message === "string" && error.message.trim() !== ""
+      ? `${summary} (${error.message})`
+      : summary,
+  );
 
 /**
  * The student's own participation, against live data.
@@ -226,6 +245,59 @@ export function createSupabaseParticipationView(
 
       if (error !== null) {
         throw new ParticipationError("Could not record the offer. Please try again.");
+      }
+    },
+
+    async requestSelfPlacedHold(request) {
+      const studentId = await student();
+      const current = await this.status();
+
+      const decision = canRequestSelfPlacedHold({
+        participationStatus: current.participationStatus,
+        hasOfferLetter: request.offerLetter !== undefined,
+        hasDeclaration: request.declaration !== undefined,
+      });
+      if (!decision.allowed) throw new ParticipationError(decision.reason);
+
+      // The same sentences the manager's dialog shows, asked before two
+      // documents are uploaded over a window the database would refuse.
+      const draftProblem = holdDraftProblem({
+        kind: "self_placed",
+        reason: request.reason,
+        startsAt: request.startsAt,
+        endsAt: request.endsAt,
+      });
+      if (draftProblem !== null) throw new ParticipationError(draftProblem);
+
+      const offerLetterId = await uploadEvidence(
+        client,
+        studentId,
+        "offer_letter",
+        request.offerLetter,
+      );
+      const declarationId = await uploadEvidence(
+        client,
+        studentId,
+        "self_placement_declaration",
+        request.declaration,
+      );
+
+      // Both rows in one transaction (0130): the offer request the coordinator
+      // verifies, and the pending hold the Campus Manager confirms. Two client
+      // writes could leave the student with half of what they sent.
+      const { error } = await client.rpc("request_self_placed_hold", {
+        p_offer_document_id: offerLetterId,
+        p_declaration_id: declarationId,
+        p_reason: request.reason.trim(),
+        p_starts_at: request.startsAt,
+        p_ends_at: request.endsAt,
+        p_company_name: request.companyName,
+        p_role_title: request.roleTitle === "" ? null : request.roleTitle,
+        p_ctc_lpa: request.ctcLpa,
+      });
+
+      if (error !== null) {
+        throw withDetail("Could not send your hold request.", error);
       }
     },
   };

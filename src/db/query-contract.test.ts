@@ -369,7 +369,7 @@ describe("every hand-written select matches the schema", () => {
     // constraint name is guessed wrong, so it is proved here.
     ["drive record", "drives", RECORD_DRIVE_COLUMNS],
     ["drive record applicants", "applications", RECORD_APPLICANT_COLUMNS],
-    // N7: the four lists read the student's applications with their ids.
+    // N7: the Drives lists read the student's applications with their ids.
     ["student drive lists applications", "applications", "id, drive_id, applied_at"],
     ["drive progress offers", "offers", "student_id, drive_id, ctc_lpa, offer_category"],
     ["staff list", "staff_invitations", "email, full_name, role, accepted_at"],

@@ -23,6 +23,7 @@ export const HOLD_KIND_LABELS: Record<HoldKind, string> = {
   fees: "Fees",
   self_placed: "Self-placed",
   idle: "Not applying",
+  pause: "Paused",
 };
 
 /** The same three, said as a sentence to a coordinator deciding one. */
@@ -30,6 +31,7 @@ export const HOLD_KIND_DESCRIPTIONS: Record<HoldKind, string> = {
   fees: "Held until their dues are cleared with accounts.",
   self_placed: "They found a job off-campus; drives are closed to them.",
   idle: "Not applying to anything, however long the window stays open.",
+  pause: "A break agreed with the college — medical, personal, or their own request.",
 };
 
 /**
@@ -60,7 +62,11 @@ export interface HoldWindow {
   readonly kind: HoldKind;
   /** ISO `YYYY-MM-DD`, as the date column is read. */
   readonly startsAt: string;
-  readonly endsAt: string | null;
+  /**
+   * The review date. Required since 0130 — the form asks for both ends, and
+   * the column refuses a null — and still never a switch.
+   */
+  readonly endsAt: string;
   readonly releasedAt: string | null;
 }
 
@@ -80,7 +86,6 @@ export type HoldStanding = "released" | "open" | "overdue";
  */
 export function holdStanding(hold: HoldWindow, today: Date): HoldStanding {
   if (hold.releasedAt !== null) return "released";
-  if (hold.endsAt === null) return "open";
   // Compared as dates, not timestamps: `ends_at` is a day, and a day is not
   // over until the whole of it has passed.
   const review = new Date(`${hold.endsAt}T23:59:59`);
@@ -91,14 +96,12 @@ export function holdStanding(hold: HoldWindow, today: Date): HoldStanding {
  * How a hold's window reads on one line: "from 29 Oct 2026, review by 15 Dec",
  * or the release once there is one.
  *
- * A hold with no review date says so rather than going quiet — "no review date"
- * is a fact the coordinator set by leaving the box empty, and the manager who
- * inherits the row needs to see that nobody ever meant to look again.
+ * There is no "no review date" case any more: 0130 made the review date
+ * mandatory, and the database refuses a hold without one.
  */
 export function holdWindowLine(hold: HoldWindow, today: Date): string {
   if (hold.releasedAt !== null) return `released ${formatDay(hold.releasedAt)}`;
   const standing = holdStanding(hold, today);
-  if (hold.endsAt === null) return `from ${formatDay(hold.startsAt)}, no review date`;
   return `from ${formatDay(hold.startsAt)}, ${
     standing === "overdue" ? "review was due" : "review by"
   } ${formatDay(hold.endsAt)}`;
@@ -129,9 +132,9 @@ export function holdDraftProblem(draft: HoldDraft): string | null {
   if (draft.reason.trim() === "")
     return "Give the reason — it is what the student is told, and what a release is judged against.";
   if (draft.startsAt === "") return "Say when the hold starts.";
+  if (draft.endsAt === "") return "Say when the hold should be reviewed.";
   // ISO dates order correctly as text, which is why the boxes hold YYYY-MM-DD.
-  if (draft.endsAt !== "" && draft.endsAt < draft.startsAt)
-    return "The review date cannot fall before the hold starts.";
+  if (draft.endsAt < draft.startsAt) return "The review date cannot fall before the hold starts.";
   return null;
 }
 

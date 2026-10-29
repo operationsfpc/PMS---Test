@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { OffCampusPage } from "./off-campus-page";
@@ -9,19 +9,24 @@ import type { ParticipationView } from "./participation-contract";
  * Recording an offer the student found themselves — its own screen since F2
  * (UAT 2026-08-06).
  *
- * It is a separate statistic and never touches on-campus eligibility. Students
- * ask about that constantly, so the screen states it rather than waiting to be
- * asked.
+ * Since 0130 the screen has two shapes. An active student's offer travels with
+ * a self-placement hold request (offer letter + handwritten declaration) that a
+ * Campus Manager confirms; an opted-out student has no drives left to hold, so
+ * their offer is recorded for the statistic alone.
  */
-function view(overrides: Partial<ParticipationView> = {}): ParticipationView {
+function view(
+  overrides: Partial<ParticipationView> = {},
+  participationStatus: "active" | "opted_out" | "on_hold" | "disbarred" = "active",
+): ParticipationView {
   return {
     status: async () => ({
-      participationStatus: "active",
+      participationStatus,
       optOutRequests: [],
       selfPlacements: [],
     }),
     requestOptOut: async () => undefined,
     recordSelfPlacement: async () => undefined,
+    requestSelfPlacedHold: async () => undefined,
     ...overrides,
   };
 }
@@ -37,19 +42,28 @@ const placement = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-describe("OffCampusPage", () => {
+const offer = () => new File(["offer"], "offer.pdf", { type: "application/pdf" });
+const declaration = () => new File(["signed"], "declaration.jpg", { type: "image/jpeg" });
+
+/** Fills what both shapes share. */
+async function fillOffer(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(await screen.findByLabelText(/company/i), "Freshworks");
+  await user.type(screen.getByLabelText(/role/i), "SDE");
+  await user.type(screen.getByLabelText(/ctc/i), "12");
+  await user.upload(screen.getByLabelText(/offer letter/i), offer());
+}
+
+/**
+ * The offer-only shape: a student who has opted out has no drives to hold, so
+ * this is the flow that has always existed.
+ */
+describe("OffCampusPage — recording an offer", () => {
   it("records an off-campus offer with company and CTC", async () => {
     const recordSelfPlacement = vi.fn();
     const user = userEvent.setup();
-    render(<OffCampusPage view={view({ recordSelfPlacement })} />);
+    render(<OffCampusPage view={view({ recordSelfPlacement }, "opted_out")} />);
 
-    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
-    await user.type(screen.getByLabelText(/role/i), "SDE");
-    await user.type(screen.getByLabelText(/ctc/i), "12");
-    await user.upload(
-      screen.getByLabelText(/offer letter/i),
-      new File(["offer"], "offer.pdf", { type: "application/pdf" }),
-    );
+    await fillOffer(user);
     await user.click(screen.getByRole("button", { name: /record.*offer/i }));
 
     await waitFor(() =>
@@ -60,7 +74,7 @@ describe("OffCampusPage", () => {
   });
 
   it("states that an off-campus offer does not affect on-campus eligibility", async () => {
-    render(<OffCampusPage view={view()} />);
+    render(<OffCampusPage view={view({}, "opted_out")} />);
 
     expect(await screen.findByText(/does not affect/i)).toBeDefined();
   });
@@ -68,7 +82,7 @@ describe("OffCampusPage", () => {
   it("will not record one without the offer letter", async () => {
     const recordSelfPlacement = vi.fn();
     const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ recordSelfPlacement })} />);
+    render(<OffCampusPage view={view({ recordSelfPlacement }, "opted_out")} />);
 
     await user.type(await screen.findByLabelText(/company/i), "Freshworks");
     await user.type(screen.getByLabelText(/ctc/i), "7.5");
@@ -81,14 +95,9 @@ describe("OffCampusPage", () => {
   it("sends the offer letter with the offer", async () => {
     const recordSelfPlacement = vi.fn();
     const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ recordSelfPlacement })} />);
+    render(<OffCampusPage view={view({ recordSelfPlacement }, "opted_out")} />);
 
-    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
-    await user.type(screen.getByLabelText(/ctc/i), "7.5");
-    await user.upload(
-      screen.getByLabelText(/offer letter/i),
-      new File(["offer"], "offer.pdf", { type: "application/pdf" }),
-    );
+    await fillOffer(user);
     await user.click(screen.getByRole("button", { name: /record.*offer/i }));
 
     await waitFor(() => expect(recordSelfPlacement).toHaveBeenCalled());
@@ -96,7 +105,7 @@ describe("OffCampusPage", () => {
   });
 
   it("says the coordinator has to verify it, so nobody expects it to count yet", async () => {
-    render(<OffCampusPage view={view()} />);
+    render(<OffCampusPage view={view({}, "opted_out")} />);
 
     expect(await screen.findByText(/verified by your.*coordinator/i)).toBeDefined();
   });
@@ -104,7 +113,7 @@ describe("OffCampusPage", () => {
   it("refuses a CTC that is not a number rather than sending nonsense", async () => {
     const recordSelfPlacement = vi.fn();
     const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ recordSelfPlacement })} />);
+    render(<OffCampusPage view={view({ recordSelfPlacement }, "opted_out")} />);
 
     await user.type(await screen.findByLabelText(/company/i), "Freshworks");
     await user.click(screen.getByRole("button", { name: /record.*offer/i }));
@@ -122,14 +131,9 @@ describe("OffCampusPage", () => {
         }),
     );
     const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ recordSelfPlacement })} />);
+    render(<OffCampusPage view={view({ recordSelfPlacement }, "opted_out")} />);
 
-    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
-    await user.type(screen.getByLabelText(/ctc/i), "9");
-    await user.upload(
-      screen.getByLabelText(/offer letter/i),
-      new File(["offer"], "offer.pdf", { type: "application/pdf" }),
-    );
+    await fillOffer(user);
 
     const button = screen.getByRole("button", { name: /record.*offer/i }) as HTMLButtonElement;
     await user.click(button);
@@ -146,10 +150,142 @@ describe("OffCampusPage", () => {
 
   /** F2: this screen is about one decision. */
   it("says nothing about opting out", async () => {
-    render(<OffCampusPage view={view()} />);
+    render(<OffCampusPage view={view({}, "opted_out")} />);
 
     await screen.findByText(/does not affect/i);
     expect(screen.queryByLabelText(/why are you opting out/i)).toBeNull();
+  });
+
+  /**
+   * Deliberately still open (PRD §16.2): a student who withdrew and then found
+   * their own job is exactly the self-placement statistic.
+   */
+  it("still records an offer for a student who has opted out", async () => {
+    const recordSelfPlacement = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view({ recordSelfPlacement }, "opted_out")} />);
+
+    await fillOffer(user);
+    await user.click(screen.getByRole("button", { name: /record.*offer/i }));
+
+    await waitFor(() => expect(recordSelfPlacement).toHaveBeenCalled());
+  });
+});
+
+/**
+ * 0130: the student files the offer and asks for the hold in one act. Nothing
+ * closes until a Campus Manager confirms, and the two documents are what they
+ * decide on.
+ */
+describe("OffCampusPage — asking for a self-placement hold", () => {
+  it("asks for the declaration, the reason and both ends of the window", async () => {
+    render(<OffCampusPage view={view()} />);
+
+    expect(await screen.findByLabelText(/signed declaration/i)).toBeDefined();
+    expect(screen.getByLabelText(/why hold your placements/i)).toBeDefined();
+    expect(screen.getByLabelText(/^from$/i)).toBeDefined();
+    expect(screen.getByLabelText(/review by/i)).toBeDefined();
+  });
+
+  it("says the drives stay open until the Campus Manager confirms", async () => {
+    render(<OffCampusPage view={view()} />);
+
+    expect(await screen.findByText(/until they confirm it/i)).toBeDefined();
+  });
+
+  it("sends both documents, the reason and the window", async () => {
+    const requestSelfPlacedHold = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
+
+    await fillOffer(user);
+    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
+    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
+    fireEvent.change(screen.getByLabelText(/^from$/i), { target: { value: "2026-11-02" } });
+    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
+    await user.click(screen.getByRole("button", { name: /send hold request/i }));
+
+    await waitFor(() =>
+      expect(requestSelfPlacedHold).toHaveBeenCalledWith(
+        expect.objectContaining({
+          companyName: "Freshworks",
+          roleTitle: "SDE",
+          ctcLpa: 12,
+          reason: "Offer in hand.",
+          startsAt: "2026-11-02",
+          endsAt: "2027-01-15",
+          offerLetter: expect.any(File),
+          declaration: expect.any(File),
+        }),
+      ),
+    );
+    // The offer-only path must not have fired as well: one submission, one request.
+    expect(screen.queryByText(/verified by your/i)).toBeNull();
+  });
+
+  it("says the request is with the Campus Manager after it is sent", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view()} />);
+
+    await fillOffer(user);
+    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
+    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
+    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
+    await user.click(screen.getByRole("button", { name: /send hold request/i }));
+
+    expect(await screen.findByText(/with your Campus Manager/i)).toBeDefined();
+  });
+
+  it("will not send without the handwritten declaration", async () => {
+    const requestSelfPlacedHold = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
+
+    await fillOffer(user);
+    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
+    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
+    await user.click(screen.getByRole("button", { name: /send hold request/i }));
+
+    expect(requestSelfPlacedHold).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/handwritten declaration/i);
+  });
+
+  it("will not send without a review date — 0130 makes both ends mandatory", async () => {
+    const requestSelfPlacedHold = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
+
+    await fillOffer(user);
+    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
+    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
+    await user.click(screen.getByRole("button", { name: /send hold request/i }));
+
+    expect(requestSelfPlacedHold).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/should be reviewed/i);
+  });
+
+  it("refuses a review date before the hold starts", async () => {
+    const requestSelfPlacedHold = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
+
+    await fillOffer(user);
+    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
+    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
+    fireEvent.change(screen.getByLabelText(/^from$/i), { target: { value: "2027-02-01" } });
+    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
+    await user.click(screen.getByRole("button", { name: /send hold request/i }));
+
+    expect(requestSelfPlacedHold).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/cannot fall before/i);
+  });
+
+  it("will not offer the hold request to a student already out of placements", async () => {
+    render(<OffCampusPage view={view({}, "opted_out")} />);
+
+    await screen.findByLabelText(/offer letter/i);
+    expect(screen.queryByLabelText(/signed declaration/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /send hold request/i })).toBeNull();
   });
 });
 
@@ -212,47 +348,22 @@ describe("OffCampusPage — what happened to my offer", () => {
     expect(screen.getByText(/the letter has no ctc on it/i)).toBeDefined();
   });
 
-  it("still lets a student record another offer after one was declined", async () => {
+  it("still lets a student ask again after one was declined", async () => {
     render(
       <OffCampusPage
-        view={view({
-          status: async () => ({
-            participationStatus: "active",
-            optOutRequests: [],
-            selfPlacements: [placement({ status: "rejected", decisionReason: "Unreadable." })],
-          }),
-        })}
+        view={view(
+          {
+            status: async () => ({
+              participationStatus: "opted_out",
+              optOutRequests: [],
+              selfPlacements: [placement({ status: "rejected", decisionReason: "Unreadable." })],
+            }),
+          },
+          "opted_out",
+        )}
       />,
     );
 
     expect(await screen.findByRole("button", { name: /record.*offer/i })).toBeDefined();
-  });
-
-  /** Opting out is usually BECAUSE they took an outside job (PRD §16.2). */
-  it("still records an offer for a student who has opted out", async () => {
-    const recordSelfPlacement = vi.fn();
-    const user = userEvent.setup({ delay: null });
-    render(
-      <OffCampusPage
-        view={view({
-          recordSelfPlacement,
-          status: async () => ({
-            participationStatus: "opted_out",
-            optOutRequests: [],
-            selfPlacements: [],
-          }),
-        })}
-      />,
-    );
-
-    await user.type(await screen.findByLabelText(/company/i), "Freshworks");
-    await user.type(screen.getByLabelText(/ctc/i), "9");
-    await user.upload(
-      screen.getByLabelText(/offer letter/i),
-      new File(["offer"], "offer.pdf", { type: "application/pdf" }),
-    );
-    await user.click(screen.getByRole("button", { name: /record.*offer/i }));
-
-    await waitFor(() => expect(recordSelfPlacement).toHaveBeenCalled());
   });
 });

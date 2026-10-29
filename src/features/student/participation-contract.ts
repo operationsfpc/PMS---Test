@@ -50,6 +50,22 @@ export interface NewSelfPlacement {
   readonly offerLetter: File;
 }
 
+/**
+ * A student asking their Campus Manager for a self-placement hold (0130).
+ *
+ * The offer is part of the request, not a second one: the same submission
+ * records the offer and files the hold request, in one database call, so a
+ * student can never be left with half of what they sent.
+ */
+export interface NewSelfPlacedHold extends NewSelfPlacement {
+  /** Handwritten and signed — the manager closes their drives on it. */
+  readonly declaration: File;
+  readonly reason: string;
+  /** ISO `YYYY-MM-DD`. Both ends are required (0130). */
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
 export interface NewOptOut {
   readonly reason: string;
   /** Mandatory (UAT 2026-08-05): handwritten, signed, and irreversible. */
@@ -60,6 +76,8 @@ export interface ParticipationView {
   status(): Promise<ParticipationStatusView>;
   requestOptOut(request: NewOptOut): Promise<void>;
   recordSelfPlacement(placement: NewSelfPlacement): Promise<void>;
+  /** Files the offer request and the hold request together (0130). */
+  requestSelfPlacedHold(request: NewSelfPlacedHold): Promise<void>;
 }
 
 /** A request nobody has decided yet blocks a second one. */

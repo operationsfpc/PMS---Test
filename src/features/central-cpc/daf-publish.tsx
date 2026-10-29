@@ -48,6 +48,21 @@ export interface TargetingOptions {
   readonly colleges: readonly CollegeOption[];
   readonly degrees: readonly string[];
   readonly branches: readonly string[];
+  /**
+   * Every (campus, degree, branch) triple the roster actually holds, read off
+   * the cohort this screen already loads. It is what lets the three tickers
+   * interlock — the degrees a ticked college really runs, the branches a ticked
+   * degree really holds — instead of each list offering the whole catalogue.
+   */
+  readonly programmes: readonly ProgrammeLink[];
+}
+
+/** One place the roster offers a programme: a college running a degree's branch. */
+export interface ProgrammeLink {
+  readonly campus: string;
+  readonly degree: string;
+  /** "" when the degree carries no branches (an MBA). */
+  readonly branch: string;
 }
 
 /** Whom the drive is already targeted at. Empty everywhere means "not yet". */
@@ -213,6 +228,7 @@ function MultiSelect({
   onSelectAll,
   emptyNote,
   inactive = [],
+  inactiveNote = "retired",
 }: {
   label: string;
   options: readonly string[];
@@ -224,6 +240,8 @@ function MultiSelect({
   emptyNote: string;
   /** Chosen options that are no longer active — visible, and untickable. */
   inactive?: readonly string[];
+  /** Why each inactive chip is inactive, said once after every marked chip. */
+  inactiveNote?: string;
 }) {
   const allSelected = areAllSelected(options, selected);
   return (
@@ -264,7 +282,7 @@ function MultiSelect({
               />
               {o}
               {inactive.includes(o) && (
-                <span className={on ? "text-white/70" : "text-ink-300"}> · retired</span>
+                <span className={on ? "text-white/70" : "text-ink-300"}> · {inactiveNote}</span>
               )}
             </label>
           );
@@ -445,6 +463,56 @@ export function DafPublish({ view }: { view: PublishView }) {
   const retiredColleges = colleges
     .filter((college) => !college.isActive)
     .map((college) => college.name);
+
+  /**
+   * The three tickers interlock (2026-10-29 UAT). A college runs some degrees
+   * and not others; a degree holds some branches and not others; yet all three
+   * lists offered the whole catalogue, so a coordinator could tick B.E beside
+   * MBA and publish a combination the roster does not contain. Ticking
+   * campuses narrows the degrees to what those colleges run, and ticking
+   * degrees narrows the branches again.
+   *
+   * Nothing ticked narrows nothing: an empty tick means "everyone", so a
+   * shortened catalogue there would show a menu the selection does not mean.
+   * A tick that falls out of the narrowed list stays visible and marked — the
+   * retired-colleges lesson: a chip the screen cannot show is a chip nobody
+   * can untick, and the drive would carry targeting invisible to its editor.
+   */
+  const programmes = loaded?.options.programmes ?? [];
+  const narrowedDegrees =
+    campuses.length === 0
+      ? null
+      : [
+          ...new Set(programmes.filter((p) => campuses.includes(p.campus)).map((p) => p.degree)),
+        ].sort((a, b) => a.localeCompare(b));
+  const narrowedBranches =
+    degrees.length === 0
+      ? null
+      : [
+          ...new Set(
+            programmes
+              .filter(
+                (p) =>
+                  (campuses.length === 0 || campuses.includes(p.campus)) &&
+                  degrees.includes(p.degree) &&
+                  p.branch !== "",
+              )
+              .map((p) => p.branch),
+          ),
+        ].sort((a, b) => a.localeCompare(b));
+
+  const degreeOptions =
+    narrowedDegrees === null
+      ? (loaded?.options.degrees ?? [])
+      : [...new Set([...narrowedDegrees, ...degrees])].sort((a, b) => a.localeCompare(b));
+  const inactiveDegrees =
+    narrowedDegrees === null ? [] : degrees.filter((d) => !narrowedDegrees.includes(d));
+  const branchOptions =
+    narrowedBranches === null
+      ? (loaded?.options.branches ?? [])
+      : [...new Set([...narrowedBranches, ...branches])].sort((a, b) => a.localeCompare(b));
+  const inactiveBranches =
+    narrowedBranches === null ? [] : branches.filter((b) => !narrowedBranches.includes(b));
 
   const drive: VisibleDrive | null = useMemo(
     () =>
@@ -717,20 +785,32 @@ export function DafPublish({ view }: { view: PublishView }) {
                 emptyNote="No campus ticked — this drive is open to every college on the roster."
               />
               <MultiSelect
-                label="Degrees"
-                options={loaded.options.degrees}
+                label={narrowedDegrees === null ? "Degrees" : "Degrees the ticked campuses run"}
+                options={degreeOptions}
                 selected={degrees}
                 onToggle={toggle(setDegrees)}
                 onSelectAll={setDegrees}
-                emptyNote="No degree ticked — every degree on the roster is included."
+                inactive={inactiveDegrees}
+                inactiveNote="not on the ticked campuses"
+                emptyNote={
+                  narrowedDegrees === null
+                    ? "No degree ticked — every degree on the roster is included."
+                    : "The ticked campuses run none of the roster's degrees."
+                }
               />
               <MultiSelect
-                label="Branches"
-                options={loaded.options.branches}
+                label={narrowedBranches === null ? "Branches" : "Branches on the ticked degrees"}
+                options={branchOptions}
                 selected={branches}
                 onToggle={toggle(setBranches)}
                 onSelectAll={setBranches}
-                emptyNote="No branch ticked — every branch on the roster is included."
+                inactive={inactiveBranches}
+                inactiveNote="not on the ticked degrees"
+                emptyNote={
+                  narrowedBranches === null
+                    ? "No branch ticked — every branch on the roster is included."
+                    : "The ticked degrees carry none of the roster's branches."
+                }
               />
 
               <div className="grid gap-4 sm:grid-cols-2">
