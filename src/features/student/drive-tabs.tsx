@@ -553,7 +553,7 @@ function FullRecordLink({ id, role, company }: { id: string; role: string; compa
     <p className="mt-3">
       <ButtonLink
         size="sm"
-        variant="ghost"
+        variant="secondary"
         to={`/drives/${id}`}
         aria-label={`View ${company} — ${role}`}
       >

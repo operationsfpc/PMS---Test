@@ -23,7 +23,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { Controller, type FieldErrors, useFieldArray, useForm } from "react-hook-form";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type { AddSemesterView } from "./add-semester";
 import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
@@ -233,12 +233,12 @@ export function SrfPage({
   programmes?: readonly { readonly degree: string; readonly branch: string }[];
 }) {
   const { signOut } = useAuthActions();
+  const navigate = useNavigate();
   /**
    * What this student may do with this form right now. The rule is the
    * domain's; this screen only obeys it.
    */
   const access = srfAccess(status);
-  const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
@@ -674,7 +674,12 @@ export function SrfPage({
     setServerError(null);
     try {
       await submitSrf(values as SrfSubmission);
-      setSubmitted(true);
+      /**
+       * The dashboard is where a submitted student reads "with your
+       * coordinator" — and `replace` keeps a form that has already been sent
+       * out of the history, so Back cannot reopen it (2026-10-29).
+       */
+      navigate("/student", { replace: true });
     } catch (error) {
       setServerError(
         error instanceof SrfSubmitError ? error.message : "Something went wrong. Please try again.",
@@ -692,21 +697,6 @@ export function SrfPage({
    */
   const nullableNum = (name: Parameters<typeof register>[0]) =>
     register(name, { setValueAs: (v) => (v === "" || v === null ? null : Number(v)) });
-
-  if (submitted) {
-    return (
-      <div className="mx-auto flex min-h-dvh max-w-lg items-center px-4">
-        <div className="w-full rounded-card border border-line bg-surface p-8 text-center shadow-sm">
-          <p className="font-heading text-2xl font-bold text-ink-900">Submitted for verification</p>
-          <p className="mt-3 text-sm leading-relaxed text-ink-500">
-            Your Campus Placement Coordinator will check your entries against your uploaded
-            marksheets. You will be notified once approved — you can apply to drives from that point
-            on.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-dvh bg-surface-muted">
@@ -1756,7 +1746,7 @@ export function SrfPage({
                       {certificates.fields.map((field, index) => (
                         <div
                           key={field.id}
-                          className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.5fr_auto]"
+                          className="grid gap-3 rounded-lg border border-line p-3 sm:grid-cols-[1fr_1.5fr]"
                         >
                           <TextField
                             label={`Certificate ${index + 1} name`}
@@ -1767,62 +1757,77 @@ export function SrfPage({
                           <Controller
                             control={control}
                             name={`certificates.${index}.file`}
-                            render={({ field: file }) => (
-                              <div>
-                                <label
-                                  htmlFor={`certificate-file-${index}`}
-                                  className="mb-1 block text-sm font-medium text-ink-700"
-                                >
-                                  Upload certificate {index + 1}
-                                </label>
-                                <input
-                                  id={`certificate-file-${index}`}
-                                  type="file"
-                                  accept="application/pdf,image/*"
-                                  onChange={(e) => {
-                                    const fileSelected = e.target.files?.[0] ?? null;
-                                    file.onChange(fileSelected);
-                                    if (fileSelected !== null) {
-                                      const currentName = getValues(`certificates.${index}.name`);
-                                      if (
-                                        !currentName ||
-                                        currentName.trim() === "" ||
-                                        currentName.trim().toLowerCase() ===
-                                          "e.g. aws cloud practitioner"
-                                      ) {
-                                        setValue(
-                                          `certificates.${index}.name`,
-                                          filenameToCertificateName(fileSelected.name),
-                                          { shouldValidate: true, shouldDirty: true },
-                                        );
-                                      }
-                                    }
-                                  }}
-                                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-                                />
-                                <ErrorText>
-                                  {
-                                    (
-                                      errors.certificates?.[index]?.file as
-                                        | { message?: string }
-                                        | undefined
-                                    )?.message
-                                  }
-                                </ErrorText>
-                              </div>
-                            )}
+                            render={({ field: file }) => {
+                              const fileError = (
+                                errors.certificates?.[index]?.file as
+                                  | { message?: string }
+                                  | undefined
+                              )?.message;
+                              const hasFileError =
+                                fileError !== undefined && fileError.trim() !== "";
+                              return (
+                                /* Remove sits beside the picker it undoes, in
+                                   the same control row - a third `self-end`
+                                   column landed below it (2026-10-29). */
+                                <div className="flex flex-col gap-1.5">
+                                  <label
+                                    htmlFor={`certificate-file-${index}`}
+                                    className={`text-sm ${
+                                      hasFileError
+                                        ? "font-semibold text-danger-700"
+                                        : "font-medium text-ink-700"
+                                    }`}
+                                  >
+                                    Upload certificate {index + 1}
+                                  </label>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      id={`certificate-file-${index}`}
+                                      type="file"
+                                      accept="application/pdf,image/*"
+                                      onChange={(e) => {
+                                        const fileSelected = e.target.files?.[0] ?? null;
+                                        file.onChange(fileSelected);
+                                        if (fileSelected !== null) {
+                                          const currentName = getValues(
+                                            `certificates.${index}.name`,
+                                          );
+                                          if (
+                                            !currentName ||
+                                            currentName.trim() === "" ||
+                                            currentName.trim().toLowerCase() ===
+                                              "e.g. aws cloud practitioner"
+                                          ) {
+                                            setValue(
+                                              `certificates.${index}.name`,
+                                              filenameToCertificateName(fileSelected.name),
+                                              { shouldValidate: true, shouldDirty: true },
+                                            );
+                                          }
+                                        }
+                                      }}
+                                      className={getControlClass(hasFileError)}
+                                    />
+                                    <Button
+                                      variant="danger"
+                                      size="sm"
+                                      type="button"
+                                      className="shrink-0"
+                                      aria-label={`Remove certificate ${index + 1}`}
+                                      onClick={() => certificates.remove(index)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                  {hasFileError && (
+                                    <p role="alert" className="text-xs font-medium text-danger-700">
+                                      {fileError}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            }}
                           />
-                          <div className="self-end">
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              type="button"
-                              aria-label={`Remove certificate ${index + 1}`}
-                              onClick={() => certificates.remove(index)}
-                            >
-                              Remove
-                            </Button>
-                          </div>
                         </div>
                       ))}
                     </div>

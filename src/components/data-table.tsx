@@ -48,7 +48,6 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
   const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(new Set());
-  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement>(null);
 
@@ -218,7 +217,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
-      {/* Top Toolbar: Search, Filters, Column Toggle, Density */}
+      {/* Top Toolbar: Search, Filters, Column Toggle */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Search Box */}
         <div className="relative flex-1 min-w-[220px] max-w-sm">
@@ -257,18 +256,6 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Density Toggle */}
-          <button
-            type="button"
-            aria-label="Toggle row density"
-            aria-pressed={density === "compact"}
-            title={density === "comfortable" ? "Compact the rows" : "Give the rows more room again"}
-            onClick={() => setDensity((d) => (d === "comfortable" ? "compact" : "comfortable"))}
-            className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted transition-colors aria-pressed:border-brand-300 aria-pressed:bg-brand-50 aria-pressed:text-brand-700"
-          >
-            {density === "comfortable" ? "Compact" : "Comfortable"}
-          </button>
-
           {/* Column Visibility Picker */}
           <div className="relative" ref={columnPickerRef}>
             <button
@@ -409,7 +396,6 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               paginatedData.map((row, idx) => {
                 const rowId = row.id ?? JSON.stringify(row);
                 const isSelected = selectedIds.has(rowId);
-                const paddingY = density === "comfortable" ? "py-3" : "py-1.5";
 
                 return (
                   <tr
@@ -419,7 +405,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                     }`}
                   >
                     {enableSelection && (
-                      <td className={`w-10 px-3 text-center ${paddingY}`}>
+                      <td className="w-10 px-3 text-center py-3">
                         <input
                           type="checkbox"
                           aria-label={`Select row ${idx + 1}`}
@@ -444,7 +430,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       return (
                         <td
                           key={col.id}
-                          className={`px-3 text-sm text-ink-900 ${paddingY} ${col.className ?? ""}`}
+                          className={`px-3 text-sm text-ink-900 py-3 ${col.className ?? ""}`}
                         >
                           {cellContent}
                         </td>
@@ -475,13 +461,13 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
       </div>
 
       {/*
-       * Pagination Footer — only when there is something to paginate.
-       * `totalPages` is at least 1 even for an empty table, so this also covers
-       * the "no rows" case the old `sortedData.length > 0` guard was for. Three
-       * rows used to sit under "Showing 1 to 3 of 3 records, Page 1 of 1" and
-       * two disabled buttons: controls that can do nothing read as broken.
+       * Pagination Footer — visible whenever records are shown, even when
+       * they all fit one page. UAT 2026-10-23: hiding the footer for a single
+       * page read as "the table is broken" (21 rows, no pagination anywhere),
+       * and a hidden "Rows" control meant a long list could never be paged.
+       * At the page edges the Previous/Next buttons sit disabled, as elsewhere.
        */}
-      {totalPages > 1 && (
+      {sortedData.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-ink-600 pt-1">
           <div className="flex items-center gap-2">
             <span>

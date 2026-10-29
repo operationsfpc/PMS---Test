@@ -276,136 +276,156 @@ export function DrivesList({
             /**
              * Everything a role does, below its name: when it closes, how much
              * time is left, the canonical page, and the application itself.
+             *
+             * The decision and its terms sit side by side (2026-10-29): every
+             * fact stacked on the left left the right half of a wide card
+             * empty, and the only controls were small links under the prose.
              */
-            const roleBody = (drive: OpenDrive) => {
-              const confirming = confirmingId === drive.id;
+            const roleMeta = (drive: OpenDrive) => {
+              const left = drive.applied
+                ? null
+                : describeTimeLeft(
+                    new Date(drive.applicationEnd),
+                    now(),
+                    drive.details.applicationStart
+                      ? new Date(drive.details.applicationStart)
+                      : null,
+                  );
               return (
                 <>
                   <p className="mt-1 text-xs text-ink-500">
                     Applications close {day(drive.applicationEnd)}
                   </p>
                   {/* N7: closing time SHOWN, hot under 24 hours. */}
-                  {!drive.applied &&
-                    (() => {
-                      const left = describeTimeLeft(
-                        new Date(drive.applicationEnd),
-                        now(),
-                        drive.details.applicationStart
-                          ? new Date(drive.details.applicationStart)
-                          : null,
-                      );
-                      return (
-                        <p
-                          className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                            left.urgent
-                              ? "bg-orange-500 text-white"
-                              : "bg-surface-muted text-brand-500"
-                          }`}
-                        >
-                          {left.urgent ? "🔥 " : "⏳ "}
-                          {left.label}
-                        </p>
-                      );
-                    })()}
-                  {/* N1: the card links to the drive's one canonical page. */}
-                  <p className="mt-2">
-                    <ButtonLink
-                      size="sm"
-                      variant="ghost"
-                      to={`/drives/${drive.id}`}
-                      aria-label={`View ${drive.companyName} — ${drive.roleTitle}`}
+                  {left !== null && (
+                    <p
+                      className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                        left.urgent ? "bg-orange-500 text-white" : "bg-surface-muted text-brand-500"
+                      }`}
                     >
-                      {/* The card already names the company and the role, so
-                          the control says neither twice. The accessible name
-                          still carries both, so a student tabbing through the
-                          links tells two visits apart. */}
-                      View
-                    </ButtonLink>
-                  </p>
-                  {/* ⚠️ F14's "View more" expander DELIBERATELY REMOVED
-                      2026-08-24 (Karthik): "view everything is sufficient."
-                      Every detail it showed lives on the canonical /drives/:id
-                      page the link above opens. */}
-                  {drive.applied ? null : confirming ? (
-                    /* F14: "Add a warning that you are sure you want to apply
-                         for this drive?" There is no withdrawal (PRD §7.4), so
-                         this is the last moment the decision is reversible. */
-                    <section
-                      aria-label={`Confirm applying to ${drive.companyName} — ${drive.roleTitle}`}
-                      className="mt-4 rounded-lg border border-gold-300 bg-gold-50 p-4"
-                    >
-                      <p className="font-semibold text-ink-900">
-                        Are you sure you want to apply for this drive?
-                      </p>
-                      <p className="mt-1 text-sm text-ink-700">
-                        If you apply, you are expected to <strong>attend all the rounds</strong> of
-                        this drive, and to <strong>accept the final offer</strong> if you get one.
-                        An application cannot be withdrawn.
-                      </p>
-
-                      <div className="mt-3">
-                        {/* D2: the saved per-area resume is the default; the
-                              upload replaces it. With none on file the upload is
-                              required, as F14 originally asked. */}
-                        {drive.profileResumeName !== null && (
-                          <p className="mb-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-ink-700">
-                            Your saved resume <strong>{drive.profileResumeName}</strong> will be
-                            sent with this application unless you upload a different one below.
-                          </p>
-                        )}
-                        <label
-                          htmlFor={`resume-${drive.id}`}
-                          className="mb-1 block text-sm font-medium text-ink-700"
-                        >
-                          {drive.profileResumeName === null ? (
-                            <>
-                              Resume for this drive <span className="text-destructive">*</span>
-                            </>
-                          ) : (
-                            "Replace with a drive-specific resume (optional)"
-                          )}
-                        </label>
-                        <p className="mb-2 text-xs text-ink-500">
-                          This is what {drive.companyName} will read. Tailor it to this role rather
-                          than sending the one on your profile.
-                        </p>
-                        <input
-                          id={`resume-${drive.id}`}
-                          type="file"
-                          accept="application/pdf"
-                          onChange={(e) => setResume(e.target.files?.[0] ?? null)}
-                          className="w-full rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
-                        />
-                        {problem !== null && (
-                          <p className="mt-1 text-xs font-medium text-danger-500">{problem}</p>
-                        )}
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <Button isLoading={busyId === drive.id} onClick={() => void confirm(drive)}>
-                          Yes, apply
-                        </Button>
-                        <Button variant="secondary" onClick={() => setConfirmingId(null)}>
-                          Cancel
-                        </Button>
-                      </div>
-                    </section>
-                  ) : drive.canApply ? (
-                    <div className="mt-4">
-                      <Button
-                        aria-label={`Apply to ${drive.companyName} — ${drive.roleTitle}`}
-                        onClick={() => startApplying(drive.id)}
-                      >
-                        Apply
-                      </Button>
-                      <p className="mt-2 text-xs text-orange-500">
-                        An application cannot be withdrawn once submitted.
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-danger-500">{drive.refusal}</p>
+                      {left.urgent ? "🔥 " : "⏳ "}
+                      {left.label}
+                    </p>
                   )}
                 </>
+              );
+            };
+
+            /** The way in and the way to commit, on the card's quiet side. */
+            const roleActions = (drive: OpenDrive) => {
+              const confirming = confirmingId === drive.id;
+              return (
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-col sm:items-end">
+                  {/* N1: the card links to the drive's one canonical page. */}
+                  <ButtonLink
+                    size="sm"
+                    variant="secondary"
+                    to={`/drives/${drive.id}`}
+                    aria-label={`View ${drive.companyName} — ${drive.roleTitle}`}
+                  >
+                    {/* The card already names the company and the role, so
+                        the control says neither twice. The accessible name
+                        still carries both, so a student tabbing through the
+                        links tells two visits apart. */}
+                    View
+                  </ButtonLink>
+                  {!drive.applied && !confirming && drive.canApply && (
+                    <Button
+                      aria-label={`Apply to ${drive.companyName} — ${drive.roleTitle}`}
+                      onClick={() => startApplying(drive.id)}
+                    >
+                      Apply
+                    </Button>
+                  )}
+                </div>
+              );
+            };
+
+            /**
+             * What follows the row: the promise an application extracts, the
+             * reason one cannot be made, or the confirmation itself.
+             */
+            const roleNotes = (drive: OpenDrive) => {
+              const confirming = confirmingId === drive.id;
+              if (drive.applied) return null;
+              if (confirming) {
+                return (
+                  /* F14: "Add a warning that you are sure you want to apply
+                       for this drive?" There is no withdrawal (PRD §7.4), so
+                       this is the last moment the decision is reversible. */
+                  <section
+                    aria-label={`Confirm applying to ${drive.companyName} — ${drive.roleTitle}`}
+                    className="mt-4 rounded-lg border border-gold-300 bg-gold-50 p-4"
+                  >
+                    <p className="font-semibold text-ink-900">
+                      Are you sure you want to apply for this drive?
+                    </p>
+                    <p className="mt-1 text-sm text-ink-700">
+                      If you apply, you are expected to <strong>attend all the rounds</strong> of
+                      this drive, and to <strong>accept the final offer</strong> if you get one. An
+                      application cannot be withdrawn.
+                    </p>
+
+                    <div className="mt-3">
+                      {/* D2: the saved per-area resume is the default; the
+                            upload replaces it. With none on file the upload is
+                            required, as F14 originally asked. */}
+                      {drive.profileResumeName !== null && (
+                        <p className="mb-2 rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-ink-700">
+                          Your saved resume <strong>{drive.profileResumeName}</strong> will be sent
+                          with this application unless you upload a different one below.
+                        </p>
+                      )}
+                      <label
+                        htmlFor={`resume-${drive.id}`}
+                        className="mb-1 block text-sm font-medium text-ink-700"
+                      >
+                        {drive.profileResumeName === null ? (
+                          <>
+                            Resume for this drive <span className="text-destructive">*</span>
+                          </>
+                        ) : (
+                          "Replace with a drive-specific resume (optional)"
+                        )}
+                      </label>
+                      <p className="mb-2 text-xs text-ink-500">
+                        This is what {drive.companyName} will read. Tailor it to this role rather
+                        than sending the one on your profile.
+                      </p>
+                      <input
+                        id={`resume-${drive.id}`}
+                        type="file"
+                        accept="application/pdf"
+                        onChange={(e) => setResume(e.target.files?.[0] ?? null)}
+                        className="w-full rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
+                      />
+                      {problem !== null && (
+                        <p className="mt-1 text-xs font-medium text-danger-500">{problem}</p>
+                      )}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button isLoading={busyId === drive.id} onClick={() => void confirm(drive)}>
+                        Yes, apply
+                      </Button>
+                      <Button variant="secondary" onClick={() => setConfirmingId(null)}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </section>
+                );
+              }
+              if (drive.canApply) {
+                return (
+                  <p className="mt-3 text-xs text-orange-500">
+                    An application cannot be withdrawn once submitted.
+                  </p>
+                );
+              }
+              return (
+                <p className="mt-3 rounded-lg bg-danger-50 px-3 py-2 text-sm text-danger-500">
+                  {drive.refusal}
+                </p>
               );
             };
 
@@ -416,34 +436,38 @@ export function DrivesList({
                     show company name"). A student decides whether to give an
                     afternoon to Zoho, not to a list of job titles that happen to
                     share a date, a venue and one interview process. */}
-                <div className="border-b border-line bg-brand-50 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-heading text-lg font-bold text-ink-900">
-                      {event.companyName}
-                    </h2>
-                    {/* A visit where no role declared a type says nothing rather
-                        than "Type not set" — the same rule RoleFacts follows one
-                        level down. */}
-                    {visitType !== null && (
-                      <Badge tone={visitType === undefined ? "neutral" : driveTypeTone(visitType)}>
-                        {visitType === undefined ? "Mixed types" : driveTypeLabel(visitType)}
-                      </Badge>
-                    )}
-                    {isMultiRole && <Badge tone="brand">{event.roles.length} roles</Badge>}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-3 text-sm text-ink-600">
-                    {event.tentativeDate && (
-                      <span>
-                        📅{" "}
-                        {new Date(event.tentativeDate).toLocaleDateString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                        })}
-                      </span>
-                    )}
-                    {event.driveMode && <span>· {event.driveMode.replace(/_/g, " ")}</span>}
-                    {event.venue && event.venue !== "Venue to be confirmed" && (
-                      <span>· {event.venue}</span>
-                    )}
+                <div className="border-b border-line bg-brand-50 p-4 sm:px-5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-heading text-lg font-bold text-ink-900">
+                        {event.companyName}
+                      </h2>
+                      {/* A visit where no role declared a type says nothing rather
+                          than "Type not set" — the same rule RoleFacts follows one
+                          level down. */}
+                      {visitType !== null && (
+                        <Badge
+                          tone={visitType === undefined ? "neutral" : driveTypeTone(visitType)}
+                        >
+                          {visitType === undefined ? "Mixed types" : driveTypeLabel(visitType)}
+                        </Badge>
+                      )}
+                      {isMultiRole && <Badge tone="brand">{event.roles.length} roles</Badge>}
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-sm text-ink-600 sm:justify-end">
+                      {event.tentativeDate && (
+                        <span>
+                          📅{" "}
+                          {new Date(event.tentativeDate).toLocaleDateString("en-IN", {
+                            timeZone: "Asia/Kolkata",
+                          })}
+                        </span>
+                      )}
+                      {event.driveMode && <span>· {event.driveMode.replace(/_/g, " ")}</span>}
+                      {event.venue && event.venue !== "Venue to be confirmed" && (
+                        <span>· {event.venue}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -467,17 +491,29 @@ export function DrivesList({
                           <RoleFacts drive={drive} showType={visitType === undefined} />
                           <span className="text-sm font-normal text-ink-600">{drive.ctcLabel}</span>
                         </AccordionTrigger>
-                        <AccordionContent className="pb-4">{roleBody(drive)}</AccordionContent>
+                        <AccordionContent className="pb-4">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">{roleMeta(drive)}</div>
+                            {roleActions(drive)}
+                          </div>
+                          {roleNotes(drive)}
+                        </AccordionContent>
                       </AccordionItem>
                     ))}
                   </Accordion>
                 ) : (
                   <div className="divide-y divide-line">
                     {event.roles.map((drive) => (
-                      <div key={drive.id} className="p-4">
+                      <div key={drive.id} className="p-4 sm:px-5">
                         {roleLine(drive)}
-                        <p className="text-sm text-ink-600">{drive.ctcLabel}</p>
-                        {roleBody(drive)}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-ink-700">{drive.ctcLabel}</p>
+                            {roleMeta(drive)}
+                          </div>
+                          {roleActions(drive)}
+                        </div>
+                        {roleNotes(drive)}
                       </div>
                     ))}
                   </div>

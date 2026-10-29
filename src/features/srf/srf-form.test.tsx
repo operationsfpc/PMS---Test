@@ -4,13 +4,35 @@ import { createClient } from "@supabase/supabase-js";
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
 import { SrfPage } from "./srf-page";
 
-/** The form links back to the dashboard, so every render needs a router. */
-const render = (ui: React.ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+/**
+ * The form links back to the dashboard, so every render needs a router — and
+ * since 2026-10-29 a submitted form HANDS the student to that dashboard, so
+ * the destination has to exist for the navigation to be observable.
+ */
+const render = (ui: React.ReactNode) =>
+  rtlRender(
+    <MemoryRouter initialEntries={["/srf"]}>
+      <Routes>
+        <Route path="/srf" element={ui} />
+        <Route path="/student" element={<p>Student dashboard</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+/** The browser's Back button, inside a MemoryRouter. */
+function BackProbe() {
+  const navigate = useNavigate();
+  return (
+    <button type="button" onClick={() => navigate(-1)}>
+      Go back
+    </button>
+  );
+}
 
 /**
  * Submission now goes to Supabase, so refusals are PostgREST errors rather
@@ -415,7 +437,7 @@ describe("SRF marksheet evidence", () => {
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
+    expect(await screen.findByText("Student dashboard")).toBeDefined();
     // Three marksheets, and - since P10 - the resume for the one area chosen.
     // Both buckets, both under the student's own id, which is what the storage
     // policy (0022) checks.
@@ -428,7 +450,7 @@ describe("SRF marksheet evidence", () => {
 describe("SRF submission", () => {
   afterEach(() => setSupabaseClient(undefined));
 
-  it("confirms submission and sets the expectation of verification", async () => {
+  it("hands the student to their dashboard once the form is sent", async () => {
     studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
     signedIn();
 
@@ -438,8 +460,44 @@ describe("SRF submission", () => {
 
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
-    expect(screen.getByText(/notified once approved/i)).toBeDefined();
+    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /submit for verification/i })).toBeNull();
+  });
+
+  /**
+   * The dashboard, not the form, is what Back must find. `replace` keeps a
+   * sent form out of the history entirely (2026-10-29).
+   */
+  it("keeps the sent form out of history, so Back cannot reopen it", async () => {
+    studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
+    signedIn();
+
+    const user = setup();
+    rtlRender(
+      <MemoryRouter initialEntries={["/previous", "/srf"]}>
+        <Routes>
+          <Route path="/previous" element={<p>Previous screen</p>} />
+          <Route path="/srf" element={<SrfPage profile={ROSTER} />} />
+          <Route
+            path="/student"
+            element={
+              <>
+                <p>Student dashboard</p>
+                <BackProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await fillValidForm(user);
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    await screen.findByText("Student dashboard");
+    await user.click(screen.getByRole("button", { name: /go back/i }));
+
+    expect(await screen.findByText("Previous screen")).toBeDefined();
+    expect(screen.queryByRole("button", { name: /submit for verification/i })).toBeNull();
   });
 
   it("surfaces a server refusal without losing the student's work", async () => {
@@ -578,7 +636,7 @@ describe("other professional profiles", () => {
     await user.type(screen.getByLabelText(/profile 1 link or username/i), "asha_r");
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
+    expect(await screen.findByText("Student dashboard")).toBeDefined();
     expect(body.other_profiles).toEqual([{ label: "Codeforces", value: "asha_r" }]);
   });
 
@@ -598,7 +656,7 @@ describe("other professional profiles", () => {
     await user.click(screen.getByRole("button", { name: /add another profile/i }));
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText(/submitted for verification/i)).toBeDefined();
+    expect(await screen.findByText("Student dashboard")).toBeDefined();
   });
 
   it("asks for the missing half when only one is filled in", async () => {
