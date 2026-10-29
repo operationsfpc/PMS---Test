@@ -206,8 +206,26 @@ describe("studentPrompt", () => {
       openDrives: 3,
     });
 
-    expect(prompt.headline).toMatch(/on hold/i);
+    expect(prompt.headline).toMatch(/suspended/i);
     expect(prompt.detail).toMatch(/coordinator/i);
+    expect(prompt.action).toBeNull();
+  });
+
+  /**
+   * 2026-10-29: `on_hold` is a real status now (0124), so disbarment gave up the
+   * words "on hold" and this prompt took them. The college has to be able to
+   * tell the two apart — one is a sanction, the other ends when somebody
+   * presses Release.
+   */
+  it("names the college as the one who holds a held student, with no button to press", () => {
+    const prompt = studentPrompt({
+      srfStatus: "srf_approved",
+      participationStatus: "on_hold",
+      openDrives: 3,
+    });
+
+    expect(prompt.headline).toMatch(/college has placed a hold on your placements/i);
+    expect(prompt.detail).toMatch(/release/i);
     expect(prompt.action).toBeNull();
   });
 });

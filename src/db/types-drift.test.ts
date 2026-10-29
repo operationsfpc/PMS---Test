@@ -8,6 +8,7 @@ import {
   DRIVE_MODES,
   DRIVE_STATUSES,
   DRIVE_TYPES,
+  HOLD_KINDS,
   OFFER_SOURCES,
   PARTICIPATION_STATUSES,
   ROLE_CATEGORIES,
@@ -36,6 +37,8 @@ describe("Postgres enums match the domain vocabularies", () => {
     ["offer_category", OFFER_CATEGORIES],
     ["srf_status", SRF_STATUSES],
     ["participation_status", PARTICIPATION_STATUSES],
+    // 0125. Which of the three reasons a Campus Manager can hold a student over.
+    ["hold_kind", HOLD_KINDS],
     ["drive_status", DRIVE_STATUSES],
     ["round_result", ROUND_RESULTS],
     ["attendance_status", ATTENDANCE_STATUSES],

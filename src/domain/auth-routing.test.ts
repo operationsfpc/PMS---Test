@@ -148,6 +148,17 @@ describe("studentLandingRoute", () => {
     expect(landing("invited", "disbarred")).toBe("/student");
   });
 
+  /**
+   * 0124: `on_hold` is the third state that is not `active`, and the gate above
+   * catches it without being widened — which is what asking `!== "active"`
+   * rather than listing the refusals buys. Pinned so a future edit that turns
+   * it into a list of two is noticed here.
+   */
+  it("never sends a held student to the form either", () => {
+    expect(landing("invited", "on_hold")).toBe("/student");
+    expect(landing("registered", "on_hold")).toBe("/student");
+  });
+
   it("agrees with the role map: a student's default screen is still /student", () => {
     expect(landingRouteForRole("student")).toBe("/student");
   });

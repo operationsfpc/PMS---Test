@@ -66,9 +66,10 @@ export function studentLandingRoute(student: {
   readonly srfStatus: SrfStatus;
   readonly participationStatus: ParticipationStatus;
 }): string {
-  // Settled first. An opted-out student cannot reverse the decision, so a form
-  // is the last thing to put in front of them; a disbarred one cannot act on
-  // it either. Both need the dashboard, which explains their standing.
+  // Settled first, and asked as one test against `active`: an opted-out student
+  // cannot reverse the decision, a disbarred one cannot act, and a held one has
+  // nothing to do until their college releases them. All three need the
+  // dashboard, which explains their standing.
   if (student.participationStatus !== "active") return LANDING_ROUTES.student;
 
   // The one the request is about: nothing has been submitted, so the form IS

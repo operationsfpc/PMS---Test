@@ -102,24 +102,28 @@ DECLARE
   v_student RECORD;
   v_notification_id UUID;
 BEGIN
-  -- Find rounds scheduled for today
   FOR v_round IN
-    SELECT dr.id, dr.drive_id, dr.round_name, dr.round_number, dr.scheduled_date, dr.scheduled_time,
+    SELECT dr.id, dr.drive_id, dr.name as round_name, dr.sequence as round_number, dr.scheduled_at,
            d.company_name, d.role_title
     FROM drive_rounds dr
     JOIN drives d ON d.id = dr.drive_id
-    WHERE dr.scheduled_date = CURRENT_DATE
+    WHERE dr.scheduled_at::date = CURRENT_DATE
   LOOP
-    -- Send to all students scheduled for this round
     FOR v_student IN
       SELECT DISTINCT s.id, s.email, s.full_name
       FROM students s
-      JOIN drive_applications da ON da.student_id = s.id
+      JOIN applications da ON da.student_id = s.id
+      JOIN round_participants rp ON rp.application_id = da.id AND rp.round_id = v_round.id
       WHERE da.drive_id = v_round.drive_id
-        AND da.status IN ('shortlisted', 'round_scheduled')
         AND s.participation_status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n
+          WHERE n.student_id = s.id
+            AND n.drive_id = v_round.drive_id
+            AND n.kind = 'interview_day_reminder'
+            AND n.created_at::date = CURRENT_DATE
+        )
     LOOP
-      -- Create notification
       INSERT INTO notifications (student_id, kind, title, body, drive_id)
       VALUES (
         v_student.id,
@@ -128,16 +132,16 @@ BEGIN
         'Your scheduled round for **' || v_round.company_name || '** takes place today.' || E'\n\n' ||
         '**Schedule Details**' || E'\n' ||
         '• **Round:** ' || COALESCE(v_round.round_name, 'Round ' || v_round.round_number) || E'\n' ||
-        '• **Date:** ' || TO_CHAR(v_round.scheduled_date, 'DD Mon YYYY') || E'\n' ||
-        '• **Time:** ' || COALESCE(TO_CHAR(v_round.scheduled_time, 'HH24:MI'), 'TBD') || E'\n\n' ||
+        '• **Date:** ' || TO_CHAR(v_round.scheduled_at, 'DD Mon YYYY') || E'\n' ||
+        '• **Time:** ' || COALESCE(TO_CHAR(v_round.scheduled_at, 'HH24:MI'), 'TBD') || E'\n\n' ||
         'Please report on time with your college ID card and student credentials ready.',
         v_round.drive_id
       ) RETURNING id INTO v_notification_id;
       
-      -- Stage email
       IF v_student.email IS NOT NULL AND trim(v_student.email) <> '' THEN
         INSERT INTO email_deliveries (notification_id, recipient_email, status)
-        VALUES (v_notification_id, lower(trim(v_student.email)), 'queued');
+        VALUES (v_notification_id, lower(trim(v_student.email)), 'queued')
+        ON CONFLICT (notification_id, recipient_email) DO NOTHING;
       END IF;
     END LOOP;
   END LOOP;

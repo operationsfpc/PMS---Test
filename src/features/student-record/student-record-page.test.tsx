@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import type { Hold, HoldsView } from "@lib/holds-view";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   type StudentRecord,
   StudentRecordPage,
@@ -13,8 +15,8 @@ import {
  * `/students/:studentId`, N1's second canonical page. The directory's
  * numbers were dead ends; every count now opens the person behind it.
  *
- * Read-only. Verification and editing live with the campus coordinator; this
- * page must not become a second way in.
+ * Read-only except for the one verb 0125 gives a Campus Manager: lifting a
+ * hold their college placed. Verification and editing still live elsewhere.
  */
 const PRIYA: StudentRecord = {
   studentId: "s1",
@@ -202,5 +204,242 @@ describe("StudentRecordPage", () => {
     await screen.findByText(/cannot read it/i);
 
     expect(screen.getByRole("link", { name: /overview/i })).toBeDefined();
+  });
+});
+
+/**
+ * 0125's hold, on the record the college reads when a student stops appearing
+ * in every drive list. A review date far enough from today that no test can
+ * age into the wrong standing.
+ */
+const LIVE: Hold = {
+  id: "h1",
+  studentId: "s1",
+  kind: "fees",
+  reason: "Two semesters of fees unpaid.",
+  startsAt: "2026-10-29",
+  endsAt: "2099-01-09",
+  heldAt: "2026-10-29T06:30:00Z",
+  heldBy: "Karthik Subramanian",
+  releasedAt: null,
+  releasedBy: null,
+  releaseNote: null,
+  documentPath: null,
+};
+
+const EARLIER: Hold = {
+  ...LIVE,
+  id: "h0",
+  kind: "idle",
+  reason: "Applied to nothing in September.",
+  endsAt: null,
+  releasedAt: "2026-09-30T10:00:00Z",
+  releasedBy: "Meena Krishnan",
+  releaseNote: "Cleared on request — they were mid-project.",
+};
+
+const holdsView = (overrides: Partial<HoldsView> = {}): HoldsView => ({
+  live: async () => LIVE,
+  history: async () => [LIVE, EARLIER],
+  place: async () => "h1",
+  release: async () => {},
+  orderUrl: async () => null,
+  ...overrides,
+});
+
+const showHold = (
+  holds: HoldsView,
+  release?: (holdId: string, note: string | null) => Promise<void>,
+  record: StudentRecord = { ...PRIYA, participationStatus: "on_hold" },
+) =>
+  render(
+    <MemoryRouter>
+      <StudentRecordPage
+        studentId="s1"
+        view={view(record)}
+        holds={holds}
+        {...(release === undefined ? {} : { release })}
+      />
+    </MemoryRouter>,
+  );
+
+const block = () => screen.findByRole("region", { name: /placement hold/i });
+
+describe("StudentRecordPage hold", () => {
+  it("shows the live hold with its reason, window and author", async () => {
+    showHold(holdsView());
+
+    const card = await block();
+    expect(within(card).getByText(/on hold — fees/i)).toBeDefined();
+    expect(within(card).getByText(/two semesters of fees unpaid\./i)).toBeDefined();
+    expect(within(card).getByText(/in force/i)).toBeDefined();
+    expect(within(card).getByText(/from 29 Oct 2026, review by 09 Jan 2099/i)).toBeDefined();
+    expect(within(card).getByText(/placed by Karthik Subramanian/i)).toBeDefined();
+  });
+
+  /** A chip above a card that both say "on hold" is the same fact twice. */
+  it("does not repeat the hold in the badge once the block says it", async () => {
+    showHold(holdsView());
+    await block();
+
+    expect(screen.queryByText(/^on hold$/i)).toBeNull();
+  });
+
+  it("lists the holds that came before, each with who lifted it", async () => {
+    showHold(holdsView());
+
+    const card = await block();
+    expect(within(card).getByText(/earlier holds/i)).toBeDefined();
+    expect(within(card).getByText(/applied to nothing in september\./i)).toBeDefined();
+    expect(within(card).getByText(/released 30 Sep/i)).toBeDefined();
+    expect(within(card).getByText(/by Meena Krishnan/i)).toBeDefined();
+  });
+
+  /** 0126: the student is told on screen, and 0125 keeps the order for staff. */
+  it("says the order is on file when it has no working link to it", async () => {
+    const withPath = { ...LIVE, documentPath: "s1/1730000000000-fee-demand.pdf" };
+    showHold(holdsView({ live: async () => withPath }));
+
+    const card = await block();
+    expect(within(card).getByText(/order on file: fee-demand\.pdf/i)).toBeDefined();
+    expect(within(card).queryByRole("link")).toBeNull();
+  });
+
+  /**
+   * 0051: a link only appears once it has actually signed. An unsigned one is
+   * a promise that breaks on tapping, so the row stays plain text.
+   */
+  it("links the order only once the link signs", async () => {
+    const withPath = { ...LIVE, documentPath: "s1/1730000000000-fee-demand.pdf" };
+    showHold(
+      holdsView({ live: async () => withPath, orderUrl: async () => "https://signed/order" }),
+    );
+
+    const card = await block();
+    const anchor = within(card).getByRole("link", { name: /fee-demand\.pdf/i });
+    expect(anchor.getAttribute("href")).toBe("https://signed/order");
+    expect(within(card).queryByText(/order on file/i)).toBeNull();
+  });
+
+  /** The release is the Campus Manager's verb alone; everyone else reads it. */
+  it("offers no release to a role the route did not hand the verb to", async () => {
+    showHold(holdsView());
+
+    const card = await block();
+    expect(within(card).queryByRole("button", { name: /release hold/i })).toBeNull();
+  });
+
+  it("asks for the note before it lifts anything, and re-reads both halves", async () => {
+    const user = userEvent.setup();
+    const release = vi.fn(async () => {});
+    let liveReads = 0;
+    let recordReads = 0;
+
+    render(
+      <MemoryRouter>
+        <StudentRecordPage
+          studentId="s1"
+          view={{
+            record: async () => {
+              recordReads += 1;
+              return recordReads === 1 ? { ...PRIYA, participationStatus: "on_hold" } : PRIYA;
+            },
+          }}
+          holds={holdsView({
+            live: async () => {
+              liveReads += 1;
+              return liveReads === 1 ? LIVE : null;
+            },
+            history: async () => [],
+          })}
+          release={release}
+        />
+      </MemoryRouter>,
+    );
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /release hold/i }));
+    // One press opens the form; the hold comes off on the second.
+    expect(release).not.toHaveBeenCalled();
+
+    await user.type(
+      screen.getByRole("textbox", { name: /what cleared it/i }),
+      "Cleared with accounts on 3 Nov.",
+    );
+    await user.click(within(card).getByRole("button", { name: /release hold/i }));
+
+    await waitFor(() => expect(release).toHaveBeenCalledTimes(1));
+    expect(release).toHaveBeenCalledWith("h1", "Cleared with accounts on 3 Nov.");
+    expect(liveReads).toBe(2);
+    expect(recordReads).toBe(2);
+
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: /placement hold/i })).toBeNull(),
+    );
+    expect(await screen.findByRole("heading", { name: /priya ramesh/i })).toBeDefined();
+  });
+
+  it("lifts the hold with no note when the manager has nothing to add", async () => {
+    const user = userEvent.setup();
+    const release = vi.fn(async () => {});
+    showHold(holdsView({ history: async () => [] }), release);
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /release hold/i }));
+    await user.click(within(card).getByRole("button", { name: /release hold/i }));
+
+    await waitFor(() => expect(release).toHaveBeenCalledWith("h1", null));
+  });
+
+  /** 0125 raises a sentence; it is the only explanation the manager gets. */
+  it("shows what the release failed on instead of leaving it quiet", async () => {
+    const user = userEvent.setup();
+    showHold(holdsView({ history: async () => [] }), async () => {
+      throw new Error("This hold was already released on 12 Nov 2026.");
+    });
+
+    const card = await block();
+    await user.click(within(card).getByRole("button", { name: /release hold/i }));
+    await user.click(within(card).getByRole("button", { name: /release hold/i }));
+
+    const alert = await within(card).findByRole("alert");
+    expect(alert.textContent).toMatch(/already released on 12 Nov 2026/i);
+    expect(within(card).getByText(/two semesters of fees unpaid\./i)).toBeDefined();
+  });
+
+  /** A review date that has gone by is a reminder, not a release (0125). */
+  it("marks a passed review date overdue and keeps the student held", async () => {
+    showHold(holdsView({ live: async () => ({ ...LIVE, endsAt: "2020-01-09" }) }), undefined, {
+      ...PRIYA,
+      participationStatus: "on_hold",
+    });
+
+    const card = await block();
+    expect(within(card).getByText(/review overdue/i)).toBeDefined();
+    expect(within(card).getByText(/review was due 09 Jan 2020/i)).toBeDefined();
+    expect(within(card).getByText(/on hold — fees/i)).toBeDefined();
+  });
+
+  it("says the hold read failed rather than showing a held student as clear", async () => {
+    showHold(
+      holdsView({
+        live: async () => {
+          throw new Error("Could not read whether this student is on a hold.");
+        },
+      }),
+    );
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/could not read whether this student is on a hold/i);
+    expect(screen.queryByRole("region", { name: /placement hold/i })).toBeNull();
+  });
+
+  /** A record page for a role 0125 does not admit asks the question not at all. */
+  it("draws nothing when the page was never handed the hold read", async () => {
+    show();
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+
+    expect(screen.queryByRole("region", { name: /placement hold/i })).toBeNull();
   });
 });

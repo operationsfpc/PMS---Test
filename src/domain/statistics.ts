@@ -37,7 +37,13 @@ const round1 = (value: number) => Math.round(value * 10) / 10;
 export const hasOptedOut = (student: StudentPlacementFacts): boolean =>
   student.participationStatus === "opted_out";
 
-/** Still in the process — the denominator, and every card labelled "eligible". */
+/**
+ * Still in the process — the denominator, and every card labelled "eligible".
+ *
+ * Opting out is the only status that leaves. A held student stays counted: the
+ * college can release them on a Tuesday, and a rate that moved because someone
+ * set a review date would not be the college's placement rate any more.
+ */
 export const countsInPlacementDenominator = (student: StudentPlacementFacts): boolean =>
   !hasOptedOut(student);
 

@@ -172,6 +172,7 @@ type ExclusionKey =
 const EXCLUSION_LABEL: Record<ExclusionKey, string> = {
   srf_not_approved: "SRF not yet verified",
   opted_out: "Opted out of placements",
+  on_hold: "On a hold placed by their college",
   disbarred: "Disbarred",
   not_eligible: "Do not meet the academic bars",
   /**

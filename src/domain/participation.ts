@@ -33,6 +33,18 @@ export function canRequestOptOut(context: OptOutContext): Decision {
       reason: "A disbarred student cannot opt out. Speak to your placement coordinator.",
     };
   }
+  /**
+   * Releasing a hold writes `active` back, while opting out is irreversible
+   * (0009) — so a held student could end their placements to escape the hold,
+   * leaving the college no release to grant.
+   */
+  if (context.participationStatus === "on_hold") {
+    return {
+      allowed: false,
+      reason:
+        "Your college has placed a hold on your placements. Ask them to release it before opting out.",
+    };
+  }
   if (context.hasPendingRequest) {
     return { allowed: false, reason: "Your opt-out request is already waiting for approval." };
   }
@@ -53,7 +65,9 @@ export function canRequestOptOut(context: OptOutContext): Decision {
  *
  * Deliberately still open to an opted-out student: opting out is usually
  * BECAUSE they took an outside job, and the placement statistics need that
- * offer recorded. It never touches the ladder or the cap (PRD 16.2).
+ * offer recorded. A held student keeps it too — a `self_placed` hold is placed
+ * BECAUSE they found a job, so refusing the letter would hide the one fact the
+ * hold was raised over. It never touches the ladder or the cap (PRD 16.2).
  */
 export function canRecordSelfPlacement(context: {
   readonly participationStatus: ParticipationStatus;

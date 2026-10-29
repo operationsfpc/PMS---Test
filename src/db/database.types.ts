@@ -9,15 +9,16 @@ export interface Enums {
   app_role: "admin" | "student" | "campus_placement_coordinator" | "campus_manager" | "account_executive" | "delivery_head" | "central_placement_coordinator" | "key_account_manager" | "enterprise_relations" | "er_head" | "ceo";
   arrear_policy: "no_standing" | "no_history" | "flexible";
   attendance_status: "scheduled" | "present" | "absent" | "provisional";
-  document_kind: "tenth_marksheet" | "twelfth_marksheet" | "semester_marksheet" | "resume" | "offer_letter" | "opt_out_declaration" | "ug_consolidated_marksheet" | "diploma_marksheet" | "certificate";
+  document_kind: "tenth_marksheet" | "twelfth_marksheet" | "semester_marksheet" | "resume" | "offer_letter" | "opt_out_declaration" | "ug_consolidated_marksheet" | "diploma_marksheet" | "certificate" | "hold_order";
   drive_mode: "on_campus" | "physical_outside_campus" | "virtual" | "pooled";
   drive_status: "draft" | "submitted" | "approved" | "live" | "applications_closed" | "in_rounds" | "completed" | "rejected";
   drive_type: "placement" | "internship_convertible" | "internship";
+  hold_kind: "fees" | "self_placed" | "idle";
   joining_timeline: "immediate" | "later";
   marks_scale: "cgpa" | "percentage";
   offer_category: "internship" | "regular" | "dream" | "super_dream";
   offer_source: "on_campus" | "self_placed";
-  participation_status: "active" | "opted_out" | "disbarred";
+  participation_status: "active" | "opted_out" | "disbarred" | "on_hold";
   programme_level: "ug" | "pg";
   role_category: "software_technical" | "technical_support_it_ops" | "digital_marketing" | "sales" | "operations_business";
   round_result: "selected" | "rejected" | "waitlisted" | "on_hold";
@@ -112,6 +113,52 @@ export interface CitiesRow {
 }
 
 export type CitiesInsert = Pick<CitiesRow, "name" | "state"> & Partial<Pick<CitiesRow, "id">>;
+
+export interface CompaniesRow {
+  id: string;
+  name: string;
+  industry: string | null;
+  website: string | null;
+  created_at: string;
+}
+
+export type CompaniesInsert = Pick<CompaniesRow, "name"> & Partial<Pick<CompaniesRow, "id" | "industry" | "website" | "created_at">>;
+
+export interface CompanyDriveContactsRow {
+  id: string;
+  company_drive_id: string;
+  sequence: number;
+  name: string | null;
+  designation: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+export type CompanyDriveContactsInsert = Pick<CompanyDriveContactsRow, "company_drive_id" | "sequence"> & Partial<Pick<CompanyDriveContactsRow, "id" | "name" | "designation" | "email" | "phone">>;
+
+export interface CompanyDriveTargetCampusesRow {
+  company_drive_id: string;
+  campus_id: string;
+}
+
+export type CompanyDriveTargetCampusesInsert = Pick<CompanyDriveTargetCampusesRow, "company_drive_id" | "campus_id">;
+
+export interface CompanyDrivesRow {
+  id: string;
+  company_id: string | null;
+  company_name: string;
+  drive_mode: Enums["drive_mode"] | null;
+  venue: string | null;
+  tentative_date: string | null;
+  timeline_notes: string | null;
+  joining_timeline: string | null;
+  status: Enums["drive_status"];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type CompanyDrivesInsert = Pick<CompanyDrivesRow, "company_name"> & Partial<Pick<CompanyDrivesRow, "id" | "company_id" | "drive_mode" | "venue" | "tentative_date" | "timeline_notes" | "joining_timeline" | "status" | "created_by" | "created_at" | "updated_at">>;
 
 export interface DegreesRow {
   id: string;
@@ -242,9 +289,11 @@ export interface DrivesRow {
   stipend_max_monthly: number | null;
   venue: string | null;
   completed_reason: string | null;
+  company_drive_id: string | null;
+  has_custom_targeting: boolean;
 }
 
-export type DrivesInsert = Pick<DrivesRow, "company_name"> & Partial<Pick<DrivesRow, "id" | "industry" | "company_website" | "spoc_name" | "spoc_designation" | "spoc_email" | "spoc_phone" | "role_title" | "role_category" | "job_description" | "openings" | "work_locations" | "ctc_min_lpa" | "ctc_max_lpa" | "ctc_breakup" | "shift_type" | "bond_details" | "min_overall_cgpa" | "min_tenth_percentage" | "min_twelfth_percentage" | "arrears_policy" | "eligible_passing_years" | "mandatory_skills" | "drive_mode" | "tentative_date" | "timeline_notes" | "drive_type" | "offer_category" | "status" | "on_hold" | "on_hold_reason" | "open_to_all_override" | "open_to_all_reason" | "application_start" | "application_end" | "created_by" | "approved_by" | "approved_at" | "rejection_reason" | "published_by" | "published_at" | "created_at" | "updated_at" | "additional_designations" | "round_count" | "min_overall_marks" | "min_overall_cgpa_scale" | "jd_storage_path" | "jd_file_name" | "jd_size_bytes" | "shift_night_timing" | "joining_timeline" | "joining_immediate_notes" | "joining_later_notes" | "stipend_min_monthly" | "stipend_max_monthly" | "venue" | "completed_reason">>;
+export type DrivesInsert = Pick<DrivesRow, "company_name"> & Partial<Pick<DrivesRow, "id" | "industry" | "company_website" | "spoc_name" | "spoc_designation" | "spoc_email" | "spoc_phone" | "role_title" | "role_category" | "job_description" | "openings" | "work_locations" | "ctc_min_lpa" | "ctc_max_lpa" | "ctc_breakup" | "shift_type" | "bond_details" | "min_overall_cgpa" | "min_tenth_percentage" | "min_twelfth_percentage" | "arrears_policy" | "eligible_passing_years" | "mandatory_skills" | "drive_mode" | "tentative_date" | "timeline_notes" | "drive_type" | "offer_category" | "status" | "on_hold" | "on_hold_reason" | "open_to_all_override" | "open_to_all_reason" | "application_start" | "application_end" | "created_by" | "approved_by" | "approved_at" | "rejection_reason" | "published_by" | "published_at" | "created_at" | "updated_at" | "additional_designations" | "round_count" | "min_overall_marks" | "min_overall_cgpa_scale" | "jd_storage_path" | "jd_file_name" | "jd_size_bytes" | "shift_night_timing" | "joining_timeline" | "joining_immediate_notes" | "joining_later_notes" | "stipend_min_monthly" | "stipend_max_monthly" | "venue" | "completed_reason" | "company_drive_id" | "has_custom_targeting">>;
 
 export interface EmailDeliveriesRow {
   id: string;
@@ -256,13 +305,16 @@ export interface EmailDeliveriesRow {
   updated_at: string;
   subject: string | null;
   html_body: string | null;
+  attempts: number;
+  claimed_at: string | null;
+  cc_emails: string[] | null;
 }
 
-export type EmailDeliveriesInsert = Pick<EmailDeliveriesRow, "recipient_email"> & Partial<Pick<EmailDeliveriesRow, "id" | "notification_id" | "provider_message_id" | "status" | "error" | "updated_at" | "subject" | "html_body">>;
+export type EmailDeliveriesInsert = Pick<EmailDeliveriesRow, "recipient_email"> & Partial<Pick<EmailDeliveriesRow, "id" | "notification_id" | "provider_message_id" | "status" | "error" | "updated_at" | "subject" | "html_body" | "attempts" | "claimed_at" | "cc_emails">>;
 
 export interface NotificationsRow {
   id: string;
-  student_id: string;
+  student_id: string | null;
   kind: string;
   title: string;
   body: string;
@@ -271,7 +323,7 @@ export interface NotificationsRow {
   drive_id: string | null;
 }
 
-export type NotificationsInsert = Pick<NotificationsRow, "student_id" | "kind" | "title" | "body"> & Partial<Pick<NotificationsRow, "id" | "read_at" | "created_at" | "drive_id">>;
+export type NotificationsInsert = Pick<NotificationsRow, "kind" | "title" | "body"> & Partial<Pick<NotificationsRow, "id" | "student_id" | "read_at" | "created_at" | "drive_id">>;
 
 export interface OffersRow {
   id: string;
@@ -369,16 +421,17 @@ export interface SelfPlacementRequestsRow {
   student_id: string;
   company_name: string;
   role_title: string | null;
-  ctc_lpa: number;
+  ctc_lpa: number | null;
   offer_letter_id: string | null;
   status: Enums["verification_status"];
   decided_by: string | null;
   decided_at: string | null;
   created_at: string;
   decision_reason: string | null;
+  stipend_monthly: number | null;
 }
 
-export type SelfPlacementRequestsInsert = Pick<SelfPlacementRequestsRow, "student_id" | "company_name" | "ctc_lpa"> & Partial<Pick<SelfPlacementRequestsRow, "id" | "role_title" | "offer_letter_id" | "status" | "decided_by" | "decided_at" | "created_at" | "decision_reason">>;
+export type SelfPlacementRequestsInsert = Pick<SelfPlacementRequestsRow, "student_id" | "company_name"> & Partial<Pick<SelfPlacementRequestsRow, "id" | "role_title" | "ctc_lpa" | "offer_letter_id" | "status" | "decided_by" | "decided_at" | "created_at" | "decision_reason" | "stipend_monthly">>;
 
 export interface SettingsRow {
   key: string;
@@ -461,6 +514,23 @@ export interface StudentDocumentsRow {
 }
 
 export type StudentDocumentsInsert = Pick<StudentDocumentsRow, "student_id" | "kind" | "storage_path" | "size_bytes"> & Partial<Pick<StudentDocumentsRow, "id" | "role_category" | "uploaded_at" | "drive_id">>;
+
+export interface StudentHoldsRow {
+  id: string;
+  student_id: string;
+  kind: Enums["hold_kind"];
+  reason: string;
+  starts_at: string;
+  ends_at: string | null;
+  document_id: string | null;
+  held_by: string;
+  held_at: string;
+  released_by: string | null;
+  released_at: string | null;
+  release_note: string | null;
+}
+
+export type StudentHoldsInsert = Pick<StudentHoldsRow, "student_id" | "kind" | "reason" | "held_by"> & Partial<Pick<StudentHoldsRow, "id" | "starts_at" | "ends_at" | "document_id" | "held_at" | "released_by" | "released_at" | "release_note">>;
 
 export interface StudentRolePreferencesRow {
   student_id: string;

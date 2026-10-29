@@ -45,6 +45,9 @@ const REFUSALS: Record<string, string> = {
   srf_not_approved: "Your registration form has not been approved yet.",
   opted_out: "You have opted out of campus placements.",
   disbarred: "You are not currently eligible to apply. Contact your coordinator.",
+  // Word for word the sentence `enforce_application_gates` raises with (0126),
+  // so the student's screen and the database cannot describe the hold differently.
+  on_hold: "Your college has placed a hold on your placements. Contact your placement office.",
   not_eligible: "You do not meet this drive's eligibility criteria.",
   area_not_chosen:
     "This drive is for an area you did not choose on your registration form. Ask your coordinator if that has changed.",

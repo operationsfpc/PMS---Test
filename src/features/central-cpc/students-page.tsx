@@ -1,4 +1,5 @@
 import { ErrorPanel } from "@components/error-panel";
+import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
@@ -10,6 +11,7 @@ import {
   summariseDirectory,
 } from "@domain/student-directory";
 import type { SrfStatus } from "@domain/types";
+import type { HoldsView } from "@lib/holds-view";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
@@ -32,8 +34,9 @@ export interface StudentDirectoryView {
  * a coordinator who has to filter again has been taken to the list rather than
  * to the breakdown they clicked.
  *
- * Read-only. Nothing here edits a student - verification lives with the campus
- * coordinator and this must not become a second way in.
+ * Read-only for everyone except a Campus Manager, who may hold one of their own
+ * students (0125) — the row's badge is then the proof it landed. Verification
+ * still lives with the campus coordinator and nothing here edits a record.
  */
 const SRF_LABEL: Record<SrfStatus, string> = {
   invited: "Not started",
@@ -122,9 +125,15 @@ function parseCtc(value: string | null): number | undefined {
 
 export function StudentDirectoryPage({
   view,
+  holds,
   download = browserDownload,
 }: {
   view: StudentDirectoryView;
+  /**
+   * The one write this page offers, and only a Campus Manager is handed it
+   * (0125). Absent — as it is for every other role — draws no Hold button.
+   */
+  holds?: HoldsView;
   download?: (filename: string, text: string) => void;
 }) {
   const [params, setParams] = useSearchParams();
@@ -139,6 +148,10 @@ export function StudentDirectoryPage({
   const [exportNote, setExportNote] = useState<string | null>(null);
   /** The export failing — not the same complaint as the roster not loading. */
   const [exportProblem, setExportProblem] = useState<string | null>(null);
+  /** The student whose hold form is open. */
+  const [holding, setHolding] = useState<HoldTarget | null>(null);
+  /** Which student is now held, said once the write has landed. */
+  const [holdNote, setHoldNote] = useState<string | null>(null);
 
   // The filter lives in the URL so the dashboard can link straight to a
   // breakdown, and so a coordinator can send someone the exact view they mean.
@@ -303,6 +316,17 @@ export function StudentDirectoryPage({
         </p>
       )}
 
+      {/* Said out loud because a hold that landed silently is a hold the next
+          manager believes was never placed. */}
+      {holdNote !== null && (
+        <p
+          role="status"
+          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
+        >
+          {holdNote}
+        </p>
+      )}
+
       {students === null ? (
         <p role="status" className="text-sm text-ink-500">
           Loading students…
@@ -435,6 +459,7 @@ export function StudentDirectoryPage({
                     <th className="px-4 py-3">Registration</th>
                     <th className="px-4 py-3">Applications</th>
                     <th className="px-4 py-3">Placement</th>
+                    {holds !== undefined && <th className="px-4 py-3">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
@@ -499,6 +524,31 @@ export function StudentDirectoryPage({
                           </>
                         )}
                       </td>
+                      {holds !== undefined && (
+                        <td className="px-4 py-3">
+                          {/* 0125 refuses a second hold on a student already
+                              held, so the row says that instead of offering a
+                              button whose only answer would be a failure. */}
+                          {student.participationStatus === "on_hold" ? (
+                            <Badge tone="warning">On hold</Badge>
+                          ) : (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              aria-label={`Hold ${student.fullName}`}
+                              onClick={() =>
+                                setHolding({
+                                  studentId: student.studentId,
+                                  fullName: student.fullName,
+                                  rollNumber: student.rollNumber,
+                                })
+                              }
+                            >
+                              Hold
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -506,6 +556,24 @@ export function StudentDirectoryPage({
             </Card>
           )}
         </>
+      )}
+
+      {holding !== null && holds !== undefined && (
+        <HoldDialog
+          target={holding}
+          holds={holds}
+          onClose={() => setHolding(null)}
+          onPlaced={(student) => {
+            setHoldNote(
+              `${student.fullName} is on hold. Every drive is closed to them and nothing reaches them by notification until a Campus Manager releases it from their record.`,
+            );
+            setHolding(null);
+            // The row's own "On hold" badge is the proof the write landed, and
+            // it comes from the roster — so the roster is re-read rather than
+            // painted from the click that was hoped for.
+            setAttempt((count) => count + 1);
+          }}
+        />
       )}
     </div>
   );

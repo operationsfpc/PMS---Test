@@ -162,6 +162,49 @@ describe("summariseDirectory", () => {
 });
 
 /**
+ * 2026-10-29: a held student is neither opted out nor disbarred — they are
+ * temporarily blocked by their own college (0125) and are expected back. Kept
+ * out of ALL so the counts above it stay the counts they claim to be.
+ */
+const HELD: DirectoryStudent = {
+  ...UNPLACED,
+  studentId: "s7",
+  fullName: "Kavya Reddy",
+  branch: "CSE",
+  participationStatus: "on_hold",
+};
+
+describe("filterDirectory — the held", () => {
+  const ROSTER = [PLACED, UNPLACED, OPTED_OUT, HELD];
+
+  it("lists them by on_hold, and not by the filter that means opting out", () => {
+    expect(names(filterDirectory(ROSTER, { filter: "on_hold", query: "" }))).toEqual([
+      "Kavya Reddy",
+    ]);
+    expect(names(filterDirectory(ROSTER, { filter: "opted_out", query: "" }))).toEqual([
+      "Meera Iyer",
+    ]);
+  });
+
+  /** A hold is not a withdrawal: they are still on the roster, still unplaced. */
+  it("keeps them in the roster and the unplaced", () => {
+    expect(names(filterDirectory(ROSTER, { filter: "all", query: "" }))).toHaveLength(4);
+    expect(names(filterDirectory(ROSTER, { filter: "not_placed", query: "" }))).toContain(
+      "Kavya Reddy",
+    );
+  });
+
+  /**
+   * The summary still counts only the opted out on their own line, and says
+   * nothing about holds — the honest reading. An `onHold` figure belongs to the
+   * day a card prints it and opens exactly the students behind it.
+   */
+  it("does not move the opted-out count", () => {
+    expect(summariseDirectory(ROSTER).optedOut).toBe(1);
+  });
+});
+
+/**
  * 2026-08-26 (answer 3): the overview's "Placed on campus" counts
  * `hasOnCampusPlacement` — self-placed excluded, PRD §16.2 — while `placed`
  * here counts any placement record, self-placed INCLUDED (C1, deliberate).

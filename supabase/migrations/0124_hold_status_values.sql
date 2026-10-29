@@ -1,0 +1,42 @@
+-- 0124_hold_status_values.sql
+--
+-- A placement hold needs one new state and one new document kind. This file
+-- adds the labels and nothing else, on purpose.
+--
+-- Postgres will not let a newly added enum label be USED in the same
+-- transaction that adds it, and every migration here runs inside one. Measured
+-- on PGlite 2026-10-29, not remembered:
+--
+--   alter type colors add value 'blue'; insert into t values ('blue');
+--     -> ERROR:  unsafe use of new value "blue" of enum type colors
+--   (the same two statements, sent as two separate round trips)
+--     -> both succeed
+--
+-- So a multi-statement script IS one implicit transaction, here and in the
+-- Dashboard. Put the table and the status flip below these statements and the
+-- migration dies with a message that names neither holds nor the reason it
+-- failed. Hence 0125 creates the table and 0126 restates the gates.
+--
+-- Precedent for the value-only shape: 0022:19 and 0066:32. That second one is
+-- the cautionary case — offer_category needed `before 'regular'` because enum
+-- labels sort by the order they were added, not by name, so a value appended
+-- late lands at the END of any ORDER BY over the column. participation_status
+-- is never ordered, ranked or array_positioned anywhere in supabase/ or src/,
+-- which is what makes appending 'on_hold' safe here.
+--
+-- 'on_hold' is a fourth state, not a synonym for the other three:
+--   active      — in placements.
+--   opted_out   — the student's own, irreversible decision (0009:141).
+--   disbarred   — a Central CPC sanction (0006:59, 0091:29).
+--   on_hold     — a Campus Manager's dated, releasable bar. Releasable is the
+--                 point, so 0009's irreversibility guard must keep allowing
+--                 on_hold -> active, and it does: it only fires when leaving
+--                 opted_out.
+--
+-- 'hold_order' is the manager's evidence — the fee demand, the offer letter
+-- behind a self-placed call. It is a student document so the storage path,
+-- the size cap and the cascade on student delete all come free from 0003:75.
+
+alter type participation_status add value if not exists 'on_hold';
+
+alter type document_kind add value if not exists 'hold_order';

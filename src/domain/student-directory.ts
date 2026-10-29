@@ -85,6 +85,7 @@ export type DirectoryFilter =
   | "self_placed"
   | "not_placed"
   | "opted_out"
+  | "on_hold"
   | "submitted"
   | "verified";
 
@@ -146,6 +147,8 @@ const matchesFilter = (student: DirectoryStudent, filter: DirectoryFilter): bool
       return !isPlaced(student);
     case "opted_out":
       return student.participationStatus === "opted_out";
+    case "on_hold":
+      return student.participationStatus === "on_hold";
     case "submitted":
       return countsAsSubmitted(evidence(student));
     case "verified":

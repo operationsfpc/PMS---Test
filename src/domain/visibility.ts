@@ -72,6 +72,7 @@ export type VisibilityReason =
   | "srf_not_approved"
   | "opted_out"
   | "disbarred"
+  | "on_hold"
   | "not_eligible"
   | "area_not_chosen"
   | "drive_type_not_preferred"
@@ -101,12 +102,14 @@ export function isDriveVisibleToStudent(
     return { visible: false, reason: "srf_not_approved" };
   }
 
-  if (student.participationStatus === "opted_out") {
-    return { visible: false, reason: "opted_out" };
-  }
-
-  if (student.participationStatus === "disbarred") {
-    return { visible: false, reason: "disbarred" };
+  /**
+   * Only `active` participates. Asked as one test against the state that is
+   * allowed in, not as a list of the states that refuse, so a fifth status is
+   * hidden by this gate and refused by `enforce_application_gates` on the same
+   * day. Mirrors 0126; change both or neither.
+   */
+  if (student.participationStatus !== "active") {
+    return { visible: false, reason: student.participationStatus };
   }
 
   const eligibility = evaluateEligibility(student.academics, drive.criteria);

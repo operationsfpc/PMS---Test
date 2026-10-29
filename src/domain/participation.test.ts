@@ -48,6 +48,21 @@ describe("canRequestOptOut", () => {
     expect(decision.allowed === false && decision.reason).toMatch(/disbarred/i);
   });
 
+  /**
+   * 0125: releasing a hold writes `active` back, and opting out is irreversible
+   * (0009). Allowed to opt out while held, a student could end their placements
+   * to escape a fee block and leave the college with no release left to grant.
+   */
+  it("refuses a held student: their college can still put them back", () => {
+    const decision = canRequestOptOut({
+      participationStatus: "on_hold",
+      hasPendingRequest: false,
+      hasDeclaration: true,
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.allowed === false && decision.reason).toMatch(/hold/i);
+  });
+
   it("refuses a second request while one is already pending", () => {
     const decision = canRequestOptOut({
       participationStatus: "active",
@@ -79,6 +94,17 @@ describe("canRecordSelfPlacement", () => {
     });
     expect(decision.allowed).toBe(false);
     expect(decision.allowed === false && decision.reason).toMatch(/disbarred/i);
+  });
+
+  /**
+   * A `self_placed` hold (0125) is raised BECAUSE the student found a job, so
+   * the offer letter is the evidence the hold was built on. Refusing it would
+   * hide the fact the college is holding them over.
+   */
+  it("still lets a held student record one", () => {
+    expect(
+      canRecordSelfPlacement({ participationStatus: "on_hold", hasOfferLetter: true }),
+    ).toEqual({ allowed: true });
   });
 });
 

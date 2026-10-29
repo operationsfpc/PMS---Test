@@ -85,6 +85,23 @@ describe("computePlacementStats", () => {
     expect(stats.placementRate).toBe(50);
   });
 
+  /**
+   * A hold is the college's administrative block, not the student's withdrawal
+   * (0125). They stay counted, and a held student who is holding an offer is
+   * still placed — releasing the hold is a date, not a change of outcome.
+   */
+  it("keeps a held student in the denominator", () => {
+    const stats = computePlacementStats({
+      students: [
+        student({ studentId: "a", hasOnCampusPlacement: true }),
+        student({ studentId: "b", participationStatus: "on_hold" }),
+      ],
+    });
+
+    expect(stats.eligible).toBe(2);
+    expect(stats.placementRate).toBe(50);
+  });
+
   it("reports a rate of zero for an empty cohort rather than dividing by zero", () => {
     const stats = computePlacementStats({ students: [] });
 

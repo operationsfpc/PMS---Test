@@ -33,8 +33,13 @@ export const SRF_STATUSES = [
 ] as const;
 export type SrfStatus = (typeof SRF_STATUSES)[number];
 
-export const PARTICIPATION_STATUSES = ["active", "opted_out", "disbarred"] as const;
+// Order is the Postgres enum's own: 0124 appended `on_hold`, and types-drift compares in order.
+export const PARTICIPATION_STATUSES = ["active", "opted_out", "disbarred", "on_hold"] as const;
 export type ParticipationStatus = (typeof PARTICIPATION_STATUSES)[number];
+
+// Order is the Postgres enum's own (0125), for the same reason as above.
+export const HOLD_KINDS = ["fees", "self_placed", "idle"] as const;
+export type HoldKind = (typeof HOLD_KINDS)[number];
 
 export const DRIVE_STATUSES = [
   "draft",

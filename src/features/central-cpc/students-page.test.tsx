@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { parseCsv } from "@domain/csv";
 import type { DirectoryStudent } from "@domain/student-directory";
+import type { HoldsView } from "@lib/holds-view";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
@@ -491,5 +492,138 @@ describe("arriving from the placement overview", () => {
   it("ignores a package figure that is not a number", async () => {
     show(EVERYONE, "/central/students?ctc=abc");
     expect(await screen.findByText("Anjali Subramanian")).toBeDefined();
+  });
+});
+
+/**
+ * 2026-10-29: the one write this roster offers, and the only role the route
+ * hands it to (0125). These are the near side of that gate — the database
+ * refuses every other role regardless, and src/db/hold-gate.test.ts proves it.
+ */
+const holdsView = (overrides: Partial<HoldsView> = {}): HoldsView => ({
+  live: async () => null,
+  history: async () => [],
+  place: async () => "hold-1",
+  release: async () => {},
+  orderUrl: async () => null,
+  ...overrides,
+});
+
+const showHolds = (students: readonly DirectoryStudent[], holds: HoldsView) =>
+  render(
+    <MemoryRouter initialEntries={["/central/students"]}>
+      <StudentDirectoryPage view={view(students)} holds={holds} download={vi.fn()} />
+    </MemoryRouter>,
+  );
+
+describe("StudentDirectoryPage holds", () => {
+  it("draws no way to hold for a role the route did not hand holds to", async () => {
+    show();
+    await screen.findByText("Rahul Nair");
+
+    expect(screen.queryByRole("columnheader", { name: /actions/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /hold/i })).toBeNull();
+  });
+
+  it("names the student each row's hold will land on", async () => {
+    showHolds([PLACED, UNPLACED], holdsView());
+    await screen.findByRole("button", { name: "Hold Rahul Nair" });
+
+    expect(screen.getByRole("button", { name: "Hold Anjali Subramanian" })).toBeDefined();
+  });
+
+  /**
+   * The row's own "On hold" is the proof, and it has to come from the roster,
+   * not from the click that was hoped for — so a successful place re-reads.
+   */
+  it("places the hold, says who is held, and re-reads the roster to prove it", async () => {
+    const user = userEvent.setup();
+    const place = vi.fn(async () => "hold-1");
+    let reads = 0;
+
+    render(
+      <MemoryRouter initialEntries={["/central/students"]}>
+        <StudentDirectoryPage
+          view={{
+            students: async () => {
+              reads += 1;
+              return reads === 1 ? [UNPLACED] : [{ ...UNPLACED, participationStatus: "on_hold" }];
+            },
+          }}
+          holds={holdsView({ place })}
+          download={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Hold Rahul Nair" }));
+    // The page's own filter chips are radios too, so the dialog is scoped.
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("radio", { name: /^Fees/ }));
+    await user.type(
+      within(dialog).getByRole("textbox", { name: /reason/i }),
+      "Two semesters of fees unpaid.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: /place hold/i }));
+
+    expect(await screen.findByText(/is on hold/)).toBeDefined();
+    expect(place).toHaveBeenCalledWith({
+      studentId: "s2",
+      kind: "fees",
+      reason: "Two semesters of fees unpaid.",
+      startsAt: expect.any(String),
+      endsAt: null,
+      order: null,
+    });
+
+    const row = await screen.findByRole("row", { name: /rahul nair/i });
+    expect(within(row).getByText("On hold")).toBeDefined();
+    expect(within(row).queryByRole("button", { name: /hold/i })).toBeNull();
+  });
+
+  it("does not offer a second hold to a student already held", async () => {
+    showHolds([{ ...UNPLACED, participationStatus: "on_hold" }], holdsView());
+
+    const row = await screen.findByRole("row", { name: /rahul nair/i });
+    expect(within(row).getByText("On hold")).toBeDefined();
+    expect(within(row).queryByRole("button", { name: /hold/i })).toBeNull();
+  });
+
+  /** Nothing is sent while the draft is wrong, so no half-placed hold exists. */
+  it("refuses a hold with neither a kind nor a reason before asking the database", async () => {
+    const user = userEvent.setup();
+    const place = vi.fn(async () => "hold-1");
+    showHolds([UNPLACED], holdsView({ place }));
+
+    await user.click(await screen.findByRole("button", { name: "Hold Rahul Nair" }));
+    await user.click(screen.getByRole("button", { name: /place hold/i }));
+
+    expect(place).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Choose what the hold is for/);
+  });
+
+  /** 0125's raised sentence is the manager's only explanation, so it is shown. */
+  it("shows the database's refusal inside the dialog instead of losing it", async () => {
+    const user = userEvent.setup();
+    showHolds(
+      [UNPLACED],
+      holdsView({
+        place: async () => {
+          throw new Error("Only a Campus Manager may place a placement hold.");
+        },
+      }),
+    );
+
+    await user.click(await screen.findByRole("button", { name: "Hold Rahul Nair" }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("radio", { name: /^Self-placed/ }));
+    await user.type(
+      within(dialog).getByRole("textbox", { name: /reason/i }),
+      "Offer already in hand.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: /place hold/i }));
+
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Only a Campus Manager/);
+    expect(screen.queryByText(/is on hold/)).toBeNull();
   });
 });

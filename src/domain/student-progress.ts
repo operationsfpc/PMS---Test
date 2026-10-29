@@ -98,8 +98,8 @@ export interface StudentPrompt {
  *
  * Participation is asked before the registration form on purpose: nagging a
  * student who has opted out to finish their SRF is worse than saying nothing.
- * Neither opting out nor disbarment carries an action - both are resolved by a
- * coordinator, and offering a button would imply otherwise.
+ * None of opted out, held or disbarred carries an action — all three are
+ * resolved by the college, and offering a button would imply otherwise.
  */
 export function studentPrompt(input: {
   readonly srfStatus: SrfStatus;
@@ -119,9 +119,21 @@ export function studentPrompt(input: {
     };
   }
 
+  /**
+   * The same sentence the database refuses with (0126) and `REFUSALS` repeats,
+   * so the banner and a rejected apply cannot disagree about what happened.
+   */
+  if (input.participationStatus === "on_hold") {
+    return {
+      headline: "Your college has placed a hold on your placements",
+      detail: "No drive is open to you until they release it. Ask your placement office.",
+      action: null,
+    };
+  }
+
   if (input.participationStatus === "disbarred") {
     return {
-      headline: "Your participation is on hold",
+      headline: "Your participation is suspended",
       detail: "You cannot apply to drives at the moment. Contact your placement coordinator.",
       action: null,
     };

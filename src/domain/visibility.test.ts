@@ -91,6 +91,14 @@ describe("isDriveVisibleToStudent", () => {
       expect(result).toMatchObject({ visible: false, reason: "disbarred" });
     });
 
+    it("hides drives from a held student even with the override on", () => {
+      const result = isDriveVisibleToStudent(
+        student({ participationStatus: "on_hold" }),
+        drive({ openToAllOverride: true }),
+      );
+      expect(result).toMatchObject({ visible: false, reason: "on_hold" });
+    });
+
     it("hides drives the student is not academically eligible for", () => {
       const result = isDriveVisibleToStudent(
         student(),
@@ -310,6 +318,11 @@ describe("canApply", () => {
 
   it("allows an eligible student inside the window", () => {
     expect(canApply(student(), drive(), during).allowed).toBe(true);
+  });
+
+  it("refuses a held student by name, not with the generic sentence", () => {
+    const result = canApply(student({ participationStatus: "on_hold" }), drive(), during);
+    expect(result).toMatchObject({ allowed: false, reason: "on_hold" });
   });
 
   it("refuses when the drive is not visible", () => {

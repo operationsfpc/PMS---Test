@@ -53,7 +53,7 @@ describe("domain vocabularies mirror the Postgres enums", () => {
   });
 
   it("pins participation statuses", () => {
-    expect(PARTICIPATION_STATUSES).toEqual(["active", "opted_out", "disbarred"]);
+    expect(PARTICIPATION_STATUSES).toEqual(["active", "opted_out", "disbarred", "on_hold"]);
   });
 
   it("pins drive statuses", () => {
