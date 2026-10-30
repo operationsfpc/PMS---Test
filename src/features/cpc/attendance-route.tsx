@@ -89,7 +89,7 @@ export function AttendanceRoute() {
                 This drive has no rounds yet. Rounds are created on the Rounds &amp; results screen.
               </p>
             ) : (
-              <ul className="divide-y divide-neutral-200">
+              <ul className="divide-y divide-line">
                 {rounds.map((round) => (
                   <li key={round.roundId} className="py-3">
                     <Link

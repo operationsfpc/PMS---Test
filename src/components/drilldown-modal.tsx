@@ -38,12 +38,14 @@ export function DrilldownModal({
     >
       <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="fpc-gradient h-1.5 w-full" />
-        <header className="flex items-start justify-between gap-4 border-b border-line bg-surface-muted/40 p-5">
+        <header className="flex items-start justify-between gap-4 border-b border-line bg-surface-muted p-5">
           <div className="min-w-0">
             <span className="inline-block rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
               {eyebrow}
             </span>
-            <h2 className="mt-1 truncate text-lg font-bold text-ink-900">{title}</h2>
+            <h2 className="mt-1 break-words text-lg font-bold text-ink-900 [overflow-wrap:anywhere]">
+              {title}
+            </h2>
             {subtitle !== undefined && <p className="mt-0.5 text-xs text-ink-500">{subtitle}</p>}
           </div>
           <button

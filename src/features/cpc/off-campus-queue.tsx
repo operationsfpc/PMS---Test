@@ -37,7 +37,7 @@ export function OffCampusQueue({ view }: { view: ParticipationQueueView }) {
     >
       {(pending, run) => (
         <Card>
-          <ul className="divide-y divide-neutral-200">
+          <ul className="divide-y divide-line">
             {pending.selfPlacements.map((placement) => (
               <li
                 key={placement.id}

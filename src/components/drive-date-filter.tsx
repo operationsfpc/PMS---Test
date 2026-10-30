@@ -113,7 +113,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                 aria-pressed={criteria.dimension === "created_at"}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
                   criteria.dimension === "created_at"
-                    ? "bg-white text-ink-900 shadow-xs"
+                    ? "bg-surface text-ink-900 shadow-xs"
                     : "text-ink-600 hover:text-ink-900"
                 }`}
               >
@@ -125,7 +125,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                 aria-pressed={criteria.dimension === "tentative_date"}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
                   criteria.dimension === "tentative_date"
-                    ? "bg-white text-ink-900 shadow-xs"
+                    ? "bg-surface text-ink-900 shadow-xs"
                     : "text-ink-600 hover:text-ink-900"
                 }`}
               >
@@ -167,7 +167,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       active
                         ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-line bg-white text-ink-700 hover:border-violet-400"
+                        : "border-line bg-surface text-ink-700 hover:border-violet-400"
                     }`}
                   >
                     {PRESET_LABELS[p]}
@@ -187,7 +187,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                 type="date"
                 value={criteria.startDate ?? ""}
                 onChange={(e) => handleDateChange("startDate", e.target.value)}
-                className="rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
+                className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
               />
             </div>
             <div className="flex items-center gap-1.5 text-xs text-ink-700">
@@ -199,7 +199,7 @@ export function DriveDateFilter<T extends DriveDateFilterItem>({
                 type="date"
                 value={criteria.endDate ?? ""}
                 onChange={(e) => handleDateChange("endDate", e.target.value)}
-                className="rounded-lg border border-line bg-white px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
+                className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
               />
             </div>
           </div>

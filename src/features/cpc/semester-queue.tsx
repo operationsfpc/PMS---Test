@@ -110,7 +110,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-neutral-500">
+          <p role="status" className="p-6 text-sm text-ink-500">
             Loading the CGPA verification queue…
           </p>
         ) : null
@@ -175,7 +175,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
                     <input
                       id={`reason-${semester.id}`}
                       type="text"
-                      className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                       placeholder="What the student needs to correct"
                       value={reasons[semester.id] ?? ""}
                       onChange={(e) => setReasons((r) => ({ ...r, [semester.id]: e.target.value }))}

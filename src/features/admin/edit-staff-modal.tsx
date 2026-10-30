@@ -172,8 +172,10 @@ export function EditStaffModal({
               {getInitials(member.fullName)}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-ink-900 text-sm truncate">{member.fullName}</div>
-              <div className="text-xs text-ink-500 font-mono truncate">{member.email}</div>
+              <div className="font-semibold text-ink-900 text-sm break-words [overflow-wrap:anywhere]">
+                {member.fullName}
+              </div>
+              <div className="text-xs text-ink-500 font-mono break-all">{member.email}</div>
             </div>
             <div className="shrink-0">
               <span className="inline-flex items-center rounded-md bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 border border-line capitalize">

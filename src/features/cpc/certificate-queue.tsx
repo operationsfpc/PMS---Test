@@ -111,7 +111,7 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-neutral-500">
+          <p role="status" className="p-6 text-sm text-ink-500">
             Loading the certificate queue…
           </p>
         ) : null
@@ -176,7 +176,7 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
                       <input
                         id={`reason-${certificate.id}`}
                         type="text"
-                        className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                         placeholder="What the student needs to correct"
                         value={reason}
                         onChange={(e) =>

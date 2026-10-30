@@ -108,7 +108,7 @@ export function DrivePicker({
           {visible.length === 0 ? (
             <p className="mt-3 text-sm text-ink-500">No drives match “{query}”.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-neutral-200">
+            <ul className="mt-3 divide-y divide-line">
               {events.map(([eventId, roles]) => {
                 const [only] = roles;
                 return (
@@ -188,7 +188,9 @@ function Visit({
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-ink-900">
-          {visit[0]?.companyName}
+          <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+            {visit[0]?.companyName}
+          </span>
           <Badge tone={mixed ? "neutral" : driveTypeTone(singleType ?? null)}>
             {mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)}
           </Badge>
@@ -200,58 +202,60 @@ function Visit({
           they needed two clicks each — one to open, one to choose — and a panel
           left open by default is a table that pays the height for nothing. So:
           one row per role, each with its own link. */}
-      <table className="mt-2 w-full text-left text-sm">
-        <thead>
-          <tr className="text-xs uppercase tracking-wide text-ink-500">
-            <th scope="col" className="py-1 pr-3 font-medium">
-              Role
-            </th>
-            <th scope="col" className="py-1 pr-3 font-medium">
-              Details
-            </th>
-            <th scope="col" className="py-1 pr-3 font-medium">
-              Status
-            </th>
-            <th scope="col" className="py-1 font-medium">
-              <span className="sr-only">Choose a role</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {visit.map((role) => (
-            <tr key={role.driveId} className="border-t border-line align-top">
-              <td className="py-2 pr-3">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-ink-900">
-                    {role.roleTitle ?? "Role not set"}
-                  </span>
-                  {mixed && (
-                    <Badge tone={driveTypeTone(role.driveType ?? null)}>
-                      {driveTypeLabel(role.driveType ?? null)}
-                    </Badge>
-                  )}
-                </span>
-              </td>
-              <td className="py-2 pr-3 text-xs text-ink-600">
-                {[raisedLabel(role.raisedOn), role.ctcLabel]
-                  .filter((part) => part !== null)
-                  .join(" · ")}
-              </td>
-              <td className="py-2 pr-3">{statusBadge(role.status)}</td>
-              <td className="py-2 text-right">
-                <ButtonLink
-                  size="sm"
-                  variant="secondary"
-                  to={makeLink(role.driveId)}
-                  aria-label={`Choose ${role.roleTitle ?? "this role"}`}
-                >
-                  Choose
-                </ButtonLink>
-              </td>
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full min-w-[520px] text-left text-sm">
+          <thead>
+            <tr className="text-xs uppercase tracking-wide text-ink-500">
+              <th scope="col" className="py-1 pr-3 font-medium">
+                Role
+              </th>
+              <th scope="col" className="py-1 pr-3 font-medium">
+                Details
+              </th>
+              <th scope="col" className="py-1 pr-3 font-medium">
+                Status
+              </th>
+              <th scope="col" className="py-1 font-medium">
+                <span className="sr-only">Choose a role</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visit.map((role) => (
+              <tr key={role.driveId} className="border-t border-line align-top">
+                <td className="py-2 pr-3">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-ink-900">
+                      {role.roleTitle ?? "Role not set"}
+                    </span>
+                    {mixed && (
+                      <Badge tone={driveTypeTone(role.driveType ?? null)}>
+                        {driveTypeLabel(role.driveType ?? null)}
+                      </Badge>
+                    )}
+                  </span>
+                </td>
+                <td className="py-2 pr-3 text-xs text-ink-600">
+                  {[raisedLabel(role.raisedOn), role.ctcLabel]
+                    .filter((part) => part !== null)
+                    .join(" · ")}
+                </td>
+                <td className="py-2 pr-3">{statusBadge(role.status)}</td>
+                <td className="py-2 text-right">
+                  <ButtonLink
+                    size="sm"
+                    variant="secondary"
+                    to={makeLink(role.driveId)}
+                    aria-label={`Choose ${role.roleTitle ?? "this role"}`}
+                  >
+                    Choose
+                  </ButtonLink>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

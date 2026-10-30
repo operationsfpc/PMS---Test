@@ -199,7 +199,7 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
         </Card>
       ) : (
         <Card>
-          <ul className="divide-y divide-neutral-200">
+          <ul className="divide-y divide-line">
             {candidates.map((candidate) => (
               <li
                 key={candidate.applicationId}
@@ -290,7 +290,7 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
                         inputMode="decimal"
                         value={pay[candidate.studentId] ?? ""}
                         onChange={(e) => setPay({ ...pay, [candidate.studentId]: e.target.value })}
-                        className="w-28 rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                        className="w-28 rounded-lg border border-line px-3 py-2 text-sm"
                       />
                     </div>
                     <Button

@@ -106,7 +106,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
       )}
 
       {saved && (
-        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             Attendance saved.
           </p>
@@ -115,7 +115,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-neutral-500">
+          <p role="status" className="p-6 text-sm text-ink-500">
             Loading the attendance list…
           </p>
         ) : null
@@ -148,7 +148,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
           </Card>
 
           <Card className="p-2">
-            <ul className="divide-y divide-neutral-200">
+            <ul className="divide-y divide-line">
               {rows.map((student) => {
                 const isPresent = present.includes(student.applicationId);
                 /** What the record already holds. A round nobody has taken yet
@@ -158,15 +158,21 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                     ? student.status
                     : null;
                 return (
-                  <li key={student.applicationId} className="flex items-center gap-3 px-3 py-2">
+                  <li
+                    key={student.applicationId}
+                    className="flex flex-wrap items-center gap-3 px-3 py-2"
+                  >
                     <input
                       type="checkbox"
                       id={`att-${student.applicationId}`}
-                      className="size-4 accent-brand-500"
+                      className="size-4 shrink-0 accent-brand-500"
                       checked={isPresent}
                       onChange={() => toggle(student.applicationId)}
                     />
-                    <label htmlFor={`att-${student.applicationId}`} className="text-sm">
+                    <label
+                      htmlFor={`att-${student.applicationId}`}
+                      className="min-w-0 flex-1 break-words text-sm [overflow-wrap:anywhere]"
+                    >
                       <span className="font-medium">{student.studentName}</span>{" "}
                       <span className="text-ink-500">Roll {student.rollNumber}</span>
                       {student.college != null && student.college !== "" && (
@@ -189,7 +195,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                       </ButtonLink>
                     )}
 
-                    <span className="ml-auto flex items-center gap-2 text-xs">
+                    <span className="ml-auto flex flex-wrap items-center gap-2 text-xs">
                       {/* The tick IS the mark, but a box alone reads as "nothing
                           decided yet" — and ticking a student changed nothing a
                           coordinator could see. Say the state the row holds, and
@@ -200,15 +206,13 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
                       {recorded !== null && isPresent !== (recorded === "present") && (
                         <span className="text-ink-500">was {recorded}</span>
                       )}
-                      <span
-                        className={student.priorAbsences > 0 ? "text-orange-500" : "text-ink-500"}
-                      >
+                      <span className={student.priorAbsences > 0 ? "text-warning" : "text-ink-500"}>
                         {`${student.priorAbsences} of ${ABSENCE_LIMIT}`}
                       </span>
                       {/* Warn BEFORE the mark, not after: the coordinator is the
                           last person who can check this was really an absence. */}
                       {!isPresent && needsDisbarmentReview(student.priorAbsences + 1) && (
-                        <span className="rounded bg-danger-50 px-2 py-0.5 font-semibold text-danger-500">
+                        <span className="rounded bg-danger-50 px-2 py-0.5 font-semibold text-danger-700">
                           Triggers review
                         </span>
                       )}
@@ -223,7 +227,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
             <Button isLoading={busy} onClick={() => void save()}>
               Save attendance
             </Button>
-            <p className="text-xs text-orange-500">
+            <p className="text-xs text-warning">
               Anyone left unticked is recorded absent. Three absences trigger a disbarment review.
             </p>
           </div>

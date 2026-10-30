@@ -437,7 +437,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                                 <td className="px-3 py-3 align-top" rowSpan={roles.length}>
                                   <p
                                     title={head.companyName}
-                                    className="max-w-[200px] truncate font-semibold text-ink-900"
+                                    className="max-w-[200px] break-words font-semibold text-ink-900 [overflow-wrap:anywhere]"
                                   >
                                     {single ? (
                                       <Link
@@ -460,7 +460,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                               <td className="px-3 py-3">
                                 <p
                                   title={role.roleTitle ?? "Role not specified"}
-                                  className="max-w-[200px] truncate text-ink-900"
+                                  className="max-w-[200px] break-words text-ink-900 [overflow-wrap:anywhere]"
                                 >
                                   {single ? (
                                     (role.roleTitle ?? "Role not specified")
@@ -474,7 +474,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                                   )}
                                 </p>
                                 {ctc !== null && (
-                                  <p className="max-w-[200px] truncate text-xs text-ink-500">
+                                  <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
                                     {ctc}
                                   </p>
                                 )}

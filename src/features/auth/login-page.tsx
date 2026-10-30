@@ -63,9 +63,9 @@ export function LoginPage() {
 
   return (
     <main className="grid min-h-dvh place-items-center bg-surface-muted px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-2xl bg-surface p-8 shadow-sm">
         <h1 className="font-heading text-2xl font-bold text-brand-500">FACE Prep Campus</h1>
-        <p className="mt-1 text-sm text-neutral-600">Placement Management System</p>
+        <p className="mt-1 text-sm text-ink-600">Placement Management System</p>
 
         {message !== null && (
           <p
@@ -93,7 +93,7 @@ export function LoginPage() {
           </Button>
         )}
 
-        <p className="mt-6 text-xs text-neutral-500">
+        <p className="mt-6 text-xs text-ink-500">
           Use the Google account your college or administrator has on record.
         </p>
       </div>

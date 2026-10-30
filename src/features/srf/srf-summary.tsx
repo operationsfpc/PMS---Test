@@ -89,7 +89,7 @@ export function SrfSummary({
 
       <Card className="p-6">
         <h3 className="font-heading text-base font-semibold text-ink-900">Personal details</h3>
-        <dl className="mt-2 divide-y divide-neutral-200">
+        <dl className="mt-2 divide-y divide-line">
           <Row label="Full name" value={shown(profile.fullName)} />
           <Row label="Roll number" value={shown(profile.rollNumber)} />
           <Row label="Email ID" value={shown(profile.email)} />
@@ -101,7 +101,7 @@ export function SrfSummary({
 
       <Card className="p-6">
         <h3 className="font-heading text-base font-semibold text-ink-900">Academic record</h3>
-        <dl className="mt-2 divide-y divide-neutral-200">
+        <dl className="mt-2 divide-y divide-line">
           <Row label="Degree" value={shown(profile.degree)} />
           <Row label="Branch" value={shown(profile.branch)} />
           <Row label="Year of passing" value={shown(profile.passingYear)} />
@@ -150,7 +150,7 @@ export function SrfSummary({
         {semesters.length > 0 && (
           <>
             <h4 className="mt-5 text-sm font-semibold text-ink-900">Semester-wise marks</h4>
-            <dl className="mt-1 divide-y divide-neutral-200">
+            <dl className="mt-1 divide-y divide-line">
               {semesters.map((s) => {
                 /**
                  * 2026-08-24: the coordinator's decision, read back exactly
@@ -204,7 +204,7 @@ export function SrfSummary({
         <h3 className="font-heading text-base font-semibold text-ink-900">
           Skills and achievements
         </h3>
-        <dl className="mt-2 divide-y divide-neutral-200">
+        <dl className="mt-2 divide-y divide-line">
           <Row label="Technical skills" value={shown(profile.technicalSkills)} />
           <Row label="Areas of interest" value={shown(profile.areasOfInterest)} />
           <Row label="Areas of expertise" value={shown(profile.areasOfExpertise)} />
@@ -223,7 +223,7 @@ export function SrfSummary({
         {certificates.length === 0 ? (
           <p className="mt-1 text-sm text-ink-500">No certificates uploaded.</p>
         ) : (
-          <ul className="mt-1 divide-y divide-neutral-200">
+          <ul className="mt-1 divide-y divide-line">
             {certificates.map((certificate) => {
               const standing = certificateStanding(certificate.status, certificate.rejectionReason);
               return (

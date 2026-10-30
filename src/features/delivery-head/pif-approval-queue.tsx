@@ -126,7 +126,7 @@ function PendingRoleCard({
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {standalone ? (
-          <h2 className="max-w-[300px] truncate font-heading text-lg font-bold text-ink-900">
+          <h2 className="min-w-0 break-words font-heading text-lg font-bold text-ink-900 [overflow-wrap:anywhere]">
             {pif.companyName}
           </h2>
         ) : (
@@ -201,7 +201,7 @@ function PendingRoleCard({
           </label>
           <select
             id={`cat-${pif.id}`}
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
             // Never a silent default: §3.3 makes this immutable, so
             // a category nobody chose must not be approvable.
             value={category ?? ""}
@@ -219,7 +219,7 @@ function PendingRoleCard({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-orange-500">
+          <p className="mt-1 text-xs text-warning">
             {categoryIsFixed
               ? "This drive is an internship, so Internship is the only category it can carry. This cannot be changed later."
               : category === undefined
@@ -237,7 +237,7 @@ function PendingRoleCard({
           </label>
           <input
             id={`reason-${pif.id}`}
-            className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
             value={reason}
             onChange={(e) => onReason(e.target.value)}
           />
@@ -390,7 +390,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-neutral-500">
+          <p role="status" className="p-6 text-sm text-ink-500">
             Loading the queue…
           </p>
         ) : null
@@ -405,7 +405,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
           {eventGroups.map(({ key, event, roles }) => (
             <Card key={key} className="p-5">
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <h2 className="max-w-[300px] truncate font-heading text-lg font-bold text-ink-900">
+                <h2 className="min-w-0 break-words font-heading text-lg font-bold text-ink-900 [overflow-wrap:anywhere]">
                   {event.companyName}
                 </h2>
                 <Badge tone="accent">

@@ -225,7 +225,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       {error !== null && (
         <div
           role="alert"
-          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="mb-4 rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700"
         >
           {error}
         </div>
@@ -261,7 +261,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="e.g. John Doe"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
               />
             </div>
             <div>
@@ -274,7 +274,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@faceprep.in"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
               />
             </div>
             <div>
@@ -285,7 +285,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 id="staff-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as AppRole)}
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm capitalize text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm capitalize text-ink-900 focus:border-brand-500 focus:outline-hidden"
               >
                 {INVITABLE.map((r) => (
                   <option key={r} value={r}>
@@ -316,7 +316,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
             </fieldset>
           )}
 
-          {problem !== null && <p className="mt-3 text-sm text-destructive">{problem}</p>}
+          {problem !== null && <p className="mt-3 text-sm text-danger-700">{problem}</p>}
 
           <div className="mt-5">
             <Button type="submit" isLoading={saving}>
@@ -499,10 +499,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                   filteredStaff?.map((member) => {
                     const initials = getInitials(member.fullName);
                     return (
-                      <tr
-                        key={member.email}
-                        className="transition-colors hover:bg-surface-muted/40"
-                      >
+                      <tr key={member.email} className="transition-colors hover:bg-surface-muted">
                         {/* Staff Member Info with Avatar */}
                         <td className="px-4 py-3.5 align-middle min-w-[220px]">
                           <div className="flex items-center gap-3">
@@ -513,10 +510,10 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                               {initials}
                             </div>
                             <div className="min-w-0">
-                              <div className="font-semibold text-ink-900 leading-snug truncate">
+                              <div className="font-semibold text-ink-900 leading-snug break-words [overflow-wrap:anywhere]">
                                 {member.fullName}
                               </div>
-                              <div className="text-xs text-ink-500 font-mono truncate mt-0.5">
+                              <div className="text-xs text-ink-500 font-mono break-all mt-0.5">
                                 {member.email}
                               </div>
                             </div>
@@ -535,11 +532,11 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                           {campusScopeFor(member.role) === "one" && (
                             <div className="max-w-[220px]">
                               {member.campuses.length > 0 ? (
-                                <span className="text-xs font-semibold text-ink-900 truncate block">
+                                <span className="text-xs font-semibold text-ink-900 break-words block [overflow-wrap:anywhere]">
                                   {member.campuses[0]?.name}
                                 </span>
                               ) : (
-                                <p className="text-xs font-medium text-destructive">
+                                <p className="text-xs font-medium text-danger-700">
                                   No campus mapped — they cannot see any students yet.
                                 </p>
                               )}
@@ -564,7 +561,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                                   )}
                                 </div>
                               ) : (
-                                <span className="text-xs font-medium text-destructive">
+                                <span className="text-xs font-medium text-danger-700">
                                   No campuses assigned
                                 </span>
                               )}

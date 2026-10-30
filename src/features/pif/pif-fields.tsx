@@ -760,7 +760,7 @@ export function ContactsEditor<T extends FieldValues>({
       {contacts.fields.map((field, index) => (
         <div
           key={field.id}
-          className="mt-3 grid gap-2 rounded-lg border border-line bg-white p-3 sm:grid-cols-2"
+          className="mt-3 grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2"
         >
           <div>
             <label

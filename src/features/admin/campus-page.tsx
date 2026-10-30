@@ -180,7 +180,7 @@ export function CampusPage({
                   value={values[field.name]}
                   onChange={(e) => setValues({ ...values, [field.name]: e.target.value })}
                   placeholder={`Enter ${field.label.toLowerCase()}`}
-                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
                 />
                 {missing.includes(field.name) && (
                   <p className="mt-1 text-xs text-destructive">{field.label} is required.</p>
@@ -220,12 +220,12 @@ export function CampusPage({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search campuses by name, code, or city…"
-              className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[240px]"
+              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[240px]"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
             >
               <option value="">All statuses</option>
               <option value="active">Active</option>

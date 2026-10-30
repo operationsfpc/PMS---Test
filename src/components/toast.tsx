@@ -26,22 +26,22 @@ export function Toast({
 }) {
   const toneClasses: Record<ToastTone, { card: string; icon: string; title: string }> = {
     danger: {
-      card: "border-destructive/40 bg-white text-destructive shadow-lg ring-1 ring-destructive/10",
+      card: "border-destructive/40 bg-surface text-destructive shadow-lg ring-1 ring-destructive/10",
       icon: "text-destructive bg-destructive/10",
       title: "text-destructive font-semibold",
     },
     success: {
-      card: "border-success-500/40 bg-white text-success-800 shadow-lg ring-1 ring-success-500/10",
+      card: "border-success-500/40 bg-surface text-success-800 shadow-lg ring-1 ring-success-500/10",
       icon: "text-success-600 bg-success-50",
       title: "text-success-900 font-semibold",
     },
     warning: {
-      card: "border-gold-500/40 bg-white text-gold-900 shadow-lg ring-1 ring-gold-500/10",
+      card: "border-gold-500/40 bg-surface text-gold-900 shadow-lg ring-1 ring-gold-500/10",
       icon: "text-gold-700 bg-gold-50",
       title: "text-gold-900 font-semibold",
     },
     info: {
-      card: "border-brand-500/40 bg-white text-ink-900 shadow-lg ring-1 ring-brand-500/10",
+      card: "border-brand-500/40 bg-surface text-ink-900 shadow-lg ring-1 ring-brand-500/10",
       icon: "text-brand-600 bg-brand-50",
       title: "text-ink-900 font-semibold",
     },

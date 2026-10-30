@@ -26,7 +26,7 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
     >
       {(pending, run) => (
         <Card>
-          <ul className="divide-y divide-neutral-200">
+          <ul className="divide-y divide-line">
             {pending.optOuts.map((request) => (
               <li key={request.id} className="flex flex-wrap items-start justify-between gap-4 p-4">
                 <StudentIdentity
@@ -35,7 +35,9 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
                   college={request.college}
                   studentId={request.studentId}
                 >
-                  <p className="mt-1 text-sm text-ink-700">“{request.reason}”</p>
+                  <p className="mt-1 break-words text-sm text-ink-700 [overflow-wrap:anywhere]">
+                    “{request.reason}”
+                  </p>
                   <Evidence
                     url={request.declarationUrl}
                     label="signed declaration"

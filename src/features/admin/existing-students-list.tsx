@@ -122,7 +122,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
               setPage(1);
             }}
             placeholder="Search by name, roll no, or email…"
-            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[200px]"
+            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[200px]"
           />
 
           {/* Campus Filter */}
@@ -137,7 +137,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                 setFilterCampus(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
             >
               <option value="">All campuses</option>
               {campuses.map((c) => (
@@ -156,7 +156,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                 setFilterYear(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-line bg-white px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
             >
               <option value="">All years</option>
               {passingYears.map((yr) => (
@@ -196,7 +196,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
           {listProblem} Until it loads, this list cannot say who is already on record.
         </ErrorPanel>
       ) : students === null ? (
-        <p role="status" className="text-sm text-neutral-500 py-6 text-center">
+        <p role="status" className="text-sm text-ink-500 py-6 text-center">
           Loading students…
         </p>
       ) : filtered.length === 0 ? (
@@ -253,7 +253,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                 <select
                   value={pageSize}
                   onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="rounded border border-line bg-white px-2 py-1 text-xs text-ink-800"
+                  className="rounded border border-line bg-surface px-2 py-1 text-xs text-ink-800"
                 >
                   {PAGE_SIZE_OPTIONS.map((sz) => (
                     <option key={sz} value={sz}>

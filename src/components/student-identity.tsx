@@ -27,7 +27,7 @@ export function StudentIdentity({
   readonly children?: ReactNode;
 }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 break-words [overflow-wrap:anywhere]">
       <p className="font-medium text-ink-900">
         {studentId != null && studentId !== "" ? (
           <Link to={`/students/${studentId}`} className="hover:underline">

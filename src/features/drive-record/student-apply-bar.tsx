@@ -86,7 +86,7 @@ export function StudentApplyBar({ driveId, view }: { driveId: string; view: Stud
     if (error === null) return null;
     return (
       <Bar>
-        <p role="alert" className="text-sm text-danger-500">
+        <p role="alert" className="text-sm text-danger-700">
           {error}
         </p>
         <Button size="sm" variant="secondary" onClick={() => void load()}>
@@ -116,7 +116,7 @@ export function StudentApplyBar({ driveId, view }: { driveId: string; view: Stud
             Apply
           </Button>
         ) : (
-          <p className="max-w-md text-center text-sm font-medium text-danger-500 break-words">
+          <p className="max-w-md text-center text-sm font-medium text-danger-700 break-words">
             {card.refusal}
           </p>
         )}
@@ -167,15 +167,15 @@ export function StudentApplyBar({ driveId, view }: { driveId: string; view: Stud
               type="file"
               accept="application/pdf"
               onChange={(e) => setResume(e.target.files?.[0] ?? null)}
-              className="w-full rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
             />
             {problem !== null && (
-              <p className="mt-1 text-xs font-medium text-danger-500">{problem}</p>
+              <p className="mt-1 text-xs font-medium text-danger-700">{problem}</p>
             )}
           </div>
 
           {error !== null && (
-            <p role="alert" className="mt-3 text-sm text-danger-500">
+            <p role="alert" className="mt-3 text-sm text-danger-700">
               {error}
             </p>
           )}

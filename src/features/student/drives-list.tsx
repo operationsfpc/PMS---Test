@@ -133,8 +133,8 @@ const VISIT_ACCENTS = [
   { rail: "border-l-violet-500", band: "bg-violet-50" },
   { rail: "border-l-success-500", band: "bg-success-50" },
   { rail: "border-l-gold-500", band: "bg-gold-50" },
-  { rail: "border-l-sky-500", band: "bg-sky-50" },
-  { rail: "border-l-rose-500", band: "bg-rose-50" },
+  { rail: "border-l-cyan-400", band: "bg-cyan-50" },
+  { rail: "border-l-danger-500", band: "bg-danger-50" },
 ] as const;
 
 export function visitAccent(index: number): (typeof VISIT_ACCENTS)[number] {
@@ -268,7 +268,7 @@ export function DrivesList({
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-neutral-500">
+          <p role="status" className="p-6 text-sm text-ink-500">
             Loading your drives…
           </p>
         ) : null
@@ -339,7 +339,7 @@ export function DrivesList({
                   {left !== null && (
                     <p
                       className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                        left.urgent ? "bg-orange-500 text-white" : "bg-surface-muted text-brand-500"
+                        left.urgent ? "bg-danger-500 text-white" : "bg-surface-muted text-brand-500"
                       }`}
                     >
                       {left.urgent ? "🔥 " : "⏳ "}
@@ -439,7 +439,7 @@ export function DrivesList({
                         type="file"
                         accept="application/pdf"
                         onChange={(e) => setResume(e.target.files?.[0] ?? null)}
-                        className="w-full rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                       />
                       {problem !== null && (
                         <p className="mt-1 text-xs font-medium text-danger-500">{problem}</p>
@@ -459,7 +459,7 @@ export function DrivesList({
               }
               if (drive.canApply) {
                 return (
-                  <p className="mt-3 text-xs text-orange-500">
+                  <p className="mt-3 text-xs text-warning">
                     An application cannot be withdrawn once submitted.
                   </p>
                 );

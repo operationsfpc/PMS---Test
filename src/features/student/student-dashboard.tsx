@@ -183,10 +183,12 @@ function ApplicationVisits({ entries }: { entries: readonly ProgressedApplicatio
               <Card className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-heading font-bold text-ink-900">
+                    <p className="break-words font-heading font-bold text-ink-900 [overflow-wrap:anywhere]">
                       {first.application.companyName}
                     </p>
-                    <p className="truncate text-sm text-ink-500">{first.application.roleTitle}</p>
+                    <p className="break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                      {first.application.roleTitle}
+                    </p>
                     <AppliedLine entry={first} />
                   </div>
                   <Badge tone={STAGE_TONE[first.progress.stage]}>{first.progress.label}</Badge>
@@ -201,7 +203,9 @@ function ApplicationVisits({ entries }: { entries: readonly ProgressedApplicatio
           <li key={visitId}>
             <Card className="p-4">
               <p className="flex flex-wrap items-center gap-2 font-heading font-bold text-ink-900">
-                <span className="truncate">{first.application.companyName}</span>
+                <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                  {first.application.companyName}
+                </span>
                 <Badge tone="brand">{roles.length} roles</Badge>
               </p>
               <Accordion
@@ -523,9 +527,13 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                         <Badge tone="brand">{offerCategoryLabel(offer.offerCategory)}</Badge>
                       )}
                     </div>
-                    <p className="font-heading font-bold text-ink-900">{offer.companyName}</p>
+                    <p className="break-words font-heading font-bold text-ink-900 [overflow-wrap:anywhere]">
+                      {offer.companyName}
+                    </p>
                     {offer.roleTitle !== null && (
-                      <p className="text-sm text-ink-500">{offer.roleTitle}</p>
+                      <p className="break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                        {offer.roleTitle}
+                      </p>
                     )}
                     <p className="mt-1 text-sm text-ink-700">
                       {/* 2026-08-27: an internship is paid monthly. This line

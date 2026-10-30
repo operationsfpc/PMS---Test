@@ -242,10 +242,7 @@ export function AddSemester({
 
           <div className="mt-4 flex flex-col gap-5">
             {rows.map((row, index) => (
-              <fieldset
-                key={row.semesterNumber}
-                className="rounded-lg border border-neutral-300 p-4"
-              >
+              <fieldset key={row.semesterNumber} className="rounded-lg border border-line p-4">
                 <legend className="px-1 text-base font-semibold text-ink-900">
                   Semester {row.semesterNumber}
                 </legend>
@@ -263,7 +260,7 @@ export function AddSemester({
                       inputMode="decimal"
                       value={row.marks}
                       onChange={(e) => update(row.semesterNumber, { marks: e.target.value })}
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-line px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
@@ -278,7 +275,7 @@ export function AddSemester({
                       inputMode="numeric"
                       value={row.standing}
                       onChange={(e) => update(row.semesterNumber, { standing: e.target.value })}
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-line px-3 py-2 text-sm"
                     />
                   </div>
                   <div>
@@ -293,7 +290,7 @@ export function AddSemester({
                       inputMode="numeric"
                       value={row.history}
                       onChange={(e) => update(row.semesterNumber, { history: e.target.value })}
-                      className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                      className="w-full rounded-lg border border-line px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
@@ -313,7 +310,7 @@ export function AddSemester({
                     onChange={(e) =>
                       update(row.semesterNumber, { marksheet: e.target.files?.[0] ?? null })
                     }
-                    className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm"
                   />
                 </div>
 

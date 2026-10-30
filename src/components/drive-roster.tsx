@@ -220,7 +220,7 @@ export function DriveRoster({
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-xs text-ink-500 truncate">
+                    <p className="mt-0.5 break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
                       {student.degree && student.branch
                         ? `${student.degree} — ${student.branch}`
                         : ""}

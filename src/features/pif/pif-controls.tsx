@@ -72,7 +72,7 @@ export function SectionNav({
         <a
           key={item.id}
           href={`#${item.id}`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:text-brand-700"
+          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:text-brand-700"
         >
           {item.number !== undefined && (
             <span
@@ -120,7 +120,7 @@ export function Labelled({
 }
 
 export const control =
-  "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-400 placeholder:font-normal transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-400 placeholder:font-normal transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 /**
  * An untouched optional number is NOT zero.

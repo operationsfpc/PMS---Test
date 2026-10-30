@@ -673,7 +673,7 @@ function RoleProgress({
       </div>
 
       {/* Student list for this role / selected college */}
-      <ul className="divide-y divide-neutral-200">
+      <ul className="divide-y divide-line">
         {filteredStudents.length === 0 ? (
           <li className="p-4 text-xs text-ink-500 italic text-center">
             No students found for this filter.

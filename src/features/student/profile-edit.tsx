@@ -351,7 +351,7 @@ export function ProfileEditPage({
                   aria-label={certificate.name}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3"
                 >
-                  <span className="min-w-0">
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                     <span className="block text-sm font-medium text-ink-900">
                       {certificate.name}
                     </span>

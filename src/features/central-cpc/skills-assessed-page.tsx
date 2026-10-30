@@ -142,7 +142,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
         </Card>
       )}
       {status !== null && (
-        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             {status}
           </p>
@@ -157,7 +157,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
             </label>
             <input
               id="new-skill"
-              className="rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
             />
@@ -170,7 +170,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
 
       {skills === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-neutral-500">
+          <p role="status" className="p-6 text-sm text-ink-500">
             Loading the skills…
           </p>
         ) : null
@@ -192,7 +192,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
                       </label>
                       <input
                         id={`rename-${skill.id}`}
-                        className="rounded-lg border border-neutral-300 bg-surface px-3 py-2 text-sm"
+                        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                         value={renameDraft}
                         onChange={(e) => setRenameDraft(e.target.value)}
                       />

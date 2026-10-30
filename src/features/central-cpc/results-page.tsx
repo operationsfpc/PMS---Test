@@ -356,7 +356,7 @@ export function ResultsPage({
           </div>
 
           <Card>
-            <ul className="divide-y divide-neutral-200">
+            <ul className="divide-y divide-line">
               {participants.map((participant) => {
                 const outcome = outcomeOf(participant);
                 const open = outcome.editable && closed === null;
@@ -465,7 +465,7 @@ export function ResultsPage({
           <div
             role="alertdialog"
             aria-label="Confirm results"
-            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
               Mark {checked.size} {checked.size === 1 ? "student" : "students"} as{" "}
@@ -1399,7 +1399,7 @@ export function DriveRoundsPage({
               <div
                 role="alertdialog"
                 aria-label="Confirm advancing"
-                className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+                className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
               >
                 <h2 className="font-heading text-lg font-bold text-ink-900">
                   Advance {advancing} to Round {nextRound.sequence}?
@@ -1459,7 +1459,7 @@ export function DriveRoundsPage({
           <div
             role="dialog"
             aria-label="Manage rounds"
-            className="my-auto w-full max-w-lg rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-lg rounded-card bg-surface p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">Manage rounds</h2>
             <p className="mt-1 text-sm text-ink-500">
@@ -1467,7 +1467,7 @@ export function DriveRoundsPage({
               results is frozen — history is not edited.
             </p>
 
-            <ul className="mt-4 divide-y divide-neutral-200">
+            <ul className="mt-4 divide-y divide-line">
               {(rounds ?? []).map((round) => {
                 const freeze = describeRoundFreeze(
                   facts.get(round.roundId) ?? {
@@ -1543,7 +1543,7 @@ export function DriveRoundsPage({
           <div
             role="alertdialog"
             aria-label="Remove round"
-            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
               Remove Round {removing.sequence} — {removing.name}?
@@ -1572,7 +1572,7 @@ export function DriveRoundsPage({
           <div
             role="alertdialog"
             aria-label="Complete drive"
-            className="my-auto w-full max-w-md rounded-card bg-white p-6 shadow-xl"
+            className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">Mark drive completed?</h2>
             {completing.ready ? (

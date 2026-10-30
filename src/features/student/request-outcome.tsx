@@ -22,7 +22,7 @@ export function RequestOutcome({
     outcome.tone === "approved" ? "success" : outcome.tone === "declined" ? "danger" : "warning";
 
   return (
-    <div>
+    <div className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
       <Badge tone={tone}>{outcome.label}</Badge>
       {outcome.detail !== null && <p className="mt-1 text-sm text-ink-700">{outcome.detail}</p>}
     </div>

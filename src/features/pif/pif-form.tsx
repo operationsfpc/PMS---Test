@@ -630,7 +630,7 @@ export function PifForm({
                     new drive date.
                   </p>
                 </div>
-                <span className="rounded-full border border-brand-200 bg-white px-2.5 py-0.5 text-xs font-semibold text-brand-700">
+                <span className="rounded-full border border-brand-200 bg-surface px-2.5 py-0.5 text-xs font-semibold text-brand-700">
                   {eventsForCompany.length} existing drive{eventsForCompany.length > 1 ? "s" : ""}
                 </span>
               </div>
@@ -647,9 +647,9 @@ export function PifForm({
                       key={evt.id}
                       className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
                         isSelected
-                          ? "border-brand-500 bg-white shadow-xs ring-1 ring-brand-500/20"
-                          : "border-line bg-white/70"
-                      } ${refused === null ? "cursor-pointer hover:bg-white" : ""}`}
+                          ? "border-brand-500 bg-surface shadow-xs ring-1 ring-brand-500/20"
+                          : "border-line bg-surface/70"
+                      } ${refused === null ? "cursor-pointer hover:bg-surface" : ""}`}
                     >
                       <input
                         type="radio"
@@ -698,8 +698,8 @@ export function PifForm({
                 <label
                   className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
                     selectedEventId === "new"
-                      ? "border-brand-500 bg-white shadow-xs ring-1 ring-brand-500/20"
-                      : "border-line bg-white/70 hover:bg-white"
+                      ? "border-brand-500 bg-surface shadow-xs ring-1 ring-brand-500/20"
+                      : "border-line bg-surface/70 hover:bg-surface"
                   }`}
                 >
                   <input

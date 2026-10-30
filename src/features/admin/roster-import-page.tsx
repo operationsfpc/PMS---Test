@@ -110,7 +110,7 @@ export function RosterImportPage({
       )}
 
       {done !== null && (
-        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             Imported {done} student{done === 1 ? "" : "s"}. They can now sign in with the Google
             account on their roster row.
@@ -126,7 +126,7 @@ export function RosterImportPage({
             </label>
             <select
               id={campusId}
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
               value={campus}
               onChange={(e) => setCampus(e.target.value)}
             >
@@ -146,7 +146,7 @@ export function RosterImportPage({
               id={fileId}
               type="file"
               accept=".csv,text/csv"
-              className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
             <p className="mt-1 text-xs text-ink-500">
@@ -211,7 +211,7 @@ export function RosterImportPage({
                 {parsed.rejected.map((r) => (
                   <li
                     key={`${r.row}-${r.reason}`}
-                    className="text-sm text-ink-800 bg-white border border-destructive/20 rounded-lg p-2.5 shadow-2xs"
+                    className="text-sm text-ink-800 bg-surface border border-destructive/20 rounded-lg p-2.5 shadow-2xs"
                   >
                     <strong className="text-destructive mr-1.5">Row {r.row}:</strong>
                     <span>{r.reason}</span>

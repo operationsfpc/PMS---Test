@@ -1,4 +1,12 @@
-import { Badge, Button, ButtonAnchor, ButtonLink, Card, PageHeader } from "@components/ui";
+import {
+  Badge,
+  Button,
+  ButtonAnchor,
+  ButtonLink,
+  Card,
+  PageHeader,
+  type Tone,
+} from "@components/ui";
 import { visitDayInParentheses } from "@domain/drive-aging";
 import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
@@ -31,6 +39,18 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "Completed",
 };
 
+/** Matches the PIF event picker's tones, so "Live" is green on both screens. */
+const STATUS_TONE: Record<string, Tone> = {
+  draft: "neutral",
+  submitted: "warning",
+  approved: "success",
+  rejected: "danger",
+  live: "success",
+  applications_closed: "warning",
+  in_rounds: "warning",
+  completed: "neutral",
+};
+
 const AREA_LABEL: Record<string, string> = {
   software_technical: "Software / Technical",
   technical_support_it_ops: "Technical Support / IT Operations",
@@ -47,7 +67,7 @@ const when = (iso: string | null) =>
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card className="p-5">
-      <h2 className="mb-3 inline-block border-b-2 border-gold-500 pb-0.5 font-heading text-sm font-bold uppercase tracking-wide text-brand-500">
+      <h2 className="mb-3 inline-block border-b-2 border-gold-500 pb-0.5 font-heading text-sm font-bold uppercase tracking-wide text-ink-900">
         {title}
       </h2>
       {children}
@@ -141,7 +161,7 @@ export function DriveRecordPage({
 
   if (record === null) {
     return (
-      <p role="status" className="p-6 text-sm text-neutral-500">
+      <p role="status" className="p-6 text-sm text-ink-500">
         Loading the drive…
       </p>
     );
@@ -206,7 +226,9 @@ export function DriveRecordPage({
               // A closed visit cannot take a fifth role onto it. The offer is
               // replaced by the reason, not removed: a missing button reads
               // as a defect, a refused one that says why reads as a rule.
-              <p className="text-xs text-ink-500">{rolesRefused} No further roles can be raised.</p>
+              <p className="max-w-full break-words text-xs text-ink-500">
+                {rolesRefused} No further roles can be raised.
+              </p>
             )
           ) : undefined
         }
@@ -239,13 +261,13 @@ export function DriveRecordPage({
                 Nobody is at “{STAGE_LABEL[activeStage]}” on this drive.
               </p>
             ) : (
-              <ul className="divide-y divide-neutral-200">
+              <ul className="divide-y divide-line">
                 {stageApplicants.map((applicant) => (
                   <li
                     key={applicant.applicationId}
                     className="flex flex-wrap items-center justify-between gap-3 py-2.5"
                   >
-                    <span>
+                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                       <Link
                         to={`/students/${applicant.studentId}`}
                         className="font-medium text-brand-600 hover:underline"
@@ -266,7 +288,9 @@ export function DriveRecordPage({
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Badge tone="brand">{STATUS_LABEL[record.status] ?? record.status}</Badge>
+        <Badge tone={STATUS_TONE[record.status] ?? "neutral"}>
+          {STATUS_LABEL[record.status] ?? record.status}
+        </Badge>
         {/* UAT 2026-08-27: an internship's category IS its type. Two badges
             reading "Internship" are one fact wearing two colours. */}
         {record.offerCategory !== null &&
@@ -282,7 +306,7 @@ export function DriveRecordPage({
 
       {/* Quick Highlights Strip */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
             Package / CTC
           </span>
@@ -290,7 +314,7 @@ export function DriveRecordPage({
             {record.ctcLabel ? `${record.ctcLabel} (CTC)` : "—"}
           </p>
         </div>
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
             Location
           </span>
@@ -301,7 +325,7 @@ export function DriveRecordPage({
             {record.locations || "—"}
           </p>
         </div>
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
             Drive Mode
           </span>
@@ -309,7 +333,7 @@ export function DriveRecordPage({
             {record.driveMode ? `${record.driveMode.replaceAll("_", " ")} drive` : "—"}
           </p>
         </div>
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted/40 p-3.5">
+        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
             Apply Deadline
           </span>
@@ -331,7 +355,7 @@ export function DriveRecordPage({
                 </p>
               )}
               {record.jobDescriptionUrl !== null && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-muted/40 p-3.5">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-muted p-3.5">
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
                     <span className="text-xl shrink-0" aria-hidden="true">
                       📄
@@ -412,7 +436,7 @@ export function DriveRecordPage({
                 {record.rounds.map((round) => (
                   <li
                     key={round.sequence}
-                    className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted/30 px-3.5 py-2.5 text-sm text-ink-800"
+                    className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted px-3.5 py-2.5 text-sm text-ink-800"
                   >
                     <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600">
                       {round.sequence}
@@ -520,7 +544,7 @@ export function DriveRecordPage({
                 {record.siblingRoles.map((sibling) => (
                   <li
                     key={sibling.driveId}
-                    className="rounded-lg border border-line bg-surface-muted/30 p-3"
+                    className="rounded-lg border border-line bg-surface-muted p-3"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0 max-w-full">
@@ -539,7 +563,7 @@ export function DriveRecordPage({
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-sm shrink-0">
-                        <Badge tone="neutral">
+                        <Badge tone={STATUS_TONE[sibling.status] ?? "neutral"}>
                           {STATUS_LABEL[sibling.status] ?? sibling.status}
                         </Badge>
                         <span className="text-ink-600">{sibling.ctcLabel}</span>

@@ -11,7 +11,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (auth.status === "loading") {
     return (
-      <p role="status" className="p-8 text-sm text-neutral-500">
+      <p role="status" className="p-8 text-sm text-ink-500">
         Checking your sign-in…
       </p>
     );

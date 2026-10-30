@@ -303,8 +303,8 @@ export function StudentRecordPage({
   if (record === undefined) {
     if (failure !== null) {
       return (
-        <Card className="border border-danger-500 bg-danger-50 p-5">
-          <p role="alert" className="text-sm text-danger-500">
+        <Card className="border border-danger-500/30 bg-danger-50 p-5">
+          <p role="alert" className="text-sm text-danger-700">
             {failure}
           </p>
           <div className="mt-4">{back}</div>
@@ -356,7 +356,7 @@ export function StudentRecordPage({
       {holdProblem !== null && (
         <p
           role="alert"
-          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="mb-4 rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700"
         >
           {holdProblem}
         </p>
@@ -370,15 +370,17 @@ export function StudentRecordPage({
            * and the card says so before the button.
            */}
           {pending !== null && (
-            <Card className="border-brand-500/40 bg-brand-50 p-5">
+            <Card className="border-violet-300 bg-violet-50 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-heading text-lg font-bold text-ink-900">
                   Requested — {HOLD_KIND_LABELS[pending.kind]}
                 </h2>
-                <Badge tone="brand">Awaiting confirmation</Badge>
+                <Badge tone="accent">Awaiting confirmation</Badge>
               </div>
 
-              <p className="mt-2 text-sm text-ink-900">{pending.reason}</p>
+              <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+                {pending.reason}
+              </p>
               <p className="mt-1 text-xs text-ink-500">
                 {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
               </p>
@@ -389,7 +391,7 @@ export function StudentRecordPage({
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {pending.documentPath !== null &&
                   (evidence.offer === null ? (
-                    <span className="text-sm text-ink-500">
+                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
                       Offer letter on file: {extractOriginalFilename(pending.documentPath)}
                     </span>
                   ) : (
@@ -404,7 +406,7 @@ export function StudentRecordPage({
                   ))}
                 {pending.declarationPath !== null &&
                   (evidence.declaration === null ? (
-                    <span className="text-sm text-ink-500">
+                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
                       Declaration on file: {extractOriginalFilename(pending.declarationPath)}
                     </span>
                   ) : (
@@ -466,7 +468,7 @@ export function StudentRecordPage({
                   {actions.error !== null && (
                     <p
                       role="alert"
-                      className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                      className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
                     >
                       {actions.error}
                     </p>
@@ -477,7 +479,7 @@ export function StudentRecordPage({
           )}
 
           {hold !== null && (
-            <Card className="border-warning/40 bg-warning/5 p-5">
+            <Card className="border-gold-300 bg-gold-50 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-heading text-lg font-bold text-ink-900">
                   On hold — {HOLD_KIND_LABELS[hold.kind]}
@@ -487,7 +489,9 @@ export function StudentRecordPage({
                 </Badge>
               </div>
 
-              <p className="mt-2 text-sm text-ink-900">{hold.reason}</p>
+              <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+                {hold.reason}
+              </p>
               <p className="mt-1 text-xs text-ink-500">
                 {holdWindowLine(hold, today)}
                 {hold.heldBy !== null && ` · placed by ${hold.heldBy}`} · placed{" "}
@@ -499,7 +503,7 @@ export function StudentRecordPage({
                   {orderUrl === null ? (
                     // True in both cases: the order is on file, and the record
                     // simply has no working link to it.
-                    <span className="text-sm text-ink-500">
+                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
                       Order on file: {extractOriginalFilename(hold.documentPath)}
                     </span>
                   ) : (
@@ -601,7 +605,7 @@ export function StudentRecordPage({
                   {actions.error !== null && (
                     <p
                       role="alert"
-                      className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                      className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
                     >
                       {actions.error}
                     </p>
@@ -618,7 +622,7 @@ export function StudentRecordPage({
                 {pastHolds.map((past) => (
                   <li key={past.id} className="py-2">
                     <p className="font-medium text-ink-900">{HOLD_KIND_LABELS[past.kind]}</p>
-                    <p className="text-xs text-ink-500">
+                    <p className="break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
                       {past.reason} · {holdWindowLine(past, today)}
                       {past.releasedBy !== null && ` by ${past.releasedBy}`}
                     </p>
@@ -636,19 +640,19 @@ export function StudentRecordPage({
             <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Identity</h2>
             <dl className="grid gap-2 text-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-ink-500">Programme</dt>
-                <dd className="text-right text-ink-900">
+                <dt className="shrink-0 text-ink-500">Programme</dt>
+                <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
                   {record.degree}
                   {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="shrink-0 text-ink-500">Email</dt>
-                <dd className="truncate text-right text-ink-900">{record.email}</dd>
+                <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="shrink-0 text-ink-500">Mobile</dt>
-                <dd className="truncate text-right text-ink-900">
+                <dd className="min-w-0 break-all text-right text-ink-900">
                   {record.mobile ?? "Not recorded"}
                 </dd>
               </div>
@@ -664,7 +668,7 @@ export function StudentRecordPage({
               <p className="text-sm text-ink-500">Not placed.</p>
             ) : (
               <div className="text-sm">
-                <p className="font-medium text-ink-900">
+                <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
                   {record.placement.companyName}
                   {record.placement.source === "self_placed" && (
                     <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
@@ -734,7 +738,7 @@ export function StudentRecordPage({
                 {record.skills.map(({ skill, score }) => (
                   <span
                     key={skill}
-                    className="whitespace-nowrap rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700"
+                    className="max-w-full break-words rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700 [overflow-wrap:anywhere]"
                   >
                     {skill} {score}/{SKILL_SCORE_MAX}
                   </span>

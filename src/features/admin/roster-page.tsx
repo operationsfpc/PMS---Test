@@ -109,7 +109,7 @@ export function AdminRosterPage() {
 
   if (campuses === null) {
     return (
-      <p role="status" className="p-6 text-sm text-neutral-500">
+      <p role="status" className="p-6 text-sm text-ink-500">
         Loading campuses…
       </p>
     );

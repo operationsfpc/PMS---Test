@@ -103,7 +103,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
       {actions.error !== null && (
         <div
           role="alert"
-          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="mb-4 rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700"
         >
           {actions.error}
         </div>
@@ -112,7 +112,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
       {readProblem !== null && (
         <div
           role="alert"
-          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          className="mb-4 rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700"
         >
           {readProblem}
         </div>
@@ -130,7 +130,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
           <ul className="divide-y divide-line">
             {requests.map((request) => (
               <li key={request.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
-                <div className="min-w-0">
+                <div className="min-w-0 break-words [overflow-wrap:anywhere]">
                   <p className="text-sm text-ink-900">“{request.reason}”</p>
                   <p className="mt-0.5 text-xs text-ink-500">
                     Submitted {submittedOn(request.submittedAt)}
@@ -182,7 +182,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             />
             <div className="mt-4">
               <label
@@ -201,7 +201,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
                 type="file"
                 accept="application/pdf,image/*"
                 onChange={(e) => setDeclaration(e.target.files?.[0] ?? null)}
-                className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
               />
             </div>
             <div className="mt-3">

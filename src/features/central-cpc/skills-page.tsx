@@ -132,7 +132,7 @@ export function SkillsPage({
 
   if (areas === null || students === null) {
     return (
-      <p role="status" className="p-6 text-sm text-neutral-500">
+      <p role="status" className="p-6 text-sm text-ink-500">
         Loading the skill repository…
       </p>
     );
@@ -319,7 +319,7 @@ export function SkillsPage({
         </Card>
       )}
       {status !== null && (
-        <Card className="mb-4 border border-cyan-400 bg-cyan-50 p-4">
+        <Card className="mb-4 border border-success-500/30 bg-success-50 p-4">
           <p role="status" className="text-sm text-ink-900">
             {status}
           </p>
@@ -337,7 +337,7 @@ export function SkillsPage({
                 <input
                   id={newAreaId}
                   type="text"
-                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                   placeholder="e.g. Cloud fundamentals"
                   value={newArea}
                   onChange={(e) => setNewArea(e.target.value)}
@@ -357,7 +357,7 @@ export function SkillsPage({
                 ref={fileRef}
                 type="file"
                 accept=".csv,text/csv"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                 onChange={(e) => void onFile(e.target.files?.[0])}
               />
               <p className="mt-1 text-xs text-ink-500">
@@ -416,7 +416,7 @@ export function SkillsPage({
             <input
               id={searchId}
               type="search"
-              className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
               placeholder="Name or roll number"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -431,7 +431,7 @@ export function SkillsPage({
                 </label>
                 <select
                   id={bulkAreaId}
-                  className="rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className="rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                   value={bulkArea !== "" ? bulkArea : (areas[0]?.id ?? "")}
                   onChange={(e) => setBulkArea(e.target.value)}
                 >
@@ -454,7 +454,7 @@ export function SkillsPage({
                   id={bulkScoreId}
                   type="text"
                   inputMode="decimal"
-                  className="w-28 rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className="w-28 rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                   value={bulkScore}
                   onChange={(e) => setBulkScore(e.target.value)}
                 />
@@ -480,7 +480,7 @@ export function SkillsPage({
           </p>
         ) : (
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_var(--color-line)]">
+            <thead className="sticky top-0 z-10 bg-surface shadow-[0_1px_0_0_var(--color-line)]">
               <tr className="border-b border-line text-left">
                 {!readOnly && (
                   <th scope="col" className="px-4 py-3">
@@ -544,7 +544,7 @@ export function SkillsPage({
                             type="text"
                             inputMode="decimal"
                             aria-label={area.name}
-                            className="w-20 rounded-lg border border-line bg-white px-2 py-1 text-sm"
+                            className="w-20 rounded-lg border border-line bg-surface px-2 py-1 text-sm"
                             value={draft[area.id] ?? ""}
                             onChange={(e) => setDraft((d) => ({ ...d, [area.id]: e.target.value }))}
                           />

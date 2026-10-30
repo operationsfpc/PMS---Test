@@ -431,7 +431,7 @@ export function StudentDirectoryPage({
                     className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
                       filter === option.value
                         ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-line bg-white text-ink-700 hover:border-violet-400"
+                        : "border-line bg-surface text-ink-700 hover:border-violet-400"
                     }`}
                   >
                     <input
@@ -589,7 +589,7 @@ export function StudentDirectoryPage({
                           <span className="text-ink-500">Not placed</span>
                         ) : (
                           <>
-                            <p className="max-w-[200px] truncate font-medium text-ink-900">
+                            <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
                               {student.placement.companyName}
                               {student.placement.source === "self_placed" && (
                                 <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
@@ -597,7 +597,7 @@ export function StudentDirectoryPage({
                                 </span>
                               )}
                             </p>
-                            <p className="max-w-[200px] truncate text-xs text-ink-500">
+                            <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
                               {student.placement.roleTitle ?? "Role not recorded"} · ₹
                               {student.placement.ctcLpa} LPA
                               {student.placement.offerCategory !== null &&

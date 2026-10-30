@@ -1333,7 +1333,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                           activeId: drive.driveId,
                                         })
                                       }
-                                      className="inline-flex items-center rounded-md bg-white border border-line px-2 py-0.5 text-xs text-ink-800 hover:border-brand-400 hover:text-brand-600 cursor-pointer transition-colors"
+                                      className="inline-flex items-center rounded-md bg-surface border border-line px-2 py-0.5 text-xs text-ink-800 hover:border-brand-400 hover:text-brand-600 cursor-pointer transition-colors"
                                       title={`View placement details for ${s.studentName}`}
                                     >
                                       {s.studentName}
@@ -1534,7 +1534,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
           <Card className="mt-6 p-5">
             <section aria-label="By campus">
               <h2 className="text-lg text-ink-900">By campus</h2>
-              <ul className="mt-3 divide-y divide-neutral-200">
+              <ul className="mt-3 divide-y divide-line">
                 {snapshot.campuses.map((campus) => (
                   <li key={campus.campusId}>
                     {/* Its own campus, not the switcher's: this row is the

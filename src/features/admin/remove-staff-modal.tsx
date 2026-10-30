@@ -80,7 +80,7 @@ export function RemoveStaffModal({ member, onClose, onConfirm }: RemoveStaffModa
             and their permissions will be revoked immediately.
           </p>
 
-          <p className="mt-3 rounded-lg border border-line bg-surface-muted/40 p-3 text-xs text-ink-600 leading-relaxed">
+          <p className="mt-3 rounded-lg border border-line bg-surface-muted p-3 text-xs text-ink-600 leading-relaxed">
             <strong>Audit Note:</strong> If this person is attributed to historical placement
             drives, offers, or results, the database preserves their attribution and prevents
             deletion. In that case, deactivate them instead.

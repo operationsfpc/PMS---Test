@@ -382,7 +382,7 @@ export function CockpitPage({
             R8: reaching the absence limit raises a review. It is never an automatic sanction — the
             decision is yours.
           </p>
-          <ul className="mt-3 divide-y divide-neutral-200">
+          <ul className="mt-3 divide-y divide-line">
             {reviews.map((review) => (
               <li key={review.studentId} className="flex items-center justify-between gap-4 py-2">
                 <StudentIdentity
@@ -526,7 +526,7 @@ export function CockpitPage({
                 value={venueText}
                 onChange={(e) => setVenueText(e.target.value)}
                 placeholder="e.g. HCL Campus, Sholinganallur, Chennai"
-                className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
               />
             </div>
 
@@ -580,7 +580,7 @@ export function CockpitPage({
                   id="cockpit-category"
                   value={category ?? ""}
                   onChange={(e) => setCategory(e.target.value as OfferCategory)}
-                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                 >
                   <option value="" disabled>
                     Choose a category…
@@ -609,7 +609,7 @@ export function CockpitPage({
                   id="cockpit-reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                 />
                 <p className="mt-1 text-xs text-ink-500">Required.</p>
               </div>

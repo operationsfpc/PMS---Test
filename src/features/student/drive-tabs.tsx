@@ -252,7 +252,7 @@ export function DriveTabs({
             className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
               tab === t.key
                 ? "border-brand-500 bg-brand-500 text-white"
-                : "border-line bg-white text-ink-700 hover:border-violet-400"
+                : "border-line bg-surface text-ink-700 hover:border-violet-400"
             }`}
           >
             {t.label} ({counts[t.key]})
@@ -312,7 +312,7 @@ export function DriveTabs({
       </div>
 
       {lists === null && error === null ? (
-        <p role="status" className="p-6 text-sm text-neutral-500">
+        <p role="status" className="p-6 text-sm text-ink-500">
           Loading your drives…
         </p>
       ) : filtered === null ? null : tab === "to_apply" ? (
@@ -451,7 +451,9 @@ function TabVisits<T extends TabRow>({
         return (
           <Card key={eventId} className={`border-l-4 p-5 ${accent.rail}`}>
             <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
-              <span className="max-w-[250px] truncate">{head.companyName}</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                {head.companyName}
+              </span>
               {/* Said once for the visit when every role shares a type; per role
                   underneath when it mixes, because picking one at random lies. */}
               {mixed ? <Badge tone="neutral">Mixed types</Badge> : null}
@@ -499,7 +501,7 @@ function RowHead({
   return (
     <>
       <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
-        <span className="max-w-[250px] truncate">{row.companyName}</span>
+        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{row.companyName}</span>
         {/* 2026-08-27: the type, on every drive summary the student sees. */}
         {row.driveType !== undefined && row.driveType !== null && (
           <Badge tone={driveTypeTone(row.driveType)}>{driveTypeLabel(row.driveType)}</Badge>
