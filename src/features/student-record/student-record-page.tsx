@@ -1,29 +1,35 @@
+import { DrilldownModal } from "@components/drilldown-modal";
 import { Badge, Button, ButtonAnchor, ButtonLink, Card, PageHeader } from "@components/ui";
+import { boardLabel, type SchoolBoard } from "@domain/boards";
 import { HOLD_KIND_LABELS, holdStanding, holdWindowLine } from "@domain/holds";
 import { describeMarks } from "@domain/marks";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import { extractOriginalFilename } from "@domain/storage-path";
-import type { OfferSource, ParticipationStatus, RoleCategory, SrfStatus } from "@domain/types";
+import {
+  DRIVE_TYPES,
+  type DriveType,
+  type OfferSource,
+  type ParticipationStatus,
+  ROLE_CATEGORIES,
+  type RoleCategory,
+  type SrfStatus,
+} from "@domain/types";
 import type { Hold, HoldsView } from "@lib/holds-view";
 import { useAsyncAction } from "@lib/use-async-action";
-import { ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Briefcase,
+  Download,
+  Edit2,
+  ExternalLink,
+  FileText,
+  Globe,
+  GraduationCap,
+  Upload,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-
-/**
- * G7 (UAT 2026-08-20, Q7 answer b): the canonical student record.
- *
- * "Student numbers/counts aren't clickable, and there's no way to drill into
- * student details from that view." One page for every staff role, reached from
- * the directory and anywhere else a student is named. RLS decides who may read
- * the row at all; this page only renders what comes back.
- *
- * Read-only except for one verb: a Campus Manager may lift a placement hold
- * (0125) — the hold was placed by their college, and nobody above them can say
- * whether the dues that raised it have cleared. Verification still belongs to
- * the campus coordinator, and nothing here edits a student's record.
- */
 
 export interface StudentRecordSemester {
   readonly semesterNumber: number;
@@ -46,6 +52,31 @@ export interface StudentRecordApplication {
   readonly hasOffer: boolean;
 }
 
+export interface StudentRecordOffer {
+  readonly id: string;
+  readonly driveId: string | null;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly driveType: DriveType;
+  readonly offerCategory: OfferCategory | null;
+  readonly ctcLpa: number | null;
+  readonly stipendMonthly: number | null;
+  readonly declaredAt: string;
+  readonly source: OfferSource;
+  readonly letterUrl: string | null;
+  readonly letterFileName: string | null;
+}
+
+export interface StudentRecordResume {
+  readonly id: string;
+  readonly roleCategory: RoleCategory;
+  readonly storagePath: string;
+  readonly fileName: string;
+  readonly sizeBytes: number;
+  readonly uploadedAt: string;
+  readonly downloadUrl: string | null;
+}
+
 export interface StudentRecordPlacement {
   readonly companyName: string;
   readonly roleTitle: string | null;
@@ -61,24 +92,59 @@ export interface StudentRecord {
   readonly rollNumber: string;
   readonly email: string;
   readonly mobile: string | null;
+  readonly whatsapp?: string | null;
+  readonly alternateContact?: string | null;
   readonly campusName: string;
   readonly degree: string;
   readonly branch: string;
   readonly passingYear: number;
   readonly srfStatus: SrfStatus;
   readonly participationStatus: ParticipationStatus;
+  // Academics
   readonly tenthPercentage: number | null;
+  readonly tenthInstitution?: string | null;
+  readonly tenthBoard?: SchoolBoard | null;
   readonly twelfthPercentage: number | null;
+  readonly twelfthInstitution?: string | null;
+  readonly twelfthBoard?: SchoolBoard | null;
+  readonly diplomaInstitution?: string | null;
+  readonly diplomaMarks?: number | null;
+  readonly overallCgpa?: number | null;
+  readonly currentArrears?: number;
+  readonly historyOfArrears?: number;
   readonly semesters: readonly StudentRecordSemester[];
+  // Skills & Preferences
   readonly skills: readonly StudentRecordSkill[];
   readonly rolePreferences: readonly RoleCategory[];
+  readonly driveTypePreferences?: readonly DriveType[];
+  // Portfolio
+  readonly technicalSkills?: string | null;
+  readonly areasOfInterest?: string | null;
+  readonly areasOfExpertise?: string | null;
+  readonly projects?: string | null;
+  readonly certifications?: string | null;
+  readonly achievements?: string | null;
+  // Professional Links
+  readonly linkedinUrl?: string | null;
+  readonly githubUrl?: string | null;
+  readonly leetcodeUrl?: string | null;
+  readonly hackerrankUrl?: string | null;
+  // Resumes & Applications & Offers
+  readonly resumes?: readonly StudentRecordResume[];
   readonly applications: readonly StudentRecordApplication[];
+  readonly offers?: readonly StudentRecordOffer[];
   readonly placement: StudentRecordPlacement | null;
 }
 
 export interface StudentRecordView {
   /** Null when the row does not exist or RLS refuses it — indistinguishable BY DESIGN. */
   record(studentId: string): Promise<StudentRecord | null>;
+  updatePreferences?(
+    studentId: string,
+    roleCategories: readonly RoleCategory[],
+    driveTypePreferences: readonly DriveType[],
+  ): Promise<void>;
+  uploadResume?(studentId: string, roleCategory: RoleCategory, file: File): Promise<void>;
 }
 
 const SRF_LABEL: Record<SrfStatus, string> = {
@@ -89,12 +155,26 @@ const SRF_LABEL: Record<SrfStatus, string> = {
   srf_rejected: "Returned",
 };
 
-const AREA_LABEL: Record<string, string> = {
+export const AREA_LABEL: Record<string, string> = {
   software_technical: "Software / Technical",
   technical_support_it_ops: "Technical Support / IT Operations",
   digital_marketing: "Digital Marketing",
   sales: "Sales",
   operations_business: "Operations and Business Roles",
+};
+
+export const RESUME_TRACK_LABEL: Record<RoleCategory, string> = {
+  software_technical: "Software & Technical CV",
+  technical_support_it_ops: "IT Operations & Support CV",
+  digital_marketing: "Digital Marketing CV",
+  sales: "Sales & Client Track CV",
+  operations_business: "Operations & Business CV",
+};
+
+export const DRIVE_TYPE_LABEL: Record<DriveType, string> = {
+  placement: "Placement (Full-time)",
+  internship_convertible: "Internship (Convertible)",
+  internship: "Internship only",
 };
 
 const onDate = (iso: string) =>
@@ -105,32 +185,31 @@ const onDate = (iso: string) =>
     year: "numeric",
   });
 
-/** The first date a hold's review may be pushed to: the day after it ends (0131). */
 const dayAfter = (iso: string) =>
   new Date(new Date(`${iso}T00:00:00Z`).getTime() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export function StudentRecordPage({
   studentId,
   view,
   holds,
   release,
+  canManagePreferences = false,
 }: {
   studentId: string;
   view: StudentRecordView;
-  /**
-   * The hold read, for the roles 0125 admits to `student_holds` — a Campus
-   * Manager's own college and the org readers above them. Absent draws no hold
-   * block, which is also what a refused read looks like, so the screen never
-   * claims a student is unheld when it simply could not see.
-   */
   holds?: HoldsView;
-  /** The Campus Manager's verb alone. Absent, the block is a fact, not a control. */
   release?: (holdId: string, note: string | null) => Promise<void>;
+  canManagePreferences?: boolean;
 }) {
   const [record, setRecord] = useState<StudentRecord | null | undefined>(undefined);
   const [failure, setFailure] = useState<string | null>(null);
   const [hold, setHold] = useState<Hold | null>(null);
-  /** A student's self-placed request, waiting on this Campus Manager (0130). */
   const [pending, setPending] = useState<Hold | null>(null);
   const [evidence, setEvidence] = useState<{
     readonly offer: string | null;
@@ -141,14 +220,24 @@ export function StudentRecordPage({
   const [orderUrl, setOrderUrl] = useState<string | null>(null);
   const [lifting, setLifting] = useState(false);
   const [releaseNote, setReleaseNote] = useState("");
-  /** 0131: moving a live hold's review date forward. */
   const [extending, setExtending] = useState(false);
   const [extendDate, setExtendDate] = useState("");
   const [declining, setDeclining] = useState(false);
   const [declineNote, setDeclineNote] = useState("");
-  // One bump re-reads both halves: `release_student_hold` flips the student
-  // back to active in the same transaction that lifts the row.
   const [reload, setReload] = useState(0);
+
+  // Preference management modal state
+  const [isPrefModalOpen, setIsPrefModalOpen] = useState(false);
+  const [editRoleCats, setEditRoleCats] = useState<RoleCategory[]>([]);
+  const [editDriveTypes, setEditDriveTypes] = useState<DriveType[]>([]);
+  const [prefSaveError, setPrefSaveError] = useState<string | null>(null);
+
+  // Resume upload state
+  const [uploadCategory, setUploadCategory] = useState<RoleCategory | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const actions = useAsyncAction();
   const navigate = useNavigate();
   const location = useLocation();
@@ -164,9 +253,6 @@ export function StudentRecordPage({
         }
       },
       () => {
-        // A refused read is not "no such student". The record may exist and be
-        // perfectly readable — the network or a policy failed — and left
-        // unhandled this page sat on "Loading…" forever.
         if (live) setFailure("Could not load this student record. Please try again.");
       },
     );
@@ -194,16 +280,12 @@ export function StudentRecordPage({
 
         const path = current?.documentPath ?? null;
         setOrderUrl(null);
-        // A link only ever appears once it has actually signed (0051): an order
-        // that cannot be opened is still said to be on file, not offered dead.
         if (path !== null) {
           void holds.orderUrl(path).then((url) => {
             if (live) setOrderUrl(url);
           });
         }
 
-        // The two documents a self-placed request stands on (0130). Same rule:
-        // a refused signing is said to be on file, not offered as a dead link.
         setEvidence({ offer: null, declaration: null });
         if (request?.documentPath != null) {
           void holds.evidenceUrl("offer-letters", request.documentPath).then((url) => {
@@ -231,10 +313,63 @@ export function StudentRecordPage({
     };
   }, [holds, studentId, reload]);
 
+  function openPreferencesModal() {
+    if (!record) return;
+    setEditRoleCats([...(record.rolePreferences ?? [])]);
+    setEditDriveTypes([...(record.driveTypePreferences ?? [])]);
+    setPrefSaveError(null);
+    setIsPrefModalOpen(true);
+  }
+
+  async function savePreferences() {
+    const update = view.updatePreferences;
+    if (!record || !update) return;
+    setPrefSaveError(null);
+    try {
+      await actions.run(() => update(record.studentId, editRoleCats, editDriveTypes));
+      setIsPrefModalOpen(false);
+      setReload((c) => c + 1);
+    } catch (err) {
+      setPrefSaveError(err instanceof Error ? err.message : "Failed to update student preferences");
+    }
+  }
+
+  function triggerResumeUpload(category: RoleCategory) {
+    setUploadCategory(category);
+    setUploadError(null);
+    setUploadSuccess(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const upload = view.uploadResume;
+    if (!file || !uploadCategory || !record || !upload) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
+      setUploadError("Only PDF files are permitted for resumes.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("Resume file size must be under 5 MB.");
+      return;
+    }
+
+    try {
+      setUploadError(null);
+      await actions.run(() => upload(record.studentId, uploadCategory, file));
+      setUploadSuccess(`Resume for ${AREA_LABEL[uploadCategory]} updated successfully!`);
+      setReload((c) => c + 1);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Failed to upload resume");
+    }
+  }
+
   async function lift() {
     if (hold === null || release === undefined) return;
-    // The note is optional to the database and asked for here: it is the only
-    // record of why the block came off, and the next manager reads it cold.
     const note = releaseNote.trim() === "" ? null : releaseNote.trim();
     if (await actions.run(() => release(hold.id, note))) {
       setLifting(false);
@@ -243,11 +378,6 @@ export function StudentRecordPage({
     }
   }
 
-  /**
-   * 0131: the fee dispute outlived the review date it was guessed at. The
-   * database refuses anything not strictly later — this only keeps the
-   * disabled button honest before the round trip.
-   */
   async function extendHold() {
     if (hold === null || holds === undefined) return;
     if (await actions.run(() => holds.extend(hold.id, extendDate))) {
@@ -257,11 +387,6 @@ export function StudentRecordPage({
     }
   }
 
-  /**
-   * 0130: the one statement that turns a student's request into the hold it
-   * asked to be. The database re-checks the manager's college and the student's
-   * status, and its sentence is what this page shows if it refuses.
-   */
   async function confirmRequest() {
     if (pending === null || holds === undefined) return;
     if (await actions.run(() => holds.confirm(pending.id))) {
@@ -269,7 +394,6 @@ export function StudentRecordPage({
     }
   }
 
-  /** Declining is the release RPC: the request is lifted before it ever bound. */
   async function declineRequest() {
     if (pending === null || release === undefined) return;
     const note = declineNote.trim() === "" ? null : declineNote.trim();
@@ -280,13 +404,6 @@ export function StudentRecordPage({
     }
   }
 
-  /**
-   * UAT 2026-10-18: "there is no way to go back". A record reached from a list
-   * returns to that list. One loaded cold — bookmark, mail link, refresh — has
-   * no in-app history to step into, so it points at the reader's own overview
-   * instead of offering a button that would do nothing. `/` sends each role to
-   * their landing screen, so this never hands someone a page they cannot read.
-   */
   const back =
     location.key === "default" ? (
       <ButtonLink variant="secondary" size="sm" to="/">
@@ -330,29 +447,83 @@ export function StudentRecordPage({
     );
   }
 
+  // Safe variables with fallbacks
+  const rolePreferences = record.rolePreferences ?? [];
+  const driveTypePreferences = record.driveTypePreferences ?? [];
+  const resumes = record.resumes ?? [];
+  const offers = record.offers ?? [];
+  const applications = record.applications ?? [];
+  const semesters = record.semesters ?? [];
+  const skills = record.skills ?? [];
+  const currentArrears = record.currentArrears ?? 0;
+  const historyOfArrears = record.historyOfArrears ?? 0;
+
   const today = new Date();
   const standing = hold === null ? null : holdStanding(hold, today);
-  // The block below already says "On hold — Fees"; a chip 3cm above it saying
-  // "on hold" again is the same fact twice.
   const badgeRepeatsHold = hold !== null && record.participationStatus === "on_hold";
+  const hasStaffControls = canManagePreferences || view.updatePreferences !== undefined;
 
   return (
-    <div>
-      <PageHeader
-        title={record.fullName}
-        subtitle={`Roll ${record.rollNumber} · ${record.campusName}`}
-        actions={back}
+    <div className="space-y-6">
+      {/* Hidden file input for staff resume upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileSelected}
+        accept="application/pdf,.pdf"
+        className="hidden"
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Badge tone={record.srfStatus === "srf_approved" ? "success" : "neutral"}>
-          Registration: {SRF_LABEL[record.srfStatus]}
-        </Badge>
-        {record.participationStatus !== "active" && !badgeRepeatsHold && (
-          <Badge tone="warning">{record.participationStatus.replaceAll("_", " ")}</Badge>
-        )}
+      {/* Header */}
+      <div>
+        <PageHeader
+          title={record.fullName}
+          subtitle={`Roll ${record.rollNumber} · ${record.campusName}`}
+          actions={
+            <div className="flex items-center gap-2">
+              {hasStaffControls && (
+                <Button variant="secondary" size="sm" onClick={openPreferencesModal}>
+                  <Edit2 className="mr-1.5 size-3.5" />
+                  Edit Preferences
+                </Button>
+              )}
+              {back}
+            </div>
+          }
+        />
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Badge tone={record.srfStatus === "srf_approved" ? "success" : "neutral"}>
+            Registration: {SRF_LABEL[record.srfStatus]}
+          </Badge>
+          {record.participationStatus !== "active" && !badgeRepeatsHold && (
+            <Badge tone="warning">{record.participationStatus.replaceAll("_", " ")}</Badge>
+          )}
+          {driveTypePreferences.length > 0 && (
+            <span className="text-xs text-ink-500">
+              Open to: {driveTypePreferences.map((t) => DRIVE_TYPE_LABEL[t] ?? t).join(", ")}
+            </span>
+          )}
+        </div>
       </div>
 
+      {/* Feedback banners */}
+      {uploadError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger-500/30 bg-danger-50 px-4 py-3 text-sm text-danger-700"
+        >
+          {uploadError}
+        </div>
+      )}
+      {uploadSuccess && (
+        <div
+          role="status"
+          className="rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-success-700"
+        >
+          {uploadSuccess}
+        </div>
+      )}
       {holdProblem !== null && (
         <p
           role="alert"
@@ -362,13 +533,64 @@ export function StudentRecordPage({
         </p>
       )}
 
+      {/* Top Quick Stats Strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Card className="p-3.5 text-center">
+          <span className="text-xs font-medium text-ink-500">Overall CGPA</span>
+          <p className="mt-1 font-heading text-xl font-bold text-ink-900">
+            {record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
+          </p>
+          <span className="text-[11px] text-ink-400">Scale of 10</span>
+        </Card>
+        <Card className="p-3.5 text-center">
+          <span className="text-xs font-medium text-ink-500">Standing Arrears</span>
+          <p
+            className={`mt-1 font-heading text-xl font-bold ${
+              currentArrears > 0 ? "text-amber-600" : "text-emerald-600"
+            }`}
+          >
+            {currentArrears}
+          </p>
+          <span className="text-[11px] text-ink-400">
+            {currentArrears > 0 ? "Action required" : "Zero active"}
+          </span>
+        </Card>
+        <Card className="p-3.5 text-center">
+          <span className="text-xs font-medium text-ink-500">History Arrears</span>
+          <p className="mt-1 font-heading text-xl font-bold text-ink-900">{historyOfArrears}</p>
+          <span className="text-[11px] text-ink-400">Total recorded</span>
+        </Card>
+        <Card className="p-3.5 text-center">
+          <span className="text-xs font-medium text-ink-500">10th / 12th Marks</span>
+          <p className="mt-1 font-heading text-sm font-bold text-ink-900">
+            {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} /{" "}
+            {record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"}
+          </p>
+          <span className="text-[11px] text-ink-400">Class X / XII</span>
+        </Card>
+        <Card className="p-3.5 text-center">
+          <span className="text-xs font-medium text-ink-500">Offers & Internships</span>
+          <p className="mt-1 font-heading text-xl font-bold text-brand-700">
+            {offers.length > 0
+              ? `${offers.length} Offer${offers.length > 1 ? "s" : ""}`
+              : record.placement
+                ? "1 Placed"
+                : "0"}
+          </p>
+          <span className="text-[11px] text-ink-400">
+            {offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
+          </span>
+        </Card>
+        <Card className="p-3.5 text-center">
+          <span className="text-xs font-medium text-ink-500">Applications</span>
+          <p className="mt-1 font-heading text-xl font-bold text-ink-900">{applications.length}</p>
+          <span className="text-[11px] text-ink-400">Campus drives</span>
+        </Card>
+      </div>
+
+      {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
       {(hold !== null || pending !== null || pastHolds.length > 0) && (
         <section aria-label="Placement hold" className="mb-4 flex flex-col gap-3">
-          {/*
-           * 0130: the student's own self-placed request. It changes nothing
-           * until the manager here confirms it — their drives are still open,
-           * and the card says so before the button.
-           */}
           {pending !== null && (
             <Card className="border-violet-300 bg-violet-50 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -501,8 +723,6 @@ export function StudentRecordPage({
               {hold.documentPath !== null && (
                 <p className="mt-3 flex flex-wrap items-center gap-2">
                   {orderUrl === null ? (
-                    // True in both cases: the order is on file, and the record
-                    // simply has no working link to it.
                     <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
                       Order on file: {extractOriginalFilename(hold.documentPath)}
                     </span>
@@ -594,8 +814,6 @@ export function StudentRecordPage({
                       <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
                         Release hold
                       </Button>
-                      {/* 0131: a fee dispute outliving the date it was guessed
-                          at has somewhere to go that is not release-and-replace. */}
                       <Button variant="secondary" size="sm" onClick={() => setExtending(true)}>
                         Extend review date
                       </Button>
@@ -634,162 +852,665 @@ export function StudentRecordPage({
         </section>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section aria-label="Identity">
-          <Card className="p-5">
-            <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Identity</h2>
-            <dl className="grid gap-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="shrink-0 text-ink-500">Programme</dt>
-                <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
-                  {record.degree}
-                  {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
-                </dd>
+      {/* Main Layout Grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left 2 Columns: Core History & Records */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Offers & Placement Card */}
+          <section aria-label="Placement">
+            <Card className="p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="size-5 text-brand-600" />
+                  <h2 className="font-heading text-lg font-bold text-ink-900">
+                    Offers & Internships
+                  </h2>
+                </div>
+                {record.placement !== null && (
+                  <Badge tone="success">Primary Placement Active</Badge>
+                )}
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="shrink-0 text-ink-500">Email</dt>
-                <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
-              </div>
-              <div className="flex justify-between gap-4">
-                <dt className="shrink-0 text-ink-500">Mobile</dt>
-                <dd className="min-w-0 break-all text-right text-ink-900">
-                  {record.mobile ?? "Not recorded"}
-                </dd>
-              </div>
-            </dl>
-          </Card>
-        </section>
 
-        <section aria-label="Placement">
-          <Card className="p-5">
-            <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Placement</h2>
-            {record.placement === null ? (
-              // A fact, not a blank: an empty card reads as missing data.
-              <p className="text-sm text-ink-500">Not placed.</p>
-            ) : (
-              <div className="text-sm">
-                <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                  {record.placement.companyName}
-                  {record.placement.source === "self_placed" && (
-                    <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                      Self-placed
-                    </span>
+              {offers.length === 0 && record.placement === null ? (
+                <p className="text-sm text-ink-500">Not placed.</p>
+              ) : (
+                <div className="space-y-3">
+                  {offers.length > 0 ? (
+                    <div className="divide-y divide-line rounded-lg border border-line">
+                      {offers.map((offer) => (
+                        <div
+                          key={offer.id}
+                          className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-heading text-base font-bold text-ink-900">
+                                {offer.companyName}
+                              </h3>
+                              <Badge
+                                tone={
+                                  offer.driveType === "placement"
+                                    ? "success"
+                                    : offer.driveType === "internship_convertible"
+                                      ? "accent"
+                                      : "brand"
+                                }
+                              >
+                                {DRIVE_TYPE_LABEL[offer.driveType] ?? offer.driveType}
+                              </Badge>
+                              {offer.source === "self_placed" && (
+                                <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                  Self-placed
+                                </span>
+                              )}
+                              {offer.offerCategory && (
+                                <Badge tone="brand">
+                                  {offerCategoryLabel(offer.offerCategory)}
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="mt-1 text-sm text-ink-700">
+                              {offer.roleTitle ?? "Role title not recorded"}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
+                              {offer.ctcLpa != null && offer.ctcLpa > 0 && (
+                                <span className="font-semibold text-brand-700">
+                                  ₹{offer.ctcLpa} LPA
+                                </span>
+                              )}
+                              {offer.stipendMonthly != null && offer.stipendMonthly > 0 && (
+                                <span className="font-semibold text-emerald-700">
+                                  ₹{offer.stipendMonthly.toLocaleString("en-IN")} / month
+                                </span>
+                              )}
+                              <span>Declared on {onDate(offer.declaredAt)}</span>
+                            </div>
+                          </div>
+
+                          {offer.letterUrl && (
+                            <ButtonAnchor
+                              href={offer.letterUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              size="sm"
+                              className="shrink-0"
+                            >
+                              <Download className="mr-1.5 size-3.5" />
+                              Offer Letter
+                            </ButtonAnchor>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    record.placement && (
+                      <div className="text-sm">
+                        <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                          {record.placement.companyName}
+                          {record.placement.source === "self_placed" && (
+                            <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                              Self-placed
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 text-ink-500">
+                          {record.placement.roleTitle ?? "Role not recorded"} · ₹
+                          {record.placement.ctcLpa} LPA
+                          {record.placement.offerCategory !== null &&
+                            ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
+                        </p>
+                      </div>
+                    )
                   )}
-                </p>
-                <p className="mt-0.5 text-ink-500">
-                  {record.placement.roleTitle ?? "Role not recorded"} · ₹{record.placement.ctcLpa}{" "}
-                  LPA
-                  {record.placement.offerCategory !== null &&
-                    ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
-                </p>
-              </div>
-            )}
-          </Card>
-        </section>
+                </div>
+              )}
+            </Card>
+          </section>
 
-        <section aria-label="Academics">
-          <Card className="p-5">
-            <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Academics</h2>
-            <dl className="grid gap-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <dt className="text-ink-500">10th %</dt>
-                <dd className="text-ink-900">{record.tenthPercentage ?? "Not recorded"}</dd>
+          {/* Academics Record Card */}
+          <section aria-label="Academics">
+            <Card className="p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <GraduationCap className="size-5 text-brand-600" />
+                <h2 className="font-heading text-lg font-bold text-ink-900">Academics</h2>
               </div>
-              <div className="flex justify-between gap-4">
-                <dt className="text-ink-500">12th %</dt>
-                <dd className="text-ink-900">{record.twelfthPercentage ?? "Not recorded"}</dd>
-              </div>
-            </dl>
-            {record.semesters.length > 0 && (
-              <ul className="mt-3 divide-y divide-line border-t border-line pt-1">
-                {record.semesters.map((semester) => (
-                  <li
-                    key={semester.semesterNumber}
-                    className="flex items-center justify-between gap-4 py-2 text-sm"
-                  >
-                    <span className="text-ink-700">Semester {semester.semesterNumber}</span>
-                    <span className="flex items-center gap-2">
-                      {/* The figure says what scale it is on. Beside a Verified
-                          badge, a bare "8.2" is the number the badge claims to
-                          have checked, so the unit belongs on it. */}
-                      <span className="font-medium text-ink-900">
-                        {describeMarks(semester.cgpa, "cgpa")}
+
+              {/* Schooling & Diploma Grid */}
+              <dl className="grid gap-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-500">10th %</dt>
+                  <dd className="text-ink-900">
+                    {record.tenthPercentage ?? "Not recorded"}
+                    {record.tenthInstitution && (
+                      <span className="ml-2 text-xs text-ink-500">
+                        ({record.tenthInstitution}
+                        {record.tenthBoard ? ` · ${boardLabel(record.tenthBoard, "tenth")}` : ""})
                       </span>
-                      <Badge tone={semester.verified ? "success" : "warning"}>
-                        {semester.verified ? "Verified" : "Pending"}
-                      </Badge>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-500">12th %</dt>
+                  <dd className="text-ink-900">
+                    {record.twelfthPercentage ?? "Not recorded"}
+                    {record.twelfthInstitution && (
+                      <span className="ml-2 text-xs text-ink-500">
+                        ({record.twelfthInstitution}
+                        {record.twelfthBoard
+                          ? ` · ${boardLabel(record.twelfthBoard, "twelfth")}`
+                          : ""}
+                        )
+                      </span>
+                    )}
+                  </dd>
+                </div>
+                {record.diplomaInstitution && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-ink-500">Diploma</dt>
+                    <dd className="text-ink-900">
+                      {record.diplomaMarks != null ? `${record.diplomaMarks}%` : "Recorded"}
+                      <span className="ml-2 text-xs text-ink-500">
+                        ({record.diplomaInstitution})
+                      </span>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
+              {/* Semester by Semester Breakdown */}
+              {semesters.length > 0 && (
+                <ul className="mt-3 divide-y divide-line border-t border-line pt-1">
+                  {semesters.map((semester) => (
+                    <li
+                      key={semester.semesterNumber}
+                      className="flex items-center justify-between gap-4 py-2 text-sm"
+                    >
+                      <span className="text-ink-700">Semester {semester.semesterNumber}</span>
+                      <span className="flex items-center gap-2">
+                        <span className="font-medium text-ink-900">
+                          {describeMarks(semester.cgpa, "cgpa")}
+                        </span>
+                        <Badge tone={semester.verified ? "success" : "warning"}>
+                          {semester.verified ? "Verified" : "Pending"}
+                        </Badge>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </section>
+
+          {/* Applications History Card */}
+          <section aria-label="Applications">
+            <Card className="p-5">
+              <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Applications</h2>
+              {applications.length === 0 ? (
+                <p className="text-sm text-ink-700">No applications yet.</p>
+              ) : (
+                <ul className="divide-y divide-line">
+                  {applications.map((application) => (
+                    <li
+                      key={application.applicationId}
+                      className="flex flex-wrap items-center justify-between gap-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-ink-900">
+                          <Link to={`/drives/${application.driveId}`} className="hover:underline">
+                            {application.companyName}
+                          </Link>
+                        </p>
+                        <p className="text-xs text-ink-500">
+                          {application.roleTitle ?? "Role not recorded"}
+                          {application.appliedAt !== null &&
+                            ` · applied ${onDate(application.appliedAt)}`}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {application.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
+                        {application.hasOffer && <Badge tone="success">Offer</Badge>}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </section>
+
+          {/* Portfolio & SRF Details Card */}
+          <section aria-label="Portfolio">
+            <Card className="p-5">
+              <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">
+                Portfolio & Technical Profile
+              </h2>
+              <div className="space-y-4 text-sm">
+                {record.technicalSkills && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-500">Technical Skills</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                      {record.technicalSkills}
+                    </p>
+                  </div>
+                )}
+
+                {record.areasOfInterest && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-500">Areas of Interest</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                      {record.areasOfInterest}
+                    </p>
+                  </div>
+                )}
+
+                {record.areasOfExpertise && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-500">Areas of Expertise</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                      {record.areasOfExpertise}
+                    </p>
+                  </div>
+                )}
+
+                {record.projects && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-500">Key Projects</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.projects}</p>
+                  </div>
+                )}
+
+                {record.certifications && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-500">Certifications</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.certifications}</p>
+                  </div>
+                )}
+
+                {record.achievements && (
+                  <div>
+                    <h3 className="text-xs font-semibold text-ink-500">Achievements & Honors</h3>
+                    <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.achievements}</p>
+                  </div>
+                )}
+
+                {!record.technicalSkills &&
+                  !record.areasOfInterest &&
+                  !record.projects &&
+                  !record.certifications &&
+                  !record.achievements && (
+                    <p className="text-xs text-ink-500">
+                      No additional project or portfolio details filed in SRF.
+                    </p>
+                  )}
+              </div>
+            </Card>
+          </section>
+        </div>
+
+        {/* Right 1 Column: Preferences, Resumes, Assessed Skills, Contacts & Profiles */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* Identity Card */}
+          <section aria-label="Identity">
+            <Card className="p-5">
+              <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Identity</h2>
+              <dl className="grid gap-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="shrink-0 text-ink-500">Programme</dt>
+                  <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
+                    {record.degree}
+                    {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="shrink-0 text-ink-500">Email</dt>
+                  <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="shrink-0 text-ink-500">Mobile</dt>
+                  <dd className="min-w-0 break-all text-right text-ink-900">
+                    {record.mobile ?? "Not recorded"}
+                  </dd>
+                </div>
+                {record.whatsapp && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="shrink-0 text-ink-500">WhatsApp</dt>
+                    <dd className="min-w-0 break-all text-right font-medium text-emerald-700">
+                      {record.whatsapp}
+                    </dd>
+                  </div>
+                )}
+                {record.alternateContact && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="shrink-0 text-ink-500">Alt Phone</dt>
+                    <dd className="min-w-0 break-all text-right text-ink-900">
+                      {record.alternateContact}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </Card>
+          </section>
+
+          {/* Resumes on File Card (with Staff Upload/Replace) */}
+          <section aria-label="Resumes">
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="size-5 text-brand-600" />
+                  <h2 className="font-heading text-base font-bold text-ink-900">
+                    Category Resumes
+                  </h2>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {ROLE_CATEGORIES.map((cat) => {
+                  const isPreferred = rolePreferences.includes(cat);
+                  const doc = resumes.find((r) => r.roleCategory === cat);
+
+                  return (
+                    <div
+                      key={cat}
+                      className={`rounded-lg border p-3 ${
+                        isPreferred
+                          ? "border-line bg-surface"
+                          : "border-line/60 bg-surface-muted/30"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-ink-900">
+                              {RESUME_TRACK_LABEL[cat]}
+                            </span>
+                            {isPreferred && <Badge tone="brand">Active</Badge>}
+                          </div>
+                          {doc ? (
+                            <div className="mt-1 text-xs text-ink-500">
+                              <p className="truncate font-medium text-ink-700" title={doc.fileName}>
+                                {doc.fileName}
+                              </p>
+                              <p className="text-[11px]">
+                                {formatFileSize(doc.sizeBytes)} · {onDate(doc.uploadedAt)}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-[11px] text-ink-400">No resume uploaded</p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1.5">
+                          {doc?.downloadUrl && (
+                            <ButtonAnchor
+                              href={doc.downloadUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              size="sm"
+                              className="text-xs"
+                            >
+                              <ExternalLink className="mr-1 size-3" />
+                              View PDF
+                            </ButtonAnchor>
+                          )}
+                          {hasStaffControls && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => triggerResumeUpload(cat)}
+                              isLoading={actions.isPending() && uploadCategory === cat}
+                              className="text-xs"
+                            >
+                              <Upload className="mr-1 size-3" />
+                              {doc ? "Replace" : "Upload"}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </section>
+
+          {/* Role & Drive Preferences Card */}
+          <section aria-label="Skills and preferences">
+            <Card className="p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  Skills and preferences
+                </h2>
+                {hasStaffControls && (
+                  <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
+                    <Edit2 className="mr-1 size-3" />
+                    Edit
+                  </Button>
+                )}
+              </div>
+
+              {/* Assessed skill scores */}
+              {skills.length === 0 ? (
+                <p className="text-sm text-ink-500">No skill scores recorded.</p>
+              ) : (
+                <p className="flex flex-wrap gap-1.5 text-xs">
+                  {skills.map(({ skill, score }) => (
+                    <span
+                      key={skill}
+                      className="max-w-full break-words rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700 [overflow-wrap:anywhere]"
+                    >
+                      {skill} {score}/{SKILL_SCORE_MAX}
                     </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </section>
+                  ))}
+                </p>
+              )}
 
-        <section aria-label="Skills and preferences">
-          <Card className="p-5">
-            <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">
-              Skills and preferences
-            </h2>
-            {record.skills.length === 0 ? (
-              <p className="text-sm text-ink-500">No skill scores recorded.</p>
-            ) : (
-              <p className="flex flex-wrap gap-1.5 text-xs">
-                {record.skills.map(({ skill, score }) => (
-                  <span
-                    key={skill}
-                    className="max-w-full break-words rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700 [overflow-wrap:anywhere]"
-                  >
-                    {skill} {score}/{SKILL_SCORE_MAX}
-                  </span>
-                ))}
-              </p>
-            )}
-            {record.rolePreferences.length > 0 && (
-              <p className="mt-3 text-sm text-ink-700">
-                <span className="text-ink-500">Preferred areas: </span>
-                {record.rolePreferences.map((area) => AREA_LABEL[area] ?? area).join(" · ")}
-              </p>
-            )}
-          </Card>
-        </section>
+              {/* Preferred role categories */}
+              {rolePreferences.length > 0 && (
+                <p className="mt-3 text-sm text-ink-700">
+                  <span className="text-ink-500">Preferred areas: </span>
+                  {rolePreferences.map((area) => AREA_LABEL[area] ?? area).join(" · ")}
+                </p>
+              )}
 
-        <section aria-label="Applications" className="lg:col-span-2">
-          <Card className="p-5">
-            <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Applications</h2>
-            {record.applications.length === 0 ? (
-              <p className="text-sm text-ink-700">No applications yet.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {record.applications.map((application) => (
-                  <li
-                    key={application.applicationId}
-                    className="flex flex-wrap items-center justify-between gap-3 py-2.5"
+              {/* Drive type preferences */}
+              <div className="mt-3 border-t border-line pt-3">
+                <span className="text-xs font-semibold text-ink-500">Drive Type Preferences:</span>
+                {driveTypePreferences.length === 0 ? (
+                  <p className="mt-1 text-xs text-ink-500">
+                    Open to all drive types (no restrictions)
+                  </p>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {driveTypePreferences.map((dt) => (
+                      <Badge key={dt} tone="accent">
+                        {DRIVE_TYPE_LABEL[dt] ?? dt}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
+          </section>
+
+          {/* Online & Coding Profiles Card */}
+          <section aria-label="Online profiles">
+            <Card className="p-5">
+              <div className="mb-3 flex items-center gap-2">
+                <Globe className="size-4 text-brand-600" />
+                <h2 className="font-heading text-base font-bold text-ink-900">
+                  Online & Coding Profiles
+                </h2>
+              </div>
+              <div className="space-y-2 text-sm">
+                {record.linkedinUrl && (
+                  <a
+                    href={record.linkedinUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
                   >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-ink-900">
-                        {/* N1: the name is the door to the drive's record. */}
-                        <Link to={`/drives/${application.driveId}`} className="hover:underline">
-                          {application.companyName}
-                        </Link>
-                      </p>
-                      <p className="text-xs text-ink-500">
-                        {application.roleTitle ?? "Role not recorded"}
-                        {application.appliedAt !== null &&
-                          ` · applied ${onDate(application.appliedAt)}`}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {application.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
-                      {application.hasOffer && <Badge tone="success">Offer</Badge>}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-        </section>
+                    <span className="flex items-center gap-2 text-ink-900">
+                      <Globe className="size-4 text-[#0A66C2]" /> LinkedIn
+                    </span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </a>
+                )}
+                {record.githubUrl && (
+                  <a
+                    href={record.githubUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                  >
+                    <span className="flex items-center gap-2 text-ink-900">
+                      <Globe className="size-4 text-ink-900" /> GitHub
+                    </span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </a>
+                )}
+                {record.leetcodeUrl && (
+                  <a
+                    href={record.leetcodeUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                  >
+                    <span className="flex items-center gap-2 text-ink-900">
+                      <span className="font-mono font-bold text-[#FFA116]">LC</span> LeetCode
+                    </span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </a>
+                )}
+                {record.hackerrankUrl && (
+                  <a
+                    href={record.hackerrankUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                  >
+                    <span className="flex items-center gap-2 text-ink-900">
+                      <span className="font-mono font-bold text-[#00EA64]">HR</span> HackerRank
+                    </span>
+                    <ExternalLink className="size-3.5 text-ink-400" />
+                  </a>
+                )}
+                {!record.linkedinUrl &&
+                  !record.githubUrl &&
+                  !record.leetcodeUrl &&
+                  !record.hackerrankUrl && (
+                    <p className="text-xs text-ink-500">No profile links recorded.</p>
+                  )}
+              </div>
+            </Card>
+          </section>
+        </div>
       </div>
+
+      {/* Staff Preferences Management Modal */}
+      {isPrefModalOpen && (
+        <DrilldownModal
+          eyebrow="Staff Management"
+          title={`Edit Preferences — ${record.fullName}`}
+          subtitle="Manage role category eligibility and drive type permissions for this student"
+          onClose={() => setIsPrefModalOpen(false)}
+        >
+          <div className="space-y-6 p-6">
+            {prefSaveError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-danger-500/30 bg-danger-50 p-3 text-sm text-danger-700"
+              >
+                {prefSaveError}
+              </div>
+            )}
+
+            <div>
+              <h3 className="font-heading text-sm font-bold text-ink-900">
+                1. Role Category Preferences
+              </h3>
+              <p className="mt-0.5 text-xs text-ink-500">
+                Determines which role-scoped drives this student is eligible to see and apply for.
+              </p>
+              <div className="mt-3 space-y-2">
+                {ROLE_CATEGORIES.map((cat) => {
+                  const checked = editRoleCats.includes(cat);
+                  return (
+                    <label
+                      key={cat}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-line p-2.5 hover:bg-surface-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEditRoleCats((prev) => [...prev, cat]);
+                          } else {
+                            setEditRoleCats((prev) => prev.filter((c) => c !== cat));
+                          }
+                        }}
+                        className="size-4 rounded text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="text-sm font-medium text-ink-900">
+                        {AREA_LABEL[cat] ?? cat}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-line pt-4">
+              <h3 className="font-heading text-sm font-bold text-ink-900">
+                2. Drive Type Preferences
+              </h3>
+              <p className="mt-0.5 text-xs text-ink-500">
+                If none are selected, the student is open to all drive types. Check specific types
+                to restrict participation.
+              </p>
+              <div className="mt-3 space-y-2">
+                {DRIVE_TYPES.map((dt) => {
+                  const checked = editDriveTypes.includes(dt);
+                  return (
+                    <label
+                      key={dt}
+                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-line p-2.5 hover:bg-surface-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEditDriveTypes((prev) => [...prev, dt]);
+                          } else {
+                            setEditDriveTypes((prev) => prev.filter((d) => d !== dt));
+                          }
+                        }}
+                        className="size-4 rounded text-brand-600 focus:ring-brand-500"
+                      />
+                      <span className="text-sm font-medium text-ink-900">
+                        {DRIVE_TYPE_LABEL[dt] ?? dt}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-line pt-4">
+              <Button
+                variant="secondary"
+                disabled={actions.busy}
+                onClick={() => setIsPrefModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button isLoading={actions.isPending()} onClick={() => void savePreferences()}>
+                Save Preferences
+              </Button>
+            </div>
+          </div>
+        </DrilldownModal>
+      )}
     </div>
   );
 }

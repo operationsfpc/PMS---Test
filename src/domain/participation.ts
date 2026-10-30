@@ -17,6 +17,29 @@ export interface OptOutContext {
 }
 
 /**
+ * The reason is a note a coordinator reads in a queue, not a document. Without
+ * a bound one pasted block runs for screens and buries every row after it.
+ */
+export const MAX_OPT_OUT_REASON = 1000;
+
+/**
+ * Whether the words the student typed can be sent at all.
+ *
+ * The screen and the view ask this so an over-long reason is refused with the
+ * same sentence before anything is uploaded or written.
+ */
+export function optOutReasonProblem(reason: string): string | null {
+  const trimmed = reason.trim();
+  if (trimmed === "") {
+    return "Give a reason for opting out.";
+  }
+  if (trimmed.length > MAX_OPT_OUT_REASON) {
+    return "Keep your reason to 1,000 characters or fewer.";
+  }
+  return null;
+}
+
+/**
  * Opting out.
  *
  * Student-initiated ONLY. Nothing about a student's marks, arrears or absences

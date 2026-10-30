@@ -5,9 +5,36 @@ import {
   canRecordSelfPlacement,
   canRequestOptOut,
   canRequestSelfPlacedHold,
+  MAX_OPT_OUT_REASON,
+  optOutReasonProblem,
   participationOutcome,
 } from "./participation";
 import { APP_ROLES } from "./types";
+
+/**
+ * 2026-10-30: one pasted block ran for thousands of characters and filled the
+ * queue it was shown in. The reason is a note, and this is its size.
+ */
+describe("optOutReasonProblem", () => {
+  it("refuses a blank reason, with the sentence the student acts on", () => {
+    expect(optOutReasonProblem("   ")).toMatch(/give a reason for opting out/i);
+  });
+
+  it("accepts a reason of exactly the full allowance", () => {
+    expect(optOutReasonProblem("x".repeat(MAX_OPT_OUT_REASON))).toBeNull();
+  });
+
+  it("refuses a reason past the allowance, and names the limit", () => {
+    expect(optOutReasonProblem("x".repeat(MAX_OPT_OUT_REASON + 1))).toMatch(
+      /1,000 characters or fewer/i,
+    );
+  });
+
+  /** Spaces around a paste are not part of the reason, so neither are they counted. */
+  it("measures the trimmed reason, not the surrounding whitespace", () => {
+    expect(optOutReasonProblem(`  ${"x".repeat(MAX_OPT_OUT_REASON)}  `)).toBeNull();
+  });
+});
 
 /**
  * Opting out and self-placing.

@@ -30,6 +30,7 @@ export function StudentRecordRoute() {
    */
   const mayRead = HOLD_READER_ROLES.includes(role);
   const release = mayRead && canReleasePlacementHold(role) ? holds.release : undefined;
+  const canManagePreferences = role !== "student";
 
   if (studentId === undefined) {
     return (
@@ -43,6 +44,7 @@ export function StudentRecordRoute() {
     <StudentRecordPage
       studentId={studentId}
       view={view}
+      canManagePreferences={canManagePreferences}
       {...(mayRead ? { holds } : {})}
       {...(release === undefined ? {} : { release })}
     />

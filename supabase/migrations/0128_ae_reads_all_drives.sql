@@ -38,3 +38,4 @@ create policy rounds_ae_read on round_participants for select
 drop policy if exists results_ae_read on round_results;
 create policy results_ae_read on round_results for select
   using (current_app_role() = 'account_executive');
+

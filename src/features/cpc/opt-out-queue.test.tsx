@@ -47,6 +47,44 @@ describe("OptOutQueue", () => {
     expect(screen.getByText(/joining the family business/i)).toBeDefined();
   });
 
+  /**
+   * 2026-10-30: a reason can be thousands of characters of pasted noise, which
+   * used to print whole and take the queue with it. The row now holds a
+   * preview and the full text opens in a popup.
+   */
+  it("folds a long reason into a popup instead of printing it whole", async () => {
+    const long = "jk;kfdgghghjklhljk;".repeat(120);
+    const user = userEvent.setup();
+    render(
+      <OptOutQueue
+        view={view({
+          pending: async () => ({ optOuts: [request({ reason: long })], selfPlacements: [] }),
+        })}
+      />,
+    );
+
+    const trigger = await screen.findByRole("button", {
+      name: /read the full reason — Priya Ramesh/i,
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    await user.click(trigger);
+
+    const dialog = screen.getByRole("dialog", { name: /opt-out reason/i });
+    expect(dialog.textContent).toContain(long);
+
+    await user.click(screen.getByRole("button", { name: /close/i }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  /** A reason that fits stays in the row: not every explanation is a document. */
+  it("keeps a short reason inline, with nothing to open", async () => {
+    render(<OptOutQueue view={view()} />);
+
+    await screen.findByText(/joining the family business/i);
+    expect(screen.queryByRole("button", { name: /read the full reason/i })).toBeNull();
+  });
+
   /** These queues run across every campus, so a name alone is not enough. */
   it("names the college the student belongs to", async () => {
     render(<OptOutQueue view={view()} />);

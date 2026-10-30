@@ -71,6 +71,7 @@ function stubHappyPath() {
         },
       ]),
     ),
+    http.get(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json([])),
   );
 }
 

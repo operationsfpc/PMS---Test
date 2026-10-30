@@ -1,3 +1,4 @@
+import { QuotedText } from "@components/quoted-text";
 import { StudentIdentity } from "@components/student-identity";
 import { Button, Card } from "@components/ui";
 import { useState } from "react";
@@ -35,9 +36,11 @@ export function OptOutQueue({ view }: { view: ParticipationQueueView }) {
                   college={request.college}
                   studentId={request.studentId}
                 >
-                  <p className="mt-1 break-words text-sm text-ink-700 [overflow-wrap:anywhere]">
-                    “{request.reason}”
-                  </p>
+                  <QuotedText
+                    text={request.reason}
+                    title="Opt-out reason"
+                    subject={request.studentName}
+                  />
                   <Evidence
                     url={request.declarationUrl}
                     label="signed declaration"

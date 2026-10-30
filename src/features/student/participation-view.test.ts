@@ -1,3 +1,4 @@
+import { MAX_OPT_OUT_REASON } from "@domain/participation";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -239,6 +240,23 @@ describe("requesting an opt-out", () => {
     await expect(
       view().requestOptOut({ reason: "Changed my mind", declaration: evidence() }),
     ).rejects.toThrow(/opted out/i);
+    expect(writes).toHaveLength(0);
+  });
+
+  /**
+   * 2026-10-30: the reason is bounded at 1,000 characters. It is refused
+   * before the upload, so an over-long paste leaves no document behind in the
+   * bucket for a request that was never written.
+   */
+  it("refuses an over-long reason before it uploads anything", async () => {
+    const writes = stub();
+
+    await expect(
+      view().requestOptOut({
+        reason: "x".repeat(MAX_OPT_OUT_REASON + 1),
+        declaration: evidence(),
+      }),
+    ).rejects.toThrow(/1,000 characters or fewer/i);
     expect(writes).toHaveLength(0);
   });
 

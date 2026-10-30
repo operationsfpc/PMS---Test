@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import { MAX_OPT_OUT_REASON } from "@domain/participation";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -56,6 +58,23 @@ describe("OptOutPage", () => {
         expect.objectContaining({ reason: "Joining family business" }),
       ),
     );
+  });
+
+  /**
+   * 2026-10-30: the box was unbounded, and one pasted block filled the
+   * coordinator's whole queue. The limit is stated under the box rather than
+   * discovered when typing stops.
+   */
+  it("stops the reason at 1,000 characters, and counts them", async () => {
+    const user = userEvent.setup({ delay: null });
+    render(<OptOutPage view={view()} />);
+
+    const box = (await screen.findByLabelText(/why are you opting out/i)) as HTMLTextAreaElement;
+    expect(box.maxLength).toBe(MAX_OPT_OUT_REASON);
+    expect(screen.getByText("0 / 1,000 characters")).toBeDefined();
+
+    await user.type(box, "Joining family business");
+    expect(screen.getByText("23 / 1,000 characters")).toBeDefined();
   });
 
   it("will not send an opt-out without the signed declaration", async () => {

@@ -24,6 +24,8 @@ const PRIYA: StudentRecord = {
   rollNumber: "21CSE1042",
   email: "priya@example.com",
   mobile: "9876543210",
+  whatsapp: null,
+  alternateContact: null,
   campusName: "SDNB Vaishnav College",
   degree: "B.Sc CS / CT",
   branch: "CS with AI",
@@ -31,7 +33,16 @@ const PRIYA: StudentRecord = {
   srfStatus: "srf_approved",
   participationStatus: "active",
   tenthPercentage: 92.4,
+  tenthInstitution: "St. Joseph's Convent",
+  tenthBoard: "state_board",
   twelfthPercentage: 88,
+  twelfthInstitution: "Kendriya Vidyalaya",
+  twelfthBoard: "cbse",
+  diplomaInstitution: null,
+  diplomaMarks: null,
+  overallCgpa: 8.4,
+  currentArrears: 0,
+  historyOfArrears: 0,
   semesters: [
     { semesterNumber: 1, cgpa: 8.2, verified: true },
     { semesterNumber: 2, cgpa: 8.6, verified: false },
@@ -41,6 +52,28 @@ const PRIYA: StudentRecord = {
     { skill: "SQL", score: 3 },
   ],
   rolePreferences: ["software_technical", "sales"],
+  driveTypePreferences: ["placement", "internship"],
+  technicalSkills: "React, Node.js, Python, PostgreSQL",
+  areasOfInterest: "Full-Stack Development, Cloud Computing",
+  areasOfExpertise: null,
+  projects: "Hospital Management System using React and Spring Boot",
+  certifications: "AWS Certified Cloud Practitioner",
+  achievements: "First place in College Hackathon 2025",
+  linkedinUrl: "https://linkedin.com/in/priya-ramesh",
+  githubUrl: "https://github.com/priya-ramesh",
+  leetcodeUrl: "https://leetcode.com/u/priya-ramesh",
+  hackerrankUrl: "https://hackerrank.com/priya_ramesh",
+  resumes: [
+    {
+      id: "res1",
+      roleCategory: "software_technical",
+      storagePath: "s1/profile-software_technical-resume.pdf",
+      fileName: "priya_swe_resume.pdf",
+      sizeBytes: 154200,
+      uploadedAt: "2026-08-01T10:00:00Z",
+      downloadUrl: "https://storage.test/res1.pdf",
+    },
+  ],
   applications: [
     {
       applicationId: "a1",
@@ -52,6 +85,7 @@ const PRIYA: StudentRecord = {
       hasOffer: false,
     },
   ],
+  offers: [],
   placement: null,
 };
 
@@ -672,5 +706,99 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
     const alert = await within(card).findByRole("alert");
     expect(alert.textContent).toMatch(/already declined on 2026-11-01/i);
+  });
+
+  describe("Enriched student profile & staff management", () => {
+    it("displays CGPA, arrears, school institutions and boards", async () => {
+      show();
+
+      expect(await screen.findByText("8.4 CGPA")).toBeDefined();
+      expect(screen.getByText(/St\. Joseph's Convent/)).toBeDefined();
+      expect(screen.getByText(/Kendriya Vidyalaya/)).toBeDefined();
+      expect(screen.getByText("AWS Certified Cloud Practitioner")).toBeDefined();
+      expect(screen.getByText(/Hospital Management System/)).toBeDefined();
+    });
+
+    it("displays multiple offers and internships with stipends and letter downloads", async () => {
+      const studentWithOffers: StudentRecord = {
+        ...PRIYA,
+        offers: [
+          {
+            id: "o1",
+            driveId: "d1",
+            companyName: "Zoho",
+            roleTitle: "MTS",
+            driveType: "placement",
+            offerCategory: "dream",
+            ctcLpa: 8.5,
+            stipendMonthly: null,
+            declaredAt: "2026-09-01T10:00:00Z",
+            source: "on_campus",
+            letterUrl: "https://storage.test/zoho-offer.pdf",
+            letterFileName: "zoho-offer.pdf",
+          },
+          {
+            id: "o2",
+            driveId: "d2",
+            companyName: "NxtMeal",
+            roleTitle: "BTL Marketing Intern",
+            driveType: "internship",
+            offerCategory: null,
+            ctcLpa: null,
+            stipendMonthly: 15000,
+            declaredAt: "2026-10-05T10:00:00Z",
+            source: "on_campus",
+            letterUrl: null,
+            letterFileName: null,
+          },
+        ],
+      };
+
+      show(view(studentWithOffers));
+
+      const placementRegion = await screen.findByRole("region", { name: /placement/i });
+      expect(within(placementRegion).getByText("Zoho")).toBeDefined();
+      expect(within(placementRegion).getByText("₹8.5 LPA")).toBeDefined();
+      expect(within(placementRegion).getByText("NxtMeal")).toBeDefined();
+      expect(within(placementRegion).getByText(/₹15,000 \/ month/i)).toBeDefined();
+      const letterLink = within(placementRegion).getByRole("link", { name: /offer letter/i });
+      expect(letterLink.getAttribute("href")).toBe("https://storage.test/zoho-offer.pdf");
+    });
+
+    it("displays category resumes and permits staff to edit preferences", async () => {
+      const user = userEvent.setup();
+      const updatePreferences = vi.fn(async () => {});
+      const v: StudentRecordView = {
+        record: async () => PRIYA,
+        updatePreferences,
+      };
+
+      render(
+        <MemoryRouter>
+          <StudentRecordPage studentId="s1" view={v} canManagePreferences={true} />
+        </MemoryRouter>,
+      );
+
+      // Verify resume
+      const resumesRegion = await screen.findByRole("region", { name: /resumes/i });
+      expect(within(resumesRegion).getByText("priya_swe_resume.pdf")).toBeDefined();
+      const pdfLink = within(resumesRegion).getByRole("link", { name: /view pdf/i });
+      expect(pdfLink.getAttribute("href")).toBe("https://storage.test/res1.pdf");
+
+      // Open Edit Preferences Modal
+      const [firstEditButton] = screen.getAllByRole("button", { name: /edit/i });
+      if (!firstEditButton) throw new Error("Edit button not found");
+      await user.click(firstEditButton);
+
+      expect(await screen.findByRole("dialog", { name: /edit preferences/i })).toBeDefined();
+
+      // Save preferences
+      await user.click(screen.getByRole("button", { name: /save preferences/i }));
+      expect(updatePreferences).toHaveBeenCalledWith(
+        "s1",
+        ["software_technical", "sales"],
+        ["placement", "internship"],
+      );
+    });
   });
 });

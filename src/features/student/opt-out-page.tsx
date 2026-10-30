@@ -1,5 +1,6 @@
+import { QuotedText } from "@components/quoted-text";
 import { Button, Card, PageHeader } from "@components/ui";
-import { canRequestOptOut } from "@domain/participation";
+import { canRequestOptOut, MAX_OPT_OUT_REASON, optOutReasonProblem } from "@domain/participation";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
@@ -59,8 +60,11 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
   // other. And the request is irreversible, which is exactly why a second
   // click must not be able to raise a second one.
   async function optOut() {
-    if (reason.trim() === "") {
-      throw new Error("Give a reason for opting out.");
+    // The domain owns the words, so the screen, the view and the count under
+    // the box all refuse an over-long or blank reason identically.
+    const reasonProblem = optOutReasonProblem(reason);
+    if (reasonProblem !== null) {
+      throw new Error(reasonProblem);
     }
 
     // The domain refuses without the declaration, so the screen and the
@@ -131,7 +135,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
             {requests.map((request) => (
               <li key={request.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
                 <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-                  <p className="text-sm text-ink-900">“{request.reason}”</p>
+                  <QuotedText text={request.reason} title="Your opt-out reason" />
                   <p className="mt-0.5 text-xs text-ink-500">
                     Submitted {submittedOn(request.submittedAt)}
                   </p>
@@ -182,8 +186,12 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
+              maxLength={MAX_OPT_OUT_REASON}
               className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             />
+            <p className="mt-1 text-right text-xs text-ink-500">
+              {reason.length} / {MAX_OPT_OUT_REASON.toLocaleString("en-IN")} characters
+            </p>
             <div className="mt-4">
               <label
                 htmlFor="optout-declaration"

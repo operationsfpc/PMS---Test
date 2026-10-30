@@ -3,6 +3,7 @@ import {
   canRecordSelfPlacement,
   canRequestOptOut,
   canRequestSelfPlacedHold,
+  optOutReasonProblem,
 } from "@domain/participation";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { ParticipationStatus } from "@domain/types";
@@ -178,6 +179,11 @@ export function createSupabaseParticipationView(
     },
 
     async requestOptOut({ reason, declaration }) {
+      // Before the upload: an over-long reason must not leave an orphaned
+      // declaration in the bucket behind a request that was never written.
+      const reasonProblem = optOutReasonProblem(reason);
+      if (reasonProblem !== null) throw new ParticipationError(reasonProblem);
+
       const studentId = await student();
       const current = await this.status();
 

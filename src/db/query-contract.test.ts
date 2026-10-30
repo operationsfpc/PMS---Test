@@ -43,6 +43,7 @@ import {
 } from "@features/student/student-dashboard-view";
 import {
   RECORD_APPLICATION_COLUMNS,
+  RECORD_DOCUMENT_COLUMNS,
   RECORD_OFFER_COLUMNS,
   RECORD_SEMESTER_COLUMNS,
   RECORD_SKILL_COLUMNS,
@@ -408,6 +409,7 @@ describe("every hand-written select matches the schema", () => {
     ["student record skills", "student_skill_scores", RECORD_SKILL_COLUMNS],
     ["student record applications", "applications", RECORD_APPLICATION_COLUMNS],
     ["student record offers", "offers", RECORD_OFFER_COLUMNS],
+    ["student record documents", "student_documents", RECORD_DOCUMENT_COLUMNS],
     // 0125: the hold block. Registered because it embeds `profiles` twice on
     // purpose — the one live-hold read and the history read use this same spec.
     ["student placement holds", "student_holds", HOLD_COLUMNS],
