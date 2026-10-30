@@ -319,6 +319,15 @@ export function createSupabaseDrivesView(
       .limit(1);
 
     if (error !== null) {
+      if (
+        error.code === "PGRST205" ||
+        error.code === "42P01" ||
+        error.code === "42703" ||
+        error.message?.includes("schema cache") ||
+        error.message?.includes("does not exist")
+      ) {
+        return null;
+      }
       throw new Error(
         describeReadFailure(error, "Could not check whether your placements are on hold."),
       );
