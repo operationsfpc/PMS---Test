@@ -205,6 +205,7 @@ export function SheetContent({
         aria-describedby={descriptionId}
         className={`relative z-50 flex h-full w-full flex-col overflow-hidden border-line bg-surface shadow-2xl focus:outline-hidden ${sideClasses} ${sizeClasses} ${className}`}
       >
+        <div className="fpc-gradient h-1.5 w-full shrink-0" aria-hidden="true" />
         <button
           type="button"
           aria-label="Close panel"

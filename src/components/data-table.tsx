@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button } from "./ui";
 
@@ -238,6 +239,10 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Search Box */}
         <div className="relative flex-1 min-w-[220px] max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400"
+            aria-hidden="true"
+          />
           <input
             type="text"
             value={searchQuery}
@@ -246,7 +251,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               setPageIndex(0);
             }}
             placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 placeholder:italic placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-8 text-sm text-ink-900 placeholder:italic placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-1 focus:ring-brand-500 shadow-xs"
           />
           {searchQuery && (
             <button
@@ -352,7 +357,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
           <caption className="sr-only">{caption}</caption>
           <thead>
-            <tr className="border-b border-line bg-surface-muted/50 text-ink-700">
+            <tr className="border-b border-brand-100 bg-brand-50/50 text-brand-900">
               {enableSelection && (
                 <th scope="col" className="w-10 px-3 py-3 text-center">
                   <input
@@ -375,7 +380,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                         ? "ascending"
                         : "descending"
                   }
-                  className={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-ink-600 ${col.className ?? ""}`}
+                  className={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-brand-900 ${col.className ?? ""}`}
                 >
                   {/*
                    * A click handler on the header cell itself was mouse-only: a
@@ -394,15 +399,18 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       type="button"
                       onClick={() => handleSort(col.id)}
                       title={`Sort by ${typeof col.header === "string" ? col.header : col.id}`}
-                      className="flex items-center gap-1.5 rounded text-left uppercase text-inherit hover:text-ink-900"
+                      className="flex items-center gap-1.5 rounded text-left uppercase text-inherit transition-colors hover:text-brand-700"
                     >
-                      <span>{col.header}</span>
-                      <span aria-hidden="true" className="text-[10px] text-ink-400">
+                      <span className="font-semibold">{col.header}</span>
+                      <span
+                        aria-hidden="true"
+                        className={`text-[10px] ${sortColumnId === col.id ? "font-bold text-brand-600" : "text-ink-400"}`}
+                      >
                         {sortColumnId === col.id ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
                       </span>
                     </button>
                   ) : (
-                    col.header
+                    <span className="font-semibold">{col.header}</span>
                   )}
                 </th>
               ))}

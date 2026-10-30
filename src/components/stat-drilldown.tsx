@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { type ColumnDef, ShadcnDataTable } from "./data-table";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
-import { Badge, ButtonLink } from "./ui";
+import { Badge, ButtonLink, type Tone } from "./ui";
 
 /**
  * One person as a drill-down lists them.
@@ -30,6 +30,57 @@ export interface DrilldownPerson {
 
 /** The tab that lists everybody, so a group actually named "All" can't collide with it. */
 const ALL = "__all__";
+
+/**
+ * Map person status to appropriate brand/feedback tone so placed and shortlisted
+ * students stand out with distinctive colors rather than a monochrome grey.
+ */
+function statusTone(status: string): Tone {
+  const s = status.toLowerCase().trim();
+  if (
+    s === "placed" ||
+    s.includes("placed on campus") ||
+    s.includes("self-placed") ||
+    s === "verified" ||
+    s === "approved" ||
+    s === "cleared" ||
+    s === "active" ||
+    s.includes("selected") ||
+    s === "offer" ||
+    s.includes("accepted")
+  ) {
+    return "success";
+  }
+  if (
+    s.includes("shortlist") ||
+    s === "applied" ||
+    s.includes("in round") ||
+    s.includes("interview") ||
+    s === "form submitted"
+  ) {
+    return "brand";
+  }
+  if (
+    s.includes("opted out") ||
+    s.includes("opt out") ||
+    s.includes("reject") ||
+    s.includes("absent") ||
+    s.includes("hold") ||
+    s.includes("failed") ||
+    s.includes("disqualif")
+  ) {
+    return "danger";
+  }
+  if (
+    s.includes("pending") ||
+    s.includes("awaiting") ||
+    s.includes("review") ||
+    s.includes("draft")
+  ) {
+    return "warning";
+  }
+  return "neutral";
+}
 
 /** An empty string is as good as no value here, and the views hand over both. */
 function filled(value: string | null | undefined): string | null {
@@ -118,7 +169,7 @@ export function StatDrilldown({
           <Link
             to={`/students/${person.id}`}
             onClick={onClose}
-            className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+            className="font-semibold text-brand-700 underline-offset-2 transition-colors hover:text-brand-900 hover:underline"
           >
             {person.name}
           </Link>
@@ -145,8 +196,15 @@ export function StatDrilldown({
         header: "CGPA",
         accessorFn: (person) => person.cgpa,
         sortable: true,
-        cell: (person) =>
-          person.cgpa === null || person.cgpa === undefined ? "—" : person.cgpa.toFixed(2),
+        cell: (person) => {
+          if (person.cgpa === null || person.cgpa === undefined) return "—";
+          const formatted = person.cgpa.toFixed(2);
+          return person.cgpa >= 8.5 ? (
+            <span className="font-semibold text-brand-700">{formatted}</span>
+          ) : (
+            <span>{formatted}</span>
+          );
+        },
       });
     }
     if (any((person) => person.status)) {
@@ -154,7 +212,9 @@ export function StatDrilldown({
         id: "status",
         header: "Status",
         cell: (person) =>
-          isEmpty(person.status) ? "—" : <Badge tone="neutral">{person.status}</Badge>,
+          isEmpty(person.status) ? "—" : (
+            <Badge tone={statusTone(person.status!)}>{person.status}</Badge>
+          ),
       });
     }
     return cols;
@@ -202,7 +262,11 @@ export function StatDrilldown({
    */
   const header = (filters: ReactNode) => (
     <SheetHeader>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">{eyebrow}</p>
+      <div>
+        <span className="inline-flex items-center rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
+          {eyebrow}
+        </span>
+      </div>
       <SheetTitle>{title}</SheetTitle>
       {/*
         The header counts what the list below actually shows. A popup that
@@ -210,8 +274,19 @@ export function StatDrilldown({
         popup at all — the reader now doubts every other number on the page.
       */}
       <SheetDescription>
-        {shown.length} student{shown.length === 1 ? "" : "s"}
-        {isEmpty(note) ? "" : ` · ${note}`}
+        <span className="font-medium text-ink-700">
+          {shown.length} student{shown.length === 1 ? "" : "s"}
+        </span>
+        {isEmpty(note) ? (
+          ""
+        ) : (
+          <>
+            <span className="mx-1.5 text-ink-400">·</span>
+            <span className="inline-flex items-center rounded-md border border-success-500/30 bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700">
+              {note}
+            </span>
+          </>
+        )}
       </SheetDescription>
       {filters}
     </SheetHeader>

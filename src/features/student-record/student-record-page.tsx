@@ -37,8 +37,10 @@ import {
   Globe,
   GraduationCap,
   Search,
+  Sparkles,
   Trophy,
   Upload,
+  User,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
@@ -1072,7 +1074,10 @@ export function StudentRecordPage({
                 </div>
 
                 {offers.length === 0 && record.placement === null ? (
-                  <p className="text-sm text-ink-500">Not placed.</p>
+                  <div className="flex items-center gap-2.5 rounded-lg border border-line bg-surface-muted/50 p-3 text-sm text-ink-600">
+                    <Badge tone="neutral">Not placed</Badge>
+                    <span>Currently eligible and active for upcoming placement drives.</span>
+                  </div>
                 ) : (
                   <div className="space-y-3">
                     {offers.length > 0 ? (
@@ -1479,11 +1484,16 @@ export function StudentRecordPage({
             <section aria-label="Applications">
               <Card className="p-5">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="font-heading text-lg font-bold text-ink-900">Applications</h2>
-                    <p className="text-xs text-ink-500">
-                      Drive participation and recruiter shortlist status
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
+                      <FileText className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-heading text-lg font-bold text-ink-900">Applications</h2>
+                      <p className="text-xs text-ink-500">
+                        Drive participation and recruiter shortlist status
+                      </p>
+                    </div>
                   </div>
                   {applications.length > 0 && (
                     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -1707,7 +1717,12 @@ export function StudentRecordPage({
           {(activeSection === "all" || activeSection === "identity") && (
             <section aria-label="Identity">
               <Card className="p-5">
-                <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Identity</h2>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
+                    <User className="size-4" />
+                  </div>
+                  <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
+                </div>
                 <dl className="grid gap-2 text-sm">
                   <div className="flex justify-between gap-4">
                     <dt className="shrink-0 text-ink-500">Programme</dt>
@@ -1863,9 +1878,14 @@ export function StudentRecordPage({
             <section aria-label="Skills and preferences">
               <Card className="p-5">
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-heading text-lg font-bold text-ink-900">
-                    Skills and preferences
-                  </h2>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-violet-50 p-1.5 text-violet-700">
+                      <Sparkles className="size-4" />
+                    </div>
+                    <h2 className="font-heading text-lg font-bold text-ink-900">
+                      Skills and preferences
+                    </h2>
+                  </div>
                   {hasStaffControls && (
                     <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
                       <Edit2 className="mr-1 size-3" />
@@ -1886,10 +1906,16 @@ export function StudentRecordPage({
                         </span>
                         <span
                           aria-hidden="true"
-                          className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-line"
+                          className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-line"
                         >
                           <span
-                            className="block h-full rounded-full bg-brand-500"
+                            className={`block h-full rounded-full ${
+                              score >= 4
+                                ? "bg-success-500"
+                                : score >= 3
+                                  ? "bg-brand-500"
+                                  : "bg-gold-500"
+                            }`}
                             style={{
                               width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
                             }}
@@ -1902,11 +1928,11 @@ export function StudentRecordPage({
 
                 {/* Preferred role categories */}
                 {rolePreferences.length > 0 && (
-                  <div className="mt-3">
+                  <div className="mt-3 border-t border-line pt-3">
                     <span className="text-xs font-semibold text-ink-500">Preferred areas</span>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {rolePreferences.map((area) => (
-                        <Badge key={area} tone="neutral">
+                        <Badge key={area} tone="brand">
                           {AREA_LABEL[area] ?? area}
                         </Badge>
                       ))}
