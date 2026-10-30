@@ -1349,7 +1349,7 @@ export function StudentRecordPage({
                     className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
                   >
                     <span className="flex items-center gap-2 text-ink-900">
-                      <Globe className="size-4 text-[#0A66C2]" /> LinkedIn
+                      <Globe className="size-4 text-brand-600" /> LinkedIn
                     </span>
                     <ExternalLink className="size-3.5 text-ink-400" />
                   </a>
@@ -1375,7 +1375,7 @@ export function StudentRecordPage({
                     className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
                   >
                     <span className="flex items-center gap-2 text-ink-900">
-                      <span className="font-mono font-bold text-[#FFA116]">LC</span> LeetCode
+                      <span className="font-mono font-bold text-gold-600">LC</span> LeetCode
                     </span>
                     <ExternalLink className="size-3.5 text-ink-400" />
                   </a>
@@ -1388,7 +1388,7 @@ export function StudentRecordPage({
                     className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
                   >
                     <span className="flex items-center gap-2 text-ink-900">
-                      <span className="font-mono font-bold text-[#00EA64]">HR</span> HackerRank
+                      <span className="font-mono font-bold text-success-600">HR</span> HackerRank
                     </span>
                     <ExternalLink className="size-3.5 text-ink-400" />
                   </a>
