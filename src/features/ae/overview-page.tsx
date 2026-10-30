@@ -15,6 +15,7 @@ import { type AeApplicant, summariseAeDrives } from "@domain/ae-overview";
 import { groupDrivesByEvent } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import { orderDrives } from "@domain/drive-aging";
+import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import {
   DRIVE_TYPE_FILTERS,
   type DriveTypeFilter,
@@ -76,24 +77,6 @@ export interface AeOverviewView {
 
 /** Money, as read aloud: "₹8 LPA", never "₹8.00 LPA". */
 const lpa = (value: number | null) => (value === null ? "—" : `₹${value} LPA`);
-
-const STATUS_LABEL: Partial<Record<DriveStatus, string>> = {
-  draft: "Draft",
-  submitted: "Awaiting approval",
-  approved: "Yet to publish",
-  live: "Applications open",
-  applications_closed: "Applications closed",
-  in_rounds: "In rounds",
-  completed: "Completed",
-  rejected: "Not approved",
-};
-
-const STATUS_TONE = (status: DriveStatus): "success" | "warning" | "neutral" =>
-  status === "live" || status === "in_rounds"
-    ? "success"
-    : status === "completed" || status === "rejected"
-      ? "neutral"
-      : "warning";
 
 /** How many of their recent drives the overview shows before deferring to Drives. */
 const RECENT = 5;
@@ -189,9 +172,7 @@ function StatDriveRow({ drive }: { drive: AeOverviewDrive }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
-          <Badge tone={STATUS_TONE(drive.status)}>
-            {STATUS_LABEL[drive.status] ?? drive.status}
-          </Badge>
+          <Badge tone={driveStatusTone(drive.status)}>{driveStatusLabel(drive.status)}</Badge>
         </div>
       </div>
       <RoleFacts drive={drive} />
@@ -238,9 +219,7 @@ function StatVisit({ roles }: { roles: readonly AeOverviewDrive[] }) {
                     {driveTypeLabel(role.driveType)}
                   </Badge>
                 )}
-                <Badge tone={STATUS_TONE(role.status)}>
-                  {STATUS_LABEL[role.status] ?? role.status}
-                </Badge>
+                <Badge tone={driveStatusTone(role.status)}>{driveStatusLabel(role.status)}</Badge>
               </AccordionTrigger>
               <AccordionContent className="pb-2">
                 <ButtonLink
@@ -480,8 +459,8 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                                 )}
                               </td>
                               <td className="px-3 py-3">
-                                <Badge tone={STATUS_TONE(role.status)}>
-                                  {STATUS_LABEL[role.status] ?? role.status}
+                                <Badge tone={driveStatusTone(role.status)}>
+                                  {driveStatusLabel(role.status)}
                                 </Badge>
                               </td>
                               <td className="px-3 py-3 font-semibold text-ink-900">

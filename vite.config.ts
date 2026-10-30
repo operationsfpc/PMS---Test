@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
+      "@": r("./src"),
       "@domain": r("./src/domain"),
       "@features": r("./src/features"),
       "@lib": r("./src/lib"),

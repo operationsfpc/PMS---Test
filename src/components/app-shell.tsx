@@ -45,7 +45,7 @@ import {
   UserX,
   X,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Button, Card } from "./ui";
 
@@ -512,6 +512,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [localPreview, setLocalPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Lock body scroll when mobile navigation drawer is open
+  useEffect(() => {
+    if (!menuOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [menuOpen]);
+
   const role = auth.status === "signed-in" ? auth.role : (localPreview ?? "student");
   const groups = ROLE_NAVS[role] ?? [];
 
@@ -551,7 +561,7 @@ export function AppShell({ children }: { children: ReactNode }) {
    * for the answer.
    */
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
-    `relative flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+    `relative flex min-h-[38px] sm:min-h-[36px] items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
       isActive
         ? "bg-brand-50 font-semibold text-brand-700"
         : "font-medium text-ink-700 hover:bg-surface-muted hover:text-ink-900"
@@ -563,19 +573,21 @@ export function AppShell({ children }: { children: ReactNode }) {
         {/* Brand gradient hairline — the logo's own palette, used sparingly. */}
         <div className="fpc-gradient h-1" aria-hidden="true" />
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
-          <button
-            type="button"
-            className="cursor-pointer rounded-lg p-1.5 text-ink-700 hover:bg-surface-muted lg:hidden"
-            aria-label={menuOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            {menuOpen ? (
-              <X aria-hidden="true" className="size-5" />
-            ) : (
+          {/* The drawer slides over exactly this corner, so the header stands
+              down while it is up: a buried second button named "Close
+              navigation", still in the tab order behind the panel, is a control
+              nobody can see answering the same question as the drawer's own X. */}
+          {!menuOpen && (
+            <button
+              type="button"
+              className="cursor-pointer rounded-lg p-1.5 text-ink-700 hover:bg-surface-muted lg:hidden"
+              aria-label="Open navigation"
+              aria-expanded={false}
+              onClick={() => setMenuOpen(true)}
+            >
               <Menu aria-hidden="true" className="size-5" />
-            )}
-          </button>
+            </button>
+          )}
 
           <Logo />
 
@@ -622,9 +634,15 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             {/* Campus machines are shared. Leaving no way out means the next
                 person to open the browser is signed in as the last one. */}
-            <Button variant="secondary" size="sm" onClick={() => void signOut()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void signOut()}
+              aria-label="Sign out"
+              title="Sign out"
+            >
               <LogOut aria-hidden="true" className="size-3.5 shrink-0" />
-              Sign out
+              <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
         </div>
@@ -654,6 +672,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               : "hidden lg:block lg:w-64"
           } shrink-0 self-start`}
         >
+          {menuOpen && (
+            <div className="mb-2.5 flex items-center justify-between border-b border-line px-1 pb-2.5 lg:hidden">
+              <Logo />
+              <button
+                type="button"
+                className="cursor-pointer rounded-lg p-1.5 text-ink-600 hover:bg-surface-muted"
+                aria-label="Close navigation"
+                onClick={() => setMenuOpen(false)}
+              >
+                <X aria-hidden="true" className="size-5" />
+              </button>
+            </div>
+          )}
           <div className="lg:sticky lg:top-[4.5rem]">
             <Card className="p-2">
               <RoleScope role={role} campuses={campuses} />

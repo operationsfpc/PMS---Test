@@ -228,10 +228,10 @@ describe("DrivePicker — one card per company visit", () => {
    * is not asked to repeat it — least of all with two badges when they differ. */
   it("leaves the status to each role's own row", () => {
     pick(visit([{ status: "live" }, { status: "applications_closed" }]));
-    expect(screen.getAllByText("live")).toHaveLength(1);
-    expect(within(screen.getByRole("row", { name: /sde/i })).getByText("live")).toBeDefined();
+    expect(screen.getAllByText("Live")).toHaveLength(1);
+    expect(within(screen.getByRole("row", { name: /sde/i })).getByText("Live")).toBeDefined();
     expect(
-      within(screen.getByRole("row", { name: /data analyst/i })).getByText("applications closed"),
+      within(screen.getByRole("row", { name: /data analyst/i })).getByText("Applications closed"),
     ).toBeDefined();
   });
 

@@ -1369,9 +1369,9 @@ describe("DashboardPage — the drives behind a status count", () => {
   it("opens a popup listing exactly the drives in that status, with their colleges", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "live: 2 drives" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Live: 2 drives" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Drives — live" });
+    const dialog = await screen.findByRole("dialog", { name: "Drives — Live" });
     expect(within(dialog).getByText("Zoho Corporation")).toBeDefined();
     expect(within(dialog).getByText("Freshworks")).toBeDefined();
     expect(within(dialog).queryByText("TCS")).toBeNull();
@@ -1401,9 +1401,9 @@ describe("DashboardPage — the drives behind a status count", () => {
       />,
     );
 
-    await userEvent.click(await screen.findByRole("button", { name: /^live:/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Live:/ }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Drives — live" });
+    const dialog = await screen.findByRole("dialog", { name: "Drives — Live" });
     expect(within(dialog).getByText("Visit on 5 Nov 2026")).toBeDefined();
     // An undated visit says nothing rather than "()" or a dash.
     expect(within(dialog).getAllByText(/^Visit on /)).toHaveLength(1);
@@ -1412,9 +1412,9 @@ describe("DashboardPage — the drives behind a status count", () => {
   it("opens the drives of a different status when its row is clicked", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "completed: 2 drives" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Completed: 2 drives" }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Drives — completed" });
+    const dialog = await screen.findByRole("dialog", { name: "Drives — Completed" });
     expect(within(dialog).getByText("TCS")).toBeDefined();
     expect(within(dialog).getByText("Open to: VIT Bangalore")).toBeDefined();
     expect(within(dialog).queryByText("Zoho Corporation")).toBeNull();
@@ -1423,12 +1423,12 @@ describe("DashboardPage — the drives behind a status count", () => {
   it("closes the popup on Escape", async () => {
     render(<DashboardPage view={view()} title="Executive overview" />);
 
-    await userEvent.click(await screen.findByRole("button", { name: "live: 2 drives" }));
-    expect(await screen.findByRole("dialog", { name: "Drives — live" })).toBeDefined();
+    await userEvent.click(await screen.findByRole("button", { name: "Live: 2 drives" }));
+    expect(await screen.findByRole("dialog", { name: "Drives — Live" })).toBeDefined();
 
     await userEvent.keyboard("{Escape}");
 
-    expect(screen.queryByRole("dialog", { name: "Drives — live" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Drives — Live" })).toBeNull();
   });
 
   /**
@@ -1454,10 +1454,10 @@ describe("DashboardPage — the drives behind a status count", () => {
     );
 
     await userEvent.click(
-      await screen.findByRole("button", { name: "completed: 2 drives, 3 roles" }),
+      await screen.findByRole("button", { name: "Completed: 2 drives, 3 roles" }),
     );
 
-    const dialog = await screen.findByRole("dialog", { name: "Drives — completed" });
+    const dialog = await screen.findByRole("dialog", { name: "Drives — Completed" });
     expect(within(dialog).getByText("2 drives · 3 roles")).toBeDefined();
     expect(within(dialog).getAllByText("TCS")).toHaveLength(1);
     expect(within(dialog).getByText("2 roles")).toBeDefined();

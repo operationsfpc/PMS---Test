@@ -112,7 +112,8 @@ describe("DriveRecordPage", () => {
     expect(
       await screen.findByRole("heading", { name: /Accenture — Jr. Software Engineer/ }),
     ).toBeDefined();
-    expect(screen.getByText("₹4–6 LPA")).toBeDefined();
+    // The summary tile and the Compensation list both carry the figure.
+    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(2);
     expect(screen.getByText("≥ 7.5 CGPA")).toBeDefined();
     expect(screen.getByText(/Aptitude Test/)).toBeDefined();
     expect(screen.getByText(/Raised by/)).toBeDefined();
@@ -127,7 +128,7 @@ describe("DriveRecordPage", () => {
         <DriveRecordPage view={view()} role={CENTRAL} driveId="d1" />
       </MemoryRouter>,
     );
-    await screen.findByText("₹4–6 LPA");
+    await screen.findAllByText("₹4–6 LPA");
     expect(screen.queryByText("testabcd@example.com")).toBeNull();
     unmount();
 
@@ -220,7 +221,7 @@ describe("DriveRecordPage", () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText("₹4–6 LPA");
+    await screen.findAllByText("₹4–6 LPA");
     expect(screen.getByText(/central placement coordinator/i)).toBeDefined();
   });
 
@@ -231,7 +232,7 @@ describe("DriveRecordPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("₹4–6 LPA")).toBeDefined();
+    expect(await screen.findAllByText("₹4–6 LPA")).toHaveLength(2);
     expect(screen.queryByText("Thanush Krishna")).toBeNull();
     expect(screen.queryByText(/Raised by/)).toBeNull();
     expect(screen.queryByText("testabcd@example.com")).toBeNull();

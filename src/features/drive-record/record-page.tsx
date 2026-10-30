@@ -1,20 +1,23 @@
-import {
-  Badge,
-  Button,
-  ButtonAnchor,
-  ButtonLink,
-  Card,
-  PageHeader,
-  type Tone,
-} from "@components/ui";
+import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitDayInParentheses } from "@domain/drive-aging";
 import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
+import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import { describeDriveFreeze } from "@domain/drive-working";
 import { offerCategoryLabel, offerCategoryRestatesType } from "@domain/offer-category";
 import type { AppRole, DriveStatus } from "@domain/types";
-import { useCallback, useEffect, useState } from "react";
+import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
+import { Skeleton } from "@/components/shadcn/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/shadcn/table";
 import type { DriveRecord, DriveRecordView } from "./record-view";
 
 /**
@@ -27,29 +30,6 @@ import type { DriveRecord, DriveRecordView } from "./record-view";
  * `role` is REQUIRED, not defaulted: a permissive default is a permission
  * granted by forgetfulness (the CockpitPage rule).
  */
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: "Draft",
-  submitted: "Awaiting approval",
-  approved: "Approved — not yet published",
-  rejected: "Sent back",
-  live: "LIVE",
-  applications_closed: "Applications closed",
-  in_rounds: "In rounds",
-  completed: "Completed",
-};
-
-/** Matches the PIF event picker's tones, so "Live" is green on both screens. */
-const STATUS_TONE: Record<string, Tone> = {
-  draft: "neutral",
-  submitted: "warning",
-  approved: "success",
-  rejected: "danger",
-  live: "success",
-  applications_closed: "warning",
-  in_rounds: "warning",
-  completed: "neutral",
-};
 
 const AREA_LABEL: Record<string, string> = {
   software_technical: "Software / Technical",
@@ -92,6 +72,27 @@ function Fact({
     </div>
   );
 }
+
+/**
+ * The four figures a reader scans first, in the same shape as `Fact` above —
+ * they used to be four copies of one block with three different type scales,
+ * so a long CTC and a long city list looked like two different components.
+ */
+function Tile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">{label}</span>
+      <p className="mt-1 break-words text-sm font-semibold text-ink-900 [overflow-wrap:anywhere]">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+/** Skeleton rows for the drive read, in the shape of the tiles and the two columns. */
+const LOADING_TILES = ["ctc", "location", "mode", "deadline"];
+const LOADING_MAIN = ["description", "eligibility", "applicants"];
+const LOADING_SIDE = ["compensation", "window"];
 
 /**
  * A snapshot value, read from the REAL envelope: `buildApplicationSnapshot`
@@ -151,8 +152,8 @@ export function DriveRecordPage({
 
   if (error !== null) {
     return (
-      <Card className="border border-danger-500 bg-danger-50 p-5">
-        <p role="alert" className="text-sm text-danger-500">
+      <Card className="border border-danger-500/30 bg-danger-50 p-5">
+        <p role="alert" className="text-sm text-danger-700">
           {error}
         </p>
       </Card>
@@ -161,9 +162,28 @@ export function DriveRecordPage({
 
   if (record === null) {
     return (
-      <p role="status" className="p-6 text-sm text-ink-500">
-        Loading the drive…
-      </p>
+      <div role="status" aria-busy="true" className="space-y-6">
+        <Skeleton className="h-8 w-80" />
+        <Skeleton className="h-5 w-24" />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {LOADING_TILES.map((key) => (
+            <Skeleton key={key} className="h-[70px]" />
+          ))}
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            {LOADING_MAIN.map((key) => (
+              <Skeleton key={key} className="h-44" />
+            ))}
+          </div>
+          <div className="space-y-6">
+            {LOADING_SIDE.map((key) => (
+              <Skeleton key={key} className="h-36" />
+            ))}
+          </div>
+        </div>
+        <p className="text-sm text-ink-500">Loading the drive…</p>
+      </div>
     );
   }
 
@@ -237,18 +257,22 @@ export function DriveRecordPage({
       {activeStage !== null && stageApplicants !== null && (
         <section aria-label="Applicants by stage" className="mb-4">
           <Card className="p-5">
-            <div className="mb-3 flex flex-wrap gap-3 text-sm">
+            <div className="mb-3 flex flex-nowrap overflow-x-auto pb-1 [scrollbar-width:none] gap-1.5 sm:flex-wrap">
               {FUNNEL_STAGES.map((key) => {
                 const count = filterFunnelStage(record.applicants, key).length;
                 return key === activeStage ? (
-                  <span key={key} className="font-semibold text-ink-900">
+                  <span
+                    key={key}
+                    aria-current="true"
+                    className="rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700"
+                  >
                     {STAGE_LABEL[key]} ({count})
                   </span>
                 ) : (
                   <Link
                     key={key}
                     to={`/drives/${driveId}?stage=${key}`}
-                    className="font-medium text-brand-600 hover:underline"
+                    className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
                   >
                     {STAGE_LABEL[key]} ({count})
                   </Link>
@@ -288,9 +312,7 @@ export function DriveRecordPage({
       )}
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <Badge tone={STATUS_TONE[record.status] ?? "neutral"}>
-          {STATUS_LABEL[record.status] ?? record.status}
-        </Badge>
+        <Badge tone={driveStatusTone(record.status)}>{driveStatusLabel(record.status)}</Badge>
         {/* UAT 2026-08-27: an internship's category IS its type. Two badges
             reading "Internship" are one fact wearing two colours. */}
         {record.offerCategory !== null &&
@@ -304,43 +326,25 @@ export function DriveRecordPage({
         )}
       </div>
 
-      {/* Quick Highlights Strip */}
+      {/* Quick Highlights — one tile shape, one type scale */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
-            Package / CTC
-          </span>
-          <p className="mt-1 font-heading text-base font-bold text-ink-900 break-words [overflow-wrap:anywhere] leading-snug">
-            {record.ctcLabel ? `${record.ctcLabel} (CTC)` : "—"}
-          </p>
-        </div>
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
-            Location
-          </span>
-          <p
-            className="mt-1 text-sm font-medium text-ink-800 break-words [overflow-wrap:anywhere] leading-snug"
-            title={record.locations || "—"}
-          >
-            {record.locations || "—"}
-          </p>
-        </div>
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
-            Drive Mode
-          </span>
-          <p className="mt-1 text-sm font-medium capitalize text-ink-800 break-words leading-snug">
-            {record.driveMode ? `${record.driveMode.replaceAll("_", " ")} drive` : "—"}
-          </p>
-        </div>
-        <div className="min-w-0 rounded-xl border border-line bg-surface-muted p-3.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">
-            Apply Deadline
-          </span>
-          <p className="mt-1 text-sm font-medium text-ink-800 break-words leading-snug">
-            {record.applicationEnd ? when(record.applicationEnd) : "Open"}
-          </p>
-        </div>
+        <Tile
+          label="Package / CTC"
+          value={record.ctcLabel === "" ? "Not stated" : record.ctcLabel}
+        />
+        <Tile label="Location" value={record.locations === "" ? "Not stated" : record.locations} />
+        <Tile
+          label="Drive Mode"
+          value={
+            record.driveMode === ""
+              ? "Not stated"
+              : `${record.driveMode.replaceAll("_", " ")} drive`
+          }
+        />
+        <Tile
+          label="Apply Deadline"
+          value={record.applicationEnd ? when(record.applicationEnd) : "Open"}
+        />
       </div>
 
       {/* Main asymmetric 3-column layout */}
@@ -355,37 +359,24 @@ export function DriveRecordPage({
                 </p>
               )}
               {record.jobDescriptionUrl !== null && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-muted p-3.5">
-                  <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                    <span className="text-xl shrink-0" aria-hidden="true">
-                      📄
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <a
-                        href={record.jobDescriptionUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 break-all"
-                      >
-                        {record.jobDescriptionName ?? "Job description (PDF)"}
-                      </a>
-                      <p className="text-xs text-ink-500">
-                        Official document provided by recruiter
-                      </p>
-                    </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-line bg-surface-muted p-3.5">
+                  <FileText className="size-5 shrink-0 text-brand-600" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    {/* One affordance, named by its document. The row used to carry a
+                        link to the PDF AND a second "PDF" button for the same file. */}
+                    <a
+                      href={record.jobDescriptionUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex min-w-0 items-center gap-1.5 break-words font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 [overflow-wrap:anywhere]"
+                    >
+                      {record.jobDescriptionName ?? "Job description (PDF)"}
+                      <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+                    </a>
+                    <p className="text-xs text-ink-500">
+                      Official document provided by recruiter — opens in a new tab
+                    </p>
                   </div>
-                  {/* The row already names the document beside it, so this
-                      affordance names its object — "View" belongs to the one
-                      link that opens the record (architecture rule). */}
-                  <ButtonAnchor
-                    href={record.jobDescriptionUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0"
-                    aria-label={`Open the job description PDF for ${record.companyName} — ${record.roleTitle}`}
-                  >
-                    PDF
-                  </ButtonAnchor>
                 </div>
               )}
             </Section>
@@ -438,10 +429,8 @@ export function DriveRecordPage({
                     key={round.sequence}
                     className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted px-3.5 py-2.5 text-sm text-ink-800"
                   >
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-50 text-xs font-bold text-brand-600">
-                      {round.sequence}
-                    </span>
-                    <span className="min-w-0 flex-1 break-words font-medium">
+                    <Badge tone="brand">{round.sequence}</Badge>
+                    <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">
                       <span className="font-semibold text-ink-900">Round {round.sequence}</span> —{" "}
                       {round.name}
                     </span>
@@ -453,84 +442,110 @@ export function DriveRecordPage({
 
           {staff && record.applicants.length > 0 && (
             <Section title={`Applicants (${record.applicants.length})`}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="text-xs uppercase tracking-wide text-ink-500">
-                      <th className="py-1 pr-3 whitespace-nowrap">Student</th>
-                      <th className="py-1 pr-3 whitespace-nowrap">Roll number</th>
-                      <th className="py-1 pr-3 whitespace-nowrap">Campus</th>
-                      <th className="py-1 pr-3 whitespace-nowrap">Applied</th>
-                      <th className="py-1 whitespace-nowrap" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {record.applicants.map((applicant) => (
-                      <tr key={applicant.applicationId} className="border-t border-line">
-                        <td className="py-2 pr-3 font-medium text-ink-900 break-words max-w-[200px]">
-                          {applicant.fullName}
-                        </td>
-                        <td className="py-2 pr-3 whitespace-nowrap font-mono text-xs">
-                          {applicant.rollNumber}
-                        </td>
-                        <td className="py-2 pr-3 break-words max-w-[180px]">{applicant.campus}</td>
-                        <td className="py-2 pr-3 whitespace-nowrap text-ink-600">
-                          {when(applicant.appliedAt)}
-                        </td>
-                        <td className="py-2 whitespace-nowrap text-right">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            aria-expanded={openSnapshot === applicant.applicationId}
-                            onClick={() =>
-                              setOpenSnapshot(
-                                openSnapshot === applicant.applicationId
-                                  ? null
-                                  : applicant.applicationId,
-                              )
-                            }
-                          >
-                            {openSnapshot === applicant.applicationId
-                              ? "Hide snapshot"
-                              : "View snapshot"}
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="overflow-x-auto rounded-lg border border-line">
+                <Table>
+                  <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
+                    <TableRow className="border-line">
+                      <TableHead className="pl-4">Student</TableHead>
+                      <TableHead>Roll number</TableHead>
+                      <TableHead>Campus</TableHead>
+                      <TableHead>Applied</TableHead>
+                      <TableHead className="pr-4 text-right">
+                        <span className="sr-only">Snapshot</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="bg-surface">
+                    {record.applicants.map((applicant) => {
+                      const isOpen = openSnapshot === applicant.applicationId;
+                      return (
+                        <Fragment key={applicant.applicationId}>
+                          <TableRow className="border-line">
+                            <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                              <Link
+                                to={`/students/${applicant.studentId}`}
+                                className="text-brand-600 hover:underline"
+                              >
+                                {applicant.fullName}
+                              </Link>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {applicant.rollNumber}
+                            </TableCell>
+                            <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
+                              {applicant.campus}
+                            </TableCell>
+                            <TableCell className="text-ink-600">
+                              {when(applicant.appliedAt)}
+                            </TableCell>
+                            <TableCell className="pr-4 text-right">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                aria-expanded={isOpen}
+                                aria-controls={`snapshot-${applicant.applicationId}`}
+                                onClick={() =>
+                                  setOpenSnapshot(isOpen ? null : applicant.applicationId)
+                                }
+                              >
+                                {isOpen ? "Hide snapshot" : "View snapshot"}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          {/* The snapshot belongs to its own row, so it opens inside the
+                              table rather than under it, where it read as the last row's. */}
+                          {isOpen && (
+                            <TableRow className="border-line hover:bg-transparent">
+                              <TableCell colSpan={5} className="p-0 pt-1 pb-4">
+                                <section
+                                  id={`snapshot-${applicant.applicationId}`}
+                                  aria-label={`Snapshot of ${applicant.fullName}`}
+                                  className="rounded-lg bg-surface-muted p-4"
+                                >
+                                  <p className="mb-2 flex items-start gap-1.5 text-xs font-semibold text-gold-800">
+                                    <TriangleAlert
+                                      className="mt-px size-3.5 shrink-0"
+                                      aria-hidden="true"
+                                    />
+                                    The profile as it was AT APPLY TIME — what the recruiter
+                                    received, never the live profile.
+                                  </p>
+                                  <dl className="grid gap-3 sm:grid-cols-3">
+                                    <Fact
+                                      label="CGPA"
+                                      value={fromSnapshot(applicant.snapshot, "overallCgpa")}
+                                    />
+                                    <Fact
+                                      label="10th %"
+                                      value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
+                                    />
+                                    <Fact
+                                      label="12th %"
+                                      value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
+                                    />
+                                    <Fact
+                                      label="Current arrears"
+                                      value={fromSnapshot(applicant.snapshot, "currentArrears")}
+                                    />
+                                    <Fact
+                                      label="Degree"
+                                      value={fromSnapshot(applicant.snapshot, "degree")}
+                                    />
+                                    <Fact
+                                      label="Branch"
+                                      value={fromSnapshot(applicant.snapshot, "branch")}
+                                    />
+                                  </dl>
+                                </section>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
-              {record.applicants
-                .filter((a) => a.applicationId === openSnapshot)
-                .map((applicant) => (
-                  <section
-                    key={applicant.applicationId}
-                    aria-label={`Snapshot of ${applicant.fullName}`}
-                    className="mt-3 rounded-lg bg-surface-muted p-4"
-                  >
-                    <p className="mb-2 text-xs font-semibold text-gold-800">
-                      ⚠️ The profile as it was AT APPLY TIME — what the recruiter received, never the
-                      live profile.
-                    </p>
-                    <dl className="grid gap-3 sm:grid-cols-3">
-                      <Fact label="CGPA" value={fromSnapshot(applicant.snapshot, "overallCgpa")} />
-                      <Fact
-                        label="10th %"
-                        value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
-                      />
-                      <Fact
-                        label="12th %"
-                        value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
-                      />
-                      <Fact
-                        label="Current arrears"
-                        value={fromSnapshot(applicant.snapshot, "currentArrears")}
-                      />
-                      <Fact label="Degree" value={fromSnapshot(applicant.snapshot, "degree")} />
-                      <Fact label="Branch" value={fromSnapshot(applicant.snapshot, "branch")} />
-                    </dl>
-                  </section>
-                ))}
             </Section>
           )}
 
@@ -563,10 +578,12 @@ export function DriveRecordPage({
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 text-sm shrink-0">
-                        <Badge tone={STATUS_TONE[sibling.status] ?? "neutral"}>
-                          {STATUS_LABEL[sibling.status] ?? sibling.status}
+                        <Badge tone={driveStatusTone(sibling.status)}>
+                          {driveStatusLabel(sibling.status)}
                         </Badge>
-                        <span className="text-ink-600">{sibling.ctcLabel}</span>
+                        <span className="text-ink-600">
+                          {sibling.ctcLabel === "" ? "Package not stated" : sibling.ctcLabel}
+                        </span>
                         {sibling.stipendLabel !== null && (
                           <span className="text-ink-600">{sibling.stipendLabel}</span>
                         )}

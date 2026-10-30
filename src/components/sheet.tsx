@@ -178,11 +178,11 @@ export function SheetContent({
   }[side];
 
   const sizeClasses = {
-    sm: "max-w-sm",
-    md: "max-w-md",
-    lg: "max-w-xl",
-    xl: "max-w-3xl",
-    "2xl": "max-w-5xl",
+    sm: "w-full max-w-full sm:max-w-sm",
+    md: "w-full max-w-full sm:max-w-md",
+    lg: "w-full max-w-full sm:max-w-xl",
+    xl: "w-full max-w-full sm:max-w-3xl",
+    "2xl": "w-full max-w-full sm:max-w-5xl",
     full: "max-w-full w-full",
   }[size];
 
@@ -209,7 +209,7 @@ export function SheetContent({
           type="button"
           aria-label="Close panel"
           onClick={close}
-          className="absolute right-4 top-4 z-20 rounded-lg p-1.5 text-ink-400 hover:bg-surface-muted hover:text-ink-700 transition-colors"
+          className="absolute right-3 top-3 z-20 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-ink-400 hover:bg-surface-muted hover:text-ink-700 transition-colors"
         >
           <svg
             aria-hidden="true"

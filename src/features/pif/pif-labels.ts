@@ -1,4 +1,3 @@
-import type { Tone } from "@components/ui";
 import { driveTypeLabel } from "@domain/drive-type";
 import { DRIVE_TYPES } from "@domain/types";
 
@@ -64,18 +63,6 @@ export const PASSING_YEARS = [2026, 2027, 2028] as const;
 export const SCALE_LABELS: Record<string, string> = {
   cgpa: "CGPA (out of 10)",
   percentage: "Percentage (out of 100)",
-};
-
-/** What the event picker says about where a drive is in its life. */
-export const EVENT_STATUS_LABELS: Record<string, { label: string; tone: Tone }> = {
-  draft: { label: "Draft", tone: "neutral" },
-  submitted: { label: "Pending approval", tone: "warning" },
-  approved: { label: "Approved", tone: "success" },
-  live: { label: "Live", tone: "success" },
-  applications_closed: { label: "Applications closed", tone: "warning" },
-  in_rounds: { label: "In rounds", tone: "warning" },
-  completed: { label: "Completed", tone: "neutral" },
-  rejected: { label: "Rejected", tone: "danger" },
 };
 
 /** A contact as the form and the event picker both hold it — every part optional. */

@@ -3,6 +3,7 @@ import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
+import { participationStatusLabel } from "@domain/participation-status";
 import { describeResumeLinks } from "@domain/recruiter-export";
 import {
   type DirectoryFilter,
@@ -267,7 +268,7 @@ export function StudentDirectoryPage({
         "Passing year": String(s.passingYear),
         CGPA: s.cgpa === null ? "" : s.cgpa.toFixed(2),
         Registration: SRF_LABEL[s.srfStatus],
-        Participation: s.participationStatus.replaceAll("_", " "),
+        Participation: participationStatusLabel(s.participationStatus),
         Applications: String(s.applications),
         Company: s.placement?.companyName ?? "",
         Role: s.placement?.roleTitle ?? "",
@@ -421,14 +422,18 @@ export function StudentDirectoryPage({
             </div>
           )}
 
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <fieldset>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <fieldset className="w-full">
               <legend className="sr-only">Filter students</legend>
-              <div role="radiogroup" aria-label="Filter students" className="flex flex-wrap gap-2">
+              <div
+                role="radiogroup"
+                aria-label="Filter students"
+                className="flex flex-nowrap overflow-x-auto pb-1.5 [scrollbar-width:none] gap-2 sm:flex-wrap"
+              >
                 {FILTERS.map((option) => (
                   <label
                     key={option.value}
-                    className={`cursor-pointer rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
+                    className={`shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
                       filter === option.value
                         ? "border-brand-500 bg-brand-500 text-white"
                         : "border-line bg-surface text-ink-700 hover:border-violet-400"
@@ -451,30 +456,32 @@ export function StudentDirectoryPage({
 
             {/* F4 carried through (2026-08-26): a card pressed on one campus
                 lands here on that campus, and says so. */}
-            {campuses.length > 1 && (
-              <select
-                aria-label="Campus"
-                value={campus}
-                onChange={(e) => update({ campus: e.target.value })}
-                className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-900"
-              >
-                <option value="">All campuses</option>
-                {campuses.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            )}
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              {campuses.length > 1 && (
+                <select
+                  aria-label="Campus"
+                  value={campus}
+                  onChange={(e) => update({ campus: e.target.value })}
+                  className="flex-1 min-w-[130px] rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-900 sm:flex-none"
+                >
+                  <option value="">All campuses</option>
+                  {campuses.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              )}
 
-            <input
-              type="search"
-              aria-label="Search students"
-              placeholder="Name, roll number, company…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="min-w-56 flex-1 rounded-lg border border-line px-3 py-1.5 text-sm text-ink-900"
-            />
+              <input
+                type="search"
+                aria-label="Search students"
+                placeholder="Name, roll number, company…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-full flex-1 rounded-lg border border-line px-3 py-1.5 text-sm text-ink-900 sm:w-64"
+              />
+            </div>
           </div>
 
           {/*
@@ -556,14 +563,18 @@ export function StudentDirectoryPage({
                         </p>
                         <p className="text-xs text-ink-500">
                           Roll {student.rollNumber}
-                          {student.participationStatus !== "active" && (
-                            <>
-                              {" · "}
-                              <span className="text-warning">
-                                {student.participationStatus.replaceAll("_", " ")}
-                              </span>
-                            </>
-                          )}
+                          {/* The Actions column wears an "On hold" badge when
+                              holds are switched on, so the name cell stays
+                              quiet rather than saying it twice in one row. */}
+                          {student.participationStatus !== "active" &&
+                            !(holds !== undefined && student.participationStatus === "on_hold") && (
+                              <>
+                                {" · "}
+                                <span className="text-warning">
+                                  {participationStatusLabel(student.participationStatus)}
+                                </span>
+                              </>
+                            )}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-ink-700">

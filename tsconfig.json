@@ -22,6 +22,7 @@
     "resolveJsonModule": true,
 
     "paths": {
+      "@/*": ["./src/*"],
       "@domain/*": ["./src/domain/*"],
       "@features/*": ["./src/features/*"],
       "@lib/*": ["./src/lib/*"],

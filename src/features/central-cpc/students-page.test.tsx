@@ -291,10 +291,11 @@ describe("StudentDirectoryPage", () => {
 
   /**
    * 2026-10-29: the Participation column is the only place the CSV says what
-   * a student's status is. "on hold" must come out as two words, not the
-   * database's `on_hold` — the file is read by people, not machines.
+   * a student's status is, and it must read the way the screen says it —
+   * "On hold", never the database's `on_hold`. The file is read by people,
+   * not machines.
    */
-  it("prints the participation as two words for a held student in the export", async () => {
+  it("prints the participation as the screen words it for a held student in the export", async () => {
     const user = userEvent.setup();
     const download = vi.fn();
     const held: DirectoryStudent = { ...UNPLACED, participationStatus: "on_hold" };
@@ -308,7 +309,7 @@ describe("StudentDirectoryPage", () => {
     const rows = table.slice(1);
     const column = header.indexOf("Participation");
     expect(column).toBeGreaterThanOrEqual(0);
-    expect(rows[1]?.[column]).toBe("on hold");
+    expect(rows[1]?.[column]).toBe("On hold");
   });
 
   it("tells the reader how many students it is showing", async () => {

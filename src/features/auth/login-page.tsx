@@ -63,8 +63,15 @@ export function LoginPage() {
 
   return (
     <main className="grid min-h-dvh place-items-center bg-surface-muted px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-surface p-8 shadow-sm">
-        <h1 className="font-heading text-2xl font-bold text-brand-500">FACE Prep Campus</h1>
+      <div className="w-full max-w-sm rounded-2xl bg-surface p-6 sm:p-8 shadow-sm">
+        <img
+          src="/brand/faceprep-campus-dark.png"
+          alt="FACE Prep Campus"
+          className="mb-4 h-8 w-auto"
+        />
+        <h1 className="font-heading text-xl sm:text-2xl font-bold text-ink-900">
+          FACE Prep Campus
+        </h1>
         <p className="mt-1 text-sm text-ink-600">Placement Management System</p>
 
         {message !== null && (

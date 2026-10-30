@@ -5,6 +5,7 @@ import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
+import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import {
   type DriveTypeFilter as DriveTypeFilterValue,
   driveTypeLabel,
@@ -452,8 +453,8 @@ function VisitCard({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {statuses.map((entry) => (
-            <Badge key={entry.status} tone="brand">
-              {label(entry.status)}
+            <Badge key={entry.status} tone={driveStatusTone(entry.status)}>
+              {driveStatusLabel(entry.status)}
               {entry.count > 1 && ` ×${entry.count}`}
             </Badge>
           ))}
@@ -524,7 +525,9 @@ function VisitCard({
                     <td className="py-2 pr-3">{own.inRounds}</td>
                     <td className="py-2 pr-3">{own.offers}</td>
                     <td className="py-2 pr-3">
-                      <Badge tone="brand">{label(drive.status)}</Badge>
+                      <Badge tone={driveStatusTone(drive.status)}>
+                        {driveStatusLabel(drive.status)}
+                      </Badge>
                     </td>
                     <td className="py-2 text-right whitespace-nowrap">
                       <Button

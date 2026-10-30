@@ -138,6 +138,29 @@ describe("StudentRecordPage", () => {
     expect(within(skills).getByText(/no skill scores recorded/i)).toBeDefined();
   });
 
+  it("filters the record through the section tabs, wiring each tab to the panel", async () => {
+    const user = userEvent.setup();
+    show();
+
+    const allTab = await screen.findByRole("tab", { name: /all sections/i });
+    expect(allTab.getAttribute("aria-selected")).toBe("true");
+    expect(allTab.getAttribute("aria-controls")).toBe("student-record-panels");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
+      "student-record-tab-all",
+    );
+
+    await user.click(screen.getByRole("tab", { name: /portfolio & projects/i }));
+
+    expect(screen.queryByRole("region", { name: /academics/i })).toBeNull();
+    expect(screen.getByRole("region", { name: /portfolio/i })).toBeDefined();
+    expect(
+      screen.getByRole("tab", { name: /portfolio & projects/i }).getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
+      "student-record-tab-portfolio",
+    );
+  });
+
   it("lists every application, each opening its drive", async () => {
     show();
 

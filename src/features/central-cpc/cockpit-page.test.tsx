@@ -362,7 +362,7 @@ describe("the cockpit's actions are role-gated", () => {
     routed(view([APPROVED, LIVE]), "account_executive");
     expect(await screen.findByText("Zoho")).toBeDefined();
     expect(screen.getByText("Freshworks")).toBeDefined();
-    expect(screen.getByText("live")).toBeDefined();
+    expect(screen.getByText("Live")).toBeDefined();
   });
 
   /** Approving the commercials is not publishing them. */
@@ -889,7 +889,7 @@ describe("one company visit is one card", () => {
     routed(view([MTS, QA]));
 
     await screen.findByText(/2 roles/);
-    expect(screen.getByText(/approved ×2/)).toBeDefined();
+    expect(screen.getByText(/Approved — not yet published ×2/)).toBeDefined();
   });
 
   /** A visit whose roles stand in different places has no single status, and
@@ -899,8 +899,8 @@ describe("one company visit is one card", () => {
 
     await screen.findByText(/2 roles/);
     expect(screen.queryByText(/×/)).toBeNull();
-    expect(screen.getAllByText("approved")).toHaveLength(1);
-    expect(screen.getAllByText("live")).toHaveLength(1);
+    expect(screen.getAllByText("Approved — not yet published")).toHaveLength(1);
+    expect(screen.getAllByText("Live")).toHaveLength(1);
   });
 
   it("leaves a legacy single drive exactly the row it was", async () => {

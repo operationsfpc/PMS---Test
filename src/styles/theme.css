@@ -112,6 +112,34 @@
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
 
   --radius-card: 0.875rem;
+
+  /**
+   * shadcn's own vocabulary, mapped onto the ramp above rather than a second
+   * palette. The generated components ask for `bg-card`, `text-muted-foreground`
+   * and `border-border`; left undefined, Tailwind v4 emits nothing for them and
+   * each one renders colourless — the same fault `destructive`, `warning` and
+   * `accent` already hit here.
+   *
+   * `accent` is deliberately NOT remapped: ten screens use `bg-accent/5` as a
+   * violet ranking wash, so the shadcn hover states name `surface-muted`
+   * directly instead of borrowing that token back.
+   */
+  --color-background: var(--color-surface-muted);
+  --color-foreground: var(--color-ink-900);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-ink-900);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-ink-900);
+  --color-primary: var(--color-brand-500);
+  --color-primary-foreground: var(--color-surface);
+  --color-secondary: var(--color-surface-muted);
+  --color-secondary-foreground: var(--color-ink-900);
+  --color-muted: var(--color-surface-muted);
+  --color-muted-foreground: var(--color-ink-500);
+  --color-destructive-foreground: var(--color-surface);
+  --color-border: var(--color-line);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-brand-300);
 }
 
 @utility fpc-gradient {

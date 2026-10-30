@@ -267,13 +267,13 @@ export function DriveTabs({
           placeholder="Company or role"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm sm:w-56"
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm sm:w-56"
         />
         <select
           aria-label="Filter by location"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
-          className="rounded-lg border border-line px-2 py-2 text-sm"
+          className="flex-1 min-w-[130px] rounded-lg border border-line bg-surface px-2.5 py-2 text-sm sm:flex-none"
         >
           <option value="">All locations</option>
           {locationOptions.map((loc) => (
@@ -288,7 +288,7 @@ export function DriveTabs({
           aria-label="Filter by drive type"
           value={type}
           onChange={(e) => setType(e.target.value as DriveTypeFilterValue)}
-          className="rounded-lg border border-line px-2 py-2 text-sm"
+          className="flex-1 min-w-[130px] rounded-lg border border-line bg-surface px-2.5 py-2 text-sm sm:flex-none"
         >
           {DRIVE_TYPE_FILTERS.map((option) => (
             <option key={option.value === "" ? "all" : option.value} value={option.value}>
@@ -300,7 +300,7 @@ export function DriveTabs({
           aria-label="Filter by role area"
           value={area}
           onChange={(e) => setArea(e.target.value as "" | RoleCategory)}
-          className="rounded-lg border border-line px-2 py-2 text-sm"
+          className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm sm:w-auto sm:flex-none"
         >
           <option value="">All role areas</option>
           {Object.entries(AREA_LABEL).map(([value, label]) => (

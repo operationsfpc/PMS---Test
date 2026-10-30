@@ -194,7 +194,7 @@ export function DriveRoster({
                 className={`rounded-xl border transition-all ${
                   isExpanded
                     ? "border-brand-300 bg-brand-50/20 shadow-xs"
-                    : "border-line bg-surface hover:border-line-hover hover:bg-surface-muted/20"
+                    : "border-line bg-surface hover:border-brand-300 hover:bg-surface-muted/20"
                 }`}
               >
                 {/* Clickable student summary row */}

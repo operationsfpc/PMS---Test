@@ -1,12 +1,13 @@
 import { groupDrivesByEvent } from "@domain/company-drive";
 import { compareNewestFirst, compareOldestFirst, type DriveOrder } from "@domain/drive-aging";
 import { searchDrives } from "@domain/drive-portfolio";
+import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import type { DriveType } from "@domain/types";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { DriveSort } from "./drive-sort";
-import { Badge, ButtonLink, Card, type Tone } from "./ui";
+import { Badge, ButtonLink, Card } from "./ui";
 
 /**
  * M1 (approved 2026-08-21): the one drive picker behind Shortlisting,
@@ -29,13 +30,6 @@ export interface PickerDrive {
   readonly companyDriveId?: string | null;
   readonly driveType?: DriveType | null;
 }
-
-const STATUS_TONE: Record<string, Tone> = {
-  live: "brand",
-  applications_closed: "warning",
-  in_rounds: "warning",
-  completed: "success",
-};
 
 const raisedLabel = (iso: string | null): string | null =>
   iso === null
@@ -131,7 +125,7 @@ export function DrivePicker({
 
 /** The status word and its colour, spelled the way every other drive list spells it. */
 const statusBadge = (status: string) => (
-  <Badge tone={STATUS_TONE[status] ?? "neutral"}>{status.replaceAll("_", " ")}</Badge>
+  <Badge tone={driveStatusTone(status)}>{driveStatusLabel(status)}</Badge>
 );
 
 /**

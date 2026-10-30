@@ -19,6 +19,7 @@ import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain
 import { describeVisitDay } from "@domain/drive-aging";
 import { applicationWindow, driveOutcome } from "@domain/drive-analytics";
 import { type DriveFunnel, type DriveParticipation, driveFunnel } from "@domain/drive-funnel";
+import { driveStatusLabel } from "@domain/drive-status";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import { sameMoney } from "@domain/math";
 import { type OfferCategory, offerCategoryLabelOf } from "@domain/offer-category";
@@ -212,8 +213,6 @@ export interface DashboardSnapshot {
 export interface DashboardView {
   snapshot(scope?: DashboardScope): Promise<DashboardSnapshot>;
 }
-
-const label = (value: string) => value.replaceAll("_", " ");
 
 /** Money, as read aloud: "₹8 LPA", never "₹8.00 LPA". */
 const lpa = (value: number | null) => (value === null ? "—" : `₹${value} LPA`);
@@ -771,7 +770,10 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               somewhere else — and the directory's own filter did not always
               hold the same population ("if it shows a count I need to know who
               all is there"). The directory stays one click away in the footer. */}
-          <section aria-label="Headline" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <section
+            aria-label="Headline"
+            className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5"
+          >
             <StatCard
               label="Placement rate"
               value={`${stats.placementRate}%`}
@@ -837,7 +839,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
             />
             {/* The one card that is not about students, so it opens the drives
                 instead - and the campus switcher does not apply to it. */}
-            <Link to="/central/drives/completed" className="block">
+            <Link to="/central/drives/completed" className="block col-span-2 sm:col-span-1">
               <StatCard
                 label="Drives completed"
                 value={snapshot.drivesByStatus.completed ?? 0}
@@ -1048,14 +1050,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                         type="button"
                         aria-label={
                           roles === count
-                            ? `${label(status)}: ${drives}`
-                            : `${label(status)}: ${drives}, ${roles} roles`
+                            ? `${driveStatusLabel(status)}: ${drives}`
+                            : `${driveStatusLabel(status)}: ${drives}, ${roles} roles`
                         }
                         onClick={() => setStatusOpen(status)}
                         className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-brand-50"
                       >
                         <span className="flex flex-wrap items-baseline gap-2">
-                          <span className="capitalize text-ink-700">{label(status)}</span>
+                          <span className="text-ink-700">{driveStatusLabel(status)}</span>
                           {roles !== count && (
                             <span className="text-xs text-ink-500">{roles} roles</span>
                           )}
@@ -1603,7 +1605,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
       {statusOpen !== null && (
         <DrilldownModal
           eyebrow="Campus overview"
-          title={`Drives — ${label(statusOpen)}`}
+          title={`Drives — ${driveStatusLabel(statusOpen)}`}
           subtitle={`${statusOpenEvents.length} drive${statusOpenEvents.length === 1 ? "" : "s"} · ${statusOpenDrives.length} role${statusOpenDrives.length === 1 ? "" : "s"}`}
           onClose={() => setStatusOpen(null)}
         >

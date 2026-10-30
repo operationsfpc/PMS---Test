@@ -34,11 +34,11 @@ export function DrilldownModal({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4 backdrop-blur-xs"
     >
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+      <div className="flex max-h-[92dvh] sm:max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl sm:rounded-2xl border border-line bg-surface shadow-2xl">
         <div className="fpc-gradient h-1.5 w-full" />
-        <header className="flex items-start justify-between gap-4 border-b border-line bg-surface-muted p-5">
+        <header className="flex items-start justify-between gap-3 border-b border-line bg-surface-muted p-4 sm:p-5">
           <div className="min-w-0">
             <span className="inline-block rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
               {eyebrow}
@@ -52,7 +52,7 @@ export function DrilldownModal({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-ink-500 transition-colors hover:bg-surface-muted hover:text-ink-900"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-ink-500 transition-colors hover:bg-surface-muted hover:text-ink-900"
           >
             <svg
               aria-hidden="true"
@@ -68,7 +68,7 @@ export function DrilldownModal({
             </svg>
           </button>
         </header>
-        <div className="overflow-y-auto p-5">{children}</div>
+        <div className="overflow-y-auto p-4 sm:p-5">{children}</div>
       </div>
     </div>
   );

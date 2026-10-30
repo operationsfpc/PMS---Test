@@ -460,7 +460,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
             {prompt.action !== null && (
               <Link
                 to={prompt.action.href}
-                className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+                className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-600 sm:w-auto"
               >
                 {prompt.action.label}
               </Link>
@@ -469,7 +469,10 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
         </Card>
       </section>
 
-      <section aria-label="Summary" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section
+        aria-label="Summary"
+        className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+      >
         <StatCard label="Applications" value={snapshot.applications.length} />
         <StatCard label="In process" value={inProcess} tone="brand" />
         <StatCard

@@ -38,6 +38,7 @@ import {
 } from "@domain/drive-aging";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
+import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import {
   type DriveTypeFilter as DriveTypeFilterValue,
   driveTypeLabel,
@@ -127,19 +128,6 @@ export interface CockpitView {
    */
   updateVenue?(driveId: string, venue: string): Promise<void>;
 }
-
-const STATUS_TONE: Record<DriveStatus, "neutral" | "brand" | "warning" | "success" | "danger"> = {
-  draft: "neutral",
-  submitted: "warning",
-  approved: "warning",
-  live: "brand",
-  applications_closed: "neutral",
-  in_rounds: "brand",
-  completed: "success",
-  rejected: "danger",
-};
-
-const label = (value: string) => value.replaceAll("_", " ");
 
 /**
  * D2 (2026-08-12): the Central CPC sees what awaits publishing and what is
@@ -730,7 +718,7 @@ function VisitCard({ roles, ...props }: { roles: readonly DriveSummary[] } & Row
     const stale = isUnpublished(head.status) && isPendingTooLong(head.createdAt, props.now);
     return (
       <>
-        <Badge tone={STATUS_TONE[head.status]}>{label(head.status)}</Badge>
+        <Badge tone={driveStatusTone(head.status)}>{driveStatusLabel(head.status)}</Badge>
         {head.onHold && <Badge tone="warning">On hold</Badge>}
         {/* G1a: the age of a submission, flagged only while it waits. */}
         {stale && (
@@ -777,8 +765,8 @@ function VisitCard({ roles, ...props }: { roles: readonly DriveSummary[] } & Row
           {isVisit ? (
             <>
               {uniform.size === 1 && (
-                <Badge tone={STATUS_TONE[[...uniform][0] ?? "draft"]}>
-                  {label([...uniform][0] ?? "draft")}
+                <Badge tone={driveStatusTone([...uniform][0] ?? "draft")}>
+                  {driveStatusLabel([...uniform][0] ?? "draft")}
                   {roles.length > 1 && ` ×${roles.length}`}
                 </Badge>
               )}
@@ -811,7 +799,9 @@ function VisitCard({ roles, ...props }: { roles: readonly DriveSummary[] } & Row
                   )}
                   <span>{drive.applicationCount} applicants</span>
                   {" · "}
-                  <Badge tone={STATUS_TONE[drive.status]}>{label(drive.status)}</Badge>
+                  <Badge tone={driveStatusTone(drive.status)}>
+                    {driveStatusLabel(drive.status)}
+                  </Badge>
                   {drive.onHold && (
                     <>
                       {" · "}

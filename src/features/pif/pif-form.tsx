@@ -1,6 +1,7 @@
 import { ErrorPanel } from "@components/error-panel";
 import { ToastContainer, useToast } from "@components/toast";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveStatus, describeDriveFreeze } from "@domain/drive-working";
 import { ROLE_CATEGORIES } from "@domain/types";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -28,7 +29,6 @@ import {
   type ContactRow,
   contactSignature,
   DRIVE_MODE_LABELS,
-  EVENT_STATUS_LABELS,
   hasAnyContactIn,
   PIF_SECTIONS,
   ROLE_CATEGORY_LABELS,
@@ -669,8 +669,8 @@ export function PifForm({
                             Drive Date:{" "}
                             {evt.tentativeDate ? evt.tentativeDate : "Date to be announced"}
                           </span>
-                          <Badge tone={EVENT_STATUS_LABELS[evt.status]?.tone ?? "neutral"}>
-                            {EVENT_STATUS_LABELS[evt.status]?.label ?? evt.status}
+                          <Badge tone={driveStatusTone(evt.status)}>
+                            {driveStatusLabel(evt.status)}
                           </Badge>
                           {evt.driveMode && (
                             <span className="text-ink-500">

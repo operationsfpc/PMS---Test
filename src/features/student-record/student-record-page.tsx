@@ -1,9 +1,18 @@
 import { DrilldownModal } from "@components/drilldown-modal";
-import { Badge, Button, ButtonAnchor, ButtonLink, Card, PageHeader } from "@components/ui";
+import {
+  Badge,
+  Button,
+  ButtonAnchor,
+  ButtonLink,
+  Card,
+  PageHeader,
+  StatCard,
+} from "@components/ui";
 import { boardLabel, type SchoolBoard } from "@domain/boards";
 import { HOLD_KIND_LABELS, holdStanding, holdWindowLine } from "@domain/holds";
 import { describeMarks } from "@domain/marks";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
+import { participationStatusLabel, participationStatusTone } from "@domain/participation-status";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import { extractOriginalFilename } from "@domain/storage-path";
 import {
@@ -33,6 +42,16 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { Skeleton } from "@/components/shadcn/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/shadcn/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
 
 export interface StudentRecordSemester {
   readonly semesterNumber: number;
@@ -212,6 +231,26 @@ export const DRIVE_TYPE_LABEL: Record<DriveType, string> = {
   internship_convertible: "Internship (Convertible)",
   internship: "Internship only",
 };
+
+/** The placeholder tiles and panel columns, shaped like the real page so the read does not reflow. */
+const LOADING_STATS = ["cgpa", "arrears", "history", "school", "outcomes", "applications"];
+const LOADING_PANELS = ["placement", "marks", "proofs", "applications"];
+const LOADING_SIDEBAR = ["profile", "resume"];
+
+/**
+ * A declared figure with the scale the student chose, spelled out.
+ *
+ * `diploma_marks_scale` and `ug_aggregate_scale` are stored as enum strings, so
+ * the raw value used to print as "9.5 (cgpa)" — a column value, not something a
+ * coordinator reads. An unrecognised scale is still shown rather than silently
+ * re-labelled, because guessing a scale changes which cutoff the figure is
+ * compared against.
+ */
+function declaredMarks(value: number, scale: string | null | undefined): string {
+  if (scale === "percentage") return `${value}%`;
+  if (scale === "cgpa" || scale == null) return `${value} CGPA`;
+  return `${value} (${scale})`;
+}
 
 const onDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-IN", {
@@ -475,9 +514,31 @@ export function StudentRecordPage({
     }
 
     return (
-      <p role="status" className="text-sm text-ink-500">
-        Loading the student record…
-      </p>
+      <div role="status" aria-busy="true" className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-7 w-52" />
+          <Skeleton className="h-4 w-36" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {LOADING_STATS.map((key) => (
+            <Skeleton key={key} className="h-[88px]" />
+          ))}
+        </div>
+        <Skeleton className="h-9 w-full" />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            {LOADING_PANELS.map((key) => (
+              <Skeleton key={key} className="h-44" />
+            ))}
+          </div>
+          <div className="space-y-6">
+            {LOADING_SIDEBAR.map((key) => (
+              <Skeleton key={key} className="h-36" />
+            ))}
+          </div>
+        </div>
+        <p className="text-sm text-ink-500">Loading the student record…</p>
+      </div>
     );
   }
 
@@ -567,7 +628,9 @@ export function StudentRecordPage({
             Registration: {SRF_LABEL[record.srfStatus]}
           </Badge>
           {record.participationStatus !== "active" && !badgeRepeatsHold && (
-            <Badge tone="warning">{record.participationStatus.replaceAll("_", " ")}</Badge>
+            <Badge tone={participationStatusTone(record.participationStatus)}>
+              {participationStatusLabel(record.participationStatus)}
+            </Badge>
           )}
           {driveTypePreferences.length > 0 && (
             <span className="text-xs text-ink-500">
@@ -603,92 +666,74 @@ export function StudentRecordPage({
         </p>
       )}
 
-      {/* Top Quick Stats Strip */}
+      {/* Top Quick Stats Strip — one palette; colour only where the figure is a signal */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Card className="border-brand-200/80 bg-brand-50/50 p-3.5 text-center">
-          <span className="text-xs font-medium text-brand-700">Overall CGPA</span>
-          <p className="mt-1 font-heading text-xl font-bold text-ink-900">
-            {record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
-          </p>
-          <span className="text-[11px] text-ink-500">Scale of 10</span>
-        </Card>
-        <Card
-          className={`p-3.5 text-center ${currentArrears > 0 ? "border-danger-100 bg-danger-50/70" : "bg-surface"}`}
-        >
-          <span className="text-xs font-medium text-ink-500">Standing Arrears</span>
-          <p
-            className={`mt-1 font-heading text-xl font-bold ${
-              currentArrears > 0 ? "text-danger-600" : "text-success-600"
-            }`}
-          >
-            {currentArrears}
-          </p>
-          <span className="text-[11px] text-ink-400">
-            {currentArrears > 0 ? "Action required" : "Zero active"}
-          </span>
-        </Card>
-        <Card
-          className={`p-3.5 text-center ${historyOfArrears > 0 ? "border-gold-300 bg-gold-50/50" : "bg-surface"}`}
-        >
-          <span className="text-xs font-medium text-ink-500">History Arrears</span>
-          <p className="mt-1 font-heading text-xl font-bold text-ink-900">{historyOfArrears}</p>
-          <span className="text-[11px] text-ink-400">Total recorded</span>
-        </Card>
-        <Card className="bg-surface p-3.5 text-center">
-          <span className="text-xs font-medium text-ink-500">10th / 12th Marks</span>
-          <p className="mt-1 font-heading text-sm font-bold text-ink-900">
-            {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} /{" "}
-            {record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"}
-          </p>
-          <span className="text-[11px] text-ink-400">Class X / XII</span>
-        </Card>
-        <Card className="border-success-200/80 bg-success-50/50 p-3.5 text-center">
-          <span className="text-xs font-medium text-success-700">Offers & Internships</span>
-          <p className="mt-1 font-heading text-xl font-bold text-success-700">
-            {offers.length > 0
+        <StatCard
+          label="Overall CGPA"
+          value={record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
+          hint="Normalised out of 10"
+        />
+        <StatCard
+          label="Standing Arrears"
+          value={currentArrears}
+          hint={currentArrears > 0 ? "Action required" : "Zero active"}
+          tone={currentArrears > 0 ? "danger" : "success"}
+        />
+        <StatCard label="History Arrears" value={historyOfArrears} hint="Total recorded" />
+        <StatCard
+          label="10th / 12th Marks"
+          value={`${record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} / ${
+            record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"
+          }`}
+          hint="Class X / XII"
+        />
+        <StatCard
+          label="Offers & Internships"
+          value={
+            offers.length > 0
               ? `${offers.length} Offer${offers.length > 1 ? "s" : ""}`
               : record.placement
                 ? "1 Placed"
-                : "0"}
-          </p>
-          <span className="text-[11px] text-ink-500">
-            {offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
-          </span>
-        </Card>
-        <Card className="border-violet-300/60 bg-violet-50/50 p-3.5 text-center">
-          <span className="text-xs font-medium text-violet-700">Applications</span>
-          <p className="mt-1 font-heading text-xl font-bold text-ink-900">{applications.length}</p>
-          <span className="text-[11px] text-ink-500">Campus drives</span>
-        </Card>
+                : "0"
+          }
+          hint={offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
+          tone={offers.length > 0 || record.placement ? "success" : "neutral"}
+        />
+        <StatCard label="Applications" value={applications.length} hint="Campus drives" />
       </div>
 
-      {/* Interactive Section Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-line pb-3">
-        {[
-          { id: "all", label: "All Sections" },
-          { id: "academics", label: `Academics & Semesters (${semesters.length})` },
-          {
-            id: "placements",
-            label: `Placements & Offers (${offers.length || (record.placement ? 1 : 0)})`,
-          },
-          { id: "preferences", label: "Resumes & Preferences" },
-          { id: "portfolio", label: "Portfolio & Skills" },
-          { id: "identity", label: "Identity & Audit" },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveSection(tab.id as typeof activeSection)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              activeSection === tab.id
-                ? "bg-brand-600 text-white shadow-xs"
-                : "border border-line bg-surface text-ink-700 hover:bg-surface-muted"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Section filter — real Tabs: arrow keys, roving focus, one panel the sections live in */}
+      <Tabs
+        value={activeSection}
+        onValueChange={(next) => setActiveSection(next as typeof activeSection)}
+      >
+        <TabsList
+          variant="line"
+          className="h-auto w-full flex-nowrap overflow-x-auto justify-start gap-x-1 rounded-none border-b border-line p-0 [scrollbar-width:none] sm:flex-wrap"
+        >
+          {[
+            { id: "all", label: "All Sections" },
+            { id: "academics", label: `Academics & Semesters (${semesters.length})` },
+            {
+              id: "placements",
+              label: `Placements & Offers (${offers.length || (record.placement ? 1 : 0)})`,
+            },
+            { id: "preferences", label: "Resumes & Preferences" },
+            { id: "portfolio", label: "Portfolio & Projects" },
+            { id: "identity", label: "Identity & Audit" },
+          ].map((tab) => (
+            <TabsTrigger
+              key={tab.id}
+              value={tab.id}
+              id={`student-record-tab-${tab.id}`}
+              aria-controls="student-record-panels"
+              className="w-auto flex-none rounded-none px-3 py-2 text-xs data-[state=active]:after:bg-brand-600 data-[state=active]:after:bottom-0"
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
       {(hold !== null || pending !== null || pastHolds.length > 0) && (
@@ -954,8 +999,14 @@ export function StudentRecordPage({
         </section>
       )}
 
-      {/* Main Layout Grid */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Main Layout Grid — the panel every section tab points at */}
+      <div
+        id="student-record-panels"
+        role="tabpanel"
+        aria-labelledby={`student-record-tab-${activeSection}`}
+        tabIndex={-1}
+        className="grid grid-cols-1 gap-6 outline-none lg:grid-cols-3"
+      >
         {/* Left 2 Columns: Core History & Records */}
         <div className="space-y-6 lg:col-span-2">
           {/* Offers & Placement Card */}
@@ -1062,10 +1113,12 @@ export function StudentRecordPage({
                                 {offer.roleTitle ?? "Role title not recorded"}
                               </p>
                               <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
-                                {offer.ctcLpa != null && offer.ctcLpa > 0 && (
+                                {offer.ctcLpa != null && offer.ctcLpa > 0 ? (
                                   <span className="font-semibold text-brand-700">
                                     ₹{offer.ctcLpa} LPA
                                   </span>
+                                ) : (
+                                  <span>CTC not recorded</span>
                                 )}
                                 {offer.stipendMonthly != null && offer.stipendMonthly > 0 && (
                                   <span className="font-semibold text-success-700">
@@ -1103,8 +1156,11 @@ export function StudentRecordPage({
                             )}
                           </p>
                           <p className="mt-0.5 text-ink-500">
-                            {record.placement.roleTitle ?? "Role not recorded"} · ₹
-                            {record.placement.ctcLpa} LPA
+                            {record.placement.roleTitle ?? "Role not recorded"}
+                            {" · "}
+                            {record.placement.ctcLpa != null && record.placement.ctcLpa > 0
+                              ? `₹${record.placement.ctcLpa} LPA`
+                              : "CTC not recorded"}
                             {record.placement.offerCategory !== null &&
                               ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
                           </p>
@@ -1179,26 +1235,26 @@ export function StudentRecordPage({
                   <p className="text-sm text-ink-500">No semester records filed.</p>
                 ) : (
                   <div className="overflow-x-auto rounded-lg border border-line">
-                    <table className="w-full text-left text-sm">
-                      <thead className="border-b border-line bg-surface-muted text-xs font-semibold text-ink-700">
-                        <tr>
-                          <th className="px-4 py-2.5">Semester</th>
-                          <th className="px-4 py-2.5">CGPA / Score</th>
-                          <th className="px-4 py-2.5">Arrears</th>
-                          <th className="px-4 py-2.5">Status</th>
-                          <th className="px-4 py-2.5 text-right">Marksheet</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-line bg-surface">
+                    <Table>
+                      <TableHeader className="bg-surface-muted text-xs font-semibold text-ink-700">
+                        <TableRow>
+                          <TableHead className="pl-4">Semester</TableHead>
+                          <TableHead>CGPA / Score</TableHead>
+                          <TableHead>Arrears</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="pr-4 text-right">Marksheet</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="divide-line bg-surface">
                         {filteredSemesters.map((semester) => (
-                          <tr key={semester.semesterNumber} className="hover:bg-surface-muted/30">
-                            <td className="px-4 py-2.5 font-medium text-ink-900">
+                          <TableRow key={semester.semesterNumber} className="border-line">
+                            <TableCell className="pl-4 font-medium text-ink-900">
                               Semester {semester.semesterNumber}
-                            </td>
-                            <td className="px-4 py-2.5 text-ink-900">
+                            </TableCell>
+                            <TableCell className="text-ink-900 tabular-nums">
                               {describeMarks(semester.cgpa, "cgpa")}
-                            </td>
-                            <td className="px-4 py-2.5 text-xs">
+                            </TableCell>
+                            <TableCell className="text-xs">
                               <span
                                 className={
                                   semester.currentArrears && semester.currentArrears > 0
@@ -1208,17 +1264,16 @@ export function StudentRecordPage({
                               >
                                 Standing: {semester.currentArrears ?? 0}
                               </span>
-                              <span className="text-ink-400">
-                                {" "}
-                                · History: {semester.historyOfArrears ?? 0}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2.5">
+                              <p className="text-ink-400">
+                                History: {semester.historyOfArrears ?? 0}
+                              </p>
+                            </TableCell>
+                            <TableCell>
                               <Badge tone={semester.verified ? "success" : "warning"}>
                                 {semester.verified ? "Verified" : "Pending"}
                               </Badge>
-                            </td>
-                            <td className="px-4 py-2.5 text-right">
+                            </TableCell>
+                            <TableCell className="pr-4 text-right">
                               {semester.marksheetUrl ? (
                                 <ButtonAnchor
                                   href={semester.marksheetUrl}
@@ -1232,13 +1287,13 @@ export function StudentRecordPage({
                                   View PDF
                                 </ButtonAnchor>
                               ) : (
-                                <span className="text-xs text-ink-400">—</span>
+                                <span className="text-xs text-ink-400">Not filed</span>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </Card>
@@ -1350,8 +1405,8 @@ export function StudentRecordPage({
                           </span>
                           <p className="mt-1 text-base font-bold text-ink-900">
                             {record.diplomaMarks != null
-                              ? `${record.diplomaMarks} (${record.diplomaMarksScale ?? "cgpa"})`
-                              : "Declared"}
+                              ? declaredMarks(record.diplomaMarks, record.diplomaMarksScale)
+                              : "Marks not recorded"}
                           </p>
                           <p className="mt-1 text-xs text-ink-600">{record.diplomaInstitution}</p>
                           {record.diplomaUniversity && (
@@ -1387,8 +1442,8 @@ export function StudentRecordPage({
                           </span>
                           <p className="mt-1 text-base font-bold text-ink-900">
                             {record.ugAggregateDeclared != null
-                              ? `${record.ugAggregateDeclared} (${record.ugAggregateScale ?? "cgpa"})`
-                              : "Completed"}
+                              ? declaredMarks(record.ugAggregateDeclared, record.ugAggregateScale)
+                              : "Aggregate not recorded"}
                           </p>
                           <p className="mt-1 text-xs text-ink-600">
                             {record.ugDegree}
@@ -1431,15 +1486,15 @@ export function StudentRecordPage({
                     </p>
                   </div>
                   {applications.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="relative">
+                    <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                      <div className="relative w-full sm:w-auto">
                         <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-400" />
                         <input
                           type="text"
                           value={appSearch}
                           onChange={(e) => setAppSearch(e.target.value)}
                           placeholder="Search company or role…"
-                          className="rounded-lg border border-line bg-surface py-1 pl-8 pr-3 text-xs placeholder:text-ink-400 focus:outline-hidden"
+                          className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-xs placeholder:text-ink-400 focus:outline-hidden sm:w-52"
                         />
                       </div>
                       <div className="flex items-center gap-1 rounded-lg border border-line bg-surface-muted/50 p-0.5">
@@ -1819,28 +1874,44 @@ export function StudentRecordPage({
                   )}
                 </div>
 
-                {/* Assessed skill scores */}
+                {/* Assessed skill scores — one row per skill, the bar shows what the fraction means */}
                 {skills.length === 0 ? (
                   <p className="text-sm text-ink-500">No skill scores recorded.</p>
                 ) : (
-                  <p className="flex flex-wrap gap-1.5 text-xs">
+                  <ul className="divide-y divide-line text-sm">
                     {skills.map(({ skill, score }) => (
-                      <span
-                        key={skill}
-                        className="max-w-full break-words rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700 [overflow-wrap:anywhere]"
-                      >
-                        {skill} {score}/{SKILL_SCORE_MAX}
-                      </span>
+                      <li key={skill} className="flex items-center gap-3 py-2 first:pt-0">
+                        <span className="min-w-0 flex-1 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                          {skill} {score}/{SKILL_SCORE_MAX}
+                        </span>
+                        <span
+                          aria-hidden="true"
+                          className="h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-line"
+                        >
+                          <span
+                            className="block h-full rounded-full bg-brand-500"
+                            style={{
+                              width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
+                            }}
+                          />
+                        </span>
+                      </li>
                     ))}
-                  </p>
+                  </ul>
                 )}
 
                 {/* Preferred role categories */}
                 {rolePreferences.length > 0 && (
-                  <p className="mt-3 text-sm text-ink-700">
-                    <span className="text-ink-500">Preferred areas: </span>
-                    {rolePreferences.map((area) => AREA_LABEL[area] ?? area).join(" · ")}
-                  </p>
+                  <div className="mt-3">
+                    <span className="text-xs font-semibold text-ink-500">Preferred areas</span>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {rolePreferences.map((area) => (
+                        <Badge key={area} tone="neutral">
+                          {AREA_LABEL[area] ?? area}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {/* Drive type preferences */}
