@@ -15,12 +15,14 @@ import type {
   SrfStatus,
 } from "@domain/types";
 import { readAllRows } from "@lib/postgrest-read";
-import { signedResumeLinks } from "@lib/resume-links";
+import { type ResumableFile, signedResumeLinks } from "@lib/resume-links";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   StudentRecord,
+  StudentRecordCertificate,
   StudentRecordOffer,
   StudentRecordResume,
+  StudentRecordSemester,
   StudentRecordView,
 } from "./student-record-page";
 
@@ -52,17 +54,21 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
 export const RECORD_STUDENT_COLUMNS = `
   id, full_name, roll_number, email, mobile, whatsapp, alternate_contact, passing_year,
   srf_status, participation_status, tenth_percentage, twelfth_percentage,
-  tenth_institution, tenth_board, twelfth_institution, twelfth_board,
-  diploma_institution, diploma_marks,
+  tenth_institution, tenth_board, tenth_board_state, tenth_grade,
+  twelfth_institution, twelfth_board, twelfth_board_state, twelfth_grade,
+  diploma_institution, diploma_university, diploma_marks, diploma_marks_scale,
+  programme_level, ug_degree, ug_college, ug_branch, ug_aggregate_declared, ug_aggregate_scale,
   overall_cgpa, current_arrears, history_of_arrears,
   drive_type_preferences,
   technical_skills, areas_of_interest, areas_of_expertise,
   projects, certifications, achievements,
+  other_profiles, consent_given_at, srf_submitted_at, srf_decided_at, srf_rejection_reason,
   linkedin_url, github_url, leetcode_url, hackerrank_url,
   campuses(name), degrees(name), branches(name)
 `;
 
-export const RECORD_SEMESTER_COLUMNS = "semester_number, cgpa, status";
+export const RECORD_SEMESTER_COLUMNS =
+  "semester_number, cgpa, current_arrears, history_of_arrears, status, marksheet_id";
 export const RECORD_SKILL_COLUMNS = "score, skill_areas(name)";
 export const RECORD_APPLICATION_COLUMNS =
   "id, drive_id, applied_at, drives(company_name, role_title), shortlist_entries(included)";
@@ -70,6 +76,7 @@ export const RECORD_OFFER_COLUMNS =
   "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, company_name, role_title, attachment_path, attachment_name";
 export const RECORD_DOCUMENT_COLUMNS =
   "id, kind, role_category, storage_path, size_bytes, uploaded_at";
+export const RECORD_CERTIFICATE_COLUMNS = "id, name, status, document_id";
 
 export function createSupabaseStudentRecordView(client: SupabaseClient): StudentRecordView {
   return {
@@ -91,55 +98,69 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
       let applicationRows: Array<Record<string, unknown>>;
       let offerRows: Array<Record<string, unknown>>;
       let documentRows: Array<Record<string, unknown>>;
+      let certificateRows: Array<Record<string, unknown>>;
       try {
-        [semesterRows, skillRows, preferenceRows, applicationRows, offerRows, documentRows] =
-          await Promise.all([
-            readAllRows((from, to) =>
-              client
-                .from("student_semesters")
-                .select(RECORD_SEMESTER_COLUMNS)
-                .eq("student_id", studentId)
-                .order("semester_number")
-                .range(from, to),
-            ),
-            readAllRows((from, to) =>
-              client
-                .from("student_skill_scores")
-                .select(RECORD_SKILL_COLUMNS)
-                .eq("student_id", studentId)
-                .range(from, to),
-            ),
-            readAllRows((from, to) =>
-              client
-                .from("student_role_preferences")
-                .select("category")
-                .eq("student_id", studentId)
-                .range(from, to),
-            ),
-            readAllRows((from, to) =>
-              client
-                .from("applications")
-                .select(RECORD_APPLICATION_COLUMNS)
-                .eq("student_id", studentId)
-                .order("applied_at", { ascending: false })
-                .range(from, to),
-            ),
-            readAllRows((from, to) =>
-              client
-                .from("offers")
-                .select(RECORD_OFFER_COLUMNS)
-                .eq("student_id", studentId)
-                .range(from, to),
-            ),
-            readAllRows((from, to) =>
-              client
-                .from("student_documents")
-                .select(RECORD_DOCUMENT_COLUMNS)
-                .eq("student_id", studentId)
-                .eq("kind", "resume")
-                .range(from, to),
-            ),
-          ]);
+        [
+          semesterRows,
+          skillRows,
+          preferenceRows,
+          applicationRows,
+          offerRows,
+          documentRows,
+          certificateRows,
+        ] = await Promise.all([
+          readAllRows((from, to) =>
+            client
+              .from("student_semesters")
+              .select(RECORD_SEMESTER_COLUMNS)
+              .eq("student_id", studentId)
+              .order("semester_number")
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("student_skill_scores")
+              .select(RECORD_SKILL_COLUMNS)
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("student_role_preferences")
+              .select("category")
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("applications")
+              .select(RECORD_APPLICATION_COLUMNS)
+              .eq("student_id", studentId)
+              .order("applied_at", { ascending: false })
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("offers")
+              .select(RECORD_OFFER_COLUMNS)
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("student_documents")
+              .select(RECORD_DOCUMENT_COLUMNS)
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("student_certificates")
+              .select(RECORD_CERTIFICATE_COLUMNS)
+              .eq("student_id", studentId)
+              .range(from, to),
+          ),
+        ]);
       } catch {
         // An empty list is a fact about this student; a refused read is not.
         // Read past, a failed skills query rendered "No skill scores
@@ -223,34 +244,78 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
         }),
       );
 
-      // Sign resumes
-      const resumeFiles = documentRows
+      // Sign all student documents (marksheets, certificates, resumes)
+      const allDocFiles: ResumableFile[] = documentRows
         .filter((row) => row.storage_path)
         .map((row) => ({
           key: row.id as string,
           storagePath: row.storage_path as string,
         }));
 
-      let signedResumeMap = new Map<string, string>();
-      if (resumeFiles.length > 0) {
+      let signedDocMap = new Map<string, string>();
+      if (allDocFiles.length > 0) {
         try {
-          signedResumeMap = await signedResumeLinks(client, resumeFiles, 600);
+          signedDocMap = await signedResumeLinks(client, allDocFiles, 600);
         } catch {
-          // If signing fails, resume cards still list the file
+          // If signing fails, cards still list the file
         }
       }
 
-      const resumes: StudentRecordResume[] = documentRows.map((row) => {
-        const path = row.storage_path as string;
-        return {
-          id: row.id as string,
-          roleCategory: row.role_category as RoleCategory,
-          storagePath: path,
-          fileName: extractOriginalFilename(path) ?? "resume.pdf",
-          sizeBytes: Number(row.size_bytes ?? 0),
-          uploadedAt: (row.uploaded_at as string | null) ?? new Date().toISOString(),
-          downloadUrl: signedResumeMap.get(row.id as string) ?? null,
+      // Map document kinds
+      const tenthDoc = documentRows.find((d) => d.kind === "tenth_marksheet");
+      const twelfthDoc = documentRows.find((d) => d.kind === "twelfth_marksheet");
+      const diplomaDoc = documentRows.find((d) => d.kind === "diploma_marksheet");
+      const ugDoc = documentRows.find(
+        (d) => d.kind === "ug_consolidated_marksheet" || d.kind === "ug_marksheet",
+      );
+
+      const resumes: StudentRecordResume[] = documentRows
+        .filter((row) => row.kind === "resume" && row.role_category)
+        .map((row) => {
+          const path = row.storage_path as string;
+          return {
+            id: row.id as string,
+            roleCategory: row.role_category as RoleCategory,
+            storagePath: path,
+            fileName: extractOriginalFilename(path) ?? "resume.pdf",
+            sizeBytes: Number(row.size_bytes ?? 0),
+            uploadedAt: (row.uploaded_at as string | null) ?? new Date().toISOString(),
+            downloadUrl: signedDocMap.get(row.id as string) ?? null,
+          };
+        });
+
+      // Certificates list
+      const certificatesList: StudentRecordCertificate[] = certificateRows.map((row) => ({
+        id: row.id as string,
+        name: (row.name as string | null) ?? "Certificate",
+        status: (row.status as string | null) ?? "pending",
+        documentUrl: row.document_id ? (signedDocMap.get(row.document_id as string) ?? null) : null,
+      }));
+
+      // Semesters list
+      const semesters: StudentRecordSemester[] = semesterRows.map((row) => {
+        const item: {
+          semesterNumber: number;
+          cgpa: number;
+          verified: boolean;
+          currentArrears?: number;
+          historyOfArrears?: number;
+          marksheetUrl?: string | null;
+        } = {
+          semesterNumber: Number(row.semester_number),
+          cgpa: Number(row.cgpa),
+          verified: row.status === "verified",
         };
+        if (row.current_arrears != null) {
+          item.currentArrears = Number(row.current_arrears);
+        }
+        if (row.history_of_arrears != null) {
+          item.historyOfArrears = Number(row.history_of_arrears);
+        }
+        if (row.marksheet_id) {
+          item.marksheetUrl = signedDocMap.get(row.marksheet_id as string) ?? null;
+        }
+        return item;
       });
 
       return {
@@ -270,20 +335,37 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
         tenthPercentage: student.tenth_percentage == null ? null : Number(student.tenth_percentage),
         tenthInstitution: (student.tenth_institution as string | null) ?? null,
         tenthBoard: (student.tenth_board as SchoolBoard | null) ?? null,
+        tenthBoardState: (student.tenth_board_state as string | null) ?? null,
+        tenthGrade: (student.tenth_grade as string | null) ?? null,
+        tenthMarksheetUrl: tenthDoc ? (signedDocMap.get(tenthDoc.id as string) ?? null) : null,
         twelfthPercentage:
           student.twelfth_percentage == null ? null : Number(student.twelfth_percentage),
         twelfthInstitution: (student.twelfth_institution as string | null) ?? null,
         twelfthBoard: (student.twelfth_board as SchoolBoard | null) ?? null,
+        twelfthBoardState: (student.twelfth_board_state as string | null) ?? null,
+        twelfthGrade: (student.twelfth_grade as string | null) ?? null,
+        twelfthMarksheetUrl: twelfthDoc
+          ? (signedDocMap.get(twelfthDoc.id as string) ?? null)
+          : null,
         diplomaInstitution: (student.diploma_institution as string | null) ?? null,
+        diplomaUniversity: (student.diploma_university as string | null) ?? null,
         diplomaMarks: student.diploma_marks == null ? null : Number(student.diploma_marks),
+        diplomaMarksScale: (student.diploma_marks_scale as string | null) ?? null,
+        diplomaMarksheetUrl: diplomaDoc
+          ? (signedDocMap.get(diplomaDoc.id as string) ?? null)
+          : null,
+        programmeLevel: (student.programme_level as string | null) ?? null,
+        ugDegree: (student.ug_degree as string | null) ?? null,
+        ugCollege: (student.ug_college as string | null) ?? null,
+        ugBranch: (student.ug_branch as string | null) ?? null,
+        ugAggregateDeclared:
+          student.ug_aggregate_declared == null ? null : Number(student.ug_aggregate_declared),
+        ugAggregateScale: (student.ug_aggregate_scale as string | null) ?? null,
+        ugMarksheetUrl: ugDoc ? (signedDocMap.get(ugDoc.id as string) ?? null) : null,
         overallCgpa: student.overall_cgpa == null ? null : Number(student.overall_cgpa),
         currentArrears: Number(student.current_arrears ?? 0),
         historyOfArrears: Number(student.history_of_arrears ?? 0),
-        semesters: semesterRows.map((row) => ({
-          semesterNumber: Number(row.semester_number),
-          cgpa: Number(row.cgpa),
-          verified: row.status === "verified",
-        })),
+        semesters,
         skills: skillRows.map((row) => ({
           skill: one<{ name?: string }>(row.skill_areas)?.name ?? "Unnamed skill",
           score: Number(row.score),
@@ -295,11 +377,19 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
         areasOfExpertise: (student.areas_of_expertise as string | null) ?? null,
         projects: (student.projects as string | null) ?? null,
         certifications: (student.certifications as string | null) ?? null,
+        certificatesList,
         achievements: (student.achievements as string | null) ?? null,
         linkedinUrl: (student.linkedin_url as string | null) ?? null,
         githubUrl: (student.github_url as string | null) ?? null,
         leetcodeUrl: (student.leetcode_url as string | null) ?? null,
         hackerrankUrl: (student.hackerrank_url as string | null) ?? null,
+        otherProfiles: Array.isArray(student.other_profiles)
+          ? (student.other_profiles as Array<{ label: string; value: string }>)
+          : [],
+        consentGivenAt: (student.consent_given_at as string | null) ?? null,
+        srfSubmittedAt: (student.srf_submitted_at as string | null) ?? null,
+        srfDecidedAt: (student.srf_decided_at as string | null) ?? null,
+        srfRejectionReason: (student.srf_rejection_reason as string | null) ?? null,
         resumes,
         applications: applicationRows.map((row) => {
           const drive = driveNames.get(row.drive_id as string);

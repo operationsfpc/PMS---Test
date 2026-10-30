@@ -19,13 +19,16 @@ import type { Hold, HoldsView } from "@lib/holds-view";
 import { useAsyncAction } from "@lib/use-async-action";
 import {
   ArrowLeft,
-  Briefcase,
+  Award,
+  BookOpen,
   Download,
   Edit2,
   ExternalLink,
   FileText,
   Globe,
   GraduationCap,
+  Search,
+  Trophy,
   Upload,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -35,6 +38,16 @@ export interface StudentRecordSemester {
   readonly semesterNumber: number;
   readonly cgpa: number;
   readonly verified: boolean;
+  readonly currentArrears?: number | undefined;
+  readonly historyOfArrears?: number | undefined;
+  readonly marksheetUrl?: string | null;
+}
+
+export interface StudentRecordCertificate {
+  readonly id: string;
+  readonly name: string;
+  readonly status: string;
+  readonly documentUrl?: string | null;
 }
 
 export interface StudentRecordSkill {
@@ -104,14 +117,30 @@ export interface StudentRecord {
   readonly tenthPercentage: number | null;
   readonly tenthInstitution?: string | null;
   readonly tenthBoard?: SchoolBoard | null;
+  readonly tenthBoardState?: string | null;
+  readonly tenthGrade?: string | null;
+  readonly tenthMarksheetUrl?: string | null;
   readonly twelfthPercentage: number | null;
   readonly twelfthInstitution?: string | null;
   readonly twelfthBoard?: SchoolBoard | null;
+  readonly twelfthBoardState?: string | null;
+  readonly twelfthGrade?: string | null;
+  readonly twelfthMarksheetUrl?: string | null;
   readonly diplomaInstitution?: string | null;
+  readonly diplomaUniversity?: string | null;
   readonly diplomaMarks?: number | null;
+  readonly diplomaMarksScale?: string | null;
+  readonly diplomaMarksheetUrl?: string | null;
+  readonly programmeLevel?: string | null;
+  readonly ugDegree?: string | null;
+  readonly ugCollege?: string | null;
+  readonly ugBranch?: string | null;
+  readonly ugAggregateDeclared?: number | null;
+  readonly ugAggregateScale?: string | null;
+  readonly ugMarksheetUrl?: string | null;
   readonly overallCgpa?: number | null;
-  readonly currentArrears?: number;
-  readonly historyOfArrears?: number;
+  readonly currentArrears?: number | undefined;
+  readonly historyOfArrears?: number | undefined;
   readonly semesters: readonly StudentRecordSemester[];
   // Skills & Preferences
   readonly skills: readonly StudentRecordSkill[];
@@ -123,12 +152,19 @@ export interface StudentRecord {
   readonly areasOfExpertise?: string | null;
   readonly projects?: string | null;
   readonly certifications?: string | null;
+  readonly certificatesList?: readonly StudentRecordCertificate[];
   readonly achievements?: string | null;
   // Professional Links
   readonly linkedinUrl?: string | null;
   readonly githubUrl?: string | null;
   readonly leetcodeUrl?: string | null;
   readonly hackerrankUrl?: string | null;
+  readonly otherProfiles?: readonly { label: string; value: string }[];
+  // Registration & Audit
+  readonly consentGivenAt?: string | null;
+  readonly srfSubmittedAt?: string | null;
+  readonly srfDecidedAt?: string | null;
+  readonly srfRejectionReason?: string | null;
   // Resumes & Applications & Offers
   readonly resumes?: readonly StudentRecordResume[];
   readonly applications: readonly StudentRecordApplication[];
@@ -237,6 +273,15 @@ export function StudentRecordPage({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Filter states
+  const [activeSection, setActiveSection] = useState<
+    "all" | "academics" | "placements" | "preferences" | "portfolio" | "identity"
+  >("all");
+  const [appSearch, setAppSearch] = useState("");
+  const [appStatusFilter, setAppStatusFilter] = useState<"all" | "shortlisted" | "offered">("all");
+  const [offerTypeFilter, setOfferTypeFilter] = useState<"all" | "placement" | "internship">("all");
+  const [semFilter, setSemFilter] = useState<"all" | "verified" | "pending">("all");
 
   const actions = useAsyncAction();
   const navigate = useNavigate();
@@ -455,8 +500,33 @@ export function StudentRecordPage({
   const applications = record.applications ?? [];
   const semesters = record.semesters ?? [];
   const skills = record.skills ?? [];
+  const certificatesList = record.certificatesList ?? [];
   const currentArrears = record.currentArrears ?? 0;
   const historyOfArrears = record.historyOfArrears ?? 0;
+
+  const filteredOffers = offers.filter((o) => {
+    if (offerTypeFilter === "placement") return o.driveType === "placement";
+    if (offerTypeFilter === "internship") return o.driveType !== "placement";
+    return true;
+  });
+
+  const filteredSemesters = semesters.filter((s) => {
+    if (semFilter === "verified") return s.verified;
+    if (semFilter === "pending") return !s.verified;
+    return true;
+  });
+
+  const filteredApplications = applications.filter((app) => {
+    if (appStatusFilter === "shortlisted" && !app.shortlisted) return false;
+    if (appStatusFilter === "offered" && !app.hasOffer) return false;
+    if (appSearch.trim()) {
+      const q = appSearch.toLowerCase().trim();
+      const matchCompany = app.companyName.toLowerCase().includes(q);
+      const matchRole = app.roleTitle?.toLowerCase().includes(q) ?? false;
+      if (!matchCompany && !matchRole) return false;
+    }
+    return true;
+  });
 
   const today = new Date();
   const standing = hold === null ? null : holdStanding(hold, today);
@@ -535,18 +605,20 @@ export function StudentRecordPage({
 
       {/* Top Quick Stats Strip */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Card className="p-3.5 text-center">
-          <span className="text-xs font-medium text-ink-500">Overall CGPA</span>
+        <Card className="border-brand-200/80 bg-brand-50/50 p-3.5 text-center">
+          <span className="text-xs font-medium text-brand-700">Overall CGPA</span>
           <p className="mt-1 font-heading text-xl font-bold text-ink-900">
             {record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
           </p>
-          <span className="text-[11px] text-ink-400">Scale of 10</span>
+          <span className="text-[11px] text-ink-500">Scale of 10</span>
         </Card>
-        <Card className="p-3.5 text-center">
+        <Card
+          className={`p-3.5 text-center ${currentArrears > 0 ? "border-danger-100 bg-danger-50/70" : "bg-surface"}`}
+        >
           <span className="text-xs font-medium text-ink-500">Standing Arrears</span>
           <p
             className={`mt-1 font-heading text-xl font-bold ${
-              currentArrears > 0 ? "text-amber-600" : "text-emerald-600"
+              currentArrears > 0 ? "text-danger-600" : "text-success-600"
             }`}
           >
             {currentArrears}
@@ -555,12 +627,14 @@ export function StudentRecordPage({
             {currentArrears > 0 ? "Action required" : "Zero active"}
           </span>
         </Card>
-        <Card className="p-3.5 text-center">
+        <Card
+          className={`p-3.5 text-center ${historyOfArrears > 0 ? "border-gold-300 bg-gold-50/50" : "bg-surface"}`}
+        >
           <span className="text-xs font-medium text-ink-500">History Arrears</span>
           <p className="mt-1 font-heading text-xl font-bold text-ink-900">{historyOfArrears}</p>
           <span className="text-[11px] text-ink-400">Total recorded</span>
         </Card>
-        <Card className="p-3.5 text-center">
+        <Card className="bg-surface p-3.5 text-center">
           <span className="text-xs font-medium text-ink-500">10th / 12th Marks</span>
           <p className="mt-1 font-heading text-sm font-bold text-ink-900">
             {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} /{" "}
@@ -568,24 +642,52 @@ export function StudentRecordPage({
           </p>
           <span className="text-[11px] text-ink-400">Class X / XII</span>
         </Card>
-        <Card className="p-3.5 text-center">
-          <span className="text-xs font-medium text-ink-500">Offers & Internships</span>
-          <p className="mt-1 font-heading text-xl font-bold text-brand-700">
+        <Card className="border-success-200/80 bg-success-50/50 p-3.5 text-center">
+          <span className="text-xs font-medium text-success-700">Offers & Internships</span>
+          <p className="mt-1 font-heading text-xl font-bold text-success-700">
             {offers.length > 0
               ? `${offers.length} Offer${offers.length > 1 ? "s" : ""}`
               : record.placement
                 ? "1 Placed"
                 : "0"}
           </p>
-          <span className="text-[11px] text-ink-400">
+          <span className="text-[11px] text-ink-500">
             {offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
           </span>
         </Card>
-        <Card className="p-3.5 text-center">
-          <span className="text-xs font-medium text-ink-500">Applications</span>
+        <Card className="border-violet-300/60 bg-violet-50/50 p-3.5 text-center">
+          <span className="text-xs font-medium text-violet-700">Applications</span>
           <p className="mt-1 font-heading text-xl font-bold text-ink-900">{applications.length}</p>
-          <span className="text-[11px] text-ink-400">Campus drives</span>
+          <span className="text-[11px] text-ink-500">Campus drives</span>
         </Card>
+      </div>
+
+      {/* Interactive Section Filter Tabs */}
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-line pb-3">
+        {[
+          { id: "all", label: "All Sections" },
+          { id: "academics", label: `Academics & Semesters (${semesters.length})` },
+          {
+            id: "placements",
+            label: `Placements & Offers (${offers.length || (record.placement ? 1 : 0)})`,
+          },
+          { id: "preferences", label: "Resumes & Preferences" },
+          { id: "portfolio", label: "Portfolio & Skills" },
+          { id: "identity", label: "Identity & Audit" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveSection(tab.id as typeof activeSection)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeSection === tab.id
+                ? "bg-brand-600 text-white shadow-xs"
+                : "border border-line bg-surface text-ink-700 hover:bg-surface-muted"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
@@ -857,551 +959,1002 @@ export function StudentRecordPage({
         {/* Left 2 Columns: Core History & Records */}
         <div className="space-y-6 lg:col-span-2">
           {/* Offers & Placement Card */}
-          <section aria-label="Placement">
-            <Card className="p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Briefcase className="size-5 text-brand-600" />
-                  <h2 className="font-heading text-lg font-bold text-ink-900">
-                    Offers & Internships
-                  </h2>
-                </div>
-                {record.placement !== null && (
-                  <Badge tone="success">Primary Placement Active</Badge>
-                )}
-              </div>
-
-              {offers.length === 0 && record.placement === null ? (
-                <p className="text-sm text-ink-500">Not placed.</p>
-              ) : (
-                <div className="space-y-3">
-                  {offers.length > 0 ? (
-                    <div className="divide-y divide-line rounded-lg border border-line">
-                      {offers.map((offer) => (
-                        <div
-                          key={offer.id}
-                          className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"
+          {(activeSection === "all" || activeSection === "placements") && (
+            <section aria-label="Placement">
+              <Card className="p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-success-50 p-2 text-success-600">
+                      <Trophy className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-heading text-lg font-bold text-ink-900">
+                        Offers & Internships
+                      </h2>
+                      <p className="text-xs text-ink-500">
+                        Total {offers.length} recorded outcome{offers.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {record.placement !== null && (
+                      <Badge tone="success">Primary Placement Active</Badge>
+                    )}
+                    {offers.length > 0 && (
+                      <div className="flex items-center gap-1 rounded-lg border border-line bg-surface-muted/50 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setOfferTypeFilter("all")}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            offerTypeFilter === "all"
+                              ? "bg-surface text-ink-900 shadow-xs"
+                              : "text-ink-600 hover:text-ink-900"
+                          }`}
                         >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="font-heading text-base font-bold text-ink-900">
-                                {offer.companyName}
-                              </h3>
-                              <Badge
-                                tone={
-                                  offer.driveType === "placement"
-                                    ? "success"
-                                    : offer.driveType === "internship_convertible"
-                                      ? "accent"
-                                      : "brand"
+                          All ({offers.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOfferTypeFilter("placement")}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            offerTypeFilter === "placement"
+                              ? "bg-surface text-ink-900 shadow-xs"
+                              : "text-ink-600 hover:text-ink-900"
+                          }`}
+                        >
+                          Placements ({offers.filter((o) => o.driveType === "placement").length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOfferTypeFilter("internship")}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            offerTypeFilter === "internship"
+                              ? "bg-surface text-ink-900 shadow-xs"
+                              : "text-ink-600 hover:text-ink-900"
+                          }`}
+                        >
+                          Internships ({offers.filter((o) => o.driveType !== "placement").length})
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {offers.length === 0 && record.placement === null ? (
+                  <p className="text-sm text-ink-500">Not placed.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {offers.length > 0 ? (
+                      <div className="divide-y divide-line rounded-lg border border-line">
+                        {filteredOffers.map((offer) => (
+                          <div
+                            key={offer.id}
+                            className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="font-heading text-base font-bold text-ink-900">
+                                  {offer.companyName}
+                                </h3>
+                                <Badge
+                                  tone={
+                                    offer.driveType === "placement"
+                                      ? "success"
+                                      : offer.driveType === "internship_convertible"
+                                        ? "accent"
+                                        : "brand"
+                                  }
+                                >
+                                  {DRIVE_TYPE_LABEL[offer.driveType] ?? offer.driveType}
+                                </Badge>
+                                {offer.source === "self_placed" && (
+                                  <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                    Self-placed
+                                  </span>
+                                )}
+                                {offer.offerCategory && (
+                                  <Badge tone="brand">
+                                    {offerCategoryLabel(offer.offerCategory)}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="mt-1 text-sm text-ink-700">
+                                {offer.roleTitle ?? "Role title not recorded"}
+                              </p>
+                              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
+                                {offer.ctcLpa != null && offer.ctcLpa > 0 && (
+                                  <span className="font-semibold text-brand-700">
+                                    ₹{offer.ctcLpa} LPA
+                                  </span>
+                                )}
+                                {offer.stipendMonthly != null && offer.stipendMonthly > 0 && (
+                                  <span className="font-semibold text-success-700">
+                                    ₹{offer.stipendMonthly.toLocaleString("en-IN")} / month
+                                  </span>
+                                )}
+                                <span>Declared on {onDate(offer.declaredAt)}</span>
+                              </div>
+                            </div>
+
+                            {offer.letterUrl && (
+                              <ButtonAnchor
+                                href={offer.letterUrl}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                size="sm"
+                                className="shrink-0"
+                              >
+                                <Download className="mr-1.5 size-3.5" />
+                                Offer Letter
+                              </ButtonAnchor>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      record.placement && (
+                        <div className="text-sm">
+                          <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                            {record.placement.companyName}
+                            {record.placement.source === "self_placed" && (
+                              <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                Self-placed
+                              </span>
+                            )}
+                          </p>
+                          <p className="mt-0.5 text-ink-500">
+                            {record.placement.roleTitle ?? "Role not recorded"} · ₹
+                            {record.placement.ctcLpa} LPA
+                            {record.placement.offerCategory !== null &&
+                              ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
+                          </p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </Card>
+            </section>
+          )}
+
+          {/* Academics Record Card & Semester Progression */}
+          {(activeSection === "all" || activeSection === "academics") && (
+            <section aria-label="Academics" className="space-y-6">
+              {/* Semester by Semester Progression Table */}
+              <Card className="p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
+                      <GraduationCap className="size-5" />
+                    </div>
+                    <div>
+                      <h2 className="font-heading text-lg font-bold text-ink-900">
+                        Academic Progression
+                      </h2>
+                      <p className="text-xs text-ink-500">
+                        Semester-wise marks, backlogs, and official marksheets
+                      </p>
+                    </div>
+                  </div>
+                  {semesters.length > 0 && (
+                    <div className="flex items-center gap-1 rounded-lg border border-line bg-surface-muted/50 p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setSemFilter("all")}
+                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                          semFilter === "all"
+                            ? "bg-surface text-ink-900 shadow-xs"
+                            : "text-ink-600 hover:text-ink-900"
+                        }`}
+                      >
+                        All ({semesters.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSemFilter("verified")}
+                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                          semFilter === "verified"
+                            ? "bg-surface text-ink-900 shadow-xs"
+                            : "text-ink-600 hover:text-ink-900"
+                        }`}
+                      >
+                        Cleared ({semesters.filter((s) => s.verified).length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSemFilter("pending")}
+                        className={`rounded px-2 py-0.5 text-xs font-medium ${
+                          semFilter === "pending"
+                            ? "bg-surface text-ink-900 shadow-xs"
+                            : "text-ink-600 hover:text-ink-900"
+                        }`}
+                      >
+                        Awaiting ({semesters.filter((s) => !s.verified).length})
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {semesters.length === 0 ? (
+                  <p className="text-sm text-ink-500">No semester records filed.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-line">
+                    <table className="w-full text-left text-sm">
+                      <thead className="border-b border-line bg-surface-muted text-xs font-semibold text-ink-700">
+                        <tr>
+                          <th className="px-4 py-2.5">Semester</th>
+                          <th className="px-4 py-2.5">CGPA / Score</th>
+                          <th className="px-4 py-2.5">Arrears</th>
+                          <th className="px-4 py-2.5">Status</th>
+                          <th className="px-4 py-2.5 text-right">Marksheet</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-line bg-surface">
+                        {filteredSemesters.map((semester) => (
+                          <tr key={semester.semesterNumber} className="hover:bg-surface-muted/30">
+                            <td className="px-4 py-2.5 font-medium text-ink-900">
+                              Semester {semester.semesterNumber}
+                            </td>
+                            <td className="px-4 py-2.5 text-ink-900">
+                              {describeMarks(semester.cgpa, "cgpa")}
+                            </td>
+                            <td className="px-4 py-2.5 text-xs">
+                              <span
+                                className={
+                                  semester.currentArrears && semester.currentArrears > 0
+                                    ? "font-semibold text-danger-600"
+                                    : "text-ink-600"
                                 }
                               >
-                                {DRIVE_TYPE_LABEL[offer.driveType] ?? offer.driveType}
+                                Standing: {semester.currentArrears ?? 0}
+                              </span>
+                              <span className="text-ink-400">
+                                {" "}
+                                · History: {semester.historyOfArrears ?? 0}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <Badge tone={semester.verified ? "success" : "warning"}>
+                                {semester.verified ? "Verified" : "Pending"}
                               </Badge>
-                              {offer.source === "self_placed" && (
-                                <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                                  Self-placed
-                                </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              {semester.marksheetUrl ? (
+                                <ButtonAnchor
+                                  href={semester.marksheetUrl}
+                                  target="_blank"
+                                  rel="noreferrer noopener"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-xs text-brand-600 hover:text-brand-700"
+                                >
+                                  <FileText className="mr-1 size-3.5" />
+                                  View PDF
+                                </ButtonAnchor>
+                              ) : (
+                                <span className="text-xs text-ink-400">—</span>
                               )}
-                              {offer.offerCategory && (
-                                <Badge tone="brand">
-                                  {offerCategoryLabel(offer.offerCategory)}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="mt-1 text-sm text-ink-700">
-                              {offer.roleTitle ?? "Role title not recorded"}
-                            </p>
-                            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
-                              {offer.ctcLpa != null && offer.ctcLpa > 0 && (
-                                <span className="font-semibold text-brand-700">
-                                  ₹{offer.ctcLpa} LPA
-                                </span>
-                              )}
-                              {offer.stipendMonthly != null && offer.stipendMonthly > 0 && (
-                                <span className="font-semibold text-emerald-700">
-                                  ₹{offer.stipendMonthly.toLocaleString("en-IN")} / month
-                                </span>
-                              )}
-                              <span>Declared on {onDate(offer.declaredAt)}</span>
-                            </div>
-                          </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Card>
 
-                          {offer.letterUrl && (
-                            <ButtonAnchor
-                              href={offer.letterUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              size="sm"
-                              className="shrink-0"
-                            >
-                              <Download className="mr-1.5 size-3.5" />
-                              Offer Letter
-                            </ButtonAnchor>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    record.placement && (
-                      <div className="text-sm">
-                        <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                          {record.placement.companyName}
-                          {record.placement.source === "self_placed" && (
-                            <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                              Self-placed
+              {/* Schooling & Higher Education Details */}
+              <Card className="p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <div className="rounded-lg bg-cyan-50 p-2 text-brand-600">
+                    <BookOpen className="size-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-heading text-lg font-bold text-ink-900">
+                      School & Higher Education
+                    </h2>
+                    <p className="text-xs text-ink-500">
+                      Secondary boards, diploma qualifications, and prior degrees
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Class 10 */}
+                  <div className="rounded-lg border border-line bg-surface p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-semibold text-brand-700">10th Standard</span>
+                        <p className="mt-1 text-base font-bold text-ink-900">
+                          {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"}
+                          {record.tenthGrade && (
+                            <span className="ml-1.5 text-xs font-medium text-ink-500">
+                              (Grade {record.tenthGrade})
                             </span>
                           )}
                         </p>
-                        <p className="mt-0.5 text-ink-500">
-                          {record.placement.roleTitle ?? "Role not recorded"} · ₹
-                          {record.placement.ctcLpa} LPA
-                          {record.placement.offerCategory !== null &&
-                            ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
+                        <p className="mt-1 text-xs text-ink-600">
+                          {record.tenthInstitution ?? "School not recorded"}
                         </p>
+                        {record.tenthBoard && (
+                          <p className="text-[11px] text-ink-400">
+                            Board: {boardLabel(record.tenthBoard, "tenth")}
+                            {record.tenthBoardState ? ` · ${record.tenthBoardState}` : ""}
+                          </p>
+                        )}
                       </div>
-                    )
+                      {record.tenthMarksheetUrl && (
+                        <ButtonAnchor
+                          href={record.tenthMarksheetUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          size="sm"
+                          variant="secondary"
+                          className="shrink-0 text-xs"
+                        >
+                          <FileText className="mr-1 size-3" />
+                          Marksheet
+                        </ButtonAnchor>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Class 12 */}
+                  <div className="rounded-lg border border-line bg-surface p-3.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-semibold text-brand-700">
+                          12th Standard / HSE
+                        </span>
+                        <p className="mt-1 text-base font-bold text-ink-900">
+                          {record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"}
+                          {record.twelfthGrade && (
+                            <span className="ml-1.5 text-xs font-medium text-ink-500">
+                              (Grade {record.twelfthGrade})
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-1 text-xs text-ink-600">
+                          {record.twelfthInstitution ?? "School not recorded"}
+                        </p>
+                        {record.twelfthBoard && (
+                          <p className="text-[11px] text-ink-400">
+                            Board: {boardLabel(record.twelfthBoard, "twelfth")}
+                            {record.twelfthBoardState ? ` · ${record.twelfthBoardState}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      {record.twelfthMarksheetUrl && (
+                        <ButtonAnchor
+                          href={record.twelfthMarksheetUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          size="sm"
+                          variant="secondary"
+                          className="shrink-0 text-xs"
+                        >
+                          <FileText className="mr-1 size-3" />
+                          Marksheet
+                        </ButtonAnchor>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Diploma (if present) */}
+                  {record.diplomaInstitution && (
+                    <div className="rounded-lg border border-line bg-surface p-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-semibold text-brand-700">
+                            Diploma Qualification
+                          </span>
+                          <p className="mt-1 text-base font-bold text-ink-900">
+                            {record.diplomaMarks != null
+                              ? `${record.diplomaMarks} (${record.diplomaMarksScale ?? "cgpa"})`
+                              : "Declared"}
+                          </p>
+                          <p className="mt-1 text-xs text-ink-600">{record.diplomaInstitution}</p>
+                          {record.diplomaUniversity && (
+                            <p className="text-[11px] text-ink-400">
+                              University: {record.diplomaUniversity}
+                            </p>
+                          )}
+                        </div>
+                        {record.diplomaMarksheetUrl && (
+                          <ButtonAnchor
+                            href={record.diplomaMarksheetUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            size="sm"
+                            variant="secondary"
+                            className="shrink-0 text-xs"
+                          >
+                            <FileText className="mr-1 size-3" />
+                            Marksheet
+                          </ButtonAnchor>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prior UG Degree (for PG students) */}
+                  {(record.ugDegree || record.programmeLevel === "pg") && (
+                    <div className="rounded-lg border border-line bg-surface p-3.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-xs font-semibold text-brand-700">
+                            Undergraduate Degree (Prior)
+                          </span>
+                          <p className="mt-1 text-base font-bold text-ink-900">
+                            {record.ugAggregateDeclared != null
+                              ? `${record.ugAggregateDeclared} (${record.ugAggregateScale ?? "cgpa"})`
+                              : "Completed"}
+                          </p>
+                          <p className="mt-1 text-xs text-ink-600">
+                            {record.ugDegree}
+                            {record.ugBranch ? ` · ${record.ugBranch}` : ""}
+                          </p>
+                          {record.ugCollege && (
+                            <p className="text-[11px] text-ink-400">{record.ugCollege}</p>
+                          )}
+                        </div>
+                        {record.ugMarksheetUrl && (
+                          <ButtonAnchor
+                            href={record.ugMarksheetUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            size="sm"
+                            variant="secondary"
+                            className="shrink-0 text-xs"
+                          >
+                            <FileText className="mr-1 size-3" />
+                            Marksheet
+                          </ButtonAnchor>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
-              )}
-            </Card>
-          </section>
-
-          {/* Academics Record Card */}
-          <section aria-label="Academics">
-            <Card className="p-5">
-              <div className="mb-4 flex items-center gap-2">
-                <GraduationCap className="size-5 text-brand-600" />
-                <h2 className="font-heading text-lg font-bold text-ink-900">Academics</h2>
-              </div>
-
-              {/* Schooling & Diploma Grid */}
-              <dl className="grid gap-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="text-ink-500">10th %</dt>
-                  <dd className="text-ink-900">
-                    {record.tenthPercentage ?? "Not recorded"}
-                    {record.tenthInstitution && (
-                      <span className="ml-2 text-xs text-ink-500">
-                        ({record.tenthInstitution}
-                        {record.tenthBoard ? ` · ${boardLabel(record.tenthBoard, "tenth")}` : ""})
-                      </span>
-                    )}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="text-ink-500">12th %</dt>
-                  <dd className="text-ink-900">
-                    {record.twelfthPercentage ?? "Not recorded"}
-                    {record.twelfthInstitution && (
-                      <span className="ml-2 text-xs text-ink-500">
-                        ({record.twelfthInstitution}
-                        {record.twelfthBoard
-                          ? ` · ${boardLabel(record.twelfthBoard, "twelfth")}`
-                          : ""}
-                        )
-                      </span>
-                    )}
-                  </dd>
-                </div>
-                {record.diplomaInstitution && (
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-ink-500">Diploma</dt>
-                    <dd className="text-ink-900">
-                      {record.diplomaMarks != null ? `${record.diplomaMarks}%` : "Recorded"}
-                      <span className="ml-2 text-xs text-ink-500">
-                        ({record.diplomaInstitution})
-                      </span>
-                    </dd>
-                  </div>
-                )}
-              </dl>
-
-              {/* Semester by Semester Breakdown */}
-              {semesters.length > 0 && (
-                <ul className="mt-3 divide-y divide-line border-t border-line pt-1">
-                  {semesters.map((semester) => (
-                    <li
-                      key={semester.semesterNumber}
-                      className="flex items-center justify-between gap-4 py-2 text-sm"
-                    >
-                      <span className="text-ink-700">Semester {semester.semesterNumber}</span>
-                      <span className="flex items-center gap-2">
-                        <span className="font-medium text-ink-900">
-                          {describeMarks(semester.cgpa, "cgpa")}
-                        </span>
-                        <Badge tone={semester.verified ? "success" : "warning"}>
-                          {semester.verified ? "Verified" : "Pending"}
-                        </Badge>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </section>
+              </Card>
+            </section>
+          )}
 
           {/* Applications History Card */}
-          <section aria-label="Applications">
-            <Card className="p-5">
-              <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Applications</h2>
-              {applications.length === 0 ? (
-                <p className="text-sm text-ink-700">No applications yet.</p>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {applications.map((application) => (
-                    <li
-                      key={application.applicationId}
-                      className="flex flex-wrap items-center justify-between gap-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-ink-900">
-                          <Link to={`/drives/${application.driveId}`} className="hover:underline">
-                            {application.companyName}
-                          </Link>
-                        </p>
-                        <p className="text-xs text-ink-500">
-                          {application.roleTitle ?? "Role not recorded"}
-                          {application.appliedAt !== null &&
-                            ` · applied ${onDate(application.appliedAt)}`}
-                        </p>
+          {(activeSection === "all" || activeSection === "placements") && (
+            <section aria-label="Applications">
+              <Card className="p-5">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-heading text-lg font-bold text-ink-900">Applications</h2>
+                    <p className="text-xs text-ink-500">
+                      Drive participation and recruiter shortlist status
+                    </p>
+                  </div>
+                  {applications.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-400" />
+                        <input
+                          type="text"
+                          value={appSearch}
+                          onChange={(e) => setAppSearch(e.target.value)}
+                          placeholder="Search company or role…"
+                          className="rounded-lg border border-line bg-surface py-1 pl-8 pr-3 text-xs placeholder:text-ink-400 focus:outline-hidden"
+                        />
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {application.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
-                        {application.hasOffer && <Badge tone="success">Offer</Badge>}
+                      <div className="flex items-center gap-1 rounded-lg border border-line bg-surface-muted/50 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setAppStatusFilter("all")}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            appStatusFilter === "all"
+                              ? "bg-surface text-ink-900 shadow-xs"
+                              : "text-ink-600 hover:text-ink-900"
+                          }`}
+                        >
+                          All ({applications.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAppStatusFilter("shortlisted")}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            appStatusFilter === "shortlisted"
+                              ? "bg-surface text-ink-900 shadow-xs"
+                              : "text-ink-600 hover:text-ink-900"
+                          }`}
+                        >
+                          Shortlists ({applications.filter((a) => a.shortlisted).length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAppStatusFilter("offered")}
+                          className={`rounded px-2 py-0.5 text-xs font-medium ${
+                            appStatusFilter === "offered"
+                              ? "bg-surface text-ink-900 shadow-xs"
+                              : "text-ink-600 hover:text-ink-900"
+                          }`}
+                        >
+                          Offers ({applications.filter((a) => a.hasOffer).length})
+                        </button>
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
-          </section>
+                    </div>
+                  )}
+                </div>
+
+                {applications.length === 0 ? (
+                  <p className="text-sm text-ink-700">No applications yet.</p>
+                ) : filteredApplications.length === 0 ? (
+                  <p className="py-4 text-center text-xs text-ink-500">
+                    No applications matching current search/filter.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {filteredApplications.map((application) => (
+                      <li
+                        key={application.applicationId}
+                        className="flex flex-wrap items-center justify-between gap-3 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-ink-900">
+                            <Link to={`/drives/${application.driveId}`} className="hover:underline">
+                              {application.companyName}
+                            </Link>
+                          </p>
+                          <p className="text-xs text-ink-500">
+                            {application.roleTitle ?? "Role not recorded"}
+                            {application.appliedAt !== null &&
+                              ` · applied ${onDate(application.appliedAt)}`}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {application.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
+                          {application.hasOffer && <Badge tone="success">Offer</Badge>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </section>
+          )}
 
           {/* Portfolio & SRF Details Card */}
-          <section aria-label="Portfolio">
-            <Card className="p-5">
-              <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">
-                Portfolio & Technical Profile
-              </h2>
-              <div className="space-y-4 text-sm">
-                {record.technicalSkills && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-ink-500">Technical Skills</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                      {record.technicalSkills}
-                    </p>
+          {(activeSection === "all" || activeSection === "portfolio") && (
+            <section aria-label="Portfolio">
+              <Card className="p-5">
+                <div className="mb-4 flex items-center gap-2">
+                  <div className="rounded-lg bg-gold-50 p-2 text-gold-600">
+                    <Award className="size-5" />
                   </div>
-                )}
-
-                {record.areasOfInterest && (
                   <div>
-                    <h3 className="text-xs font-semibold text-ink-500">Areas of Interest</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                      {record.areasOfInterest}
-                    </p>
-                  </div>
-                )}
-
-                {record.areasOfExpertise && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-ink-500">Areas of Expertise</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                      {record.areasOfExpertise}
-                    </p>
-                  </div>
-                )}
-
-                {record.projects && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-ink-500">Key Projects</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.projects}</p>
-                  </div>
-                )}
-
-                {record.certifications && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-ink-500">Certifications</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.certifications}</p>
-                  </div>
-                )}
-
-                {record.achievements && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-ink-500">Achievements & Honors</h3>
-                    <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.achievements}</p>
-                  </div>
-                )}
-
-                {!record.technicalSkills &&
-                  !record.areasOfInterest &&
-                  !record.projects &&
-                  !record.certifications &&
-                  !record.achievements && (
+                    <h2 className="font-heading text-lg font-bold text-ink-900">
+                      Portfolio & Technical Profile
+                    </h2>
                     <p className="text-xs text-ink-500">
-                      No additional project or portfolio details filed in SRF.
+                      Skills, projects, verified certificates, and achievements
                     </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 text-sm">
+                  {record.technicalSkills && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-ink-500">Technical Skills</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                        {record.technicalSkills}
+                      </p>
+                    </div>
                   )}
-              </div>
-            </Card>
-          </section>
+
+                  {record.areasOfInterest && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-ink-500">Areas of Interest</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                        {record.areasOfInterest}
+                      </p>
+                    </div>
+                  )}
+
+                  {record.areasOfExpertise && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-ink-500">Areas of Expertise</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                        {record.areasOfExpertise}
+                      </p>
+                    </div>
+                  )}
+
+                  {record.projects && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-ink-500">Key Projects</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.projects}</p>
+                    </div>
+                  )}
+
+                  {/* Verified Certificates */}
+                  {certificatesList.length > 0 && (
+                    <div className="border-t border-line pt-3">
+                      <h3 className="text-xs font-semibold text-ink-500">Declared Certificates</h3>
+                      <div className="mt-2 divide-y divide-line rounded-lg border border-line">
+                        {certificatesList.map((cert) => (
+                          <div
+                            key={cert.id}
+                            className="flex items-center justify-between gap-3 p-3 text-xs"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-ink-900">{cert.name}</span>
+                              <Badge
+                                tone={
+                                  cert.status === "verified"
+                                    ? "success"
+                                    : cert.status === "rejected"
+                                      ? "danger"
+                                      : "warning"
+                                }
+                              >
+                                {cert.status}
+                              </Badge>
+                            </div>
+                            {cert.documentUrl && (
+                              <ButtonAnchor
+                                href={cert.documentUrl}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                size="sm"
+                                variant="ghost"
+                                className="text-xs text-brand-600 hover:text-brand-700"
+                              >
+                                <ExternalLink className="mr-1 size-3" />
+                                View Certificate
+                              </ButtonAnchor>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {record.certifications && certificatesList.length === 0 && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-ink-500">Certifications</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-ink-800">
+                        {record.certifications}
+                      </p>
+                    </div>
+                  )}
+
+                  {record.achievements && (
+                    <div>
+                      <h3 className="text-xs font-semibold text-ink-500">Achievements & Honors</h3>
+                      <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.achievements}</p>
+                    </div>
+                  )}
+
+                  {!record.technicalSkills &&
+                    !record.areasOfInterest &&
+                    !record.projects &&
+                    !record.certifications &&
+                    certificatesList.length === 0 &&
+                    !record.achievements && (
+                      <p className="text-xs text-ink-500">
+                        No additional project or portfolio details filed in SRF.
+                      </p>
+                    )}
+                </div>
+              </Card>
+            </section>
+          )}
         </div>
 
         {/* Right 1 Column: Preferences, Resumes, Assessed Skills, Contacts & Profiles */}
         <div className="space-y-6 lg:col-span-1">
           {/* Identity Card */}
-          <section aria-label="Identity">
-            <Card className="p-5">
-              <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Identity</h2>
-              <dl className="grid gap-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="shrink-0 text-ink-500">Programme</dt>
-                  <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
-                    {record.degree}
-                    {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="shrink-0 text-ink-500">Email</dt>
-                  <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="shrink-0 text-ink-500">Mobile</dt>
-                  <dd className="min-w-0 break-all text-right text-ink-900">
-                    {record.mobile ?? "Not recorded"}
-                  </dd>
-                </div>
-                {record.whatsapp && (
+          {(activeSection === "all" || activeSection === "identity") && (
+            <section aria-label="Identity">
+              <Card className="p-5">
+                <h2 className="mb-3 font-heading text-lg font-bold text-ink-900">Identity</h2>
+                <dl className="grid gap-2 text-sm">
                   <div className="flex justify-between gap-4">
-                    <dt className="shrink-0 text-ink-500">WhatsApp</dt>
-                    <dd className="min-w-0 break-all text-right font-medium text-emerald-700">
-                      {record.whatsapp}
+                    <dt className="shrink-0 text-ink-500">Programme</dt>
+                    <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
+                      {record.degree}
+                      {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
                     </dd>
                   </div>
-                )}
-                {record.alternateContact && (
                   <div className="flex justify-between gap-4">
-                    <dt className="shrink-0 text-ink-500">Alt Phone</dt>
+                    <dt className="shrink-0 text-ink-500">Email</dt>
+                    <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="shrink-0 text-ink-500">Mobile</dt>
                     <dd className="min-w-0 break-all text-right text-ink-900">
-                      {record.alternateContact}
+                      {record.mobile ?? "Not recorded"}
                     </dd>
                   </div>
-                )}
-              </dl>
-            </Card>
-          </section>
+                  {record.whatsapp && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-ink-500">WhatsApp</dt>
+                      <dd className="min-w-0 break-all text-right font-medium text-success-700">
+                        {record.whatsapp}
+                      </dd>
+                    </div>
+                  )}
+                  {record.alternateContact && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-ink-500">Alt Phone</dt>
+                      <dd className="min-w-0 break-all text-right text-ink-900">
+                        {record.alternateContact}
+                      </dd>
+                    </div>
+                  )}
+                  {/* Registration audit timestamps */}
+                  <div className="mt-2 border-t border-line pt-2 text-xs">
+                    <div className="flex justify-between text-ink-500">
+                      <span>Submitted:</span>
+                      <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
+                    </div>
+                    {record.srfDecidedAt && (
+                      <div className="mt-1 flex justify-between text-ink-500">
+                        <span>Approved:</span>
+                        <span>{onDate(record.srfDecidedAt)}</span>
+                      </div>
+                    )}
+                    {record.consentGivenAt && (
+                      <div className="mt-1 flex justify-between text-ink-500">
+                        <span>Consent Recorded:</span>
+                        <span>{onDate(record.consentGivenAt)}</span>
+                      </div>
+                    )}
+                    {record.srfRejectionReason && (
+                      <div className="mt-2 rounded bg-danger-50 p-2 text-danger-700">
+                        Rejection reason: {record.srfRejectionReason}
+                      </div>
+                    )}
+                  </div>
+                </dl>
+              </Card>
+            </section>
+          )}
 
           {/* Resumes on File Card (with Staff Upload/Replace) */}
-          <section aria-label="Resumes">
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="size-5 text-brand-600" />
-                  <h2 className="font-heading text-base font-bold text-ink-900">
-                    Category Resumes
-                  </h2>
+          {(activeSection === "all" || activeSection === "preferences") && (
+            <section aria-label="Resumes">
+              <Card className="p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileText className="size-5 text-brand-600" />
+                    <h2 className="font-heading text-base font-bold text-ink-900">
+                      Category Resumes
+                    </h2>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                {ROLE_CATEGORIES.map((cat) => {
-                  const isPreferred = rolePreferences.includes(cat);
-                  const doc = resumes.find((r) => r.roleCategory === cat);
+                <div className="space-y-3">
+                  {ROLE_CATEGORIES.map((cat) => {
+                    const isPreferred = rolePreferences.includes(cat);
+                    const doc = resumes.find((r) => r.roleCategory === cat);
 
-                  return (
-                    <div
-                      key={cat}
-                      className={`rounded-lg border p-3 ${
-                        isPreferred
-                          ? "border-line bg-surface"
-                          : "border-line/60 bg-surface-muted/30"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-ink-900">
-                              {RESUME_TRACK_LABEL[cat]}
-                            </span>
-                            {isPreferred && <Badge tone="brand">Active</Badge>}
-                          </div>
-                          {doc ? (
-                            <div className="mt-1 text-xs text-ink-500">
-                              <p className="truncate font-medium text-ink-700" title={doc.fileName}>
-                                {doc.fileName}
-                              </p>
-                              <p className="text-[11px]">
-                                {formatFileSize(doc.sizeBytes)} · {onDate(doc.uploadedAt)}
-                              </p>
+                    return (
+                      <div
+                        key={cat}
+                        className={`rounded-lg border p-3 ${
+                          isPreferred
+                            ? "border-line bg-surface"
+                            : "border-line/60 bg-surface-muted/30"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-semibold text-ink-900">
+                                {RESUME_TRACK_LABEL[cat]}
+                              </span>
+                              {isPreferred && <Badge tone="brand">Active</Badge>}
                             </div>
-                          ) : (
-                            <p className="mt-1 text-[11px] text-ink-400">No resume uploaded</p>
-                          )}
-                        </div>
+                            {doc ? (
+                              <div className="mt-1 text-xs text-ink-500">
+                                <p
+                                  className="truncate font-medium text-ink-700"
+                                  title={doc.fileName}
+                                >
+                                  {doc.fileName}
+                                </p>
+                                <p className="text-[11px]">
+                                  {formatFileSize(doc.sizeBytes)} · {onDate(doc.uploadedAt)}
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-[11px] text-ink-400">No resume uploaded</p>
+                            )}
+                          </div>
 
-                        <div className="flex flex-col items-end gap-1.5">
-                          {doc?.downloadUrl && (
-                            <ButtonAnchor
-                              href={doc.downloadUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              size="sm"
-                              className="text-xs"
-                            >
-                              <ExternalLink className="mr-1 size-3" />
-                              View PDF
-                            </ButtonAnchor>
-                          )}
-                          {hasStaffControls && (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => triggerResumeUpload(cat)}
-                              isLoading={actions.isPending() && uploadCategory === cat}
-                              className="text-xs"
-                            >
-                              <Upload className="mr-1 size-3" />
-                              {doc ? "Replace" : "Upload"}
-                            </Button>
-                          )}
+                          <div className="flex flex-col items-end gap-1.5">
+                            {doc?.downloadUrl && (
+                              <ButtonAnchor
+                                href={doc.downloadUrl}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                size="sm"
+                                className="text-xs"
+                              >
+                                <ExternalLink className="mr-1 size-3" />
+                                View PDF
+                              </ButtonAnchor>
+                            )}
+                            {hasStaffControls && (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => triggerResumeUpload(cat)}
+                                isLoading={actions.isPending() && uploadCategory === cat}
+                                className="text-xs"
+                              >
+                                <Upload className="mr-1 size-3" />
+                                {doc ? "Replace" : "Upload"}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          </section>
+                    );
+                  })}
+                </div>
+              </Card>
+            </section>
+          )}
 
           {/* Role & Drive Preferences Card */}
-          <section aria-label="Skills and preferences">
-            <Card className="p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-heading text-lg font-bold text-ink-900">
-                  Skills and preferences
-                </h2>
-                {hasStaffControls && (
-                  <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
-                    <Edit2 className="mr-1 size-3" />
-                    Edit
-                  </Button>
-                )}
-              </div>
+          {(activeSection === "all" || activeSection === "preferences") && (
+            <section aria-label="Skills and preferences">
+              <Card className="p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-heading text-lg font-bold text-ink-900">
+                    Skills and preferences
+                  </h2>
+                  {hasStaffControls && (
+                    <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
+                      <Edit2 className="mr-1 size-3" />
+                      Edit
+                    </Button>
+                  )}
+                </div>
 
-              {/* Assessed skill scores */}
-              {skills.length === 0 ? (
-                <p className="text-sm text-ink-500">No skill scores recorded.</p>
-              ) : (
-                <p className="flex flex-wrap gap-1.5 text-xs">
-                  {skills.map(({ skill, score }) => (
-                    <span
-                      key={skill}
-                      className="max-w-full break-words rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700 [overflow-wrap:anywhere]"
-                    >
-                      {skill} {score}/{SKILL_SCORE_MAX}
-                    </span>
-                  ))}
-                </p>
-              )}
-
-              {/* Preferred role categories */}
-              {rolePreferences.length > 0 && (
-                <p className="mt-3 text-sm text-ink-700">
-                  <span className="text-ink-500">Preferred areas: </span>
-                  {rolePreferences.map((area) => AREA_LABEL[area] ?? area).join(" · ")}
-                </p>
-              )}
-
-              {/* Drive type preferences */}
-              <div className="mt-3 border-t border-line pt-3">
-                <span className="text-xs font-semibold text-ink-500">Drive Type Preferences:</span>
-                {driveTypePreferences.length === 0 ? (
-                  <p className="mt-1 text-xs text-ink-500">
-                    Open to all drive types (no restrictions)
-                  </p>
+                {/* Assessed skill scores */}
+                {skills.length === 0 ? (
+                  <p className="text-sm text-ink-500">No skill scores recorded.</p>
                 ) : (
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {driveTypePreferences.map((dt) => (
-                      <Badge key={dt} tone="accent">
-                        {DRIVE_TYPE_LABEL[dt] ?? dt}
-                      </Badge>
+                  <p className="flex flex-wrap gap-1.5 text-xs">
+                    {skills.map(({ skill, score }) => (
+                      <span
+                        key={skill}
+                        className="max-w-full break-words rounded-full border border-line bg-surface-muted px-2 py-0.5 font-medium text-ink-700 [overflow-wrap:anywhere]"
+                      >
+                        {skill} {score}/{SKILL_SCORE_MAX}
+                      </span>
                     ))}
-                  </div>
+                  </p>
                 )}
-              </div>
-            </Card>
-          </section>
+
+                {/* Preferred role categories */}
+                {rolePreferences.length > 0 && (
+                  <p className="mt-3 text-sm text-ink-700">
+                    <span className="text-ink-500">Preferred areas: </span>
+                    {rolePreferences.map((area) => AREA_LABEL[area] ?? area).join(" · ")}
+                  </p>
+                )}
+
+                {/* Drive type preferences */}
+                <div className="mt-3 border-t border-line pt-3">
+                  <span className="text-xs font-semibold text-ink-500">
+                    Drive Type Preferences:
+                  </span>
+                  {driveTypePreferences.length === 0 ? (
+                    <p className="mt-1 text-xs text-ink-500">
+                      Open to all drive types (no restrictions)
+                    </p>
+                  ) : (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {driveTypePreferences.map((dt) => (
+                        <Badge key={dt} tone="accent">
+                          {DRIVE_TYPE_LABEL[dt] ?? dt}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </section>
+          )}
 
           {/* Online & Coding Profiles Card */}
-          <section aria-label="Online profiles">
-            <Card className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <Globe className="size-4 text-brand-600" />
-                <h2 className="font-heading text-base font-bold text-ink-900">
-                  Online & Coding Profiles
-                </h2>
-              </div>
-              <div className="space-y-2 text-sm">
-                {record.linkedinUrl && (
-                  <a
-                    href={record.linkedinUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                  >
-                    <span className="flex items-center gap-2 text-ink-900">
-                      <Globe className="size-4 text-brand-600" /> LinkedIn
-                    </span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </a>
-                )}
-                {record.githubUrl && (
-                  <a
-                    href={record.githubUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                  >
-                    <span className="flex items-center gap-2 text-ink-900">
-                      <Globe className="size-4 text-ink-900" /> GitHub
-                    </span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </a>
-                )}
-                {record.leetcodeUrl && (
-                  <a
-                    href={record.leetcodeUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                  >
-                    <span className="flex items-center gap-2 text-ink-900">
-                      <span className="font-mono font-bold text-gold-600">LC</span> LeetCode
-                    </span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </a>
-                )}
-                {record.hackerrankUrl && (
-                  <a
-                    href={record.hackerrankUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                  >
-                    <span className="flex items-center gap-2 text-ink-900">
-                      <span className="font-mono font-bold text-success-600">HR</span> HackerRank
-                    </span>
-                    <ExternalLink className="size-3.5 text-ink-400" />
-                  </a>
-                )}
-                {!record.linkedinUrl &&
-                  !record.githubUrl &&
-                  !record.leetcodeUrl &&
-                  !record.hackerrankUrl && (
-                    <p className="text-xs text-ink-500">No profile links recorded.</p>
+          {(activeSection === "all" || activeSection === "portfolio") && (
+            <section aria-label="Online profiles">
+              <Card className="p-5">
+                <div className="mb-3 flex items-center gap-2">
+                  <Globe className="size-4 text-brand-600" />
+                  <h2 className="font-heading text-base font-bold text-ink-900">
+                    Online & Coding Profiles
+                  </h2>
+                </div>
+                <div className="space-y-2 text-sm">
+                  {record.linkedinUrl && (
+                    <a
+                      href={record.linkedinUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                    >
+                      <span className="flex items-center gap-2 text-ink-900">
+                        <Globe className="size-4 text-brand-600" /> LinkedIn
+                      </span>
+                      <ExternalLink className="size-3.5 text-ink-400" />
+                    </a>
                   )}
-              </div>
-            </Card>
-          </section>
+                  {record.githubUrl && (
+                    <a
+                      href={record.githubUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                    >
+                      <span className="flex items-center gap-2 text-ink-900">
+                        <Globe className="size-4 text-ink-900" /> GitHub
+                      </span>
+                      <ExternalLink className="size-3.5 text-ink-400" />
+                    </a>
+                  )}
+                  {record.leetcodeUrl && (
+                    <a
+                      href={record.leetcodeUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                    >
+                      <span className="flex items-center gap-2 text-ink-900">
+                        <span className="font-mono font-bold text-gold-600">LC</span> LeetCode
+                      </span>
+                      <ExternalLink className="size-3.5 text-ink-400" />
+                    </a>
+                  )}
+                  {record.hackerrankUrl && (
+                    <a
+                      href={record.hackerrankUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                    >
+                      <span className="flex items-center gap-2 text-ink-900">
+                        <span className="font-mono font-bold text-success-600">HR</span> HackerRank
+                      </span>
+                      <ExternalLink className="size-3.5 text-ink-400" />
+                    </a>
+                  )}
+                  {/* Custom other profiles */}
+                  {record.otherProfiles?.map((p) => (
+                    <a
+                      key={`${p.label}-${p.value}`}
+                      href={p.value.startsWith("http") ? p.value : `https://${p.value}`}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+                    >
+                      <span className="flex items-center gap-2 text-ink-900">
+                        <Globe className="size-4 text-violet-500" /> {p.label}
+                      </span>
+                      <ExternalLink className="size-3.5 text-ink-400" />
+                    </a>
+                  ))}
+                  {!record.linkedinUrl &&
+                    !record.githubUrl &&
+                    !record.leetcodeUrl &&
+                    !record.hackerrankUrl &&
+                    (!record.otherProfiles || record.otherProfiles.length === 0) && (
+                      <p className="text-xs text-ink-500">No profile links recorded.</p>
+                    )}
+                </div>
+              </Card>
+            </section>
+          )}
         </div>
       </div>
 

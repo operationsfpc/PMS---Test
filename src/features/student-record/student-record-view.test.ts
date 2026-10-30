@@ -72,6 +72,7 @@ function stubHappyPath() {
       ]),
     ),
     http.get(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json([])),
+    http.get(`${BASE}/rest/v1/student_certificates`, () => HttpResponse.json([])),
   );
 }
 
