@@ -423,7 +423,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                       to="/student/notifications"
                       className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline"
                     >
-                      View all ({notes.length})
+                      All ({notes.length}) →
                     </Link>
                   )}
                 </div>
