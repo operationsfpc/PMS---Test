@@ -303,6 +303,37 @@ describe("DashboardPage", () => {
     ).toBeDefined();
   });
 
+  it("greets the person by first name and still says which view it is", async () => {
+    render(<DashboardPage view={view()} title="Campus overview" name="Priya Sharma" />);
+
+    const heading = await screen.findByRole("heading", { level: 1 });
+    expect(heading.textContent).toMatch(/Good (morning|afternoon|evening), Priya/);
+    expect(heading.textContent).toContain("Campus overview");
+  });
+
+  it("greets without a name rather than with an empty one", async () => {
+    render(<DashboardPage view={view()} title="Campus overview" />);
+
+    const heading = await screen.findByRole("heading", { level: 1 });
+    expect(heading.textContent).toMatch(/Good (morning|afternoon|evening)(?!,)/);
+  });
+
+  it("gives each panel a round action that goes to its own page", async () => {
+    render(<DashboardPage view={view()} title="Executive overview" />);
+
+    await screen.findByRole("region", { name: /headline/i });
+    const destinations: Record<string, string> = {
+      "Open the student directory": "/central/students",
+      "Open every offer and its package": "/central/offers",
+      "Open the drives list": "/central/drives",
+      "Open the live drives queue": "/central/drives/live",
+    };
+    for (const [label, href] of Object.entries(destinations)) {
+      const link = screen.getByRole("link", { name: label });
+      expect(link.getAttribute("href")).toBe(href);
+    }
+  });
+
   it("says so plainly when there is no data yet", async () => {
     render(
       <DashboardPage

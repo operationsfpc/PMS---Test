@@ -238,6 +238,49 @@ export function ButtonAnchor({
   );
 }
 
+/**
+ * The round icon action a panel carries in its header.
+ *
+ * A panel of lists already opens every row in place; what it never said is
+ * that a whole page sits behind it. This is that way out — one circle, no
+ * words, so it does not compete with the rows under it.
+ *
+ * Icon-only means `label` is the only name a screen reader hears, so it has to
+ * carry the object the way the card rule demands ("Open the drives list",
+ * never a bare "Open"). `title` repeats it for a sighted pointer.
+ */
+export function RoundAction({
+  label,
+  to,
+  onClick,
+  tone = "ink",
+  className = "",
+  children,
+}: {
+  label: string;
+  /** Opens a page — the usual case, and a real anchor, so new tab still works. */
+  to?: string | undefined;
+  /** Opens something in place when there is no page to go to. */
+  onClick?: (() => void) | undefined;
+  tone?: "ink" | "brand";
+  className?: string;
+  children: ReactNode;
+}) {
+  const shape = `flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full shadow-xs transition-transform duration-200 hover:scale-105 ${
+    tone === "ink" ? "bg-ink-900 text-surface" : "bg-brand-500 text-surface"
+  } ${className}`;
+
+  return to === undefined ? (
+    <button type="button" aria-label={label} title={label} onClick={onClick} className={shape}>
+      {children}
+    </button>
+  ) : (
+    <Link to={to} aria-label={label} title={label} className={shape}>
+      {children}
+    </Link>
+  );
+}
+
 export function PageHeader({
   title,
   subtitle,

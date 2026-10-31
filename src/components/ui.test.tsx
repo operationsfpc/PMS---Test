@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { Badge, Button, ButtonAnchor, ButtonLink, Card, StatCard } from "./ui";
+import { Badge, Button, ButtonAnchor, ButtonLink, Card, RoundAction, StatCard } from "./ui";
 
 /**
  * The one control every role's screens press.
@@ -318,5 +318,50 @@ describe("StatCard", () => {
     expect(card.tagName).toBe("A");
     expect(card.getAttribute("href")).toBe("/students");
     expect(card.className).not.toContain("border");
+  });
+});
+
+/**
+ * The circle on a panel's header.
+ *
+ * It has no words of its own, so the accessible name is the whole of what it
+ * says — and a control named "Open" tells a reader nothing about what opens.
+ * The other half of the contract is that a panel's overflow is nearly always a
+ * page, so the default shape stays a real anchor: new tab, back button, and
+ * the destination visible before the press.
+ */
+describe("RoundAction", () => {
+  it("is an anchor with the panel's own page behind it", () => {
+    render(
+      <MemoryRouter>
+        <RoundAction label="Open the drives list" to="/central/drives">
+          <svg aria-hidden="true" />
+        </RoundAction>
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "Open the drives list" });
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/central/drives");
+    // The name is the only text it has, so it has to be said twice: once to a
+    // reader, once to a pointer that pauses on an empty circle.
+    expect(link.getAttribute("title")).toBe("Open the drives list");
+    expect(link.className).toContain("rounded-full");
+    expect(link.className).toContain("cursor-pointer");
+  });
+
+  it("opens something in place when there is no page to go to", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <RoundAction label="Open the hold queue" onClick={onClick}>
+        <svg aria-hidden="true" />
+      </RoundAction>,
+    );
+
+    const button = screen.getByRole("button", { name: "Open the hold queue" });
+    expect(button.getAttribute("type")).toBe("button");
+    await user.click(button);
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

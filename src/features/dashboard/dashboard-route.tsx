@@ -38,5 +38,11 @@ export function DashboardRoute() {
     return <Navigate to="/ae/overview" replace />;
   }
 
-  return <DashboardPage view={view} title={TITLES[role] ?? "Overview"} />;
+  return (
+    <DashboardPage
+      view={view}
+      title={TITLES[role] ?? "Overview"}
+      name={auth.status === "signed-in" ? (auth.name ?? "") : ""}
+    />
+  );
 }

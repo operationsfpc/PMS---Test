@@ -10,7 +10,7 @@ import {
   Button,
   ButtonLink,
   Card,
-  PageHeader,
+  RoundAction,
   StatCard,
 } from "@components/ui";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
@@ -35,6 +35,7 @@ import {
 import type { DirectoryFilter } from "@domain/student-directory";
 import type { DriveType, SrfStatus } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
+import { ArrowUpRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -298,7 +299,7 @@ function CampusPicker({
   if (campuses.length === 0) return null;
 
   return (
-    <div className="mb-5 flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <label htmlFor="campus-filter" className="text-sm font-medium text-ink-700">
         Campus
       </label>
@@ -321,6 +322,19 @@ function CampusPicker({
   );
 }
 
+/**
+ * The hour, then the person.
+ *
+ * Only the first name, because a campus manager's dashboard is a conversation
+ * with one person at a desk, not a letter. Empty name is not an error — the
+ * profile row may hold none — so the greeting still answers, just without one.
+ */
+function greetingOf(hour: number, name: string): string {
+  const part = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const first = name.split(" ")[0]?.trim();
+  return first === undefined || first === "" ? part : `${part}, ${first}`;
+}
+
 /** Which funnel row opens which population. The row's own count, exactly. */
 const FUNNEL_FILTER: Readonly<Record<string, DirectoryFilter | undefined>> = {
   on_roster: undefined,
@@ -340,7 +354,20 @@ const FUNNEL_FILTER: Readonly<Record<string, DirectoryFilter | undefined>> = {
  * computes its own version of "placed" is how two departments end up quoting
  * different numbers from the same database.
  */
-export function DashboardPage({ view, title }: { view: DashboardView; title: string }) {
+export function DashboardPage({
+  view,
+  title,
+  name = "",
+}: {
+  view: DashboardView;
+  title: string;
+  /**
+   * The signed-in person, from the route that already holds the auth state.
+   * Optional because a screen that greets nobody still has to work: the name is
+   * decoration, every figure on this page is not.
+   */
+  name?: string;
+}) {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   /**
    * The first, unscoped load: it owns the campus list the switcher is built
@@ -650,11 +677,36 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
     });
   }
 
+  /**
+   * The opening, drawn once for the loading, failed and loaded states alike.
+   * A screen that repaints its own header as the data arrives reads as the
+   * page changing under the reader.
+   *
+   * `title` rides inside the single h1: a greeting alone is nobody's
+   * dashboard, and a screen reader has to hear WHICH overview this is before
+   * it hears the figures under it.
+   */
+  const header = (
+    <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0 max-w-full">
+        <h1 className="font-heading text-hero font-light text-ink-900 break-words">
+          {greetingOf(new Date().getHours(), name)}
+          <span className="mt-1 block text-sm font-semibold text-ink-500">{title}</span>
+        </h1>
+        <p className="mt-2 text-sm text-ink-500 break-words">
+          Opt-outs leave the denominator; self-placed is its own line.
+        </p>
+      </div>
+
+      {/* F4: all campuses by default, one campus on request. */}
+      <CampusPicker campuses={campusOptions} value={campusId} onChange={setCampusId} />
+    </div>
+  );
+
   if (snapshot === null) {
     return (
       <div>
-        <PageHeader title={title} />
-        <CampusPicker campuses={campusOptions} value={campusId} onChange={setCampusId} />
+        {header}
         {failure === null ? (
           <p role="status" className="text-sm text-ink-500">
             Loading…
@@ -746,13 +798,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
 
   return (
     <div>
-      <PageHeader
-        title={title}
-        subtitle="Opt-outs leave the denominator; self-placed is its own line."
-      />
-
-      {/* F4: all campuses by default, one campus on request. */}
-      <CampusPicker campuses={campusOptions} value={campusId} onChange={setCampusId} />
+      {header}
 
       {snapshot.students.length === 0 ? (
         <Card className="p-6">
@@ -769,15 +815,19 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               leave the number they were questioning to go and check it
               somewhere else — and the directory's own filter did not always
               hold the same population ("if it shows a count I need to know who
-              all is there"). The directory stays one click away in the footer. */}
+              all is there"). The directory stays one click away in the footer.
+              Readouts, not tiles: five bordered boxes compete with the panels
+              under them, and the only thing the row has to say is the five
+              figures. The hairlines divide them without framing them. */}
           <section
             aria-label="Headline"
-            className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5"
+            className="mb-8 grid grid-cols-2 gap-y-4 sm:grid-cols-3 lg:grid-cols-5 lg:divide-x lg:divide-line/70"
           >
             <StatCard
               label="Placement rate"
               value={`${stats.placementRate}%`}
               tone="brand"
+              variant="readout"
               onClick={() =>
                 openStudents({
                   eyebrow: "Headline",
@@ -799,6 +849,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               value={stats.placed}
               hint={`of ${stats.eligible} eligible`}
               tone="success"
+              variant="readout"
               onClick={() =>
                 openStudents({
                   eyebrow: "Headline",
@@ -813,6 +864,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               label="Self-placed"
               value={stats.selfPlaced}
               tone="warning"
+              variant="readout"
               onClick={() =>
                 openStudents({
                   eyebrow: "Headline",
@@ -829,6 +881,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               label="Opted out"
               value={stats.optedOut}
               tone="danger"
+              variant="readout"
               onClick={() =>
                 openStudents({
                   eyebrow: "Headline",
@@ -841,25 +894,40 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
             />
             {/* The one card that is not about students, so it opens the drives
                 instead - and the campus switcher does not apply to it. */}
-            <Link to="/central/drives/completed" className="block col-span-2 sm:col-span-1">
-              <StatCard
-                label="Drives completed"
-                value={snapshot.drivesByStatus.completed ?? 0}
-                hint={`${openEvents.length} open now`}
-              />
-            </Link>
+            <StatCard
+              label="Drives completed"
+              value={snapshot.drivesByStatus.completed ?? 0}
+              hint={`${openEvents.length} open now`}
+              variant="readout"
+              to="/central/drives/completed"
+            />
           </section>
 
-          <div className="mb-6 grid gap-6 lg:grid-cols-2">
-            <Card className="p-5">
+          {/*
+           * Three panels across, each a different pastel, each answering one
+           * question — where the cohort stands, what it earned, how the drives
+           * are going. They used to be four equal white cards in two rows,
+           * which made the funnel and the drive counts look like the same kind
+           * of object. A tone says which queue is which before the title is
+           * read, and the circle says there is a whole page behind it.
+           */}
+          <div className="mb-6 grid gap-5 lg:grid-cols-3">
+            <Card tone="brand" className="p-5">
               {/* F5: renamed, because "funnel" promised a drive-by-drive story
                   it could not tell. These four are facts about a STUDENT. */}
               <section aria-label="Students overview">
-                <h2 className="text-lg text-ink-900">Students overview</h2>
-                <p className="mt-1 mb-3 text-sm text-ink-500">
-                  Where the cohort is, from the roster to a signed offer.
-                </p>
-                <ol className="space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg text-ink-900">Students overview</h2>
+                    <p className="mt-1 text-sm text-ink-500">
+                      Where the cohort is, from the roster to a signed offer.
+                    </p>
+                  </div>
+                  <RoundAction label="Open the student directory" to="/central/students">
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                  </RoundAction>
+                </div>
+                <ol className="mt-3 space-y-2">
                   {funnel.map((stage) => {
                     /*
                      * 2026-08-17: the Placed count opens the students behind
@@ -898,13 +966,13 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                   : `${stage.percentOfRoster}% of the roster`,
                             })
                           }
-                          className="block w-full rounded-lg text-left transition-colors hover:bg-brand-50"
+                          className="block w-full rounded-control text-left transition-colors hover:bg-surface"
                         >
                           {row}
                         </button>
                         {/* The bar is the point: a stage that drops off a cliff
                           is visible before the numbers are read. */}
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface">
                           <div
                             className="h-full bg-brand-500"
                             style={{ width: `${stage.percentOfRoster}%` }}
@@ -917,9 +985,14 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               </section>
             </Card>
 
-            <Card className="p-5">
+            <Card tone="warn" className="p-5">
               <section aria-label="Package">
-                <h2 className="text-lg text-ink-900">Package</h2>
+                <div className="flex items-start justify-between gap-3">
+                  <h2 className="text-lg text-ink-900">Package</h2>
+                  <RoundAction label="Open every offer and its package" to="/central/offers">
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                  </RoundAction>
+                </div>
                 {packages === null || packages.count === 0 ? (
                   <p className="mt-3 text-sm text-ink-700">
                     No packages yet. Figures appear as soon as the first offer is declared.
@@ -975,7 +1048,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                         } at this package`,
                                 })
                               }
-                              className="block rounded-lg bg-surface-muted p-3 text-left transition-colors hover:bg-brand-50"
+                              className="block rounded-control bg-surface/70 p-3 text-left transition-colors hover:bg-surface"
                             >
                               <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
                                 {name}
@@ -1010,7 +1083,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                   )}`,
                                 })
                               }
-                              className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg py-2 pr-1 text-left text-sm transition-colors hover:bg-brand-50"
+                              className="flex w-full flex-wrap items-center justify-between gap-2 rounded-control py-2 pr-1 text-left text-sm transition-colors hover:bg-surface"
                             >
                               {/* 2026-08-27: the domain's spelling. The
                                   `capitalize` class was a stylesheet spelling
@@ -1034,14 +1107,19 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 )}
               </section>
             </Card>
-          </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="p-5">
-              <h2 className="text-lg text-ink-900">Drives by status</h2>
-              <p className="mt-1 text-xs text-ink-500">
-                Company visits, not role rows — a visit that raised three roles is one drive.
-              </p>
+            <Card tone="quiet" className="p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg text-ink-900">Drives by status</h2>
+                  <p className="mt-1 text-xs text-ink-500">
+                    Company visits, not role rows — a visit that raised three roles is one drive.
+                  </p>
+                </div>
+                <RoundAction label="Open the drives list" to="/central/drives">
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                </RoundAction>
+              </div>
               <ul className="mt-3 space-y-1">
                 {Object.entries(snapshot.drivesByStatus).map(([status, count]) => {
                   const roles = rolesByStatus[status] ?? count;
@@ -1071,8 +1149,10 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 })}
               </ul>
             </Card>
+          </div>
 
-            <Card className="p-5">
+          <div className="mb-6 grid gap-5 lg:grid-cols-2">
+            <Card tone="good" className="p-5">
               <section aria-label="Offers by category">
                 <h2 className="text-lg text-ink-900">Offers by category</h2>
                 {/* 2026-10-16: these are STUDENTS, each at the one offer that is
@@ -1108,11 +1188,61 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 </ul>
               </section>
             </Card>
+
+            <Card tone="quiet" className="p-5">
+              <section aria-label="By campus">
+                <h2 className="text-lg text-ink-900">By campus</h2>
+                <ul className="mt-3 divide-y divide-line">
+                  {snapshot.campuses.map((campus) => (
+                    <li key={campus.campusId}>
+                      {/* Its own campus, not the switcher's: this row is the
+                          answer for THAT college. */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const at = snapshot.students.filter(
+                            (student) =>
+                              student.campusId === campus.campusId &&
+                              countsInPlacementDenominator(student),
+                          );
+                          openStudents({
+                            eyebrow: "By campus",
+                            title: `In the denominator at ${campus.campusName}`,
+                            href: studentsLink({ campus: campus.campusName }),
+                            rows: at,
+                            status: (student) =>
+                              student.hasOnCampusPlacement ? "Placed" : "Not placed",
+                            group: (student) =>
+                              student.hasOnCampusPlacement ? "Placed" : "Not placed",
+                            note: `${rate(campus.placed, campus.eligible)}% placed`,
+                            where: campus.campusName,
+                          });
+                        }}
+                        className="flex w-full items-center justify-between gap-4 rounded-control py-2 pr-1 text-left text-sm transition-colors hover:bg-surface"
+                      >
+                        <span className="text-ink-800">{campus.campusName}</span>
+                        <span className="text-ink-500">
+                          {campus.placed} of {campus.eligible} ·{" "}
+                          <span className="font-semibold text-ink-900">
+                            {rate(campus.placed, campus.eligible)}%
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            </Card>
           </div>
 
-          <Card className="mt-6 p-5">
+          <Card className="mb-6 p-5">
             <section aria-label="Open drives">
-              <h2 className="text-lg text-ink-900">Open drives</h2>
+              <div className="flex items-start justify-between gap-3">
+                <h2 className="text-lg text-ink-900">Open drives</h2>
+                <RoundAction label="Open the live drives queue" to="/central/drives/live">
+                  <ArrowUpRight className="size-4" aria-hidden="true" />
+                </RoundAction>
+              </div>
               {openEvents.length === 0 ? (
                 <p className="mt-3 text-sm text-ink-700">
                   No drives are open right now. Published drives appear here with the time left to
@@ -1182,7 +1312,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
            * audience — so the one number anybody wanted to act on was the one
            * number that was wrong.
            */}
-          <Card className="mt-6 p-5">
+          <Card className="p-5">
             <section aria-label="Drive progress">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
@@ -1378,13 +1508,13 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                                   <th className="pb-2 font-medium">Performance / Attendance</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-line/40">
+                              <tbody className="table-rows">
                                 {drive.funnel.stages.map((stage) => {
                                   const round = drive.funnel.rounds.find(
                                     (r) => r.roundId === stage.key,
                                   );
                                   return (
-                                    <tr key={stage.key} className="hover:bg-surface-muted/30">
+                                    <tr key={stage.key}>
                                       <td className="py-2.5 pr-3 font-medium text-ink-800 text-xs sm:text-sm">
                                         <span className="block">
                                           <span className="text-ink-700">{stage.label}</span>
@@ -1532,51 +1662,6 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                   )}
                 </div>
               )}
-            </section>
-          </Card>
-
-          <Card className="mt-6 p-5">
-            <section aria-label="By campus">
-              <h2 className="text-lg text-ink-900">By campus</h2>
-              <ul className="mt-3 divide-y divide-line">
-                {snapshot.campuses.map((campus) => (
-                  <li key={campus.campusId}>
-                    {/* Its own campus, not the switcher's: this row is the
-                        answer for THAT college. */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const at = snapshot.students.filter(
-                          (student) =>
-                            student.campusId === campus.campusId &&
-                            countsInPlacementDenominator(student),
-                        );
-                        openStudents({
-                          eyebrow: "By campus",
-                          title: `In the denominator at ${campus.campusName}`,
-                          href: studentsLink({ campus: campus.campusName }),
-                          rows: at,
-                          status: (student) =>
-                            student.hasOnCampusPlacement ? "Placed" : "Not placed",
-                          group: (student) =>
-                            student.hasOnCampusPlacement ? "Placed" : "Not placed",
-                          note: `${rate(campus.placed, campus.eligible)}% placed`,
-                          where: campus.campusName,
-                        });
-                      }}
-                      className="flex w-full items-center justify-between gap-4 rounded-lg py-2 pr-1 text-left text-sm transition-colors hover:bg-brand-50"
-                    >
-                      <span className="text-ink-800">{campus.campusName}</span>
-                      <span className="text-ink-500">
-                        {campus.placed} of {campus.eligible} ·{" "}
-                        <span className="font-semibold text-ink-900">
-                          {rate(campus.placed, campus.eligible)}%
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             </section>
           </Card>
         </>
