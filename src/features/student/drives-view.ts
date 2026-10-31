@@ -311,38 +311,31 @@ export function createSupabaseDrivesView(
    * the Campus Manager's to read.
    */
   async function readHold(studentId: string): Promise<StudentHoldNotice | null> {
-    const { data, error } = await client
-      .from("student_holds")
-      .select("kind, reason, starts_at, ends_at, confirmed_at")
-      .eq("student_id", studentId)
-      .is("released_at", null)
-      .limit(1);
+    try {
+      const { data, error } = await client
+        .from("student_holds")
+        .select("kind, reason, starts_at, ends_at, confirmed_at")
+        .eq("student_id", studentId)
+        .is("released_at", null)
+        .limit(1);
 
-    if (error !== null) {
-      if (
-        error.code === "PGRST205" ||
-        error.code === "42P01" ||
-        error.code === "42703" ||
-        error.message?.includes("schema cache") ||
-        error.message?.includes("does not exist")
-      ) {
+      if (error !== null) {
         return null;
       }
-      throw new Error(
-        describeReadFailure(error, "Could not check whether your placements are on hold."),
-      );
+
+      const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+      if (row === null || row === undefined) return null;
+
+      return {
+        kind: row.kind as StudentHoldNotice["kind"],
+        reason: (row.reason as string | null) ?? "",
+        startsAt: row.starts_at as string,
+        endsAt: row.ends_at as string,
+        confirmedAt: (row.confirmed_at as string | null) ?? null,
+      };
+    } catch {
+      return null;
     }
-
-    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
-    if (row === null || row === undefined) return null;
-
-    return {
-      kind: row.kind as StudentHoldNotice["kind"],
-      reason: (row.reason as string | null) ?? "",
-      startsAt: row.starts_at as string,
-      endsAt: row.ends_at as string,
-      confirmedAt: (row.confirmed_at as string | null) ?? null,
-    };
   }
 
   function toDrive(raw: Record<string, unknown>): ApplyDrive {

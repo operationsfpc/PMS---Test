@@ -385,7 +385,7 @@ export function StudentRecordPage({
 
   // Filter states
   const [activeSection, setActiveSection] = useState<
-    "overview" | "all" | "academics" | "placements" | "preferences" | "portfolio"
+    "overview" | "academics" | "placements" | "preferences" | "portfolio"
   >("overview");
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<"all" | "shortlisted" | "offered">("all");
@@ -858,11 +858,18 @@ export function StudentRecordPage({
         <TabsList className="mb-4 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
           {[
             { id: "overview", label: "Overview" },
-            { id: "all", label: "All sections" },
-            { id: "academics", label: `Academics (${semesters.length})` },
+            {
+              id: "academics",
+              label: semesters.length > 0 ? `Academics (${semesters.length})` : "Academics",
+            },
             {
               id: "placements",
-              label: `Placements (${offers.length || (record.placement ? 1 : 0)})`,
+              label:
+                offers.length > 0
+                  ? `Placements (${offers.length})`
+                  : record.placement
+                    ? "Placements (1)"
+                    : "Placements",
             },
             { id: "preferences", label: "Preferences" },
             { id: "portfolio", label: "Portfolio" },
@@ -872,7 +879,7 @@ export function StudentRecordPage({
               value={tab.id}
               id={`student-record-tab-${tab.id}`}
               aria-controls="student-record-panels"
-              className="w-auto flex-none rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-500 data-[state=active]:bg-surface data-[state=active]:text-brand-700 data-[state=active]:shadow-sm"
+              className="w-auto flex-none rounded-lg px-3.5 py-1.5 text-xs font-semibold text-ink-600 transition-all data-[state=active]:bg-surface data-[state=active]:text-brand-700 data-[state=active]:shadow-xs"
             >
               {tab.label}
             </TabsTrigger>
@@ -889,80 +896,8 @@ export function StudentRecordPage({
         tabIndex={-1}
         className="space-y-6 outline-none"
       >
-        {(activeSection === "overview" || activeSection === "all") && (
-          <section aria-label="Identity">
-            <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
-                  <User className="size-4" />
-                </div>
-                <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
-              </div>
-              <dl className="grid gap-2 text-sm">
-                <div className="flex justify-between gap-4">
-                  <dt className="shrink-0 text-ink-500">Programme</dt>
-                  <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
-                    {record.degree}
-                    {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="shrink-0 text-ink-500">Email</dt>
-                  <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
-                </div>
-                <div className="flex justify-between gap-4">
-                  <dt className="shrink-0 text-ink-500">Mobile</dt>
-                  <dd className="min-w-0 break-all text-right text-ink-900">
-                    {record.mobile ?? "Not recorded"}
-                  </dd>
-                </div>
-                {record.whatsapp && (
-                  <div className="flex justify-between gap-4">
-                    <dt className="shrink-0 text-ink-500">WhatsApp</dt>
-                    <dd className="min-w-0 break-all text-right font-medium text-success-700">
-                      {record.whatsapp}
-                    </dd>
-                  </div>
-                )}
-                {record.alternateContact && (
-                  <div className="flex justify-between gap-4">
-                    <dt className="shrink-0 text-ink-500">Alt Phone</dt>
-                    <dd className="min-w-0 break-all text-right text-ink-900">
-                      {record.alternateContact}
-                    </dd>
-                  </div>
-                )}
-                {/* Registration audit timestamps */}
-                <div className="mt-2 border-t border-line pt-2 text-xs">
-                  <div className="flex justify-between text-ink-500">
-                    <span>Submitted:</span>
-                    <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
-                  </div>
-                  {record.srfDecidedAt && (
-                    <div className="mt-1 flex justify-between text-ink-500">
-                      <span>Approved:</span>
-                      <span>{onDate(record.srfDecidedAt)}</span>
-                    </div>
-                  )}
-                  {record.consentGivenAt && (
-                    <div className="mt-1 flex justify-between text-ink-500">
-                      <span>Consent Recorded:</span>
-                      <span>{onDate(record.consentGivenAt)}</span>
-                    </div>
-                  )}
-                  {record.srfRejectionReason && (
-                    <div className="mt-2 rounded bg-danger-50 p-2 text-danger-700">
-                      Rejection reason: {record.srfRejectionReason}
-                    </div>
-                  )}
-                </div>
-              </dl>
-            </Card>
-          </section>
-        )}
-
         {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
-        {(activeSection === "overview" || activeSection === "all") &&
+        {activeSection === "overview" &&
           (hold !== null || pending !== null || pastHolds.length > 0) && (
             <section aria-label="Placement hold" className="flex flex-col gap-3">
               {pending !== null && (
@@ -1240,16 +1175,20 @@ export function StudentRecordPage({
           )}
 
         {/* Status history — every move a person made on this standing, and why */}
-        {(activeSection === "overview" || activeSection === "all") && (
+        {activeSection === "overview" && (
           <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
         )}
 
-        {/* Main Layout Grid — the sections of every tab but Overview */}
+        {/* Main Layout Grid — continuous 2/3 + 1/3 presentation */}
         <div id="student-record-grid" className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Left 2 Columns: Core History & Records */}
-          <div className="space-y-6 lg:col-span-2">
+          {/* Left Column: 2 cols on Overview, full 3 cols on focused tabs */}
+          <div
+            className={`space-y-6 ${
+              activeSection === "overview" ? "lg:col-span-2" : "lg:col-span-3"
+            }`}
+          >
             {/* Offers & Placement Card */}
-            {(activeSection === "placements" || activeSection === "all") && (
+            {(activeSection === "placements" || activeSection === "overview") && (
               <section aria-label="Placement">
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1282,8 +1221,7 @@ export function StudentRecordPage({
                               All ({offers.length})
                             </TabsTrigger>
                             <TabsTrigger value="placement" className="px-2 py-0.5 text-xs">
-                              Placements ({offers.filter((o) => o.driveType === "placement").length}
-                              )
+                              Full-time ({offers.filter((o) => o.driveType === "placement").length})
                             </TabsTrigger>
                             <TabsTrigger value="internship" className="px-2 py-0.5 text-xs">
                               Internships (
@@ -1414,7 +1352,7 @@ export function StudentRecordPage({
             )}
 
             {/* Academics Record Card & Semester Progression */}
-            {(activeSection === "academics" || activeSection === "all") && (
+            {(activeSection === "academics" || activeSection === "overview") && (
               <section aria-label="Academics" className="space-y-6">
                 {/* Semester by Semester Progression Table */}
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
@@ -1700,7 +1638,7 @@ export function StudentRecordPage({
             )}
 
             {/* Applications History Card */}
-            {(activeSection === "placements" || activeSection === "all") && (
+            {(activeSection === "placements" || activeSection === "overview") && (
               <section aria-label="Applications">
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1838,7 +1776,7 @@ export function StudentRecordPage({
             )}
 
             {/* Portfolio & SRF Details Card */}
-            {(activeSection === "portfolio" || activeSection === "all") && (
+            {activeSection === "portfolio" && (
               <section aria-label="Portfolio">
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex items-center gap-2">
@@ -1971,10 +1909,91 @@ export function StudentRecordPage({
             )}
           </div>
 
-          {/* Right 1 Column: Preferences, Resumes, Assessed Skills, Contacts & Profiles */}
-          <div className="space-y-6 lg:col-span-1">
+          {/* Right Column: 1 col on Overview, full 3 cols on focused tabs, hidden on academics/placements */}
+          <div
+            className={`space-y-6 ${
+              activeSection === "overview"
+                ? "lg:col-span-1"
+                : activeSection === "preferences" || activeSection === "portfolio"
+                  ? "lg:col-span-3"
+                  : "hidden"
+            }`}
+          >
+            {/* Identity Card */}
+            {activeSection === "overview" && (
+              <section aria-label="Identity">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
+                      <User className="size-4" />
+                    </div>
+                    <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
+                  </div>
+                  <dl className="grid gap-2 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-ink-500">Programme</dt>
+                      <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
+                        {record.degree}
+                        {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-ink-500">Email</dt>
+                      <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
+                    </div>
+                    <div className="flex justify-between gap-4">
+                      <dt className="shrink-0 text-ink-500">Mobile</dt>
+                      <dd className="min-w-0 break-all text-right text-ink-900">
+                        {record.mobile ?? "Not recorded"}
+                      </dd>
+                    </div>
+                    {record.whatsapp && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="shrink-0 text-ink-500">WhatsApp</dt>
+                        <dd className="min-w-0 break-all text-right font-medium text-success-700">
+                          {record.whatsapp}
+                        </dd>
+                      </div>
+                    )}
+                    {record.alternateContact && (
+                      <div className="flex justify-between gap-4">
+                        <dt className="shrink-0 text-ink-500">Alt Phone</dt>
+                        <dd className="min-w-0 break-all text-right text-ink-900">
+                          {record.alternateContact}
+                        </dd>
+                      </div>
+                    )}
+                    {/* Registration audit timestamps */}
+                    <div className="mt-2 border-t border-line pt-2 text-xs">
+                      <div className="flex justify-between text-ink-500">
+                        <span>Submitted:</span>
+                        <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
+                      </div>
+                      {record.srfDecidedAt && (
+                        <div className="mt-1 flex justify-between text-ink-500">
+                          <span>Approved:</span>
+                          <span>{onDate(record.srfDecidedAt)}</span>
+                        </div>
+                      )}
+                      {record.consentGivenAt && (
+                        <div className="mt-1 flex justify-between text-ink-500">
+                          <span>Consent Recorded:</span>
+                          <span>{onDate(record.consentGivenAt)}</span>
+                        </div>
+                      )}
+                      {record.srfRejectionReason && (
+                        <div className="mt-2 rounded bg-danger-50 p-2 text-danger-700">
+                          Rejection reason: {record.srfRejectionReason}
+                        </div>
+                      )}
+                    </div>
+                  </dl>
+                </Card>
+              </section>
+            )}
+
             {/* Resumes on File Card (with Staff Upload/Replace) */}
-            {(activeSection === "preferences" || activeSection === "all") && (
+            {(activeSection === "preferences" || activeSection === "overview") && (
               <section aria-label="Resumes">
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
@@ -2061,7 +2080,7 @@ export function StudentRecordPage({
             )}
 
             {/* Role & Drive Preferences Card */}
-            {(activeSection === "preferences" || activeSection === "all") && (
+            {(activeSection === "preferences" || activeSection === "overview") && (
               <section aria-label="Skills and preferences">
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
@@ -2151,7 +2170,7 @@ export function StudentRecordPage({
             )}
 
             {/* Online & Coding Profiles Card */}
-            {(activeSection === "portfolio" || activeSection === "all") && (
+            {(activeSection === "portfolio" || activeSection === "overview") && (
               <section aria-label="Online profiles">
                 <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-3 flex items-center gap-2">

@@ -637,6 +637,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Button
               variant="secondary"
               size="sm"
+              className="whitespace-nowrap px-2.5 sm:px-3"
               onClick={() => void signOut()}
               aria-label="Sign out"
               title="Sign out"
