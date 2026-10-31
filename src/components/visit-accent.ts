@@ -16,12 +16,12 @@
  * reads.
  */
 export const VISIT_ACCENTS = [
-  { rail: "border-l-brand-500", band: "bg-brand-50" },
-  { rail: "border-l-violet-500", band: "bg-violet-50" },
-  { rail: "border-l-success-500", band: "bg-success-50" },
-  { rail: "border-l-gold-500", band: "bg-gold-50" },
-  { rail: "border-l-cyan-400", band: "bg-cyan-50" },
-  { rail: "border-l-danger-500", band: "bg-danger-50" },
+  { rail: "", band: "bg-brand-50", tone: "brand", dot: "bg-brand-500" },
+  { rail: "", band: "bg-violet-50", tone: "accent", dot: "bg-violet-500" },
+  { rail: "", band: "bg-success-50", tone: "success", dot: "bg-success-500" },
+  { rail: "", band: "bg-gold-50", tone: "warning", dot: "bg-gold-500" },
+  { rail: "", band: "bg-cyan-50", tone: "neutral", dot: "bg-cyan-400" },
+  { rail: "", band: "bg-danger-50", tone: "danger", dot: "bg-danger-500" },
 ] as const;
 
 export function visitAccent(index: number): (typeof VISIT_ACCENTS)[number] {

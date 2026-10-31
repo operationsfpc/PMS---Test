@@ -460,7 +460,7 @@ export function DrivesList({
             };
 
             return (
-              <Card key={event.eventId} className={`overflow-hidden border-l-4 ${accent.rail}`}>
+              <Card key={event.eventId} data-visit-card="true" className="overflow-hidden">
                 {/* One company visit is one card, and the COMPANY is its headline
                     whatever the number of roles under it (2026-10-16: "it should
                     show company name"). A student decides whether to give an

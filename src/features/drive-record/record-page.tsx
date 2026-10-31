@@ -21,7 +21,13 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
 import type { DriveRecord, DriveRecordView } from "./record-view";
 
-type DriveRecordTab = "overview" | "eligibility" | "applicants" | "compensation" | "recruiters";
+type DriveRecordTab =
+  | "overview"
+  | "all"
+  | "eligibility"
+  | "applicants"
+  | "compensation"
+  | "recruiters";
 
 /**
  * N1 — the drive's one canonical page (approved mockup 2026-08-19).
@@ -55,12 +61,12 @@ const when = (iso: string | null) =>
  */
 type SectionTone = "neutral" | "brand" | "accent" | "success" | "warning";
 
-const SECTION_TONES: Readonly<Record<SectionTone, { rail: string; rule: string }>> = {
-  neutral: { rail: "border-l-line", rule: "border-line" },
-  brand: { rail: "border-l-brand-500", rule: "border-brand-500" },
-  accent: { rail: "border-l-violet-500", rule: "border-violet-500" },
-  success: { rail: "border-l-success-500", rule: "border-success-500" },
-  warning: { rail: "border-l-gold-500", rule: "border-gold-500" },
+const SECTION_TONES: Readonly<Record<SectionTone, { badge: string; icon: string }>> = {
+  neutral: { badge: "bg-surface-muted text-ink-700 border-line", icon: "text-ink-600" },
+  brand: { badge: "bg-brand-50 text-brand-700 border-brand-200", icon: "text-brand-600" },
+  accent: { badge: "bg-violet-50 text-violet-700 border-violet-300", icon: "text-violet-700" },
+  success: { badge: "bg-success-50 text-success-700 border-success-200", icon: "text-success-600" },
+  warning: { badge: "bg-gold-50 text-gold-700 border-gold-300", icon: "text-gold-600" },
 };
 
 function Section({
@@ -74,12 +80,13 @@ function Section({
 }) {
   const colors = SECTION_TONES[tone];
   return (
-    <Card className={`border-l-4 ${colors.rail} p-5`}>
-      <h2
-        className={`mb-3 inline-block border-b-2 ${colors.rule} pb-0.5 font-heading text-sm font-bold uppercase tracking-wide text-ink-900`}
-      >
-        {title}
-      </h2>
+    <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+      <div className="mb-4 flex items-center justify-between border-b border-line/60 pb-3">
+        <h2 className="font-heading text-sm font-bold uppercase tracking-wide text-ink-900">
+          {title}
+        </h2>
+        <span className={`inline-block size-2 rounded-full ${colors.icon.replace("text-", "bg-")}`} />
+      </div>
       {children}
     </Card>
   );
@@ -104,17 +111,14 @@ function Fact({
 }
 
 /**
- * The four figures a reader scans first, in the same shape as `Fact` above —
- * they used to be four copies of one block with three different type scales,
- * so a long CTC and a long city list looked like two different components.
- * Each tile wears the tone of what it holds: the money, the place, the format,
- * the deadline.
+ * The four figures a reader scans first, in the same shape as `Fact` above.
+ * Clean, symmetrical cards with soft wash and rounded corners — no one-sided rail.
  */
 const TILE_TONES = {
-  brand: { rail: "border-l-brand-500", band: "bg-brand-50" },
-  accent: { rail: "border-l-violet-500", band: "bg-violet-50" },
-  success: { rail: "border-l-success-500", band: "bg-success-50" },
-  warning: { rail: "border-l-gold-500", band: "bg-gold-50" },
+  brand: { bg: "bg-brand-50/50", border: "border-brand-200/80", label: "text-brand-700" },
+  accent: { bg: "bg-violet-50/50", border: "border-violet-300/80", label: "text-violet-700" },
+  success: { bg: "bg-success-50/50", border: "border-success-200/80", label: "text-success-700" },
+  warning: { bg: "bg-gold-50/50", border: "border-gold-300/80", label: "text-gold-700" },
 } as const;
 
 function Tile({
@@ -129,10 +133,10 @@ function Tile({
   const colors = TILE_TONES[tone];
   return (
     <div
-      className={`min-w-0 rounded-xl border border-line border-l-4 ${colors.rail} ${colors.band} p-3.5`}
+      className={`min-w-0 rounded-xl border ${colors.border} ${colors.bg} p-4 shadow-xs transition-all`}
     >
-      <span className="text-xs font-semibold uppercase tracking-wide text-ink-500">{label}</span>
-      <p className="mt-1 break-words text-sm font-semibold text-ink-900 [overflow-wrap:anywhere]">
+      <span className={`text-xs font-bold uppercase tracking-wide ${colors.label}`}>{label}</span>
+      <p className="mt-1 break-words font-heading text-sm font-bold text-ink-900 [overflow-wrap:anywhere]">
         {value}
       </p>
     </div>
@@ -408,7 +412,7 @@ export function DriveRecordPage({
       </div>
 
       <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as DriveRecordTab)}>
-        <TabsList className="mb-1 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
+        <TabsList className="mb-4 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
           <TabsTrigger
             value="overview"
             id="drive-record-tab-overview"
@@ -416,6 +420,14 @@ export function DriveRecordPage({
             className={tabTriggerClass}
           >
             Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="all"
+            id="drive-record-tab-all"
+            aria-controls="drive-record-panels"
+            className={tabTriggerClass}
+          >
+            All Details
           </TabsTrigger>
           <TabsTrigger
             value="eligibility"
@@ -466,14 +478,14 @@ export function DriveRecordPage({
         {/* Main Column (2 cols) */}
         <div
           className={
-            activeTab === "overview"
+            activeTab === "overview" || activeTab === "all"
               ? "space-y-6 lg:col-span-2"
               : activeTab === "eligibility" || activeTab === "applicants"
                 ? "space-y-6 lg:col-span-3"
                 : "hidden"
           }
         >
-          {activeTab === "overview" &&
+          {(activeTab === "overview" || activeTab === "all") &&
             (record.jobDescription !== "" || record.jobDescriptionUrl !== null) && (
               <Section title="Job description" tone="brand">
                 {record.jobDescription !== "" && (
@@ -505,7 +517,7 @@ export function DriveRecordPage({
               </Section>
             )}
 
-          {activeTab === "eligibility" && (
+          {(activeTab === "eligibility" || activeTab === "all") && (
             <Section title="Eligibility as published" tone="accent">
               <dl className="grid gap-3 sm:grid-cols-2">
                 <Fact label="CGPA cutoff" value={record.eligibility.cgpaLabel} />
@@ -544,7 +556,7 @@ export function DriveRecordPage({
             </Section>
           )}
 
-          {activeTab === "overview" && (
+          {(activeTab === "overview" || activeTab === "all") && (
             <Section title="Selection process" tone="brand">
               {record.rounds.length === 0 ? (
                 <p className="text-sm text-ink-500">No rounds declared yet.</p>
@@ -564,6 +576,20 @@ export function DriveRecordPage({
                   ))}
                 </ol>
               )}
+            </Section>
+          )}
+
+          {activeTab === "all" && (
+            <Section title="Compensation & Terms" tone="success">
+              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <Fact label="CTC" value={record.ctcLabel} />
+                <Fact label="Breakup" value={record.ctcBreakup} />
+                <Fact label="Bond / service agreement" value={record.bondDetails} />
+                <Fact
+                  label="Openings"
+                  value={record.openings === null ? "" : String(record.openings)}
+                />
+              </dl>
             </Section>
           )}
 
@@ -676,7 +702,7 @@ export function DriveRecordPage({
             </Section>
           )}
 
-          {activeTab === "overview" && record.siblingRoles.length > 0 && (
+          {(activeTab === "overview" || activeTab === "all") && record.siblingRoles.length > 0 && (
             <Section title="Other Roles in This Drive" tone="accent">
               <p className="mb-3 text-sm text-ink-600">
                 This company is hiring for {record.siblingRoles.length + 1} roles under the same
@@ -723,10 +749,10 @@ export function DriveRecordPage({
           )}
         </div>
 
-        {/* Sidebar Column (1 col on Overview; full width for its own tabs) */}
+        {/* Sidebar Column (1 col on Overview & All; full width for its own tabs) */}
         <div
           className={
-            activeTab === "overview"
+            activeTab === "overview" || activeTab === "all"
               ? "space-y-6 lg:col-span-1"
               : activeTab === "compensation" || activeTab === "recruiters"
                 ? "space-y-6 lg:col-span-3"
@@ -747,7 +773,7 @@ export function DriveRecordPage({
             </Section>
           )}
 
-          {activeTab === "overview" && (
+          {(activeTab === "overview" || activeTab === "all") && (
             <Section title="Where and when" tone="warning">
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
                 <Fact label="Locations" value={record.locations} />
@@ -790,7 +816,7 @@ export function DriveRecordPage({
             </Section>
           )}
 
-          {activeTab === "overview" && staff && (
+          {(activeTab === "overview" || activeTab === "all") && staff && (
             <Section title="Provenance">
               <p className="text-sm leading-relaxed text-ink-700 break-words [overflow-wrap:anywhere]">
                 Raised by <strong>{record.provenance.raisedBy ?? "—"}</strong> ·{" "}

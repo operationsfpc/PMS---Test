@@ -218,7 +218,7 @@ export function ShiftField<T extends FieldValues>({ api }: { api: PifFieldApi<T>
         }}
       />
       {shiftType === "night" && (
-        <div className="mt-3 border-l-[3px] border-violet-400 bg-violet-400/5 py-3 pl-4 pr-3">
+        <div className="mt-3 rounded-xl border border-line bg-surface-muted/50 p-4">
           <Labelled label="Night shift timing" error={api.err("shiftNightTiming")}>
             {(id) => (
               <input
@@ -908,7 +908,7 @@ export function VenueAndModeField<T extends FieldValues>({ api }: { api: PifFiel
             }}
           />
           {venueStatus === "confirmed" && (
-            <div className="mt-3 border-l-[3px] border-violet-400 bg-violet-400/5 py-3 pl-4 pr-3">
+            <div className="mt-3 rounded-xl border border-line bg-surface-muted/50 p-4">
               <Labelled label="Venue" error={api.err("venue")}>
                 {(id) => (
                   <input
@@ -974,7 +974,7 @@ export function JoiningTimelineField<T extends FieldValues>({
         }}
       />
       {withComments && joiningTimeline !== "" && (
-        <div className="mt-3 border-l-[3px] border-violet-400 bg-violet-400/5 py-3 pl-4 pr-3">
+        <div className="mt-3 rounded-xl border border-line bg-surface-muted/50 p-4">
           <JoiningCommentBox
             api={api}
             which={joiningTimeline === "immediate" ? "immediate" : "later"}

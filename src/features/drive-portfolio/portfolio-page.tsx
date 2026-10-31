@@ -543,7 +543,7 @@ export function DrivePortfolioPage({
 
     return (
       <li key={event.eventId}>
-        <Card className={`overflow-hidden border-l-4 ${accent.rail}`}>
+        <Card className="overflow-hidden">
           {/* Event Header for multi-role drives */}
           {isMultiRole && (
             <div className={`border-b border-line ${accent.band} p-4`}>

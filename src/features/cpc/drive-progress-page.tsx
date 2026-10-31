@@ -437,7 +437,7 @@ function VisitCard({
   });
 
   return (
-    <Card className={`mb-6 overflow-hidden border-l-4 ${accent.rail}`}>
+    <Card className="mb-6 overflow-hidden">
       <div
         className={`flex flex-wrap items-start justify-between gap-3 border-b border-line ${accent.band} p-4`}
       >

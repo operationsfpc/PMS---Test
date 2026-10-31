@@ -385,7 +385,7 @@ export function StudentRecordPage({
 
   // Filter states
   const [activeSection, setActiveSection] = useState<
-    "overview" | "academics" | "placements" | "preferences" | "portfolio"
+    "overview" | "all" | "academics" | "placements" | "preferences" | "portfolio"
   >("overview");
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<"all" | "shortlisted" | "offered">("all");
@@ -855,9 +855,10 @@ export function StudentRecordPage({
         value={activeSection}
         onValueChange={(next) => setActiveSection(next as typeof activeSection)}
       >
-        <TabsList className="mb-1 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
+        <TabsList className="mb-4 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
           {[
             { id: "overview", label: "Overview" },
+            { id: "all", label: "All sections" },
             { id: "academics", label: `Academics (${semesters.length})` },
             {
               id: "placements",
@@ -888,9 +889,9 @@ export function StudentRecordPage({
         tabIndex={-1}
         className="space-y-6 outline-none"
       >
-        {activeSection === "overview" && (
+        {(activeSection === "overview" || activeSection === "all") && (
           <section aria-label="Identity">
-            <Card className="border-l-4 border-l-brand-500 p-5">
+            <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
               <div className="mb-3 flex items-center gap-2">
                 <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
                   <User className="size-4" />
@@ -961,7 +962,7 @@ export function StudentRecordPage({
         )}
 
         {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
-        {activeSection === "overview" &&
+        {(activeSection === "overview" || activeSection === "all") &&
           (hold !== null || pending !== null || pastHolds.length > 0) && (
             <section aria-label="Placement hold" className="flex flex-col gap-3">
               {pending !== null && (
@@ -1239,7 +1240,7 @@ export function StudentRecordPage({
           )}
 
         {/* Status history — every move a person made on this standing, and why */}
-        {activeSection === "overview" && (
+        {(activeSection === "overview" || activeSection === "all") && (
           <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
         )}
 
@@ -1248,9 +1249,9 @@ export function StudentRecordPage({
           {/* Left 2 Columns: Core History & Records */}
           <div className="space-y-6 lg:col-span-2">
             {/* Offers & Placement Card */}
-            {activeSection === "placements" && (
+            {(activeSection === "placements" || activeSection === "all") && (
               <section aria-label="Placement">
-                <Card className="border-l-4 border-l-success-500 p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <div className="rounded-lg bg-success-50 p-2 text-success-600">
@@ -1413,10 +1414,10 @@ export function StudentRecordPage({
             )}
 
             {/* Academics Record Card & Semester Progression */}
-            {activeSection === "academics" && (
+            {(activeSection === "academics" || activeSection === "all") && (
               <section aria-label="Academics" className="space-y-6">
                 {/* Semester by Semester Progression Table */}
-                <Card className="border-l-4 border-l-brand-500 p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
@@ -1519,7 +1520,7 @@ export function StudentRecordPage({
                 </Card>
 
                 {/* Schooling & Higher Education Details */}
-                <Card className="border-l-4 border-l-brand-500 p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex items-center gap-2">
                     <div className="rounded-lg bg-cyan-50 p-2 text-brand-600">
                       <BookOpen className="size-5" />
@@ -1699,9 +1700,9 @@ export function StudentRecordPage({
             )}
 
             {/* Applications History Card */}
-            {activeSection === "placements" && (
+            {(activeSection === "placements" || activeSection === "all") && (
               <section aria-label="Applications">
-                <Card className="border-l-4 border-l-brand-500 p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
@@ -1837,9 +1838,9 @@ export function StudentRecordPage({
             )}
 
             {/* Portfolio & SRF Details Card */}
-            {activeSection === "portfolio" && (
+            {(activeSection === "portfolio" || activeSection === "all") && (
               <section aria-label="Portfolio">
-                <Card className="border-l-4 border-l-gold-500 p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-4 flex items-center gap-2">
                     <div className="rounded-lg bg-gold-50 p-2 text-gold-600">
                       <Award className="size-5" />
@@ -1973,9 +1974,9 @@ export function StudentRecordPage({
           {/* Right 1 Column: Preferences, Resumes, Assessed Skills, Contacts & Profiles */}
           <div className="space-y-6 lg:col-span-1">
             {/* Resumes on File Card (with Staff Upload/Replace) */}
-            {activeSection === "preferences" && (
+            {(activeSection === "preferences" || activeSection === "all") && (
               <section aria-label="Resumes">
-                <Card className="border-l-4 border-l-line p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <FileText className="size-5 text-brand-600" />
@@ -2060,9 +2061,9 @@ export function StudentRecordPage({
             )}
 
             {/* Role & Drive Preferences Card */}
-            {activeSection === "preferences" && (
+            {(activeSection === "preferences" || activeSection === "all") && (
               <section aria-label="Skills and preferences">
-                <Card className="border-l-4 border-l-violet-500 p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div className="rounded-lg bg-violet-50 p-1.5 text-violet-700">
@@ -2150,9 +2151,9 @@ export function StudentRecordPage({
             )}
 
             {/* Online & Coding Profiles Card */}
-            {activeSection === "portfolio" && (
+            {(activeSection === "portfolio" || activeSection === "all") && (
               <section aria-label="Online profiles">
-                <Card className="border-l-4 border-l-line p-5">
+                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
                   <div className="mb-3 flex items-center gap-2">
                     <Globe className="size-4 text-brand-600" />
                     <h2 className="font-heading text-base font-bold text-ink-900">

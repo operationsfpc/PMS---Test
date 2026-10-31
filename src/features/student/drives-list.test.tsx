@@ -421,25 +421,25 @@ describe("DrivesList — several roles under one company event", () => {
  * visit now carries its own colour on the rail and the header band.
  */
 describe("a colour per company visit", () => {
-  it("gives neighbouring visits different rails", async () => {
+  it("gives neighbouring visits different header bands", async () => {
     const other = { ...open, id: "d9", companyName: "Freshworks", roleTitle: "SDE" };
     const { container } = render(
       <DrivesList view={view({ openDrives: async () => [open, other] })} />,
     );
     await screen.findByText("Zoho");
 
-    const cards = container.querySelectorAll(".border-l-4");
+    const cards = container.querySelectorAll("[data-visit-card]");
     expect(cards).toHaveLength(2);
-    expect(cards[0]?.className).toContain(visitAccent(0).rail);
-    expect(cards[1]?.className).toContain(visitAccent(1).rail);
-    expect(visitAccent(0).rail).not.toBe(visitAccent(1).rail);
+    expect(cards[0]?.querySelector(`.${visitAccent(0).band}`)).not.toBeNull();
+    expect(cards[1]?.querySelector(`.${visitAccent(1).band}`)).not.toBeNull();
+    expect(visitAccent(0).band).not.toBe(visitAccent(1).band);
   });
 
-  it("paints the visit's header band in the colour of its rail", async () => {
+  it("paints the visit's header band in its distinctive colour", async () => {
     const { container } = render(<DrivesList view={view()} />);
     await screen.findByText("Zoho");
 
-    const card = container.querySelector(`.${visitAccent(0).rail}`);
+    const card = container.querySelector("[data-visit-card]");
     expect(card).not.toBeNull();
     expect(card?.querySelector(`.${visitAccent(0).band}`)).not.toBeNull();
   });
@@ -450,7 +450,7 @@ describe("a colour per company visit", () => {
     const { container } = render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
     await screen.findByText("Zoho");
 
-    expect(container.querySelectorAll(".border-l-4")).toHaveLength(1);
+    expect(container.querySelectorAll("[data-visit-card]")).toHaveLength(1);
   });
 });
 

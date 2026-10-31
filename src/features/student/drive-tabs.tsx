@@ -446,7 +446,7 @@ function TabVisits<T extends TabRow>({
 
         if (roles.length === 1) {
           return (
-            <Card key={eventId} className={`border-l-4 p-5 ${accent.rail}`}>
+            <Card key={eventId} className="p-5">
               <RowHead row={head} />
               {body(head)}
             </Card>
@@ -458,7 +458,7 @@ function TabVisits<T extends TabRow>({
         const mixed = types.size > 1;
 
         return (
-          <Card key={eventId} className={`border-l-4 p-5 ${accent.rail}`}>
+          <Card key={eventId} className="p-5">
             <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
               <span className="min-w-0 break-words [overflow-wrap:anywhere]">
                 {head.companyName}

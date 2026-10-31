@@ -1275,7 +1275,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                           className={
                             nested
                               ? ""
-                              : `rounded-xl border border-line border-l-4 bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm ${accent.rail}`
+                              : "rounded-xl border border-line bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm"
                           }
                         >
                           <header className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-line/60">
@@ -1448,7 +1448,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                     return (
                       <div
                         key={eventId}
-                        className={`rounded-xl border border-line border-l-4 bg-surface p-4.5 shadow-xs ${accent.rail}`}
+                        className="rounded-xl border border-line bg-surface p-4.5 shadow-xs"
                       >
                         <p className="flex flex-wrap items-center gap-2 font-semibold text-ink-900">
                           {head.companyName}

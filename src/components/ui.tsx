@@ -1,11 +1,18 @@
-import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { Link } from "react-router";
 
 /** Shared presentation primitives. Brand-styled, light-mode, accessible. */
 
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+export function Card({
+  children,
+  className = "",
+  ...props
+}: { children: ReactNode; className?: string } & HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`rounded-card border border-line bg-surface shadow-sm ${className}`}>
+    <div
+      className={`rounded-card border border-line bg-surface shadow-sm ${className}`}
+      {...props}
+    >
       {children}
     </div>
   );
