@@ -121,10 +121,7 @@ describe("StudentRecordPage", () => {
   });
 
   it("shows the school marks and each semester with its verification state", async () => {
-    const user = userEvent.setup();
     show();
-
-    await user.click(await screen.findByRole("tab", { name: /academics/i }));
 
     const academics = await screen.findByRole("region", { name: /academics/i });
     expect(within(academics).getByText(/92\.4/)).toBeDefined();
@@ -136,10 +133,7 @@ describe("StudentRecordPage", () => {
   });
 
   it("shows the skill scores out of 5, and the role preferences", async () => {
-    const user = userEvent.setup();
     show();
-
-    await user.click(await screen.findByRole("tab", { name: /preferences/i }));
 
     const skills = await screen.findByRole("region", { name: /skills/i });
     expect(within(skills).getByText(/java 4\/5/i)).toBeDefined();
@@ -148,44 +142,36 @@ describe("StudentRecordPage", () => {
   });
 
   it("is honest when no skill scores are recorded", async () => {
-    const user = userEvent.setup();
     show(view({ ...PRIYA, skills: [] }));
-
-    await user.click(await screen.findByRole("tab", { name: /preferences/i }));
 
     const skills = await screen.findByRole("region", { name: /skills/i });
     expect(within(skills).getByText(/no skill scores recorded/i)).toBeDefined();
   });
 
-  it("opens on Overview and filters the record through the section tabs", async () => {
-    const user = userEvent.setup();
+  it("shows every section at once, with nothing folded behind a tab", async () => {
     show();
 
-    const overviewTab = await screen.findByRole("tab", { name: /overview/i });
-    expect(overviewTab.getAttribute("aria-selected")).toBe("true");
-    expect(overviewTab.getAttribute("aria-controls")).toBe("student-record-panels");
-    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
-      "student-record-tab-overview",
-    );
-    expect(screen.getByRole("region", { name: /identity/i })).toBeDefined();
+    expect(await screen.findByRole("region", { name: /identity/i })).toBeDefined();
+    for (const name of [
+      /placement/i,
+      /applications/i,
+      /academics/i,
+      /resumes/i,
+      /skills/i,
+      /portfolio/i,
+      /online profiles/i,
+    ]) {
+      expect(screen.getByRole("region", { name })).toBeDefined();
+    }
 
-    await user.click(screen.getByRole("tab", { name: /portfolio/i }));
-
-    expect(screen.queryByRole("region", { name: /academics/i })).toBeNull();
-    expect(screen.getByRole("region", { name: /portfolio/i })).toBeDefined();
-    expect(screen.getByRole("tab", { name: /portfolio/i }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
-    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
-      "student-record-tab-portfolio",
-    );
+    expect(screen.queryByRole("tablist", { name: /section/i })).toBeNull();
+    expect(screen.queryByRole("tabpanel")).toBeNull();
+    expect(screen.queryByRole("tab", { name: /overview/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: /placements/i })).toBeNull();
   });
 
   it("lists every application, each opening its drive", async () => {
-    const user = userEvent.setup();
     show();
-
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
 
     const applications = await screen.findByRole("region", { name: /applications/i });
     const link = within(applications).getByRole("link", { name: /zoho/i });
@@ -194,17 +180,13 @@ describe("StudentRecordPage", () => {
   });
 
   it("says plainly when the student has not applied anywhere", async () => {
-    const user = userEvent.setup();
     show(view({ ...PRIYA, applications: [] }));
-
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
 
     const applications = await screen.findByRole("region", { name: /applications/i });
     expect(within(applications).getByText(/no applications yet/i)).toBeDefined();
   });
 
   it("keeps two roles of one company visit in one block", async () => {
-    const user = userEvent.setup();
     const role = (
       applicationId: string,
       driveId: string,
@@ -226,9 +208,6 @@ describe("StudentRecordPage", () => {
         applications: [role("a1", "d1", "MTS"), role("a2", "d2", "QA")],
       }),
     );
-
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
-
     const applications = await screen.findByRole("region", { name: /applications/i });
     expect(within(applications).getAllByText("Zoho")).toHaveLength(1);
     expect(within(applications).getByText("2 roles")).toBeDefined();
@@ -241,7 +220,6 @@ describe("StudentRecordPage", () => {
   });
 
   it("shows the placement when there is one — with its source", async () => {
-    const user = userEvent.setup();
     show(
       view({
         ...PRIYA,
@@ -254,20 +232,13 @@ describe("StudentRecordPage", () => {
         },
       }),
     );
-
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
-
     const placement = await screen.findByRole("region", { name: /placement/i });
     expect(within(placement).getByText(/freshworks/i)).toBeDefined();
     expect(within(placement).getByText(/self-placed/i)).toBeDefined();
   });
 
   it("says Not placed as a fact, not a blank", async () => {
-    const user = userEvent.setup();
     show();
-
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
-
     const placement = await screen.findByRole("region", { name: /placement/i });
     expect(within(placement).getByText(/not placed/i)).toBeDefined();
   });
@@ -805,22 +776,16 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
   describe("Enriched student profile & staff management", () => {
     it("displays CGPA, arrears, school institutions and boards", async () => {
-      const user = userEvent.setup();
       show();
 
       expect(await screen.findByText("8.4 CGPA")).toBeDefined();
-
-      await user.click(screen.getByRole("tab", { name: /academics/i }));
       expect(screen.getByText(/St\. Joseph's Convent/)).toBeDefined();
       expect(screen.getByText(/Kendriya Vidyalaya/)).toBeDefined();
-
-      await user.click(screen.getByRole("tab", { name: /portfolio/i }));
       expect(screen.getByText("AWS Certified Cloud Practitioner")).toBeDefined();
       expect(screen.getByText(/Hospital Management System/)).toBeDefined();
     });
 
     it("displays multiple offers and internships with stipends and letter downloads", async () => {
-      const user = userEvent.setup();
       const studentWithOffers: StudentRecord = {
         ...PRIYA,
         offers: [
@@ -857,8 +822,6 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
       show(view(studentWithOffers));
 
-      await user.click(await screen.findByRole("tab", { name: /placements/i }));
-
       const placementRegion = await screen.findByRole("region", { name: /placement/i });
       expect(within(placementRegion).getByText("Zoho")).toBeDefined();
       expect(within(placementRegion).getByText("₹8.5 LPA")).toBeDefined();
@@ -888,7 +851,6 @@ describe("StudentRecordPage — a student's self-placed request", () => {
       );
 
       // Verify resume
-      await user.click(await screen.findByRole("tab", { name: /preferences/i }));
       const resumesRegion = await screen.findByRole("region", { name: /resumes/i });
       expect(within(resumesRegion).getByText("priya_swe_resume.pdf")).toBeDefined();
       const pdfLink = within(resumesRegion).getByRole("link", { name: /view pdf/i });
@@ -1102,20 +1064,14 @@ describe("StudentRecordPage status change", () => {
 
 describe("StudentRecordPage offer withdrawal", () => {
   it("offers the move on each offer row for a role 0134 admits", async () => {
-    const user = userEvent.setup();
     showStatus(PLACED, MANAGER);
-
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
-
     expect(await screen.findByRole("button", { name: /withdraw the zoho offer/i })).toBeDefined();
   });
 
   it("keeps it from a role that may not delete an offer", async () => {
-    const user = userEvent.setup();
     showStatus(PLACED, DELIVERY_HEAD);
 
     await screen.findByRole("heading", { name: /priya ramesh/i });
-    await user.click(screen.getByRole("tab", { name: /placements/i }));
     expect(screen.queryByRole("button", { name: /withdraw the zoho offer/i })).toBeNull();
   });
 
@@ -1124,7 +1080,6 @@ describe("StudentRecordPage offer withdrawal", () => {
     const withdraw = vi.fn(async (_offerId: string, _reason: string) => {});
     showStatus(PLACED, COORDINATOR, ledger({ withdraw }));
 
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
     await user.click(await screen.findByRole("button", { name: /withdraw the zoho offer/i }));
     const dialog = await screen.findByRole("dialog", { name: /withdraw the zoho offer/i });
     await user.click(within(dialog).getByRole("button", { name: /withdraw offer$/i }));
@@ -1139,7 +1094,6 @@ describe("StudentRecordPage offer withdrawal", () => {
     const withdraw = vi.fn(async (_offerId: string, _reason: string) => {});
     showStatus(PLACED, COORDINATOR, ledger({ withdraw }));
 
-    await user.click(await screen.findByRole("tab", { name: /placements/i }));
     await user.click(await screen.findByRole("button", { name: /withdraw the zoho offer/i }));
     const dialog = await screen.findByRole("dialog", { name: /withdraw the zoho offer/i });
     const reason = "Company retracted the joining — confirmed in writing.";

@@ -720,28 +720,22 @@ export function StudentRecordPage({
       <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-success-50 p-2 text-success-600">
+            <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
               <Trophy className="size-5" />
             </div>
             <div>
-              <h2 className="font-heading text-lg font-bold text-ink-900">
-                Offers & Internships
-              </h2>
+              <h2 className="font-heading text-lg font-bold text-ink-900">Offers & Internships</h2>
               <p className="text-xs text-ink-500">
                 Total {offers.length} recorded outcome{offers.length === 1 ? "" : "s"}
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            {record.placement !== null && (
-              <Badge tone="success">Primary Placement Active</Badge>
-            )}
+            {record.placement !== null && <Badge tone="success">Primary Placement Active</Badge>}
             {offers.length > 0 && (
               <Tabs
                 value={offerTypeFilter}
-                onValueChange={(next) =>
-                  setOfferTypeFilter(next as typeof offerTypeFilter)
-                }
+                onValueChange={(next) => setOfferTypeFilter(next as typeof offerTypeFilter)}
               >
                 <TabsList className="h-7 w-fit p-0.5">
                   <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
@@ -751,8 +745,7 @@ export function StudentRecordPage({
                     Full-time ({offers.filter((o) => o.driveType === "placement").length})
                   </TabsTrigger>
                   <TabsTrigger value="internship" className="px-2 py-0.5 text-xs">
-                    Internships (
-                    {offers.filter((o) => o.driveType !== "placement").length})
+                    Internships ({offers.filter((o) => o.driveType !== "placement").length})
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
@@ -796,9 +789,7 @@ export function StudentRecordPage({
                           </span>
                         )}
                         {offer.offerCategory && (
-                          <Badge tone="brand">
-                            {offerCategoryLabel(offer.offerCategory)}
-                          </Badge>
+                          <Badge tone="brand">{offerCategoryLabel(offer.offerCategory)}</Badge>
                         )}
                       </div>
                       <p className="mt-1 text-sm text-ink-700">
@@ -806,9 +797,7 @@ export function StudentRecordPage({
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
                         {offer.ctcLpa != null && offer.ctcLpa > 0 ? (
-                          <span className="font-semibold text-brand-700">
-                            ₹{offer.ctcLpa} LPA
-                          </span>
+                          <span className="font-semibold text-brand-700">₹{offer.ctcLpa} LPA</span>
                         ) : (
                           <span>CTC not recorded</span>
                         )}
@@ -888,9 +877,7 @@ export function StudentRecordPage({
               <GraduationCap className="size-5" />
             </div>
             <div>
-              <h2 className="font-heading text-lg font-bold text-ink-900">
-                Academic Progression
-              </h2>
+              <h2 className="font-heading text-lg font-bold text-ink-900">Academic Progression</h2>
               <p className="text-xs text-ink-500">
                 Semester-wise marks, backlogs, and official marksheets
               </p>
@@ -949,9 +936,7 @@ export function StudentRecordPage({
                       >
                         Standing: {semester.currentArrears ?? 0}
                       </span>
-                      <p className="text-ink-400">
-                        History: {semester.historyOfArrears ?? 0}
-                      </p>
+                      <p className="text-ink-400">History: {semester.historyOfArrears ?? 0}</p>
                     </TableCell>
                     <TableCell>
                       <Badge tone={semester.verified ? "success" : "warning"}>
@@ -986,7 +971,7 @@ export function StudentRecordPage({
       {/* Schooling & Higher Education Details */}
       <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
         <div className="mb-4 flex items-center gap-2">
-          <div className="rounded-lg bg-cyan-50 p-2 text-brand-600">
+          <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
             <BookOpen className="size-5" />
           </div>
           <div>
@@ -1004,9 +989,7 @@ export function StudentRecordPage({
           <div className="rounded-lg border border-line bg-surface p-3.5">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="text-xs font-semibold text-brand-700">
-                  10th Standard
-                </span>
+                <span className="text-xs font-semibold text-brand-700">10th Standard</span>
                 <p className="mt-1 text-base font-bold text-ink-900">
                   {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"}
                   {record.tenthGrade && (
@@ -1045,13 +1028,9 @@ export function StudentRecordPage({
           <div className="rounded-lg border border-line bg-surface p-3.5">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="text-xs font-semibold text-brand-700">
-                  12th Standard / HSE
-                </span>
+                <span className="text-xs font-semibold text-brand-700">12th Standard / HSE</span>
                 <p className="mt-1 text-base font-bold text-ink-900">
-                  {record.twelfthPercentage != null
-                    ? `${record.twelfthPercentage}%`
-                    : "—"}
+                  {record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"}
                   {record.twelfthGrade && (
                     <span className="ml-1.5 text-xs font-medium text-ink-500">
                       (Grade {record.twelfthGrade})
@@ -1172,9 +1151,7 @@ export function StudentRecordPage({
               <FileText className="size-5" />
             </div>
             <div>
-              <h2 className="font-heading text-lg font-bold text-ink-900">
-                Applications
-              </h2>
+              <h2 className="font-heading text-lg font-bold text-ink-900">Applications</h2>
               <p className="text-xs text-ink-500">
                 Drive participation and recruiter shortlist status
               </p>
@@ -1194,9 +1171,7 @@ export function StudentRecordPage({
               </div>
               <Tabs
                 value={appStatusFilter}
-                onValueChange={(next) =>
-                  setAppStatusFilter(next as typeof appStatusFilter)
-                }
+                onValueChange={(next) => setAppStatusFilter(next as typeof appStatusFilter)}
               >
                 <TabsList className="h-7 w-fit p-0.5">
                   <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
@@ -1240,8 +1215,7 @@ export function StudentRecordPage({
                       </p>
                       <p className="text-xs text-ink-500">
                         {head.roleTitle ?? "Role not recorded"}
-                        {head.appliedAt !== null &&
-                          ` · applied ${onDate(head.appliedAt)}`}
+                        {head.appliedAt !== null && ` · applied ${onDate(head.appliedAt)}`}
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1279,9 +1253,7 @@ export function StudentRecordPage({
                           )}
                         </p>
                         <div className="flex flex-wrap items-center gap-2">
-                          {application.shortlisted && (
-                            <Badge tone="brand">Shortlisted</Badge>
-                          )}
+                          {application.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
                           {application.hasOffer && <Badge tone="success">Offer</Badge>}
                         </div>
                       </li>
@@ -1302,9 +1274,7 @@ export function StudentRecordPage({
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="size-5 text-brand-600" />
-            <h2 className="font-heading text-base font-bold text-ink-900">
-              Category Resumes
-            </h2>
+            <h2 className="font-heading text-base font-bold text-ink-900">Category Resumes</h2>
           </div>
         </div>
 
@@ -1317,9 +1287,7 @@ export function StudentRecordPage({
               <div
                 key={cat}
                 className={`rounded-lg border p-3 ${
-                  isPreferred
-                    ? "border-line bg-surface"
-                    : "border-line/60 bg-surface-muted/30"
+                  isPreferred ? "border-line bg-surface" : "border-line/60 bg-surface-muted/30"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -1332,10 +1300,7 @@ export function StudentRecordPage({
                     </div>
                     {doc ? (
                       <div className="mt-1 text-xs text-ink-500">
-                        <p
-                          className="truncate font-medium text-ink-700"
-                          title={doc.fileName}
-                        >
+                        <p className="truncate font-medium text-ink-700" title={doc.fileName}>
                           {doc.fileName}
                         </p>
                         <p className="text-[11px]">
@@ -1387,12 +1352,10 @@ export function StudentRecordPage({
       <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-violet-50 p-1.5 text-violet-700">
+            <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
               <Sparkles className="size-4" />
             </div>
-            <h2 className="font-heading text-lg font-bold text-ink-900">
-              Skills and preferences
-            </h2>
+            <h2 className="font-heading text-lg font-bold text-ink-900">Skills and preferences</h2>
           </div>
           {hasStaffControls && (
             <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
@@ -1417,11 +1380,7 @@ export function StudentRecordPage({
                 >
                   <span
                     className={`block h-full rounded-full ${
-                      score >= 4
-                        ? "bg-success-500"
-                        : score >= 3
-                          ? "bg-brand-500"
-                          : "bg-gold-500"
+                      score >= 4 ? "bg-success-500" : score >= 3 ? "bg-brand-500" : "bg-gold-500"
                     }`}
                     style={{
                       width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
@@ -1447,13 +1406,9 @@ export function StudentRecordPage({
         )}
 
         <div className="mt-3 border-t border-line pt-3">
-          <span className="text-xs font-semibold text-ink-500">
-            Drive Type Preferences:
-          </span>
+          <span className="text-xs font-semibold text-ink-500">Drive Type Preferences:</span>
           {driveTypePreferences.length === 0 ? (
-            <p className="mt-1 text-xs text-ink-500">
-              Open to all drive types (no restrictions)
-            </p>
+            <p className="mt-1 text-xs text-ink-500">Open to all drive types (no restrictions)</p>
           ) : (
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {driveTypePreferences.map((dt) => (
@@ -1631,7 +1586,7 @@ export function StudentRecordPage({
     <section aria-label="Portfolio">
       <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
         <div className="mb-4 flex items-center gap-2">
-          <div className="rounded-lg bg-gold-50 p-2 text-gold-600">
+          <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
             <Award className="size-5" />
           </div>
           <div>
@@ -1831,7 +1786,6 @@ export function StudentRecordPage({
           label="Overall CGPA"
           value={record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
           hint="Normalised out of 10"
-          tone="brand"
         />
         <StatCard
           label="Standing Arrears"
@@ -1859,345 +1813,287 @@ export function StudentRecordPage({
           hint={offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
           tone={offers.length > 0 || record.placement ? "success" : "neutral"}
         />
-        <StatCard
-          label="Applications"
-          value={applications.length}
-          hint="Campus drives"
-          tone="brand"
-        />
+        <StatCard label="Applications" value={applications.length} hint="Campus drives" />
       </div>
 
-      {/* One continuous stack: every section on the page at once. The tab bar
-          that used to sit here folded four sections away behind a click, and
-          the columns they gated went `hidden` while the page still reserved
-          their width — the gap the reader saw as a broken layout. */}
-      <div className="space-y-4">
-        {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
-        {(hold !== null || pending !== null || pastHolds.length > 0) && (
-            <section aria-label="Placement hold" className="flex flex-col gap-3">
-              {pending !== null && (
-                <Card className="border-violet-300 bg-violet-50 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="font-heading text-lg font-bold text-ink-900">
-                      Requested — {HOLD_KIND_LABELS[pending.kind]}
-                    </h2>
-                    <Badge tone="accent">Awaiting confirmation</Badge>
-                  </div>
+      {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
+      {(hold !== null || pending !== null || pastHolds.length > 0) && (
+        <section aria-label="Placement hold" className="flex flex-col gap-3">
+          {pending !== null && (
+            <Card className="border-violet-300 bg-violet-50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  Requested — {HOLD_KIND_LABELS[pending.kind]}
+                </h2>
+                <Badge tone="accent">Awaiting confirmation</Badge>
+              </div>
 
-                  <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
-                    {pending.reason}
-                  </p>
-                  <p className="mt-1 text-xs text-ink-500">
-                    {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
-                  </p>
-                  <p className="mt-1 text-xs text-ink-500">
-                    Their drives stay open until you confirm this. Confirming closes them.
-                  </p>
+              <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+                {pending.reason}
+              </p>
+              <p className="mt-1 text-xs text-ink-500">
+                {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
+              </p>
+              <p className="mt-1 text-xs text-ink-500">
+                Their drives stay open until you confirm this. Confirming closes them.
+              </p>
 
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {pending.documentPath !== null &&
-                      (evidence.offer === null ? (
-                        <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                          Offer letter on file: {extractOriginalFilename(pending.documentPath)}
-                        </span>
-                      ) : (
-                        <ButtonAnchor
-                          href={evidence.offer}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          aria-label={`Open the offer letter — ${extractOriginalFilename(pending.documentPath)}`}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {pending.documentPath !== null &&
+                  (evidence.offer === null ? (
+                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                      Offer letter on file: {extractOriginalFilename(pending.documentPath)}
+                    </span>
+                  ) : (
+                    <ButtonAnchor
+                      href={evidence.offer}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`Open the offer letter — ${extractOriginalFilename(pending.documentPath)}`}
+                    >
+                      Offer letter
+                    </ButtonAnchor>
+                  ))}
+                {pending.declarationPath !== null &&
+                  (evidence.declaration === null ? (
+                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                      Declaration on file: {extractOriginalFilename(pending.declarationPath)}
+                    </span>
+                  ) : (
+                    <ButtonAnchor
+                      href={evidence.declaration}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`Open the signed declaration — ${extractOriginalFilename(pending.declarationPath)}`}
+                    >
+                      Signed declaration
+                    </ButtonAnchor>
+                  ))}
+              </div>
+
+              {release !== undefined && (
+                <div className="mt-4">
+                  {declining ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="decline-note" className="text-sm font-medium text-ink-700">
+                        Why are you declining?{" "}
+                        <span className="font-normal text-ink-500">(optional)</span>
+                      </label>
+                      <textarea
+                        id="decline-note"
+                        rows={2}
+                        value={declineNote}
+                        onChange={(e) => setDeclineNote(e.target.value)}
+                        placeholder="The letter names a different student. Ask for a signed copy."
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="danger"
+                          isLoading={actions.isPending()}
+                          onClick={() => void declineRequest()}
                         >
-                          Offer letter
-                        </ButtonAnchor>
-                      ))}
-                    {pending.declarationPath !== null &&
-                      (evidence.declaration === null ? (
-                        <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                          Declaration on file: {extractOriginalFilename(pending.declarationPath)}
-                        </span>
-                      ) : (
-                        <ButtonAnchor
-                          href={evidence.declaration}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          aria-label={`Open the signed declaration — ${extractOriginalFilename(pending.declarationPath)}`}
+                          Decline request
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          disabled={actions.busy}
+                          onClick={() => setDeclining(false)}
                         >
-                          Signed declaration
-                        </ButtonAnchor>
-                      ))}
-                  </div>
-
-                  {release !== undefined && (
-                    <div className="mt-4">
-                      {declining ? (
-                        <div className="flex flex-col gap-2">
-                          <label
-                            htmlFor="decline-note"
-                            className="text-sm font-medium text-ink-700"
-                          >
-                            Why are you declining?{" "}
-                            <span className="font-normal text-ink-500">(optional)</span>
-                          </label>
-                          <textarea
-                            id="decline-note"
-                            rows={2}
-                            value={declineNote}
-                            onChange={(e) => setDeclineNote(e.target.value)}
-                            placeholder="The letter names a different student. Ask for a signed copy."
-                            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                          />
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              variant="danger"
-                              isLoading={actions.isPending()}
-                              onClick={() => void declineRequest()}
-                            >
-                              Decline request
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              disabled={actions.busy}
-                              onClick={() => setDeclining(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            isLoading={actions.isPending()}
-                            onClick={() => void confirmRequest()}
-                          >
-                            Confirm hold
-                          </Button>
-                          <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
-                            Decline request
-                          </Button>
-                        </div>
-                      )}
-
-                      {actions.error !== null && (
-                        <p
-                          role="alert"
-                          className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-                        >
-                          {actions.error}
-                        </p>
-                      )}
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <Button isLoading={actions.isPending()} onClick={() => void confirmRequest()}>
+                        Confirm hold
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
+                        Decline request
+                      </Button>
                     </div>
                   )}
-                </Card>
-              )}
 
-              {hold !== null && (
-                <Card className="border-gold-300 bg-gold-50 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="font-heading text-lg font-bold text-ink-900">
-                      On hold — {HOLD_KIND_LABELS[hold.kind]}
-                    </h2>
-                    <Badge tone={standing === "overdue" ? "danger" : "warning"}>
-                      {standing === "overdue" ? "Review overdue" : "In force"}
-                    </Badge>
-                  </div>
-
-                  <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
-                    {hold.reason}
-                  </p>
-                  <p className="mt-1 text-xs text-ink-500">
-                    {holdWindowLine(hold, today)}
-                    {hold.heldBy !== null && ` · placed by ${hold.heldBy}`} · placed{" "}
-                    {onDate(hold.heldAt)}
-                  </p>
-
-                  {hold.documentPath !== null && (
-                    <p className="mt-3 flex flex-wrap items-center gap-2">
-                      {orderUrl === null ? (
-                        <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                          Order on file: {extractOriginalFilename(hold.documentPath)}
-                        </span>
-                      ) : (
-                        <ButtonAnchor
-                          href={orderUrl}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          aria-label={`Open the hold order — ${extractOriginalFilename(hold.documentPath)}`}
-                        >
-                          Hold order
-                        </ButtonAnchor>
-                      )}
-                      <span className="text-xs text-ink-500">
-                        The student cannot open this file.
-                      </span>
+                  {actions.error !== null && (
+                    <p
+                      role="alert"
+                      className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+                    >
+                      {actions.error}
                     </p>
                   )}
-
-                  {release !== undefined && (
-                    <div className="mt-4">
-                      {lifting ? (
-                        <div className="flex flex-col gap-2">
-                          <label
-                            htmlFor="release-note"
-                            className="text-sm font-medium text-ink-700"
-                          >
-                            What cleared it?{" "}
-                            <span className="font-normal text-ink-500">(optional)</span>
-                          </label>
-                          <textarea
-                            id="release-note"
-                            rows={2}
-                            value={releaseNote}
-                            onChange={(e) => setReleaseNote(e.target.value)}
-                            placeholder="Cleared with accounts on 3 Nov — receipt filed."
-                            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                          />
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              variant="danger"
-                              isLoading={actions.isPending()}
-                              onClick={() => void lift()}
-                            >
-                              Release hold
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              disabled={actions.busy}
-                              onClick={() => setLifting(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : extending ? (
-                        <div className="flex flex-col gap-2">
-                          <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
-                            Extend the review to
-                          </label>
-                          <input
-                            id="extend-date"
-                            type="date"
-                            min={dayAfter(hold.endsAt)}
-                            value={extendDate}
-                            onChange={(e) => setExtendDate(e.target.value)}
-                            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                          />
-                          <p className="text-xs text-ink-500">
-                            Only forward — pulling a review earlier is what Release is for. The old
-                            date stays in the audit log.
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              isLoading={actions.isPending()}
-                              disabled={extendDate === "" || extendDate <= hold.endsAt}
-                              onClick={() => void extendHold()}
-                            >
-                              Extend review date
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={actions.busy}
-                              onClick={() => setExtending(false)}
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2">
-                          <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
-                            Release hold
-                          </Button>
-                          <Button variant="secondary" size="sm" onClick={() => setExtending(true)}>
-                            Extend review date
-                          </Button>
-                        </div>
-                      )}
-
-                      {actions.error !== null && (
-                        <p
-                          role="alert"
-                          className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-                        >
-                          {actions.error}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </Card>
+                </div>
               )}
-
-              {pastHolds.length > 0 && (
-                <Card className="p-5">
-                  <h2 className="mb-2 font-heading text-lg font-bold text-ink-900">
-                    Earlier holds
-                  </h2>
-                  <ul className="divide-y divide-line text-sm">
-                    {pastHolds.map((past) => (
-                      <li key={past.id} className="py-2">
-                        <p className="font-medium text-ink-900">{HOLD_KIND_LABELS[past.kind]}</p>
-                        <p className="break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
-                          {past.reason} · {holdWindowLine(past, today)}
-                          {past.releasedBy !== null && ` by ${past.releasedBy}`}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              )}
-            </section>
+            </Card>
           )}
 
-        {/* Status history — every move a person made on this standing, and why */}
-        {activeSection === "overview" && (
-          <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
-        )}
+          {hold !== null && (
+            <Card className="border-gold-300 bg-gold-50 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  On hold — {HOLD_KIND_LABELS[hold.kind]}
+                </h2>
+                <Badge tone={standing === "overdue" ? "danger" : "warning"}>
+                  {standing === "overdue" ? "Review overdue" : "In force"}
+                </Badge>
+              </div>
 
-        {/* Main Content Layout — balanced continuous presentation */}
-        {activeSection === "overview" && (
-          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
-            <div className="space-y-6">
-              {offersSection}
-              {resumesSection}
-              {identitySection}
-              {profilesSection}
-            </div>
-            <div className="space-y-6">
-              {academicsSection}
-              {applicationsSection}
-              {skillsSection}
-              {portfolioSection}
-            </div>
-          </div>
-        )}
+              <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+                {hold.reason}
+              </p>
+              <p className="mt-1 text-xs text-ink-500">
+                {holdWindowLine(hold, today)}
+                {hold.heldBy !== null && ` · placed by ${hold.heldBy}`} · placed{" "}
+                {onDate(hold.heldAt)}
+              </p>
 
-        {activeSection === "placements" && (
-          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
-            <div className="space-y-6">{offersSection}</div>
-            <div className="space-y-6">{applicationsSection}</div>
-          </div>
-        )}
+              {hold.documentPath !== null && (
+                <p className="mt-3 flex flex-wrap items-center gap-2">
+                  {orderUrl === null ? (
+                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                      Order on file: {extractOriginalFilename(hold.documentPath)}
+                    </span>
+                  ) : (
+                    <ButtonAnchor
+                      href={orderUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`Open the hold order — ${extractOriginalFilename(hold.documentPath)}`}
+                    >
+                      Hold order
+                    </ButtonAnchor>
+                  )}
+                  <span className="text-xs text-ink-500">The student cannot open this file.</span>
+                </p>
+              )}
 
-        {activeSection === "academics" && (
-          <div id="student-record-content" className="space-y-6">
-            {academicsSection}
-          </div>
-        )}
+              {release !== undefined && (
+                <div className="mt-4">
+                  {lifting ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="release-note" className="text-sm font-medium text-ink-700">
+                        What cleared it?{" "}
+                        <span className="font-normal text-ink-500">(optional)</span>
+                      </label>
+                      <textarea
+                        id="release-note"
+                        rows={2}
+                        value={releaseNote}
+                        onChange={(e) => setReleaseNote(e.target.value)}
+                        placeholder="Cleared with accounts on 3 Nov — receipt filed."
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="danger"
+                          isLoading={actions.isPending()}
+                          onClick={() => void lift()}
+                        >
+                          Release hold
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          disabled={actions.busy}
+                          onClick={() => setLifting(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : extending ? (
+                    <div className="flex flex-col gap-2">
+                      <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
+                        Extend the review to
+                      </label>
+                      <input
+                        id="extend-date"
+                        type="date"
+                        min={dayAfter(hold.endsAt)}
+                        value={extendDate}
+                        onChange={(e) => setExtendDate(e.target.value)}
+                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                      />
+                      <p className="text-xs text-ink-500">
+                        Only forward — pulling a review earlier is what Release is for. The old date
+                        stays in the audit log.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          isLoading={actions.isPending()}
+                          disabled={extendDate === "" || extendDate <= hold.endsAt}
+                          onClick={() => void extendHold()}
+                        >
+                          Extend review date
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={actions.busy}
+                          onClick={() => setExtending(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
+                        Release hold
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => setExtending(true)}>
+                        Extend review date
+                      </Button>
+                    </div>
+                  )}
 
-        {activeSection === "preferences" && (
-          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
-            <div className="space-y-6">{resumesSection}</div>
-            <div className="space-y-6">{skillsSection}</div>
-          </div>
-        )}
+                  {actions.error !== null && (
+                    <p
+                      role="alert"
+                      className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+                    >
+                      {actions.error}
+                    </p>
+                  )}
+                </div>
+              )}
+            </Card>
+          )}
 
-        {activeSection === "portfolio" && (
-          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
-            <div className="space-y-6">{portfolioSection}</div>
-            <div className="space-y-6">{profilesSection}</div>
-          </div>
-        )}
+          {pastHolds.length > 0 && (
+            <Card className="p-5">
+              <h2 className="mb-2 font-heading text-lg font-bold text-ink-900">Earlier holds</h2>
+              <ul className="divide-y divide-line text-sm">
+                {pastHolds.map((past) => (
+                  <li key={past.id} className="py-2">
+                    <p className="font-medium text-ink-900">{HOLD_KIND_LABELS[past.kind]}</p>
+                    <p className="break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
+                      {past.reason} · {holdWindowLine(past, today)}
+                      {past.releasedBy !== null && ` by ${past.releasedBy}`}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+        </section>
+      )}
+
+      {/* Status history — every move a person made on this standing, and why */}
+      <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
+
+      {/* One full-width column: every section gets the whole page, so a table
+            never has to fit inside half of it and no column is left empty. */}
+      <div id="student-record-content" className="space-y-4">
+        {identitySection}
+        {offersSection}
+        {applicationsSection}
+        {academicsSection}
+        {resumesSection}
+        {skillsSection}
+        {portfolioSection}
+        {profilesSection}
       </div>
 
       {/* Staff Preferences Management Modal */}
