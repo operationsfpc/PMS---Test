@@ -251,7 +251,7 @@ begin
         '{}'::integer[]
       ),
       nullif(trim(v_role_entry->>'mandatorySkills'), ''),
-      nullif(trim(p_event->>'joiningTimeline'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), '')::joining_timeline,
       nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
       nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
       nullif(trim(p_event->>'timelineNotes'), ''),
@@ -295,7 +295,7 @@ begin
         '{}'::integer[]
       ),
       mandatory_skills        = nullif(trim(v_role_entry->>'mandatorySkills'), ''),
-      joining_timeline        = nullif(trim(p_event->>'joiningTimeline'), ''),
+      joining_timeline        = nullif(trim(p_event->>'joiningTimeline'), '')::joining_timeline,
       joining_immediate_notes = nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
       joining_later_notes     = nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
       timeline_notes          = nullif(trim(p_event->>'timelineNotes'), ''),

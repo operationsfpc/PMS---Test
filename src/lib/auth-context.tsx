@@ -99,27 +99,36 @@ export function useAuthActions(): AuthActions {
   return useContext(AuthActionsContext);
 }
 
+/** The two accounts the preview override was written for. */
+function isPreviewTester(normalizedEmail: string): boolean {
+  return normalizedEmail === "radhika@faceprep.in" || normalizedEmail === "thanush@faceprep.in";
+}
+
 /**
  * Test role preview switcher and route bypass are active ONLY on
  * https://pms-test-gamma.vercel.app for testing users (radhika@faceprep.in, thanush@faceprep.in)
  * or in local DEV environments.
  * It is strictly INACTIVE on real production domains.
+ *
+ * An unknown email is refused before any of that, in every build mode. This is
+ * the one rule that lets a preview role past `RoleGuard`, so an account with no
+ * profile row - whose email is therefore blank - would otherwise get in
+ * anywhere while the database still knows it has no rights.
  */
 export function isTestPreviewAllowed(email?: string): boolean {
+  const normalized = email?.toLowerCase().trim() ?? "";
+  if (normalized === "") return false;
+
   const isTestEnv =
     (import.meta as unknown as { env?: { MODE?: string } }).env?.MODE === "test" ||
     (typeof process !== "undefined" && process.env?.NODE_ENV === "test");
   if (isTestEnv) {
-    return !email || email === "radhika@faceprep.in" || email === "thanush@faceprep.in";
+    return isPreviewTester(normalized);
   }
 
   if (import.meta.env.DEV) return true;
-  if (!email) return false;
 
-  const normalized = email.toLowerCase().trim();
-  const isAllowedUser =
-    normalized === "radhika@faceprep.in" || normalized === "thanush@faceprep.in";
-  if (!isAllowedUser) return false;
+  if (!isPreviewTester(normalized)) return false;
 
   if (typeof window !== "undefined") {
     const host = window.location.hostname.toLowerCase();
