@@ -8,7 +8,8 @@ import {
   Card,
   PageHeader,
 } from "@components/ui";
-import { groupByVisitKey, visitKey } from "@domain/company-drive";
+import { visitAccent } from "@components/visit-accent";
+import { groupByCompanyVisit } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
   DRIVE_TYPE_FILTERS,
@@ -22,7 +23,7 @@ import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { matchesLocation, parseLocations } from "@domain/student-drive-lists";
 import type { DriveType, HoldKind, RoleCategory } from "@domain/types";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { DrivesList, type DrivesView, type OpenDrive, visitAccent } from "./drives-list";
+import { DrivesList, type DrivesView, type OpenDrive } from "./drives-list";
 
 /** An application still moving: the card wears its current round (N7). */
 export interface ProgressDriveRow {
@@ -34,6 +35,8 @@ export interface ProgressDriveRow {
   readonly driveType?: DriveType | null;
   /** The company visit this role belongs to; null for a legacy standalone drive. */
   readonly companyDriveId?: string | null;
+  /** The visit's day, so same-company visits on different days stay apart. */
+  readonly tentativeDate?: string | null;
   readonly locations: string;
   readonly appliedAt: string;
   readonly progressLabel: string;
@@ -409,6 +412,7 @@ interface TabRow {
   readonly roleCategory: RoleCategory;
   readonly driveType?: DriveType | null;
   readonly companyDriveId?: string | null;
+  readonly tentativeDate?: string | null;
 }
 
 /**
@@ -426,7 +430,12 @@ function TabVisits<T extends TabRow>({
   rows: readonly T[];
   body: (row: T) => ReactNode;
 }) {
-  const groups = groupByVisitKey(rows, (row) => visitKey(row.companyDriveId, row.id));
+  const groups = groupByCompanyVisit(rows, (row) => ({
+    ownId: row.id,
+    companyDriveId: row.companyDriveId,
+    companyName: row.companyName,
+    tentativeDate: row.tentativeDate,
+  }));
 
   return (
     <>

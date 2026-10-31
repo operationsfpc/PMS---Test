@@ -52,6 +52,7 @@ import {
 } from "@features/student-record/student-record-view";
 import { COLUMNS as PIF_APPROVAL_COLUMNS } from "@lib/approval-repository";
 import { HOLD_COLUMNS } from "@lib/holds-view";
+import { OFFER_WITHDRAWAL_COLUMNS, PARTICIPATION_CHANGE_COLUMNS } from "@lib/status-changes-view";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./harness";
 
@@ -415,6 +416,10 @@ describe("every hand-written select matches the schema", () => {
     // 0125: the hold block. Registered because it embeds `profiles` twice on
     // purpose — the one live-hold read and the history read use this same spec.
     ["student placement holds", "student_holds", HOLD_COLUMNS],
+    // 0133 and 0134: the two status ledgers. New tables, so every column name
+    // here is a guess until this test says otherwise.
+    ["participation status changes", "participation_status_changes", PARTICIPATION_CHANGE_COLUMNS],
+    ["offer withdrawals", "offer_withdrawals", OFFER_WITHDRAWAL_COLUMNS],
   ];
 
   it.each(SELECTS)("%s", async (_name, table, spec) => {

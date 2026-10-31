@@ -26,6 +26,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@components/ui";
+import { visitAccent } from "@components/visit-accent";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import {
@@ -649,12 +650,12 @@ function DriveList({ drives, ...props }: { drives: readonly DriveSummary[] } & R
 
   return (
     <ul className="space-y-6">
-      {events.map((roles) => {
+      {events.map((roles, index) => {
         const head = roles[0];
         if (head === undefined) return null;
         return (
           <li key={head.driveId}>
-            <VisitCard roles={roles} {...props} />
+            <VisitCard roles={roles} accentIndex={index} {...props} />
           </li>
         );
       })}
@@ -701,10 +702,15 @@ function roleFacts(drive: DriveSummary): string {
  * A visit that raised several roles folds them into an accordion opened on the
  * roles that are waiting on the reader, because that is why the card exists.
  */
-function VisitCard({ roles, ...props }: { roles: readonly DriveSummary[] } & RowProps) {
+function VisitCard({
+  roles,
+  accentIndex,
+  ...props
+}: { roles: readonly DriveSummary[]; accentIndex: number } & RowProps) {
   const head = roles[0];
   if (head === undefined) return null;
 
+  const accent = visitAccent(accentIndex);
   const isVisit = roles.length > 1;
   const raised = describeRaisedOn(head.createdAt);
 
@@ -748,8 +754,10 @@ function VisitCard({ roles, ...props }: { roles: readonly DriveSummary[] } & Row
     : roleFacts(head);
 
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
+    <Card className={`overflow-hidden border-l-4 ${accent.rail}`}>
+      <div
+        className={`flex flex-wrap items-start justify-between gap-3 border-b border-line ${accent.band} p-4`}
+      >
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 font-heading text-base font-bold text-ink-900">
             {head.companyName}

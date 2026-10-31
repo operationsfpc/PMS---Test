@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
+
+import { visitAccent } from "@components/visit-accent";
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { ApplyError } from "./apply-repository";
-import { DrivesList, type DrivesView, visitAccent } from "./drives-list";
+import { DrivesList, type DrivesView } from "./drives-list";
 
 /** The card carries a Link to /drives/:id (N1), so a router must be present. */
 const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);

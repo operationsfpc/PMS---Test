@@ -71,7 +71,7 @@ export const RECORD_SEMESTER_COLUMNS =
   "semester_number, cgpa, current_arrears, history_of_arrears, status, marksheet_id";
 export const RECORD_SKILL_COLUMNS = "score, skill_areas(name)";
 export const RECORD_APPLICATION_COLUMNS =
-  "id, drive_id, applied_at, drives(company_name, role_title), shortlist_entries(included)";
+  "id, drive_id, applied_at, drives(company_name, role_title, company_drive_id, tentative_date), shortlist_entries(included)";
 export const RECORD_OFFER_COLUMNS =
   "id, student_id, drive_id, source, drive_type, offer_category, ctc_lpa, stipend_monthly, declared_at, company_name, role_title, attachment_path, attachment_name";
 export const RECORD_DOCUMENT_COLUMNS =
@@ -184,14 +184,19 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
 
       const driveNames = new Map(
         applicationRows.map((row) => {
-          const drive = one<{ company_name?: string | null; role_title?: string | null }>(
-            row.drives,
-          );
+          const drive = one<{
+            company_name?: string | null;
+            role_title?: string | null;
+            company_drive_id?: string | null;
+            tentative_date?: string | null;
+          }>(row.drives);
           return [
             row.drive_id as string,
             {
               companyName: drive?.company_name ?? "Company not recorded",
               roleTitle: drive?.role_title ?? null,
+              companyDriveId: drive?.company_drive_id ?? null,
+              tentativeDate: drive?.tentative_date ?? null,
             },
           ];
         }),
@@ -398,6 +403,8 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
             driveId: row.drive_id as string,
             companyName: drive?.companyName ?? "Company not recorded",
             roleTitle: drive?.roleTitle ?? null,
+            companyDriveId: drive?.companyDriveId ?? null,
+            tentativeDate: drive?.tentativeDate ?? null,
             appliedAt: (row.applied_at as string | null) ?? null,
             shortlisted: rows(row.shortlist_entries).some((entry) => entry.included === true),
             hasOffer: offeredDrives.has(row.drive_id as string),

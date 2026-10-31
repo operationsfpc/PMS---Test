@@ -2,6 +2,7 @@ import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
 import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
+import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
@@ -276,8 +277,14 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
             </Card>
           ) : null}
 
-          {paginatedEvents.map(([eventId, roles]) => (
-            <VisitCard key={eventId} roles={roles} selection={selection} onSelect={select} />
+          {paginatedEvents.map(([eventId, roles], index) => (
+            <VisitCard
+              key={eventId}
+              roles={roles}
+              selection={selection}
+              onSelect={select}
+              accentIndex={(page - 1) * PAGE_SIZE + index}
+            />
           ))}
 
           {/* Pagination Controls */}
@@ -350,16 +357,20 @@ function VisitCard({
   roles,
   selection,
   onSelect,
+  accentIndex,
 }: {
   roles: readonly DriveProgressEntry[];
   selection: Record<string, RoleSelection>;
   onSelect: (driveId: string, next: Partial<RoleSelection>) => void;
+  accentIndex: number;
 }) {
   /** The role whose students the pane is listing. */
   const [openRole, setOpenRole] = useState<string | null>(null);
 
   const head = roles[0];
   if (head === undefined) return null;
+
+  const accent = visitAccent(accentIndex);
 
   const isVisit = roles.length > 1;
   const counts = countStage(roles.flatMap((role) => [...role.students]));
@@ -426,8 +437,10 @@ function VisitCard({
   });
 
   return (
-    <Card className="mb-6 overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-surface-muted/30 p-4">
+    <Card className={`mb-6 overflow-hidden border-l-4 ${accent.rail}`}>
+      <div
+        className={`flex flex-wrap items-start justify-between gap-3 border-b border-line ${accent.band} p-4`}
+      >
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
             {/* A single-role visit is one company with exactly one drive record

@@ -9,8 +9,9 @@ import {
   Card,
   PageHeader,
 } from "@components/ui";
+import { visitAccent } from "@components/visit-accent";
 import { applicationEvidenceProblems } from "@domain/application-snapshot";
-import { groupByVisitKey, visitKey } from "@domain/company-drive";
+import { groupByCompanyVisit } from "@domain/company-drive";
 import { driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import {
   type OfferCategory,
@@ -22,9 +23,20 @@ import type { DriveType, RoleCategory } from "@domain/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApplyError } from "./apply-repository";
 
-/** Groups individual drives by their parent company event for multi-role display. */
+/**
+ * Groups individual drives into the company visits a student decides on.
+ *
+ * The domain keys a visit by company + day, so two roles of one visit raised
+ * separately still arrive as one card (2026-10-31: "if same company why it
+ * shows separate cards").
+ */
 function groupDrivesByEvent(drives: readonly OpenDrive[]): OpenDriveEvent[] {
-  const groups = groupByVisitKey(drives, (drive) => visitKey(drive.companyDriveId, drive.id));
+  const groups = groupByCompanyVisit(drives, (drive) => ({
+    ownId: drive.id,
+    companyDriveId: drive.companyDriveId,
+    companyName: drive.companyName,
+    tentativeDate: drive.tentativeDate,
+  }));
 
   return Array.from(groups.entries()).map(([key, roles]) => {
     const first = roles[0];
@@ -116,30 +128,6 @@ export interface DrivesView {
 
 const day = (iso: string | null) =>
   iso === null ? "—" : new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
-
-/**
- * One colour per company visit (2026-10-29, UAT: "use some colours for
- * batches"). Three visits stacked as identical white cards were told apart
- * only by reading every name; the rail and its band now carry the visit.
- *
- * Assigned by position in the list, not by hashing the visit id: two visits
- * that happen to hash alike would wear the same colour, which is the exact
- * confusion these are here to end. Neighbouring cards always differ, and the
- * order is the one the data already arrives in, so colours do not jump between
- * reads.
- */
-const VISIT_ACCENTS = [
-  { rail: "border-l-brand-500", band: "bg-brand-50" },
-  { rail: "border-l-violet-500", band: "bg-violet-50" },
-  { rail: "border-l-success-500", band: "bg-success-50" },
-  { rail: "border-l-gold-500", band: "bg-gold-50" },
-  { rail: "border-l-cyan-400", band: "bg-cyan-50" },
-  { rail: "border-l-danger-500", band: "bg-danger-50" },
-] as const;
-
-export function visitAccent(index: number): (typeof VISIT_ACCENTS)[number] {
-  return VISIT_ACCENTS[index % VISIT_ACCENTS.length] ?? VISIT_ACCENTS[0];
-}
 
 /**
  * What tells one role on a visit apart from its siblings: its category when

@@ -1,3 +1,4 @@
+import type { StatusEvent } from "@domain/status-changes";
 import type { ParticipationStatus } from "@domain/types";
 
 /**
@@ -78,6 +79,14 @@ export interface ParticipationView {
   recordSelfPlacement(placement: NewSelfPlacement): Promise<void>;
   /** Files the offer request and the hold request together (0130). */
   requestSelfPlacedHold(request: NewSelfPlacedHold): Promise<void>;
+  /**
+   * Every move the placement office made on this student's standing, with the
+   * reason they gave (0133, 0134) — the same two ledgers the staff record reads.
+   *
+   * It throws when the read is refused. "Nothing has ever happened to you" and
+   * "we could not look it up" must not be the same answer.
+   */
+  statusHistory(): Promise<readonly StatusEvent[]>;
 }
 
 /** A request nobody has decided yet blocks a second one. */

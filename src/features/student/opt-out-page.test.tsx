@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { MAX_OPT_OUT_REASON } from "@domain/participation";
-import { render, screen, waitFor } from "@testing-library/react";
+import type { StatusEvent } from "@domain/status-changes";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { OptOutPage } from "./opt-out-page";
@@ -26,15 +27,16 @@ function view(overrides: Partial<ParticipationView> = {}): ParticipationView {
     requestOptOut: async () => undefined,
     recordSelfPlacement: async () => undefined,
     requestSelfPlacedHold: async () => undefined,
+    statusHistory: async () => [],
     ...overrides,
   };
 }
 
 describe("OptOutPage", () => {
-  it("warns that opting out is irreversible before anything is clicked", async () => {
+  it("warns that the student cannot undo an opt-out before anything is clicked", async () => {
     render(<OptOutPage view={view()} />);
 
-    expect(await screen.findByText(/cannot be reversed/i)).toBeDefined();
+    expect(await screen.findByText(/cannot undo it yourself/i)).toBeDefined();
   });
 
   it("requires a reason, and sends it with the request", async () => {
@@ -267,7 +269,7 @@ describe("OptOutPage", () => {
   it("says nothing about off-campus offers", async () => {
     render(<OptOutPage view={view()} />);
 
-    await screen.findByText(/cannot be reversed/i);
+    await screen.findByText(/cannot undo it yourself/i);
     expect(screen.queryByLabelText(/offer letter/i)).toBeNull();
   });
 });
@@ -324,5 +326,73 @@ describe("OptOutPage — what happened to my request", () => {
     render(<OptOutPage view={withRequest("rejected", null)} />);
 
     expect(await screen.findByText(/no reason was recorded/i)).toBeDefined();
+  });
+});
+
+/**
+ * 0133 put a second way this standing can change — a Coordinator, Campus
+ * Manager or KAM returning the student — and promised the reason was recorded.
+ * This is that record, read through the student's own view: RLS admits them to
+ * their own rows and to nobody else's.
+ */
+describe("OptOutPage — what the placement office did to my standing", () => {
+  const RESTORED: StatusEvent = {
+    id: "change-c1",
+    title: "Status changed",
+    detail: "Opted out → In the pipeline",
+    byName: "Karthik Subramanian",
+    at: "2026-10-20T09:00:00Z",
+    reason: "Opted out at counselling by mistake — confirmed with the student on 3 Nov.",
+    tone: "neutral",
+  };
+
+  const WITHDRAWN: StatusEvent = {
+    id: "withdrawal-w1",
+    title: "Offer withdrawn",
+    detail: "TCS · Software Engineer · ₹9 LPA · on campus",
+    byName: "Meena Krishnan",
+    at: "2026-10-25T09:00:00Z",
+    reason: "Company retracted the joining — confirmed in writing.",
+    tone: "warning",
+  };
+
+  const withHistory = (history: () => Promise<readonly StatusEvent[]>) =>
+    view({ statusHistory: history });
+
+  it("shows every move with who made it, when, and the reason they gave", async () => {
+    render(<OptOutPage view={withHistory(async () => [WITHDRAWN, RESTORED])} />);
+
+    const region = await screen.findByRole("region", { name: /status history/i });
+    expect(
+      within(region)
+        .getAllByRole("heading", { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual(["Offer withdrawn", "Status changed"]);
+    expect(within(region).getByText(/opted out → in the pipeline/i)).toBeDefined();
+    expect(within(region).getByText(/by meena krishnan · 25 oct 2026/i)).toBeDefined();
+    expect(within(region).getByText(/counselling by mistake/i)).toBeDefined();
+    expect(within(region).getByText(/2 records/i)).toBeDefined();
+  });
+
+  it("says when the ledger refused to answer, and keeps the opt-out form usable", async () => {
+    render(
+      <OptOutPage
+        view={withHistory(async () => {
+          throw new Error("Your session has expired. Please sign in again.");
+        })}
+      />,
+    );
+
+    const region = await screen.findByRole("region", { name: /status history/i });
+    expect(within(region).getByRole("alert").textContent).toMatch(/session has expired/i);
+    expect(screen.getByRole("button", { name: /request opt-out/i })).toBeDefined();
+  });
+
+  /** Nothing has happened to them, so the screen does not invent a card. */
+  it("draws no history at all while nobody has moved the standing", async () => {
+    render(<OptOutPage view={view()} />);
+
+    await screen.findByText(/cannot undo it yourself/i);
+    expect(screen.queryByRole("region", { name: /status history/i })).toBeNull();
   });
 });

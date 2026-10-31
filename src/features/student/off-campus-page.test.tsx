@@ -27,6 +27,7 @@ function view(
     requestOptOut: async () => undefined,
     recordSelfPlacement: async () => undefined,
     requestSelfPlacedHold: async () => undefined,
+    statusHistory: async () => [],
     ...overrides,
   };
 }

@@ -1,5 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
+import { TablePager } from "@components/table-pager";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
@@ -151,6 +152,8 @@ export function StudentDirectoryPage({
   // tell the reader to refresh the whole page.
   const [attempt, setAttempt] = useState(0);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
   const [exporting, setExporting] = useState(false);
   /** What the CSV actually carried, said once it is on its way. */
   const [exportNote, setExportNote] = useState<string | null>(null);
@@ -237,6 +240,16 @@ export function StudentDirectoryPage({
     () => filterDirectory(students ?? [], { filter, query, campus, ctc, category }),
     [students, filter, query, campus, ctc, category],
   );
+
+  // A filter change can shrink the list under the page the reader was on; the
+  // roster then shows page one of the list they just asked for.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting the page is the point
+  useEffect(() => {
+    setPage(0);
+  }, [filter, query, campus, ctc, category, pageSize]);
+
+  const safePage = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1));
+  const pagedStudents = visible.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   /** Every campus actually present in the rows, so the list cannot offer an empty one. */
   const campuses = useMemo(
@@ -523,8 +536,7 @@ export function StudentDirectoryPage({
               page to visit, not a filter to apply. */}
           <p className="mb-3 flex flex-wrap items-center gap-2 text-sm text-ink-500">
             <span>
-              Showing <strong className="text-ink-900">{visible.length} students</strong> of{" "}
-              {summary.total}
+              <strong className="text-ink-900">{visible.length} students</strong> of {summary.total}
             </span>
             <Button size="sm" variant="ghost" onClick={() => update({ filter: "placed" })}>
               {summary.placed} placed
@@ -539,118 +551,130 @@ export function StudentDirectoryPage({
               <p className="text-sm text-ink-700">No students match this search.</p>
             </Card>
           ) : (
-            <Card className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
-                  <tr>
-                    <th className="px-4 py-3">Student</th>
-                    <th className="px-4 py-3">Campus</th>
-                    <th className="px-4 py-3">Registration</th>
-                    <th className="px-4 py-3">Applications</th>
-                    <th className="px-4 py-3">Placement</th>
-                    {holds !== undefined && <th className="px-4 py-3">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {visible.map((student) => (
-                    <tr key={student.studentId}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-ink-900">
-                          {/* G7: the name is the door to the canonical record. */}
-                          <Link to={`/students/${student.studentId}`} className="hover:underline">
-                            {student.fullName}
-                          </Link>
-                        </p>
-                        <p className="text-xs text-ink-500">
-                          Roll {student.rollNumber}
-                          {/* The Actions column wears an "On hold" badge when
+            <>
+              <Card className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
+                    <tr>
+                      <th className="px-4 py-3">Student</th>
+                      <th className="px-4 py-3">Campus</th>
+                      <th className="px-4 py-3">Registration</th>
+                      <th className="px-4 py-3">Applications</th>
+                      <th className="px-4 py-3">Placement</th>
+                      {holds !== undefined && <th className="px-4 py-3">Actions</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {pagedStudents.map((student) => (
+                      <tr key={student.studentId}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-ink-900">
+                            {/* G7: the name is the door to the canonical record. */}
+                            <Link to={`/students/${student.studentId}`} className="hover:underline">
+                              {student.fullName}
+                            </Link>
+                          </p>
+                          <p className="text-xs text-ink-500">
+                            Roll {student.rollNumber}
+                            {/* The Actions column wears an "On hold" badge when
                               holds are switched on, so the name cell stays
                               quiet rather than saying it twice in one row. */}
-                          {student.participationStatus !== "active" &&
-                            !(holds !== undefined && student.participationStatus === "on_hold") && (
-                              <>
-                                {" · "}
-                                <span className="text-warning">
-                                  {participationStatusLabel(student.participationStatus)}
-                                </span>
-                              </>
-                            )}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-ink-700">
-                        <p>{student.campusName}</p>
-                        <p className="text-xs text-ink-500">
-                          {student.degree} {student.branch} · {student.passingYear}
-                          {/* 2026-10-18 (UAT): the overview's count opens a
+                            {student.participationStatus !== "active" &&
+                              !(
+                                holds !== undefined && student.participationStatus === "on_hold"
+                              ) && (
+                                <>
+                                  {" · "}
+                                  <span className="text-warning">
+                                    {participationStatusLabel(student.participationStatus)}
+                                  </span>
+                                </>
+                              )}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3 text-ink-700">
+                          <p>{student.campusName}</p>
+                          <p className="text-xs text-ink-500">
+                            {student.degree} {student.branch} · {student.passingYear}
+                            {/* 2026-10-18 (UAT): the overview's count opens a
                               popup with a CGPA column, and this is the list it
                               links into — the same figure, same two decimals. */}
-                          {student.cgpa !== null && <> · {student.cgpa.toFixed(2)} CGPA</>}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge tone={SRF_TONE[student.srfStatus]}>
-                          {SRF_LABEL[student.srfStatus]}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-ink-700">{student.applications}</td>
-                      <td className="px-4 py-3">
-                        {student.placement === null ? (
-                          // A fact, not a blank cell: an empty column reads as
-                          // missing data rather than as an unplaced student.
-                          <span className="text-ink-500">Not placed</span>
-                        ) : (
-                          <>
-                            <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                              {student.placement.companyName}
-                              {student.placement.source === "self_placed" && (
-                                <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                                  Self-placed
-                                </span>
-                              )}
-                            </p>
-                            <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
-                              {student.placement.roleTitle ?? "Role not recorded"} · ₹
-                              {student.placement.ctcLpa} LPA
-                              {student.placement.offerCategory !== null &&
-                                ` · ${offerCategoryLabel(student.placement.offerCategory)}`}
-                            </p>
-                          </>
-                        )}
-                      </td>
-                      {holds !== undefined && (
+                            {student.cgpa !== null && <> · {student.cgpa.toFixed(2)} CGPA</>}
+                          </p>
+                        </td>
                         <td className="px-4 py-3">
-                          {/* 0125 refuses a second hold on a student already
-                              held, so the row says that instead of offering a
-                              button whose only answer would be a failure. */}
-                          {student.participationStatus === "on_hold" ? (
-                            <Badge tone="warning">On hold</Badge>
-                          ) : pendingSet.has(student.studentId) ? (
-                            // A request waiting is the student's own words; a
-                            // second Hold button would just be refused by 0130.
-                            <Badge tone="warning">Request waiting</Badge>
+                          <Badge tone={SRF_TONE[student.srfStatus]}>
+                            {SRF_LABEL[student.srfStatus]}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-ink-700">{student.applications}</td>
+                        <td className="px-4 py-3">
+                          {student.placement === null ? (
+                            // A fact, not a blank cell: an empty column reads as
+                            // missing data rather than as an unplaced student.
+                            <span className="text-ink-500">Not placed</span>
                           ) : (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              aria-label={`Hold ${student.fullName}`}
-                              onClick={() =>
-                                setHolding({
-                                  studentId: student.studentId,
-                                  fullName: student.fullName,
-                                  rollNumber: student.rollNumber,
-                                })
-                              }
-                            >
-                              Hold
-                            </Button>
+                            <>
+                              <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                                {student.placement.companyName}
+                                {student.placement.source === "self_placed" && (
+                                  <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                    Self-placed
+                                  </span>
+                                )}
+                              </p>
+                              <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
+                                {student.placement.roleTitle ?? "Role not recorded"} · ₹
+                                {student.placement.ctcLpa} LPA
+                                {student.placement.offerCategory !== null &&
+                                  ` · ${offerCategoryLabel(student.placement.offerCategory)}`}
+                              </p>
+                            </>
                           )}
                         </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
+                        {holds !== undefined && (
+                          <td className="px-4 py-3">
+                            {/* 0125 refuses a second hold on a student already
+                              held, so the row says that instead of offering a
+                              button whose only answer would be a failure. */}
+                            {student.participationStatus === "on_hold" ? (
+                              <Badge tone="warning">On hold</Badge>
+                            ) : pendingSet.has(student.studentId) ? (
+                              // A request waiting is the student's own words; a
+                              // second Hold button would just be refused by 0130.
+                              <Badge tone="warning">Request waiting</Badge>
+                            ) : (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                aria-label={`Hold ${student.fullName}`}
+                                onClick={() =>
+                                  setHolding({
+                                    studentId: student.studentId,
+                                    fullName: student.fullName,
+                                    rollNumber: student.rollNumber,
+                                  })
+                                }
+                              >
+                                Hold
+                              </Button>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </Card>
+              <TablePager
+                page={page}
+                pageSize={pageSize}
+                total={visible.length}
+                unit="students"
+                onPage={setPage}
+                onPageSize={setPageSize}
+              />
+            </>
           )}
         </>
       )}

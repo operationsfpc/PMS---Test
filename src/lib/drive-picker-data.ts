@@ -17,7 +17,7 @@ export async function fetchPickerDrives(client: SupabaseClient): Promise<readonl
   const { data, error } = await client
     .from("drives")
     .select(
-      "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, created_at, drive_type, company_drive_id",
+      "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, status, created_at, drive_type, company_drive_id, tentative_date",
     )
     .in("status", IN_PROGRESS_STATUSES);
 
@@ -36,6 +36,7 @@ export async function fetchPickerDrives(client: SupabaseClient): Promise<readonl
     // Without the event id the picker cannot know that two roles belong to one
     // visit, so it prints the company twice — the exact complaint of 2026-10-16.
     companyDriveId: (row.company_drive_id as string | null) ?? null,
+    tentativeDate: (row.tentative_date as string | null) ?? null,
     driveType: asDriveType(row.drive_type as string | null),
   }));
 }

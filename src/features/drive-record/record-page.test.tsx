@@ -103,6 +103,7 @@ const STUDENT = "student" as const;
 
 describe("DriveRecordPage", () => {
   it("shows the whole record to a staff reader — compensation, window, eligibility, rounds", async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <DriveRecordPage view={view()} role={CENTRAL} driveId="d1" />
@@ -112,23 +113,31 @@ describe("DriveRecordPage", () => {
     expect(
       await screen.findByRole("heading", { name: /Accenture — Jr. Software Engineer/ }),
     ).toBeDefined();
-    // The summary tile and the Compensation list both carry the figure.
-    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(2);
-    expect(screen.getByText("≥ 7.5 CGPA")).toBeDefined();
+    // Overview carries the summary tile, the rounds, provenance and the JD.
+    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(1);
     expect(screen.getByText(/Aptitude Test/)).toBeDefined();
     expect(screen.getByText(/Raised by/)).toBeDefined();
     expect(screen.getByRole<HTMLAnchorElement>("link", { name: "Accenture-JD.pdf" }).href).toBe(
       "https://signed.example/jd.pdf",
     );
+
+    // Compensation repeats the figure under its own tab.
+    await user.click(screen.getByRole("tab", { name: "Compensation" }));
+    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(2);
+
+    await user.click(screen.getByRole("tab", { name: "Eligibility" }));
+    expect(screen.getByText("≥ 7.5 CGPA")).toBeDefined();
   });
 
   it("hides the recruiter contact from everyone but the AE", async () => {
+    const user = userEvent.setup();
     const { unmount } = render(
       <MemoryRouter>
         <DriveRecordPage view={view()} role={CENTRAL} driveId="d1" />
       </MemoryRouter>,
     );
     await screen.findAllByText("₹4–6 LPA");
+    expect(screen.queryByRole("tab", { name: "Recruiters" })).toBeNull();
     expect(screen.queryByText("testabcd@example.com")).toBeNull();
     unmount();
 
@@ -137,6 +146,10 @@ describe("DriveRecordPage", () => {
         <DriveRecordPage view={view()} role={AE} driveId="d1" />
       </MemoryRouter>,
     );
+    await screen.findByRole("heading", { name: /accenture/i });
+    expect(screen.queryByText("testabcd@example.com")).toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: "Recruiters" }));
     expect(await screen.findByText("testabcd@example.com")).toBeDefined();
     expect(screen.getByText(/visible to you alone/i)).toBeDefined();
   });
@@ -148,11 +161,14 @@ describe("DriveRecordPage", () => {
    * four screens that show a drive already say it in words (UAT 2026-10-23).
    */
   it("says which colleges a drive reaches, and says so when it reaches all of them", async () => {
+    const user = userEvent.setup();
     const { unmount } = render(
       <MemoryRouter>
         <DriveRecordPage view={view()} role={CENTRAL} driveId="d1" />
       </MemoryRouter>,
     );
+    await screen.findByRole("heading", { name: /accenture/i });
+    await user.click(screen.getByRole("tab", { name: "Eligibility" }));
     expect(await screen.findByText("Open to: KGiSL")).toBeDefined();
     unmount();
 
@@ -166,10 +182,13 @@ describe("DriveRecordPage", () => {
       </MemoryRouter>,
     );
 
+    await screen.findByRole("heading", { name: /accenture/i });
+    await user.click(screen.getByRole("tab", { name: "Eligibility" }));
     expect(await screen.findByText("Open to every campus")).toBeDefined();
   });
 
   it("hides the campuses list from a student reader", async () => {
+    const user = userEvent.setup();
     const { unmount } = render(
       <MemoryRouter>
         <DriveRecordPage view={view()} role={STUDENT} driveId="d1" />
@@ -177,6 +196,8 @@ describe("DriveRecordPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /accenture/i })).toBeDefined();
+    await user.click(screen.getByRole("tab", { name: "Eligibility" }));
+    expect(screen.getByText("≥ 7.5 CGPA")).toBeDefined();
     expect(screen.queryByText(/campuses/i)).toBeNull();
     expect(screen.queryByText("Open to: KGiSL")).toBeNull();
     unmount();
@@ -192,11 +213,13 @@ describe("DriveRecordPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: /accenture/i })).toBeDefined();
+    await user.click(screen.getByRole("tab", { name: "Eligibility" }));
     expect(screen.queryByText("Open to every campus")).toBeNull();
   });
 
   /** A4/A5 (UAT 2026-08-19): several contacts, or an honest "none". */
   it("lists every contact the drive carries, for the AE", async () => {
+    const user = userEvent.setup();
     const two = {
       ...RECORD,
       recruiters: [
@@ -210,35 +233,48 @@ describe("DriveRecordPage", () => {
       </MemoryRouter>,
     );
 
+    await screen.findByRole("heading", { name: /accenture/i });
+    await user.click(screen.getByRole("tab", { name: "Recruiters" }));
     expect(await screen.findByText("First Contact")).toBeDefined();
     expect(screen.getByText("Second Contact")).toBeDefined();
   });
 
   it("says the Central CPC is the point of contact when the drive has none (A5)", async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <DriveRecordPage view={view({ ...RECORD, recruiters: [] })} role={AE} driveId="d1" />
       </MemoryRouter>,
     );
 
-    await screen.findAllByText("₹4–6 LPA");
+    await screen.findByRole("heading", { name: /accenture/i });
+    await user.click(screen.getByRole("tab", { name: "Recruiters" }));
     expect(screen.getByText(/central placement coordinator/i)).toBeDefined();
   });
 
   it("hides applicants and provenance from a student — the page is still theirs to read", async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <DriveRecordPage view={view()} role={STUDENT} driveId="d1" />
       </MemoryRouter>,
     );
 
-    expect(await screen.findAllByText("₹4–6 LPA")).toHaveLength(2);
+    await screen.findByRole("heading", { name: /accenture/i });
+    // A student gets no Applicants or Recruiters tab at all.
+    expect(screen.queryByRole("tab", { name: /applicants/i })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Recruiters" })).toBeNull();
+    // The tile says the package once; Compensation repeats it on its tab.
+    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(1);
+    await user.click(screen.getByRole("tab", { name: "Compensation" }));
+    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(2);
     expect(screen.queryByText("Thanush Krishna")).toBeNull();
     expect(screen.queryByText(/Raised by/)).toBeNull();
     expect(screen.queryByText("testabcd@example.com")).toBeNull();
   });
 
   it("renders long text fields without crashing and keeps full text content", async () => {
+    const user = userEvent.setup();
     const longRecord: DriveRecord = {
       ...RECORD,
       locations: "Bengaluru, Chennai, Hyderabad, Coimbatore, Pune, Mumbai, Gurugram, Noida",
@@ -279,6 +315,8 @@ describe("DriveRecordPage", () => {
     expect(
       screen.getByText(/Online Cognitive, Verbal Ability and Technical Coding Assessment/),
     ).toBeDefined();
+
+    await user.click(screen.getByRole("tab", { name: "Eligibility" }));
     expect(screen.getByText(/React, Next\.js, TypeScript, PostgreSQL/)).toBeDefined();
   });
 
@@ -289,6 +327,8 @@ describe("DriveRecordPage", () => {
         <DriveRecordPage view={view()} role={CENTRAL} driveId="d1" />
       </MemoryRouter>,
     );
+    await screen.findByRole("heading", { name: /accenture/i });
+    await user.click(screen.getByRole("tab", { name: /applicants/i }));
     await screen.findByText("Thanush Krishna");
 
     await user.click(screen.getByRole("button", { name: "View snapshot" }));

@@ -7,6 +7,7 @@ import {
 } from "@domain/participation";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { ParticipationStatus } from "@domain/types";
+import { createSupabaseStatusChangesView } from "@lib/status-changes-view";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   hasPendingRequest,
@@ -97,6 +98,9 @@ export function createSupabaseParticipationView(
   client: SupabaseClient,
   getStudentId: () => Promise<string | null>,
 ): ParticipationView {
+  /** The two status ledgers, read through the same view the staff record uses. */
+  const changes = createSupabaseStatusChangesView(client);
+
   async function student() {
     const id = await getStudentId();
     if (id === null)
@@ -305,6 +309,15 @@ export function createSupabaseParticipationView(
       if (error !== null) {
         throw withDetail("Could not send your hold request.", error);
       }
+    },
+
+    /*
+     * Their own two ledger rows, and only theirs: RLS admits a student to the
+     * changes and withdrawals that name them. What the coordinator typed as
+     * the reason is exactly what comes back, which is the promise 0133 made.
+     */
+    async statusHistory() {
+      return changes.historyFor(await student());
     },
   };
 }

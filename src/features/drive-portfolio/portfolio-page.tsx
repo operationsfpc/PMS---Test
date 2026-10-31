@@ -15,8 +15,9 @@ import {
   PageHeader,
   StatCard,
 } from "@components/ui";
+import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
-import { groupByVisitKey, isStandaloneVisit, visitKey } from "@domain/company-drive";
+import { groupDrivesByEvent } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import {
   type DriveOrder,
@@ -82,9 +83,25 @@ function visitRoleFreeze(event: PortfolioEvent): string | null {
     : null;
 }
 
-/** Groups portfolio drives by their parent company event. */
+/**
+ * The real `company_drives` row behind a visit, for links that attach another
+ * role to it.
+ *
+ * Since a visit is now identified by company + day, its group key is not an
+ * event id — separately raised drives of one visit carry different event ids.
+ * The first role that still has one is the row an added role can attach to.
+ */
+function visitEventId(event: PortfolioEvent): string {
+  return (
+    event.roles.find(
+      (role) => typeof role.companyDriveId === "string" && role.companyDriveId !== "",
+    )?.companyDriveId ?? ""
+  );
+}
+
+/** Groups portfolio drives by company visit. */
 function groupPortfolioByEvent(drives: readonly PortfolioDrive[]): PortfolioEvent[] {
-  const groups = groupByVisitKey(drives, (drive) => visitKey(drive.companyDriveId, drive.driveId));
+  const groups = groupDrivesByEvent(drives);
 
   return Array.from(groups.entries()).map(([key, roles]) => {
     const first = roles[0];
@@ -407,7 +424,7 @@ export function DrivePortfolioPage({
           ) : (
             <>
               <ul className="flex flex-col gap-4">
-                {activeEvents.map((event) => renderEvent(event))}
+                {activeEvents.map((event, index) => renderEvent(event, index))}
               </ul>
 
               {expiredEvents.length > 0 && (
@@ -416,7 +433,9 @@ export function DrivePortfolioPage({
                     Expired — application deadline passed ({expiredEvents.length})
                   </summary>
                   <ul className="mt-3 flex flex-col gap-4">
-                    {expiredEvents.map((event) => renderEvent(event))}
+                    {expiredEvents.map((event, index) =>
+                      renderEvent(event, activeEvents.length + index),
+                    )}
                   </ul>
                 </details>
               )}
@@ -517,16 +536,17 @@ export function DrivePortfolioPage({
     }));
   }
 
-  function renderEvent(event: PortfolioEvent) {
+  function renderEvent(event: PortfolioEvent, accentIndex: number) {
     const isMultiRole = event.roles.length > 1;
     const types = visitType(event.roles);
+    const accent = visitAccent(accentIndex);
 
     return (
       <li key={event.eventId}>
-        <Card className="overflow-hidden">
+        <Card className={`overflow-hidden border-l-4 ${accent.rail}`}>
           {/* Event Header for multi-role drives */}
           {isMultiRole && (
-            <div className="border-b border-line bg-brand-50 p-4">
+            <div className={`border-b border-line ${accent.band} p-4`}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-heading text-lg font-bold text-ink-900">{event.companyName}</h3>
                 {!types.mixed && types.single !== null && (
@@ -614,9 +634,9 @@ export function DrivePortfolioPage({
                   <ButtonLink
                     size="sm"
                     variant="ghost"
-                    to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${
-                      isStandaloneVisit(event.eventId) ? "" : event.eventId
-                    }&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
+                    to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${encodeURIComponent(
+                      visitEventId(event),
+                    )}&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
                   >
                     + Add another role
                     {isMultiRole ? "" : visitDayInParentheses(event.tentativeDate)}

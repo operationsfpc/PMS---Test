@@ -314,7 +314,10 @@ describe("StudentDirectoryPage", () => {
 
   it("tells the reader how many students it is showing", async () => {
     show();
-    expect(await screen.findByText(/2 students/i)).toBeDefined();
+    // The count line and the pager both speak; the count is the filtered total,
+    // the pager says which slice of it is on screen.
+    expect(await screen.findByText(/^2 students$/)).toBeDefined();
+    expect(screen.getByText(/showing 1 to 2 of 2 students/i)).toBeDefined();
   });
   it("says the roster is empty rather than showing a bare table", async () => {
     show([]);

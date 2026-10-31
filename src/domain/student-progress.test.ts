@@ -195,7 +195,8 @@ describe("studentPrompt", () => {
     });
 
     expect(prompt.headline).toMatch(/opted out/i);
-    expect(prompt.detail).toMatch(/cannot be reversed/i);
+    expect(prompt.detail).toMatch(/cannot undo this yourself/i);
+    expect(prompt.detail).toMatch(/placement office/i);
     expect(prompt.action).toBeNull();
   });
 

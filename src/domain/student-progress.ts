@@ -114,7 +114,8 @@ export function studentPrompt(input: {
   if (input.participationStatus === "opted_out") {
     return {
       headline: "You have opted out of campus placements",
-      detail: "This cannot be reversed. Speak to your placement coordinator if it is wrong.",
+      detail:
+        "You cannot undo this yourself. Speak to your placement office if it was a mistake — they can put you back.",
       action: null,
     };
   }

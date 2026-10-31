@@ -18,7 +18,7 @@ import {
   countAbsences,
   needsDisbarmentReview,
 } from "@domain/attendance";
-import { groupByVisitKey, visitKey } from "@domain/company-drive";
+import { groupByCompanyVisit } from "@domain/company-drive";
 import { describeMarks } from "@domain/marks";
 import { condenseNotifications } from "@domain/notifications";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
@@ -44,6 +44,8 @@ export interface StudentApplicationRow {
   readonly applicationId: string;
   /** The company visit this role belongs to; null for a legacy standalone drive. */
   readonly companyDriveId?: string | null;
+  /** The visit's day, so the same company visiting twice stays two cards. */
+  readonly tentativeDate?: string | null;
   readonly companyName: string;
   readonly roleTitle: string;
   readonly appliedAt: string;
@@ -167,9 +169,12 @@ const RoundChips = ({ entry }: { entry: ProgressedApplication }) =>
  * own date and its own rounds — those are never summed.
  */
 function ApplicationVisits({ entries }: { entries: readonly ProgressedApplication[] }) {
-  const visits = groupByVisitKey(entries, (entry) =>
-    visitKey(entry.application.companyDriveId, entry.application.applicationId),
-  );
+  const visits = groupByCompanyVisit(entries, (entry) => ({
+    ownId: entry.application.applicationId,
+    companyDriveId: entry.application.companyDriveId,
+    companyName: entry.application.companyName,
+    tentativeDate: entry.application.tentativeDate,
+  }));
 
   return (
     <ul className="flex flex-col gap-3">

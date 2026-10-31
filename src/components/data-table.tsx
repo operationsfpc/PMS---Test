@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Badge, Button } from "./ui";
 
 export interface ColumnDef<T> {
@@ -55,37 +55,6 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
   const [pageIndex, setPageIndex] = useState(0);
   const [pageSize, setPageSize] = useState(defaultPageSize);
   const [selectedIds, setSelectedIds] = useState<Set<string | number>>(new Set());
-  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<string>>(new Set());
-  const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
-  const columnPickerRef = useRef<HTMLDivElement>(null);
-
-  /**
-   * The picker used to stay open over the rows once clicked, with nothing to
-   * shut it — so the first press a reader made afterwards landed on a column
-   * checkbox rather than the row they aimed at. It also never told a screen
-   * reader whether the list of columns was up.
-   */
-  useEffect(() => {
-    if (!isColumnPickerOpen) return;
-
-    function onPointerDown(event: PointerEvent) {
-      const picker = columnPickerRef.current;
-      if (picker !== null && !picker.contains(event.target as Node)) {
-        setIsColumnPickerOpen(false);
-      }
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setIsColumnPickerOpen(false);
-    }
-
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isColumnPickerOpen]);
 
   // Filtered rows
   const filteredData = useMemo(() => {
@@ -162,12 +131,6 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
     setPageIndex((current) => Math.min(current, totalPages - 1));
   }, [totalPages]);
 
-  // Visible columns
-  const visibleColumns = useMemo(
-    () => columns.filter((col) => !hiddenColumnIds.has(col.id)),
-    [columns, hiddenColumnIds],
-  );
-
   // Sorting handler
   const handleSort = (colId: string) => {
     if (sortColumnId === colId) {
@@ -235,7 +198,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
-      {/* Top Toolbar: Search, Filters, Column Toggle */}
+      {/* Top Toolbar: Search */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Search Box */}
         <div className="relative flex-1 min-w-[220px] max-w-sm">
@@ -275,65 +238,6 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
             </button>
           )}
         </div>
-
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Column Visibility Picker */}
-          <div className="relative" ref={columnPickerRef}>
-            <button
-              type="button"
-              onClick={() => setIsColumnPickerOpen((o) => !o)}
-              aria-expanded={isColumnPickerOpen}
-              aria-haspopup="true"
-              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted transition-colors flex items-center gap-1.5"
-            >
-              <span>Columns</span>
-              <span
-                aria-hidden="true"
-                className={`transition-transform ${isColumnPickerOpen ? "rotate-180" : ""}`}
-              >
-                ▾
-              </span>
-            </button>
-
-            {isColumnPickerOpen && (
-              <div className="absolute right-0 z-30 mt-1 w-48 rounded-xl border border-line bg-surface p-2 shadow-xl animate-fade-in">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 mb-1 px-1">
-                  Toggle Columns
-                </p>
-                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-                  {columns.map((col) => {
-                    const isVisible = !hiddenColumnIds.has(col.id);
-                    return (
-                      <label
-                        key={col.id}
-                        className="flex items-center gap-2 px-1.5 py-1 rounded text-xs text-ink-700 hover:bg-surface-muted cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isVisible}
-                          onChange={(e) => {
-                            const next = new Set(hiddenColumnIds);
-                            if (e.target.checked) {
-                              next.delete(col.id);
-                            } else {
-                              next.add(col.id);
-                            }
-                            setHiddenColumnIds(next);
-                          }}
-                          className="rounded border-line text-brand-600 focus:ring-brand-500 h-3.5 w-3.5"
-                        />
-                        <span className="truncate">
-                          {typeof col.header === "string" ? col.header : col.id}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Bulk Action Bar (when rows selected) */}
@@ -369,7 +273,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                   />
                 </th>
               )}
-              {visibleColumns.map((col) => (
+              {columns.map((col) => (
                 <th
                   key={col.id}
                   scope="col"
@@ -440,7 +344,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                         />
                       </td>
                     )}
-                    {visibleColumns.map((col) => {
+                    {columns.map((col) => {
                       let cellContent: ReactNode;
                       if (col.cell) {
                         cellContent = col.cell(row, idx);
@@ -467,7 +371,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
             ) : (
               <tr>
                 <td
-                  colSpan={visibleColumns.length + (enableSelection ? 1 : 0)}
+                  colSpan={columns.length + (enableSelection ? 1 : 0)}
                   className="py-12 text-center text-xs text-ink-500"
                 >
                   <div className="flex flex-col items-center justify-center gap-1.5">
@@ -496,7 +400,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         <div
           className={`flex flex-wrap items-center justify-between gap-3 text-xs text-ink-600 ${
             stickyPagination
-              ? "sticky bottom-0 z-10 -mx-6 border-t border-line bg-surface px-6 py-2"
+              ? "sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-line bg-surface px-6 pb-6 pt-2"
               : "pt-1"
           }`}
         >

@@ -375,7 +375,9 @@ export function EditStaffModal({
                           onChange={() => toggleCampus(campus.id)}
                           className="rounded border-line text-brand-600 focus:ring-brand-500"
                         />
-                        <span className="truncate">{campus.name}</span>
+                        <span className="min-w-0 truncate" title={campus.name}>
+                          {campus.name}
+                        </span>
                       </label>
                     );
                   })}

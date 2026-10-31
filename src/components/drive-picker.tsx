@@ -28,6 +28,8 @@ export interface PickerDrive {
   readonly status: string;
   /** The company visit this role belongs to; null for a legacy standalone drive. */
   readonly companyDriveId?: string | null;
+  /** The visit's day, so same-company visits on different days stay apart. */
+  readonly tentativeDate?: string | null;
   readonly driveType?: DriveType | null;
 }
 

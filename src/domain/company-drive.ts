@@ -52,20 +52,20 @@ export function resolveEffectiveCampuses(
 }
 
 /**
- * Counts distinct recruitment events across drives.
- * A drive with a `companyDriveId` belongs to that event.
- * A legacy standalone drive (null `companyDriveId`) is treated as its own distinct event.
+ * Counts distinct company visits across drives.
+ *
+ * Delegates to the same grouping the lists draw, so a number beside a list can
+ * never disagree with the cards under it.
  */
 export function countDistinctEvents(
-  drives: readonly { readonly driveId: string; readonly companyDriveId?: string | null }[],
+  drives: readonly {
+    readonly driveId: string;
+    readonly companyDriveId?: string | null | undefined;
+    readonly companyName?: string | null | undefined;
+    readonly tentativeDate?: string | null | undefined;
+  }[],
 ): number {
-  const eventKeys = new Set<string>();
-
-  for (const drive of drives) {
-    eventKeys.add(visitKey(drive.companyDriveId, drive.driveId));
-  }
-
-  return eventKeys.size;
+  return groupDrivesByEvent(drives).size;
 }
 
 /**
@@ -97,6 +97,44 @@ export function isStandaloneVisit(key: string): boolean {
   return key.startsWith(STANDALONE_VISIT_PREFIX);
 }
 
+/** What a row must be able to say for its company visit to be identified. */
+export interface VisitIdentity {
+  readonly companyDriveId?: string | null | undefined;
+  readonly ownId: string;
+  readonly companyName?: string | null | undefined;
+  readonly tentativeDate?: string | null | undefined;
+}
+
+/** The day part of a date or timestamp, or null when it does not say one. */
+function visitDay(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed.slice(0, 10);
+}
+
+/** Company names compare case- and spacing-insensitively, as people type them. */
+function companySlug(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replaceAll(/\s+/g, " ");
+}
+
+/**
+ * The key one company visit is grouped under when the row can name both the
+ * company and the day.
+ *
+ * One company on one day is one visit, even when the rows were raised
+ * separately and carry different event ids. A different day, or a row missing
+ * either fact, falls back to the event key so genuinely separate visits never
+ * merge. The `visit:` prefix keeps this namespace away from real event ids and
+ * from the legacy `standalone:` keys.
+ */
+export function companyVisitKey(row: VisitIdentity): string {
+  const company = companySlug(row.companyName);
+  const day = visitDay(row.tentativeDate);
+  if (company === "" || day === null) {
+    return visitKey(row.companyDriveId, row.ownId);
+  }
+  return `visit:${company}|${day}`;
+}
+
 /** Groups any rows by the company visit they belong to. */
 export function groupByVisitKey<T>(
   rows: readonly T[],
@@ -118,10 +156,73 @@ export function groupByVisitKey<T>(
 }
 
 /**
- * Groups drives by their parent event (a legacy drive becomes its own visit).
+ * Groups rows by the company visit they belong to.
+ *
+ * Two passes, because either fact alone is not the whole rule:
+ *
+ *  1. Rows of one event stay together whatever they say — a role that forgot
+ *     its date must not fall out of its own event.
+ *  2. Event groups that name the same company and day merge. The 0118 backfill
+ *     left one event per legacy drive, so separate event ids cannot mean
+ *     separate visits.
+ *
+ * A group that cannot name both facts keeps its event key, so a genuinely
+ * different day never merges.
+ */
+function groupRowsByVisit<T>(
+  rows: readonly T[],
+  identityOf: (row: T) => VisitIdentity,
+): Map<string, T[]> {
+  const byEvent = groupByVisitKey(rows, (row) => {
+    const identity = identityOf(row);
+    return visitKey(identity.companyDriveId, identity.ownId);
+  });
+
+  const visits = new Map<string, T[]>();
+  for (const [eventKey, eventRows] of byEvent) {
+    const named = eventRows.find((row) => {
+      const identity = identityOf(row);
+      return companySlug(identity.companyName) !== "" && visitDay(identity.tentativeDate) !== null;
+    });
+    const key = named === undefined ? eventKey : companyVisitKey(identityOf(named));
+
+    const existing = visits.get(key);
+    if (existing === undefined) {
+      visits.set(key, [...eventRows]);
+    } else {
+      existing.push(...eventRows);
+    }
+  }
+
+  return visits;
+}
+
+/**
+ * Groups drives by their company visit.
+ *
+ * A drive that names its company and date joins its siblings even when the
+ * event ids differ; a legacy drive that cannot say both becomes its own visit.
  */
 export function groupDrivesByEvent<
-  T extends { readonly driveId: string; readonly companyDriveId?: string | null },
+  T extends {
+    readonly driveId: string;
+    readonly companyDriveId?: string | null | undefined;
+    readonly companyName?: string | null | undefined;
+    readonly tentativeDate?: string | null | undefined;
+  },
 >(drives: readonly T[]): Map<string, T[]> {
-  return groupByVisitKey(drives, (drive) => visitKey(drive.companyDriveId, drive.driveId));
+  return groupRowsByVisit(drives, (drive) => ({
+    companyDriveId: drive.companyDriveId,
+    ownId: drive.driveId,
+    companyName: drive.companyName,
+    tentativeDate: drive.tentativeDate,
+  }));
+}
+
+/** Groups rows that each name the company and day they belong to. */
+export function groupByCompanyVisit<T>(
+  rows: readonly T[],
+  identityOf: (row: T) => VisitIdentity,
+): Map<string, T[]> {
+  return groupRowsByVisit(rows, identityOf);
 }

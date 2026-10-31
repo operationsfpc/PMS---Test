@@ -25,6 +25,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "./sheet";
+import { TablePager } from "./table-pager";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { Button, StatCard } from "./ui";
 
@@ -132,19 +133,44 @@ describe("DataTable controls", () => {
     expect(sort.closest("th")?.getAttribute("aria-sort")).toBe("descending");
   });
 
-  it("opens the column picker on request and shuts it on Escape", async () => {
+  /**
+   * 2026-10-31: a row painted in the 24px strip the sticky pager left uncovered
+   * ("Sneha Pillai" sat beside "Page 1 of 9"). The band must own the scroll
+   * container's bottom padding the same way SheetFooter does.
+   */
+  it("keeps the sticky pager over the scroll container's bottom padding", () => {
+    render(
+      <ShadcnDataTable data={[{ id: "1", name: "Asha" }]} columns={PEOPLE} stickyPagination />,
+    );
+
+    const pager = screen.getByRole("button", { name: /previous/i }).closest(".sticky");
+    expect(pager).not.toBeNull();
+    expect(pager?.className).toContain("-mb-6");
+    expect(pager?.className).toContain("pb-6");
+  });
+});
+
+describe("TablePager", () => {
+  it("says the range and the page, and pages forward", async () => {
     const user = userEvent.setup();
-    render(<ShadcnDataTable data={[{ id: "1", name: "Asha" }]} columns={PEOPLE} />);
+    const onPage = vi.fn();
+    render(<TablePager page={0} pageSize={25} total={51} onPage={onPage} unit="students" />);
 
-    const toggle = screen.getByRole("button", { name: /columns/i });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText(/showing 1 to 25 of 51 students/i)).toBeDefined();
+    expect(screen.getByText("Page 1 of 3")).toBeDefined();
+    expect((screen.getByRole("button", { name: "Previous" }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
 
-    await user.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getByText("Toggle Columns")).toBeDefined();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(onPage).toHaveBeenCalledWith(1);
+  });
 
-    await user.keyboard("{Escape}");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  it("clamps a page the list has shrunk past", () => {
+    render(<TablePager page={8} pageSize={25} total={30} onPage={() => {}} />);
+
+    expect(screen.getByText("Page 2 of 2")).toBeDefined();
+    expect(screen.getByText(/showing 26 to 30 of 30 records/i)).toBeDefined();
   });
 });
 

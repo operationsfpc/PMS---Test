@@ -211,10 +211,11 @@ export function StatDrilldown({
       cols.push({
         id: "status",
         header: "Status",
-        cell: (person) =>
-          isEmpty(person.status) ? "—" : (
-            <Badge tone={statusTone(person.status!)}>{person.status}</Badge>
-          ),
+        cell: (person) => {
+          const status = person.status;
+          if (typeof status !== "string" || status === "") return "—";
+          return <Badge tone={statusTone(status)}>{status}</Badge>;
+        },
       });
     }
     return cols;
@@ -236,36 +237,26 @@ export function StatDrilldown({
     );
 
   /**
-   * The popup's second affordance, so it names its own object: the row names
-   * are the way to a student, this is the way to the whole list with more room
-   * around it.
-   *
-   * It sits in the flow under the list rather than in a sticky `SheetFooter`
-   * (2026-10-29): that pinned band floated over the table's own pagination on
-   * any roster long enough to scroll, so the paging controls sat underneath a
-   * second footer and could not be clicked.
-   */
-  const moreRoom =
-    href === undefined ? null : (
-      <div className="mt-1 flex justify-end">
-        <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
-          {linkLabel ?? "Open this list in All students"}
-        </ButtonLink>
-      </div>
-    );
-
-  /**
    * The heading, with the filter strip inside it when the count spans more than
    * one group. The filters ride in the sticky header because they are how the
    * reader narrows the list, and a control that scrolls out of view above a long
    * roster is a control that says "scroll back to the top to do your job".
+   *
+   * The "open this list" link rides here too (2026-10-31): under the table it
+   * sat in the strip the sticky pager now owns, so it was covered on exactly
+   * the long rosters where it was needed.
    */
   const header = (filters: ReactNode) => (
     <SheetHeader>
-      <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
           {eyebrow}
         </span>
+        {href !== undefined && (
+          <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
+            {linkLabel ?? "Open this list in All students"}
+          </ButtonLink>
+        )}
       </div>
       <SheetTitle>{title}</SheetTitle>
       {/*
@@ -311,14 +302,12 @@ export function StatDrilldown({
           <>
             {header(null)}
             {list}
-            {moreRoom}
           </>
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
             {header(filterStrip)}
             <TabsContent value={tab} className="mt-3">
               {list}
-              {moreRoom}
             </TabsContent>
           </Tabs>
         )}

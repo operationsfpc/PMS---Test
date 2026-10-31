@@ -46,6 +46,8 @@ export interface AeOverviewDrive {
   readonly driveId: string;
   /** The company visit this role was raised under; null for a legacy drive. */
   readonly companyDriveId: string | null;
+  /** The visit's day, so same-company visits on different days stay apart. */
+  readonly tentativeDate?: string | null;
   readonly companyName: string;
   readonly roleTitle: string | null;
   readonly status: DriveStatus;

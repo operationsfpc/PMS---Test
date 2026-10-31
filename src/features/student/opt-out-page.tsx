@@ -1,6 +1,8 @@
 import { QuotedText } from "@components/quoted-text";
+import { StatusHistory } from "@components/status-history";
 import { Button, Card, PageHeader } from "@components/ui";
 import { canRequestOptOut, MAX_OPT_OUT_REASON, optOutReasonProblem } from "@domain/participation";
+import type { StatusEvent } from "@domain/status-changes";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
@@ -54,11 +56,42 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
     void refresh();
   }, [refresh, attempt]);
 
+  /*
+   * 0133: the standing can now move without the student touching anything, so
+   * the card that tells them "only your placement office can put you back, and
+   * only by recording who and why" has to show them what that office wrote.
+   * Read once on arrival — nothing this page does changes a status.
+   */
+  const [history, setHistory] = useState<readonly StatusEvent[]>([]);
+  const [historyProblem, setHistoryProblem] = useState<string | null>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt retries every read this page makes
+  useEffect(() => {
+    let live = true;
+    view.statusHistory().then(
+      (events) => {
+        if (live) {
+          setHistory(events);
+          setHistoryProblem(null);
+        }
+      },
+      (cause: unknown) => {
+        if (live)
+          setHistoryProblem(
+            describeReadFailure(cause, "We could not read your status history. Please try again."),
+          );
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [view, attempt]);
+
   // Validation throws instead of calling setError: the hook turns a rejection
   // into the sentence the student reads, so a missing reason and a refused
   // request share one alert rather than two states that can contradict each
-  // other. And the request is irreversible, which is exactly why a second
-  // click must not be able to raise a second one.
+  // other. And the student has no way back from this, which is exactly why a
+  // second click must not be able to raise a second one.
   async function optOut() {
     // The domain owns the words, so the screen, the view and the count under
     // the box all refuse an over-long or blank reason identically.
@@ -149,8 +182,9 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
 
       <Card className="p-5 sm:p-6">
         <p className="text-sm text-ink-700">
-          Opting out removes you from all future drives. It <strong>cannot be reversed</strong>.
-          Drives you are already part of will continue.
+          Opting out removes you from all future drives. You{" "}
+          <strong>cannot undo it yourself</strong> — only your placement office can put you back,
+          and only by recording who and why. Drives you are already part of will continue.
         </p>
 
         {status === null ? (
@@ -202,7 +236,7 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
               <p className="mb-2 text-xs text-ink-500">
                 A <strong>handwritten and signed</strong> letter confirming that you are opting out.
                 A clear photograph is fine. Your Campus Placement Coordinator has to approve it, and
-                opting out cannot be reversed afterwards.
+                you cannot undo the decision afterwards.
               </p>
               <input
                 id="optout-declaration"
@@ -224,6 +258,13 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
           </div>
         )}
       </Card>
+
+      <StatusHistory
+        events={history}
+        problem={historyProblem}
+        subtitle="Every move the placement office made on your standing, with the reason they gave"
+        className="mt-6"
+      />
     </div>
   );
 }

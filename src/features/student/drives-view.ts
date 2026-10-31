@@ -634,6 +634,7 @@ export function createSupabaseDrivesView(
             roleCategory: drive.roleCategory,
             driveType: drive.driveType,
             companyDriveId: (raw.company_drive_id as string | null) ?? null,
+            tentativeDate: (raw.tentative_date as string | null) ?? null,
             locations: text(raw.work_locations),
             appliedAt: application.applied_at,
             progressLabel: progress.label,

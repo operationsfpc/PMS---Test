@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
+import type { StatusEvent } from "@domain/status-changes";
+import type { AppRole } from "@domain/types";
 import type { Hold, HoldsView } from "@lib/holds-view";
+import type { StatusChangesView } from "@lib/status-changes-view";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import {
   type StudentRecord,
+  type StudentRecordApplication,
   StudentRecordPage,
   type StudentRecordView,
 } from "./student-record-page";
@@ -93,10 +97,16 @@ const view = (record: StudentRecord | null = PRIYA): StudentRecordView => ({
   record: async () => record,
 });
 
+/** As expressions: biome reads a literal role="…" prop as an ARIA role. */
+const COORDINATOR = "campus_placement_coordinator" as const;
+const MANAGER = "campus_manager" as const;
+const DELIVERY_HEAD = "delivery_head" as const;
+const ACCOUNT_EXECUTIVE = "account_executive" as const;
+
 const show = (v: StudentRecordView = view()) =>
   render(
     <MemoryRouter>
-      <StudentRecordPage studentId="s1" view={v} />
+      <StudentRecordPage studentId="s1" view={v} role={COORDINATOR} />
     </MemoryRouter>,
   );
 
@@ -111,7 +121,10 @@ describe("StudentRecordPage", () => {
   });
 
   it("shows the school marks and each semester with its verification state", async () => {
+    const user = userEvent.setup();
     show();
+
+    await user.click(await screen.findByRole("tab", { name: /academics/i }));
 
     const academics = await screen.findByRole("region", { name: /academics/i });
     expect(within(academics).getByText(/92\.4/)).toBeDefined();
@@ -123,7 +136,10 @@ describe("StudentRecordPage", () => {
   });
 
   it("shows the skill scores out of 5, and the role preferences", async () => {
+    const user = userEvent.setup();
     show();
+
+    await user.click(await screen.findByRole("tab", { name: /preferences/i }));
 
     const skills = await screen.findByRole("region", { name: /skills/i });
     expect(within(skills).getByText(/java 4\/5/i)).toBeDefined();
@@ -132,37 +148,44 @@ describe("StudentRecordPage", () => {
   });
 
   it("is honest when no skill scores are recorded", async () => {
+    const user = userEvent.setup();
     show(view({ ...PRIYA, skills: [] }));
+
+    await user.click(await screen.findByRole("tab", { name: /preferences/i }));
 
     const skills = await screen.findByRole("region", { name: /skills/i });
     expect(within(skills).getByText(/no skill scores recorded/i)).toBeDefined();
   });
 
-  it("filters the record through the section tabs, wiring each tab to the panel", async () => {
+  it("opens on Overview and filters the record through the section tabs", async () => {
     const user = userEvent.setup();
     show();
 
-    const allTab = await screen.findByRole("tab", { name: /all sections/i });
-    expect(allTab.getAttribute("aria-selected")).toBe("true");
-    expect(allTab.getAttribute("aria-controls")).toBe("student-record-panels");
+    const overviewTab = await screen.findByRole("tab", { name: /overview/i });
+    expect(overviewTab.getAttribute("aria-selected")).toBe("true");
+    expect(overviewTab.getAttribute("aria-controls")).toBe("student-record-panels");
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
-      "student-record-tab-all",
+      "student-record-tab-overview",
     );
+    expect(screen.getByRole("region", { name: /identity/i })).toBeDefined();
 
-    await user.click(screen.getByRole("tab", { name: /portfolio & projects/i }));
+    await user.click(screen.getByRole("tab", { name: /portfolio/i }));
 
     expect(screen.queryByRole("region", { name: /academics/i })).toBeNull();
     expect(screen.getByRole("region", { name: /portfolio/i })).toBeDefined();
-    expect(
-      screen.getByRole("tab", { name: /portfolio & projects/i }).getAttribute("aria-selected"),
-    ).toBe("true");
+    expect(screen.getByRole("tab", { name: /portfolio/i }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
     expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(
       "student-record-tab-portfolio",
     );
   });
 
   it("lists every application, each opening its drive", async () => {
+    const user = userEvent.setup();
     show();
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
 
     const applications = await screen.findByRole("region", { name: /applications/i });
     const link = within(applications).getByRole("link", { name: /zoho/i });
@@ -171,13 +194,54 @@ describe("StudentRecordPage", () => {
   });
 
   it("says plainly when the student has not applied anywhere", async () => {
+    const user = userEvent.setup();
     show(view({ ...PRIYA, applications: [] }));
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
 
     const applications = await screen.findByRole("region", { name: /applications/i });
     expect(within(applications).getByText(/no applications yet/i)).toBeDefined();
   });
 
+  it("keeps two roles of one company visit in one block", async () => {
+    const user = userEvent.setup();
+    const role = (
+      applicationId: string,
+      driveId: string,
+      roleTitle: string,
+    ): StudentRecordApplication => ({
+      applicationId,
+      driveId,
+      companyName: "Zoho",
+      roleTitle,
+      companyDriveId: "e1",
+      tentativeDate: "2026-09-01",
+      appliedAt: "2026-08-10T10:00:00Z",
+      shortlisted: false,
+      hasOffer: false,
+    });
+    show(
+      view({
+        ...PRIYA,
+        applications: [role("a1", "d1", "MTS"), role("a2", "d2", "QA")],
+      }),
+    );
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
+
+    const applications = await screen.findByRole("region", { name: /applications/i });
+    expect(within(applications).getAllByText("Zoho")).toHaveLength(1);
+    expect(within(applications).getByText("2 roles")).toBeDefined();
+    expect(within(applications).getByRole("link", { name: "MTS" }).getAttribute("href")).toBe(
+      "/drives/d1",
+    );
+    expect(within(applications).getByRole("link", { name: "QA" }).getAttribute("href")).toBe(
+      "/drives/d2",
+    );
+  });
+
   it("shows the placement when there is one — with its source", async () => {
+    const user = userEvent.setup();
     show(
       view({
         ...PRIYA,
@@ -191,13 +255,18 @@ describe("StudentRecordPage", () => {
       }),
     );
 
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
+
     const placement = await screen.findByRole("region", { name: /placement/i });
     expect(within(placement).getByText(/freshworks/i)).toBeDefined();
     expect(within(placement).getByText(/self-placed/i)).toBeDefined();
   });
 
   it("says Not placed as a fact, not a blank", async () => {
+    const user = userEvent.setup();
     show();
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
 
     const placement = await screen.findByRole("region", { name: /placement/i });
     expect(within(placement).getByText(/not placed/i)).toBeDefined();
@@ -238,7 +307,7 @@ describe("StudentRecordPage", () => {
   it("hands the reader back to the list they came from", async () => {
     render(
       <MemoryRouter initialEntries={["/central/students", "/students/s1"]} initialIndex={1}>
-        <StudentRecordPage studentId="s1" view={view()} />
+        <StudentRecordPage studentId="s1" view={view()} role={COORDINATOR} />
       </MemoryRouter>,
     );
     await screen.findByRole("heading", { name: /priya ramesh/i });
@@ -333,6 +402,7 @@ const showHold = (
       <StudentRecordPage
         studentId="s1"
         view={view(record)}
+        role={MANAGER}
         holds={holds}
         {...(release === undefined ? {} : { release })}
       />
@@ -415,6 +485,7 @@ describe("StudentRecordPage hold", () => {
       <MemoryRouter>
         <StudentRecordPage
           studentId="s1"
+          role={MANAGER}
           view={{
             record: async () => {
               recordReads += 1;
@@ -502,6 +573,7 @@ describe("StudentRecordPage hold", () => {
       <MemoryRouter>
         <StudentRecordPage
           studentId="s1"
+          role={MANAGER}
           view={{
             record: async () => {
               recordReads += 1;
@@ -733,16 +805,22 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
   describe("Enriched student profile & staff management", () => {
     it("displays CGPA, arrears, school institutions and boards", async () => {
+      const user = userEvent.setup();
       show();
 
       expect(await screen.findByText("8.4 CGPA")).toBeDefined();
+
+      await user.click(screen.getByRole("tab", { name: /academics/i }));
       expect(screen.getByText(/St\. Joseph's Convent/)).toBeDefined();
       expect(screen.getByText(/Kendriya Vidyalaya/)).toBeDefined();
+
+      await user.click(screen.getByRole("tab", { name: /portfolio/i }));
       expect(screen.getByText("AWS Certified Cloud Practitioner")).toBeDefined();
       expect(screen.getByText(/Hospital Management System/)).toBeDefined();
     });
 
     it("displays multiple offers and internships with stipends and letter downloads", async () => {
+      const user = userEvent.setup();
       const studentWithOffers: StudentRecord = {
         ...PRIYA,
         offers: [
@@ -779,6 +857,8 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
       show(view(studentWithOffers));
 
+      await user.click(await screen.findByRole("tab", { name: /placements/i }));
+
       const placementRegion = await screen.findByRole("region", { name: /placement/i });
       expect(within(placementRegion).getByText("Zoho")).toBeDefined();
       expect(within(placementRegion).getByText("₹8.5 LPA")).toBeDefined();
@@ -798,11 +878,17 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
       render(
         <MemoryRouter>
-          <StudentRecordPage studentId="s1" view={v} canManagePreferences={true} />
+          <StudentRecordPage
+            studentId="s1"
+            view={v}
+            role={COORDINATOR}
+            canManagePreferences={true}
+          />
         </MemoryRouter>,
       );
 
       // Verify resume
+      await user.click(await screen.findByRole("tab", { name: /preferences/i }));
       const resumesRegion = await screen.findByRole("region", { name: /resumes/i });
       expect(within(resumesRegion).getByText("priya_swe_resume.pdf")).toBeDefined();
       const pdfLink = within(resumesRegion).getByRole("link", { name: /view pdf/i });
@@ -823,5 +909,244 @@ describe("StudentRecordPage — a student's self-placed request", () => {
         ["placement", "internship"],
       );
     });
+  });
+});
+
+/**
+ * 0133 and 0134 on the record: the two moves a person can make on this
+ * student's standing, and the ledger that says who made them and why.
+ *
+ * The point these tests exist for is that the screen refuses the same people
+ * the database does. A button that always fails is worse than no button — the
+ * manager types a reason, presses it, and learns the rule only from the error.
+ */
+const CHANGE_EVENT: StatusEvent = {
+  id: "change-c1",
+  title: "Status changed",
+  detail: "Opted out → In the pipeline",
+  byName: "Karthik Subramanian",
+  at: "2026-10-20T09:00:00Z",
+  reason: "Opted out at counselling by mistake — confirmed with the student on 3 Nov.",
+  tone: "neutral",
+};
+
+const WITHDRAWAL_EVENT: StatusEvent = {
+  id: "withdrawal-w1",
+  title: "Offer withdrawn",
+  detail: "TCS · Software Engineer · ₹9 LPA · on campus",
+  byName: "Meena Krishnan",
+  at: "2026-10-25T09:00:00Z",
+  reason: "Company retracted the joining — confirmed in writing.",
+  tone: "warning",
+};
+
+const ledger = (overrides: Partial<StatusChangesView> = {}): StatusChangesView => ({
+  historyFor: async () => [],
+  restore: async () => {},
+  withdraw: async () => {},
+  ...overrides,
+});
+
+const showStatus = (record: StudentRecord, role: AppRole, changes: StatusChangesView = ledger()) =>
+  render(
+    <MemoryRouter>
+      <StudentRecordPage studentId="s1" view={view(record)} role={role} statusChanges={changes} />
+    </MemoryRouter>,
+  );
+
+const OPTED_OUT: StudentRecord = { ...PRIYA, participationStatus: "opted_out" };
+const PLACED: StudentRecord = {
+  ...PRIYA,
+  participationStatus: "opted_out",
+  offers: [
+    {
+      id: "o1",
+      driveId: "d1",
+      companyName: "Zoho",
+      roleTitle: "MTS",
+      driveType: "placement",
+      offerCategory: "dream",
+      ctcLpa: 8.5,
+      stipendMonthly: null,
+      declaredAt: "2026-09-01T10:00:00Z",
+      source: "on_campus",
+      letterUrl: "https://storage.test/zoho-offer.pdf",
+      letterFileName: "zoho-offer.pdf",
+    },
+  ],
+};
+
+describe("StudentRecordPage status change", () => {
+  it("offers the move to a coordinator while the student is opted out", async () => {
+    showStatus(OPTED_OUT, COORDINATOR);
+
+    expect(await screen.findByRole("button", { name: /change status/i })).toBeDefined();
+  });
+
+  /** A role that only reads still needs to know whose desk the request is on. */
+  it("names the roles that may return the student when this one cannot", async () => {
+    showStatus(OPTED_OUT, DELIVERY_HEAD);
+
+    expect(screen.queryByRole("button", { name: /change status/i })).toBeNull();
+    expect(await screen.findByText(/only a campus placement coordinator/i)).toBeDefined();
+  });
+
+  /** A held student has a way back, and it is not this button. */
+  it("points a held student at the hold instead of the status change", async () => {
+    showStatus({ ...PRIYA, participationStatus: "on_hold" }, MANAGER);
+
+    expect(screen.queryByRole("button", { name: /change status/i })).toBeNull();
+    expect(await screen.findByText(/hold is released by their campus manager/i)).toBeDefined();
+  });
+
+  it("says nothing to a disbarred student's reader that a status change will help", async () => {
+    showStatus({ ...PRIYA, participationStatus: "disbarred" }, MANAGER);
+
+    expect(screen.queryByRole("button", { name: /change status/i })).toBeNull();
+    expect(await screen.findByText(/disbarment is central/i)).toBeDefined();
+  });
+
+  /** Already in the pipeline is the normal case, not a fact worth a sentence. */
+  it("offers nothing for a student already in the pipeline", async () => {
+    showStatus(PRIYA, MANAGER);
+
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+    expect(screen.queryByRole("button", { name: /change status/i })).toBeNull();
+    expect(screen.queryByText(/already in the pipeline/i)).toBeNull();
+  });
+
+  it("refuses an empty reason before it sends anything", async () => {
+    const user = userEvent.setup();
+    const restore = vi.fn(async () => {});
+    showStatus(OPTED_OUT, COORDINATOR, ledger({ restore }));
+
+    await user.click(await screen.findByRole("button", { name: /change status/i }));
+    const dialog = await screen.findByRole("dialog", { name: /return priya ramesh/i });
+    await user.click(within(dialog).getByRole("button", { name: /return to the pipeline/i }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toMatch(/say why the student is coming back/i);
+    expect(restore).not.toHaveBeenCalled();
+  });
+
+  it("sends the reason with the student's id and closes once it goes through", async () => {
+    const user = userEvent.setup();
+    const restore = vi.fn(async (_studentId: string, _reason: string) => {});
+    showStatus(OPTED_OUT, COORDINATOR, ledger({ restore }));
+
+    await user.click(await screen.findByRole("button", { name: /change status/i }));
+    const dialog = await screen.findByRole("dialog", { name: /return priya ramesh/i });
+    const reason = "Counselling mistake — confirmed with the student on 3 Nov.";
+    await user.type(within(dialog).getByLabelText(/why are they coming back/i), reason);
+    await user.click(within(dialog).getByRole("button", { name: /return to the pipeline/i }));
+
+    await waitFor(() => expect(restore).toHaveBeenCalledWith("s1", reason));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  /** The view throws its own sentence; the block is where the reader finds it. */
+  it("says the student's standing aloud with who moved it and why", async () => {
+    showStatus(
+      PLACED,
+      MANAGER,
+      ledger({ historyFor: async () => [WITHDRAWAL_EVENT, CHANGE_EVENT] }),
+    );
+
+    const region = await screen.findByRole("region", { name: /status history/i });
+    expect(within(region).getAllByRole("heading", { level: 3 })[0]?.textContent).toBe(
+      "Offer withdrawn",
+    );
+    expect(within(region).getByText(/₹9 lpa · on campus/i)).toBeDefined();
+    expect(within(region).getByText(/opted out → in the pipeline/i)).toBeDefined();
+    expect(within(region).getByText(/by meena krishnan · 25 oct 2026/i)).toBeDefined();
+    expect(within(region).getByText(/by karthik subramanian · 20 oct 2026/i)).toBeDefined();
+    expect(within(region).getByText(/2 records/i)).toBeDefined();
+    expect(within(region).getByText(/counselling by mistake/i)).toBeDefined();
+  });
+
+  it("says when the ledger cannot be read instead of showing nothing", async () => {
+    showStatus(
+      OPTED_OUT,
+      COORDINATOR,
+      ledger({
+        historyFor: async () => {
+          throw new Error("Could not read this student's status history. (permission denied)");
+        },
+      }),
+    );
+
+    const region = await screen.findByRole("region", { name: /status history/i });
+    const alert = within(region).getByRole("alert");
+    expect(alert.textContent).toMatch(/permission denied/i);
+  });
+
+  /**
+   * Which roles may read the ledger is the route's question — it hands the
+   * view only to those canReadStatusHistory admits, and
+   * domain/status-changes.test.ts proves account_executive is not one of them.
+   * This is the page's half: handed nothing, it draws no history and offers no
+   * move, the same silence the hold block keeps.
+   */
+  it("draws no history and offers no move when the ledger was never handed over", async () => {
+    render(
+      <MemoryRouter>
+        <StudentRecordPage studentId="s1" view={view(OPTED_OUT)} role={ACCOUNT_EXECUTIVE} />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+    expect(screen.queryByRole("region", { name: /status history/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /change status/i })).toBeNull();
+  });
+});
+
+describe("StudentRecordPage offer withdrawal", () => {
+  it("offers the move on each offer row for a role 0134 admits", async () => {
+    const user = userEvent.setup();
+    showStatus(PLACED, MANAGER);
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
+
+    expect(await screen.findByRole("button", { name: /withdraw the zoho offer/i })).toBeDefined();
+  });
+
+  it("keeps it from a role that may not delete an offer", async () => {
+    const user = userEvent.setup();
+    showStatus(PLACED, DELIVERY_HEAD);
+
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+    await user.click(screen.getByRole("tab", { name: /placements/i }));
+    expect(screen.queryByRole("button", { name: /withdraw the zoho offer/i })).toBeNull();
+  });
+
+  it("asks for the reason before it takes an offer back", async () => {
+    const user = userEvent.setup();
+    const withdraw = vi.fn(async (_offerId: string, _reason: string) => {});
+    showStatus(PLACED, COORDINATOR, ledger({ withdraw }));
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
+    await user.click(await screen.findByRole("button", { name: /withdraw the zoho offer/i }));
+    const dialog = await screen.findByRole("dialog", { name: /withdraw the zoho offer/i });
+    await user.click(within(dialog).getByRole("button", { name: /withdraw offer$/i }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toMatch(/say why the offer is being withdrawn/i);
+    expect(withdraw).not.toHaveBeenCalled();
+  });
+
+  it("sends the offer id with the reason and closes once it goes through", async () => {
+    const user = userEvent.setup();
+    const withdraw = vi.fn(async (_offerId: string, _reason: string) => {});
+    showStatus(PLACED, COORDINATOR, ledger({ withdraw }));
+
+    await user.click(await screen.findByRole("tab", { name: /placements/i }));
+    await user.click(await screen.findByRole("button", { name: /withdraw the zoho offer/i }));
+    const dialog = await screen.findByRole("dialog", { name: /withdraw the zoho offer/i });
+    const reason = "Company retracted the joining — confirmed in writing.";
+    await user.type(within(dialog).getByLabelText(/why is the offer being withdrawn/i), reason);
+    await user.click(within(dialog).getByRole("button", { name: /withdraw offer$/i }));
+
+    await waitFor(() => expect(withdraw).toHaveBeenCalledWith("o1", reason));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

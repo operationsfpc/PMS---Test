@@ -9,9 +9,11 @@ export interface OptOutContext {
   readonly hasPendingRequest: boolean;
   /**
    * A handwritten, signed declaration confirming the decision (UAT
-   * 2026-08-05). Required because approval is irreversible: once granted,
-   * 0009 refuses to move the student back, so "I never asked to opt out" has
-   * to be answerable with a document.
+   * 2026-08-05). Required because the student cannot take the decision back:
+   * once granted, 0009's guard refuses every path a client can take, so "I
+   * never asked to opt out" has to be answerable with a document. A staff
+   * member can still undo it — 0133's `restore_participation` — but only by
+   * name, and with a reason the student is shown.
    */
   readonly hasDeclaration: boolean;
 }
@@ -44,11 +46,17 @@ export function optOutReasonProblem(reason: string): string | null {
  *
  * Student-initiated ONLY. Nothing about a student's marks, arrears or absences
  * may ever trigger this - it is a choice, and the system must not make it for
- * them. Approval is the coordinator's, and it is irreversible once given.
+ * them. Approval is the coordinator's, and the student has no way back from it:
+ * only a staff member's `restore_participation` (0133) moves them, and it
+ * records who and why.
  */
 export function canRequestOptOut(context: OptOutContext): Decision {
   if (context.participationStatus === "opted_out") {
-    return { allowed: false, reason: "You have already opted out. This cannot be reversed." };
+    return {
+      allowed: false,
+      reason:
+        "You have already opted out. Only your placement office can return you to the pipeline.",
+    };
   }
   if (context.participationStatus === "disbarred") {
     return {
@@ -57,9 +65,9 @@ export function canRequestOptOut(context: OptOutContext): Decision {
     };
   }
   /**
-   * Releasing a hold writes `active` back, while opting out is irreversible
-   * (0009) — so a held student could end their placements to escape the hold,
-   * leaving the college no release to grant.
+   * Releasing a hold writes `active` back, while a student has no way back from
+   * an opt-out (0009) — so a held student could end their placements to escape
+   * the hold, leaving the college no release to grant.
    */
   if (context.participationStatus === "on_hold") {
     return {

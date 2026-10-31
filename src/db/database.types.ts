@@ -325,6 +325,24 @@ export interface NotificationsRow {
 
 export type NotificationsInsert = Pick<NotificationsRow, "kind" | "title" | "body"> & Partial<Pick<NotificationsRow, "id" | "student_id" | "read_at" | "created_at" | "drive_id">>;
 
+export interface OfferWithdrawalsRow {
+  id: string;
+  offer_id: string;
+  student_id: string;
+  drive_id: string | null;
+  source: Enums["offer_source"];
+  company_name: string;
+  role_title: string | null;
+  ctc_lpa: number;
+  reason: string;
+  withdrawn_by: string;
+  withdrawn_at: string;
+  offer: Json;
+  record_override: Json | null;
+}
+
+export type OfferWithdrawalsInsert = Pick<OfferWithdrawalsRow, "offer_id" | "student_id" | "source" | "company_name" | "ctc_lpa" | "reason" | "withdrawn_by" | "offer"> & Partial<Pick<OfferWithdrawalsRow, "id" | "drive_id" | "role_title" | "withdrawn_at" | "record_override">>;
+
 export interface OffersRow {
   id: string;
   student_id: string;
@@ -357,9 +375,23 @@ export interface OptOutRequestsRow {
   created_at: string;
   declaration_id: string | null;
   decision_reason: string | null;
+  reversed_by: string | null;
+  reversed_at: string | null;
 }
 
-export type OptOutRequestsInsert = Pick<OptOutRequestsRow, "student_id" | "reason"> & Partial<Pick<OptOutRequestsRow, "id" | "status" | "decided_by" | "decided_at" | "created_at" | "declaration_id" | "decision_reason">>;
+export type OptOutRequestsInsert = Pick<OptOutRequestsRow, "student_id" | "reason"> & Partial<Pick<OptOutRequestsRow, "id" | "status" | "decided_by" | "decided_at" | "created_at" | "declaration_id" | "decision_reason" | "reversed_by" | "reversed_at">>;
+
+export interface ParticipationStatusChangesRow {
+  id: string;
+  student_id: string;
+  from_status: Enums["participation_status"];
+  to_status: Enums["participation_status"];
+  reason: string;
+  changed_by: string;
+  changed_at: string;
+}
+
+export type ParticipationStatusChangesInsert = Pick<ParticipationStatusChangesRow, "student_id" | "from_status" | "to_status" | "reason" | "changed_by"> & Partial<Pick<ParticipationStatusChangesRow, "id" | "changed_at">>;
 
 export interface PlacementRecordOverridesRow {
   student_id: string;
@@ -523,17 +555,17 @@ export interface StudentHoldsRow {
   starts_at: string;
   ends_at: string;
   document_id: string | null;
-  declaration_id: string | null;
   held_by: string | null;
   held_at: string;
-  confirmed_by: string | null;
-  confirmed_at: string | null;
   released_by: string | null;
   released_at: string | null;
   release_note: string | null;
+  declaration_id: string | null;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
 }
 
-export type StudentHoldsInsert = Pick<StudentHoldsRow, "student_id" | "kind" | "reason" | "ends_at"> & Partial<Pick<StudentHoldsRow, "id" | "starts_at" | "document_id" | "declaration_id" | "held_by" | "held_at" | "confirmed_by" | "confirmed_at" | "released_by" | "released_at" | "release_note">>;
+export type StudentHoldsInsert = Pick<StudentHoldsRow, "student_id" | "kind" | "reason" | "ends_at"> & Partial<Pick<StudentHoldsRow, "id" | "starts_at" | "document_id" | "held_by" | "held_at" | "released_by" | "released_at" | "release_note" | "declaration_id" | "confirmed_at" | "confirmed_by">>;
 
 export interface StudentRolePreferencesRow {
   student_id: string;

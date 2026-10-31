@@ -13,6 +13,7 @@ import {
   PageHeader,
   StatCard,
 } from "@components/ui";
+import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { groupDrivesByEvent } from "@domain/company-drive";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
@@ -1259,7 +1260,8 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {paginatedVisits.map(([eventId, roles]) => {
+                  {paginatedVisits.map(([eventId, roles], index) => {
+                    const accent = visitAccent((drivePage - 1) * DRIVES_PAGE_SIZE + index);
                     const block = (drive: DriveWithFunnel, nested: boolean) => {
                       const driveStudents = (drive.students ?? []).filter(
                         (s) => campusId === "" || s.campusId === campusId,
@@ -1273,7 +1275,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                           className={
                             nested
                               ? ""
-                              : "rounded-xl border border-line bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm"
+                              : `rounded-xl border border-line border-l-4 bg-surface p-4.5 shadow-xs transition-shadow hover:shadow-sm ${accent.rail}`
                           }
                         >
                           <header className="flex flex-wrap items-start justify-between gap-3 pb-3 border-b border-line/60">
@@ -1446,7 +1448,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                     return (
                       <div
                         key={eventId}
-                        className="rounded-xl border border-line bg-surface p-4.5 shadow-xs"
+                        className={`rounded-xl border border-line border-l-4 bg-surface p-4.5 shadow-xs ${accent.rail}`}
                       >
                         <p className="flex flex-wrap items-center gap-2 font-semibold text-ink-900">
                           {head.companyName}

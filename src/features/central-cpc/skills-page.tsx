@@ -1,3 +1,4 @@
+import { TablePager } from "@components/table-pager";
 import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
 import { parseCsv } from "@domain/csv";
 import {
@@ -100,6 +101,8 @@ export function SkillsPage({
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulkArea, setBulkArea] = useState("");
   const [bulkScore, setBulkScore] = useState("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const [sheet, setSheet] = useState<{
     readonly changes: readonly ScoreChange[];
@@ -129,6 +132,14 @@ export function SkillsPage({
         s.studentName.toLowerCase().includes(needle) || s.rollNumber.toLowerCase().includes(needle),
     );
   }, [students, search]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting the page is the point
+  useEffect(() => {
+    setPage(0);
+  }, [search, pageSize]);
+
+  const safePage = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1));
+  const pagedStudents = visible.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   if (areas === null || students === null) {
     return (
@@ -512,7 +523,7 @@ export function SkillsPage({
               </tr>
             </thead>
             <tbody>
-              {visible.map((student) => {
+              {pagedStudents.map((student) => {
                 const isEditing = editing === student.studentId;
                 return (
                   <tr key={student.studentId} className="border-b border-line last:border-b-0">
@@ -587,6 +598,14 @@ export function SkillsPage({
           </table>
         )}
       </Card>
+      <TablePager
+        page={page}
+        pageSize={pageSize}
+        total={visible.length}
+        unit="students"
+        onPage={setPage}
+        onPageSize={setPageSize}
+      />
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { ErrorPanel } from "@components/error-panel";
+import { TablePager } from "@components/table-pager";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { campusScopeFor, requiresCampusAssignment, validateCampusSelection } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
@@ -51,6 +52,8 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const refresh = useCallback(async () => {
     try {
@@ -200,6 +203,15 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       return true;
     });
   }, [staff, search, roleFilter, statusFilter]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting the page is the point
+  useEffect(() => {
+    setPage(0);
+  }, [search, roleFilter, statusFilter, pageSize]);
+
+  const staffRows = filteredStaff ?? [];
+  const safePage = Math.min(page, Math.max(0, Math.ceil(staffRows.length / pageSize) - 1));
+  const pagedStaff = staffRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   return (
     <div>
@@ -496,7 +508,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                     </td>
                   </tr>
                 ) : (
-                  filteredStaff?.map((member) => {
+                  pagedStaff.map((member) => {
                     const initials = getInitials(member.fullName);
                     return (
                       <tr key={member.email} className="transition-colors hover:bg-surface-muted">
@@ -521,7 +533,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                         </td>
 
                         {/* Role */}
-                        <td className="px-4 py-3.5 align-middle whitespace-nowrap min-w-[170px]">
+                        <td className="px-4 py-3.5 align-middle min-w-[170px]">
                           <span className="inline-flex items-center rounded-md bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800 border border-brand-200/70 capitalize shadow-2xs">
                             {label(member.role)}
                           </span>
@@ -596,7 +608,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                         </td>
 
                         {/* Status Badges */}
-                        <td className="px-4 py-3.5 align-middle whitespace-nowrap min-w-[130px]">
+                        <td className="px-4 py-3.5 align-middle min-w-[130px]">
                           <div className="flex flex-col gap-1 items-start">
                             {member.isActive ? (
                               <Badge tone="success">
@@ -694,6 +706,16 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="border-t border-line px-4">
+            <TablePager
+              page={page}
+              pageSize={pageSize}
+              total={staffRows.length}
+              unit="staff"
+              onPage={setPage}
+              onPageSize={setPageSize}
+            />
           </div>
         </div>
       )}

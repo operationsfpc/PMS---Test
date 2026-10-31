@@ -1,7 +1,9 @@
 import { Card } from "@components/ui";
 import { canReleasePlacementHold, HOLD_READER_ROLES } from "@domain/holds";
+import { canReadStatusHistory } from "@domain/status-changes";
 import { useAuth } from "@lib/auth-context";
 import { createSupabaseHoldsView } from "@lib/holds-view";
+import { createSupabaseStatusChangesView } from "@lib/status-changes-view";
 import { supabase } from "@lib/supabase";
 import { useState } from "react";
 import { useParams } from "react-router";
@@ -17,6 +19,7 @@ export function StudentRecordRoute() {
   const { studentId } = useParams();
   const [view] = useState(() => createSupabaseStudentRecordView(supabase()));
   const [holds] = useState(() => createSupabaseHoldsView(supabase()));
+  const [statusChanges] = useState(() => createSupabaseStatusChangesView(supabase()));
   // Signed-out never reaches here (RequireAuth), but the fallback is the
   // least-privileged role rather than the most convenient one.
   const auth = useAuth();
@@ -30,6 +33,10 @@ export function StudentRecordRoute() {
    */
   const mayRead = HOLD_READER_ROLES.includes(role);
   const release = mayRead && canReleasePlacementHold(role) ? holds.release : undefined;
+  // The two status ledgers (0133, 0134) go to the roles their select policies
+  // admit, the student included; which *move* the page may offer is the
+  // record's own question, since it depends on the student's standing.
+  const mayReadStatus = canReadStatusHistory(role);
   const canManagePreferences = role !== "student";
 
   if (studentId === undefined) {
@@ -44,9 +51,11 @@ export function StudentRecordRoute() {
     <StudentRecordPage
       studentId={studentId}
       view={view}
+      role={role}
       canManagePreferences={canManagePreferences}
       {...(mayRead ? { holds } : {})}
       {...(release === undefined ? {} : { release })}
+      {...(mayReadStatus ? { statusChanges } : {})}
     />
   );
 }

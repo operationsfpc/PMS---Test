@@ -31,6 +31,7 @@ describe("fetchPickerDrives", () => {
             created_at: "2026-08-12T10:00:00Z",
             drive_type: "internship",
             company_drive_id: "e1",
+            tentative_date: "2026-11-05",
           },
         ]);
       }),
@@ -47,6 +48,7 @@ describe("fetchPickerDrives", () => {
         raisedOn: "2026-08-12T10:00:00Z",
         status: "in_rounds",
         companyDriveId: "e1",
+        tentativeDate: "2026-11-05",
         driveType: "internship",
       },
     ]);
@@ -55,6 +57,9 @@ describe("fetchPickerDrives", () => {
     // Without the event id in the select the picker cannot tell that two
     // roles were one visit, and prints the company twice (UAT 2026-10-16).
     expect(decodeURIComponent(url)).toContain("company_drive_id");
+    // Without the day, two separately raised roles of one visit keep their
+    // different event ids and print as two visits (2026-10-31).
+    expect(decodeURIComponent(url)).toContain("tentative_date");
     expect(decodeURIComponent(url)).toContain("drive_type");
   });
 
@@ -72,6 +77,7 @@ describe("fetchPickerDrives", () => {
             created_at: null,
             drive_type: null,
             company_drive_id: null,
+            tentative_date: null,
           },
         ]),
       ),
@@ -87,6 +93,7 @@ describe("fetchPickerDrives", () => {
       raisedOn: null,
       status: "draft",
       companyDriveId: null,
+      tentativeDate: null,
       driveType: null,
     });
   });
