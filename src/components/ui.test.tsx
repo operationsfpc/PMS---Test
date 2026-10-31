@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-import { Button, ButtonAnchor, ButtonLink } from "./ui";
+import { Badge, Button, ButtonAnchor, ButtonLink, Card, StatCard } from "./ui";
 
 /**
  * The one control every role's screens press.
@@ -144,5 +144,179 @@ describe("ButtonAnchor", () => {
     expect(file.className).not.toContain("underline");
     // Quieter than the row's View by default, so the record stays the headline.
     expect(file.className).toContain("bg-surface");
+  });
+});
+
+/**
+ * The fill a card is allowed to have.
+ *
+ * The tints existed as forty hand-typed `bg-*-50` strings, which is how two
+ * cards describing the same state ended up two different ambers — and a panel
+ * that took a background from the primitive AND from its caller resolves by CSS
+ * source order, so nobody reading the code could say what colour it was.
+ */
+describe("Card", () => {
+  const FILLS = {
+    surface: "bg-surface",
+    quiet: "bg-surface-muted",
+    brand: "bg-brand-50",
+    warn: "bg-gold-50",
+    good: "bg-success-50",
+  } as const;
+
+  /** Every background utility on the element, in the order they were written. */
+  const painted = (el: HTMLElement) => el.className.split(/\s+/).filter((c) => c.startsWith("bg-"));
+
+  it("paints exactly one background for every tone", () => {
+    for (const tone of Object.keys(FILLS) as (keyof typeof FILLS)[]) {
+      render(<Card tone={tone}>{tone} panel</Card>);
+    }
+
+    for (const tone of Object.keys(FILLS) as (keyof typeof FILLS)[]) {
+      expect(painted(screen.getByText(`${tone} panel`)), `tone=${tone}`).toEqual([FILLS[tone]]);
+    }
+  });
+
+  it("is the plain surface panel when no tone is asked for", () => {
+    render(<Card>Drive record</Card>);
+    expect(painted(screen.getByText("Drive record"))).toEqual(["bg-surface"]);
+  });
+
+  it("passes the caller's spacing through without swallowing it", () => {
+    render(
+      <Card tone="warn" className="p-5">
+        Two coordinators, one note
+      </Card>,
+    );
+
+    const card = screen.getByText("Two coordinators, one note");
+    expect(card.className).toContain("p-5");
+    expect(card.className).toContain("rounded-card");
+    expect(painted(card)).toEqual(["bg-gold-50"]);
+  });
+});
+
+/**
+ * The same word with the pill taken off.
+ *
+ * A table cell that says `Paid` inside a rounded amber chip pulls the eye off
+ * the row's own name. The colour still carries the meaning; the shape stops
+ * competing with the data it sits beside.
+ */
+describe("Badge", () => {
+  const TEXT_TONES = {
+    neutral: "text-ink-700",
+    brand: "text-brand-700",
+    accent: "text-violet-700",
+    success: "text-success-700",
+    warning: "text-gold-800",
+    danger: "text-danger-700",
+  } as const;
+
+  it("keeps the pill, the fill and the border it has always had", () => {
+    render(<Badge tone="success">Paid</Badge>);
+
+    const pill = screen.getByText("Paid");
+    expect(pill.className).toContain("rounded-full");
+    expect(pill.className).toContain("border");
+    expect(pill.className).toContain("bg-success-50");
+  });
+
+  it("takes the caller's layout and still owns the colour", () => {
+    render(
+      <Badge tone="warning" className="ml-auto">
+        Needs a date
+      </Badge>,
+    );
+
+    const pill = screen.getByText("Needs a date");
+    expect(pill.className).toContain("ml-auto");
+    expect(pill.className).toContain("bg-gold-50");
+  });
+
+  it("keeps every tone's colour when the pill is off", () => {
+    for (const tone of Object.keys(TEXT_TONES) as (keyof typeof TEXT_TONES)[]) {
+      render(
+        <Badge variant="text" tone={tone}>
+          {tone} state
+        </Badge>,
+      );
+    }
+
+    for (const tone of Object.keys(TEXT_TONES) as (keyof typeof TEXT_TONES)[]) {
+      const text = screen.getByText(`${tone} state`);
+      expect(text.className, `tone=${tone}`).toContain(TEXT_TONES[tone]);
+      expect(text.className, `tone=${tone}`).not.toContain("rounded-full");
+      expect(text.className, `tone=${tone}`).not.toContain("border");
+      // The variant's whole point: no filled box behind the word.
+      expect(
+        text.className.split(/\s+/).some((c) => c.startsWith("bg-")),
+        `tone=${tone}`,
+      ).toBe(false);
+    }
+  });
+});
+
+/**
+ * The number at the top of a page.
+ *
+ * Five bordered boxes competing for attention say nothing; five figures under
+ * one quiet label say everything. The press that opens the people behind a
+ * count has to survive the box being taken away, or the readout row becomes
+ * decoration.
+ */
+describe("StatCard", () => {
+  /** The component's own root, so the shell can be asserted without a query. */
+  const root = (ui: ReactNode) => {
+    const { container } = render(<MemoryRouter>{ui}</MemoryRouter>);
+    return container.firstElementChild as HTMLElement;
+  };
+
+  it("reads as a figure, not a box", () => {
+    const card = root(
+      <StatCard variant="readout" label="Open drives" value={12} hint="across 4 campuses" />,
+    );
+
+    expect(card.className).not.toContain("border");
+    expect(card.className).not.toContain("shadow");
+    expect(screen.getByText("Open drives").className).not.toContain("uppercase");
+
+    const figure = screen.getByText("12");
+    expect(figure.className).toContain("text-readout");
+    expect(figure.className).toContain("font-light");
+    expect(figure.className).toContain("tabular-nums");
+    expect(screen.getByText("across 4 campuses")).toBeDefined();
+  });
+
+  it("keeps the tinted tile when nothing is asked for", () => {
+    const card = root(<StatCard label="Open drives" value={12} />);
+
+    expect(card.className).toContain("border");
+    expect(card.className).toContain("rounded-card");
+    expect(screen.getByText("Open drives").className).toContain("uppercase");
+    expect(screen.getByText("12").className).not.toContain("text-readout");
+  });
+
+  it("keeps the press once a readout opens the people behind the number", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    const card = root(<StatCard variant="readout" label="On hold" value={4} onClick={onClick} />);
+
+    expect(card.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(card.className).not.toContain("border");
+    // The frame is gone, so the hover fill is the only thing saying clickable.
+    expect(card.className).toContain("hover:bg-surface-muted");
+
+    await user.click(card);
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("See who")).toBeDefined();
+  });
+
+  it("navigates when the count leads to a page of its own", () => {
+    const card = root(<StatCard variant="readout" label="Students" value={200} to="/students" />);
+
+    expect(card.tagName).toBe("A");
+    expect(card.getAttribute("href")).toBe("/students");
+    expect(card.className).not.toContain("border");
   });
 });

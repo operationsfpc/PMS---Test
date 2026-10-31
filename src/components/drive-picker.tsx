@@ -216,7 +216,7 @@ function Visit({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="table-rows">
             {visit.map((role) => (
               <tr key={role.driveId} className="border-t border-line align-top">
                 <td className="py-2 pr-3">

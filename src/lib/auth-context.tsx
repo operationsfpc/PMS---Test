@@ -48,6 +48,15 @@ export type AuthState =
       readonly previewRole?: AppRole | null;
       readonly email: string;
       /**
+       * The person's own name, from their `profiles` or `students` row.
+       *
+       * Optional because it is a second read behind RLS: a session is real
+       * whether or not the name came back, and losing one because a display
+       * string did not arrive would be an absurd failure. Where it is absent
+       * the UI says "signed in as <email>" rather than inventing a person.
+       */
+      readonly name?: string;
+      /**
        * The campuses a staff member is mapped to, by name. Empty for students
        * and for organisation-wide roles.
        *

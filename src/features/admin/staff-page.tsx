@@ -484,7 +484,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-line/60">
+              <tbody className="table-rows divide-y divide-line/60">
                 {filteredStaff !== null && filteredStaff.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-12 text-center text-sm text-ink-500">

@@ -31,6 +31,16 @@ export interface ShadcnDataTableProps<T> {
    * last row painted in the strip beneath it (2026-10-31).
    */
   fit?: boolean | undefined;
+  /**
+   * Let the whole row answer to the pointer.
+   *
+   * The row's destination stays the real `<a>` its first cell already holds —
+   * that is what a keyboard reader reaches and what right-click can open in
+   * another tab. This only widens its reach, because aiming at a person's name
+   * in a 64px-tall row is the thing that made these tables feel dead under the
+   * mouse. Off by default: a row with nowhere to go must not pretend.
+   */
+  rowLink?: boolean | undefined;
   className?: string | undefined;
 }
 
@@ -47,6 +57,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
   emptyMessage = "No records found.",
   caption = "Data table",
   fit = false,
+  rowLink = false,
   className = "",
 }: ShadcnDataTableProps<T>) {
   // State
@@ -354,7 +365,30 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-line/60">
+          {/*
+           * biome-ignore lint/a11y/useKeyWithClickEvents: the row's own link is
+           * the keyboard and screen-reader path, and it is what this follows.
+           * A row that can be pressed does not also have to be focusable —
+           * making the <tr> a tab stop would put two stops on one destination.
+           */}
+          <tbody
+            className="table-rows divide-y divide-line/60"
+            onClick={(event) => {
+              if (!rowLink) return;
+              const pressed = event.target as HTMLElement;
+              // A press that lands on a control inside the row belongs to that
+              // control: a row with an Approve button must not approve and open
+              // the student's record on the same click.
+              if (pressed.closest("a, button, input, select, textarea, label") !== null) return;
+              // The row's own anchor, not a second copy of the destination — so
+              // whatever that link does on the way (closing the drawer it lives
+              // in) happens here too, and one href is all anyone keeps in sync.
+              pressed
+                .closest<HTMLTableRowElement>("tr")
+                ?.querySelector<HTMLAnchorElement>("a[href]")
+                ?.click();
+            }}
+          >
             {paginatedData.length > 0 ? (
               paginatedData.map((row, idx) => {
                 const rowId = row.id ?? JSON.stringify(row);
@@ -363,7 +397,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                 return (
                   <tr
                     key={rowId}
-                    className={`transition-colors hover:bg-surface-muted/60 ${
+                    className={`transition-colors ${rowLink ? "cursor-pointer" : ""} ${
                       isSelected ? "bg-brand-50/50" : ""
                     }`}
                   >

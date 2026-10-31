@@ -4,14 +4,37 @@ import { Link } from "react-router";
 
 /** Shared presentation primitives. Brand-styled, light-mode, accessible. */
 
+/**
+ * A card's fill. `surface` is the plain white panel every card already was;
+ * the four tints are for a card that MEANS something — a notice, a highlighted
+ * group, a section the eye should land on first.
+ *
+ * The tints existed as forty hand-typed `bg-*-50` strings before this, which is
+ * how two cards describing the same state ended up two different ambers.
+ */
+const CARD_TONES = {
+  surface: "bg-surface",
+  quiet: "bg-surface-muted",
+  brand: "bg-brand-50",
+  warn: "bg-gold-50",
+  good: "bg-success-50",
+} as const;
+
+export type CardTone = keyof typeof CARD_TONES;
+
 export function Card({
   children,
   className = "",
+  tone = "surface",
   ...props
-}: { children: ReactNode; className?: string } & HTMLAttributes<HTMLDivElement>) {
+}: {
+  children: ReactNode;
+  className?: string;
+  tone?: CardTone;
+} & HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`rounded-card border border-line/70 bg-surface shadow-xs transition-shadow hover:shadow-sm ${className}`}
+      className={`rounded-card border border-line/60 shadow-2xs transition-shadow hover:shadow-xs ${CARD_TONES[tone]} ${className}`}
       {...props}
     >
       {children}
@@ -30,10 +53,47 @@ const TONES = {
 
 export type Tone = keyof typeof TONES;
 
-export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
+/**
+ * The same six tones with the pill taken away.
+ *
+ * A table cell that says `Paid` in a rounded amber chip draws the eye as hard
+ * as the row's own name. The colour still carries the meaning; the shape stops
+ * competing with the data.
+ */
+const BADGE_TEXT_TONES: Record<Tone, string> = {
+  neutral: "text-ink-700",
+  brand: "text-brand-700",
+  accent: "text-violet-700",
+  success: "text-success-700",
+  warning: "text-gold-800",
+  danger: "text-danger-700",
+};
+
+export function Badge({
+  tone = "neutral",
+  variant = "pill",
+  className = "",
+  children,
+}: {
+  tone?: Tone;
+  variant?: "pill" | "text";
+  /** Layout only. A badge's colour is its meaning, so it comes from `tone`. */
+  className?: string;
+  children: ReactNode;
+}) {
+  if (variant === "text") {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-semibold ${BADGE_TEXT_TONES[tone]} ${className}`}
+      >
+        {children}
+      </span>
+    );
+  }
+
   return (
     <span
-      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs ${TONES[tone]}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs ${TONES[tone]} ${className}`}
     >
       {children}
     </span>
@@ -223,6 +283,7 @@ export function StatCard({
   value,
   hint,
   tone = "neutral",
+  variant = "card",
   onClick,
   to,
 }: {
@@ -230,6 +291,13 @@ export function StatCard({
   value: string | number;
   hint?: string;
   tone?: Tone;
+  /**
+   * `card` is the tinted, bordered tile that has always been here. `readout`
+   * is the figure alone — no border, no fill, no capitals — for the row at the
+   * top of a page, where five bordered boxes competing for attention say
+   * nothing and five numbers under one label say everything.
+   */
+  variant?: "card" | "readout";
   /**
    * Opens the people behind the number (UAT 2026-10-16: "if it shows a count I
    * need to know who all is there"). Omitted, the card stays the plain figure
@@ -246,12 +314,21 @@ export function StatCard({
 }) {
   const valueColor = STAT_VALUES[tone] ?? STAT_VALUES.neutral;
   const containerTone = STAT_TONES[tone] ?? STAT_TONES.neutral;
+  const isReadout = variant === "readout";
 
   const body = (
     <div className="flex flex-col">
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
+      {isReadout ? (
+        <p className="text-[13px] text-ink-500">{label}</p>
+      ) : (
+        <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
+      )}
       <p
-        className={`mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`}
+        className={
+          isReadout
+            ? `mt-0.5 font-heading text-readout font-light tabular-nums ${valueColor}`
+            : `mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`
+        }
       >
         {value}
       </p>
@@ -260,7 +337,9 @@ export function StatCard({
   );
 
   if (onClick === undefined && to === undefined) {
-    return (
+    return isReadout ? (
+      <div className="flex flex-col justify-between">{body}</div>
+    ) : (
       <div
         className={`flex flex-col justify-between rounded-card border p-4 shadow-xs transition-all ${containerTone}`}
       >
@@ -283,7 +362,14 @@ export function StatCard({
     </>
   );
 
-  const shape = `group flex cursor-pointer flex-col justify-between rounded-card border p-4 text-left shadow-xs transition-all hover:shadow-sm ${containerTone}`;
+  /**
+   * A readout that opens something keeps the press and loses the box: the
+   * faintest fill on hover is enough to say "clickable" without a frame
+   * competing with the row of figures it sits in.
+   */
+  const shape = isReadout
+    ? "group flex cursor-pointer flex-col justify-between rounded-card p-3 text-left transition-colors hover:bg-surface-muted"
+    : `group flex cursor-pointer flex-col justify-between rounded-card border p-4 text-left shadow-xs transition-all hover:shadow-sm ${containerTone}`;
 
   return to === undefined ? (
     <button type="button" onClick={onClick} aria-haspopup="dialog" className={shape}>
@@ -310,7 +396,7 @@ export function DataTable({
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-b border-line text-left">
+          <tr className="border-b border-line bg-surface-muted/60 text-left">
             {columns.map((c) => (
               <th
                 key={c}
@@ -322,7 +408,7 @@ export function DataTable({
             ))}
           </tr>
         </thead>
-        <tbody>{children}</tbody>
+        <tbody className="table-rows">{children}</tbody>
       </table>
     </div>
   );

@@ -7,7 +7,6 @@ import {
   AccordionItem,
   AccordionTrigger,
   Badge,
-  Button,
   Card,
   PageHeader,
   StatCard,
@@ -407,36 +406,75 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
           const { shown, hidden } = condenseNotifications(notes, 3);
           return (
             <section aria-label="Notifications" className="mb-6">
-              <Card className="p-5">
-                <p className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900">
-                  Notifications
-                  {notes.some((n) => !n.read) && (
-                    <Badge tone="warning">{notes.filter((n) => !n.read).length} unread</Badge>
+              <Card className="rounded-2xl border border-line/70 p-5 shadow-xs sm:p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <p className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900">
+                      Notifications
+                    </p>
+                    {notes.some((n) => !n.read) && (
+                      <Badge tone="warning" className="rounded-full">
+                        {notes.filter((n) => !n.read).length} unread
+                      </Badge>
+                    )}
+                  </div>
+                  {hidden > 0 && (
+                    <Link
+                      to="/student/notifications"
+                      className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline"
+                    >
+                      View all ({notes.length})
+                    </Link>
                   )}
-                </p>
-                <ul className="mt-3 space-y-2">
+                </div>
+                <ul className="mt-4 space-y-2.5">
                   {shown.map((note) => (
                     <li
                       key={note.id}
-                      className={`rounded-lg border p-3 ${
-                        note.read ? "border-line" : "border-warning/50 bg-warning/5"
+                      className={`group rounded-xl border p-4 transition-all ${
+                        note.read
+                          ? "border-line/70 bg-surface shadow-2xs hover:border-line"
+                          : "border-brand-200/90 bg-gradient-to-br from-brand-50/70 via-white to-brand-50/20 shadow-xs"
                       }`}
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-ink-900">{note.title}</p>
-                          <p className="mt-0.5 text-sm text-ink-700">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-bold font-heading text-ink-900">
+                              {note.title}
+                            </p>
+                            {!note.read && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-brand-100/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-700">
+                                <span className="size-1.5 rounded-full bg-brand-600 animate-pulse" />
+                                New
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-sm leading-relaxed text-ink-700">
                             <NotificationBody body={note.body} />
                           </p>
-                          <p className="mt-1 text-xs text-ink-500">{onDate(note.createdAt)}</p>
+                          <OfferLetterLink
+                            url={note.letterUrl}
+                            name={note.letterName}
+                            className="mt-2"
+                          />
+                          <p className="mt-2 text-xs text-ink-500">{onDate(note.createdAt)}</p>
                         </div>
-                        {note.read ? (
-                          <span className="shrink-0 text-xs font-medium text-ink-500">✓ Read</span>
-                        ) : (
-                          <Button variant="ghost" size="sm" onClick={() => void markRead(note.id)}>
-                            Mark read
-                          </Button>
-                        )}
+                        <div className="shrink-0 self-start">
+                          {note.read ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/60 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+                              ✓ Read
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void markRead(note.id)}
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 shadow-2xs transition-all hover:border-brand-300 hover:bg-brand-50"
+                            >
+                              Mark read
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -444,7 +482,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                 {hidden > 0 && (
                   <Link
                     to="/student/notifications"
-                    className="mt-3 inline-block text-sm font-medium text-brand-600 hover:underline"
+                    className="mt-3.5 inline-block text-sm font-semibold text-brand-600 hover:underline"
                   >
                     Read all {notes.length} notifications →
                   </Link>

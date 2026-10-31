@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Link, MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "./accordion";
 import {
@@ -542,5 +543,119 @@ describe("ShadcnDataTable Component", () => {
     await waitFor(() => expect(screen.getByText("Page 1 of 1")).toBeDefined());
     expect(screen.queryByText("Page 3 of 1")).toBeNull();
     expect(screen.getByText("Candidate 0")).toBeDefined();
+  });
+});
+
+/**
+ * The row rhythm and the row's reach.
+ *
+ * The reference screen reads down a striped table where the whole row is the
+ * thing you press, and today's tables do neither: zero `odd:` rules exist in the
+ * app and the only way into a student is their name, which is one link in a
+ * 64px row. jsdom paints no colour, so what is asserted here is the two things
+ * code can actually get wrong — that the stripe comes from the one shared
+ * utility rather than a hand-typed background per row, and that a click anywhere
+ * in a row follows the row's OWN link instead of a second copy of the address.
+ */
+describe("ShadcnDataTable rows", () => {
+  interface Person {
+    id: string;
+    name: string;
+    campus: string;
+  }
+
+  const ROSTER: readonly Person[] = [
+    { id: "s1", name: "Asha Ramanathan", campus: "SDNB" },
+    { id: "s2", name: "Karthik Raja", campus: "Alliance" },
+  ];
+
+  /** A row's shortlist control, to prove the row does not steal its presses. */
+  const onShortlist = vi.fn();
+
+  const columns: ColumnDef<Person>[] = [
+    {
+      id: "name",
+      header: "Student",
+      accessorKey: "name",
+      cell: (person) => (
+        <Link to={`/students/${person.id}`} className="font-semibold">
+          {person.name}
+        </Link>
+      ),
+    },
+    { id: "campus", header: "Campus", accessorKey: "campus" },
+    {
+      id: "action",
+      header: "Action",
+      cell: (person) => (
+        <button type="button" onClick={onShortlist}>
+          Shortlist {person.name}
+        </button>
+      ),
+    },
+  ];
+
+  const renderRoster = (rowLink: boolean) =>
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <ShadcnDataTable data={ROSTER} columns={columns} rowLink={rowLink} caption="Roster" />
+            }
+          />
+          <Route path="/students/:id" element={<p>Student record</p>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+  it("takes its stripe from the shared table utility, not from a colour per row", () => {
+    renderRoster(true);
+
+    const body = screen.getByRole("table").querySelector("tbody");
+    expect(body?.className).toContain("table-rows");
+
+    for (const row of screen.getAllByRole("row").slice(1)) {
+      const handPainted = row.className
+        .split(/\s+/)
+        .some((c) => c.startsWith("odd:") || c.startsWith("bg-"));
+      expect(handPainted, row.textContent ?? "").toBe(false);
+    }
+  });
+
+  it("opens the row's own link from anywhere in the row", async () => {
+    const user = userEvent.setup();
+    renderRoster(true);
+
+    // The campus cell, not the name: aiming at the name was the whole problem.
+    await user.click(screen.getByText("Alliance"));
+    expect(await screen.findByText("Student record")).toBeDefined();
+  });
+
+  it("leaves a control inside the row to its own job", async () => {
+    const user = userEvent.setup();
+    renderRoster(true);
+
+    await user.click(screen.getByRole("button", { name: "Shortlist Asha Ramanathan" }));
+    expect(onShortlist).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Student record")).toBeNull();
+  });
+
+  /**
+   * A row with nowhere to go must not look pressable. `cursor-pointer` on a row
+   * that does nothing is the same lie as a button that is disabled and unmarked.
+   */
+  it("stays inert until the caller says the row goes somewhere", async () => {
+    const user = userEvent.setup();
+    renderRoster(false);
+
+    const rows = screen.getAllByRole("row").slice(1);
+    for (const row of rows) {
+      expect(row.className).not.toContain("cursor-pointer");
+    }
+
+    await user.click(screen.getByText("SDNB"));
+    expect(screen.queryByText("Student record")).toBeNull();
   });
 });

@@ -16,8 +16,8 @@ import { resolveAuthState } from "./resolve-auth";
  */
 function fakeClient(opts: {
   session: unknown;
-  profile?: { role: string } | null;
-  student?: { id: string } | null;
+  profile?: { role: string; full_name?: string } | null;
+  student?: { id: string; full_name?: string } | null;
   /** Campus rows as PostgREST returns them, with the name embedded. */
   campuses?: Array<{ campuses: { name: string } }>;
   /** The read refused, as opposed to answering with no row. */
@@ -122,6 +122,41 @@ describe("resolveAuthState", () => {
       fakeClient({ session: SESSION, profile: null, studentError: true }),
     );
     expect(state).toEqual({ status: "unreadable", email: "someone@example.com" });
+  });
+
+  /**
+   * The header greeting and the user menu have to say a person's name, and the
+   * only place that name exists is the row this resolver already reads. Until
+   * 2026-10-31 the email was the whole identity on screen, so a shared campus
+   * machine showed whoever opened it an address instead of a name.
+   */
+  it("carries the staff member's own name", async () => {
+    const state = await resolveAuthState(
+      fakeClient({
+        session: SESSION,
+        profile: { role: "campus_manager", full_name: "R Karthik" },
+      }),
+    );
+
+    expect(state).toMatchObject({ status: "signed-in", name: "R Karthik" });
+  });
+
+  it("carries the student's name from their roster record", async () => {
+    const state = await resolveAuthState(
+      fakeClient({ session: SESSION, profile: null, student: { id: "s1", full_name: "Priya" } }),
+    );
+
+    expect(state).toMatchObject({ status: "signed-in", role: "student", name: "Priya" });
+  });
+
+  /** No name in the row is not a licence to invent one. The key stays off so
+   *  the shell can say who by their address instead. */
+  it("omits the name when the row does not carry one", async () => {
+    const state = await resolveAuthState(
+      fakeClient({ session: SESSION, profile: { role: "admin" } }),
+    );
+
+    expect(Object.hasOwn(state, "name")).toBe(false);
   });
 });
 

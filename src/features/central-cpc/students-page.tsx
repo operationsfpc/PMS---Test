@@ -564,7 +564,7 @@ export function StudentDirectoryPage({
                       {holds !== undefined && <th className="px-4 py-3">Actions</th>}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-line">
+                  <tbody className="table-rows divide-y divide-line">
                     {pagedStudents.map((student) => (
                       <tr key={student.studentId}>
                         <td className="px-4 py-3">

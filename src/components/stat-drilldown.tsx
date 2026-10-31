@@ -230,6 +230,7 @@ export function StatDrilldown({
         columns={columns}
         defaultPageSize={25}
         fit
+        rowLink
         searchPlaceholder="Search name, roll number or campus…"
         caption={title}
         emptyMessage="No student here matches that search."

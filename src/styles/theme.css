@@ -281,6 +281,28 @@
   animation: qf-slide-from-bottom 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/**
+ * The row rhythm every table in the app shares: a stripe on every second row
+ * and a wash under the pointer.
+ *
+ * It is a `@utility` on the `<tbody>` rather than `odd:` classes on each row
+ * because the stripe has to be the least specific thing in the table. `:where()`
+ * gives it zero specificity, so a row that means something — selected, shortled,
+ * failed, expanded — paints over the stripe instead of being painted over by it,
+ * and a hand-typed `odd:bg-*` can never swallow the hover that tells a reader the
+ * pointer is on something. The stripe is written first and the hover second, in
+ * one rule, so the hover always wins the tie it would otherwise have with it.
+ */
+@utility table-rows {
+  :where(& > tr:nth-child(even)) {
+    background-color: color-mix(in oklab, var(--color-surface-muted) 40%, transparent);
+  }
+
+  :where(& > tr:hover) {
+    background-color: color-mix(in oklab, var(--color-surface-muted) 65%, transparent);
+  }
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;

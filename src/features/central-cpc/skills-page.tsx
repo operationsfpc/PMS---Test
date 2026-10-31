@@ -522,7 +522,7 @@ export function SkillsPage({
                 )}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="table-rows">
               {pagedStudents.map((student) => {
                 const isEditing = editing === student.studentId;
                 return (

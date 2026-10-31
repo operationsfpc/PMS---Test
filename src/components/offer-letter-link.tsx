@@ -1,3 +1,5 @@
+import { Paperclip } from "lucide-react";
+
 /**
  * The offer letter the CPC attached, as the student may open it.
  *
@@ -34,10 +36,10 @@ export function OfferLetterLink({
       // The URL is signed and short-lived; `noreferrer` keeps it from being
       // handed to whatever the letter links on to.
       rel="noreferrer noopener"
-      className={`inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg border border-brand-200/80 bg-brand-50/70 px-2.5 py-1 text-xs font-semibold text-brand-700 transition-colors hover:bg-brand-100/80 hover:text-brand-900 ${className}`}
     >
-      <span aria-hidden="true">📎</span>
-      {name}
+      <Paperclip aria-hidden="true" className="size-3.5 shrink-0 text-brand-600" />
+      <span className="truncate max-w-xs">{name}</span>
     </a>
   );
 }

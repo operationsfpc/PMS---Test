@@ -19,6 +19,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * view would be a data exposure. It reports the address instead, so the login
  * screen can explain the refusal to the person it is refusing.
  */
+/**
+ * The row's own name, only when it actually carried one.
+ *
+ * `full_name` is NOT NULL in `profiles` and in `students`, so the database
+ * cannot hand back a missing one — but the client here is untyped and a caller
+ * that reads a different column set returns an absent key. Leaving `name` off
+ * is honest: the shell then says who by their address instead of showing a
+ * blank where a person's name should be.
+ */
+function nameOf(row: Record<string, unknown>): { name?: string } {
+  return typeof row.full_name === "string" && row.full_name !== "" ? { name: row.full_name } : {};
+}
+
 export async function resolveAuthState(client: SupabaseClient): Promise<AuthState> {
   const { data } = await client.auth.getSession();
   const session = data.session;
@@ -28,7 +41,7 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
 
   const { data: profile, error: profileError } = await client
     .from("profiles")
-    .select("role, is_active")
+    .select("role, is_active, full_name")
     .eq("id", session.user.id)
     .maybeSingle();
 
@@ -65,12 +78,18 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
       return campus?.name === undefined ? [] : [campus.name];
     });
 
-    return { status: "signed-in", role: profile.role as AppRole, email, campuses };
+    return {
+      status: "signed-in",
+      role: profile.role as AppRole,
+      email,
+      campuses,
+      ...nameOf(profile),
+    };
   }
 
   const { data: student, error: studentError } = await client
     .from("students")
-    .select("id, auth_user_id")
+    .select("id, auth_user_id, full_name")
     .or(`auth_user_id.eq.${session.user.id},email.eq.${email}`)
     .maybeSingle();
 
@@ -82,7 +101,7 @@ export async function resolveAuthState(client: SupabaseClient): Promise<AuthStat
     }
     // A student is not staff: there are no assignment rows to read, and asking
     // would be a round trip that can only ever come back empty.
-    return { status: "signed-in", role: "student", email, campuses: [] };
+    return { status: "signed-in", role: "student", email, campuses: [], ...nameOf(student) };
   }
 
   return { status: "unrecognised", email };

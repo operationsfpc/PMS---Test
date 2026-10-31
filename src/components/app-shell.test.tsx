@@ -113,10 +113,18 @@ afterEach(() => vi.unstubAllEnvs());
  * exposure - the next person to open the browser is signed in as the last.
  */
 describe("signing out", () => {
+  /**
+   * The way out now lives inside the account menu, so every test of it has to
+   * open the menu the way a person does.
+   */
+  const openAccountMenu = () =>
+    fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+
   it("offers every signed-in role a way out", () => {
     for (const role of ["student", "admin", "account_executive"] as const) {
       const { unmount } = shellFor(signedIn(role));
-      expect(screen.getByRole("button", { name: /sign out/i })).toBeDefined();
+      openAccountMenu();
+      expect(screen.getByRole("menuitem", { name: /sign out/i })).toBeDefined();
       unmount();
     }
   });
@@ -126,9 +134,55 @@ describe("signing out", () => {
     const user = userEvent.setup();
     shellFor(signedIn("admin"), signOut);
 
-    await user.click(screen.getByRole("button", { name: /sign out/i }));
+    await user.click(screen.getByRole("button", { name: /account menu/i }));
+    await user.click(screen.getByRole("menuitem", { name: /sign out/i }));
 
     await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+  });
+
+  /**
+   * The header used to carry a circle of initials that named nobody, plus a
+   * Sign out button. On the shared campus machines this runs on, the first
+   * question is whose session this is — and it could not be answered.
+   */
+  it("names the signed-in person in the header", () => {
+    shellWithActions({
+      status: "signed-in",
+      role: "admin",
+      name: "R Karthik",
+      email: "karthikraja@faceprep.in",
+      campuses: [],
+    });
+
+    const trigger = screen.getByRole("button", { name: /account menu for r karthik/i });
+    expect(trigger.textContent).toContain("R Karthik");
+    expect(trigger.textContent).toContain("karthikraja@faceprep.in");
+  });
+
+  it("falls back to the address when the profile carries no name", () => {
+    shellFor(signedIn("admin"));
+    expect(screen.getByRole("button", { name: /account menu for x@example\.com/i })).toBeDefined();
+  });
+
+  it("closes on Escape and leaves the trigger as the closed control", () => {
+    shellFor(signedIn("admin"));
+    const trigger = screen.getByRole("button", { name: /account menu/i });
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu", { name: /account/i })).toBeDefined();
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: /account/i })).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("closes when the click lands outside it", () => {
+    shellFor(signedIn("admin"));
+    fireEvent.click(screen.getByRole("button", { name: /account menu/i }));
+
+    fireEvent.mouseDown(screen.getByRole("main"));
+    expect(screen.queryByRole("menu", { name: /account/i })).toBeNull();
   });
 });
 

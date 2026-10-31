@@ -400,7 +400,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="table-rows divide-y divide-line">
                   {recentVisits.map((roles) => {
                     const [head] = roles;
                     if (head === undefined) return null;

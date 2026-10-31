@@ -14,6 +14,7 @@ import {
   Building2,
   CalendarCheck,
   CalendarDays,
+  ChevronDown,
   ChevronRight,
   CircleUser,
   ClipboardCheck,
@@ -45,7 +46,7 @@ import {
   UserX,
   X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { Badge, Button, Card } from "./ui";
 
@@ -458,9 +459,19 @@ function Logo() {
 }
 
 /** Initials from the signed-in address: the account badge must not lie. */
-function initialsOf(email: string): string {
-  const local = email.split("@")[0] ?? "";
-  return local.slice(0, 2).toUpperCase();
+/**
+ * The two letters on the avatar.
+ *
+ * A person's name gives its first and last initial. An address — all the app
+ * has when the profile row carried no name — gives the first two letters of
+ * its local part, which is the shape staff already recognise from logging in.
+ */
+function initialsOf(person: string): string {
+  const source = person.includes("@") ? (person.split("@")[0] ?? "") : person;
+  const words = source.split(/[\s._-]+/).filter((word) => word !== "");
+  const first = words[0] ?? "";
+  if (words.length < 2) return first.slice(0, 2).toUpperCase();
+  return `${first[0] ?? ""}${(words[words.length - 1] ?? "")[0] ?? ""}`.toUpperCase();
 }
 
 /**
@@ -505,6 +516,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { signOut, setPreviewRole } = useAuthActions();
   const actualRole = auth.status === "signed-in" ? (auth.actualRole ?? auth.role) : "student";
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
+  const signedInName = auth.status === "signed-in" ? (auth.name ?? "") : "";
   const campuses = auth.status === "signed-in" ? auth.campuses : [];
 
   /**
@@ -525,8 +537,39 @@ export function AppShell({ children }: { children: ReactNode }) {
     auth.status === "signed-in" && auth.previewRole != null && auth.previewRole !== actualRole
       ? auth.previewRole
       : null;
+  const accountLabel = signedInName !== "" ? signedInName : signedInEmail;
   const [localPreview, setLocalPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * The account menu answers the two things every popup must.
+   *
+   * Same shape as `Combobox` rather than a new dependency: one listener, and
+   * Escape hands the focus back to the trigger so a keyboard user does not lose
+   * their place in the header.
+   */
+  useEffect(() => {
+    if (!accountOpen) return;
+
+    const onPointerDown = (event: MouseEvent) => {
+      if (accountRef.current?.contains(event.target as Node) !== true) setAccountOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setAccountOpen(false);
+      accountTriggerRef.current?.focus();
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
 
   // Lock body scroll when mobile navigation drawer is open
   useEffect(() => {
@@ -575,9 +618,14 @@ export function AppShell({ children }: { children: ReactNode }) {
    * rows). The active bar sits on the group's rule, so the eye reads which
    * heading the current page belongs to without the heading having to stay open
    * for the answer.
+   *
+   * Condensed on `lg` only (2026-10-31 restyle): the rail is a desktop object,
+   * and its rows were taller than the text needed. The phone drawer is the same
+   * element, so it keeps the taller row and the larger type it has always had —
+   * a finger is not a mouse, and 30px is a mouse target.
    */
   const linkClass = ({ isActive }: { isActive: boolean }): string =>
-    `relative flex min-h-[38px] sm:min-h-[36px] items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+    `relative flex min-h-[38px] items-center gap-2.5 rounded-control px-2.5 py-1.5 text-sm transition-colors lg:min-h-[30px] lg:gap-2 lg:px-2 lg:py-1 lg:text-[13px] ${
       isActive
         ? "bg-brand-50 font-semibold text-brand-700"
         : "font-medium text-ink-700 hover:bg-surface-muted hover:text-ink-900"
@@ -641,26 +689,87 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </select>
               </>
             )}
-            <span
-              title={signedInEmail}
-              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
-            >
-              {initialsOf(signedInEmail)}
-            </span>
+            {/*
+             * One control that says who is signed in and holds the way out.
+             *
+             * The header used to carry a bare circle of initials and a separate
+             * "Sign out" button: the initials named nobody, and the button was
+             * the only place the app admitted there was an account at all. On a
+             * shared campus machine the first question is "whose session is
+             * this", and it now answers that before it asks anything else.
+             */}
+            <div ref={accountRef} className="relative">
+              <button
+                ref={accountTriggerRef}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                aria-label={
+                  accountLabel === "" ? "Account menu" : `Account menu for ${accountLabel}`
+                }
+                onClick={() => setAccountOpen((open) => !open)}
+                className="flex min-w-0 cursor-pointer items-center gap-2 rounded-control px-1.5 py-1 text-left transition-colors hover:bg-surface-muted"
+              >
+                <span
+                  title={signedInEmail}
+                  aria-hidden="true"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
+                >
+                  {initialsOf(accountLabel)}
+                </span>
+                <span className="hidden min-w-0 max-w-40 flex-col sm:flex">
+                  <span className="truncate text-[13px] font-semibold text-ink-900">
+                    {accountLabel}
+                  </span>
+                  {signedInName !== "" && (
+                    <span className="truncate text-[11px] text-ink-500">{signedInEmail}</span>
+                  )}
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className={`size-3.5 shrink-0 text-ink-400 transition-transform ${
+                    accountOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
 
-            {/* Campus machines are shared. Leaving no way out means the next
-                person to open the browser is signed in as the last one. */}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="whitespace-nowrap px-2.5 sm:px-3"
-              onClick={() => void signOut()}
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut aria-hidden="true" className="size-3.5 shrink-0" />
-              <span className="hidden sm:inline">Sign out</span>
-            </Button>
+              {accountOpen && (
+                <div
+                  role="menu"
+                  aria-label="Account"
+                  className="absolute right-0 top-full z-30 mt-1.5 w-64 rounded-card border border-line bg-surface p-1.5 shadow-lg"
+                >
+                  <div className="min-w-0 px-2.5 py-2">
+                    <p className="truncate text-sm font-semibold text-ink-900 break-words">
+                      {accountLabel}
+                    </p>
+                    {signedInName !== "" && (
+                      <p className="truncate text-xs text-ink-500">{signedInEmail}</p>
+                    )}
+                    <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+                      {role.replaceAll("_", " ")}
+                    </p>
+                  </div>
+
+                  <div className="my-1 border-t border-line" aria-hidden="true" />
+
+                  {/* Campus machines are shared. Leaving no way out means the
+                      next person to open the browser is signed in as the last. */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      void signOut();
+                    }}
+                    className="flex min-h-[34px] w-full cursor-pointer items-center gap-2 rounded-control px-2.5 py-1.5 text-left text-[13px] font-medium text-ink-700 transition-colors hover:bg-danger-50 hover:text-danger-700"
+                  >
+                    <LogOut aria-hidden="true" className="size-4 shrink-0" />
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -715,8 +824,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           aria-label="Main"
           className={`${
             menuOpen
-              ? "fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto bg-surface p-3 shadow-xl lg:static lg:z-auto lg:w-64 lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none"
-              : "hidden lg:block lg:w-64"
+              ? "fixed inset-y-0 left-0 z-40 w-72 overflow-y-auto bg-surface p-3 shadow-xl lg:static lg:z-auto lg:w-60 lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none"
+              : "hidden lg:block lg:w-60"
           } shrink-0 self-start`}
         >
           {menuOpen && (
@@ -733,7 +842,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
           <div className="lg:sticky lg:top-[4.5rem]">
-            <Card className="p-2">
+            <Card className="p-1.5">
               <RoleScope role={role} campuses={campuses} />
 
               {groups.map((group) => {
@@ -752,7 +861,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         type="button"
                         aria-expanded={open}
                         onClick={() => toggleGroup(group.heading)}
-                        className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-base font-bold text-ink-900 transition-colors hover:bg-brand-50 hover:text-brand-700"
+                        className="flex w-full cursor-pointer items-center gap-2 rounded-control px-2.5 py-2 text-left text-base font-bold text-ink-900 transition-colors hover:bg-brand-50 hover:text-brand-700 lg:px-2 lg:py-1.5 lg:text-[15px]"
                       >
                         <GroupIcon aria-hidden="true" className="size-4 shrink-0 text-brand-600" />
                         <span className="min-w-0 flex-1 truncate">{group.heading}</span>
@@ -766,7 +875,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </h2>
 
                     {open && (
-                      <ul className="mb-2 ml-3 flex flex-col gap-0.5 border-l border-line pl-1.5">
+                      <ul className="mb-2 ml-3 flex flex-col gap-0.5 border-l border-line pl-1.5 lg:mb-1.5 lg:ml-2 lg:gap-0">
                         {group.items.map((item) => {
                           const ItemIcon = item.icon;
                           return (
