@@ -13,7 +13,6 @@ import {
   PageHeader,
   StatCard,
 } from "@components/ui";
-import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import { groupDrivesByEvent } from "@domain/company-drive";
 import { type PlacementCtc, summariseCtc, summariseCtcByCategory } from "@domain/ctc-statistics";
@@ -1262,8 +1261,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {paginatedVisits.map(([eventId, roles], index) => {
-                    const accent = visitAccent((drivePage - 1) * DRIVES_PAGE_SIZE + index);
+                  {paginatedVisits.map(([eventId, roles]) => {
                     const block = (drive: DriveWithFunnel, nested: boolean) => {
                       const driveStudents = (drive.students ?? []).filter(
                         (s) => campusId === "" || s.campusId === campusId,

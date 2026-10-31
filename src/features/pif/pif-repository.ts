@@ -208,7 +208,16 @@ function explain(error: { code?: string; message?: string }): string {
 
   switch (error.code) {
     case "42501":
-      return "You do not have permission to raise a PIF. Ask an Admin to check your role.";
+      // The database decides this one, and it reads the real profile. A
+      // "Preview as" role changes which screens the app shows and nothing else,
+      // so the old wording sent a reader whose account WAS an AE's off to ask
+      // for a role change they already had. Both remedies, in one sentence.
+      return [
+        "You do not have permission to raise a PIF: the database reads your own profile,",
+        "and it is not an Account Executive's. A 'Preview as' role changes the screens only,",
+        "never what the database accepts - stop the preview, and if your account really is",
+        "an AE, ask an Admin to check the role on it.",
+      ].join(" ");
     case "PGRST204":
     case "PGRST205":
       // The app is asking for a column the project does not have: migrations

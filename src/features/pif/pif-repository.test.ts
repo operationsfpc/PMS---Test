@@ -355,6 +355,25 @@ describe("createSupabasePifRepository", () => {
 
       await expect(repo().saveDraft(values)).rejects.toThrow(/deadlock detected/);
     });
+
+    /**
+     * The 2026-10-31 report: an Admin previewing as an Account Executive was
+     * told to "ask an Admin to check your role" when their role was correct and
+     * the preview was the problem. Naming the preview is the remedy that works;
+     * checking the profile row stays available for a real AE whose role column
+     * actually is wrong.
+     */
+    it("names the preview role as a cause when the database refuses the writer", async () => {
+      failsWith({ code: "42501", message: "permission denied", details: null }, 403);
+
+      const error = await repo()
+        .saveDraft(values)
+        .then(() => null)
+        .catch((cause: unknown) => cause as Error);
+
+      expect(error?.message).toMatch(/preview as/i);
+      expect(error?.message).toMatch(/account executive/i);
+    });
   });
 });
 

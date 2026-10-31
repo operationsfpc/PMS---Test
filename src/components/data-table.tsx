@@ -288,7 +288,9 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
       >
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
           <caption className="sr-only">{caption}</caption>
-          <thead className={fit ? "sticky top-0 z-10 bg-surface-muted/95 backdrop-blur-xs" : undefined}>
+          <thead
+            className={fit ? "sticky top-0 z-10 bg-surface-muted/95 backdrop-blur-xs" : undefined}
+          >
             <tr
               className={`border-b border-line/70 text-ink-500 ${
                 fit ? "bg-surface-muted/95" : "bg-surface-muted/60"

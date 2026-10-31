@@ -2,7 +2,7 @@
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import type { AppRole } from "@domain/types";
 import { AuthContext, type AuthState } from "@features/auth/require-auth";
-import { AuthActionsContext } from "@lib/auth-context";
+import { type AuthActions, AuthActionsContext } from "@lib/auth-context";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
@@ -72,6 +72,35 @@ const signedIn = (role: AppRole, campuses: readonly string[] = []): AuthState =>
   role,
   email: "x@example.com",
   campuses,
+});
+
+/**
+ * Renders the shell with the auth ACTIONS a test cares about.
+ *
+ * `shellFor` can only supply `signOut`. Clearing a preview role is the other
+ * capability the shell uses, and the default context value is a no-op, so a
+ * test that asserts the button works has to provide its own.
+ */
+function shellWithActions(auth: AuthState, actions: Partial<AuthActions> = {}) {
+  return render(
+    <AuthActionsContext.Provider value={{ signOut: async () => {}, ...actions }}>
+      <AuthContext.Provider value={auth}>
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <AppShell>content</AppShell>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    </AuthActionsContext.Provider>,
+  );
+}
+
+/** An Admin on the test deployment who has overridden their own role. */
+const previewingAs = (preview: AppRole, actual: AppRole = "admin"): AuthState => ({
+  status: "signed-in",
+  role: preview,
+  actualRole: actual,
+  previewRole: preview,
+  email: "thanush@faceprep.in",
+  campuses: [],
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -376,10 +405,72 @@ describe("the preview-as switcher", () => {
     expect(screen.getByLabelText(/preview as/i)).toBeDefined();
   });
 
-  it("is never shipped to production", () => {
+  it("is never offered to an account the test deployment does not trust", () => {
     vi.stubEnv("DEV", false);
     shellFor(signedIn("student"));
     expect(screen.queryByLabelText(/preview as/i)).toBeNull();
+  });
+
+  /**
+   * The control used to be gated on `import.meta.env.DEV` alone while
+   * `SupabaseAuthProvider` honoured a stored preview role for the allow-listed
+   * test accounts wherever the app is deployed. So on pms-test-gamma an Admin
+   * could be browsing as an Account Executive with no switcher in sight, no
+   * sign of the override and no way to clear it — and every write they then
+   * attempted was refused by a database that still knew their real role. That
+   * mismatch is what the 2026-10-31 "You do not have permission to raise a
+   * PIF" report actually was.
+   */
+  it("is offered wherever the override it sets is honoured, not only in development", () => {
+    vi.stubEnv("DEV", false);
+    shellWithActions(previewingAs("account_executive"));
+    expect(screen.getByLabelText(/preview as/i)).toBeDefined();
+  });
+});
+
+/**
+ * A preview role changes which doors the app opens. It changes nothing about
+ * what the database accepts, because `current_app_role()` reads the real
+ * profile. Saying so on screen is what tells an Admin that a permission error
+ * is their preview, not a broken role assignment — and gives them the way out.
+ */
+describe("the preview banner", () => {
+  it("names both the preview and the real role, and says the database follows the real one", () => {
+    shellWithActions(previewingAs("account_executive"));
+
+    const banner = screen.getByRole("status");
+    expect(banner.textContent).toContain("Previewing as account executive");
+    expect(banner.textContent).toContain("Signed in as admin");
+    expect(banner.textContent).toMatch(/database follows your real role/i);
+  });
+
+  it("gives the way out of the override without signing the user out", () => {
+    const setPreviewRole = vi.fn();
+    shellWithActions(previewingAs("account_executive"), { setPreviewRole });
+
+    fireEvent.click(screen.getByRole("button", { name: /stop preview/i }));
+
+    expect(setPreviewRole).toHaveBeenCalledTimes(1);
+    expect(setPreviewRole.mock.calls[0]?.[0]).toBeNull();
+  });
+
+  it("says nothing when the user is simply signed in as themselves", () => {
+    shellWithActions(signedIn("admin"));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  /** The provider stores a preview role even when it matches the real one;
+   *  a banner then would claim the viewer is impersonating someone. */
+  it("says nothing when the preview is the role the account already has", () => {
+    shellWithActions(previewingAs("admin", "admin"));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("stays on screen on a page whose role nav is empty", () => {
+    // The banner is global; a role with no sidebar destinations must not hide
+    // the one explanation the viewer needs.
+    shellWithActions(previewingAs("student"));
+    expect(screen.getByRole("status").textContent).toContain("Previewing as student");
   });
 });
 

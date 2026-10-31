@@ -117,7 +117,28 @@
   --font-heading: "Raleway", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
 
-  --radius-card: 1rem;
+  /**
+   * Two display sizes, so "the biggest thing on the screen" is one decision
+   * made here rather than four arbitrary `text-3xl`/`text-4xl` picks at the
+   * call sites. `hero` is a page greeting; `readout` is a number a person
+   * reads from across the room, which wants to be large but not louder than
+   * the page it sits on.
+   */
+  --text-hero: 2.5rem;
+  --text-hero--line-height: 1.05;
+  --text-hero--letter-spacing: -0.02em;
+  --text-readout: 1.75rem;
+  --text-readout--line-height: 1.1;
+
+  /**
+   * Panels and controls are two different radii. At one shared 1rem a small
+   * button and a wide card read as the same object; the reference screens
+   * separate them, and every surface in the app is a card. `card` is the
+   * outer panel — cards, dialogs, notice blocks — and `control` is anything
+   * a person clicks: buttons, inputs, chips.
+   */
+  --radius-card: 1.5rem;
+  --radius-control: 0.75rem;
 
   /**
    * shadcn's own vocabulary, mapped onto the ramp above rather than a second

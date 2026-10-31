@@ -8,7 +8,6 @@ import {
   Card,
   PageHeader,
 } from "@components/ui";
-import { visitAccent } from "@components/visit-accent";
 import { groupByCompanyVisit } from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import {
@@ -443,10 +442,9 @@ function TabVisits<T extends TabRow>({
 
   return (
     <>
-      {[...groups.entries()].map(([eventId, roles], index) => {
+      {[...groups.entries()].map(([eventId, roles]) => {
         const head = roles[0];
         if (head === undefined) return null;
-        const accent = visitAccent(index);
 
         if (roles.length === 1) {
           return (

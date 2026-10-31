@@ -8,7 +8,7 @@ import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AcademicProfile, DriveStatus, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
-import { describeReadFailure, readAll, readAllRowsByIds } from "@lib/postgrest-read";
+import { readAll, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ApplyDrive,

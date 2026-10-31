@@ -11,7 +11,7 @@ export function Card({
 }: { children: ReactNode; className?: string } & HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`rounded-2xl border border-line/70 bg-surface shadow-xs transition-shadow hover:shadow-sm ${className}`}
+      className={`rounded-card border border-line/70 bg-surface shadow-xs transition-shadow hover:shadow-sm ${className}`}
       {...props}
     >
       {children}
@@ -65,7 +65,7 @@ const DISABLED = "disabled:cursor-not-allowed disabled:opacity-60";
 const SIZING = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2.5 text-sm" } as const;
 
 const SHAPE =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors";
+  "inline-flex items-center justify-center gap-2 rounded-control font-semibold transition-colors";
 
 /**
  * The design system had no spinner, so eleven buttons spelled "Saving…" out by
@@ -250,7 +250,9 @@ export function StatCard({
   const body = (
     <div className="flex flex-col">
       <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
-      <p className={`mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`}>
+      <p
+        className={`mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`}
+      >
         {value}
       </p>
       {hint !== undefined && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
@@ -260,7 +262,7 @@ export function StatCard({
   if (onClick === undefined && to === undefined) {
     return (
       <div
-        className={`flex flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all ${containerTone}`}
+        className={`flex flex-col justify-between rounded-card border p-4 shadow-xs transition-all ${containerTone}`}
       >
         {body}
       </div>
@@ -281,7 +283,7 @@ export function StatCard({
     </>
   );
 
-  const shape = `group flex cursor-pointer flex-col justify-between rounded-2xl border p-4 text-left shadow-xs transition-all hover:shadow-sm ${containerTone}`;
+  const shape = `group flex cursor-pointer flex-col justify-between rounded-card border p-4 text-left shadow-xs transition-all hover:shadow-sm ${containerTone}`;
 
   return to === undefined ? (
     <button type="button" onClick={onClick} aria-haspopup="dialog" className={shape}>

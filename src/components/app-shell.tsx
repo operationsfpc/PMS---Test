@@ -2,7 +2,7 @@ import { landingRouteForRole } from "@domain/auth-routing";
 import { openGroupHeadings } from "@domain/navigation";
 import { campusScopeFor } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
-import { useAuth, useAuthActions } from "@lib/auth-context";
+import { isTestPreviewAllowed, useAuth, useAuthActions } from "@lib/auth-context";
 import {
   Archive,
   Award,
@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { Button, Card } from "./ui";
+import { Badge, Button, Card } from "./ui";
 
 /**
  * Application shell: brand header, role-scoped navigation.
@@ -507,8 +507,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
   const campuses = auth.status === "signed-in" ? auth.campuses : [];
 
-  // Role switcher is exclusively for local development testing, never shown in production
-  const previewable = Boolean(import.meta.env.DEV);
+  /**
+   * The switcher is shown wherever the override it sets is actually honoured.
+   *
+   * Those used to be two different rules: `SupabaseAuthProvider` applies a
+   * stored preview role whenever `isTestPreviewAllowed` accepts the email —
+   * which includes the test deployment — while this control checked
+   * `import.meta.env.DEV`. So an Admin on pms-test-gamma could be browsing as
+   * an Account Executive with no switcher in sight, no sign of the override,
+   * and no way to clear it, and every write they attempted was refused by a
+   * database that still knew their real role. That is what the "You do not
+   * have permission to raise a PIF" report on 2026-10-31 actually was.
+   */
+  const previewable =
+    Boolean(import.meta.env.DEV) || (signedInEmail !== "" && isTestPreviewAllowed(signedInEmail));
+  const previewing =
+    auth.status === "signed-in" && auth.previewRole != null && auth.previewRole !== actualRole
+      ? auth.previewRole
+      : null;
   const [localPreview, setLocalPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -648,6 +664,36 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/*
+       * Said on every screen, because the override is global. A preview role
+       * changes which doors the app opens; `current_app_role()` reads the real
+       * profile, so it changes nothing about what the database will accept.
+       * Without this the mismatch surfaces as a permission error on a form
+       * someone was just allowed to fill in.
+       */}
+      {previewing !== null && (
+        <div
+          role="status"
+          className="border-b border-gold-200 bg-gold-50 px-4 py-2.5 text-sm text-gold-800"
+        >
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2">
+            <Badge tone="warning">Previewing as {previewing.replaceAll("_", " ")}</Badge>
+            <span className="min-w-0 break-words">
+              Signed in as {actualRole.replaceAll("_", " ")}. The screens follow the preview; the
+              database follows your real role and will refuse any write it does not allow.
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto whitespace-nowrap"
+              onClick={() => setPreviewRole?.(null)}
+            >
+              Stop preview
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
         {/*
