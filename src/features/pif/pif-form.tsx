@@ -11,7 +11,6 @@ import { extractPifValidationIssues } from "./pif-diagnostics";
 import {
   CompanyNameField,
   ContactsEditor,
-  DesignationsEditor,
   DriveTypeAndCompensationField,
   EligibilityFields,
   findCompanyMatch,
@@ -147,11 +146,6 @@ function RoleBlock({
           />
         )}
       </Labelled>
-      <DesignationsEditor
-        api={roleApi}
-        heading="One interview process, however many designations — one role."
-        detail="A designation with its own interview process needs its own role below — the visit is shared, the process is not. Two roles for one process would double the shortlist and the audience count."
-      />
       <Labelled label="Role category" required error={roleApi.err("roleCategory")}>
         {(id) => (
           <select

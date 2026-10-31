@@ -33,8 +33,8 @@ import {
  *
  * The single-role PIF and the multi-role form used to carry two hand-written
  * copies of every field block — drive type and compensation, shift, eligibility,
- * skills, designations, rounds, JD, contacts, venue — ~700 lines of drifting
- * duplication. Each group here is path-agnostic: it asks its `api` for full
+ * skills, rounds, JD, contacts, venue — ~700 lines of drifting duplication. Each
+ * group here is path-agnostic: it asks its `api` for full
  * RHF paths, so the single form scopes paths at the top level ("openings")
  * and a role card scopes them under its position ("roles.0.openings") with
  * the SAME component.
@@ -435,76 +435,6 @@ export function SkillsPicker({
         repository.
       </p>
     </fieldset>
-  );
-}
-
-/**
- * F7: one interview process, several job titles. Rows are added by the AE and
- * blank ones are dropped by the schema — an untouched row is not a mistake
- * worth an error message.
- */
-export function DesignationsEditor<T extends FieldValues>({
-  api,
-  heading,
-  detail,
-}: {
-  api: PifFieldApi<T>;
-  heading: string;
-  detail?: string;
-}) {
-  const designations = useFieldArray({
-    control: api.control,
-    name: api.field("additionalDesignations") as never,
-  });
-
-  return (
-    <div className="sm:col-span-2 rounded-lg border border-line bg-surface-muted p-4">
-      <p className="text-sm font-medium text-ink-900">{heading}</p>
-      {detail !== undefined && <p className="mt-1 text-xs text-ink-700">{detail}</p>}
-
-      {designations.fields.map((field, index) => (
-        <div key={field.id} className="mt-3 flex flex-wrap items-end gap-2">
-          <div className="min-w-48 flex-1">
-            <label
-              htmlFor={`designation-${field.id}`}
-              className="mb-1 block text-xs font-medium text-ink-700"
-            >
-              Designation {index + 1}
-            </label>
-            <input
-              id={`designation-${field.id}`}
-              className={controlClass}
-              {...api.register(`${api.field("additionalDesignations")}.${index}` as never)}
-            />
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            aria-label={`Remove designation ${index + 1}`}
-            onClick={() => designations.remove(index)}
-          >
-            Remove
-          </Button>
-        </div>
-      ))}
-
-      {api.err("additionalDesignations") !== undefined && (
-        <p className="mt-1 text-xs text-danger-500" role="status">
-          {api.err("additionalDesignations")}
-        </p>
-      )}
-
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        className="mt-3"
-        onClick={() => designations.append("" as never)}
-      >
-        Add another designation
-      </Button>
-    </div>
   );
 }
 

@@ -58,13 +58,13 @@ const view = (drives: readonly DriveProgressEntry[] = [DRIVE]): DriveProgressVie
 });
 
 /**
- * Open one card's slide-over and read inside it.
+ * Open one visit's slide-over and read inside it.
  *
- * Since 2026-10-18 the card keeps only what a visit IS — company, date, the
- * four counts, its roles — and the students moved into the pane, because forty
- * applicants at ninety pixels each pushed the next company four screens down.
- * So a test that names a student has to press `View` first, exactly as the
- * coordinator does.
+ * Since 2026-10-31 the table row keeps only what a visit IS — company, date,
+ * its four counts, its roles — and the students live in the pane, because
+ * forty applicants at ninety pixels each pushed the next company four screens
+ * down. So a test that names a student has to press `View` first, exactly as
+ * the coordinator does.
  */
 async function openVisit(user: ReturnType<typeof userEvent.setup>, entity: string) {
   await screen.findByText("Zoho");
@@ -105,28 +105,27 @@ describe("DriveProgressPage", () => {
   });
 
   /**
-   * The other half of the same report: the card's whole height is now the
-   * header, whatever the visit holds. A coordinator scanning five companies
-   * does not scroll through their cohorts to do it.
+   * The other half of the same report: the table row is the whole of a visit.
+   * A coordinator scanning ten companies reads one line each, not their
+   * cohorts, and the names stay in the pane.
    */
-  it("keeps a single-role visit to one card that says nothing about its students", async () => {
+  it("keeps a single-role visit to one row that says nothing about its students", async () => {
     render(<DriveProgressPage view={view()} />);
 
     expect(await screen.findByText("Zoho")).toBeDefined();
-    expect(screen.getByText(/Engineer · 3 applicants/)).toBeDefined();
+    expect(screen.getByText("Engineer")).toBeDefined();
     expect(screen.queryByText("Priya Ramesh")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   /**
    * 2026-10-16 (Karthik): "central placement coordinator same company shows as
-   * two". Two roles raised on one company visit are ONE card now — the company
-   * named once, the visit counted once — and the roles are listed as rows of
-   * that one card. Folding must never merge: Priya applied to both roles and
-   * appears in both rosters, because each was shortlisted, tested and offered
-   * on its own.
+   * two". Two roles raised on one company visit are ONE row group now — the
+   * company named once, in a cell that spans its roles — and each role is a
+   * row. Folding must never merge: Priya applied to both roles and appears in
+   * both rosters, because each was shortlisted, tested and offered on its own.
    */
-  it("gives one company visit one card that lists each role once", async () => {
+  it("gives one company visit one row group that lists each role once", async () => {
     const mts: DriveProgressEntry = {
       ...DRIVE,
       companyDriveId: "e1",
@@ -144,7 +143,7 @@ describe("DriveProgressPage", () => {
     render(<DriveProgressPage view={view([mts, qa])} />);
 
     expect(await screen.findByText("Zoho")).toBeDefined();
-    expect(screen.getByText("2 roles")).toBeDefined();
+    expect(screen.getByText(/2 roles/)).toBeDefined();
     // The company no longer links: one visit, two drive records, and picking
     // one of them silently is how the old event strip sent readers to the
     // wrong place. Each role links to its own record from inside the pane.
@@ -158,12 +157,11 @@ describe("DriveProgressPage", () => {
 
   /**
    * The card rounds itself with `overflow-hidden`, and a table is never
-   * narrower than its own content, so a role table wider than the card used to
-   * lose its right-hand edge — including the only button that opens a role's
-   * students. The strip that scrolls has to be the table's own container, not
-   * the card.
+   * narrower than its own content, so a wide table used to lose its right-hand
+   * edge — including the only button that opens a role's students. The strip
+   * that scrolls has to be the table's own container, not the card.
    */
-  it("keeps the role table's action column inside a strip that scrolls", async () => {
+  it("keeps the table's action column inside a strip that scrolls", async () => {
     const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1" };
     const qa: DriveProgressEntry = {
       ...DRIVE,
@@ -174,7 +172,7 @@ describe("DriveProgressPage", () => {
     };
 
     render(<DriveProgressPage view={view([mts, qa])} />);
-    await screen.findByText("2 roles");
+    await screen.findByText(/2 roles/);
 
     const table = screen.getByRole("table");
     const strip = table.parentElement;
@@ -210,7 +208,7 @@ describe("DriveProgressPage", () => {
     };
 
     render(<DriveProgressPage view={view([mts, qa])} />);
-    await screen.findByText("2 roles");
+    await screen.findByText(/2 roles/);
 
     await user.click(screen.getByRole("button", { name: /view the students of engineer/i }));
 
@@ -231,39 +229,42 @@ describe("DriveProgressPage", () => {
   });
 
   /**
-   * A visit holds STUDENTS, not applications: a coordinator who reads "4" and
-   * phones four people finds three. Without a student id on every row the
-   * figure falls back to the head-count it can actually support.
+   * A role holds STUDENTS, not applications. Without a student id on every row
+   * the figure falls back to the head-count it can actually support, so a
+   * coordinator who reads "3" and phones three people finds three.
    */
-  it("counts one applicant who reached two roles of a visit once", async () => {
+  it("counts one student once in a role, however many application rows they hold", async () => {
     const withIds = DRIVE.students.map((s, i) => ({ ...s, studentId: `s${i + 1}` }));
-    const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1", students: withIds };
-    const qa: DriveProgressEntry = {
-      ...DRIVE,
-      driveId: "d2",
-      roleTitle: "Quality Analyst",
-      companyDriveId: "e1",
-      students: withIds.slice(0, 1),
-    };
+    const [first] = DRIVE.students;
+    if (first === undefined) throw new Error("fixture has no students");
+    const twice = { ...first, applicationId: "a4", studentId: "s1" };
+    const mts: DriveProgressEntry = { ...DRIVE, students: [...withIds, twice] };
 
-    render(<DriveProgressPage view={view([mts, qa])} />);
+    render(<DriveProgressPage view={view([mts])} />);
+    await screen.findByText("Engineer");
 
-    // 4 applications, 3 students; 3 shortlisted across the two roles.
-    expect(await screen.findByText(/3 applicants · 3 shortlisted/)).toBeDefined();
+    const row = screen.getByText("Engineer").closest("tr");
+    if (row === null) throw new Error("row not found");
+    // 4 application rows, 3 students: applicants 3, shortlisted 3, in rounds 3,
+    // offers 1. Only the head-count is deduped — a stage counts the rows that
+    // reached it. The four count columns follow the role title.
+    const counts = within(row)
+      .getAllByRole("cell")
+      .slice(1, 5)
+      .map((cell) => cell.textContent);
+    expect(counts).toEqual(["3", "3", "3", "1"]);
   });
 
   /**
    * The company name of a one-role visit still links to its one record, and
-   * the card offers exactly one way to its students: no role table to choose
-   * from, because there is only one role.
+   * the row offers exactly one way to its students.
    */
-  it("keeps a standalone drive a single card that links straight to its record", async () => {
+  it("keeps a standalone drive one row that links straight to its record", async () => {
     render(<DriveProgressPage view={view([DRIVE])} />);
 
-    expect(await screen.findByRole("link", { name: /Zoho/ })).toBeDefined();
-    expect(screen.getByText(/Engineer · 3 applicants/)).toBeDefined();
+    expect(await screen.findByRole("link", { name: "Zoho" })).toBeDefined();
+    expect(screen.getByText("Engineer")).toBeDefined();
     expect(screen.getAllByRole("button", { name: /view the students of zoho/i })).toHaveLength(1);
-    expect(screen.queryByRole("table")).toBeNull();
   });
 
   /**
@@ -305,8 +306,7 @@ describe("DriveProgressPage", () => {
  * ongoing drive progress without manual scrolling." (2026-08-18)
  *
  * The same `searchDrives` predicate the Live list uses, so "hcl" means the same
- * thing on every screen that lists drives - and each card here carries a whole
- * cohort's rounds, so this page is the longest scroll in the application.
+ * thing on every screen that lists drives.
  */
 describe("DriveProgressPage — searching", () => {
   const two = {
@@ -370,12 +370,16 @@ describe("DriveProgressPage — filtering and tagging by drive type", () => {
 
   const showTyped = () => render(<DriveProgressPage view={{ drives: async () => typed }} />);
 
-  it("tags each drive with its type", async () => {
+  it("tags each drive row with its type", async () => {
     showTyped();
     await screen.findByText("ABCD Infosys");
 
-    expect(screen.getAllByText("Internship").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Full time").length).toBeGreaterThan(0);
+    // Inside the table, not the filter chips above it: the tag belongs to the
+    // row, and a chip matching in its place would pass even if the row said
+    // nothing.
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("Internship")).toBeDefined();
+    expect(within(table).getByText("Full time")).toBeDefined();
   });
 
   it("narrows to the chosen type", async () => {
@@ -489,7 +493,7 @@ describe("what the board says an internship offer paid", () => {
   });
 });
 
-describe("DriveProgressPage — college-wise breakdown cards", () => {
+describe("DriveProgressPage — college chips in the pane", () => {
   const multiCollegeDrive: DriveProgressEntry = {
     driveId: "d1",
     companyName: "Zoho",

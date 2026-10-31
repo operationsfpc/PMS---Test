@@ -265,58 +265,6 @@ describe("PifForm — what the recruiter actually said", () => {
       rounds: [{ sequence: 1, name: "Aptitude test" }],
     });
   });
-
-  /**
-   * F7: "If its one interview process, multiple designations only one PIF is
-   * required, if multiple interview process for multiple designations then
-   * multiple PIF is required." One PIF now holds several roles, so the second
-   * process is a second role block on the same visit — not a second form.
-   */
-  it("says when a second role is needed and when it is not", () => {
-    show();
-
-    expect(screen.getByText(/one interview process/i)).toBeDefined();
-    expect(screen.getByText(/needs its own role below/i)).toBeDefined();
-  });
-
-  it("collects further designations covered by the same interview process", async () => {
-    const onSubmit = vi.fn();
-    const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
-
-    await fillRequired(user);
-    await user.click(screen.getByRole("button", { name: /add another designation/i }));
-    await user.type(screen.getByLabelText("Designation 1"), "Associate Engineer");
-    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
-
-    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
-      additionalDesignations: ["Associate Engineer"],
-    });
-  });
-
-  it("drops a designation row the AE added and left blank", async () => {
-    const onSubmit = vi.fn();
-    const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
-
-    await fillRequired(user);
-    await user.click(screen.getByRole("button", { name: /add another designation/i }));
-    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
-
-    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
-    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ additionalDesignations: [] });
-  });
-
-  it("removes a designation row", async () => {
-    const user = userEvent.setup();
-    show();
-
-    await user.click(screen.getByRole("button", { name: /add another designation/i }));
-    await user.click(screen.getByRole("button", { name: /remove designation 1/i }));
-
-    expect(screen.queryByLabelText("Designation 1")).toBeNull();
-  });
 });
 
 /**

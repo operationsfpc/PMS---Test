@@ -1,6 +1,7 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
 import { StudentIdentity } from "@components/student-identity";
+import { TablePager } from "@components/table-pager";
 import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
@@ -81,11 +82,11 @@ const RESULT_TONE = (result: RoundResult | null, attendance: AttendanceStatus) =
 };
 
 /**
- * Five company VISITS a page, not five drives. A visit that raised four roles
- * is one card now, and paging by role would have put half a company on each
+ * Ten company VISITS a page, not ten drives. A visit that raised four roles is
+ * one row group, and paging by role would have put half a company on each
  * page — the same company twice on screen, which is what was reported.
  */
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 
 /** The slice of the cycle a coordinator is asking about, held per role. */
 type StageFilter = "all" | "shortlisted" | "in_rounds" | "offers";
@@ -147,6 +148,8 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DriveTypeFilterValue>("");
   const [page, setPage] = useState(1);
+  /** The role whose students the pane is listing, and the visit it belongs to. */
+  const [openPane, setOpenPane] = useState<{ eventId: string; driveId: string } | null>(null);
   /**
    * Where each role is being read, keyed by drive id so the choice survives
    * folding a role away and turning the page.
@@ -204,16 +207,21 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         };
 
   /**
-   * One card per company visit. A legacy drive with no event of its own groups
-   * under its own drive id, so it stays the single-role visit it always was.
+   * One row group per company visit. A legacy drive with no event of its own
+   * groups under its own drive id, so it stays the single-role visit it was.
    */
   const events = useMemo(() => [...groupDrivesByEvent(visible).entries()], [visible]);
 
-  const totalPages = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
-  const paginatedEvents = useMemo(
-    () => events.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [events, page],
+  const pageCount = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
+  const current = Math.min(page, pageCount);
+  const pageEvents = useMemo(
+    () => events.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+    [events, current],
   );
+
+  const openGroup = openPane === null ? undefined : events.find(([id]) => id === openPane.eventId);
+  const openRoles = openGroup?.[1];
+  const openHead = openRoles?.[0];
 
   return (
     <div>
@@ -257,6 +265,7 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
             onChange={(q) => {
               setQuery(q);
               setPage(1);
+              setOpenPane(null);
             }}
           />
           <DriveTypeFilter
@@ -264,6 +273,7 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
             onChange={(t) => {
               setType(t);
               setPage(1);
+              setOpenPane(null);
             }}
             {...(typeCounts === undefined ? {} : { counts: typeCounts })}
           />
@@ -275,59 +285,74 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                 {...(type === "" ? {} : { typeLabel: driveTypeLabel(type) })}
               />
             </Card>
-          ) : null}
-
-          {paginatedEvents.map(([eventId, roles], index) => (
-            <VisitCard
-              key={eventId}
-              roles={roles}
-              selection={selection}
-              onSelect={select}
-              accentIndex={(page - 1) * PAGE_SIZE + index}
-            />
-          ))}
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface p-4">
-              <p className="text-xs text-ink-500">
-                Showing Page <span className="font-semibold text-ink-900">{page}</span> of{" "}
-                <span className="font-semibold text-ink-900">{totalPages}</span> ({events.length}{" "}
-                total company visits)
-              </p>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1}
-                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Previous
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setPage(p)}
-                    className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                      p === page
-                        ? "bg-brand-500 text-white"
-                        : "border border-line text-ink-700 hover:bg-surface-muted"
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page >= totalPages}
-                  className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                </button>
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[840px] border-collapse text-left text-sm">
+                  <caption className="sr-only">
+                    Company visits and their roles, and how far each role's students have come
+                  </caption>
+                  <thead>
+                    <tr className="border-b border-line bg-surface-muted/60 text-xs uppercase tracking-wide text-ink-500">
+                      <th scope="col" className="px-4 py-2.5 font-semibold">
+                        Company
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 font-semibold">
+                        Role
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                        Applicants
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                        Shortlisted
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                        In rounds
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                        Offers
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 font-semibold">
+                        Status
+                      </th>
+                      <th scope="col" className="px-4 py-2.5 text-right font-semibold">
+                        <span className="sr-only">Action</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  {pageEvents.map(([eventId, roles], index) => (
+                    <VisitRows
+                      key={eventId}
+                      roles={roles}
+                      accentIndex={(current - 1) * PAGE_SIZE + index}
+                      onOpen={(driveId) => setOpenPane({ eventId, driveId })}
+                    />
+                  ))}
+                </table>
               </div>
-            </div>
+              {events.length > PAGE_SIZE && (
+                <div className="border-t border-line px-4 py-3">
+                  <TablePager
+                    page={current - 1}
+                    pageSize={PAGE_SIZE}
+                    total={events.length}
+                    onPage={(next) => setPage(next + 1)}
+                    unit="company visits"
+                  />
+                </div>
+              )}
+            </Card>
+          )}
+
+          {openPane !== null && openRoles !== undefined && openHead !== undefined && (
+            <VisitPane
+              open
+              onClose={() => setOpenPane(null)}
+              company={openHead.companyName}
+              description={dayIn(openHead.tentativeDate) ?? undefined}
+              roles={paneRolesFor(openRoles, selection, select)}
+              activeId={openPane.driveId}
+            />
           )}
         </>
       )}
@@ -336,44 +361,30 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
 }
 
 /**
- * One company visit, one card — 2026-10-16 (Karthik): "same company shows as
- * two". The header answers what two cards side by side never could: how many
- * roles the visit raised, how many students it holds, and how far they have
- * come.
+ * One company visit, one row group — 2026-10-16 (Karthik): "same company shows
+ * as two". A visit that raised several roles keeps the company named once, in
+ * a cell that spans its roles, and each role states its own counts, status and
+ * `View`. A single-role visit is one row, and the company links to its one
+ * record.
  *
- * A visit that raised several roles lists them as rows, because a coordinator
- * reads one role's students at a time, never two side by side: the row opens
- * the pane on that role, and the filters stay the role's own there too, since
- * shortlisting, rounds and offers are still decided role by role.
- *
- * The students themselves never sit on the card. Asked on 2026-10-18 to stop
- * this screen scrolling forever: one applicant row is about ninety pixels of
- * round badges, so a visit holding forty students pushed the next company four
- * screens down and the coordinator scrolled past all of them to find it. The
- * card is now the same height whatever it holds — company, the four counts, the
- * roles, and one `View` — and the names are in the slide-over.
+ * Asked on 2026-10-31 to make this screen as simple as possible: the card
+ * frames, band headers and repeated visit totals are gone, and what is left is
+ * the table a coordinator reads down.
  */
-function VisitCard({
+function VisitRows({
   roles,
-  selection,
-  onSelect,
   accentIndex,
+  onOpen,
 }: {
   roles: readonly DriveProgressEntry[];
-  selection: Record<string, RoleSelection>;
-  onSelect: (driveId: string, next: Partial<RoleSelection>) => void;
   accentIndex: number;
+  onOpen: (driveId: string) => void;
 }) {
-  /** The role whose students the pane is listing. */
-  const [openRole, setOpenRole] = useState<string | null>(null);
-
   const head = roles[0];
   if (head === undefined) return null;
 
   const accent = visitAccent(accentIndex);
-
   const isVisit = roles.length > 1;
-  const counts = countStage(roles.flatMap((role) => [...role.students]));
   const when = dayIn(head.tentativeDate);
 
   // The type said once for the whole visit. A visit that mixes an internship
@@ -383,41 +394,110 @@ function VisitCard({
   const [singleType] = types;
   const mixed = types.size > 1;
 
-  const statuses = [...new Set(roles.map((role) => role.status))].map((status) => ({
-    status,
-    count: roles.filter((role) => role.status === status).length,
-  }));
-
-  const meta: string[] = [];
-  if (!isVisit) meta.push(head.roleTitle ?? "Role not set");
+  const meta = [mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)];
   if (when !== null) meta.push(when);
-  meta.push(
-    `${counts.applicants} applicants`,
-    `${counts.shortlisted} shortlisted`,
-    `${counts.inRounds} in rounds`,
-    `${counts.offers} offers`,
+  if (isVisit) meta.push(`${roles.length} roles`);
+
+  return (
+    <tbody>
+      {roles.map((drive, index) => {
+        const own = countStage(drive.students);
+        return (
+          <tr
+            key={drive.driveId}
+            className="border-t border-line align-top hover:bg-surface-muted/30"
+          >
+            {index === 0 && (
+              <th
+                scope={isVisit ? "rowgroup" : "row"}
+                rowSpan={roles.length}
+                className="px-4 py-3 text-left align-top"
+              >
+                <span className="flex min-w-44 items-start gap-2">
+                  <span
+                    aria-hidden="true"
+                    className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${accent.dot}`}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-heading font-bold text-ink-900">
+                      {/* A single-role visit is one company with exactly one
+                          drive record behind it, so the name can link. A visit
+                          that raised several cannot — picking one of them
+                          silently is how a coordinator ends up reading the
+                          wrong record. */}
+                      {isVisit ? (
+                        head.companyName
+                      ) : (
+                        <Link
+                          to={`/drives/${head.driveId}`}
+                          className="transition-colors hover:text-brand-600 hover:underline"
+                        >
+                          {head.companyName}
+                        </Link>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-xs font-normal text-ink-500">
+                      {meta.join(" · ")}
+                    </span>
+                  </span>
+                </span>
+              </th>
+            )}
+            <td className="px-3 py-3 font-medium text-ink-900">
+              <span className="flex flex-wrap items-center gap-2">
+                {drive.roleTitle ?? "Role not set"}
+                {mixed && drive.driveType !== undefined && drive.driveType !== null ? (
+                  <Badge tone={driveTypeTone(drive.driveType)}>
+                    {driveTypeLabel(drive.driveType)}
+                  </Badge>
+                ) : null}
+              </span>
+            </td>
+            <td className="px-3 py-3 text-right tabular-nums">{own.applicants}</td>
+            <td className="px-3 py-3 text-right tabular-nums">{own.shortlisted}</td>
+            <td className="px-3 py-3 text-right tabular-nums">{own.inRounds}</td>
+            <td className="px-3 py-3 text-right tabular-nums">{own.offers}</td>
+            <td className="px-3 py-3">
+              <Badge tone={driveStatusTone(drive.status)}>{driveStatusLabel(drive.status)}</Badge>
+            </td>
+            <td className="px-4 py-3 text-right whitespace-nowrap">
+              <Button
+                size="sm"
+                variant="secondary"
+                aria-label={`View the students of ${
+                  isVisit ? (drive.roleTitle ?? "this role") : head.companyName
+                }`}
+                onClick={() => onOpen(drive.driveId)}
+              >
+                View
+              </Button>
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
   );
+}
 
-  const body = (drive: DriveProgressEntry) => (
-    <RoleProgress
-      drive={drive}
-      selection={selection[drive.driveId] ?? UNFILTERED}
-      onSelect={(next) => onSelect(drive.driveId, next)}
-    />
-  );
+/** The pane's roles, each opened by its own tab and each owning its filters. */
+function paneRolesFor(
+  roles: readonly DriveProgressEntry[],
+  selection: Record<string, RoleSelection>,
+  onSelect: (driveId: string, next: Partial<RoleSelection>) => void,
+): readonly VisitPaneRole[] {
+  const types = new Set(roles.map((role) => role.driveType ?? null));
+  const mixed = types.size > 1;
 
-  const typeBadge = (drive: DriveProgressEntry) =>
-    !mixed || drive.driveType === undefined || drive.driveType === null ? undefined : (
-      <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
-    );
-
-  const paneRoles: readonly VisitPaneRole[] = roles.map((drive) => {
+  return roles.map((drive) => {
     const applicants = countStage(drive.students).applicants;
     return {
       id: drive.driveId,
       label: drive.roleTitle ?? "Role not set",
       count: { value: applicants, unit: applicants === 1 ? "applicant" : "applicants" },
-      badge: typeBadge(drive),
+      badge:
+        !mixed || drive.driveType === undefined || drive.driveType === null ? undefined : (
+          <Badge tone={driveTypeTone(drive.driveType)}>{driveTypeLabel(drive.driveType)}</Badge>
+        ),
       content: (
         <>
           <p className="mb-3">
@@ -430,146 +510,15 @@ function VisitCard({
               View
             </ButtonLink>
           </p>
-          {body(drive)}
+          <RoleProgress
+            drive={drive}
+            selection={selection[drive.driveId] ?? UNFILTERED}
+            onSelect={(next) => onSelect(drive.driveId, next)}
+          />
         </>
       ),
     };
   });
-
-  return (
-    <Card className="mb-6 overflow-hidden">
-      <div
-        className={`flex flex-wrap items-start justify-between gap-3 border-b border-line ${accent.band} p-4`}
-      >
-        <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
-            {/* A single-role visit is one company with exactly one drive record
-                behind it, so the name can link. A visit that raised several
-                cannot — picking one of them silently is how a coordinator ends
-                up reading the wrong record. */}
-            {isVisit ? (
-              head.companyName
-            ) : (
-              <Link
-                to={`/drives/${head.driveId}`}
-                className="transition-colors hover:text-brand-600 hover:underline"
-              >
-                {head.companyName}
-              </Link>
-            )}
-            <Badge tone={mixed ? "neutral" : driveTypeTone(singleType ?? null)}>
-              {mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)}
-            </Badge>
-            {isVisit && <Badge tone="brand">{roles.length} roles</Badge>}
-          </p>
-          <p className="mt-1 text-sm text-ink-500">{meta.join(" · ")}</p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {statuses.map((entry) => (
-            <Badge key={entry.status} tone={driveStatusTone(entry.status)}>
-              {driveStatusLabel(entry.status)}
-              {entry.count > 1 && ` ×${entry.count}`}
-            </Badge>
-          ))}
-          {/* One role means nothing to choose between, so the whole visit is
-              one row and this is the card's single `View`. */}
-          {!isVisit && (
-            <Button
-              size="sm"
-              variant="secondary"
-              aria-label={`View the students of ${head.companyName}`}
-              onClick={() => setOpenRole(head.driveId)}
-            >
-              View
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {isVisit ? (
-        // The card rounds its corners with `overflow-hidden`, and a table is
-        // never narrower than its own content — so on a phone, or with the
-        // sidebar open at a laptop width, the right-hand edge of this table fell
-        // off the card with no scrollbar to reach it, and the only way to open a
-        // role's students was cut away. Let the strip scroll instead.
-        <div className="overflow-x-auto p-4">
-          <table className="w-full min-w-[660px] text-left text-sm">
-            <caption className="sr-only">
-              Roles raised by {head.companyName}, and how far each one has come
-            </caption>
-            <thead>
-              <tr className="text-xs uppercase tracking-wide text-ink-500">
-                <th scope="col" className="py-1 pr-3 font-semibold">
-                  Role
-                </th>
-                <th scope="col" className="py-1 pr-3 font-semibold">
-                  Students
-                </th>
-                <th scope="col" className="py-1 pr-3 font-semibold">
-                  Shortlisted
-                </th>
-                <th scope="col" className="py-1 pr-3 font-semibold">
-                  In rounds
-                </th>
-                <th scope="col" className="py-1 pr-3 font-semibold">
-                  Offers
-                </th>
-                <th scope="col" className="py-1 pr-3 font-semibold">
-                  Status
-                </th>
-                <th scope="col" className="py-1 text-right font-semibold">
-                  <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {roles.map((drive) => {
-                const own = countStage(drive.students);
-                return (
-                  <tr key={drive.driveId} className="border-t border-line">
-                    <td className="py-2 pr-3 font-medium text-ink-900">
-                      <span className="flex flex-wrap items-center gap-2">
-                        {drive.roleTitle ?? "Role not set"}
-                        {typeBadge(drive) ?? null}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-3">{own.applicants}</td>
-                    <td className="py-2 pr-3">{own.shortlisted}</td>
-                    <td className="py-2 pr-3">{own.inRounds}</td>
-                    <td className="py-2 pr-3">{own.offers}</td>
-                    <td className="py-2 pr-3">
-                      <Badge tone={driveStatusTone(drive.status)}>
-                        {driveStatusLabel(drive.status)}
-                      </Badge>
-                    </td>
-                    <td className="py-2 text-right whitespace-nowrap">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        aria-label={`View the students of ${drive.roleTitle ?? "this role"}`}
-                        onClick={() => setOpenRole(drive.driveId)}
-                      >
-                        View
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
-
-      <VisitPane
-        open={openRole !== null}
-        onClose={() => setOpenRole(null)}
-        company={head.companyName}
-        description={when ?? undefined}
-        roles={paneRoles}
-        {...(openRole === null ? {} : { activeId: openRole })}
-      />
-    </Card>
-  );
 }
 
 /**
