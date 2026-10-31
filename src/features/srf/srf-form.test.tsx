@@ -445,7 +445,9 @@ describe("SRF marksheet evidence", () => {
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(
+      await screen.findByText("Student dashboard", undefined, { timeout: 3000 }),
+    ).toBeDefined();
     // Three marksheets, and - since P10 - the resume for the one area chosen.
     // Both buckets, both under the student's own id, which is what the storage
     // policy (0022) checks.
@@ -466,8 +468,35 @@ describe("SRF submission", () => {
 
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(
+      await screen.findByText("Student dashboard", undefined, { timeout: 3000 }),
+    ).toBeDefined();
     expect(screen.queryByRole("button", { name: /submit for verification/i })).toBeNull();
+  });
+
+  /**
+   * The dashboard used to replace the form instantly, which read as the form
+   * discarding itself. The confirmation is a real screen now, and the
+   * redirect follows a beat later (2026-10-31).
+   */
+  it("says the form was submitted before the dashboard arrives", async () => {
+    studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
+    signedIn();
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} />);
+    await fillValidForm(user);
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    expect(await screen.findByText("Form submitted")).toBeDefined();
+    expect(screen.getByText(/taking you to your dashboard/i)).toBeDefined();
+    // Not instant: the student sees the handover before the route changes.
+    expect(screen.queryByText("Student dashboard")).toBeNull();
+
+    expect(
+      await screen.findByText("Student dashboard", undefined, { timeout: 3000 }),
+    ).toBeDefined();
   });
 
   /**
@@ -523,7 +552,9 @@ describe("SRF submission", () => {
       landResume?.();
     });
 
-    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(
+      await screen.findByText("Student dashboard", undefined, { timeout: 3000 }),
+    ).toBeDefined();
     expect(sent).toHaveLength(1);
 
     const payload = sent[0] as {
@@ -576,7 +607,7 @@ describe("SRF submission", () => {
     await fillValidForm(user);
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    await screen.findByText("Student dashboard");
+    await screen.findByText("Student dashboard", undefined, { timeout: 3000 });
     await user.click(screen.getByRole("button", { name: /go back/i }));
 
     expect(await screen.findByText("Previous screen")).toBeDefined();
@@ -719,7 +750,9 @@ describe("other professional profiles", () => {
     await user.type(screen.getByLabelText(/profile 1 link or username/i), "asha_r");
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(
+      await screen.findByText("Student dashboard", undefined, { timeout: 3000 }),
+    ).toBeDefined();
     expect(body.other_profiles).toEqual([{ label: "Codeforces", value: "asha_r" }]);
   });
 
@@ -739,7 +772,9 @@ describe("other professional profiles", () => {
     await user.click(screen.getByRole("button", { name: /add another profile/i }));
     await user.click(screen.getByRole("button", { name: /submit for verification/i }));
 
-    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(
+      await screen.findByText("Student dashboard", undefined, { timeout: 3000 }),
+    ).toBeDefined();
   });
 
   it("asks for the missing half when only one is filled in", async () => {

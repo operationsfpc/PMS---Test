@@ -56,6 +56,13 @@ export const SRF_SECTIONS = [
   { id: "consent", title: "Consent and submission", step: 6 },
 ] as const;
 
+/**
+ * A beat between "sent" and the dashboard. The redirect used to be immediate,
+ * which read as the form quietly discarding itself; the student sees the
+ * confirmation first (2026-10-31).
+ */
+const SUBMIT_REDIRECT_MS = 1600;
+
 export const ROLE_CATEGORY_LABELS: Readonly<Record<RoleCategory, string>> = {
   software_technical: "Software / Technical",
   technical_support_it_ops: "Technical Support / IT Operations",
@@ -312,6 +319,15 @@ export function SrfPage({
    */
   const access = srfAccess(status);
   const [serverError, setServerError] = useState<string | null>(null);
+  /** `submit_srf` has accepted the form; the dashboard follows after a beat. */
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (!submitted) return;
+    const timer = setTimeout(() => navigate("/student", { replace: true }), SUBMIT_REDIRECT_MS);
+    return () => clearTimeout(timer);
+  }, [submitted, navigate]);
+
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
   const { toasts, toast, dismiss } = useToast();
@@ -864,11 +880,10 @@ export function SrfPage({
 
       await submitSrf(values as SrfSubmission, Object.values(evidenceByKey.current));
       /**
-       * The dashboard is where a submitted student reads "with your
-       * coordinator" — and `replace` keeps a form that has already been sent
-       * out of the history, so Back cannot reopen it (2026-10-29).
+       * Confirmation first, dashboard after a beat (2026-10-31). The redirect
+       * is still a `replace`, so a sent form never reopens from Back.
        */
-      navigate("/student", { replace: true });
+      setSubmitted(true);
     } catch (error) {
       setServerError(
         error instanceof SrfSubmitError ? error.message : "Something went wrong. Please try again.",
@@ -975,7 +990,28 @@ export function SrfPage({
           </div>
         )}
 
-        {access.mode === "edit" && (
+        {/*
+         * Sent. The form is gone before the dashboard arrives, so the student
+         * sees the handover rather than a screen that vanishes (2026-10-31).
+         */}
+        {access.mode === "edit" && submitted && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="rounded-xl border border-brand-200 bg-brand-50 p-6 text-center"
+          >
+            <p className="text-lg font-semibold text-ink-900">Form submitted</p>
+            <p className="mt-1 text-sm text-ink-600">
+              Your coordinator will verify it against your marksheets. Taking you to your dashboard…
+            </p>
+            <p className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-brand-700">
+              <Spinner className="text-brand-500" />
+              Redirecting
+            </p>
+          </div>
+        )}
+
+        {access.mode === "edit" && !submitted && (
           <>
             {/* Was hardcoded: step 1 lit on load, the other six never. It now
             reads the domain rule, and every pill is a link back to its
