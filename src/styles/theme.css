@@ -23,6 +23,7 @@
   /* Secondary — amber */
   --color-gold-50: #fff8e6;
   --color-gold-100: #ffedbf;
+  --color-gold-200: #ffe699;
   --color-gold-300: #ffd463;
   --color-gold-500: #ffb800;
   --color-gold-600: #d99c00;
@@ -30,10 +31,13 @@
 
   /* Accents */
   --color-violet-50: #f5eeff;
+  --color-violet-100: #ecdffe;
+  --color-violet-200: #dcc2fd;
   --color-violet-300: #cbaefd;
-  --color-violet-700: #6a3fc0;
   --color-violet-400: #a46afc;
   --color-violet-500: #8b45fa;
+  --color-violet-700: #6a3fc0;
+  --color-violet-900: #3b1d77;
   /* The saved-notice pair: a cyan rule around a wash pale enough to sit under
      body copy. Written as a ramp step so the four screens that say "Attendance
      saved" paint the same notice rather than four hand-typed hexes. */
@@ -55,6 +59,7 @@
   /* Feedback */
   --color-danger-50: #fff0ec;
   --color-danger-100: #ffddd2;
+  --color-danger-200: #ffc4b2;
   --color-danger-400: #e46b45;
   --color-danger-500: #dd4820;
   --color-danger-600: #c23d19;
@@ -62,6 +67,7 @@
   --color-danger-800: #7d2611;
   --color-danger-900: #571a0c;
   --color-success-50: #e6f7f0;
+  --color-success-100: #ccf0e1;
   --color-success-200: #b3e8d1;
   --color-success-300: #7fd6b2;
   --color-success-500: #00a86b;
@@ -111,7 +117,7 @@
   --font-heading: "Raleway", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
 
-  --radius-card: 0.875rem;
+  --radius-card: 1rem;
 
   /**
    * shadcn's own vocabulary, mapped onto the ramp above rather than a second

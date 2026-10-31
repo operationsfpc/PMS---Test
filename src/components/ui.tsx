@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react";
 import type { ButtonHTMLAttributes, ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -10,7 +11,7 @@ export function Card({
 }: { children: ReactNode; className?: string } & HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`rounded-card border border-line bg-surface shadow-sm ${className}`}
+      className={`rounded-2xl border border-line/70 bg-surface shadow-xs transition-shadow hover:shadow-sm ${className}`}
       {...props}
     >
       {children}
@@ -19,14 +20,12 @@ export function Card({
 }
 
 const TONES = {
-  neutral: "bg-surface-muted text-ink-700 border-line",
-  brand: "bg-brand-50 text-brand-600 border-brand-200",
-  // 2026-08-27: the violet accent, for the drive-type tag that is neither a
-  // plain fact (neutral) nor a warning — "Internship → Full time".
-  accent: "bg-violet-50 text-violet-700 border-violet-300",
-  success: "bg-success-50 text-success-500 border-success-500/30",
-  warning: "bg-gold-50 text-gold-700 border-gold-300",
-  danger: "bg-danger-50 text-danger-700 border-danger-500/30",
+  neutral: "bg-surface-muted text-ink-700 border-line/80",
+  brand: "bg-brand-50 text-brand-700 border-brand-200/80",
+  accent: "bg-violet-50 text-violet-700 border-violet-300/80",
+  success: "bg-success-50 text-success-700 border-success-200/80",
+  warning: "bg-gold-50 text-gold-800 border-gold-300/80",
+  danger: "bg-danger-50 text-danger-700 border-danger-200/80",
 } as const;
 
 export type Tone = keyof typeof TONES;
@@ -34,7 +33,7 @@ export type Tone = keyof typeof TONES;
 export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${TONES[tone]}`}
+      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold shadow-2xs ${TONES[tone]}`}
     >
       {children}
     </span>
@@ -201,6 +200,24 @@ export function PageHeader({
   );
 }
 
+const STAT_TONES: Record<Tone, string> = {
+  neutral: "bg-surface border-line/70 hover:border-line",
+  brand: "bg-brand-50/70 border-brand-200/70 hover:border-brand-300",
+  accent: "bg-violet-50/70 border-violet-300/70 hover:border-violet-400",
+  success: "bg-success-50/70 border-success-200/70 hover:border-success-300",
+  warning: "bg-gold-50/70 border-gold-300/70 hover:border-gold-500",
+  danger: "bg-danger-50/70 border-danger-200/70 hover:border-danger-400",
+};
+
+const STAT_VALUES: Record<Tone, string> = {
+  neutral: "text-ink-900",
+  brand: "text-brand-900",
+  accent: "text-violet-700",
+  success: "text-success-700",
+  warning: "text-gold-900",
+  danger: "text-danger-700",
+};
+
 export function StatCard({
   label,
   value,
@@ -227,50 +244,44 @@ export function StatCard({
    */
   to?: string | undefined;
 }) {
-  const accent =
-    tone === "brand"
-      ? "text-brand-500"
-      : tone === "success"
-        ? "text-success-500"
-        : tone === "danger"
-          ? "text-danger-500"
-          : tone === "warning"
-            ? "text-gold-700"
-            : "text-ink-900";
+  const valueColor = STAT_VALUES[tone] ?? STAT_VALUES.neutral;
+  const containerTone = STAT_TONES[tone] ?? STAT_TONES.neutral;
 
   const body = (
-    <>
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{label}</p>
-      <p className={`mt-1.5 font-heading text-2xl font-bold ${accent}`}>{value}</p>
-      {hint !== undefined && <p className="mt-0.5 text-xs text-ink-500">{hint}</p>}
-    </>
+    <div className="flex flex-col">
+      <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
+      <p className={`mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`}>
+        {value}
+      </p>
+      {hint !== undefined && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
+    </div>
   );
 
   if (onClick === undefined && to === undefined) {
-    return <Card className="p-4">{body}</Card>;
+    return (
+      <div
+        className={`flex flex-col justify-between rounded-2xl border p-4 shadow-xs transition-all ${containerTone}`}
+      >
+        {body}
+      </div>
+    );
   }
 
   const press = (
     <>
       {body}
-      <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 opacity-70 group-hover:opacity-100">
-        See who
-        <svg
-          aria-hidden="true"
-          className="h-3 w-3"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-        </svg>
-      </span>
+      <div className="mt-3 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-ink-600 opacity-80 transition-opacity group-hover:opacity-100">
+          See who
+        </span>
+        <span className="flex size-7 items-center justify-center rounded-full bg-ink-900 text-surface shadow-xs transition-transform duration-200 group-hover:scale-110">
+          <ArrowUpRight className="size-3.5" aria-hidden="true" />
+        </span>
+      </div>
     </>
   );
 
-  const shape =
-    "group flex cursor-pointer flex-col rounded-card border border-line bg-surface p-4 text-left shadow-sm transition-all hover:border-brand-300 hover:shadow-md";
+  const shape = `group flex cursor-pointer flex-col justify-between rounded-2xl border p-4 text-left shadow-xs transition-all hover:shadow-sm ${containerTone}`;
 
   return to === undefined ? (
     <button type="button" onClick={onClick} aria-haspopup="dialog" className={shape}>

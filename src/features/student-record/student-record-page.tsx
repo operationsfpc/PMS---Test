@@ -1786,6 +1786,7 @@ export function StudentRecordPage({
           label="Overall CGPA"
           value={record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
           hint="Normalised out of 10"
+          tone="brand"
         />
         <StatCard
           label="Standing Arrears"

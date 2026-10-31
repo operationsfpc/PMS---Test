@@ -799,6 +799,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
               label="Placed on campus"
               value={stats.placed}
               hint={`of ${stats.eligible} eligible`}
+              tone="success"
               onClick={() =>
                 openStudents({
                   eyebrow: "Headline",
@@ -828,6 +829,7 @@ export function DashboardPage({ view, title }: { view: DashboardView; title: str
             <StatCard
               label="Opted out"
               value={stats.optedOut}
+              tone="danger"
               onClick={() =>
                 openStudents({
                   eyebrow: "Headline",

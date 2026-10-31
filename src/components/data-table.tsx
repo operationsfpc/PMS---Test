@@ -226,7 +226,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               setPageIndex(0);
             }}
             placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-8 text-sm text-ink-900 placeholder:italic placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-1 focus:ring-brand-500 shadow-xs"
+            className="w-full rounded-xl border border-line/80 bg-surface py-2 pl-9 pr-8 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-2 focus:ring-brand-500/15 shadow-xs transition-colors"
           />
           {searchQuery && (
             <button
@@ -282,26 +282,26 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         {...(fit ? { role: "region" as const, "aria-label": caption, tabIndex: 0 } : {})}
         className={
           fit
-            ? "min-h-0 flex-1 overflow-auto rounded-xl border border-line bg-surface shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500"
-            : "overflow-x-auto rounded-xl border border-line bg-surface shadow-xs"
+            ? "min-h-0 flex-1 overflow-auto rounded-2xl border border-line/70 bg-surface shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500"
+            : "overflow-x-auto rounded-2xl border border-line/70 bg-surface shadow-xs"
         }
       >
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
           <caption className="sr-only">{caption}</caption>
-          <thead className={fit ? "sticky top-0 z-10 bg-brand-50" : undefined}>
+          <thead className={fit ? "sticky top-0 z-10 bg-surface-muted/95 backdrop-blur-xs" : undefined}>
             <tr
-              className={`border-b border-brand-100 text-brand-900 ${
-                fit ? "bg-brand-50" : "bg-brand-50/50"
+              className={`border-b border-line/70 text-ink-500 ${
+                fit ? "bg-surface-muted/95" : "bg-surface-muted/60"
               }`}
             >
               {enableSelection && (
-                <th scope="col" className="w-10 px-3 py-3 text-center">
+                <th scope="col" className="w-10 px-4 py-3 text-center">
                   <input
                     type="checkbox"
                     aria-label="Select all visible rows"
                     checked={areAllVisibleSelected}
                     onChange={handleToggleAllVisible}
-                    className="rounded border-line text-brand-600 focus:ring-brand-500 h-4 w-4"
+                    className="size-4 rounded border-line text-brand-600 focus:ring-brand-500"
                   />
                 </th>
               )}
@@ -316,7 +316,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                         ? "ascending"
                         : "descending"
                   }
-                  className={`px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-brand-900 ${col.className ?? ""}`}
+                  className={`px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-ink-500 ${col.className ?? ""}`}
                 >
                   {/*
                    * A click handler on the header cell itself was mouse-only: a
@@ -335,7 +335,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       type="button"
                       onClick={() => handleSort(col.id)}
                       title={`Sort by ${typeof col.header === "string" ? col.header : col.id}`}
-                      className="flex items-center gap-1.5 rounded text-left uppercase text-inherit transition-colors hover:text-brand-700"
+                      className="flex items-center gap-1.5 rounded text-left uppercase text-inherit transition-colors hover:text-ink-900"
                     >
                       <span className="font-semibold">{col.header}</span>
                       <span
@@ -352,7 +352,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-line">
+          <tbody className="divide-y divide-line/60">
             {paginatedData.length > 0 ? (
               paginatedData.map((row, idx) => {
                 const rowId = row.id ?? JSON.stringify(row);
@@ -361,18 +361,18 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                 return (
                   <tr
                     key={rowId}
-                    className={`transition-colors hover:bg-surface-muted/50 ${
-                      isSelected ? "bg-brand-50/40" : ""
+                    className={`transition-colors hover:bg-surface-muted/60 ${
+                      isSelected ? "bg-brand-50/50" : ""
                     }`}
                   >
                     {enableSelection && (
-                      <td className="w-10 px-3 text-center py-3">
+                      <td className="w-10 px-4 text-center py-3.5">
                         <input
                           type="checkbox"
                           aria-label={`Select row ${idx + 1}`}
                           checked={isSelected}
                           onChange={() => handleToggleRow(row)}
-                          className="rounded border-line text-brand-600 focus:ring-brand-500 h-4 w-4"
+                          className="size-4 rounded border-line text-brand-600 focus:ring-brand-500"
                         />
                       </td>
                     )}
@@ -391,7 +391,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       return (
                         <td
                           key={col.id}
-                          className={`px-3 text-sm text-ink-900 py-3 ${col.className ?? ""}`}
+                          className={`px-4 text-sm text-ink-900 py-3.5 ${col.className ?? ""}`}
                         >
                           {cellContent}
                         </td>
