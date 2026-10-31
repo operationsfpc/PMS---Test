@@ -193,6 +193,12 @@ export async function stubSupabase(page: Page, options: StubOptions): Promise<Su
       return json([]);
     }
 
+    // 0125: the student's own unreleased hold. `drives-view` reads this before
+    // it renders the lists; nobody in this journey is on hold.
+    if (table === "student_holds") {
+      return json([]);
+    }
+
     unrecognised.push(`${route.request().method()} ${url.pathname}${url.search}`);
     return json({ message: "not stubbed" }, 501);
   });
