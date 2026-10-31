@@ -21,12 +21,50 @@ import type { SrfSubmission } from "./srf-schema";
  */
 
 export interface SrfRepository {
-  submit(values: SrfSubmission): Promise<{ id: string; status: Enums["srf_status"] }>;
+  /**
+   * `preuploaded` carries evidence the screen already put in storage when the
+   * student picked it, so submit never uploads the same bytes twice.
+   */
+  submit(
+    values: SrfSubmission,
+    preuploaded?: readonly UploadedEvidence[],
+  ): Promise<{ id: string; status: Enums["srf_status"] }>;
+  /** One file, the moment it is picked, so the student sees it land. */
+  upload(input: {
+    readonly slot: string;
+    readonly kind: SrfUploadKind;
+    readonly file: File;
+  }): Promise<UploadedEvidence>;
   /**
    * Stores the unsent form. Resolves `false` rather than throwing when it
    * fails - see the implementation for why.
    */
   saveDraft(values: unknown): Promise<boolean>;
+}
+
+/** A marksheet, a certificate, or a role-category resume. */
+export type SrfUploadKind = MarksheetKind | "certificate" | "resume";
+
+/** Where one piece of evidence landed, and what it weighs. */
+export interface UploadedEvidence {
+  readonly slot: string;
+  readonly kind: SrfUploadKind;
+  readonly storage_path: string;
+  readonly size_bytes: number;
+}
+
+/** The same 5 MB the submit schema enforces, refused before the network call. */
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+/**
+ * The key one piece of evidence is remembered under.
+ *
+ * Both the screen (which uploads on pick) and submit (which reuses those
+ * uploads) derive it here, so a file can never be uploaded under one key and
+ * looked for under another.
+ */
+export function evidenceKey(kind: SrfUploadKind, slot: string): string {
+  return `${kind === "resume" || kind === "certificate" ? kind : "marksheet"}:${slot}`;
 }
 
 export class SrfSubmitError extends Error {}
@@ -49,14 +87,7 @@ const RESUME_BUCKET = "resumes";
 const CERTIFICATE_SLOT = (index: number) => `certificate-${index}`;
 
 /** One uploaded marksheet, as the transaction needs to hear about it. */
-interface MarksheetUpload {
-  /** The form's own key ("tenth", "semester-3"), used to link declarations. */
-  readonly slot: string;
-  /** A marksheet kind, or "certificate" — both are evidence the form carries. */
-  readonly kind: MarksheetKind | "certificate";
-  readonly storage_path: string;
-  readonly size_bytes: number;
-}
+type MarksheetUpload = UploadedEvidence & { readonly kind: MarksheetKind | "certificate" };
 
 /**
  * Puts every marksheet in storage and describes what landed there.
@@ -77,6 +108,7 @@ async function uploadMarksheets(
   client: SupabaseClient,
   studentId: string,
   values: SrfSubmission,
+  preuploaded: ReadonlyMap<string, UploadedEvidence>,
 ): Promise<MarksheetUpload[]> {
   /**
    * EVERY slot the form offers, not just the required ones.
@@ -98,6 +130,18 @@ async function uploadMarksheets(
   const uploads: MarksheetUpload[] = [];
 
   for (const { slot, file } of files) {
+    // Picked and uploaded already: the path is what submit is for.
+    const stored = preuploaded.get(`marksheet:${slot.key}`);
+    if (stored !== undefined) {
+      uploads.push({
+        slot: slot.key,
+        kind: slot.kind,
+        storage_path: stored.storage_path,
+        size_bytes: stored.size_bytes,
+      });
+      continue;
+    }
+
     // Namespaced by student id because that is exactly what the storage policy
     // checks (0022), and stamped so a re-upload never collides with an earlier
     // one - storage_path is unique, and a student correcting a bad scan is
@@ -130,6 +174,17 @@ async function uploadMarksheets(
     if (certificate.file === null) continue;
 
     const slot = CERTIFICATE_SLOT(index);
+    const stored = preuploaded.get(`certificate:${slot}`);
+    if (stored !== undefined) {
+      uploads.push({
+        slot,
+        kind: "certificate",
+        storage_path: stored.storage_path,
+        size_bytes: stored.size_bytes,
+      });
+      continue;
+    }
+
     const path = `${studentId}/${slot}-${Date.now()}-${sanitizeStorageFileName(certificate.file.name)}`;
 
     const { error } = await client.storage
@@ -173,10 +228,21 @@ async function uploadResumes(
   client: SupabaseClient,
   studentId: string,
   values: SrfSubmission,
+  preuploaded: ReadonlyMap<string, UploadedEvidence>,
 ): Promise<Array<{ role_category: string; storage_path: string; size_bytes: number }>> {
   const uploaded: Array<{ role_category: string; storage_path: string; size_bytes: number }> = [];
 
   for (const [category, file] of Object.entries(values.resumes)) {
+    const stored = preuploaded.get(`resume:${category}`);
+    if (stored !== undefined) {
+      uploaded.push({
+        role_category: category,
+        storage_path: stored.storage_path,
+        size_bytes: stored.size_bytes,
+      });
+      continue;
+    }
+
     const path = `${studentId}/profile-${category}-${crypto.randomUUID()}-${sanitizeStorageFileName(file.name)}`;
     const { error } = await client.storage.from(RESUME_BUCKET).upload(path, file);
 
@@ -206,13 +272,61 @@ export function createSupabaseSrfRepository(
   client: SupabaseClient,
   getAuthUserId: GetAuthUserId = sessionUserId(client),
 ): SrfRepository {
+  /**
+   * The student's own id, resolved before anything is written, because the
+   * storage policy (0022) requires every object to sit under it.
+   */
+  const resolveStudentId = async (): Promise<string> => {
+    const userId = await getAuthUserId();
+    if (userId === null) {
+      throw new SrfSubmitError("Your session has expired. Please sign in again.");
+    }
+
+    const { data: own, error: ownError } = await client
+      .from("students")
+      .select("id")
+      .eq("auth_user_id", userId)
+      .single();
+
+    if (ownError !== null || own === null) {
+      throw new SrfSubmitError(translate(ownError?.code, ownError?.message ?? ""));
+    }
+    return own.id as string;
+  };
+
   return {
-    async submit(values) {
-      const userId = await getAuthUserId();
-      if (userId === null) {
-        throw new SrfSubmitError("Your session has expired. Please sign in again.");
+    async upload({ slot, kind, file }) {
+      if (file.size === 0) {
+        throw new SrfSubmitError("That file is empty. Choose another one.");
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        throw new SrfSubmitError("That file is over 5 MB. Choose a smaller one.");
       }
 
+      const studentId = await resolveStudentId();
+      const isResume = kind === "resume";
+      // Same naming as submit's own upload: under the student's id, stamped so
+      // a correction never collides with the earlier scan.
+      const path = isResume
+        ? `${studentId}/profile-${slot}-${crypto.randomUUID()}-${sanitizeStorageFileName(file.name)}`
+        : `${studentId}/${slot}-${Date.now()}-${sanitizeStorageFileName(file.name)}`;
+
+      const { error } = await client.storage
+        .from(isResume ? RESUME_BUCKET : MARKSHEET_BUCKET)
+        .upload(path, file, { contentType: file.type });
+
+      if (error !== null) {
+        throw new SrfSubmitError(
+          isResume
+            ? `Could not upload your ${slot.replaceAll("_", " ")} resume. Check your connection and try again.`
+            : `Could not upload ${file.name}. Check your connection and try again.`,
+        );
+      }
+
+      return { slot, kind, storage_path: path, size_bytes: file.size };
+    },
+
+    async submit(values, preuploaded = []) {
       /**
        * Belt and braces with the schema. A repository that trusted its caller
        * would let any other code path drop a form with no evidence into the
@@ -229,22 +343,13 @@ export function createSupabaseSrfRepository(
         );
       }
 
-      /**
-       * The student's own id, resolved before anything is written, because the
-       * storage policy (0022) requires every object to sit under it.
-       */
-      const { data: own, error: ownError } = await client
-        .from("students")
-        .select("id")
-        .eq("auth_user_id", userId)
-        .single();
+      const studentId = await resolveStudentId();
+      const stored = new Map(
+        preuploaded.map((entry) => [evidenceKey(entry.kind, entry.slot), entry]),
+      );
 
-      if (ownError !== null || own === null) {
-        throw new SrfSubmitError(translate(ownError?.code, ownError?.message ?? ""));
-      }
-
-      const uploads = await uploadMarksheets(client, own.id as string, values);
-      const resumes = await uploadResumes(client, own.id as string, values);
+      const uploads = await uploadMarksheets(client, studentId, values, stored);
+      const resumes = await uploadResumes(client, studentId, values, stored);
 
       /**
        * ONE call, one transaction (0028).

@@ -6,11 +6,12 @@ import {
   FormSection as Section,
   TextField,
 } from "@components/form";
-import { Button } from "@components/ui";
+import { ToastContainer, useToast } from "@components/toast";
+import { Button, Spinner } from "@components/ui";
 import { MAX_SEMESTERS } from "@domain/academics";
 import { boardLabel, INDIAN_STATES, SCHOOL_BOARDS, type SchoolLevel } from "@domain/boards";
 import { marksScaleQuestion, UG_COLLEGE_MARKS_SCALE_QUESTION } from "@domain/marks";
-import { missingMarksheets, requiredMarksheets } from "@domain/marksheets";
+import { marksheetSlots, missingMarksheets, requiredMarksheets } from "@domain/marksheets";
 import { MAX_OTHER_PROFILES } from "@domain/profile-links";
 import { programmeKey, programmeLabel, splitProgrammeKey } from "@domain/programmes";
 import { srfAccess } from "@domain/srf-access";
@@ -25,7 +26,15 @@ import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useSta
 import { Controller, type FieldErrors, useFieldArray, useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import type { AddSemesterView } from "./add-semester";
-import { SrfSubmitError, saveSrfDraft, submitSrf } from "./srf-api";
+import {
+  evidenceKey,
+  SrfSubmitError,
+  type SrfUploadKind,
+  saveSrfDraft,
+  submitSrf,
+  type UploadedEvidence,
+  uploadSrfFile,
+} from "./srf-api";
 import type { SrfProfile } from "./srf-profile";
 import { SRF_DEFAULTS, type SrfFormValues, type SrfSubmission, srfSchema } from "./srf-schema";
 import { SrfSummary } from "./srf-summary";
@@ -198,6 +207,66 @@ const unanswered = (value: string | undefined): string | null =>
   value === undefined || value.trim() === "" ? null : value;
 
 /**
+ * One picked document, as the screen is watching it.
+ *
+ * The file is written to storage the moment it is picked, so the student
+ * learns straight away whether it landed. Before, nothing was sent until the
+ * whole form was submitted: a bad scan or a dropped connection on a 5 MB
+ * marksheet surfaced at the very end, after every field had been typed.
+ */
+type UploadEntry =
+  | { readonly status: "uploading" }
+  | { readonly status: "done"; readonly evidence: UploadedEvidence }
+  | { readonly status: "failed"; readonly message: string };
+
+function UploadStatus({ entry }: { entry: UploadEntry | undefined }) {
+  if (entry === undefined) return null;
+
+  if (entry.status === "uploading") {
+    return (
+      <p
+        role="status"
+        className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-brand-700"
+      >
+        <Spinner className="text-brand-500" />
+        Uploading…
+      </p>
+    );
+  }
+
+  if (entry.status === "done") {
+    return (
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-success-700">
+        <svg
+          aria-hidden="true"
+          className="h-3.5 w-3.5 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+        Uploaded
+      </p>
+    );
+  }
+
+  return (
+    <p role="alert" className="mt-1.5 text-xs font-medium text-danger-700">
+      {entry.message}
+    </p>
+  );
+}
+
+/** How the page puts one picked file in storage. Injectable so tests need no bucket. */
+type UploadFile = (input: {
+  readonly slot: string;
+  readonly kind: SrfUploadKind;
+  readonly file: File;
+}) => Promise<UploadedEvidence>;
+
+/**
  * `profile` is the student's roster record. Name, roll number and email are
  * not theirs to type - those fields are disabled - so without it the form
  * cannot be completed at all.
@@ -216,6 +285,8 @@ export function SrfPage({
   rejectionReason,
   /** Injected so the page can be tested without a database. */
   saveDraft = (values: unknown) => saveSrfDraft(values),
+  /** Injected so the page can be tested without a storage bucket. */
+  uploadFile = (input: Parameters<UploadFile>[0]) => uploadSrfFile(input),
   /** F13: adding a semester that finished after the form was approved. */
   addSemester,
   /**
@@ -229,6 +300,7 @@ export function SrfPage({
   status?: SrfStatus;
   rejectionReason?: string | null;
   saveDraft?: (values: unknown) => Promise<boolean>;
+  uploadFile?: UploadFile;
   addSemester?: AddSemesterView;
   programmes?: readonly { readonly degree: string; readonly branch: string }[];
 }) {
@@ -242,6 +314,24 @@ export function SrfPage({
   const [serverError, setServerError] = useState<string | null>(null);
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
+  const { toasts, toast, dismiss } = useToast();
+  /**
+   * Every picked document and where its upload stands. Marksheets and resumes
+   * are keyed exactly as the repository keys evidence; certificate rows are
+   * keyed by their field-array id, because an index changes the moment an
+   * earlier row is removed.
+   */
+  const [uploads, setUploads] = useState<Record<string, UploadEntry>>({});
+  /**
+   * A re-pick must beat the upload it replaced. Every start takes a ticket,
+   * and a late resolution holding a stale ticket is discarded - an earlier
+   * file must never overwrite the evidence for the file the form now holds.
+   */
+  const uploadTickets = useRef<Record<string, number>>({});
+  /** Where each finished upload landed, and what submit will reuse. */
+  const evidenceByKey = useRef<Record<string, UploadedEvidence>>({});
+  /** Uploads still running, so submit can wait for them instead of racing them. */
+  const uploadsRunning = useRef(new Map<string, Promise<void>>());
 
   const {
     register,
@@ -362,6 +452,7 @@ export function SrfPage({
       const currentSheets = (getValues("marksheets") as Record<string, File> | undefined) ?? {};
       const nextSheets = { ...currentSheets };
       delete nextSheets.ug_consolidated;
+      forgetUpload(marksheetUploadKey("ug_consolidated"));
       setValue("marksheets", nextSheets, { shouldValidate: true, shouldDirty: true });
       setValue("semesters", semesters.slice(0, MAX_SEMESTERS.ug), {
         shouldValidate: true,
@@ -374,6 +465,7 @@ export function SrfPage({
       const nextSheets = { ...currentSheets };
       for (let i = MAX_SEMESTERS.pg + 1; i <= 10; i++) {
         delete nextSheets[`semester-${i}`];
+        forgetUpload(marksheetUploadKey(`semester-${i}`));
       }
       setValue("marksheets", nextSheets, { shouldValidate: true, shouldDirty: true });
     }
@@ -422,6 +514,15 @@ export function SrfPage({
     setValue("semesters", updatedSemesters, { shouldValidate: true, shouldDirty: true });
 
     const nextSheets = { ...currentSheets };
+    /**
+     * Removing a line renumbers every later one, so a stored path no longer
+     * identifies the file that now sits under that key. Clear the semester
+     * evidence rather than risk attaching the wrong marksheet; submit uploads
+     * whatever is still in the form again.
+     */
+    for (const key of Object.keys(uploads)) {
+      if (key.startsWith("marksheet:semester-")) forgetUpload(key);
+    }
     delete nextSheets[`semester-${semesters.length}`];
     for (let i = index; i < updatedSemesters.length; i++) {
       const oldKey = `semester-${i + 2}`;
@@ -497,12 +598,90 @@ export function SrfPage({
     return undefined;
   };
 
+  /** Marksheets of every kind share one key prefix - see `evidenceKey`. */
+  const marksheetUploadKey = (slot: string) => evidenceKey("semester_marksheet", slot);
+  /**
+   * A certificate's upload is watched by its row id, not its index: removing
+   * an earlier row renumbers the rest, and the spinner must stay with the row
+   * the student is looking at.
+   */
+  const certificateUploadKey = (rowId: string) => `certificate-row:${rowId}`;
+
+  /**
+   * The one place an upload starts, so every picker reports the same way: a
+   * spinner beside the field, a toast when it lands, and the stored path kept
+   * for submit to reuse instead of sending the same bytes twice.
+   */
+  const beginUpload = (input: {
+    readonly key: string;
+    readonly slot: string;
+    readonly kind: SrfUploadKind;
+    readonly file: File;
+    readonly label: string;
+  }) => {
+    const { key, slot, kind, file, label } = input;
+    const ticket = (uploadTickets.current[key] ?? 0) + 1;
+    uploadTickets.current[key] = ticket;
+    delete evidenceByKey.current[key];
+    setUploads((prev) => ({ ...prev, [key]: { status: "uploading" } }));
+
+    const task = uploadFile({ slot, kind, file })
+      .then((evidence) => {
+        if (uploadTickets.current[key] !== ticket) return;
+        evidenceByKey.current[key] = evidence;
+        setUploads((prev) => ({ ...prev, [key]: { status: "done", evidence } }));
+        toast({ tone: "success", title: `${label} uploaded`, description: file.name });
+      })
+      .catch((error: unknown) => {
+        if (uploadTickets.current[key] !== ticket) return;
+        delete evidenceByKey.current[key];
+        const message =
+          error instanceof SrfSubmitError
+            ? error.message
+            : "Could not upload that file. Check your connection and try again.";
+        setUploads((prev) => ({ ...prev, [key]: { status: "failed", message } }));
+        toast({ tone: "danger", title: `${label} did not upload`, description: message });
+      });
+
+    uploadsRunning.current.set(key, task);
+    void task.finally(() => {
+      if (uploadsRunning.current.get(key) === task) uploadsRunning.current.delete(key);
+    });
+  };
+
+  /**
+   * Dropping a pick drops its evidence too, and invalidates any upload still
+   * in flight for that slot - otherwise a slow earlier file could land after
+   * the student has removed or replaced it and be submitted in its place.
+   */
+  const forgetUpload = (key: string) => {
+    uploadTickets.current[key] = (uploadTickets.current[key] ?? 0) + 1;
+    delete evidenceByKey.current[key];
+    uploadsRunning.current.delete(key);
+    setUploads((prev) => {
+      if (prev[key] === undefined) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
   const chooseMarksheet = (key: string, file: File | undefined) => {
     const next = { ...marksheets };
+    const uploadKey = marksheetUploadKey(key);
     if (file === undefined) {
       delete next[key];
+      forgetUpload(uploadKey);
     } else {
       next[key] = file;
+      const slot = marksheetSlots({
+        programmeLevel,
+        semesters: semesters ?? [],
+        hasDiplomaMarks,
+      }).find((s) => s.key === key);
+      if (slot !== undefined) {
+        beginUpload({ key: uploadKey, slot: key, kind: slot.kind, file, label: slot.label });
+      }
     }
     setValue("marksheets", next, { shouldValidate: true, shouldDirty: true });
   };
@@ -653,6 +832,7 @@ export function SrfPage({
   const completion = srfCompletion(progressInput);
 
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const uploadsInFlight = Object.values(uploads).some((entry) => entry.status === "uploading");
 
   const onInvalid = (fieldErrors: FieldErrors<SrfFormValues>) => {
     setSubmitAttempted(true);
@@ -673,7 +853,16 @@ export function SrfPage({
     setSubmitAttempted(false);
     setServerError(null);
     try {
-      await submitSrf(values as SrfSubmission);
+      /**
+       * Wait for any pick still landing before submitting: that file is
+       * evidence the form is about to declare, and sending the form first
+       * would either lose its path or upload the bytes twice.
+       */
+      if (uploadsRunning.current.size > 0) {
+        await Promise.allSettled([...uploadsRunning.current.values()]);
+      }
+
+      await submitSrf(values as SrfSubmission, Object.values(evidenceByKey.current));
       /**
        * The dashboard is where a submitted student reads "with your
        * coordinator" — and `replace` keeps a form that has already been sent
@@ -1002,12 +1191,15 @@ export function SrfPage({
                         {...nullableNum("tenthPercentage")}
                       />
                     </div>
-                    <FileField
-                      label="10th marksheet"
-                      required
-                      error={marksheetError("tenth")}
-                      onChange={(e) => chooseMarksheet("tenth", e.target.files?.[0])}
-                    />
+                    <div>
+                      <FileField
+                        label="10th marksheet"
+                        required
+                        error={marksheetError("tenth")}
+                        onChange={(e) => chooseMarksheet("tenth", e.target.files?.[0])}
+                      />
+                      <UploadStatus entry={uploads[marksheetUploadKey("tenth")]} />
+                    </div>
                   </div>
                 </fieldset>
 
@@ -1096,12 +1288,15 @@ export function SrfPage({
                         {...nullableNum("twelfthPercentage")}
                       />
                     </div>
-                    <FileField
-                      label="12th marksheet"
-                      required
-                      error={marksheetError("twelfth")}
-                      onChange={(e) => chooseMarksheet("twelfth", e.target.files?.[0])}
-                    />
+                    <div>
+                      <FileField
+                        label="12th marksheet"
+                        required
+                        error={marksheetError("twelfth")}
+                        onChange={(e) => chooseMarksheet("twelfth", e.target.files?.[0])}
+                      />
+                      <UploadStatus entry={uploads[marksheetUploadKey("twelfth")]} />
+                    </div>
                   </div>
                 </fieldset>
 
@@ -1158,12 +1353,15 @@ export function SrfPage({
                     </div>
                     {/* Offered, not demanded (2026-08-06). No diploma figure feeds
                     an eligibility cutoff. */}
-                    <FileField
-                      label="Diploma marksheet"
-                      hint="Optional."
-                      error={marksheetError("diploma")}
-                      onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
-                    />
+                    <div>
+                      <FileField
+                        label="Diploma marksheet"
+                        hint="Optional."
+                        error={marksheetError("diploma")}
+                        onChange={(e) => chooseMarksheet("diploma", e.target.files?.[0])}
+                      />
+                      <UploadStatus entry={uploads[marksheetUploadKey("diploma")]} />
+                    </div>
                   </div>
                 </fieldset>
 
@@ -1289,12 +1487,15 @@ export function SrfPage({
                           {...nullableNum("ugAggregate")}
                         />
                       </div>
-                      <FileField
-                        label="Consolidated UG marksheet"
-                        hint="Optional."
-                        error={marksheetError("ug_consolidated")}
-                        onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
-                      />
+                      <div>
+                        <FileField
+                          label="Consolidated UG marksheet"
+                          hint="Optional."
+                          error={marksheetError("ug_consolidated")}
+                          onChange={(e) => chooseMarksheet("ug_consolidated", e.target.files?.[0])}
+                        />
+                        <UploadStatus entry={uploads[marksheetUploadKey("ug_consolidated")]} />
+                      </div>
                     </div>
                   </fieldset>
                 )}
@@ -1431,17 +1632,24 @@ export function SrfPage({
                           }
                           {...num(`semesters.${index}.marks`)}
                         />
-                        <FileField
-                          label={`Semester ${semester.semesterNumber} marksheet`}
-                          required
-                          error={marksheetError(`semester-${semester.semesterNumber}`)}
-                          onChange={(e) =>
-                            chooseMarksheet(
-                              `semester-${semester.semesterNumber}`,
-                              e.target.files?.[0],
-                            )
-                          }
-                        />
+                        <div>
+                          <FileField
+                            label={`Semester ${semester.semesterNumber} marksheet`}
+                            required
+                            error={marksheetError(`semester-${semester.semesterNumber}`)}
+                            onChange={(e) =>
+                              chooseMarksheet(
+                                `semester-${semester.semesterNumber}`,
+                                e.target.files?.[0],
+                              )
+                            }
+                          />
+                          <UploadStatus
+                            entry={
+                              uploads[marksheetUploadKey(`semester-${semester.semesterNumber}`)]
+                            }
+                          />
+                        </div>
                         <TextField
                           label={`Semester ${semester.semesterNumber} standing arrears`}
                           type="number"
@@ -1537,6 +1745,11 @@ export function SrfPage({
                             // Dropping a category drops its resume with it, or
                             // the submission would carry a file for an area the
                             // student is no longer asking to be considered for.
+                            for (const dropped of Object.keys(resumes ?? {})) {
+                              if (!next.includes(dropped as RoleCategory)) {
+                                forgetUpload(evidenceKey("resume", dropped));
+                              }
+                            }
                             setValue(
                               "resumes",
                               Object.fromEntries(
@@ -1561,31 +1774,45 @@ export function SrfPage({
                     </p>
                     <div className={grid}>
                       {selectedCategories.map((category) => (
-                        <FileField
-                          key={category}
-                          label={`${ROLE_CATEGORY_LABELS[category]} resume`}
-                          required
-                          // The group message cannot say WHICH upload is missing
-                          // when several are on screen, so the reason goes on the
-                          // field that is actually empty.
-                          error={
-                            (
-                              errors.resumes as
-                                | Record<string, { message?: string } | undefined>
-                                | undefined
-                            )?.[category]?.message ??
-                            (errors.resumes !== undefined && !resumeCategories.includes(category)
-                              ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
-                              : undefined)
-                          }
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            const next = { ...(resumes ?? {}) };
-                            if (file === undefined) delete next[category];
-                            else next[category] = file;
-                            setValue("resumes", next, { shouldValidate: true });
-                          }}
-                        />
+                        <div key={category}>
+                          <FileField
+                            label={`${ROLE_CATEGORY_LABELS[category]} resume`}
+                            required
+                            // The group message cannot say WHICH upload is missing
+                            // when several are on screen, so the reason goes on the
+                            // field that is actually empty.
+                            error={
+                              (
+                                errors.resumes as
+                                  | Record<string, { message?: string } | undefined>
+                                  | undefined
+                              )?.[category]?.message ??
+                              (errors.resumes !== undefined && !resumeCategories.includes(category)
+                                ? `A ${ROLE_CATEGORY_LABELS[category]} resume is required.`
+                                : undefined)
+                            }
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              const uploadKey = evidenceKey("resume", category);
+                              const next = { ...(resumes ?? {}) };
+                              if (file === undefined) {
+                                delete next[category];
+                                forgetUpload(uploadKey);
+                              } else {
+                                next[category] = file;
+                                beginUpload({
+                                  key: uploadKey,
+                                  slot: category,
+                                  kind: "resume",
+                                  file,
+                                  label: `${ROLE_CATEGORY_LABELS[category]} resume`,
+                                });
+                              }
+                              setValue("resumes", next, { shouldValidate: true });
+                            }}
+                          />
+                          <UploadStatus entry={uploads[evidenceKey("resume", category)]} />
+                        </div>
                       ))}
                     </div>
                     {/* A record's error lands on `.root`, not `.message` - the
@@ -1788,6 +2015,18 @@ export function SrfPage({
                                       onChange={(e) => {
                                         const fileSelected = e.target.files?.[0] ?? null;
                                         file.onChange(fileSelected);
+                                        const uploadKey = certificateUploadKey(field.id);
+                                        if (fileSelected === null) {
+                                          forgetUpload(uploadKey);
+                                        } else {
+                                          beginUpload({
+                                            key: uploadKey,
+                                            slot: `certificate-${index}`,
+                                            kind: "certificate",
+                                            file: fileSelected,
+                                            label: `Certificate ${index + 1}`,
+                                          });
+                                        }
                                         if (fileSelected !== null) {
                                           const currentName = getValues(
                                             `certificates.${index}.name`,
@@ -1814,11 +2053,15 @@ export function SrfPage({
                                       type="button"
                                       className="shrink-0"
                                       aria-label={`Remove certificate ${index + 1}`}
-                                      onClick={() => certificates.remove(index)}
+                                      onClick={() => {
+                                        forgetUpload(certificateUploadKey(field.id));
+                                        certificates.remove(index);
+                                      }}
                                     >
                                       Remove
                                     </Button>
                                   </div>
+                                  <UploadStatus entry={uploads[certificateUploadKey(field.id)]} />
                                   {hasFileError && (
                                     <p role="alert" className="text-xs font-medium text-danger-700">
                                       {fileError}
@@ -1893,6 +2136,18 @@ export function SrfPage({
                   </div>
                 )}
 
+                {/* Submitting while a pick is still landing waits for it; the
+                    note says why the button seems to take a moment. */}
+                {uploadsInFlight && (
+                  <p
+                    role="status"
+                    className="mt-4 flex items-center gap-1.5 text-xs font-medium text-brand-700"
+                  >
+                    <Spinner className="text-brand-500" />
+                    Waiting for your uploads to finish…
+                  </p>
+                )}
+
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row-reverse">
                   <Button type="submit" isLoading={isSubmitting}>
                     Submit for verification
@@ -1911,6 +2166,8 @@ export function SrfPage({
           </>
         )}
       </main>
+
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

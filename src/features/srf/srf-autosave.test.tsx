@@ -32,6 +32,11 @@ const saveSrfDraft = vi.fn().mockResolvedValue(true);
 vi.mock("./srf-api", () => ({
   saveSrfDraft: (values: unknown) => saveSrfDraft(values),
   submitSrf: vi.fn(),
+  uploadSrfFile: vi.fn(),
+  // The page derives its per-slot upload keys while rendering; keep the real
+  // rule here so this file tests auto-save, not a mock's guess at a key.
+  evidenceKey: (kind: string, slot: string) =>
+    `${kind === "resume" || kind === "certificate" ? kind : "marksheet"}:${slot}`,
   SrfSubmitError: class extends Error {},
 }));
 

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { setSupabaseClient } from "@lib/supabase";
 import { createClient } from "@supabase/supabase-js";
-import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { act, render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
+import type { SrfUploadKind, UploadedEvidence } from "./srf-api";
 import { SrfPage } from "./srf-page";
 
 /**
@@ -92,6 +93,13 @@ const studentsPatch = (respond: () => Response | Promise<Response>) =>
  * Behaviour is unchanged: every keystroke still dispatches its real events.
  */
 const setup = () => userEvent.setup({ delay: null });
+
+/**
+ * Every test starts without a Supabase client. Picks now upload immediately,
+ * so a client injected by an earlier test would otherwise still be installed
+ * here and send those uploads to the real origin.
+ */
+afterEach(() => setSupabaseClient(undefined));
 
 /**
  * The student's roster record. Identity used to arrive as fabricated defaults
@@ -448,8 +456,6 @@ describe("SRF marksheet evidence", () => {
 });
 
 describe("SRF submission", () => {
-  afterEach(() => setSupabaseClient(undefined));
-
   it("hands the student to their dashboard once the form is sent", async () => {
     studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
     signedIn();
@@ -462,6 +468,83 @@ describe("SRF submission", () => {
 
     expect(await screen.findByText("Student dashboard")).toBeDefined();
     expect(screen.queryByRole("button", { name: /submit for verification/i })).toBeNull();
+  });
+
+  /**
+   * A pick is uploaded the moment it is chosen, so submit has to do two things
+   * with it: wait for it if it is still landing, and reference the path it
+   * landed on rather than send the bytes again. Sending the form first would
+   * declare a document whose upload had not finished; uploading again would
+   * store the same file twice.
+   */
+  it("waits for a pick still landing, then submits the path it stored", async () => {
+    const uploads = signedIn();
+    const sent: Array<Record<string, unknown>> = [];
+    studentsPatch(() => HttpResponse.json({ id: "s1", srf_status: "srf_submitted" }));
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/submit_srf`, async ({ request }) => {
+        sent.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({ student_id: "s1", srf_status: "srf_submitted" });
+      }),
+    );
+
+    // Marksheets land at once; the resume is the slow one submit must wait for.
+    let landResume: (() => void) | undefined;
+    const uploadFile = (input: {
+      slot: string;
+      kind: SrfUploadKind;
+      file: File;
+    }): Promise<UploadedEvidence> => {
+      const evidence: UploadedEvidence = {
+        slot: input.slot,
+        kind: input.kind,
+        storage_path: `student-1/${input.slot}-picked-${input.file.name}`,
+        size_bytes: input.file.size,
+      };
+      if (input.kind === "resume") {
+        return new Promise((resolve) => {
+          landResume = () => resolve(evidence);
+        });
+      }
+      return Promise.resolve(evidence);
+    };
+
+    const user = setup();
+    render(<SrfPage profile={ROSTER} uploadFile={uploadFile} />);
+    await fillValidForm(user);
+
+    await user.click(screen.getByRole("button", { name: /submit for verification/i }));
+
+    // The form has not been sent while evidence it declares is still in flight.
+    expect(sent).toHaveLength(0);
+    expect(screen.getByText(/waiting for your uploads to finish/i)).toBeDefined();
+
+    await act(async () => {
+      landResume?.();
+    });
+
+    expect(await screen.findByText("Student dashboard")).toBeDefined();
+    expect(sent).toHaveLength(1);
+
+    const payload = sent[0] as {
+      p_documents: Array<Record<string, unknown>>;
+      p_resumes: Array<Record<string, unknown>>;
+    };
+    expect(payload.p_documents.map((d) => d.slot)).toEqual(
+      expect.arrayContaining(["tenth", "twelfth", "semester-1"]),
+    );
+    // Every document points at what the pick already stored.
+    for (const document of payload.p_documents) {
+      expect(String(document.storage_path)).toContain("-picked-");
+    }
+    expect(payload.p_resumes).toEqual([
+      expect.objectContaining({
+        role_category: "software_technical",
+        storage_path: "student-1/software_technical-picked-cv.pdf",
+      }),
+    ]);
+    // Nothing went to storage twice: all four picks were reused.
+    expect(uploads).toHaveLength(0);
   });
 
   /**

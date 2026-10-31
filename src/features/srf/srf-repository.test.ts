@@ -2,7 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it } from "vitest";
 import { server } from "../../mocks/node";
-import { createSupabaseSrfRepository, type SrfSubmitError } from "./srf-repository";
+import {
+  createSupabaseSrfRepository,
+  type SrfSubmitError,
+  type UploadedEvidence,
+} from "./srf-repository";
 import { SRF_DEFAULTS, type SrfSubmission } from "./srf-schema";
 
 /**
@@ -32,6 +36,7 @@ interface SubmitPayload {
   p_semesters: Array<Record<string, unknown>>;
   p_documents: Array<Record<string, unknown>>;
   p_certificates: Array<Record<string, unknown>>;
+  p_resumes: Array<Record<string, unknown>>;
 }
 
 beforeEach(() => {
@@ -571,5 +576,206 @@ describe("createSupabaseSrfRepository \u2014 certificates", () => {
     await expect(repo(USER, { uploadFails: true }).submit(withCertificates())).rejects.toThrow();
 
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * Uploading the moment a file is picked (2026-10-31).
+ *
+ * Until now nothing left the browser until the whole form was sent, so a 5 MB
+ * scan had to succeed in the same request as everything else and a bad pick or
+ * a dropped connection was discovered at the very end. The screen uploads the
+ * file on pick and submit then references the path.
+ */
+describe("uploading one file as it is picked", () => {
+  it("puts a marksheet under the student's own id, in the marksheets bucket", async () => {
+    const { client, uploads } = storageStub();
+
+    const evidence = await createSupabaseSrfRepository(client, async () => USER).upload({
+      slot: "tenth",
+      kind: "tenth_marksheet",
+      file: sheet("10th.pdf"),
+    });
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]?.bucket).toBe("marksheets");
+    // The storage policy (0022) checks the first path segment is that id.
+    expect(uploads[0]?.path).toMatch(/^student-1\/tenth-.*10th\.pdf$/);
+    expect(evidence).toMatchObject({
+      slot: "tenth",
+      kind: "tenth_marksheet",
+      size_bytes: 10,
+    });
+    expect(evidence.storage_path).toBe(uploads[0]?.path);
+  });
+
+  it("puts a role resume in the resumes bucket, named for its category", async () => {
+    const { client, uploads } = storageStub();
+
+    const evidence = await createSupabaseSrfRepository(client, async () => USER).upload({
+      slot: "software_technical",
+      kind: "resume",
+      file: sheet("cv.pdf"),
+    });
+
+    expect(uploads[0]?.bucket).toBe("resumes");
+    expect(uploads[0]?.path).toMatch(/^student-1\/profile-software_technical-.*cv\.pdf$/);
+    expect(evidence.kind).toBe("resume");
+  });
+
+  it("puts a certificate with the other documents, in the marksheet bucket", async () => {
+    const { client, uploads } = storageStub();
+
+    const evidence = await createSupabaseSrfRepository(client, async () => USER).upload({
+      slot: "certificate-0",
+      kind: "certificate",
+      file: sheet("aws.pdf"),
+    });
+
+    expect(uploads[0]?.bucket).toBe("marksheets");
+    expect(uploads[0]?.path).toMatch(/^student-1\/certificate-0-.*aws\.pdf$/);
+    expect(evidence).toMatchObject({ slot: "certificate-0", kind: "certificate" });
+  });
+
+  it("names each object uniquely, so a correction never collides with the scan it replaces", async () => {
+    const { client, uploads } = storageStub();
+    const repository = createSupabaseSrfRepository(client, async () => USER);
+    const input = { slot: "tenth", kind: "tenth_marksheet", file: sheet("10th.pdf") } as const;
+
+    await repository.upload(input);
+    await repository.upload(input);
+
+    expect(uploads).toHaveLength(2);
+    expect(uploads[0]?.path).not.toBe(uploads[1]?.path);
+  });
+
+  /**
+   * The 5 MB rule is not a UI courtesy: the same bound is what the submit
+   * schema and the database check. Refusing here means the student learns
+   * while they are looking at the picker, not after the rest of the form.
+   */
+  it("refuses an empty file before it touches storage", async () => {
+    const { client, uploads } = storageStub();
+
+    await expect(
+      createSupabaseSrfRepository(client, async () => USER).upload({
+        slot: "tenth",
+        kind: "tenth_marksheet",
+        file: new File([], "empty.pdf", { type: "application/pdf" }),
+      }),
+    ).rejects.toThrow(/empty/i);
+
+    expect(uploads).toHaveLength(0);
+  });
+
+  it("refuses anything over 5 MB before it touches storage", async () => {
+    const { client, uploads } = storageStub();
+
+    await expect(
+      createSupabaseSrfRepository(client, async () => USER).upload({
+        slot: "tenth",
+        kind: "tenth_marksheet",
+        file: new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.pdf", {
+          type: "application/pdf",
+        }),
+      }),
+    ).rejects.toThrow(/5 MB/i);
+
+    expect(uploads).toHaveLength(0);
+  });
+
+  it("refuses without a session, rather than writing to a guessed folder", async () => {
+    const { client, uploads } = storageStub();
+
+    await expect(
+      createSupabaseSrfRepository(client, async () => null).upload({
+        slot: "tenth",
+        kind: "tenth_marksheet",
+        file: sheet("10th.pdf"),
+      }),
+    ).rejects.toThrow(/session has expired/i);
+
+    expect(uploads).toHaveLength(0);
+  });
+});
+
+/**
+ * The other half of the handshake: submit must reference what the screen
+ * already stored rather than sending the same bytes a second time - and must
+ * still describe the document, because `submit_srf` writes the rows.
+ */
+describe("submitting files the screen already uploaded", () => {
+  const earlier = (
+    slot: string,
+    kind: UploadedEvidence["kind"],
+    path: string,
+  ): UploadedEvidence => ({ slot, kind, storage_path: path, size_bytes: 10 });
+
+  it("references a marksheet already in storage instead of sending its bytes again", async () => {
+    const calls = captureSubmit();
+    const { client, uploads } = storageStub();
+    const tenth = earlier("tenth", "tenth_marksheet", "student-1/tenth-earlier.pdf");
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(values, [tenth]);
+
+    expect(uploads).toHaveLength(3);
+    expect(uploads.some((u) => u.path.includes("tenth-"))).toBe(false);
+    const document = calls[0]?.p_documents.find((d) => d.slot === "tenth");
+    expect(document?.storage_path).toBe(tenth.storage_path);
+    expect(document?.size_bytes).toBe(10);
+    expect(document?.kind).toBe("tenth_marksheet");
+  });
+
+  it("references a certificate already in storage", async () => {
+    const calls = captureSubmit();
+    const { client, uploads } = storageStub();
+    const certificate = earlier("certificate-0", "certificate", "student-1/certificate-0.pdf");
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(
+      { ...values, certificates: [{ name: "AWS", file: sheet("aws.pdf") }] },
+      [certificate],
+    );
+
+    expect(uploads).toHaveLength(4);
+    expect(calls[0]?.p_certificates).toEqual([{ name: "AWS", document_slot: "certificate-0" }]);
+    expect(calls[0]?.p_documents.find((d) => d.slot === "certificate-0")?.storage_path).toBe(
+      certificate.storage_path,
+    );
+  });
+
+  it("references a resume already in storage, and still names it in the submission", async () => {
+    const calls = captureSubmit();
+    const { client, uploads } = storageStub();
+    const resume = earlier(
+      "software_technical",
+      "resume",
+      "student-1/profile-software_technical-earlier.pdf",
+    );
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(
+      { ...values, resumes: { software_technical: sheet("cv.pdf") } },
+      [resume],
+    );
+
+    expect(uploads).toHaveLength(4);
+    expect(calls[0]?.p_resumes).toEqual([
+      {
+        role_category: "software_technical",
+        storage_path: resume.storage_path,
+        size_bytes: 10,
+      },
+    ]);
+  });
+
+  /** Evidence for a document the form no longer carries has nowhere to go. */
+  it("ignores evidence for a slot the form does not declare", async () => {
+    const calls = captureSubmit();
+    const { client, uploads } = storageStub();
+    const stale = earlier("semester-9", "semester_marksheet", "student-1/stale.pdf");
+
+    await createSupabaseSrfRepository(client, async () => USER).submit(values, [stale]);
+
+    expect(uploads).toHaveLength(4);
+    expect(calls[0]?.p_documents.map((d) => d.slot)).not.toContain("semester-9");
   });
 });

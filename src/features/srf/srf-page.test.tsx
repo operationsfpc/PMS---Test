@@ -4,7 +4,7 @@ import { act, render as rtlRender, screen, waitFor, within } from "@testing-libr
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
-
+import type { SrfUploadKind, UploadedEvidence } from "./srf-api";
 import { SRF_SECTIONS, SrfPage } from "./srf-page";
 
 /** The form links back to the dashboard, so every render needs a router. */
@@ -237,6 +237,16 @@ describe("SrfPage — progress and navigation", () => {
   });
 });
 
+/** What the page hands an upload, and what it gets back. */
+type UploadInput = { slot: string; kind: SrfUploadKind; file: File };
+
+const evidenceFor = (input: UploadInput): UploadedEvidence => ({
+  slot: input.slot,
+  kind: input.kind,
+  storage_path: `student-1/${input.slot}-${input.file.name}`,
+  size_bytes: input.file.size,
+});
+
 /**
  * Draft saving, requested from UAT 2026-08-05: "students can continue the
  * registration later without losing their data."
@@ -318,8 +328,9 @@ describe("SrfPage — saving a draft", () => {
    */
   it("never stores a picked file in the draft, because a file cannot survive one", async () => {
     const saveDraft = vi.fn().mockResolvedValue(true);
+    const uploadFile = vi.fn(async (input: UploadInput) => evidenceFor(input));
     const user = userEvent.setup({ delay: null });
-    render(<SrfPage profile={ROSTER} saveDraft={saveDraft} />);
+    render(<SrfPage profile={ROSTER} saveDraft={saveDraft} uploadFile={uploadFile} />);
 
     await user.upload(
       screen.getByLabelText(/^10th marksheet/i),
@@ -363,6 +374,144 @@ describe("SrfPage — saving a draft", () => {
     await flush();
 
     expect(saveDraft).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A pick used to wait for submit (2026-10-31). The student picked a 5 MB scan,
+ * the form said nothing, and whether it was readable was discovered only when
+ * the whole form was sent - after all the typing. A pick now leaves for storage
+ * straight away, with the field it evidences showing that it did.
+ */
+describe("SrfPage — a picked file uploads straight away", () => {
+  const scan = (name: string) => new File(["scan"], name, { type: "application/pdf" });
+
+  it("sends the marksheet to storage on the pick, not on submit", async () => {
+    const uploadFile = vi.fn(async (input: UploadInput) => evidenceFor(input));
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    await user.upload(screen.getByLabelText(/^10th marksheet/i), scan("10th.pdf"));
+
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledTimes(1));
+    const sent = uploadFile.mock.calls[0]?.[0];
+    expect(sent).toMatchObject({ slot: "tenth", kind: "tenth_marksheet" });
+    expect(sent?.file.name).toBe("10th.pdf");
+  });
+
+  it("shows it landing: a spinner while it uploads, then a confirmation", async () => {
+    let land: (() => void) | undefined;
+    const uploadFile = vi.fn(
+      (input: UploadInput) =>
+        new Promise<UploadedEvidence>((resolve) => {
+          land = () => resolve(evidenceFor(input));
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    await user.upload(screen.getByLabelText(/^10th marksheet/i), scan("10th.pdf"));
+
+    expect(await screen.findByText(/uploading/i)).toBeDefined();
+    // "Uploaded" is a claim, so it waits for the storage call to actually land.
+    expect(screen.queryByText("Uploaded")).toBeNull();
+
+    await act(async () => {
+      land?.();
+    });
+
+    expect(await screen.findByText("Uploaded")).toBeDefined();
+    expect(screen.queryByText(/uploading/i)).toBeNull();
+  });
+
+  it("confirms with a toast that names the file", async () => {
+    const uploadFile = vi.fn(async (input: UploadInput) => evidenceFor(input));
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    await user.upload(screen.getByLabelText(/^10th marksheet/i), scan("10th.pdf"));
+
+    expect(await screen.findByText("10th marksheet uploaded")).toBeDefined();
+    expect(screen.getByText("10th.pdf")).toBeDefined();
+  });
+
+  it("says beside the field when it fails, and never calls it uploaded", async () => {
+    const uploadFile = vi.fn(async (_input: UploadInput) => {
+      throw new Error("network");
+    });
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    await user.upload(screen.getByLabelText(/^10th marksheet/i), scan("10th.pdf"));
+
+    expect((await screen.findAllByText(/could not upload that file/i)).length).toBeGreaterThan(0);
+    expect(await screen.findByText("10th marksheet did not upload")).toBeDefined();
+    expect(screen.queryByText("Uploaded")).toBeNull();
+  });
+
+  it("uploads a resume for the area it was picked for", async () => {
+    const uploadFile = vi.fn(async (input: UploadInput) => evidenceFor(input));
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    await user.click(screen.getByRole("checkbox", { name: /software \/ technical/i }));
+    await user.upload(screen.getByLabelText(/software \/ technical resume/i), scan("cv.pdf"));
+
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledTimes(1));
+    expect(uploadFile.mock.calls[0]?.[0]).toMatchObject({
+      slot: "software_technical",
+      kind: "resume",
+    });
+  });
+
+  it("uploads a certificate for the row it was added to", async () => {
+    const uploadFile = vi.fn(async (input: UploadInput) => evidenceFor(input));
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    await user.click(screen.getByRole("button", { name: /add a certificate/i }));
+    await user.upload(screen.getByLabelText(/upload certificate 1/i), scan("aws.pdf"));
+
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledTimes(1));
+    expect(uploadFile.mock.calls[0]?.[0]).toMatchObject({
+      slot: "certificate-0",
+      kind: "certificate",
+    });
+  });
+
+  /**
+   * A slow first pick must not beat the replacement the student then chose.
+   * The stale resolution is discarded, so the field keeps claiming "Uploading"
+   * until the file the form actually holds has landed.
+   */
+  it("uploads a replacement pick, so only the newest file can land", async () => {
+    const lands: Array<() => void> = [];
+    const uploadFile = vi.fn(
+      (input: UploadInput) =>
+        new Promise<UploadedEvidence>((resolve) => {
+          lands.push(() => resolve(evidenceFor(input)));
+        }),
+    );
+    const user = userEvent.setup({ delay: null });
+    render(<SrfPage profile={ROSTER} saveDraft={async () => true} uploadFile={uploadFile} />);
+
+    const picker = screen.getByLabelText(/^10th marksheet/i);
+    await user.upload(picker, scan("first.pdf"));
+    await user.upload(picker, scan("second.pdf"));
+    await waitFor(() => expect(uploadFile).toHaveBeenCalledTimes(2));
+
+    // Land the FIRST upload last. It is no longer the file the form holds, so
+    // its late resolution must be discarded rather than toasted as the newest.
+    await act(async () => {
+      lands[1]?.();
+      lands[0]?.();
+    });
+
+    expect(await screen.findByText("Uploaded")).toBeDefined();
+    expect(screen.queryByText(/uploading/i)).toBeNull();
+    const notifications = await screen.findByLabelText(/notifications/i);
+    expect(within(notifications).getByText("second.pdf")).toBeDefined();
+    expect(within(notifications).queryByText("first.pdf")).toBeNull();
   });
 });
 
