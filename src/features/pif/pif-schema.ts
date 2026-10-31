@@ -1,9 +1,15 @@
 import { jobDescriptionFileProblem } from "@domain/attachments";
 import { driveVenueApplies } from "@domain/drive-venue";
 import { JOINING_TIMELINES, joiningNotesFor } from "@domain/joining";
-import { isValidForScale, MARKS_SCALES } from "@domain/marks";
+import { isValidForScale, MARKS_SCALES, type MarksScale } from "@domain/marks";
 import { nightTimingFor, nightTimingIsMissing, SHIFT_TYPES } from "@domain/shift";
-import { ARREAR_POLICIES, DRIVE_MODES, DRIVE_TYPES, ROLE_CATEGORIES } from "@domain/types";
+import {
+  ARREAR_POLICIES,
+  type ArrearPolicy,
+  DRIVE_MODES,
+  DRIVE_TYPES,
+  ROLE_CATEGORIES,
+} from "@domain/types";
 import { z } from "zod";
 
 /**
@@ -56,11 +62,19 @@ const jobDescriptionFile = z
  * is ticked). Normalising here keeps the DOM's representation out of the rest
  * of the schema and out of the form.
  */
-const passingYears = z.preprocess((v) => {
+const normalisePassingYears = (v: unknown): number[] => {
   if (Array.isArray(v)) return v.filter((x) => x !== false && x !== "").map(Number);
   if (v === "" || v === null || v === undefined || v === false) return [];
   return [Number(v)];
-}, z.array(z.number().int()));
+};
+
+const passingYears = z.preprocess(normalisePassingYears, z.array(z.number().int()));
+
+/** A submission must say who may apply: at least one passing year. */
+const passingYearsRequired = z.preprocess(
+  normalisePassingYears,
+  z.array(z.number().int()).min(1, "Choose at least one passing year."),
+);
 
 /** A4 (UAT 2026-08-19): one of the drive's contacts. Every field optional (Q2). */
 export interface PifContact {
@@ -275,14 +289,7 @@ export const pifSubmitSchema = pifDraftSchema
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),
     minOverallCgpa: z.number().min(0).nullable(),
-    eligiblePassingYears: z.preprocess(
-      (v) => {
-        if (Array.isArray(v)) return v.filter((x) => x !== false && x !== "").map(Number);
-        if (v === "" || v === null || v === undefined || v === false) return [];
-        return [Number(v)];
-      },
-      z.array(z.number().int()).min(1, "Choose at least one passing year."),
-    ),
+    eligiblePassingYears: passingYearsRequired,
   })
   /**
    * A2: the compensation the drive type calls for. A placement or convertible
@@ -416,19 +423,29 @@ export const DEFAULT_ROLE_VALUES = {
   stipendMaxMonthly: null as number | null,
   shiftType: "",
   shiftNightTiming: "",
-  bondDetails: "",
   jobDescriptionFile: null as File | null,
-  minOverallCgpa: null as number | null,
-  minOverallCgpaScale: "cgpa" as const,
-  minTenthPercentage: null as number | null,
-  minTwelfthPercentage: null as number | null,
-  arrearsPolicy: "flexible" as const,
-  eligiblePassingYears: [] as number[],
   mandatorySkills: "",
   additionalDesignations: [] as string[],
   rounds: [] as Array<{ sequence: number; name: string }>,
   joiningImmediateNotes: "",
   joiningLaterNotes: "",
+};
+
+/**
+ * The bar the company sets for the visit: the bond, the cutoff and the years.
+ *
+ * These are COMPANY facts, not role facts. A company that wants a 7.5 CGPA
+ * wants it for every role it hires for on that day, and asking it once per
+ * role is how a visit ends up with two different bars for one recruiter.
+ */
+export const DEFAULT_BAR_VALUES = {
+  bondDetails: "",
+  minOverallCgpa: null as number | null,
+  minOverallCgpaScale: "cgpa" as MarksScale,
+  minTenthPercentage: null as number | null,
+  minTwelfthPercentage: null as number | null,
+  arrearsPolicy: "flexible" as ArrearPolicy,
+  eligiblePassingYears: [] as number[],
 };
 
 export const pifRoleDraftSchema = z.object({
@@ -446,14 +463,7 @@ export const pifRoleDraftSchema = z.object({
   stipendMaxMonthly: nullableNumber,
   shiftType: z.enum(["", ...SHIFT_TYPES]).default(""),
   shiftNightTiming: optionalText,
-  bondDetails: optionalText,
   jobDescriptionFile,
-  minOverallCgpa: nullableNumber,
-  minOverallCgpaScale: z.enum(MARKS_SCALES).default("cgpa"),
-  minTenthPercentage: nullableNumber,
-  minTwelfthPercentage: nullableNumber,
-  arrearsPolicy: z.enum(ARREAR_POLICIES).default("flexible"),
-  eligiblePassingYears: passingYears.default([]),
   mandatorySkills: optionalText,
   additionalDesignations: additionalDesignations.default([]),
   rounds: z
@@ -470,15 +480,6 @@ export const pifRoleSubmitSchema = pifRoleDraftSchema
     roleCategory: z.enum(ROLE_CATEGORIES, { message: "Choose a role category." }),
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),
-    minOverallCgpa: z.number().min(0).nullable(),
-    eligiblePassingYears: z.preprocess(
-      (v) => {
-        if (Array.isArray(v)) return v.filter((x) => x !== false && x !== "").map(Number);
-        if (v === "" || v === null || v === undefined || v === false) return [];
-        return [Number(v)];
-      },
-      z.array(z.number().int()).min(1, "Choose at least one passing year."),
-    ),
     rounds: z
       .array(z.object({ sequence: z.number().int().positive(), name: z.string() }))
       .min(1, "A selection process has at least one round.")
@@ -521,13 +522,6 @@ export const pifRoleSubmitSchema = pifRoleDraftSchema
       });
     }
   })
-  .refine(
-    (v) => v.minOverallCgpa === null || isValidForScale(v.minOverallCgpa, v.minOverallCgpaScale),
-    {
-      path: ["minOverallCgpa"],
-      message: "A CGPA is on the 10-point scale; a percentage is between 0 and 100.",
-    },
-  )
   /**
    * The single-role form's rule, applied to a role card: a designation named
    * twice would appear twice on that student's drive card.
@@ -593,6 +587,17 @@ export const multiRolePifDraftSchema = z.object({
   tentativeDate: optionalText,
   timelineNotes: optionalText,
   joiningTimeline: z.enum(["", ...JOINING_TIMELINES]).default(""),
+  /**
+   * The bar the company sets for the VISIT: the bond, the cutoff and the
+   * years. It is asked once and lands on every role the PIF raises.
+   */
+  bondDetails: optionalText,
+  minOverallCgpa: nullableNumber,
+  minOverallCgpaScale: z.enum(MARKS_SCALES).default("cgpa"),
+  minTenthPercentage: nullableNumber,
+  minTwelfthPercentage: nullableNumber,
+  arrearsPolicy: z.enum(ARREAR_POLICIES).default("flexible"),
+  eligiblePassingYears: passingYears.default([]),
   roles: z.array(pifRoleDraftSchema).default([]),
 });
 
@@ -603,7 +608,21 @@ export const multiRolePifSubmitSchema = multiRolePifDraftSchema
     joiningTimeline: z.enum(JOINING_TIMELINES, {
       message: "Say whether joining is immediate or later.",
     }),
+    minOverallCgpa: z.number().min(0).nullable(),
+    eligiblePassingYears: passingYearsRequired,
   })
+  /**
+   * The cutoff is judged on the scale it was declared on — 65 is a reasonable
+   * percentage and a nonsense CGPA, and one ceiling could only ever say one of
+   * those two things.
+   */
+  .refine(
+    (v) => v.minOverallCgpa === null || isValidForScale(v.minOverallCgpa, v.minOverallCgpaScale),
+    {
+      path: ["minOverallCgpa"],
+      message: "A CGPA is on the 10-point scale; a percentage is between 0 and 100.",
+    },
+  )
   .refine(
     (v) =>
       !driveVenueApplies(v.driveMode) ||
@@ -673,13 +692,14 @@ export function toSinglePifValues(values: MultiRolePifValues, role: PifRoleValue
     stipendMaxMonthly: role.stipendMaxMonthly,
     shiftType: role.shiftType,
     shiftNightTiming: role.shiftNightTiming,
-    bondDetails: role.bondDetails,
-    minOverallCgpa: role.minOverallCgpa,
-    minOverallCgpaScale: role.minOverallCgpaScale,
-    minTenthPercentage: role.minTenthPercentage,
-    minTwelfthPercentage: role.minTwelfthPercentage,
-    arrearsPolicy: role.arrearsPolicy,
-    eligiblePassingYears: role.eligiblePassingYears,
+    // The bar is the VISIT's, not the role's: one answer for the company.
+    bondDetails: values.bondDetails,
+    minOverallCgpa: values.minOverallCgpa,
+    minOverallCgpaScale: values.minOverallCgpaScale,
+    minTenthPercentage: values.minTenthPercentage,
+    minTwelfthPercentage: values.minTwelfthPercentage,
+    arrearsPolicy: values.arrearsPolicy,
+    eligiblePassingYears: values.eligiblePassingYears,
     mandatorySkills: role.mandatorySkills,
     additionalDesignations: role.additionalDesignations,
     rounds: role.rounds,

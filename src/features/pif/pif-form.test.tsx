@@ -31,9 +31,35 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
    */
   await user.click(screen.getByRole("button", { name: /add round/i }));
   await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
+  // The passing years belong to the VISIT, so there is one set of boxes for
+  // the whole PIF however many roles it carries.
   await user.click(screen.getByRole("checkbox", { name: /2027/ }));
   // J3 (2026-08-18): the joining choice is required at submit (answer 7).
   await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+}
+
+/**
+ * A second role block, filled to the same bar as the first.
+ *
+ * zod skips a role's own refinements while that role is still invalid, so a
+ * rule that belongs to a role — the night-shift hours — only speaks once its
+ * block answers.
+ */
+async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
+  const second = (found: HTMLElement[]) => found[1] as HTMLElement;
+  await user.click(second(screen.getAllByRole("radio", { name: /^internship$/i })));
+  await user.type(second(screen.getAllByLabelText(/role title/i)), "Data Analyst Intern");
+  await user.type(screen.getByLabelText(/stipend minimum/i), "25000");
+  await user.selectOptions(
+    second(screen.getAllByLabelText(/role category/i)),
+    "operations_business",
+  );
+  await user.type(second(screen.getAllByLabelText(/number of openings/i)), "8");
+  await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
+  await user.click(second(screen.getAllByRole("button", { name: /add round/i })));
+  await user.type(second(screen.getAllByLabelText(/round 1 name/i)), "Case study");
+  // The passing years are NOT asked again here: they belong to the visit, so
+  // there is one set of boxes for the whole PIF.
 }
 
 describe("PifForm", () => {
@@ -692,12 +718,14 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
   it("asks each role for its drive type before anything else in it", () => {
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
-    // The visit is stated first — company, then the day it happens — and every
-    // role block under it opens on the question that decides its shape.
+    // The visit is stated first — company, then the day it happens, then the
+    // bar every role under it is raised against — and every role block opens
+    // on the question that decides its own shape.
     const headings = screen.getAllByRole("heading", { level: 2 });
     expect(headings.map((h) => h.textContent)).toEqual([
       "Company details",
       "Drive day, mode and joining",
+      "Eligibility and bond",
       "Roles under this drive",
       "Role 1",
     ]);
@@ -1027,6 +1055,74 @@ describe("PifForm — adding a role to an existing drive (the event picker)", ()
     expect((screen.getByLabelText(/contact 1 name/i) as HTMLInputElement).value).toBe("Ravi Kumar");
   });
 
+  /**
+   * The bar belongs to the visit. A role added to a visit that already has a
+   * cutoff is raised under that cutoff — asking again would let one recruiter
+   * hire at two bars on the same day.
+   */
+  it("brings the existing visit's bar with it", async () => {
+    const user = userEvent.setup();
+    render(
+      <PifForm
+        onSubmit={vi.fn()}
+        onSaveDraft={vi.fn()}
+        getCompanyEvents={vi.fn().mockResolvedValue([
+          {
+            ...existingEvent,
+            bar: {
+              bondDetails: "1 year service agreement",
+              minOverallCgpa: 7.5,
+              minOverallCgpaScale: "cgpa",
+              minTenthPercentage: 70,
+              minTwelfthPercentage: 70,
+              arrearsPolicy: "no_standing",
+              eligiblePassingYears: [2026, 2027],
+            },
+          },
+        ])}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+
+    expect((screen.getByLabelText(/bond \/ service agreement/i) as HTMLInputElement).value).toBe(
+      "1 year service agreement",
+    );
+    expect((screen.getByLabelText(/minimum overall/i) as HTMLInputElement).value).toBe("7.5");
+    expect((screen.getByLabelText(/minimum 10th/i) as HTMLInputElement).value).toBe("70");
+    expect((screen.getByRole("checkbox", { name: /2026/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole("checkbox", { name: /2027/ }) as HTMLInputElement).checked).toBe(true);
+  });
+
+  /** The bar is the COMPANY's: it must not ride along to another recruiter. */
+  it("drops an inherited bar when the AE moves to another company", async () => {
+    const user = userEvent.setup();
+    render(
+      <PifForm
+        onSubmit={vi.fn()}
+        onSaveDraft={vi.fn()}
+        getCompanyEvents={vi.fn().mockResolvedValue([
+          {
+            ...existingEvent,
+            bar: { bondDetails: "1 year service agreement", minOverallCgpa: 7.5 },
+          },
+        ])}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.click(await screen.findByRole("radio", { name: /drive date/i }));
+    expect((screen.getByLabelText(/minimum overall/i) as HTMLInputElement).value).toBe("7.5");
+
+    await user.clear(screen.getByLabelText(/company name/i));
+    await user.type(screen.getByLabelText(/company name/i), "Freshworks");
+
+    await waitFor(() =>
+      expect((screen.getByLabelText(/minimum overall/i) as HTMLInputElement).value).toBe(""),
+    );
+  });
+
   it("starts a NEW event clean — nothing inherited rides along", async () => {
     const user = userEvent.setup();
     renderWithEvents();
@@ -1085,27 +1181,6 @@ describe("PifForm — adding a role to an existing drive (the event picker)", ()
  * together as one event, so a half-raised visit with roles missing cannot exist.
  */
 describe("PifForm — several roles under one drive", () => {
-  /**
-   * A second block filled to the same bar as the first. zod skips a role's own
-   * refinements while that role is still invalid, so a rule that belongs to a
-   * role — the night-shift hours — only speaks once its block answers.
-   */
-  async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
-    const second = (found: HTMLElement[]) => found[1] as HTMLElement;
-    await user.click(second(screen.getAllByRole("radio", { name: /^internship$/i })));
-    await user.type(second(screen.getAllByLabelText(/role title/i)), "Data Analyst Intern");
-    await user.type(screen.getByLabelText(/stipend minimum/i), "25000");
-    await user.selectOptions(
-      second(screen.getAllByLabelText(/role category/i)),
-      "operations_business",
-    );
-    await user.type(second(screen.getAllByLabelText(/number of openings/i)), "8");
-    await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
-    await user.click(second(screen.getAllByRole("button", { name: /add round/i })));
-    await user.type(second(screen.getAllByLabelText(/round 1 name/i)), "Case study");
-    await user.click(second(screen.getAllByRole("checkbox", { name: /2027/ })));
-  }
-
   it("opens with one role block and nothing to remove", () => {
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
@@ -1248,6 +1323,117 @@ describe("PifForm — several roles under one drive", () => {
 });
 
 /**
+ * The bar belongs to the COMPANY, not to a role (2026-10-31).
+ *
+ * "make remove of this all roles? no need for each role? i need this all for
+ * company not for role" — a recruiter that wants a 7.5 CGPA wants it for every
+ * role it hires for on that day, and asking it once per role is how one visit
+ * ends up with two different bars for one recruiter.
+ */
+describe("PifForm — the eligibility bar is asked once, for the visit", () => {
+  it("shows the bar in its own section, above the roles", () => {
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    const bar = screen.getByRole("heading", { level: 2, name: "Eligibility and bond" });
+    const barSection = bar.closest("section");
+    expect(barSection?.querySelector("label")?.textContent).toMatch(/bond \/ service agreement/i);
+  });
+
+  it("asks the bar ONCE however many roles the visit carries", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+
+    expect(screen.getAllByLabelText(/bond \/ service agreement/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/cutoff scale/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/minimum overall/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/arrear policy/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/minimum 10th/i)).toHaveLength(1);
+    expect(screen.getAllByLabelText(/minimum 12th/i)).toHaveLength(1);
+    // One set of passing-year boxes, not one per role.
+    expect(screen.getAllByRole("checkbox", { name: /2027/ })).toHaveLength(1);
+  });
+
+  it("carries the bar on the visit, not on each role", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    await fillRoleTwo(user);
+    await user.type(
+      screen.getByLabelText(/bond \/ service agreement/i),
+      "1 year service agreement",
+    );
+    await user.type(screen.getByLabelText(/minimum overall/i), "7.5");
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0]?.[0] as {
+      bondDetails: string;
+      minOverallCgpa: number;
+      roles: Array<Record<string, unknown>>;
+    };
+    expect(values.bondDetails).toBe("1 year service agreement");
+    expect(values.minOverallCgpa).toBe(7.5);
+    // The roles carry no bar of their own — there is only one answer.
+    for (const role of values.roles) {
+      expect(role.bondDetails).toBeUndefined();
+      expect(role.minOverallCgpa).toBeUndefined();
+    }
+  });
+
+  it("carries the visit's bar onto the flat drive of a one-role visit", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.type(screen.getByLabelText(/bond \/ service agreement/i), "No bond");
+    await user.type(screen.getByLabelText(/minimum overall/i), "7.5");
+    await user.type(screen.getByLabelText(/minimum 10th/i), "70");
+    await user.type(screen.getByLabelText(/minimum 12th/i), "70");
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      bondDetails: "No bond",
+      minOverallCgpa: 7.5,
+      minTenthPercentage: 70,
+      minTwelfthPercentage: 70,
+      eligiblePassingYears: [2027],
+    });
+  });
+
+  it("refuses a visit with no passing year, and says it at the bar", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("radio", { name: /^full time$/i }));
+    await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
+    await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+    await user.type(screen.getByLabelText(/number of openings/i), "25");
+    await user.type(screen.getByLabelText(/work location/i), "Chennai");
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
+    await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    expect(await screen.findByText(/choose at least one passing year/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+/**
  * "the already existing company data should be get properly".
  *
  * Three separate defects hid it: most company names were never listed at all
@@ -1354,5 +1540,72 @@ describe("PifForm — an existing company answers for itself", () => {
         screen.queryByText(/please resolve the following issues before submitting:/i),
       ).toBeNull();
     });
+  });
+});
+
+/**
+ * The refusal is said AT the field, the way the SRF says it (2026-10-31).
+ *
+ * "i need validation should be highlight on that spot like SRF form?" — a toast
+ * that says "4 fields require attention" leaves the AE to hunt for four fields
+ * on a long form. The label turns red, the control turns red, and the reason
+ * sits under the field that caused it.
+ */
+describe("PifForm — the refusal is said at the field, not only in a toast", () => {
+  it("marks the field that was refused and leaves the ones that were not", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    // Everything answered except the role title.
+    await user.click(screen.getByRole("radio", { name: /^full time$/i }));
+    await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+    await user.type(screen.getByLabelText(/number of openings/i), "25");
+    await user.type(screen.getByLabelText(/work location/i), "Chennai");
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
+    await user.click(screen.getByRole("checkbox", { name: /2027/ }));
+    await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    const roleTitle = await screen.findByLabelText(/role title/i);
+    expect(roleTitle.getAttribute("aria-invalid")).toBe("true");
+    // The fields the AE did answer are not marked.
+    expect(screen.getByLabelText(/company name/i).getAttribute("aria-invalid")).toBe(null);
+    expect(screen.getByLabelText(/work location/i).getAttribute("aria-invalid")).toBe(null);
+    // And the reason is at the field, not only in the toast.
+    expect(await screen.findByText(/role title is required/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("says the reason under the field it belongs to", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    const companyName = await screen.findByLabelText(/company name/i);
+    expect(companyName.getAttribute("aria-invalid")).toBe("true");
+    const message = await screen.findByText(/company name is required/i);
+    expect(message.getAttribute("role")).toBe("alert");
+  });
+
+  it("marks the bar's own field when the cutoff is impossible on its scale", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.type(screen.getByLabelText(/minimum overall/i), "65");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    const cutoff = await screen.findByLabelText(/minimum overall/i);
+    expect(cutoff.getAttribute("aria-invalid")).toBe("true");
+    expect(await screen.findByText(/10-point scale/i)).toBeDefined();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

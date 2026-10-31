@@ -757,6 +757,14 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
       tentativeDate: "2026-11-15",
       timelineNotes: "Fast track",
       joiningTimeline: "immediate",
+      // The bar is the VISIT's: one answer for the company.
+      bondDetails: "",
+      minOverallCgpa: 7.5,
+      minOverallCgpaScale: "cgpa",
+      minTenthPercentage: 70,
+      minTwelfthPercentage: 70,
+      arrearsPolicy: "flexible",
+      eligiblePassingYears: [2026],
       roles: [
         {
           roleTitle: "SDE",
@@ -772,14 +780,7 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
           stipendMaxMonthly: null,
           shiftType: "day",
           shiftNightTiming: "",
-          bondDetails: "",
           jobDescriptionFile: null,
-          minOverallCgpa: 7.5,
-          minOverallCgpaScale: "cgpa",
-          minTenthPercentage: 70,
-          minTwelfthPercentage: 70,
-          arrearsPolicy: "flexible",
-          eligiblePassingYears: [2026],
           mandatorySkills: "Java",
           additionalDesignations: [],
           rounds: [{ sequence: 1, name: "Coding" }],
@@ -795,6 +796,75 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
     expect(rpcCalledWith.p_status).toBe("submitted");
     expect((rpcCalledWith.p_event as Record<string, unknown>).companyName).toBe("Zoho Corporation");
     expect((rpcCalledWith.p_roles as Array<Record<string, unknown>>)[0]?.roleTitle).toBe("SDE");
+  });
+
+  it("writes the visit's bar onto every role the PIF raises", async () => {
+    const { client } = storageStub();
+    let rpcCalledWith: Record<string, unknown> = {};
+
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        rpcCalledWith = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          eventId: "event-1",
+          roleIds: ["r1", "r2"],
+          status: "submitted",
+        });
+      }),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    await repo.submitCompanyDrive({
+      companyName: "Zoho Corporation",
+      industry: "",
+      companyWebsite: "",
+      contacts: [],
+      driveMode: "on_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+      tentativeDate: "",
+      timelineNotes: "",
+      joiningTimeline: "immediate",
+      bondDetails: "1 year service agreement",
+      minOverallCgpa: 7.5,
+      minOverallCgpaScale: "cgpa",
+      minTenthPercentage: 70,
+      minTwelfthPercentage: 70,
+      arrearsPolicy: "no_standing",
+      eligiblePassingYears: [2026, 2027],
+      roles: [
+        {
+          roleTitle: "SDE",
+          roleCategory: "software_technical",
+          driveType: "placement",
+          openings: 10,
+          workLocations: "Chennai",
+          ctcMinLpa: 8,
+          rounds: [{ sequence: 1, name: "Coding" }],
+        },
+        {
+          roleTitle: "QA",
+          roleCategory: "software_technical",
+          driveType: "placement",
+          openings: 5,
+          workLocations: "Chennai",
+          ctcMinLpa: 6,
+          rounds: [{ sequence: 1, name: "Coding" }],
+        },
+      ],
+    });
+
+    const roles = rpcCalledWith.p_roles as Array<Record<string, unknown>>;
+    expect(roles).toHaveLength(2);
+    for (const role of roles) {
+      expect(role.bondDetails).toBe("1 year service agreement");
+      expect(role.minOverallMarks).toBe(7.5);
+      expect(role.minOverallCgpaScale).toBe("cgpa");
+      expect(role.minTenthPercentage).toBe(70);
+      expect(role.minTwelfthPercentage).toBe(70);
+      expect(role.arrearsPolicy).toBe("no_standing");
+      expect(role.eligiblePassingYears).toEqual([2026, 2027]);
+    }
   });
 
   it("saves a multi-role draft with draft status", async () => {

@@ -6,6 +6,7 @@ import { nightTimingFor } from "@domain/shift";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BarRow } from "./pif-labels";
 import type { MultiRolePifValues, PifFormValues } from "./pif-schema";
 
 export class PifError extends Error {}
@@ -65,6 +66,11 @@ type MutableCompanySuggestion = {
   -readonly [K in keyof CompanySuggestion]: CompanySuggestion[K];
 };
 
+/** An `ExistingDriveEvent` while it is being assembled from several sources. */
+type MutableDriveEvent = {
+  -readonly [K in keyof ExistingDriveEvent]: ExistingDriveEvent[K];
+};
+
 export interface ExistingDriveEvent {
   readonly id: string;
   readonly companyName: string;
@@ -79,12 +85,57 @@ export interface ExistingDriveEvent {
     readonly email: string;
     readonly phone: string;
   }[];
+  /**
+   * The bar the visit's roles already carry, so a role added to it is raised
+   * under the same cutoff instead of a second one.
+   */
+  readonly bar?: BarRow | undefined;
 }
 
 export type GetActorId = () => Promise<string | null>;
 
 /** Empty strings are the form's way of saying "not supplied"; the database's is NULL. */
 const nullIfBlank = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+
+/**
+ * The bar a role row already carries, or nothing when it carries none.
+ *
+ * The bar lives on the ROLE row, because that is where the eligibility gates
+ * read it from. A visit's bar is therefore the bar its roles carry — and a
+ * role added to that visit must be raised under it, not under a new one.
+ */
+function barFromRoleRow(row: Record<string, unknown>): BarRow | undefined {
+  const number = (v: unknown): number | null =>
+    v === null || v === undefined || v === "" ? null : Number(v);
+  const bond = typeof row.bond_details === "string" ? row.bond_details.trim() : "";
+  const years = Array.isArray(row.eligible_passing_years)
+    ? row.eligible_passing_years.map((y) => Number(y)).filter((y) => !Number.isNaN(y))
+    : [];
+  const minOverallCgpa = number(row.min_overall_marks);
+  const minTenthPercentage = number(row.min_tenth_percentage);
+  const minTwelfthPercentage = number(row.min_twelfth_percentage);
+
+  if (
+    bond === "" &&
+    minOverallCgpa === null &&
+    minTenthPercentage === null &&
+    minTwelfthPercentage === null &&
+    years.length === 0
+  ) {
+    return undefined;
+  }
+
+  return {
+    bondDetails: bond,
+    minOverallCgpa,
+    minOverallCgpaScale:
+      typeof row.min_overall_cgpa_scale === "string" ? row.min_overall_cgpa_scale : "cgpa",
+    minTenthPercentage,
+    minTwelfthPercentage,
+    arrearsPolicy: typeof row.arrears_policy === "string" ? row.arrears_policy : "flexible",
+    eligiblePassingYears: years,
+  };
+}
 
 /**
  * Maps the AE's form onto the drives table.
@@ -413,21 +464,26 @@ export function createSupabasePifRepository(
           stipendMaxMonthly: role.stipendMaxMonthly ?? null,
           shiftType: nullIfBlank(role.shiftType),
           shiftNightTiming: nullIfBlank(nightTiming),
-          bondDetails: nullIfBlank(role.bondDetails),
+          /**
+           * The bar is the VISIT's. It is asked once and written onto every
+           * role the PIF raises, so one recruiter cannot end up hiring the same
+           * day at two different cutoffs.
+           */
+          bondDetails: nullIfBlank(values.bondDetails),
           jdStoragePath: jd?.storagePath ?? null,
           jdFileName: jd?.fileName ?? null,
           jdSizeBytes: jd?.sizeBytes ?? null,
           jobDescription: nullIfBlank(role.jobDescription),
-          minOverallMarks: role.minOverallCgpa ?? null,
-          minOverallCgpaScale: role.minOverallCgpaScale ?? "cgpa",
+          minOverallMarks: values.minOverallCgpa ?? null,
+          minOverallCgpaScale: values.minOverallCgpaScale ?? "cgpa",
           minOverallCgpa:
-            role.minOverallCgpa === null || role.minOverallCgpa === undefined
+            values.minOverallCgpa === null || values.minOverallCgpa === undefined
               ? null
-              : normaliseToCgpa(role.minOverallCgpa, role.minOverallCgpaScale ?? "cgpa"),
-          minTenthPercentage: role.minTenthPercentage ?? null,
-          minTwelfthPercentage: role.minTwelfthPercentage ?? null,
-          arrearsPolicy: role.arrearsPolicy ?? "flexible",
-          eligiblePassingYears: role.eligiblePassingYears ?? [],
+              : normaliseToCgpa(values.minOverallCgpa, values.minOverallCgpaScale ?? "cgpa"),
+          minTenthPercentage: values.minTenthPercentage ?? null,
+          minTwelfthPercentage: values.minTwelfthPercentage ?? null,
+          arrearsPolicy: values.arrearsPolicy ?? "flexible",
+          eligiblePassingYears: values.eligiblePassingYears ?? [],
           mandatorySkills: nullIfBlank(role.mandatorySkills),
           joiningImmediateNotes: nullIfBlank(role.joiningImmediateNotes),
           joiningLaterNotes: nullIfBlank(role.joiningLaterNotes),
@@ -587,14 +643,16 @@ export function createSupabasePifRepository(
        * events that table knows about.
        */
       let refused = 0;
-      const events: ExistingDriveEvent[] = [];
+      const events: MutableDriveEvent[] = [];
 
       const cdRows = await readAllRows((from, to) =>
         client
           .from("company_drives")
           .select(`
           id, company_name, drive_mode, venue, tentative_date, status,
-          drives(id, role_title),
+          drives(id, role_title, bond_details, min_overall_marks, min_overall_cgpa_scale,
+                 min_tenth_percentage, min_twelfth_percentage, arrears_policy,
+                 eligible_passing_years),
           company_drive_contacts(sequence, name, designation, email, phone)
         `)
           .ilike("company_name", trimmed)
@@ -606,8 +664,9 @@ export function createSupabasePifRepository(
       });
 
       for (const row of cdRows) {
-        const roles = (Array.isArray(row.drives) ? row.drives : [])
-          .map((d: Record<string, unknown>) => String(d.role_title ?? "").trim())
+        const roleRows = Array.isArray(row.drives) ? (row.drives as Record<string, unknown>[]) : [];
+        const roles = roleRows
+          .map((d) => String(d.role_title ?? "").trim())
           .filter((r) => r !== "");
         const contacts = (
           Array.isArray(row.company_drive_contacts) ? row.company_drive_contacts : []
@@ -629,6 +688,7 @@ export function createSupabasePifRepository(
           status: (row.status as string | null) ?? "draft",
           existingRoles: roles,
           contacts,
+          bar: roleRows.map(barFromRoleRow).find((bar) => bar !== undefined),
         });
       }
 
@@ -637,6 +697,8 @@ export function createSupabasePifRepository(
           .from("drives")
           .select(`
           id, company_drive_id, company_name, drive_mode, venue, tentative_date, status, role_title,
+          bond_details, min_overall_marks, min_overall_cgpa_scale,
+          min_tenth_percentage, min_twelfth_percentage, arrears_policy, eligible_passing_years,
           drive_contacts(sequence, name, designation, email, phone)
         `)
           .ilike("company_name", trimmed)
@@ -654,6 +716,12 @@ export function createSupabasePifRepository(
           const existing = events.find((e) => e.id === eventId);
           if (existing && d.role_title && !existing.existingRoles.includes(String(d.role_title))) {
             (existing.existingRoles as string[]).push(String(d.role_title));
+          }
+          // The visit's bar, when the visit was found through `company_drives`
+          // but this role carries one: the first role that has a bar sets it
+          // for the whole visit.
+          if (existing && existing.bar === undefined) {
+            existing.bar = barFromRoleRow(d);
           }
           continue;
         }
@@ -677,6 +745,7 @@ export function createSupabasePifRepository(
           status: (d.status as string | null) ?? "draft",
           existingRoles: d.role_title ? [String(d.role_title)] : [],
           contacts,
+          bar: barFromRoleRow(d),
         });
       }
 

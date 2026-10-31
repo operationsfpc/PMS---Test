@@ -50,6 +50,17 @@ export function extractPifValidationIssues(
   if (errors.venue?.message) {
     issues.push(formatIssue("Venue", errors.venue.message));
   }
+  /**
+   * The bar is the VISIT's, so its refusals are the visit's — not one per
+   * role. A PIF with two roles and no passing year has ONE thing wrong, and
+   * saying it twice would point the AE at two places to fix.
+   */
+  if (errors.eligiblePassingYears?.message) {
+    issues.push(formatIssue("Passing years", errors.eligiblePassingYears.message));
+  }
+  if (errors.minOverallCgpa?.message) {
+    issues.push(formatIssue("Minimum overall marks", errors.minOverallCgpa.message));
+  }
 
   // Check roles array
   const rawRoles = errors.roles as unknown;
@@ -93,9 +104,6 @@ export function extractPifValidationIssues(
       }
       if (roleErr.stipendMaxMonthly?.message) {
         issues.push(formatIssue(prefix, roleErr.stipendMaxMonthly.message));
-      }
-      if (roleErr.eligiblePassingYears?.message) {
-        issues.push(formatIssue(prefix, roleErr.eligiblePassingYears.message));
       }
       if (roleErr.rounds) {
         const roundsMsg = (roleErr.rounds as unknown as { message?: string }).message;

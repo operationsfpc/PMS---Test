@@ -89,6 +89,15 @@ export function SectionNav({
   );
 }
 
+/**
+ * One field: its label, its control, and the reason it was refused.
+ *
+ * The refusal is the field's own business, and it is said AT the field. The
+ * PIF used to report validation failures only in a toast, so an AE was told
+ * "4 fields require attention" and then had to find them. The label turns
+ * red, the control turns red, and the reason sits under it - the same
+ * treatment the SRF gives a student's form.
+ */
 export function Labelled({
   label,
   error,
@@ -98,20 +107,35 @@ export function Labelled({
 }: {
   label: string;
   error?: string | undefined;
-  children: (id: string) => ReactNode;
+  /** The control, and whether it failed: set `aria-invalid` on it. */
+  children: (id: string, invalid: boolean) => ReactNode;
   wide?: boolean;
   /** G2 (UAT 2026-08-20): required to SUBMIT — the marker the form was missing. */
   required?: boolean;
 }) {
   const id = useId();
+  const hasError = error !== undefined && error.trim() !== "";
   return (
     <div className={wide ? "sm:col-span-2" : undefined}>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink-900">
+      <label
+        htmlFor={id}
+        className={`mb-1 block text-sm ${
+          hasError ? "font-semibold text-danger-700" : "font-medium text-ink-900"
+        }`}
+      >
         {required ? `${label} *` : label}
+        {hasError && (
+          <span
+            aria-hidden="true"
+            className="ml-2 inline-flex items-center rounded bg-danger-100 px-1.5 py-0.5 text-[11px] font-bold text-danger-800"
+          >
+            Invalid
+          </span>
+        )}
       </label>
-      {children(id)}
-      {error !== undefined && (
-        <p className="mt-1 text-xs text-danger-500" role="status">
+      {children(id, hasError)}
+      {hasError && (
+        <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
           {error}
         </p>
       )}
@@ -119,8 +143,15 @@ export function Labelled({
   );
 }
 
+/**
+ * The one control style every PIF input shares.
+ *
+ * `aria-invalid:` is what turns a refused field red: the control says it is
+ * invalid and the style follows, so a field cannot look fine while the form
+ * says it is wrong.
+ */
 export const control =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-400 placeholder:font-normal transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-400 placeholder:font-normal transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500 aria-invalid:border-danger-500 aria-invalid:ring-1 aria-invalid:ring-danger-500/30 focus:aria-invalid:border-danger-600";
 
 /**
  * An untouched optional number is NOT zero.
@@ -161,7 +192,11 @@ export function RadioGroup({
 }) {
   return (
     <fieldset>
-      <legend className="mb-2 text-sm font-medium text-ink-900">
+      <legend
+        className={`mb-2 text-sm ${
+          error !== undefined ? "font-semibold text-danger-700" : "font-medium text-ink-900"
+        }`}
+      >
         {required ? `${legend} *` : legend}
       </legend>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
@@ -180,7 +215,7 @@ export function RadioGroup({
         ))}
       </div>
       {error !== undefined && (
-        <p className="mt-1 text-xs text-danger-500" role="status">
+        <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
           {error}
         </p>
       )}

@@ -8,14 +8,19 @@ import { DRIVE_TYPES } from "@domain/types";
 
 /**
  * The AE's sections, in the order the ONE PIF asks them (UAT 2026-08-19 A1/A3):
- * who the company is and when it is coming, then each role. Drive type and
- * compensation are per role now — a placement role and an internship role can
- * belong to the same visit — so the type is the first question INSIDE each role
- * block rather than a section of its own.
+ * who the company is and when it is coming, the bar it sets for the visit, then
+ * each role. Drive type and compensation are per role now — a placement role
+ * and an internship role can belong to the same visit — so the type is the
+ * first question INSIDE each role block rather than a section of its own.
+ *
+ * The eligibility bar sits ABOVE the roles on purpose: a company that wants a
+ * 7.5 CGPA wants it for every role it hires for that day, and asking it once
+ * per role is how one visit ends up with two different bars for one recruiter.
  */
 export const PIF_SECTIONS = [
   { id: "company", short: "Company", title: "Company details" },
   { id: "event", short: "Drive day", title: "Drive day, mode and joining" },
+  { id: "eligibility", short: "Eligibility", title: "Eligibility and bond" },
 ] as const;
 
 /** The heading over the repeatable role blocks, and its one-line explanation. */
@@ -84,3 +89,41 @@ export const hasAnyContactIn = (rows: readonly ContactRow[] | undefined) =>
       (f) => typeof f === "string" && f.trim() !== "",
     ),
   );
+
+/**
+ * The eligibility bar as one company states it for one visit: the bond, the
+ * cutoff and the years a student may apply in.
+ */
+export interface BarRow {
+  bondDetails?: string | undefined;
+  minOverallCgpa?: number | null | undefined;
+  minOverallCgpaScale?: string | undefined;
+  minTenthPercentage?: number | null | undefined;
+  minTwelfthPercentage?: number | null | undefined;
+  arrearsPolicy?: string | undefined;
+  eligiblePassingYears?: readonly (number | string)[] | undefined;
+}
+
+/** Two bars are the same answer when they say the same thing. */
+export const barSignature = (bar: BarRow | undefined) =>
+  JSON.stringify([
+    bar?.bondDetails ?? "",
+    bar?.minOverallCgpa ?? "",
+    bar?.minOverallCgpaScale ?? "",
+    bar?.minTenthPercentage ?? "",
+    bar?.minTwelfthPercentage ?? "",
+    bar?.arrearsPolicy ?? "",
+    (bar?.eligiblePassingYears ?? []).join(","),
+  ]);
+
+/**
+ * Whether the AE has actually answered anything.
+ *
+ * The scale and the arrear policy have defaults, so they are NOT answers —
+ * counting them would make every fresh form look answered and stop the bar
+ * from ever being prefilled from the visit it belongs to.
+ */
+export const hasAnyBarIn = (bar: BarRow | undefined) =>
+  [bar?.bondDetails, bar?.minOverallCgpa, bar?.minTenthPercentage, bar?.minTwelfthPercentage].some(
+    (f) => f !== undefined && f !== null && String(f).trim() !== "",
+  ) || (bar?.eligiblePassingYears ?? []).length > 0;

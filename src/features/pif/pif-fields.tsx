@@ -120,9 +120,10 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
             required
             error={api.err("stipendMinMonthly")}
           >
-            {(id) => (
+            {(id, invalid) => (
               <input
                 id={id}
+                aria-invalid={invalid || undefined}
                 type="number"
                 placeholder="e.g. 25000"
                 className={controlClass}
@@ -131,9 +132,10 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
             )}
           </Labelled>
           <Labelled label="Stipend maximum (₹ / month)" error={api.err("stipendMaxMonthly")}>
-            {(id) => (
+            {(id, invalid) => (
               <input
                 id={id}
+                aria-invalid={invalid || undefined}
                 type="number"
                 placeholder="e.g. 35000"
                 className={controlClass}
@@ -147,9 +149,10 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
       {wantsCtc && (
         <>
           <Labelled label="Minimum CTC (LPA)" required error={api.err("ctcMinLpa")}>
-            {(id) => (
+            {(id, invalid) => (
               <input
                 id={id}
+                aria-invalid={invalid || undefined}
                 type="number"
                 step="0.01"
                 placeholder="e.g. 6.5"
@@ -159,9 +162,10 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
             )}
           </Labelled>
           <Labelled label="Maximum CTC (LPA)" error={api.err("ctcMaxLpa")}>
-            {(id) => (
+            {(id, invalid) => (
               <input
                 id={id}
+                aria-invalid={invalid || undefined}
                 type="number"
                 step="0.01"
                 placeholder="e.g. 8.0"
@@ -171,9 +175,10 @@ export function DriveTypeAndCompensationField<T extends FieldValues>({
             )}
           </Labelled>
           <Labelled label="CTC breakup (fixed / variable)" error={api.err("ctcBreakup")} wide>
-            {(id) => (
+            {(id, invalid) => (
               <input
                 id={id}
+                aria-invalid={invalid || undefined}
                 placeholder="e.g. 6 LPA Fixed + 0.5 LPA Performance Bonus"
                 className={controlClass}
                 {...api.register(api.field("ctcBreakup") as never)}
@@ -220,9 +225,10 @@ export function ShiftField<T extends FieldValues>({ api }: { api: PifFieldApi<T>
       {shiftType === "night" && (
         <div className="mt-3 rounded-xl border border-line bg-surface-muted/50 p-4">
           <Labelled label="Night shift timing" error={api.err("shiftNightTiming")}>
-            {(id) => (
+            {(id, invalid) => (
               <input
                 id={id}
+                aria-invalid={invalid || undefined}
                 className={controlClass}
                 placeholder="9.00 pm – 6.00 am IST"
                 {...api.register(api.field("shiftNightTiming") as never)}
@@ -244,9 +250,10 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
   return (
     <>
       <Labelled label="Cutoff scale" error={api.err("minOverallCgpaScale")}>
-        {(id) => (
+        {(id, invalid) => (
           <select
             id={id}
+            aria-invalid={invalid || undefined}
             className={controlClass}
             {...api.register(api.field("minOverallCgpaScale") as never)}
           >
@@ -259,9 +266,10 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
         )}
       </Labelled>
       <Labelled label="Minimum overall marks" error={api.err("minOverallCgpa")}>
-        {(id) => (
+        {(id, invalid) => (
           <input
             id={id}
+            aria-invalid={invalid || undefined}
             type="number"
             step="0.01"
             placeholder="e.g. 7.5"
@@ -271,9 +279,10 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
         )}
       </Labelled>
       <Labelled label="Arrear policy" error={api.err("arrearsPolicy")}>
-        {(id) => (
+        {(id, invalid) => (
           <select
             id={id}
+            aria-invalid={invalid || undefined}
             className={controlClass}
             {...api.register(api.field("arrearsPolicy") as never)}
           >
@@ -286,9 +295,10 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
         )}
       </Labelled>
       <Labelled label="Minimum 10th %" error={api.err("minTenthPercentage")}>
-        {(id) => (
+        {(id, invalid) => (
           <input
             id={id}
+            aria-invalid={invalid || undefined}
             type="number"
             step="0.01"
             placeholder="e.g. 60"
@@ -298,9 +308,10 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
         )}
       </Labelled>
       <Labelled label="Minimum 12th %" error={api.err("minTwelfthPercentage")}>
-        {(id) => (
+        {(id, invalid) => (
           <input
             id={id}
+            aria-invalid={invalid || undefined}
             type="number"
             step="0.01"
             placeholder="e.g. 60"
@@ -311,7 +322,15 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
       </Labelled>
 
       <fieldset className="sm:col-span-2">
-        <legend className="mb-2 text-sm font-medium text-ink-900">Eligible passing years *</legend>
+        <legend
+          className={`mb-2 text-sm ${
+            api.err("eligiblePassingYears") !== undefined
+              ? "font-semibold text-danger-700"
+              : "font-medium text-ink-900"
+          }`}
+        >
+          Eligible passing years *
+        </legend>
         <div className="flex flex-wrap gap-4">
           {PASSING_YEARS.map((year) => (
             <label key={year} className="flex items-center gap-2 text-sm">
@@ -326,7 +345,7 @@ export function EligibilityFields<T extends FieldValues>({ api }: { api: PifFiel
           ))}
         </div>
         {api.err("eligiblePassingYears") !== undefined && (
-          <p className="mt-1 text-xs text-danger-500" role="status">
+          <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
             {api.err("eligiblePassingYears")}
           </p>
         )}
@@ -460,9 +479,10 @@ export function RoundsEditor<T extends FieldValues>({ api }: { api: PifFieldApi<
           <div key={round.sequence} className="flex flex-wrap items-end gap-2">
             <div className="min-w-56 flex-1">
               <Labelled label={`Round ${round.sequence} name`}>
-                {(id) => (
+                {(id, invalid) => (
                   <input
                     id={id}
+                    aria-invalid={invalid || undefined}
                     className={controlClass}
                     value={round.name}
                     onChange={(e) =>
@@ -543,10 +563,11 @@ export function JobDescriptionField<T extends FieldValues>({
   return (
     <>
       <Labelled label="Job description" error={api.err("jobDescription")} wide>
-        {(id) => (
+        {(id, invalid) => (
           <>
             <textarea
               id={id}
+              aria-invalid={invalid || undefined}
               rows={4}
               className={controlClass}
               {...api.register(api.field("jobDescription") as never)}
@@ -558,10 +579,11 @@ export function JobDescriptionField<T extends FieldValues>({
         )}
       </Labelled>
       <Labelled label="Attach the job description (PDF)" error={api.err("jobDescriptionFile")} wide>
-        {(id) => (
+        {(id, invalid) => (
           <>
             <input
               id={id}
+              aria-invalid={invalid || undefined}
               type="file"
               accept="application/pdf,.pdf"
               className={`${controlClass} file:mr-3 file:rounded-md file:border-0 file:bg-brand-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
@@ -633,14 +655,14 @@ export function CompanyNameField<T extends FieldValues>({
 
   return (
     <Labelled label="Company name" required error={api.err("companyName")}>
-      {(id) => (
+      {(id, invalid) => (
         <Combobox
           id={id}
           name={api.field("companyName")}
           value={companyNameValue}
           options={options}
           placeholder="e.g. Zoho Corporation or search existing recruiter…"
-          error={Boolean(api.err("companyName"))}
+          error={invalid}
           allowCustom={true}
           onChange={(val) => {
             api.setValue(api.field("companyName") as never, val as never, {
@@ -687,80 +709,93 @@ export function ContactsEditor<T extends FieldValues>({
         </p>
       )}
 
-      {contacts.fields.map((field, index) => (
-        <div
-          key={field.id}
-          className="mt-3 grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2"
-        >
-          <div>
-            <label
-              htmlFor={`contact-name-${index}`}
-              className="mb-1 block text-xs font-medium text-ink-700"
-            >
-              Contact {index + 1} name
-            </label>
-            <input
-              id={`contact-name-${index}`}
-              className={controlClass}
-              placeholder="e.g. Priya Sharma"
-              {...api.register(`${api.field("contacts")}.${index}.name` as never)}
-            />
-          </div>
-          <div>
-            <label
-              htmlFor={`contact-designation-${index}`}
-              className="mb-1 block text-xs font-medium text-ink-700"
-            >
-              Contact {index + 1} designation
-            </label>
-            <input
-              id={`contact-designation-${index}`}
-              className={controlClass}
-              placeholder="e.g. Head of Talent Acquisition"
-              {...api.register(`${api.field("contacts")}.${index}.designation` as never)}
-            />
-          </div>
-          <div>
-            <label
-              htmlFor={`contact-email-${index}`}
-              className="mb-1 block text-xs font-medium text-ink-700"
-            >
-              Contact {index + 1} email
-            </label>
-            <input
-              id={`contact-email-${index}`}
-              className={controlClass}
-              placeholder="e.g. priya.sharma@company.com"
-              {...api.register(`${api.field("contacts")}.${index}.email` as never)}
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
+      {contacts.fields.map((field, index) => {
+        const contactEmailError = api.err(`contacts.${index}.email`);
+        return (
+          <div
+            key={field.id}
+            className="mt-3 grid gap-2 rounded-lg border border-line bg-surface p-3 sm:grid-cols-2"
+          >
+            <div>
               <label
-                htmlFor={`contact-phone-${index}`}
+                htmlFor={`contact-name-${index}`}
                 className="mb-1 block text-xs font-medium text-ink-700"
               >
-                Contact {index + 1} phone
+                Contact {index + 1} name
               </label>
               <input
-                id={`contact-phone-${index}`}
+                id={`contact-name-${index}`}
                 className={controlClass}
-                placeholder="e.g. +91 98765 43210"
-                {...api.register(`${api.field("contacts")}.${index}.phone` as never)}
+                placeholder="e.g. Priya Sharma"
+                {...api.register(`${api.field("contacts")}.${index}.name` as never)}
               />
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-label={`Remove contact ${index + 1}`}
-              onClick={() => contacts.remove(index)}
-            >
-              Remove
-            </Button>
+            <div>
+              <label
+                htmlFor={`contact-designation-${index}`}
+                className="mb-1 block text-xs font-medium text-ink-700"
+              >
+                Contact {index + 1} designation
+              </label>
+              <input
+                id={`contact-designation-${index}`}
+                className={controlClass}
+                placeholder="e.g. Head of Talent Acquisition"
+                {...api.register(`${api.field("contacts")}.${index}.designation` as never)}
+              />
+            </div>
+            <div>
+              <label
+                htmlFor={`contact-email-${index}`}
+                className={`mb-1 block text-xs ${
+                  contactEmailError !== undefined
+                    ? "font-semibold text-danger-700"
+                    : "font-medium text-ink-700"
+                }`}
+              >
+                Contact {index + 1} email
+              </label>
+              <input
+                id={`contact-email-${index}`}
+                className={controlClass}
+                placeholder="e.g. priya.sharma@company.com"
+                aria-invalid={contactEmailError !== undefined || undefined}
+                {...api.register(`${api.field("contacts")}.${index}.email` as never)}
+              />
+              {contactEmailError !== undefined && (
+                <p role="alert" className="mt-1 text-xs font-medium text-danger-700">
+                  {contactEmailError}
+                </p>
+              )}
+            </div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label
+                  htmlFor={`contact-phone-${index}`}
+                  className="mb-1 block text-xs font-medium text-ink-700"
+                >
+                  Contact {index + 1} phone
+                </label>
+                <input
+                  id={`contact-phone-${index}`}
+                  className={controlClass}
+                  placeholder="e.g. +91 98765 43210"
+                  {...api.register(`${api.field("contacts")}.${index}.phone` as never)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove contact ${index + 1}`}
+                onClick={() => contacts.remove(index)}
+              >
+                Remove
+              </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       <Button
         type="button"
@@ -794,9 +829,10 @@ export function VenueAndModeField<T extends FieldValues>({ api }: { api: PifFiel
   return (
     <>
       <Labelled label="Drive mode" error={api.err("driveMode")}>
-        {(id) => (
+        {(id, invalid) => (
           <select
             id={id}
+            aria-invalid={invalid || undefined}
             className={controlClass}
             {...api.register(api.field("driveMode") as never, {
               onChange: (e) => {
@@ -840,9 +876,10 @@ export function VenueAndModeField<T extends FieldValues>({ api }: { api: PifFiel
           {venueStatus === "confirmed" && (
             <div className="mt-3 rounded-xl border border-line bg-surface-muted/50 p-4">
               <Labelled label="Venue" error={api.err("venue")}>
-                {(id) => (
+                {(id, invalid) => (
                   <input
                     id={id}
+                    aria-invalid={invalid || undefined}
                     className={controlClass}
                     placeholder="e.g. HCL Campus, Sholinganallur, Chennai"
                     {...api.register(api.field("venue") as never)}
@@ -932,9 +969,10 @@ export function JoiningCommentBox<T extends FieldValues>({
       error={api.err("joiningImmediateNotes")}
       wide={wide}
     >
-      {(id) => (
+      {(id, invalid) => (
         <textarea
           id={id}
+          aria-invalid={invalid || undefined}
           rows={2}
           className={controlClass}
           placeholder="Optional — e.g. onboarding within 30 days of the offer."
@@ -944,9 +982,10 @@ export function JoiningCommentBox<T extends FieldValues>({
     </Labelled>
   ) : (
     <Labelled label="Comments on joining later" error={api.err("joiningLaterNotes")} wide={wide}>
-      {(id) => (
+      {(id, invalid) => (
         <textarea
           id={id}
+          aria-invalid={invalid || undefined}
           rows={2}
           className={controlClass}
           placeholder="Optional — e.g. offers in Nov 2026, joining from July 2027."

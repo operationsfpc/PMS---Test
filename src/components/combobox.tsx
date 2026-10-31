@@ -115,6 +115,7 @@ export function Combobox({
           aria-controls={listboxId}
           aria-autocomplete="list"
           aria-label={ariaLabel}
+          aria-invalid={error ? true : undefined}
           disabled={disabled}
           value={value}
           onChange={(e) => {

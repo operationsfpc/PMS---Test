@@ -582,11 +582,14 @@ describe("pifSubmitSchema", () => {
       expect(parsed.success ? "" : parsed.error.issues[0]?.message).toMatch(/at least one role/i);
     });
 
-    it("submits multiple roles with independent CTC and eligibility", () => {
+    it("submits multiple roles with independent CTC under one shared bar", () => {
       const parsed = multiRolePifSubmitSchema.safeParse({
         companyName: "Zoho Corporation",
         joiningTimeline: "immediate",
         contacts: [{ name: "HR Lead", designation: "HR", email: "hr@zoho.com", phone: "123" }],
+        // The bar belongs to the visit: asked once, applied to every role.
+        minOverallCgpa: 7.5,
+        eligiblePassingYears: [2026],
         roles: [
           {
             ...DEFAULT_ROLE_VALUES,
@@ -597,8 +600,6 @@ describe("pifSubmitSchema", () => {
             openings: 10,
             ctcMinLpa: 8,
             ctcMaxLpa: 12,
-            minOverallCgpa: 7.5,
-            eligiblePassingYears: [2026],
             rounds: [
               { sequence: 1, name: "Coding" },
               { sequence: 2, name: "Interview" },
@@ -613,8 +614,6 @@ describe("pifSubmitSchema", () => {
             openings: 5,
             ctcMinLpa: 5,
             ctcMaxLpa: 6,
-            minOverallCgpa: 6.5,
-            eligiblePassingYears: [2026],
             rounds: [{ sequence: 1, name: "Aptitude" }],
           },
         ],
@@ -624,6 +623,62 @@ describe("pifSubmitSchema", () => {
         expect(parsed.data.roles).toHaveLength(2);
         expect(parsed.data.roles[0]?.roleTitle).toBe("Software Engineer");
         expect(parsed.data.roles[1]?.roleTitle).toBe("QA Engineer");
+        expect(parsed.data.minOverallCgpa).toBe(7.5);
+        expect(parsed.data.eligiblePassingYears).toEqual([2026]);
+      }
+    });
+
+    /**
+     * The bar is asked ONCE for the company, not once per role. A PIF with
+     * two roles and no passing year has ONE thing wrong — and it is wrong at
+     * the visit, not at each role.
+     */
+    it("refuses a visit with no passing year, whatever the roles say", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Software Engineer",
+            roleCategory: "software_technical",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+        ],
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === "eligiblePassingYears")).toBe(true);
+      }
+    });
+
+    it("refuses a cutoff that is impossible on the scale it was declared on", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        minOverallCgpa: 65,
+        minOverallCgpaScale: "cgpa",
+        eligiblePassingYears: [2026],
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Software Engineer",
+            roleCategory: "software_technical",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+        ],
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === "minOverallCgpa")).toBe(true);
       }
     });
 
@@ -635,6 +690,7 @@ describe("pifSubmitSchema", () => {
       const parsed = multiRolePifSubmitSchema.safeParse({
         companyName: "Zoho Corporation",
         joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
         roles: [
           {
             ...DEFAULT_ROLE_VALUES,
@@ -644,7 +700,6 @@ describe("pifSubmitSchema", () => {
             workLocations: "Chennai",
             openings: 4,
             ctcMinLpa: 5,
-            eligiblePassingYears: [2026],
             rounds: [{ sequence: 1, name: "Interview" }],
             shiftType: "night",
             shiftNightTiming: "",
@@ -663,6 +718,7 @@ describe("pifSubmitSchema", () => {
       const parsed = multiRolePifSubmitSchema.safeParse({
         companyName: "Zoho Corporation",
         joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
         roles: [
           {
             ...DEFAULT_ROLE_VALUES,
@@ -673,7 +729,6 @@ describe("pifSubmitSchema", () => {
             workLocations: "Chennai",
             openings: 10,
             ctcMinLpa: 8,
-            eligiblePassingYears: [2026],
             rounds: [{ sequence: 1, name: "Aptitude" }],
           },
         ],
@@ -698,7 +753,6 @@ describe("pifSubmitSchema", () => {
         workLocations: "Chennai",
         openings: 10,
         ctcMinLpa: 8,
-        eligiblePassingYears: [2026],
         rounds: [{ sequence: 1, name: "Coding" }],
         joiningImmediateNotes: "Relocating this month",
         joiningLaterNotes: "After the exams",
@@ -707,6 +761,7 @@ describe("pifSubmitSchema", () => {
       const later = multiRolePifSubmitSchema.parse({
         companyName: "Zoho Corporation",
         joiningTimeline: "later",
+        eligiblePassingYears: [2026],
         roles: [role],
       });
       expect(later.roles[0]?.joiningImmediateNotes).toBe("");
@@ -715,6 +770,7 @@ describe("pifSubmitSchema", () => {
       const immediate = multiRolePifSubmitSchema.parse({
         companyName: "Zoho Corporation",
         joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
         roles: [role],
       });
       expect(immediate.roles[0]?.joiningImmediateNotes).toBe("Relocating this month");
@@ -728,6 +784,7 @@ describe("pifSubmitSchema", () => {
         driveMode: "physical_outside_campus",
         venueStatus: "confirmed",
         venue: "",
+        eligiblePassingYears: [2026],
         roles: [
           {
             ...DEFAULT_ROLE_VALUES,
@@ -737,7 +794,6 @@ describe("pifSubmitSchema", () => {
             workLocations: "Chennai",
             openings: 10,
             ctcMinLpa: 8,
-            eligiblePassingYears: [2026],
             rounds: [{ sequence: 1, name: "Coding" }],
           },
         ],
@@ -766,6 +822,14 @@ describe("pifSubmitSchema", () => {
         tentativeDate: "2026-11-15",
         timelineNotes: "",
         joiningTimeline: "immediate" as const,
+        // The bar lives on the visit, even when the visit has one role.
+        bondDetails: "No bond",
+        minOverallCgpa: 7.5,
+        minOverallCgpaScale: "cgpa" as const,
+        minTenthPercentage: 70,
+        minTwelfthPercentage: 70,
+        arrearsPolicy: "flexible" as const,
+        eligiblePassingYears: [2027],
         roles: [],
       };
 
@@ -795,6 +859,22 @@ describe("pifSubmitSchema", () => {
         expect((flat as { roles?: unknown }).roles).toBeUndefined();
       });
 
+      it("carries the visit's bar onto the flat drive", () => {
+        const role: PifRoleValues = {
+          roleTitle: "Member Technical Staff",
+          driveType: "placement",
+          ctcMinLpa: 6.5,
+        };
+        const flat = toSinglePifValues(visit, role);
+
+        expect(flat.bondDetails).toBe("No bond");
+        expect(flat.minOverallCgpa).toBe(7.5);
+        expect(flat.minTenthPercentage).toBe(70);
+        expect(flat.minTwelfthPercentage).toBe(70);
+        expect(flat.arrearsPolicy).toBe("flexible");
+        expect(flat.eligiblePassingYears).toEqual([2027]);
+      });
+
       it("survives the single-drive submit schema unchanged", () => {
         const role = {
           ...DEFAULT_ROLE_VALUES,
@@ -804,7 +884,6 @@ describe("pifSubmitSchema", () => {
           workLocations: "Chennai",
           openings: 25,
           ctcMinLpa: 6.5,
-          eligiblePassingYears: [2027],
           rounds: [{ sequence: 1, name: "Aptitude test" }],
         } as PifRoleValues;
         const flat = toSinglePifValues(visit, role);
@@ -817,6 +896,7 @@ describe("pifSubmitSchema", () => {
       const parsed = multiRolePifSubmitSchema.safeParse({
         companyName: "Zoho Corporation",
         joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
         roles: [
           {
             ...DEFAULT_ROLE_VALUES,
@@ -827,8 +907,6 @@ describe("pifSubmitSchema", () => {
             openings: 10,
             ctcMinLpa: 8,
             ctcMaxLpa: 12,
-            minOverallCgpa: 7.5,
-            eligiblePassingYears: [2026],
             rounds: [{ sequence: 1, name: "Coding" }],
           },
           {
@@ -840,8 +918,6 @@ describe("pifSubmitSchema", () => {
             openings: 5,
             ctcMinLpa: 5,
             ctcMaxLpa: 6,
-            minOverallCgpa: 6.5,
-            eligiblePassingYears: [2026],
             rounds: [{ sequence: 1, name: "Aptitude" }],
           },
         ],

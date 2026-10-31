@@ -25,9 +25,12 @@ import {
   VenueAndModeField,
 } from "./pif-fields";
 import {
+  type BarRow,
+  barSignature,
   type ContactRow,
   contactSignature,
   DRIVE_MODE_LABELS,
+  hasAnyBarIn,
   hasAnyContactIn,
   PIF_SECTIONS,
   ROLE_CATEGORY_LABELS,
@@ -35,6 +38,7 @@ import {
 } from "./pif-labels";
 import type { ExistingDriveEvent } from "./pif-repository";
 import {
+  DEFAULT_BAR_VALUES,
   DEFAULT_ROLE_VALUES,
   type MultiRolePifValues,
   multiRolePifDraftSchema,
@@ -74,6 +78,9 @@ const UNIFIED_DEFAULTS = {
   tentativeDate: "",
   timelineNotes: "",
   joiningTimeline: "" as const,
+  // The bar belongs to the VISIT: one answer for the company, applied to every
+  // role raised under it.
+  ...DEFAULT_BAR_VALUES,
   roles: [{ ...DEFAULT_ROLE_VALUES }] as MultiRolePifValues["roles"],
 };
 
@@ -137,9 +144,10 @@ function RoleBlock({
       <DriveTypeAndCompensationField api={roleApi} />
 
       <Labelled label="Role title" required error={roleApi.err("roleTitle")}>
-        {(id) => (
+        {(id, invalid) => (
           <input
             id={id}
+            aria-invalid={invalid || undefined}
             placeholder="e.g. Associate Software Engineer"
             className={control}
             {...roleApi.register(roleApi.field("roleTitle") as never)}
@@ -147,9 +155,10 @@ function RoleBlock({
         )}
       </Labelled>
       <Labelled label="Role category" required error={roleApi.err("roleCategory")}>
-        {(id) => (
+        {(id, invalid) => (
           <select
             id={id}
+            aria-invalid={invalid || undefined}
             className={control}
             {...roleApi.register(roleApi.field("roleCategory") as never)}
           >
@@ -163,9 +172,10 @@ function RoleBlock({
         )}
       </Labelled>
       <Labelled label="Number of openings" required error={roleApi.err("openings")}>
-        {(id) => (
+        {(id, invalid) => (
           <input
             id={id}
+            aria-invalid={invalid || undefined}
             type="number"
             placeholder="e.g. 10"
             className={control}
@@ -174,9 +184,10 @@ function RoleBlock({
         )}
       </Labelled>
       <Labelled label="Work location(s)" required error={roleApi.err("workLocations")}>
-        {(id) => (
+        {(id, invalid) => (
           <input
             id={id}
+            aria-invalid={invalid || undefined}
             placeholder="e.g. Chennai / Bangalore / Hybrid"
             className={control}
             {...roleApi.register(roleApi.field("workLocations") as never)}
@@ -188,18 +199,7 @@ function RoleBlock({
         fileHint="PDF only, up to 5 MB. Visible to the Delivery Head approving the drive and to the students it is published to."
       />
       <ShiftField api={roleApi} />
-      <Labelled label="Bond / service agreement" error={roleApi.err("bondDetails")}>
-        {(id) => (
-          <input
-            id={id}
-            placeholder="e.g. 1 year service agreement or None"
-            className={control}
-            {...roleApi.register(roleApi.field("bondDetails") as never)}
-          />
-        )}
-      </Labelled>
 
-      <EligibilityFields api={roleApi} />
       <SkillsPicker
         skillAreas={skillAreas}
         onChange={(joined) =>
@@ -311,8 +311,20 @@ export function PifForm({
     register,
     setValue,
     control: formControl,
-    err: (key) =>
-      (errors as unknown as Record<string, { message?: string } | undefined>)[key]?.message,
+    /**
+     * The refusal attached to one field, wherever it sits.
+     *
+     * A dotted path walks into the nested errors - a contact's email is
+     * `contacts.0.email` - because a refusal nobody can see is a refusal the
+     * AE has to guess at.
+     */
+    err: (key) => {
+      let node: unknown = errors;
+      for (const part of key.split(".")) {
+        node = (node as Record<string, unknown> | undefined)?.[part];
+      }
+      return (node as { message?: string } | undefined)?.message;
+    },
   };
 
   const roles = useFieldArray({ control: formControl, name: "roles" as never });
@@ -348,6 +360,11 @@ export function PifForm({
    * name the wrong company's people.
    */
   const autoContactSignatureRef = useRef<string | null>(null);
+  /**
+   * The bar this form last wrote for itself, so an inherited one can be told
+   * apart from one the AE typed.
+   */
+  const autoBarSignatureRef = useRef<string | null>(null);
   /** The event whose defaults were auto-applied from the URL prefill, once. */
   const appliedEventRef = useRef<string | null>(null);
   /** What the company autofill wrote, so a re-match replaces its OWN values. */
@@ -409,9 +426,44 @@ export function PifForm({
   }, [joiningTimeline, getValues, setValue]);
 
   /**
-   * Copies the targeted event's identity — date, mode, venue, contacts — onto
-   * the form. The contacts rule: fill an empty form, replace an inherited set,
-   * never touch a set the AE typed.
+   * The bar the form holds right now, read as one thing so it can be compared
+   * with the bar a visit already has.
+   */
+  const readBar = useCallback((): BarRow => {
+    const all = getValues();
+    return {
+      bondDetails: all.bondDetails,
+      minOverallCgpa: all.minOverallCgpa,
+      minOverallCgpaScale: all.minOverallCgpaScale,
+      minTenthPercentage: all.minTenthPercentage,
+      minTwelfthPercentage: all.minTwelfthPercentage,
+      arrearsPolicy: all.arrearsPolicy,
+      eligiblePassingYears: all.eligiblePassingYears as readonly string[],
+    };
+  }, [getValues]);
+
+  const writeBar = useCallback(
+    (bar: BarRow) => {
+      setValue("bondDetails", bar.bondDetails ?? "");
+      setValue("minOverallCgpa", bar.minOverallCgpa ?? null);
+      setValue("minOverallCgpaScale", (bar.minOverallCgpaScale ?? "cgpa") as "cgpa" | "percentage");
+      setValue("minTenthPercentage", bar.minTenthPercentage ?? null);
+      setValue("minTwelfthPercentage", bar.minTwelfthPercentage ?? null);
+      setValue(
+        "arrearsPolicy",
+        (bar.arrearsPolicy ?? "flexible") as "flexible" | "no_standing" | "no_history",
+      );
+      // Checkbox values are strings: that is what the DOM holds and what RHF
+      // compares against when it ticks the boxes for us.
+      setValue("eligiblePassingYears", (bar.eligiblePassingYears ?? []).map(String));
+    },
+    [setValue],
+  );
+
+  /**
+   * Copies the targeted event's identity — date, mode, venue, contacts, bar —
+   * onto the form. The contacts rule: fill an empty form, replace an inherited
+   * set, never touch a set the AE typed. The bar follows the same rule.
    */
   const applyEventDefaults = useCallback(
     (evt: ExistingDriveEvent) => {
@@ -435,8 +487,22 @@ export function PifForm({
         setValue("contacts", incoming);
         autoContactSignatureRef.current = incoming.length > 0 ? contactSignature(incoming) : null;
       }
+
+      /**
+       * The bar is the VISIT's. A role added to an existing visit is raised
+       * under the bar that visit already has — asking again would let one
+       * recruiter hire at two different cutoffs on the same day.
+       */
+      if (evt.bar !== undefined) {
+        const held = readBar();
+        const wasInherited = barSignature(held) === autoBarSignatureRef.current;
+        if (!hasAnyBarIn(held) || wasInherited) {
+          writeBar(evt.bar);
+          autoBarSignatureRef.current = barSignature(evt.bar);
+        }
+      }
     },
-    [getValues, setValue],
+    [getValues, setValue, readBar, writeBar],
   );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
@@ -475,6 +541,16 @@ export function PifForm({
               setValue("contacts", []);
               autoContactSignatureRef.current = null;
             }
+            // The bar is the COMPANY's bar: it must not ride along to another
+            // recruiter. Only an inherited one is dropped — one the AE typed is
+            // theirs to keep.
+            if (
+              autoBarSignatureRef.current !== null &&
+              barSignature(readBar()) === autoBarSignatureRef.current
+            ) {
+              writeBar(DEFAULT_BAR_VALUES);
+              autoBarSignatureRef.current = null;
+            }
           }
         })
         .catch(() => {
@@ -498,6 +574,8 @@ export function PifForm({
     setSelectedEventId,
     getValues,
     setValue,
+    readBar,
+    writeBar,
     eventsAttempt,
   ]);
 
@@ -506,7 +584,7 @@ export function PifForm({
       ? (eventsForCompany.find((e) => e.id === selectedEventId) ?? null)
       : null;
 
-  const [companySection, eventSection] = PIF_SECTIONS;
+  const [companySection, eventSection, eligibilitySection] = PIF_SECTIONS;
   const roleCount = roles.fields.length;
   /** The array-level complaint ("add at least one role") lives on `.root`. */
   const rolesError =
@@ -585,10 +663,24 @@ export function PifForm({
 
           <CompanyNameField api={api} existingCompanies={existingCompanies} />
           <Labelled label="Industry / domain" error={api.err("industry")}>
-            {(id) => <input id={id} className={control} {...register("industry")} />}
+            {(id, invalid) => (
+              <input
+                id={id}
+                aria-invalid={invalid || undefined}
+                className={control}
+                {...register("industry")}
+              />
+            )}
           </Labelled>
           <Labelled label="Company website" error={api.err("companyWebsite")}>
-            {(id) => <input id={id} className={control} {...register("companyWebsite")} />}
+            {(id, invalid) => (
+              <input
+                id={id}
+                aria-invalid={invalid || undefined}
+                className={control}
+                {...register("companyWebsite")}
+              />
+            )}
           </Labelled>
 
           {/* A4/A5 (UAT 2026-08-19): several contacts, all optional. With none,
@@ -739,8 +831,14 @@ export function PifForm({
           <VenueAndModeField api={api} />
 
           <Labelled label="Tentative drive date" error={api.err("tentativeDate")}>
-            {(id) => (
-              <input id={id} type="date" className={control} {...register("tentativeDate")} />
+            {(id, invalid) => (
+              <input
+                id={id}
+                type="date"
+                aria-invalid={invalid || undefined}
+                className={control}
+                {...register("tentativeDate")}
+              />
             )}
           </Labelled>
 
@@ -751,10 +849,37 @@ export function PifForm({
           />
 
           <Labelled label="Timeline notes" error={api.err("timelineNotes")} wide>
-            {(id) => (
-              <textarea id={id} rows={2} className={control} {...register("timelineNotes")} />
+            {(id, invalid) => (
+              <textarea
+                id={id}
+                rows={2}
+                aria-invalid={invalid || undefined}
+                className={control}
+                {...register("timelineNotes")}
+              />
             )}
           </Labelled>
+        </Section>
+
+        <Section number={3} title={eligibilitySection.title} id={eligibilitySection.id}>
+          <p className="sm:col-span-2 text-sm text-ink-700">
+            The bar this company sets for the visit. Every role below is raised under it — ask it
+            once, here.
+          </p>
+
+          <Labelled label="Bond / service agreement" error={api.err("bondDetails")} wide>
+            {(id, invalid) => (
+              <input
+                id={id}
+                aria-invalid={invalid || undefined}
+                placeholder="e.g. 1 year service agreement or None"
+                className={control}
+                {...register("bondDetails")}
+              />
+            )}
+          </Labelled>
+
+          <EligibilityFields api={api} />
         </Section>
 
         <section id={ROLES_SECTION.id} className="mb-4 scroll-mt-24">
