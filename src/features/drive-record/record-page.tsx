@@ -241,7 +241,7 @@ export function DriveRecordPage({
   const staff = role !== "student";
   const driveType = asDriveType(record.driveType);
   const tabTriggerClass =
-    "w-auto flex-none rounded-none px-3 py-2 text-xs data-[state=active]:after:bg-brand-600 data-[state=active]:after:bottom-0";
+    "w-auto flex-none rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-500 data-[state=active]:bg-surface data-[state=active]:text-brand-700 data-[state=active]:shadow-sm";
   /**
    * Whether this drive's visit still admits one more role. The visit, not just
    * this row: a new role attaches to the company event, so it is refused only
@@ -408,10 +408,7 @@ export function DriveRecordPage({
       </div>
 
       <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as DriveRecordTab)}>
-        <TabsList
-          variant="line"
-          className="h-auto w-full flex-nowrap justify-start gap-x-1 overflow-x-auto rounded-none border-b border-line p-0 [scrollbar-width:none] sm:flex-wrap"
-        >
+        <TabsList className="mb-1 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
           <TabsTrigger
             value="overview"
             id="drive-record-tab-overview"

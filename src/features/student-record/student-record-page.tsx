@@ -855,10 +855,7 @@ export function StudentRecordPage({
         value={activeSection}
         onValueChange={(next) => setActiveSection(next as typeof activeSection)}
       >
-        <TabsList
-          variant="line"
-          className="h-auto w-full flex-nowrap overflow-x-auto justify-start gap-x-1 rounded-none border-b border-line p-0 [scrollbar-width:none] sm:flex-wrap"
-        >
+        <TabsList className="mb-1 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
           {[
             { id: "overview", label: "Overview" },
             { id: "academics", label: `Academics (${semesters.length})` },
@@ -874,7 +871,7 @@ export function StudentRecordPage({
               value={tab.id}
               id={`student-record-tab-${tab.id}`}
               aria-controls="student-record-panels"
-              className="w-auto flex-none rounded-none px-3 py-2 text-xs data-[state=active]:after:bg-brand-600 data-[state=active]:after:bottom-0"
+              className="w-auto flex-none rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-500 data-[state=active]:bg-surface data-[state=active]:text-brand-700 data-[state=active]:shadow-sm"
             >
               {tab.label}
             </TabsTrigger>
