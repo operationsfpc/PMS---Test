@@ -229,7 +229,7 @@ export function StatDrilldown({
         data={shown}
         columns={columns}
         defaultPageSize={25}
-        stickyPagination
+        fit
         searchPlaceholder="Search name, roll number or campus…"
         caption={title}
         emptyMessage="No student here matches that search."
@@ -242,12 +242,15 @@ export function StatDrilldown({
    * reader narrows the list, and a control that scrolls out of view above a long
    * roster is a control that says "scroll back to the top to do your job".
    *
-   * The "open this list" link rides here too (2026-10-31): under the table it
-   * sat in the strip the sticky pager now owns, so it was covered on exactly
-   * the long rosters where it was needed.
+   * The "open this list" link rides here too (2026-10-31): it used to sit under
+   * the table, where the pager's band covered it on exactly the long rosters
+   * where it was needed.
+   *
+   * `shrink-0` because the drawer is a fixed frame: the roster's scroll box
+   * takes what is left, and the header keeps its own height.
    */
   const header = (filters: ReactNode) => (
-    <SheetHeader>
+    <SheetHeader className="shrink-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="inline-flex items-center rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
           {eyebrow}
@@ -304,9 +307,14 @@ export function StatDrilldown({
             {list}
           </>
         ) : (
-          <Tabs value={tab} onValueChange={setTab}>
+          /*
+           * Tabs and their panel only pass the frame down: `flex-1` on both
+           * lets the table's scroll box take the height the header and pager
+           * leave, instead of pushing the pager below the drawer's fold.
+           */
+          <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
             {header(filterStrip)}
-            <TabsContent value={tab} className="mt-3">
+            <TabsContent value={tab} className="flex min-h-0 flex-1 flex-col">
               {list}
             </TabsContent>
           </Tabs>

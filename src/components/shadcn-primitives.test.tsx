@@ -134,19 +134,42 @@ describe("DataTable controls", () => {
   });
 
   /**
-   * 2026-10-31: a row painted in the 24px strip the sticky pager left uncovered
-   * ("Sneha Pillai" sat beside "Page 1 of 9"). The band must own the scroll
-   * container's bottom padding the same way SheetFooter does.
+   * Clearing the search puts the reader back at the top of the full list: the
+   * box and the pager live in one frame, so page 3 of a narrowed list was
+   * reopening page 3 of the whole roster.
    */
-  it("keeps the sticky pager over the scroll container's bottom padding", () => {
-    render(
-      <ShadcnDataTable data={[{ id: "1", name: "Asha" }]} columns={PEOPLE} stickyPagination />,
-    );
+  it("starts the full list at page one when the search is cleared", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      id: `s${i}`,
+      name: i === 29 ? "Zoya" : `Student ${i}`,
+    }));
+    render(<ShadcnDataTable data={many} columns={PEOPLE} defaultPageSize={10} />);
 
-    const pager = screen.getByRole("button", { name: /previous/i }).closest(".sticky");
-    expect(pager).not.toBeNull();
-    expect(pager?.className).toContain("-mb-6");
-    expect(pager?.className).toContain("pb-6");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText("Page 2 of 3")).toBeDefined();
+
+    await user.type(screen.getByPlaceholderText("Search records…"), "Zoya");
+    expect(screen.getByText("Page 1 of 1")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /clear search/i }));
+    expect(screen.getByText("Page 1 of 3")).toBeDefined();
+  });
+
+  /**
+   * 2026-10-31: the pager used to be `sticky bottom-0`, so a scrolled roster
+   * parked it mid-list with the last row painted in the strip beneath it
+   * ("Sneha Pillai" beside "Page 1 of 9"). In a filled frame the table card is
+   * the only scroll box: the search and the pager are siblings of it and can
+   * never overlap a row.
+   */
+  it("scrolls the rows while the search and the pager stay in frame", () => {
+    render(<ShadcnDataTable data={[{ id: "1", name: "Asha" }]} columns={PEOPLE} fit />);
+
+    const scroller = screen.getByRole("region", { name: "Data table" });
+    expect(scroller.contains(screen.getByRole("table"))).toBe(true);
+    expect(scroller.contains(screen.getByPlaceholderText("Search records…"))).toBe(false);
+    expect(scroller.contains(screen.getByRole("button", { name: /previous/i }))).toBe(false);
   });
 });
 

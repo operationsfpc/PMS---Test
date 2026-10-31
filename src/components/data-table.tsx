@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button } from "./ui";
 
 export interface ColumnDef<T> {
@@ -25,11 +25,12 @@ export interface ShadcnDataTableProps<T> {
   emptyMessage?: string | undefined;
   caption?: string | undefined;
   /**
-   * For a table that scrolls inside a drawer (the "See who" popup): keeps the
-   * paging controls on screen instead of leaving them at the end of a roster
-   * nobody scrolls past by accident.
+   * For a table that fills a fixed-height frame (the "See who" drawer): the
+   * search box and pager stay put and only the rows scroll. The pager used to
+   * be `sticky bottom-0`, which parked it over the roster mid-scroll with the
+   * last row painted in the strip beneath it (2026-10-31).
    */
-  stickyPagination?: boolean | undefined;
+  fit?: boolean | undefined;
   className?: string | undefined;
 }
 
@@ -45,7 +46,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
   defaultPageSize = 10,
   emptyMessage = "No records found.",
   caption = "Data table",
-  stickyPagination = false,
+  fit = false,
   className = "",
 }: ShadcnDataTableProps<T>) {
   // State
@@ -131,6 +132,17 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
     setPageIndex((current) => Math.min(current, totalPages - 1));
   }, [totalPages]);
 
+  /**
+   * In a fixed frame the rows are the only thing that scrolls, so a page turn
+   * would otherwise leave the reader halfway down an unseen list. Every new
+   * page starts at its first row.
+   */
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each new page, search or order starts the roster at its first row
+  useEffect(() => {
+    if (scrollRef.current !== null) scrollRef.current.scrollTop = 0;
+  }, [pageIndex, pageSize, searchQuery, sortColumnId, sortDirection]);
+
   // Sorting handler
   const handleSort = (colId: string) => {
     if (sortColumnId === colId) {
@@ -197,7 +209,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
     paginatedData.every((r) => selectedIds.has(r.id ?? JSON.stringify(r)));
 
   return (
-    <div className={`flex flex-col gap-3 ${className}`}>
+    <div className={`flex flex-col gap-3 ${fit ? "min-h-0 flex-1" : ""} ${className}`}>
       {/* Top Toolbar: Search */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Search Box */}
@@ -220,7 +232,10 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
             <button
               type="button"
               aria-label="Clear search"
-              onClick={() => setSearchQuery("")}
+              onClick={() => {
+                setSearchQuery("");
+                setPageIndex(0);
+              }}
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700"
             >
               <svg
@@ -256,12 +271,29 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         </div>
       )}
 
-      {/* Table Card Container */}
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface shadow-xs">
+      {/*
+       * In a fixed frame the table card is the scroll box, so the search above
+       * it and the pager below it cannot move. `tabIndex` gives a keyboard
+       * reader a way to scroll rows whose links are all they can otherwise
+       * reach; the name is the table's own caption.
+       */}
+      <div
+        ref={scrollRef}
+        {...(fit ? { role: "region" as const, "aria-label": caption, tabIndex: 0 } : {})}
+        className={
+          fit
+            ? "min-h-0 flex-1 overflow-auto rounded-xl border border-line bg-surface shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500"
+            : "overflow-x-auto rounded-xl border border-line bg-surface shadow-xs"
+        }
+      >
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
           <caption className="sr-only">{caption}</caption>
-          <thead>
-            <tr className="border-b border-brand-100 bg-brand-50/50 text-brand-900">
+          <thead className={fit ? "sticky top-0 z-10 bg-brand-50" : undefined}>
+            <tr
+              className={`border-b border-brand-100 text-brand-900 ${
+                fit ? "bg-brand-50" : "bg-brand-50/50"
+              }`}
+            >
               {enableSelection && (
                 <th scope="col" className="w-10 px-3 py-3 text-center">
                   <input
@@ -395,13 +427,15 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
        * page read as "the table is broken" (21 rows, no pagination anywhere),
        * and a hidden "Rows" control meant a long list could never be paged.
        * At the page edges the Previous/Next buttons sit disabled, as elsewhere.
+       *
+       * In a fixed frame it is a flex sibling of the scroll box, not a sticky
+       * overlay: the band owns the drawer's bottom padding (`-mb-6 pb-6`) and
+       * no row can ever paint below or beneath it.
        */}
       {sortedData.length > 0 && (
         <div
           className={`flex flex-wrap items-center justify-between gap-3 text-xs text-ink-600 ${
-            stickyPagination
-              ? "sticky bottom-0 z-10 -mx-6 -mb-6 border-t border-line bg-surface px-6 pb-6 pt-2"
-              : "pt-1"
+            fit ? "shrink-0 -mx-6 -mb-6 border-t border-line bg-surface px-6 pb-6 pt-3" : "pt-1"
           }`}
         >
           <div className="flex items-center gap-2">

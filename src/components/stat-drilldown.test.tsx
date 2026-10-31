@@ -181,6 +181,23 @@ describe("the count→who popup", () => {
     expect(within(dialog).getByText("Page 1 of 1")).toBeDefined();
   });
 
+  /**
+   * 2026-10-31 UAT: the drawer scrolled as one page, so the search left the
+   * screen and the pager parked over the roster mid-scroll. The table owns a
+   * fixed frame now: its rows are the only thing that moves.
+   */
+  it("keeps the search and the pager in frame while only the rows scroll", () => {
+    renderDrilldown({ people: [ASHA, VIKRAM, DEEPA] });
+    const dialog = screen.getByRole("dialog");
+
+    const roster = within(dialog).getByRole("region", {
+      name: "Applied to Assistant System Engineer",
+    });
+    expect(within(roster).getByRole("table")).toBeDefined();
+    expect(roster.contains(within(dialog).getByPlaceholderText(/search name/i))).toBe(false);
+    expect(roster.contains(within(dialog).getByRole("button", { name: "Next" }))).toBe(false);
+  });
+
   it("offers the same list with more room, and closes on the way out", async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
