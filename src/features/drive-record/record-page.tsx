@@ -18,16 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/shadcn/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
 import type { DriveRecord, DriveRecordView } from "./record-view";
-
-type DriveRecordTab =
-  | "overview"
-  | "all"
-  | "eligibility"
-  | "applicants"
-  | "compensation"
-  | "recruiters";
 
 /**
  * N1 — the drive's one canonical page (approved mockup 2026-08-19).
@@ -54,38 +45,19 @@ const when = (iso: string | null) =>
     : new Date(iso).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium" });
 
 /**
- * What a section is about, shown twice on its card: the rail down its left
- * edge and the rule under its heading. Colour carried meaning elsewhere on
- * these screens (a green outcome, a gold step still owed), so it cannot be
- * decoration here — each tone below is the same meaning it has on a badge.
+ * One section of the record. The heading is plain ink on a rule: the hues this
+ * card used to wear (brand, violet, gold, green) were chosen per section by the
+ * author and meant nothing, so a reader scanning five coloured headings learned
+ * nothing. Colour stays where it still means something — the status and type
+ * badges above, the gold caution on an apply-time snapshot.
  */
-type SectionTone = "neutral" | "brand" | "accent" | "success" | "warning";
-
-const SECTION_TONES: Readonly<Record<SectionTone, { badge: string; icon: string }>> = {
-  neutral: { badge: "bg-surface-muted text-ink-700 border-line", icon: "text-ink-600" },
-  brand: { badge: "bg-brand-50 text-brand-700 border-brand-200", icon: "text-brand-600" },
-  accent: { badge: "bg-violet-50 text-violet-700 border-violet-300", icon: "text-violet-700" },
-  success: { badge: "bg-success-50 text-success-700 border-success-200", icon: "text-success-600" },
-  warning: { badge: "bg-gold-50 text-gold-700 border-gold-300", icon: "text-gold-600" },
-};
-
-function Section({
-  title,
-  tone = "neutral",
-  children,
-}: {
-  title: string;
-  tone?: SectionTone;
-  children: React.ReactNode;
-}) {
-  const colors = SECTION_TONES[tone];
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-      <div className="mb-4 flex items-center justify-between border-b border-line/60 pb-3">
+      <div className="mb-4 border-b border-line/60 pb-3">
         <h2 className="font-heading text-sm font-bold uppercase tracking-wide text-ink-900">
           {title}
         </h2>
-        <span className={`inline-block size-2 rounded-full ${colors.icon.replace("text-", "bg-")}`} />
       </div>
       {children}
     </Card>
@@ -112,30 +84,13 @@ function Fact({
 
 /**
  * The four figures a reader scans first, in the same shape as `Fact` above.
- * Clean, symmetrical cards with soft wash and rounded corners — no one-sided rail.
+ * One neutral card each — a package, a place, a mode and a date are four facts,
+ * not four moods, and four washes made the row look like a legend.
  */
-const TILE_TONES = {
-  brand: { bg: "bg-brand-50/50", border: "border-brand-200/80", label: "text-brand-700" },
-  accent: { bg: "bg-violet-50/50", border: "border-violet-300/80", label: "text-violet-700" },
-  success: { bg: "bg-success-50/50", border: "border-success-200/80", label: "text-success-700" },
-  warning: { bg: "bg-gold-50/50", border: "border-gold-300/80", label: "text-gold-700" },
-} as const;
-
-function Tile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: keyof typeof TILE_TONES;
-}) {
-  const colors = TILE_TONES[tone];
+function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`min-w-0 rounded-xl border ${colors.border} ${colors.bg} p-4 shadow-xs transition-all`}
-    >
-      <span className={`text-xs font-bold uppercase tracking-wide ${colors.label}`}>{label}</span>
+    <div className="min-w-0 rounded-xl border border-line bg-surface p-4 shadow-xs">
+      <span className="text-xs font-bold uppercase tracking-wide text-ink-500">{label}</span>
       <p className="mt-1 break-words font-heading text-sm font-bold text-ink-900 [overflow-wrap:anywhere]">
         {value}
       </p>
@@ -143,10 +98,9 @@ function Tile({
   );
 }
 
-/** Skeleton rows for the drive read, in the shape of the tiles and the two columns. */
+/** Skeleton rows for the drive read, in the shape of the tiles and one section stack. */
 const LOADING_TILES = ["ctc", "location", "mode", "deadline"];
-const LOADING_MAIN = ["description", "eligibility", "applicants"];
-const LOADING_SIDE = ["compensation", "window"];
+const LOADING_SECTIONS = ["description", "eligibility", "process", "window", "applicants"];
 
 /**
  * A snapshot value, read from the REAL envelope: `buildApplicationSnapshot`
@@ -186,7 +140,6 @@ export function DriveRecordPage({
   const [record, setRecord] = useState<DriveRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSnapshot, setOpenSnapshot] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<DriveRecordTab>("overview");
 
   const load = useCallback(async () => {
     try {
@@ -225,17 +178,10 @@ export function DriveRecordPage({
             <Skeleton key={key} className="h-[70px]" />
           ))}
         </div>
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            {LOADING_MAIN.map((key) => (
-              <Skeleton key={key} className="h-44" />
-            ))}
-          </div>
-          <div className="space-y-6">
-            {LOADING_SIDE.map((key) => (
-              <Skeleton key={key} className="h-36" />
-            ))}
-          </div>
+        <div className="space-y-4">
+          {LOADING_SECTIONS.map((key) => (
+            <Skeleton key={key} className="h-44" />
+          ))}
         </div>
         <p className="text-sm text-ink-500">Loading the drive…</p>
       </div>
@@ -244,8 +190,6 @@ export function DriveRecordPage({
 
   const staff = role !== "student";
   const driveType = asDriveType(record.driveType);
-  const tabTriggerClass =
-    "w-auto flex-none rounded-lg px-3 py-1.5 text-xs font-semibold text-ink-500 data-[state=active]:bg-surface data-[state=active]:text-brand-700 data-[state=active]:shadow-sm";
   /**
    * Whether this drive's visit still admits one more role. The visit, not just
    * this row: a new role attaches to the company event, so it is refused only
@@ -384,17 +328,12 @@ export function DriveRecordPage({
       </div>
 
       {/* Quick Highlights — one tile shape, one type scale */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Tile
           label="Package / CTC"
           value={record.ctcLabel === "" ? "Not stated" : record.ctcLabel}
-          tone="success"
         />
-        <Tile
-          label="Location"
-          value={record.locations === "" ? "Not stated" : record.locations}
-          tone="brand"
-        />
+        <Tile label="Location" value={record.locations === "" ? "Not stated" : record.locations} />
         <Tile
           label="Drive Mode"
           value={
@@ -402,444 +341,339 @@ export function DriveRecordPage({
               ? "Not stated"
               : `${record.driveMode.replaceAll("_", " ")} drive`
           }
-          tone="accent"
         />
         <Tile
           label="Apply Deadline"
           value={record.applicationEnd ? when(record.applicationEnd) : "Open"}
-          tone="warning"
         />
       </div>
 
-      <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as DriveRecordTab)}>
-        <TabsList className="mb-4 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
-          <TabsTrigger
-            value="overview"
-            id="drive-record-tab-overview"
-            aria-controls="drive-record-panels"
-            className={tabTriggerClass}
-          >
-            Overview
-          </TabsTrigger>
-          <TabsTrigger
-            value="all"
-            id="drive-record-tab-all"
-            aria-controls="drive-record-panels"
-            className={tabTriggerClass}
-          >
-            All Details
-          </TabsTrigger>
-          <TabsTrigger
-            value="eligibility"
-            id="drive-record-tab-eligibility"
-            aria-controls="drive-record-panels"
-            className={tabTriggerClass}
-          >
-            Eligibility
-          </TabsTrigger>
-          {staff && (
-            <TabsTrigger
-              value="applicants"
-              id="drive-record-tab-applicants"
-              aria-controls="drive-record-panels"
-              className={tabTriggerClass}
-            >
-              Applicants ({record.applicants.length})
-            </TabsTrigger>
-          )}
-          <TabsTrigger
-            value="compensation"
-            id="drive-record-tab-compensation"
-            aria-controls="drive-record-panels"
-            className={tabTriggerClass}
-          >
-            Compensation
-          </TabsTrigger>
-          {role === "account_executive" && (
-            <TabsTrigger
-              value="recruiters"
-              id="drive-record-tab-recruiters"
-              aria-controls="drive-record-panels"
-              className={tabTriggerClass}
-            >
-              Recruiters
-            </TabsTrigger>
-          )}
-        </TabsList>
-      </Tabs>
-
-      {/* One panel the tabs move through — each tab renders only its sections. */}
-      <div
-        id="drive-record-panels"
-        role="tabpanel"
-        aria-labelledby={`drive-record-tab-${activeTab}`}
-        className="grid gap-6 lg:grid-cols-3"
-      >
-        {/* Main Column (2 cols) */}
-        <div
-          className={
-            activeTab === "overview" || activeTab === "all"
-              ? "space-y-6 lg:col-span-2"
-              : activeTab === "eligibility" || activeTab === "applicants"
-                ? "space-y-6 lg:col-span-3"
-                : "hidden"
-          }
-        >
-          {(activeTab === "overview" || activeTab === "all") &&
-            (record.jobDescription !== "" || record.jobDescriptionUrl !== null) && (
-              <Section title="Job description" tone="brand">
-                {record.jobDescription !== "" && (
-                  <p className="whitespace-pre-line text-sm leading-relaxed text-ink-800 break-words [overflow-wrap:anywhere]">
-                    {record.jobDescription}
-                  </p>
-                )}
-                {record.jobDescriptionUrl !== null && (
-                  <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-line bg-surface-muted p-3.5">
-                    <FileText className="size-5 shrink-0 text-brand-600" aria-hidden="true" />
-                    <div className="min-w-0 flex-1">
-                      {/* One affordance, named by its document. The row used to carry a
-                        link to the PDF AND a second "PDF" button for the same file. */}
-                      <a
-                        href={record.jobDescriptionUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex min-w-0 items-center gap-1.5 break-words font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 [overflow-wrap:anywhere]"
-                      >
-                        {record.jobDescriptionName ?? "Job description (PDF)"}
-                        <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
-                      </a>
-                      <p className="text-xs text-ink-500">
-                        Official document provided by recruiter — opens in a new tab
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </Section>
+      {/* Every section on one page, in one column. The tab bar that used to sit
+          above this hid five of the nine sections behind a click and left a
+          third of the page empty on the tabs whose sections fitted one column. */}
+      <div className="mt-4 space-y-4">
+        {(record.jobDescription !== "" || record.jobDescriptionUrl !== null) && (
+          <Section title="Job description">
+            {record.jobDescription !== "" && (
+              <p className="whitespace-pre-line text-sm leading-relaxed text-ink-800 break-words [overflow-wrap:anywhere]">
+                {record.jobDescription}
+              </p>
             )}
+            {record.jobDescriptionUrl !== null && (
+              <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-line bg-surface-muted p-3.5">
+                <FileText className="size-5 shrink-0 text-brand-600" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  {/* One affordance, named by its document. The row used to carry a
+                        link to the PDF AND a second "PDF" button for the same file. */}
+                  <a
+                    href={record.jobDescriptionUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex min-w-0 items-center gap-1.5 break-words font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700 [overflow-wrap:anywhere]"
+                  >
+                    {record.jobDescriptionName ?? "Job description (PDF)"}
+                    <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+                  </a>
+                  <p className="text-xs text-ink-500">
+                    Official document provided by recruiter — opens in a new tab
+                  </p>
+                </div>
+              </div>
+            )}
+          </Section>
+        )}
 
-          {(activeTab === "eligibility" || activeTab === "all") && (
-            <Section title="Eligibility as published" tone="accent">
-              <dl className="grid gap-3 sm:grid-cols-2">
-                <Fact label="CGPA cutoff" value={record.eligibility.cgpaLabel} />
-                <Fact label="10th standard" value={record.eligibility.tenthLabel} />
-                <Fact label="12th standard" value={record.eligibility.twelfthLabel} />
-                <Fact label="Arrears" value={record.eligibility.arrearsLabel} />
-                <Fact label="Passing years" value={record.eligibility.passingYears.join(", ")} />
-                <Fact
-                  label="Must-have skills"
-                  value={record.eligibility.mandatorySkills}
-                  className="sm:col-span-2"
-                />
-                <Fact
-                  label="Degrees"
-                  value={record.eligibility.degrees.join(", ")}
-                  className="sm:col-span-2"
-                />
-                <Fact
-                  label="Branches"
-                  value={record.eligibility.branches.join(", ")}
-                  className="sm:col-span-2"
-                />
-                {/* College targeting is staff-internal; students do not see which campuses are targeted */}
-                {staff && (
-                  <Fact
-                    label="Campuses"
-                    value={
-                      record.eligibility.campuses.length === 0
-                        ? "Open to every campus"
-                        : `Open to: ${record.eligibility.campuses.join(", ")}`
-                    }
-                    className="sm:col-span-2"
-                  />
-                )}
-              </dl>
-            </Section>
+        <Section title="Eligibility as published">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Fact label="CGPA cutoff" value={record.eligibility.cgpaLabel} />
+            <Fact label="10th standard" value={record.eligibility.tenthLabel} />
+            <Fact label="12th standard" value={record.eligibility.twelfthLabel} />
+            <Fact label="Arrears" value={record.eligibility.arrearsLabel} />
+            <Fact label="Passing years" value={record.eligibility.passingYears.join(", ")} />
+            <Fact
+              label="Must-have skills"
+              value={record.eligibility.mandatorySkills}
+              className="sm:col-span-2 lg:col-span-3"
+            />
+            <Fact
+              label="Degrees"
+              value={record.eligibility.degrees.join(", ")}
+              className="sm:col-span-2 lg:col-span-3"
+            />
+            <Fact
+              label="Branches"
+              value={record.eligibility.branches.join(", ")}
+              className="sm:col-span-2 lg:col-span-3"
+            />
+            {/* College targeting is staff-internal; students do not see which campuses are targeted */}
+            {staff && (
+              <Fact
+                label="Campuses"
+                value={
+                  record.eligibility.campuses.length === 0
+                    ? "Open to every campus"
+                    : `Open to: ${record.eligibility.campuses.join(", ")}`
+                }
+                className="sm:col-span-2 lg:col-span-3"
+              />
+            )}
+          </dl>
+        </Section>
+
+        <Section title="Selection process">
+          {record.rounds.length === 0 ? (
+            <p className="text-sm text-ink-500">No rounds declared yet.</p>
+          ) : (
+            <ol className="space-y-2">
+              {record.rounds.map((round) => (
+                <li
+                  key={round.sequence}
+                  className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted px-3.5 py-2.5 text-sm text-ink-800"
+                >
+                  <Badge tone="brand">{round.sequence}</Badge>
+                  <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">
+                    <span className="font-semibold text-ink-900">Round {round.sequence}</span> —{" "}
+                    {round.name}
+                  </span>
+                </li>
+              ))}
+            </ol>
           )}
+        </Section>
 
-          {(activeTab === "overview" || activeTab === "all") && (
-            <Section title="Selection process" tone="brand">
-              {record.rounds.length === 0 ? (
-                <p className="text-sm text-ink-500">No rounds declared yet.</p>
-              ) : (
-                <ol className="space-y-2">
-                  {record.rounds.map((round) => (
-                    <li
-                      key={round.sequence}
-                      className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted px-3.5 py-2.5 text-sm text-ink-800"
-                    >
-                      <Badge tone="brand">{round.sequence}</Badge>
-                      <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">
-                        <span className="font-semibold text-ink-900">Round {round.sequence}</span> —{" "}
-                        {round.name}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              )}
-            </Section>
-          )}
+        {/* CTC is the Package tile above — the same figure in the same words, so
+            it is not repeated here. */}
+        <Section title="Compensation">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Fact label="Breakup" value={record.ctcBreakup} />
+            <Fact label="Bond / service agreement" value={record.bondDetails} />
+            <Fact
+              label="Openings"
+              value={record.openings === null ? "" : String(record.openings)}
+            />
+          </dl>
+        </Section>
 
-          {activeTab === "all" && (
-            <Section title="Compensation & Terms" tone="success">
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Fact label="CTC" value={record.ctcLabel} />
-                <Fact label="Breakup" value={record.ctcBreakup} />
-                <Fact label="Bond / service agreement" value={record.bondDetails} />
-                <Fact
-                  label="Openings"
-                  value={record.openings === null ? "" : String(record.openings)}
-                />
-              </dl>
-            </Section>
-          )}
+        <Section title="Where and when">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Fact label="Locations" value={record.locations} />
+            <Fact label="Mode" value={record.driveMode.replaceAll("_", " ")} />
+            {/* UAT 2026-08-21 item 2: worded by the domain; null hides it. */}
+            <Fact label="Venue" value={record.venue ?? ""} />
+            <Fact label="Applications open" value={when(record.applicationStart)} />
+            <Fact label="Applications close" value={when(record.applicationEnd)} />
+            <Fact label="Tentative drive date" value={when(record.tentativeDate)} />
+            <Fact label="Shift" value={record.shift} />
+            <Fact label="Joining" value={record.joining} />
+          </dl>
+        </Section>
 
-          {activeTab === "applicants" && staff && record.applicants.length > 0 && (
-            <Section title={`Applicants (${record.applicants.length})`} tone="brand">
-              <div className="overflow-x-auto rounded-lg border border-line">
-                <Table>
-                  <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
-                    <TableRow className="border-line">
-                      <TableHead className="pl-4">Student</TableHead>
-                      <TableHead>Roll number</TableHead>
-                      <TableHead>Campus</TableHead>
-                      <TableHead>Applied</TableHead>
-                      <TableHead className="pr-4 text-right">
-                        <span className="sr-only">Snapshot</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="bg-surface">
-                    {record.applicants.map((applicant) => {
-                      const isOpen = openSnapshot === applicant.applicationId;
-                      return (
-                        <Fragment key={applicant.applicationId}>
-                          <TableRow className="border-line">
-                            <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                              <Link
-                                to={`/students/${applicant.studentId}`}
-                                className="text-brand-600 hover:underline"
+        {staff && record.applicants.length > 0 && (
+          <Section title={`Applicants (${record.applicants.length})`}>
+            <div className="overflow-x-auto rounded-lg border border-line">
+              <Table>
+                <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
+                  <TableRow className="border-line">
+                    <TableHead className="pl-4">Student</TableHead>
+                    <TableHead>Roll number</TableHead>
+                    <TableHead>Campus</TableHead>
+                    <TableHead>Applied</TableHead>
+                    <TableHead className="pr-4 text-right">
+                      <span className="sr-only">Snapshot</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="bg-surface">
+                  {record.applicants.map((applicant) => {
+                    const isOpen = openSnapshot === applicant.applicationId;
+                    return (
+                      <Fragment key={applicant.applicationId}>
+                        <TableRow className="border-line">
+                          <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                            <Link
+                              to={`/students/${applicant.studentId}`}
+                              className="text-brand-600 hover:underline"
+                            >
+                              {applicant.fullName}
+                            </Link>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {applicant.rollNumber}
+                          </TableCell>
+                          <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
+                            {applicant.campus}
+                          </TableCell>
+                          <TableCell className="text-ink-600">
+                            {when(applicant.appliedAt)}
+                          </TableCell>
+                          <TableCell className="pr-4 text-right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-expanded={isOpen}
+                              aria-controls={`snapshot-${applicant.applicationId}`}
+                              onClick={() =>
+                                setOpenSnapshot(isOpen ? null : applicant.applicationId)
+                              }
+                            >
+                              {isOpen ? "Hide snapshot" : "View snapshot"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {/* The snapshot belongs to its own row, so it opens inside the
+                              table rather than under it, where it read as the last row's. */}
+                        {isOpen && (
+                          <TableRow className="border-line hover:bg-transparent">
+                            <TableCell colSpan={5} className="p-0 pt-1 pb-4">
+                              <section
+                                id={`snapshot-${applicant.applicationId}`}
+                                aria-label={`Snapshot of ${applicant.fullName}`}
+                                className="rounded-lg bg-surface-muted p-4"
                               >
-                                {applicant.fullName}
-                              </Link>
-                            </TableCell>
-                            <TableCell className="font-mono text-xs">
-                              {applicant.rollNumber}
-                            </TableCell>
-                            <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
-                              {applicant.campus}
-                            </TableCell>
-                            <TableCell className="text-ink-600">
-                              {when(applicant.appliedAt)}
-                            </TableCell>
-                            <TableCell className="pr-4 text-right">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                aria-expanded={isOpen}
-                                aria-controls={`snapshot-${applicant.applicationId}`}
-                                onClick={() =>
-                                  setOpenSnapshot(isOpen ? null : applicant.applicationId)
-                                }
-                              >
-                                {isOpen ? "Hide snapshot" : "View snapshot"}
-                              </Button>
+                                <p className="mb-2 flex items-start gap-1.5 text-xs font-semibold text-gold-800">
+                                  <TriangleAlert
+                                    className="mt-px size-3.5 shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  The profile as it was AT APPLY TIME — what the recruiter received,
+                                  never the live profile.
+                                </p>
+                                <dl className="grid gap-3 sm:grid-cols-3">
+                                  <Fact
+                                    label="CGPA"
+                                    value={fromSnapshot(applicant.snapshot, "overallCgpa")}
+                                  />
+                                  <Fact
+                                    label="10th %"
+                                    value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
+                                  />
+                                  <Fact
+                                    label="12th %"
+                                    value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
+                                  />
+                                  <Fact
+                                    label="Current arrears"
+                                    value={fromSnapshot(applicant.snapshot, "currentArrears")}
+                                  />
+                                  <Fact
+                                    label="Degree"
+                                    value={fromSnapshot(applicant.snapshot, "degree")}
+                                  />
+                                  <Fact
+                                    label="Branch"
+                                    value={fromSnapshot(applicant.snapshot, "branch")}
+                                  />
+                                </dl>
+                              </section>
                             </TableCell>
                           </TableRow>
-                          {/* The snapshot belongs to its own row, so it opens inside the
-                              table rather than under it, where it read as the last row's. */}
-                          {isOpen && (
-                            <TableRow className="border-line hover:bg-transparent">
-                              <TableCell colSpan={5} className="p-0 pt-1 pb-4">
-                                <section
-                                  id={`snapshot-${applicant.applicationId}`}
-                                  aria-label={`Snapshot of ${applicant.fullName}`}
-                                  className="rounded-lg bg-surface-muted p-4"
-                                >
-                                  <p className="mb-2 flex items-start gap-1.5 text-xs font-semibold text-gold-800">
-                                    <TriangleAlert
-                                      className="mt-px size-3.5 shrink-0"
-                                      aria-hidden="true"
-                                    />
-                                    The profile as it was AT APPLY TIME — what the recruiter
-                                    received, never the live profile.
-                                  </p>
-                                  <dl className="grid gap-3 sm:grid-cols-3">
-                                    <Fact
-                                      label="CGPA"
-                                      value={fromSnapshot(applicant.snapshot, "overallCgpa")}
-                                    />
-                                    <Fact
-                                      label="10th %"
-                                      value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
-                                    />
-                                    <Fact
-                                      label="12th %"
-                                      value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
-                                    />
-                                    <Fact
-                                      label="Current arrears"
-                                      value={fromSnapshot(applicant.snapshot, "currentArrears")}
-                                    />
-                                    <Fact
-                                      label="Degree"
-                                      value={fromSnapshot(applicant.snapshot, "degree")}
-                                    />
-                                    <Fact
-                                      label="Branch"
-                                      value={fromSnapshot(applicant.snapshot, "branch")}
-                                    />
-                                  </dl>
-                                </section>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </Section>
-          )}
-
-          {(activeTab === "overview" || activeTab === "all") && record.siblingRoles.length > 0 && (
-            <Section title="Other Roles in This Drive" tone="accent">
-              <p className="mb-3 text-sm text-ink-600">
-                This company is hiring for {record.siblingRoles.length + 1} roles under the same
-                recruitment drive.
-              </p>
-              <ul className="space-y-2">
-                {record.siblingRoles.map((sibling) => (
-                  <li
-                    key={sibling.driveId}
-                    className="rounded-lg border border-line bg-surface-muted p-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0 max-w-full">
-                        <Link
-                          to={`/drives/${sibling.driveId}`}
-                          className="font-semibold text-brand-600 hover:underline break-words"
-                        >
-                          {sibling.roleTitle || "Unnamed role"}
-                        </Link>
-                        {sibling.driveType !== null && (
-                          <span className="ml-2">
-                            <Badge tone={driveTypeTone(asDriveType(sibling.driveType))}>
-                              {driveTypeLabel(asDriveType(sibling.driveType))}
-                            </Badge>
-                          </span>
                         )}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 text-sm shrink-0">
-                        <Badge tone={driveStatusTone(sibling.status)}>
-                          {driveStatusLabel(sibling.status)}
-                        </Badge>
-                        <span className="text-ink-600">
-                          {sibling.ctcLabel === "" ? "Package not stated" : sibling.ctcLabel}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </Section>
+        )}
+
+        {record.siblingRoles.length > 0 && (
+          <Section title="Other Roles in This Drive">
+            <p className="mb-3 text-sm text-ink-600">
+              This company is hiring for {record.siblingRoles.length + 1} roles under the same
+              recruitment drive.
+            </p>
+            <ul className="space-y-2">
+              {record.siblingRoles.map((sibling) => (
+                <li
+                  key={sibling.driveId}
+                  className="rounded-lg border border-line bg-surface-muted p-3"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0 max-w-full">
+                      <Link
+                        to={`/drives/${sibling.driveId}`}
+                        className="font-semibold text-brand-600 hover:underline break-words"
+                      >
+                        {sibling.roleTitle || "Unnamed role"}
+                      </Link>
+                      {sibling.driveType !== null && (
+                        <span className="ml-2">
+                          <Badge tone={driveTypeTone(asDriveType(sibling.driveType))}>
+                            {driveTypeLabel(asDriveType(sibling.driveType))}
+                          </Badge>
                         </span>
-                        {sibling.stipendLabel !== null && (
-                          <span className="text-ink-600">{sibling.stipendLabel}</span>
-                        )}
-                      </div>
+                      )}
                     </div>
-                  </li>
+                    <div className="flex flex-wrap items-center gap-2 text-sm shrink-0">
+                      <Badge tone={driveStatusTone(sibling.status)}>
+                        {driveStatusLabel(sibling.status)}
+                      </Badge>
+                      <span className="text-ink-600">
+                        {sibling.ctcLabel === "" ? "Package not stated" : sibling.ctcLabel}
+                      </span>
+                      {sibling.stipendLabel !== null && (
+                        <span className="text-ink-600">{sibling.stipendLabel}</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+        {/* AE-only: the tab used to hide this from other roles, which is the
+            same as the section's own guard. */}
+        {role === "account_executive" && (
+          <Section title="Recruiter contacts — visible to you alone">
+            {record.recruiters.length === 0 ? (
+              // A5 (UAT 2026-08-19): an honest "none", with the routing stated.
+              <p className="text-sm text-ink-700">
+                No contact recorded for this company — communication goes through the{" "}
+                <strong>Central Placement Coordinator</strong>.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {record.recruiters.map((contact) => (
+                  <dl
+                    // Contacts have no id of their own; the four fields together are the identity.
+                    key={`${contact.name}|${contact.designation}|${contact.email}|${contact.phone}`}
+                    className="grid gap-2.5 rounded-lg border border-line p-3"
+                  >
+                    <Fact label="Name" value={contact.name} />
+                    <Fact label="Designation" value={contact.designation} />
+                    <Fact label="Email" value={contact.email} className="break-all" />
+                    <Fact label="Phone" value={contact.phone} />
+                  </dl>
                 ))}
-              </ul>
-            </Section>
-          )}
-        </div>
+              </div>
+            )}
+          </Section>
+        )}
 
-        {/* Sidebar Column (1 col on Overview & All; full width for its own tabs) */}
-        <div
-          className={
-            activeTab === "overview" || activeTab === "all"
-              ? "space-y-6 lg:col-span-1"
-              : activeTab === "compensation" || activeTab === "recruiters"
-                ? "space-y-6 lg:col-span-3"
-                : "hidden"
-          }
-        >
-          {activeTab === "compensation" && (
-            <Section title="Compensation" tone="success">
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <Fact label="CTC" value={record.ctcLabel} />
-                <Fact label="Breakup" value={record.ctcBreakup} />
-                <Fact label="Bond / service agreement" value={record.bondDetails} />
-                <Fact
-                  label="Openings"
-                  value={record.openings === null ? "" : String(record.openings)}
-                />
-              </dl>
-            </Section>
-          )}
-
-          {(activeTab === "overview" || activeTab === "all") && (
-            <Section title="Where and when" tone="warning">
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <Fact label="Locations" value={record.locations} />
-                <Fact label="Mode" value={record.driveMode.replaceAll("_", " ")} />
-                {/* UAT 2026-08-21 item 2: worded by the domain; null hides it. */}
-                <Fact label="Venue" value={record.venue ?? ""} />
-                <Fact label="Applications open" value={when(record.applicationStart)} />
-                <Fact label="Applications close" value={when(record.applicationEnd)} />
-                <Fact label="Tentative drive date" value={when(record.tentativeDate)} />
-                <Fact label="Shift" value={record.shift} />
-                <Fact label="Joining" value={record.joining} />
-              </dl>
-            </Section>
-          )}
-
-          {activeTab === "recruiters" && role === "account_executive" && (
-            <Section title="Recruiter contacts — visible to you alone" tone="accent">
-              {record.recruiters.length === 0 ? (
-                // A5 (UAT 2026-08-19): an honest "none", with the routing stated.
-                <p className="text-sm text-ink-700">
-                  No contact recorded for this company — communication goes through the{" "}
-                  <strong>Central Placement Coordinator</strong>.
-                </p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {record.recruiters.map((contact) => (
-                    <dl
-                      // Contacts have no id of their own; the four fields together are the identity.
-                      key={`${contact.name}|${contact.designation}|${contact.email}|${contact.phone}`}
-                      className="grid gap-2.5 rounded-lg border border-line p-3"
-                    >
-                      <Fact label="Name" value={contact.name} />
-                      <Fact label="Designation" value={contact.designation} />
-                      <Fact label="Email" value={contact.email} className="break-all" />
-                      <Fact label="Phone" value={contact.phone} />
-                    </dl>
-                  ))}
-                </div>
+        {staff && (
+          <Section title="Provenance">
+            <p className="text-sm leading-relaxed text-ink-700 break-words [overflow-wrap:anywhere]">
+              Raised by <strong>{record.provenance.raisedBy ?? "—"}</strong> ·{" "}
+              {when(record.provenance.raisedAt)}
+              {record.provenance.approvedBy !== null && (
+                <>
+                  <br />→ Approved by <strong>{record.provenance.approvedBy}</strong> ·{" "}
+                  {when(record.provenance.approvedAt)}
+                </>
               )}
-            </Section>
-          )}
-
-          {(activeTab === "overview" || activeTab === "all") && staff && (
-            <Section title="Provenance">
-              <p className="text-sm leading-relaxed text-ink-700 break-words [overflow-wrap:anywhere]">
-                Raised by <strong>{record.provenance.raisedBy ?? "—"}</strong> ·{" "}
-                {when(record.provenance.raisedAt)}
-                {record.provenance.approvedBy !== null && (
-                  <>
-                    <br />→ Approved by <strong>{record.provenance.approvedBy}</strong> ·{" "}
-                    {when(record.provenance.approvedAt)}
-                  </>
-                )}
-                {record.provenance.publishedBy !== null && (
-                  <>
-                    <br />→ Published by <strong>{record.provenance.publishedBy}</strong> ·{" "}
-                    {when(record.provenance.publishedAt)}
-                  </>
-                )}
-              </p>
-              <p className="mt-2 text-xs italic text-ink-500">
-                This page edits nothing. Actions stay on their own screens.
-              </p>
-            </Section>
-          )}
-        </div>
+              {record.provenance.publishedBy !== null && (
+                <>
+                  <br />→ Published by <strong>{record.provenance.publishedBy}</strong> ·{" "}
+                  {when(record.provenance.publishedAt)}
+                </>
+              )}
+            </p>
+            <p className="mt-2 text-xs italic text-ink-500">
+              This page edits nothing. Actions stay on their own screens.
+            </p>
+          </Section>
+        )}
       </div>
     </div>
   );

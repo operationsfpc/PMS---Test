@@ -253,8 +253,7 @@ export const DRIVE_TYPE_LABEL: Record<DriveType, string> = {
 
 /** The placeholder tiles and panel columns, shaped like the real page so the read does not reflow. */
 const LOADING_STATS = ["cgpa", "arrears", "history", "school", "outcomes", "applications"];
-const LOADING_PANELS = ["placement", "marks", "proofs", "applications"];
-const LOADING_SIDEBAR = ["profile", "resume"];
+const LOADING_SECTIONS = ["identity", "offers", "academics", "applications", "resume", "portfolio"];
 
 /**
  * A declared figure with the scale the student chose, spelled out.
@@ -384,9 +383,6 @@ export function StudentRecordPage({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Filter states
-  const [activeSection, setActiveSection] = useState<
-    "overview" | "academics" | "placements" | "preferences" | "portfolio"
-  >("overview");
   const [appSearch, setAppSearch] = useState("");
   const [appStatusFilter, setAppStatusFilter] = useState<"all" | "shortlisted" | "offered">("all");
   const [offerTypeFilter, setOfferTypeFilter] = useState<"all" | "placement" | "internship">("all");
@@ -621,18 +617,10 @@ export function StudentRecordPage({
             <Skeleton key={key} className="h-[88px]" />
           ))}
         </div>
-        <Skeleton className="h-9 w-full" />
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            {LOADING_PANELS.map((key) => (
-              <Skeleton key={key} className="h-44" />
-            ))}
-          </div>
-          <div className="space-y-6">
-            {LOADING_SIDEBAR.map((key) => (
-              <Skeleton key={key} className="h-36" />
-            ))}
-          </div>
+        <div className="space-y-4">
+          {LOADING_SECTIONS.map((key) => (
+            <Skeleton key={key} className="h-44" />
+          ))}
         </div>
         <p className="text-sm text-ink-500">Loading the student record…</p>
       </div>
@@ -726,6 +714,1035 @@ export function StudentRecordPage({
     setWithdrawTarget(null);
     setReload((count) => count + 1);
   }
+
+  const offersSection = (
+    <section aria-label="Placement">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-success-50 p-2 text-success-600">
+              <Trophy className="size-5" />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-ink-900">
+                Offers & Internships
+              </h2>
+              <p className="text-xs text-ink-500">
+                Total {offers.length} recorded outcome{offers.length === 1 ? "" : "s"}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {record.placement !== null && (
+              <Badge tone="success">Primary Placement Active</Badge>
+            )}
+            {offers.length > 0 && (
+              <Tabs
+                value={offerTypeFilter}
+                onValueChange={(next) =>
+                  setOfferTypeFilter(next as typeof offerTypeFilter)
+                }
+              >
+                <TabsList className="h-7 w-fit p-0.5">
+                  <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
+                    All ({offers.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="placement" className="px-2 py-0.5 text-xs">
+                    Full-time ({offers.filter((o) => o.driveType === "placement").length})
+                  </TabsTrigger>
+                  <TabsTrigger value="internship" className="px-2 py-0.5 text-xs">
+                    Internships (
+                    {offers.filter((o) => o.driveType !== "placement").length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+          </div>
+        </div>
+
+        {offers.length === 0 && record.placement === null ? (
+          <div className="flex items-center gap-2.5 rounded-lg border border-line bg-surface-muted/50 p-3 text-sm text-ink-600">
+            <Badge tone="neutral">Not placed</Badge>
+            <span>Currently eligible and active for upcoming placement drives.</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {offers.length > 0 ? (
+              <div className="divide-y divide-line rounded-lg border border-line">
+                {filteredOffers.map((offer) => (
+                  <div
+                    key={offer.id}
+                    className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-heading text-base font-bold text-ink-900">
+                          {offer.companyName}
+                        </h3>
+                        <Badge
+                          tone={
+                            offer.driveType === "placement"
+                              ? "success"
+                              : offer.driveType === "internship_convertible"
+                                ? "accent"
+                                : "brand"
+                          }
+                        >
+                          {DRIVE_TYPE_LABEL[offer.driveType] ?? offer.driveType}
+                        </Badge>
+                        {offer.source === "self_placed" && (
+                          <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                            Self-placed
+                          </span>
+                        )}
+                        {offer.offerCategory && (
+                          <Badge tone="brand">
+                            {offerCategoryLabel(offer.offerCategory)}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="mt-1 text-sm text-ink-700">
+                        {offer.roleTitle ?? "Role title not recorded"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
+                        {offer.ctcLpa != null && offer.ctcLpa > 0 ? (
+                          <span className="font-semibold text-brand-700">
+                            ₹{offer.ctcLpa} LPA
+                          </span>
+                        ) : (
+                          <span>CTC not recorded</span>
+                        )}
+                        {offer.stipendMonthly != null && offer.stipendMonthly > 0 && (
+                          <span className="font-semibold text-success-700">
+                            ₹{offer.stipendMonthly.toLocaleString("en-IN")} / month
+                          </span>
+                        )}
+                        <span>Declared on {onDate(offer.declaredAt)}</span>
+                      </div>
+                    </div>
+
+                    {(offer.letterUrl !== null || mayWithdrawOffer) && (
+                      <div className="flex shrink-0 flex-wrap items-center gap-2">
+                        {offer.letterUrl !== null && (
+                          <ButtonAnchor
+                            href={offer.letterUrl}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            size="sm"
+                          >
+                            <Download className="mr-1.5 size-3.5" />
+                            Offer Letter
+                          </ButtonAnchor>
+                        )}
+                        {mayWithdrawOffer && (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            aria-label={`Withdraw the ${offer.companyName} offer`}
+                            onClick={() => setWithdrawTarget(offer)}
+                          >
+                            Withdraw offer
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              record.placement && (
+                <div className="text-sm">
+                  <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                    {record.placement.companyName}
+                    {record.placement.source === "self_placed" && (
+                      <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                        Self-placed
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-ink-500">
+                    {record.placement.roleTitle ?? "Role not recorded"}
+                    {" · "}
+                    {record.placement.ctcLpa != null && record.placement.ctcLpa > 0
+                      ? `₹${record.placement.ctcLpa} LPA`
+                      : "CTC not recorded"}
+                    {record.placement.offerCategory !== null &&
+                      ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
+                  </p>
+                </div>
+              )
+            )}
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+
+  const academicsSection = (
+    <section aria-label="Academics" className="space-y-6">
+      {/* Semester by Semester Progression Table */}
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
+              <GraduationCap className="size-5" />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-ink-900">
+                Academic Progression
+              </h2>
+              <p className="text-xs text-ink-500">
+                Semester-wise marks, backlogs, and official marksheets
+              </p>
+            </div>
+          </div>
+          {semesters.length > 0 && (
+            <Tabs
+              value={semFilter}
+              onValueChange={(next) => setSemFilter(next as typeof semFilter)}
+            >
+              <TabsList className="h-7 w-fit p-0.5">
+                <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
+                  All ({semesters.length})
+                </TabsTrigger>
+                <TabsTrigger value="verified" className="px-2 py-0.5 text-xs">
+                  Cleared ({semesters.filter((s) => s.verified).length})
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="px-2 py-0.5 text-xs">
+                  Awaiting ({semesters.filter((s) => !s.verified).length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+        </div>
+
+        {semesters.length === 0 ? (
+          <p className="text-sm text-ink-500">No semester records filed.</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-line">
+            <Table>
+              <TableHeader className="bg-surface-muted text-xs font-semibold text-ink-700">
+                <TableRow>
+                  <TableHead className="pl-4">Semester</TableHead>
+                  <TableHead>CGPA / Score</TableHead>
+                  <TableHead>Arrears</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="pr-4 text-right">Marksheet</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-line bg-surface">
+                {filteredSemesters.map((semester) => (
+                  <TableRow key={semester.semesterNumber} className="border-line">
+                    <TableCell className="pl-4 font-medium text-ink-900">
+                      Semester {semester.semesterNumber}
+                    </TableCell>
+                    <TableCell className="text-ink-900 tabular-nums">
+                      {describeMarks(semester.cgpa, "cgpa")}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <span
+                        className={
+                          semester.currentArrears && semester.currentArrears > 0
+                            ? "font-semibold text-danger-600"
+                            : "text-ink-600"
+                        }
+                      >
+                        Standing: {semester.currentArrears ?? 0}
+                      </span>
+                      <p className="text-ink-400">
+                        History: {semester.historyOfArrears ?? 0}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge tone={semester.verified ? "success" : "warning"}>
+                        {semester.verified ? "Verified" : "Pending"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="pr-4 text-right">
+                      {semester.marksheetUrl ? (
+                        <ButtonAnchor
+                          href={semester.marksheetUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs text-brand-600 hover:text-brand-700"
+                        >
+                          <FileText className="mr-1 size-3.5" />
+                          View PDF
+                        </ButtonAnchor>
+                      ) : (
+                        <span className="text-xs text-ink-400">Not filed</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+
+      {/* Schooling & Higher Education Details */}
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="rounded-lg bg-cyan-50 p-2 text-brand-600">
+            <BookOpen className="size-5" />
+          </div>
+          <div>
+            <h2 className="font-heading text-lg font-bold text-ink-900">
+              School & Higher Education
+            </h2>
+            <p className="text-xs text-ink-500">
+              Secondary boards, diploma qualifications, and prior degrees
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Class 10 */}
+          <div className="rounded-lg border border-line bg-surface p-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="text-xs font-semibold text-brand-700">
+                  10th Standard
+                </span>
+                <p className="mt-1 text-base font-bold text-ink-900">
+                  {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"}
+                  {record.tenthGrade && (
+                    <span className="ml-1.5 text-xs font-medium text-ink-500">
+                      (Grade {record.tenthGrade})
+                    </span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-ink-600">
+                  {record.tenthInstitution ?? "School not recorded"}
+                </p>
+                {record.tenthBoard && (
+                  <p className="text-[11px] text-ink-400">
+                    Board: {boardLabel(record.tenthBoard, "tenth")}
+                    {record.tenthBoardState ? ` · ${record.tenthBoardState}` : ""}
+                  </p>
+                )}
+              </div>
+              {record.tenthMarksheetUrl && (
+                <ButtonAnchor
+                  href={record.tenthMarksheetUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0 text-xs"
+                >
+                  <FileText className="mr-1 size-3" />
+                  Marksheet
+                </ButtonAnchor>
+              )}
+            </div>
+          </div>
+
+          {/* Class 12 */}
+          <div className="rounded-lg border border-line bg-surface p-3.5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <span className="text-xs font-semibold text-brand-700">
+                  12th Standard / HSE
+                </span>
+                <p className="mt-1 text-base font-bold text-ink-900">
+                  {record.twelfthPercentage != null
+                    ? `${record.twelfthPercentage}%`
+                    : "—"}
+                  {record.twelfthGrade && (
+                    <span className="ml-1.5 text-xs font-medium text-ink-500">
+                      (Grade {record.twelfthGrade})
+                    </span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-ink-600">
+                  {record.twelfthInstitution ?? "School not recorded"}
+                </p>
+                {record.twelfthBoard && (
+                  <p className="text-[11px] text-ink-400">
+                    Board: {boardLabel(record.twelfthBoard, "twelfth")}
+                    {record.twelfthBoardState ? ` · ${record.twelfthBoardState}` : ""}
+                  </p>
+                )}
+              </div>
+              {record.twelfthMarksheetUrl && (
+                <ButtonAnchor
+                  href={record.twelfthMarksheetUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0 text-xs"
+                >
+                  <FileText className="mr-1 size-3" />
+                  Marksheet
+                </ButtonAnchor>
+              )}
+            </div>
+          </div>
+
+          {/* Diploma (if present) */}
+          {record.diplomaInstitution && (
+            <div className="rounded-lg border border-line bg-surface p-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-xs font-semibold text-brand-700">
+                    Diploma Qualification
+                  </span>
+                  <p className="mt-1 text-base font-bold text-ink-900">
+                    {record.diplomaMarks != null
+                      ? declaredMarks(record.diplomaMarks, record.diplomaMarksScale)
+                      : "Marks not recorded"}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-600">{record.diplomaInstitution}</p>
+                  {record.diplomaUniversity && (
+                    <p className="text-[11px] text-ink-400">
+                      University: {record.diplomaUniversity}
+                    </p>
+                  )}
+                </div>
+                {record.diplomaMarksheetUrl && (
+                  <ButtonAnchor
+                    href={record.diplomaMarksheetUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0 text-xs"
+                  >
+                    <FileText className="mr-1 size-3" />
+                    Marksheet
+                  </ButtonAnchor>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Prior UG Degree (for PG students) */}
+          {(record.ugDegree || record.programmeLevel === "pg") && (
+            <div className="rounded-lg border border-line bg-surface p-3.5">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <span className="text-xs font-semibold text-brand-700">
+                    Undergraduate Degree (Prior)
+                  </span>
+                  <p className="mt-1 text-base font-bold text-ink-900">
+                    {record.ugAggregateDeclared != null
+                      ? declaredMarks(record.ugAggregateDeclared, record.ugAggregateScale)
+                      : "Aggregate not recorded"}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-600">
+                    {record.ugDegree}
+                    {record.ugBranch ? ` · ${record.ugBranch}` : ""}
+                  </p>
+                  {record.ugCollege && (
+                    <p className="text-[11px] text-ink-400">{record.ugCollege}</p>
+                  )}
+                </div>
+                {record.ugMarksheetUrl && (
+                  <ButtonAnchor
+                    href={record.ugMarksheetUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    size="sm"
+                    variant="secondary"
+                    className="shrink-0 text-xs"
+                  >
+                    <FileText className="mr-1 size-3" />
+                    Marksheet
+                  </ButtonAnchor>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    </section>
+  );
+
+  const applicationsSection = (
+    <section aria-label="Applications">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
+              <FileText className="size-5" />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-ink-900">
+                Applications
+              </h2>
+              <p className="text-xs text-ink-500">
+                Drive participation and recruiter shortlist status
+              </p>
+            </div>
+          </div>
+          {applications.length > 0 && (
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <div className="relative w-full sm:w-auto">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-400" />
+                <input
+                  type="text"
+                  value={appSearch}
+                  onChange={(e) => setAppSearch(e.target.value)}
+                  placeholder="Search company or role…"
+                  className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-xs placeholder:text-ink-400 focus:outline-hidden sm:w-52"
+                />
+              </div>
+              <Tabs
+                value={appStatusFilter}
+                onValueChange={(next) =>
+                  setAppStatusFilter(next as typeof appStatusFilter)
+                }
+              >
+                <TabsList className="h-7 w-fit p-0.5">
+                  <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
+                    All ({applications.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="shortlisted" className="px-2 py-0.5 text-xs">
+                    Shortlists ({applications.filter((a) => a.shortlisted).length})
+                  </TabsTrigger>
+                  <TabsTrigger value="offered" className="px-2 py-0.5 text-xs">
+                    Offers ({applications.filter((a) => a.hasOffer).length})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          )}
+        </div>
+
+        {applications.length === 0 ? (
+          <p className="text-sm text-ink-700">No applications yet.</p>
+        ) : filteredApplications.length === 0 ? (
+          <p className="py-4 text-center text-xs text-ink-500">
+            No applications matching current search/filter.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {applicationVisits.map((roles) => {
+              const head = roles[0];
+              if (head === undefined) return null;
+
+              if (roles.length === 1) {
+                return (
+                  <li
+                    key={head.applicationId}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink-900">
+                        <Link to={`/drives/${head.driveId}`} className="hover:underline">
+                          {head.companyName}
+                        </Link>
+                      </p>
+                      <p className="text-xs text-ink-500">
+                        {head.roleTitle ?? "Role not recorded"}
+                        {head.appliedAt !== null &&
+                          ` · applied ${onDate(head.appliedAt)}`}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {head.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
+                      {head.hasOffer && <Badge tone="success">Offer</Badge>}
+                    </div>
+                  </li>
+                );
+              }
+
+              return (
+                <li key={head.applicationId} className="py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-ink-900">{head.companyName}</p>
+                    <Badge tone="brand">{roles.length} roles</Badge>
+                  </div>
+                  <ul className="mt-2 space-y-1.5">
+                    {roles.map((application) => (
+                      <li
+                        key={application.applicationId}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
+                      >
+                        <p className="min-w-0 text-sm text-ink-800">
+                          <Link
+                            to={`/drives/${application.driveId}`}
+                            className="font-medium hover:underline"
+                          >
+                            {application.roleTitle ?? "Role not recorded"}
+                          </Link>
+                          {application.appliedAt !== null && (
+                            <span className="text-xs text-ink-500">
+                              {" "}
+                              · applied {onDate(application.appliedAt)}
+                            </span>
+                          )}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {application.shortlisted && (
+                            <Badge tone="brand">Shortlisted</Badge>
+                          )}
+                          {application.hasOffer && <Badge tone="success">Offer</Badge>}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+    </section>
+  );
+
+  const resumesSection = (
+    <section aria-label="Resumes">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="size-5 text-brand-600" />
+            <h2 className="font-heading text-base font-bold text-ink-900">
+              Category Resumes
+            </h2>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {ROLE_CATEGORIES.map((cat) => {
+            const isPreferred = rolePreferences.includes(cat);
+            const doc = resumes.find((r) => r.roleCategory === cat);
+
+            return (
+              <div
+                key={cat}
+                className={`rounded-lg border p-3 ${
+                  isPreferred
+                    ? "border-line bg-surface"
+                    : "border-line/60 bg-surface-muted/30"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-ink-900">
+                        {RESUME_TRACK_LABEL[cat]}
+                      </span>
+                      {isPreferred && <Badge tone="brand">Active</Badge>}
+                    </div>
+                    {doc ? (
+                      <div className="mt-1 text-xs text-ink-500">
+                        <p
+                          className="truncate font-medium text-ink-700"
+                          title={doc.fileName}
+                        >
+                          {doc.fileName}
+                        </p>
+                        <p className="text-[11px]">
+                          {formatFileSize(doc.sizeBytes)} · {onDate(doc.uploadedAt)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-ink-400">No resume uploaded</p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1.5">
+                    {doc?.downloadUrl && (
+                      <ButtonAnchor
+                        href={doc.downloadUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        size="sm"
+                        className="text-xs"
+                      >
+                        <ExternalLink className="mr-1 size-3" />
+                        View PDF
+                      </ButtonAnchor>
+                    )}
+                    {hasStaffControls && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => triggerResumeUpload(cat)}
+                        isLoading={actions.isPending() && uploadCategory === cat}
+                        className="text-xs"
+                      >
+                        <Upload className="mr-1 size-3" />
+                        {doc ? "Replace" : "Upload"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </section>
+  );
+
+  const skillsSection = (
+    <section aria-label="Skills and preferences">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-violet-50 p-1.5 text-violet-700">
+              <Sparkles className="size-4" />
+            </div>
+            <h2 className="font-heading text-lg font-bold text-ink-900">
+              Skills and preferences
+            </h2>
+          </div>
+          {hasStaffControls && (
+            <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
+              <Edit2 className="mr-1 size-3" />
+              Edit
+            </Button>
+          )}
+        </div>
+
+        {skills.length === 0 ? (
+          <p className="text-sm text-ink-500">No skill scores recorded.</p>
+        ) : (
+          <ul className="divide-y divide-line text-sm">
+            {skills.map(({ skill, score }) => (
+              <li key={skill} className="flex items-center gap-3 py-2 first:pt-0">
+                <span className="min-w-0 flex-1 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                  {skill} {score}/{SKILL_SCORE_MAX}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-line"
+                >
+                  <span
+                    className={`block h-full rounded-full ${
+                      score >= 4
+                        ? "bg-success-500"
+                        : score >= 3
+                          ? "bg-brand-500"
+                          : "bg-gold-500"
+                    }`}
+                    style={{
+                      width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
+                    }}
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {rolePreferences.length > 0 && (
+          <div className="mt-3 border-t border-line pt-3">
+            <span className="text-xs font-semibold text-ink-500">Preferred areas</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {rolePreferences.map((area) => (
+                <Badge key={area} tone="brand">
+                  {AREA_LABEL[area] ?? area}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-3 border-t border-line pt-3">
+          <span className="text-xs font-semibold text-ink-500">
+            Drive Type Preferences:
+          </span>
+          {driveTypePreferences.length === 0 ? (
+            <p className="mt-1 text-xs text-ink-500">
+              Open to all drive types (no restrictions)
+            </p>
+          ) : (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {driveTypePreferences.map((dt) => (
+                <Badge key={dt} tone="accent">
+                  {DRIVE_TYPE_LABEL[dt] ?? dt}
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+    </section>
+  );
+
+  const identitySection = (
+    <section aria-label="Identity">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
+            <User className="size-4" />
+          </div>
+          <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
+        </div>
+        <dl className="grid gap-2 text-sm">
+          <div className="flex justify-between gap-4">
+            <dt className="shrink-0 text-ink-500">Programme</dt>
+            <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
+              {record.degree}
+              {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="shrink-0 text-ink-500">Email</dt>
+            <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="shrink-0 text-ink-500">Mobile</dt>
+            <dd className="min-w-0 break-all text-right text-ink-900">
+              {record.mobile ?? "Not recorded"}
+            </dd>
+          </div>
+          {record.whatsapp && (
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-ink-500">WhatsApp</dt>
+              <dd className="min-w-0 break-all text-right font-medium text-success-700">
+                {record.whatsapp}
+              </dd>
+            </div>
+          )}
+          {record.alternateContact && (
+            <div className="flex justify-between gap-4">
+              <dt className="shrink-0 text-ink-500">Alt Phone</dt>
+              <dd className="min-w-0 break-all text-right text-ink-900">
+                {record.alternateContact}
+              </dd>
+            </div>
+          )}
+          <div className="mt-2 border-t border-line pt-2 text-xs">
+            <div className="flex justify-between text-ink-500">
+              <span>Submitted:</span>
+              <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
+            </div>
+            {record.srfDecidedAt && (
+              <div className="mt-1 flex justify-between text-ink-500">
+                <span>Approved:</span>
+                <span>{onDate(record.srfDecidedAt)}</span>
+              </div>
+            )}
+            {record.consentGivenAt && (
+              <div className="mt-1 flex justify-between text-ink-500">
+                <span>Consent Recorded:</span>
+                <span>{onDate(record.consentGivenAt)}</span>
+              </div>
+            )}
+            {record.srfRejectionReason && (
+              <div className="mt-2 rounded bg-danger-50 p-2 text-danger-700">
+                Rejection reason: {record.srfRejectionReason}
+              </div>
+            )}
+          </div>
+        </dl>
+      </Card>
+    </section>
+  );
+
+  const profilesSection = (
+    <section aria-label="Online profiles">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <Globe className="size-4 text-brand-600" />
+          <h2 className="font-heading text-base font-bold text-ink-900">
+            Online & Coding Profiles
+          </h2>
+        </div>
+        <div className="space-y-2 text-sm">
+          {record.linkedinUrl && (
+            <a
+              href={record.linkedinUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+            >
+              <span className="flex items-center gap-2 text-ink-900">
+                <Globe className="size-4 text-brand-600" /> LinkedIn
+              </span>
+              <ExternalLink className="size-3.5 text-ink-400" />
+            </a>
+          )}
+          {record.githubUrl && (
+            <a
+              href={record.githubUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+            >
+              <span className="flex items-center gap-2 text-ink-900">
+                <Globe className="size-4 text-ink-900" /> GitHub
+              </span>
+              <ExternalLink className="size-3.5 text-ink-400" />
+            </a>
+          )}
+          {record.leetcodeUrl && (
+            <a
+              href={record.leetcodeUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+            >
+              <span className="flex items-center gap-2 text-ink-900">
+                <span className="font-mono font-bold text-gold-600">LC</span> LeetCode
+              </span>
+              <ExternalLink className="size-3.5 text-ink-400" />
+            </a>
+          )}
+          {record.hackerrankUrl && (
+            <a
+              href={record.hackerrankUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+            >
+              <span className="flex items-center gap-2 text-ink-900">
+                <span className="font-mono font-bold text-success-600">HR</span> HackerRank
+              </span>
+              <ExternalLink className="size-3.5 text-ink-400" />
+            </a>
+          )}
+          {record.otherProfiles?.map((p) => (
+            <a
+              key={`${p.label}-${p.value}`}
+              href={p.value.startsWith("http") ? p.value : `https://${p.value}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
+            >
+              <span className="flex items-center gap-2 text-ink-900">
+                <Globe className="size-4 text-violet-500" /> {p.label}
+              </span>
+              <ExternalLink className="size-3.5 text-ink-400" />
+            </a>
+          ))}
+          {!record.linkedinUrl &&
+            !record.githubUrl &&
+            !record.leetcodeUrl &&
+            !record.hackerrankUrl &&
+            (!record.otherProfiles || record.otherProfiles.length === 0) && (
+              <p className="text-xs text-ink-500">No profile links recorded.</p>
+            )}
+        </div>
+      </Card>
+    </section>
+  );
+
+  const portfolioSection = (
+    <section aria-label="Portfolio">
+      <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="rounded-lg bg-gold-50 p-2 text-gold-600">
+            <Award className="size-5" />
+          </div>
+          <div>
+            <h2 className="font-heading text-lg font-bold text-ink-900">
+              Portfolio & Technical Profile
+            </h2>
+            <p className="text-xs text-ink-500">
+              Skills, projects, verified certificates, and achievements
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4 text-sm">
+          {record.technicalSkills && (
+            <div>
+              <h3 className="text-xs font-semibold text-ink-500">Technical Skills</h3>
+              <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.technicalSkills}</p>
+            </div>
+          )}
+
+          {record.areasOfInterest && (
+            <div>
+              <h3 className="text-xs font-semibold text-ink-500">Areas of Interest</h3>
+              <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.areasOfInterest}</p>
+            </div>
+          )}
+
+          {record.areasOfExpertise && (
+            <div>
+              <h3 className="text-xs font-semibold text-ink-500">Areas of Expertise</h3>
+              <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.areasOfExpertise}</p>
+            </div>
+          )}
+
+          {record.projects && (
+            <div>
+              <h3 className="text-xs font-semibold text-ink-500">Key Projects</h3>
+              <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.projects}</p>
+            </div>
+          )}
+
+          {certificatesList.length > 0 && (
+            <div className="border-t border-line pt-3">
+              <h3 className="text-xs font-semibold text-ink-500">Declared Certificates</h3>
+              <div className="mt-2 divide-y divide-line rounded-lg border border-line">
+                {certificatesList.map((cert) => (
+                  <div
+                    key={cert.id}
+                    className="flex items-center justify-between gap-3 p-3 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-ink-900">{cert.name}</span>
+                      <Badge
+                        tone={
+                          cert.status === "verified"
+                            ? "success"
+                            : cert.status === "rejected"
+                              ? "danger"
+                              : "warning"
+                        }
+                      >
+                        {cert.status}
+                      </Badge>
+                    </div>
+                    {cert.documentUrl && (
+                      <ButtonAnchor
+                        href={cert.documentUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        size="sm"
+                        variant="ghost"
+                        className="text-xs text-brand-600 hover:text-brand-700"
+                      >
+                        <ExternalLink className="mr-1 size-3" />
+                        View Certificate
+                      </ButtonAnchor>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {record.certifications && certificatesList.length === 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-ink-500">Certifications</h3>
+              <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.certifications}</p>
+            </div>
+          )}
+
+          {record.achievements && (
+            <div>
+              <h3 className="text-xs font-semibold text-ink-500">Achievements & Honors</h3>
+              <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.achievements}</p>
+            </div>
+          )}
+
+          {!record.technicalSkills &&
+            !record.areasOfInterest &&
+            !record.projects &&
+            !record.certifications &&
+            certificatesList.length === 0 &&
+            !record.achievements && (
+              <p className="text-xs text-ink-500">
+                No additional project or portfolio details filed in SRF.
+              </p>
+            )}
+        </div>
+      </Card>
+    </section>
+  );
 
   return (
     <div className="space-y-6">
@@ -850,55 +1867,13 @@ export function StudentRecordPage({
         />
       </div>
 
-      {/* Section filter — real Tabs: arrow keys, roving focus, one panel the sections live in */}
-      <Tabs
-        value={activeSection}
-        onValueChange={(next) => setActiveSection(next as typeof activeSection)}
-      >
-        <TabsList className="mb-4 h-auto w-full flex-nowrap justify-start gap-1 overflow-x-auto rounded-xl border border-line bg-surface-muted p-1 [scrollbar-width:none] sm:flex-wrap">
-          {[
-            { id: "overview", label: "Overview" },
-            {
-              id: "academics",
-              label: semesters.length > 0 ? `Academics (${semesters.length})` : "Academics",
-            },
-            {
-              id: "placements",
-              label:
-                offers.length > 0
-                  ? `Placements (${offers.length})`
-                  : record.placement
-                    ? "Placements (1)"
-                    : "Placements",
-            },
-            { id: "preferences", label: "Preferences" },
-            { id: "portfolio", label: "Portfolio" },
-          ].map((tab) => (
-            <TabsTrigger
-              key={tab.id}
-              value={tab.id}
-              id={`student-record-tab-${tab.id}`}
-              aria-controls="student-record-panels"
-              className="w-auto flex-none rounded-lg px-3.5 py-1.5 text-xs font-semibold text-ink-600 transition-all data-[state=active]:bg-surface data-[state=active]:text-brand-700 data-[state=active]:shadow-xs"
-            >
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      {/* The panel every section tab points at. Overview, the default, is the
-          profile: the live hold, the identity facts and the status history. */}
-      <div
-        id="student-record-panels"
-        role="tabpanel"
-        aria-labelledby={`student-record-tab-${activeSection}`}
-        tabIndex={-1}
-        className="space-y-6 outline-none"
-      >
+      {/* One continuous stack: every section on the page at once. The tab bar
+          that used to sit here folded four sections away behind a click, and
+          the columns they gated went `hidden` while the page still reserved
+          their width — the gap the reader saw as a broken layout. */}
+      <div className="space-y-4">
         {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
-        {activeSection === "overview" &&
-          (hold !== null || pending !== null || pastHolds.length > 0) && (
+        {(hold !== null || pending !== null || pastHolds.length > 0) && (
             <section aria-label="Placement hold" className="flex flex-col gap-3">
               {pending !== null && (
                 <Card className="border-violet-300 bg-violet-50 p-5">
@@ -1179,1088 +2154,50 @@ export function StudentRecordPage({
           <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
         )}
 
-        {/* Main Layout Grid — continuous 2/3 + 1/3 presentation */}
-        <div id="student-record-grid" className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Left Column: 2 cols on Overview, full 3 cols on focused tabs */}
-          <div
-            className={`space-y-6 ${
-              activeSection === "overview" ? "lg:col-span-2" : "lg:col-span-3"
-            }`}
-          >
-            {/* Offers & Placement Card */}
-            {(activeSection === "placements" || activeSection === "overview") && (
-              <section aria-label="Placement">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-lg bg-success-50 p-2 text-success-600">
-                        <Trophy className="size-5" />
-                      </div>
-                      <div>
-                        <h2 className="font-heading text-lg font-bold text-ink-900">
-                          Offers & Internships
-                        </h2>
-                        <p className="text-xs text-ink-500">
-                          Total {offers.length} recorded outcome{offers.length === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {record.placement !== null && (
-                        <Badge tone="success">Primary Placement Active</Badge>
-                      )}
-                      {offers.length > 0 && (
-                        <Tabs
-                          value={offerTypeFilter}
-                          onValueChange={(next) =>
-                            setOfferTypeFilter(next as typeof offerTypeFilter)
-                          }
-                        >
-                          <TabsList className="h-7 w-fit p-0.5">
-                            <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
-                              All ({offers.length})
-                            </TabsTrigger>
-                            <TabsTrigger value="placement" className="px-2 py-0.5 text-xs">
-                              Full-time ({offers.filter((o) => o.driveType === "placement").length})
-                            </TabsTrigger>
-                            <TabsTrigger value="internship" className="px-2 py-0.5 text-xs">
-                              Internships (
-                              {offers.filter((o) => o.driveType !== "placement").length})
-                            </TabsTrigger>
-                          </TabsList>
-                        </Tabs>
-                      )}
-                    </div>
-                  </div>
-
-                  {offers.length === 0 && record.placement === null ? (
-                    <div className="flex items-center gap-2.5 rounded-lg border border-line bg-surface-muted/50 p-3 text-sm text-ink-600">
-                      <Badge tone="neutral">Not placed</Badge>
-                      <span>Currently eligible and active for upcoming placement drives.</span>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {offers.length > 0 ? (
-                        <div className="divide-y divide-line rounded-lg border border-line">
-                          {filteredOffers.map((offer) => (
-                            <div
-                              key={offer.id}
-                              className="flex flex-col justify-between gap-3 p-4 sm:flex-row sm:items-center"
-                            >
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <h3 className="font-heading text-base font-bold text-ink-900">
-                                    {offer.companyName}
-                                  </h3>
-                                  <Badge
-                                    tone={
-                                      offer.driveType === "placement"
-                                        ? "success"
-                                        : offer.driveType === "internship_convertible"
-                                          ? "accent"
-                                          : "brand"
-                                    }
-                                  >
-                                    {DRIVE_TYPE_LABEL[offer.driveType] ?? offer.driveType}
-                                  </Badge>
-                                  {offer.source === "self_placed" && (
-                                    <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                                      Self-placed
-                                    </span>
-                                  )}
-                                  {offer.offerCategory && (
-                                    <Badge tone="brand">
-                                      {offerCategoryLabel(offer.offerCategory)}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="mt-1 text-sm text-ink-700">
-                                  {offer.roleTitle ?? "Role title not recorded"}
-                                </p>
-                                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-ink-500">
-                                  {offer.ctcLpa != null && offer.ctcLpa > 0 ? (
-                                    <span className="font-semibold text-brand-700">
-                                      ₹{offer.ctcLpa} LPA
-                                    </span>
-                                  ) : (
-                                    <span>CTC not recorded</span>
-                                  )}
-                                  {offer.stipendMonthly != null && offer.stipendMonthly > 0 && (
-                                    <span className="font-semibold text-success-700">
-                                      ₹{offer.stipendMonthly.toLocaleString("en-IN")} / month
-                                    </span>
-                                  )}
-                                  <span>Declared on {onDate(offer.declaredAt)}</span>
-                                </div>
-                              </div>
-
-                              {(offer.letterUrl !== null || mayWithdrawOffer) && (
-                                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                                  {offer.letterUrl !== null && (
-                                    <ButtonAnchor
-                                      href={offer.letterUrl}
-                                      target="_blank"
-                                      rel="noreferrer noopener"
-                                      size="sm"
-                                    >
-                                      <Download className="mr-1.5 size-3.5" />
-                                      Offer Letter
-                                    </ButtonAnchor>
-                                  )}
-                                  {mayWithdrawOffer && (
-                                    <Button
-                                      variant="danger"
-                                      size="sm"
-                                      aria-label={`Withdraw the ${offer.companyName} offer`}
-                                      onClick={() => setWithdrawTarget(offer)}
-                                    >
-                                      Withdraw offer
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        record.placement && (
-                          <div className="text-sm">
-                            <p className="break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                              {record.placement.companyName}
-                              {record.placement.source === "self_placed" && (
-                                <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                                  Self-placed
-                                </span>
-                              )}
-                            </p>
-                            <p className="mt-0.5 text-ink-500">
-                              {record.placement.roleTitle ?? "Role not recorded"}
-                              {" · "}
-                              {record.placement.ctcLpa != null && record.placement.ctcLpa > 0
-                                ? `₹${record.placement.ctcLpa} LPA`
-                                : "CTC not recorded"}
-                              {record.placement.offerCategory !== null &&
-                                ` · ${offerCategoryLabel(record.placement.offerCategory)}`}
-                            </p>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  )}
-                </Card>
-              </section>
-            )}
-
-            {/* Academics Record Card & Semester Progression */}
-            {(activeSection === "academics" || activeSection === "overview") && (
-              <section aria-label="Academics" className="space-y-6">
-                {/* Semester by Semester Progression Table */}
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
-                        <GraduationCap className="size-5" />
-                      </div>
-                      <div>
-                        <h2 className="font-heading text-lg font-bold text-ink-900">
-                          Academic Progression
-                        </h2>
-                        <p className="text-xs text-ink-500">
-                          Semester-wise marks, backlogs, and official marksheets
-                        </p>
-                      </div>
-                    </div>
-                    {semesters.length > 0 && (
-                      <Tabs
-                        value={semFilter}
-                        onValueChange={(next) => setSemFilter(next as typeof semFilter)}
-                      >
-                        <TabsList className="h-7 w-fit p-0.5">
-                          <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
-                            All ({semesters.length})
-                          </TabsTrigger>
-                          <TabsTrigger value="verified" className="px-2 py-0.5 text-xs">
-                            Cleared ({semesters.filter((s) => s.verified).length})
-                          </TabsTrigger>
-                          <TabsTrigger value="pending" className="px-2 py-0.5 text-xs">
-                            Awaiting ({semesters.filter((s) => !s.verified).length})
-                          </TabsTrigger>
-                        </TabsList>
-                      </Tabs>
-                    )}
-                  </div>
-
-                  {semesters.length === 0 ? (
-                    <p className="text-sm text-ink-500">No semester records filed.</p>
-                  ) : (
-                    <div className="overflow-x-auto rounded-lg border border-line">
-                      <Table>
-                        <TableHeader className="bg-surface-muted text-xs font-semibold text-ink-700">
-                          <TableRow>
-                            <TableHead className="pl-4">Semester</TableHead>
-                            <TableHead>CGPA / Score</TableHead>
-                            <TableHead>Arrears</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="pr-4 text-right">Marksheet</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody className="divide-line bg-surface">
-                          {filteredSemesters.map((semester) => (
-                            <TableRow key={semester.semesterNumber} className="border-line">
-                              <TableCell className="pl-4 font-medium text-ink-900">
-                                Semester {semester.semesterNumber}
-                              </TableCell>
-                              <TableCell className="text-ink-900 tabular-nums">
-                                {describeMarks(semester.cgpa, "cgpa")}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                <span
-                                  className={
-                                    semester.currentArrears && semester.currentArrears > 0
-                                      ? "font-semibold text-danger-600"
-                                      : "text-ink-600"
-                                  }
-                                >
-                                  Standing: {semester.currentArrears ?? 0}
-                                </span>
-                                <p className="text-ink-400">
-                                  History: {semester.historyOfArrears ?? 0}
-                                </p>
-                              </TableCell>
-                              <TableCell>
-                                <Badge tone={semester.verified ? "success" : "warning"}>
-                                  {semester.verified ? "Verified" : "Pending"}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="pr-4 text-right">
-                                {semester.marksheetUrl ? (
-                                  <ButtonAnchor
-                                    href={semester.marksheetUrl}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-xs text-brand-600 hover:text-brand-700"
-                                  >
-                                    <FileText className="mr-1 size-3.5" />
-                                    View PDF
-                                  </ButtonAnchor>
-                                ) : (
-                                  <span className="text-xs text-ink-400">Not filed</span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </Card>
-
-                {/* Schooling & Higher Education Details */}
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-4 flex items-center gap-2">
-                    <div className="rounded-lg bg-cyan-50 p-2 text-brand-600">
-                      <BookOpen className="size-5" />
-                    </div>
-                    <div>
-                      <h2 className="font-heading text-lg font-bold text-ink-900">
-                        School & Higher Education
-                      </h2>
-                      <p className="text-xs text-ink-500">
-                        Secondary boards, diploma qualifications, and prior degrees
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {/* Class 10 */}
-                    <div className="rounded-lg border border-line bg-surface p-3.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-xs font-semibold text-brand-700">
-                            10th Standard
-                          </span>
-                          <p className="mt-1 text-base font-bold text-ink-900">
-                            {record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"}
-                            {record.tenthGrade && (
-                              <span className="ml-1.5 text-xs font-medium text-ink-500">
-                                (Grade {record.tenthGrade})
-                              </span>
-                            )}
-                          </p>
-                          <p className="mt-1 text-xs text-ink-600">
-                            {record.tenthInstitution ?? "School not recorded"}
-                          </p>
-                          {record.tenthBoard && (
-                            <p className="text-[11px] text-ink-400">
-                              Board: {boardLabel(record.tenthBoard, "tenth")}
-                              {record.tenthBoardState ? ` · ${record.tenthBoardState}` : ""}
-                            </p>
-                          )}
-                        </div>
-                        {record.tenthMarksheetUrl && (
-                          <ButtonAnchor
-                            href={record.tenthMarksheetUrl}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            size="sm"
-                            variant="secondary"
-                            className="shrink-0 text-xs"
-                          >
-                            <FileText className="mr-1 size-3" />
-                            Marksheet
-                          </ButtonAnchor>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Class 12 */}
-                    <div className="rounded-lg border border-line bg-surface p-3.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className="text-xs font-semibold text-brand-700">
-                            12th Standard / HSE
-                          </span>
-                          <p className="mt-1 text-base font-bold text-ink-900">
-                            {record.twelfthPercentage != null
-                              ? `${record.twelfthPercentage}%`
-                              : "—"}
-                            {record.twelfthGrade && (
-                              <span className="ml-1.5 text-xs font-medium text-ink-500">
-                                (Grade {record.twelfthGrade})
-                              </span>
-                            )}
-                          </p>
-                          <p className="mt-1 text-xs text-ink-600">
-                            {record.twelfthInstitution ?? "School not recorded"}
-                          </p>
-                          {record.twelfthBoard && (
-                            <p className="text-[11px] text-ink-400">
-                              Board: {boardLabel(record.twelfthBoard, "twelfth")}
-                              {record.twelfthBoardState ? ` · ${record.twelfthBoardState}` : ""}
-                            </p>
-                          )}
-                        </div>
-                        {record.twelfthMarksheetUrl && (
-                          <ButtonAnchor
-                            href={record.twelfthMarksheetUrl}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            size="sm"
-                            variant="secondary"
-                            className="shrink-0 text-xs"
-                          >
-                            <FileText className="mr-1 size-3" />
-                            Marksheet
-                          </ButtonAnchor>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Diploma (if present) */}
-                    {record.diplomaInstitution && (
-                      <div className="rounded-lg border border-line bg-surface p-3.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-semibold text-brand-700">
-                              Diploma Qualification
-                            </span>
-                            <p className="mt-1 text-base font-bold text-ink-900">
-                              {record.diplomaMarks != null
-                                ? declaredMarks(record.diplomaMarks, record.diplomaMarksScale)
-                                : "Marks not recorded"}
-                            </p>
-                            <p className="mt-1 text-xs text-ink-600">{record.diplomaInstitution}</p>
-                            {record.diplomaUniversity && (
-                              <p className="text-[11px] text-ink-400">
-                                University: {record.diplomaUniversity}
-                              </p>
-                            )}
-                          </div>
-                          {record.diplomaMarksheetUrl && (
-                            <ButtonAnchor
-                              href={record.diplomaMarksheetUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              size="sm"
-                              variant="secondary"
-                              className="shrink-0 text-xs"
-                            >
-                              <FileText className="mr-1 size-3" />
-                              Marksheet
-                            </ButtonAnchor>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Prior UG Degree (for PG students) */}
-                    {(record.ugDegree || record.programmeLevel === "pg") && (
-                      <div className="rounded-lg border border-line bg-surface p-3.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-xs font-semibold text-brand-700">
-                              Undergraduate Degree (Prior)
-                            </span>
-                            <p className="mt-1 text-base font-bold text-ink-900">
-                              {record.ugAggregateDeclared != null
-                                ? declaredMarks(record.ugAggregateDeclared, record.ugAggregateScale)
-                                : "Aggregate not recorded"}
-                            </p>
-                            <p className="mt-1 text-xs text-ink-600">
-                              {record.ugDegree}
-                              {record.ugBranch ? ` · ${record.ugBranch}` : ""}
-                            </p>
-                            {record.ugCollege && (
-                              <p className="text-[11px] text-ink-400">{record.ugCollege}</p>
-                            )}
-                          </div>
-                          {record.ugMarksheetUrl && (
-                            <ButtonAnchor
-                              href={record.ugMarksheetUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              size="sm"
-                              variant="secondary"
-                              className="shrink-0 text-xs"
-                            >
-                              <FileText className="mr-1 size-3" />
-                              Marksheet
-                            </ButtonAnchor>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              </section>
-            )}
-
-            {/* Applications History Card */}
-            {(activeSection === "placements" || activeSection === "overview") && (
-              <section aria-label="Applications">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-lg bg-brand-50 p-2 text-brand-600">
-                        <FileText className="size-5" />
-                      </div>
-                      <div>
-                        <h2 className="font-heading text-lg font-bold text-ink-900">
-                          Applications
-                        </h2>
-                        <p className="text-xs text-ink-500">
-                          Drive participation and recruiter shortlist status
-                        </p>
-                      </div>
-                    </div>
-                    {applications.length > 0 && (
-                      <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-                        <div className="relative w-full sm:w-auto">
-                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-400" />
-                          <input
-                            type="text"
-                            value={appSearch}
-                            onChange={(e) => setAppSearch(e.target.value)}
-                            placeholder="Search company or role…"
-                            className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-xs placeholder:text-ink-400 focus:outline-hidden sm:w-52"
-                          />
-                        </div>
-                        <Tabs
-                          value={appStatusFilter}
-                          onValueChange={(next) =>
-                            setAppStatusFilter(next as typeof appStatusFilter)
-                          }
-                        >
-                          <TabsList className="h-7 w-fit p-0.5">
-                            <TabsTrigger value="all" className="px-2 py-0.5 text-xs">
-                              All ({applications.length})
-                            </TabsTrigger>
-                            <TabsTrigger value="shortlisted" className="px-2 py-0.5 text-xs">
-                              Shortlists ({applications.filter((a) => a.shortlisted).length})
-                            </TabsTrigger>
-                            <TabsTrigger value="offered" className="px-2 py-0.5 text-xs">
-                              Offers ({applications.filter((a) => a.hasOffer).length})
-                            </TabsTrigger>
-                          </TabsList>
-                        </Tabs>
-                      </div>
-                    )}
-                  </div>
-
-                  {applications.length === 0 ? (
-                    <p className="text-sm text-ink-700">No applications yet.</p>
-                  ) : filteredApplications.length === 0 ? (
-                    <p className="py-4 text-center text-xs text-ink-500">
-                      No applications matching current search/filter.
-                    </p>
-                  ) : (
-                    <ul className="divide-y divide-line">
-                      {applicationVisits.map((roles) => {
-                        const head = roles[0];
-                        if (head === undefined) return null;
-
-                        // A single-role visit keeps the plain row it always had.
-                        if (roles.length === 1) {
-                          return (
-                            <li
-                              key={head.applicationId}
-                              className="flex flex-wrap items-center justify-between gap-3 py-3"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-ink-900">
-                                  <Link to={`/drives/${head.driveId}`} className="hover:underline">
-                                    {head.companyName}
-                                  </Link>
-                                </p>
-                                <p className="text-xs text-ink-500">
-                                  {head.roleTitle ?? "Role not recorded"}
-                                  {head.appliedAt !== null &&
-                                    ` · applied ${onDate(head.appliedAt)}`}
-                                </p>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                {head.shortlisted && <Badge tone="brand">Shortlisted</Badge>}
-                                {head.hasOffer && <Badge tone="success">Offer</Badge>}
-                              </div>
-                            </li>
-                          );
-                        }
-
-                        /* Roles of one visit sit together, the company named once;
-                         each role keeps its own link, its own date and its own
-                         badges, because those are never summed. */
-                        return (
-                          <li key={head.applicationId} className="py-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-ink-900">{head.companyName}</p>
-                              <Badge tone="brand">{roles.length} roles</Badge>
-                            </div>
-                            <ul className="mt-2 space-y-1.5">
-                              {roles.map((application) => (
-                                <li
-                                  key={application.applicationId}
-                                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2"
-                                >
-                                  <p className="min-w-0 text-sm text-ink-800">
-                                    <Link
-                                      to={`/drives/${application.driveId}`}
-                                      className="font-medium hover:underline"
-                                    >
-                                      {application.roleTitle ?? "Role not recorded"}
-                                    </Link>
-                                    {application.appliedAt !== null && (
-                                      <span className="text-xs text-ink-500">
-                                        {" "}
-                                        · applied {onDate(application.appliedAt)}
-                                      </span>
-                                    )}
-                                  </p>
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {application.shortlisted && (
-                                      <Badge tone="brand">Shortlisted</Badge>
-                                    )}
-                                    {application.hasOffer && <Badge tone="success">Offer</Badge>}
-                                  </div>
-                                </li>
-                              ))}
-                            </ul>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </Card>
-              </section>
-            )}
-
-            {/* Portfolio & SRF Details Card */}
-            {activeSection === "portfolio" && (
-              <section aria-label="Portfolio">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-4 flex items-center gap-2">
-                    <div className="rounded-lg bg-gold-50 p-2 text-gold-600">
-                      <Award className="size-5" />
-                    </div>
-                    <div>
-                      <h2 className="font-heading text-lg font-bold text-ink-900">
-                        Portfolio & Technical Profile
-                      </h2>
-                      <p className="text-xs text-ink-500">
-                        Skills, projects, verified certificates, and achievements
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 text-sm">
-                    {record.technicalSkills && (
-                      <div>
-                        <h3 className="text-xs font-semibold text-ink-500">Technical Skills</h3>
-                        <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                          {record.technicalSkills}
-                        </p>
-                      </div>
-                    )}
-
-                    {record.areasOfInterest && (
-                      <div>
-                        <h3 className="text-xs font-semibold text-ink-500">Areas of Interest</h3>
-                        <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                          {record.areasOfInterest}
-                        </p>
-                      </div>
-                    )}
-
-                    {record.areasOfExpertise && (
-                      <div>
-                        <h3 className="text-xs font-semibold text-ink-500">Areas of Expertise</h3>
-                        <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                          {record.areasOfExpertise}
-                        </p>
-                      </div>
-                    )}
-
-                    {record.projects && (
-                      <div>
-                        <h3 className="text-xs font-semibold text-ink-500">Key Projects</h3>
-                        <p className="mt-1 whitespace-pre-wrap text-ink-800">{record.projects}</p>
-                      </div>
-                    )}
-
-                    {/* Verified Certificates */}
-                    {certificatesList.length > 0 && (
-                      <div className="border-t border-line pt-3">
-                        <h3 className="text-xs font-semibold text-ink-500">
-                          Declared Certificates
-                        </h3>
-                        <div className="mt-2 divide-y divide-line rounded-lg border border-line">
-                          {certificatesList.map((cert) => (
-                            <div
-                              key={cert.id}
-                              className="flex items-center justify-between gap-3 p-3 text-xs"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-ink-900">{cert.name}</span>
-                                <Badge
-                                  tone={
-                                    cert.status === "verified"
-                                      ? "success"
-                                      : cert.status === "rejected"
-                                        ? "danger"
-                                        : "warning"
-                                  }
-                                >
-                                  {cert.status}
-                                </Badge>
-                              </div>
-                              {cert.documentUrl && (
-                                <ButtonAnchor
-                                  href={cert.documentUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs text-brand-600 hover:text-brand-700"
-                                >
-                                  <ExternalLink className="mr-1 size-3" />
-                                  View Certificate
-                                </ButtonAnchor>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {record.certifications && certificatesList.length === 0 && (
-                      <div>
-                        <h3 className="text-xs font-semibold text-ink-500">Certifications</h3>
-                        <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                          {record.certifications}
-                        </p>
-                      </div>
-                    )}
-
-                    {record.achievements && (
-                      <div>
-                        <h3 className="text-xs font-semibold text-ink-500">
-                          Achievements & Honors
-                        </h3>
-                        <p className="mt-1 whitespace-pre-wrap text-ink-800">
-                          {record.achievements}
-                        </p>
-                      </div>
-                    )}
-
-                    {!record.technicalSkills &&
-                      !record.areasOfInterest &&
-                      !record.projects &&
-                      !record.certifications &&
-                      certificatesList.length === 0 &&
-                      !record.achievements && (
-                        <p className="text-xs text-ink-500">
-                          No additional project or portfolio details filed in SRF.
-                        </p>
-                      )}
-                  </div>
-                </Card>
-              </section>
-            )}
+        {/* Main Content Layout — balanced continuous presentation */}
+        {activeSection === "overview" && (
+          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+            <div className="space-y-6">
+              {offersSection}
+              {resumesSection}
+              {identitySection}
+              {profilesSection}
+            </div>
+            <div className="space-y-6">
+              {academicsSection}
+              {applicationsSection}
+              {skillsSection}
+              {portfolioSection}
+            </div>
           </div>
+        )}
 
-          {/* Right Column: 1 col on Overview, full 3 cols on focused tabs, hidden on academics/placements */}
-          <div
-            className={`space-y-6 ${
-              activeSection === "overview"
-                ? "lg:col-span-1"
-                : activeSection === "preferences" || activeSection === "portfolio"
-                  ? "lg:col-span-3"
-                  : "hidden"
-            }`}
-          >
-            {/* Identity Card */}
-            {activeSection === "overview" && (
-              <section aria-label="Identity">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="rounded-lg bg-brand-50 p-1.5 text-brand-600">
-                      <User className="size-4" />
-                    </div>
-                    <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
-                  </div>
-                  <dl className="grid gap-2 text-sm">
-                    <div className="flex justify-between gap-4">
-                      <dt className="shrink-0 text-ink-500">Programme</dt>
-                      <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
-                        {record.degree}
-                        {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
-                      </dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="shrink-0 text-ink-500">Email</dt>
-                      <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="shrink-0 text-ink-500">Mobile</dt>
-                      <dd className="min-w-0 break-all text-right text-ink-900">
-                        {record.mobile ?? "Not recorded"}
-                      </dd>
-                    </div>
-                    {record.whatsapp && (
-                      <div className="flex justify-between gap-4">
-                        <dt className="shrink-0 text-ink-500">WhatsApp</dt>
-                        <dd className="min-w-0 break-all text-right font-medium text-success-700">
-                          {record.whatsapp}
-                        </dd>
-                      </div>
-                    )}
-                    {record.alternateContact && (
-                      <div className="flex justify-between gap-4">
-                        <dt className="shrink-0 text-ink-500">Alt Phone</dt>
-                        <dd className="min-w-0 break-all text-right text-ink-900">
-                          {record.alternateContact}
-                        </dd>
-                      </div>
-                    )}
-                    {/* Registration audit timestamps */}
-                    <div className="mt-2 border-t border-line pt-2 text-xs">
-                      <div className="flex justify-between text-ink-500">
-                        <span>Submitted:</span>
-                        <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
-                      </div>
-                      {record.srfDecidedAt && (
-                        <div className="mt-1 flex justify-between text-ink-500">
-                          <span>Approved:</span>
-                          <span>{onDate(record.srfDecidedAt)}</span>
-                        </div>
-                      )}
-                      {record.consentGivenAt && (
-                        <div className="mt-1 flex justify-between text-ink-500">
-                          <span>Consent Recorded:</span>
-                          <span>{onDate(record.consentGivenAt)}</span>
-                        </div>
-                      )}
-                      {record.srfRejectionReason && (
-                        <div className="mt-2 rounded bg-danger-50 p-2 text-danger-700">
-                          Rejection reason: {record.srfRejectionReason}
-                        </div>
-                      )}
-                    </div>
-                  </dl>
-                </Card>
-              </section>
-            )}
-
-            {/* Resumes on File Card (with Staff Upload/Replace) */}
-            {(activeSection === "preferences" || activeSection === "overview") && (
-              <section aria-label="Resumes">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileText className="size-5 text-brand-600" />
-                      <h2 className="font-heading text-base font-bold text-ink-900">
-                        Category Resumes
-                      </h2>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {ROLE_CATEGORIES.map((cat) => {
-                      const isPreferred = rolePreferences.includes(cat);
-                      const doc = resumes.find((r) => r.roleCategory === cat);
-
-                      return (
-                        <div
-                          key={cat}
-                          className={`rounded-lg border p-3 ${
-                            isPreferred
-                              ? "border-line bg-surface"
-                              : "border-line/60 bg-surface-muted/30"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-semibold text-ink-900">
-                                  {RESUME_TRACK_LABEL[cat]}
-                                </span>
-                                {isPreferred && <Badge tone="brand">Active</Badge>}
-                              </div>
-                              {doc ? (
-                                <div className="mt-1 text-xs text-ink-500">
-                                  <p
-                                    className="truncate font-medium text-ink-700"
-                                    title={doc.fileName}
-                                  >
-                                    {doc.fileName}
-                                  </p>
-                                  <p className="text-[11px]">
-                                    {formatFileSize(doc.sizeBytes)} · {onDate(doc.uploadedAt)}
-                                  </p>
-                                </div>
-                              ) : (
-                                <p className="mt-1 text-[11px] text-ink-400">No resume uploaded</p>
-                              )}
-                            </div>
-
-                            <div className="flex flex-col items-end gap-1.5">
-                              {doc?.downloadUrl && (
-                                <ButtonAnchor
-                                  href={doc.downloadUrl}
-                                  target="_blank"
-                                  rel="noreferrer noopener"
-                                  size="sm"
-                                  className="text-xs"
-                                >
-                                  <ExternalLink className="mr-1 size-3" />
-                                  View PDF
-                                </ButtonAnchor>
-                              )}
-                              {hasStaffControls && (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => triggerResumeUpload(cat)}
-                                  isLoading={actions.isPending() && uploadCategory === cat}
-                                  className="text-xs"
-                                >
-                                  <Upload className="mr-1 size-3" />
-                                  {doc ? "Replace" : "Upload"}
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              </section>
-            )}
-
-            {/* Role & Drive Preferences Card */}
-            {(activeSection === "preferences" || activeSection === "overview") && (
-              <section aria-label="Skills and preferences">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-lg bg-violet-50 p-1.5 text-violet-700">
-                        <Sparkles className="size-4" />
-                      </div>
-                      <h2 className="font-heading text-lg font-bold text-ink-900">
-                        Skills and preferences
-                      </h2>
-                    </div>
-                    {hasStaffControls && (
-                      <Button variant="ghost" size="sm" onClick={openPreferencesModal}>
-                        <Edit2 className="mr-1 size-3" />
-                        Edit
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Assessed skill scores — one row per skill, the bar shows what the fraction means */}
-                  {skills.length === 0 ? (
-                    <p className="text-sm text-ink-500">No skill scores recorded.</p>
-                  ) : (
-                    <ul className="divide-y divide-line text-sm">
-                      {skills.map(({ skill, score }) => (
-                        <li key={skill} className="flex items-center gap-3 py-2 first:pt-0">
-                          <span className="min-w-0 flex-1 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                            {skill} {score}/{SKILL_SCORE_MAX}
-                          </span>
-                          <span
-                            aria-hidden="true"
-                            className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-line"
-                          >
-                            <span
-                              className={`block h-full rounded-full ${
-                                score >= 4
-                                  ? "bg-success-500"
-                                  : score >= 3
-                                    ? "bg-brand-500"
-                                    : "bg-gold-500"
-                              }`}
-                              style={{
-                                width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
-                              }}
-                            />
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* Preferred role categories */}
-                  {rolePreferences.length > 0 && (
-                    <div className="mt-3 border-t border-line pt-3">
-                      <span className="text-xs font-semibold text-ink-500">Preferred areas</span>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {rolePreferences.map((area) => (
-                          <Badge key={area} tone="brand">
-                            {AREA_LABEL[area] ?? area}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Drive type preferences */}
-                  <div className="mt-3 border-t border-line pt-3">
-                    <span className="text-xs font-semibold text-ink-500">
-                      Drive Type Preferences:
-                    </span>
-                    {driveTypePreferences.length === 0 ? (
-                      <p className="mt-1 text-xs text-ink-500">
-                        Open to all drive types (no restrictions)
-                      </p>
-                    ) : (
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {driveTypePreferences.map((dt) => (
-                          <Badge key={dt} tone="accent">
-                            {DRIVE_TYPE_LABEL[dt] ?? dt}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              </section>
-            )}
-
-            {/* Online & Coding Profiles Card */}
-            {(activeSection === "portfolio" || activeSection === "overview") && (
-              <section aria-label="Online profiles">
-                <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Globe className="size-4 text-brand-600" />
-                    <h2 className="font-heading text-base font-bold text-ink-900">
-                      Online & Coding Profiles
-                    </h2>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    {record.linkedinUrl && (
-                      <a
-                        href={record.linkedinUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                      >
-                        <span className="flex items-center gap-2 text-ink-900">
-                          <Globe className="size-4 text-brand-600" /> LinkedIn
-                        </span>
-                        <ExternalLink className="size-3.5 text-ink-400" />
-                      </a>
-                    )}
-                    {record.githubUrl && (
-                      <a
-                        href={record.githubUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                      >
-                        <span className="flex items-center gap-2 text-ink-900">
-                          <Globe className="size-4 text-ink-900" /> GitHub
-                        </span>
-                        <ExternalLink className="size-3.5 text-ink-400" />
-                      </a>
-                    )}
-                    {record.leetcodeUrl && (
-                      <a
-                        href={record.leetcodeUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                      >
-                        <span className="flex items-center gap-2 text-ink-900">
-                          <span className="font-mono font-bold text-gold-600">LC</span> LeetCode
-                        </span>
-                        <ExternalLink className="size-3.5 text-ink-400" />
-                      </a>
-                    )}
-                    {record.hackerrankUrl && (
-                      <a
-                        href={record.hackerrankUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                      >
-                        <span className="flex items-center gap-2 text-ink-900">
-                          <span className="font-mono font-bold text-success-600">HR</span>{" "}
-                          HackerRank
-                        </span>
-                        <ExternalLink className="size-3.5 text-ink-400" />
-                      </a>
-                    )}
-                    {/* Custom other profiles */}
-                    {record.otherProfiles?.map((p) => (
-                      <a
-                        key={`${p.label}-${p.value}`}
-                        href={p.value.startsWith("http") ? p.value : `https://${p.value}`}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
-                      >
-                        <span className="flex items-center gap-2 text-ink-900">
-                          <Globe className="size-4 text-violet-500" /> {p.label}
-                        </span>
-                        <ExternalLink className="size-3.5 text-ink-400" />
-                      </a>
-                    ))}
-                    {!record.linkedinUrl &&
-                      !record.githubUrl &&
-                      !record.leetcodeUrl &&
-                      !record.hackerrankUrl &&
-                      (!record.otherProfiles || record.otherProfiles.length === 0) && (
-                        <p className="text-xs text-ink-500">No profile links recorded.</p>
-                      )}
-                  </div>
-                </Card>
-              </section>
-            )}
+        {activeSection === "placements" && (
+          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+            <div className="space-y-6">{offersSection}</div>
+            <div className="space-y-6">{applicationsSection}</div>
           </div>
-        </div>
+        )}
+
+        {activeSection === "academics" && (
+          <div id="student-record-content" className="space-y-6">
+            {academicsSection}
+          </div>
+        )}
+
+        {activeSection === "preferences" && (
+          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+            <div className="space-y-6">{resumesSection}</div>
+            <div className="space-y-6">{skillsSection}</div>
+          </div>
+        )}
+
+        {activeSection === "portfolio" && (
+          <div id="student-record-content" className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+            <div className="space-y-6">{portfolioSection}</div>
+            <div className="space-y-6">{profilesSection}</div>
+          </div>
+        )}
       </div>
 
       {/* Staff Preferences Management Modal */}
