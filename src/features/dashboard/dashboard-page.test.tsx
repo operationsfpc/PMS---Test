@@ -770,22 +770,35 @@ describe("the drive-specific box", () => {
   });
 
   it("shows the stages of a drive, from eligible through to the final offer", async () => {
+    const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     const section = await box();
     const zoho = within(section).getByRole("link", { name: /zoho/i }).closest("div");
     if (!zoho) throw new Error("drive not found");
 
+    for (const stage of ["Eligible", "Applied", "Shortlisted", "Final offer"]) {
+      expect(within(zoho).getByText(new RegExp(`^${stage}`, "i"))).toBeDefined();
+    }
+
+    await user.click(within(zoho).getByRole("button", { name: /funnel stages/i }));
+    const dialog = await screen.findByRole("dialog");
     for (const stage of ["Eligible", "Applied", "Shortlisted", "1. Aptitude", "Final offer"]) {
-      expect(within(zoho).getByText(stage)).toBeDefined();
+      expect(within(dialog).getByText(new RegExp(`^${stage}`, "i"))).toBeDefined();
     }
   });
 
   it("reports attendance and clearance for each round", async () => {
+    const user = userEvent.setup();
     render(<DashboardPage view={view()} title="Placement overview" />);
 
     const section = await box();
-    const round = within(section).getByText("1. Aptitude").closest("tr");
+    const zoho = within(section).getByRole("link", { name: /zoho/i }).closest("div");
+    if (!zoho) throw new Error("drive not found");
+
+    await user.click(within(zoho).getByRole("button", { name: /funnel stages/i }));
+    const dialog = await screen.findByRole("dialog");
+    const round = within(dialog).getByText("1. Aptitude").closest("tr");
     if (round === null) throw new Error("round not found");
 
     // Two called, one present, one absent, one selected of the one who came.
@@ -834,11 +847,17 @@ describe("the drive-specific box", () => {
       .filter((el) => el.closest("select") === null);
     expect(namedInRoster).toHaveLength(1);
     expect(within(section).getByText("2 roles")).toBeDefined();
+    // Default accordion state: first role is expanded, subsequent roles are collapsed
+    expect(
+      within(section)
+        .getByRole("button", { name: /member technical staff/i })
+        .getAttribute("aria-expanded"),
+    ).toBe("true");
     expect(
       within(section)
         .getByRole("button", { name: /engineer trainee/i })
         .getAttribute("aria-expanded"),
-    ).toBe("true");
+    ).toBe("false");
   });
 
   it("filters by college name", async () => {
@@ -867,8 +886,39 @@ describe("the drive-specific box", () => {
     await user.selectOptions(await screen.findByLabelText(/^company$/i), "Freshworks");
 
     const section = await box();
-    expect(within(section).getByText("Eligible")).toBeDefined();
-    expect(within(section).queryByText(/attended/i)).toBeNull();
+    const freshworks = within(section)
+      .getByRole("link", { name: /freshworks/i })
+      .closest("div");
+    if (!freshworks) throw new Error("freshworks drive not found");
+    expect(within(freshworks).getByText(/^eligible:/i)).toBeDefined();
+    expect(within(freshworks).queryByText(/attended/i)).toBeNull();
+
+    await user.click(within(freshworks).getByRole("button", { name: /funnel stages/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/^eligible$/i)).toBeDefined();
+    expect(within(dialog).queryByText(/attended/i)).toBeNull();
+  });
+
+  it("shows pager strip even when total visits fit on one page", async () => {
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    const section = await box();
+    expect(within(section).getByText(/page 1 of 1/i)).toBeDefined();
+  });
+
+  it("allows opening visit pane via See all students even when drive has 0 students", async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage view={view()} title="Placement overview" />);
+
+    await user.selectOptions(await screen.findByLabelText(/^company$/i), "Freshworks");
+
+    const section = await box();
+    const seeAllBtn = within(section).getByRole("button", { name: /see all students/i });
+    await user.click(seeAllBtn);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeDefined();
+    expect(within(dialog).getByText(/Freshworks/i)).toBeDefined();
   });
 
   it("displays names of students currently in the ongoing drive on the card", async () => {

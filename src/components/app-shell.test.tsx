@@ -2,24 +2,24 @@
 import { canPublishDrive, canShortlistFromPortfolio } from "@domain/drive-portfolio";
 import type { AppRole } from "@domain/types";
 import { AuthContext, type AuthState } from "@features/auth/require-auth";
-import { type AuthActions, AuthActionsContext } from "@lib/auth-context";
+import { AuthActionsContext } from "@lib/auth-context";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AppShell } from "./app-shell";
 
 /**
- * Navigation must follow the SIGNED-IN role, not a preview control.
+ * Navigation follows the SIGNED-IN role, and nothing else.
  *
- * The role switcher is a development convenience for reviewing screens without
- * a database. Shipping it would let any signed-in user navigate into another
- * role's screens: RLS would return nothing, but offering the route at all is
- * misleading and invites support tickets about "broken" pages.
- */
-/**
- * Renders the shell exactly as a user first sees it, with groups collapsed.
- * Used by the tests that are ABOUT collapsing.
+ * There used to be a development role switcher in the header. Shipping it would
+ * have let any signed-in user navigate into another role's screens: RLS would
+ * return nothing, but offering the route at all is misleading and invites
+ * support tickets about "broken" pages. It is gone, and these tests pin that
+ * the sidebar has one source of truth — the profile the database reads.
+ *
+ * `shellCollapsed` renders the shell exactly as a user first sees it, with
+ * groups collapsed; it is used by the tests that are ABOUT collapsing.
  */
 function shellCollapsed(
   auth: AuthState,
@@ -75,37 +75,6 @@ const signedIn = (role: AppRole, campuses: readonly string[] = []): AuthState =>
 });
 
 /**
- * Renders the shell with the auth ACTIONS a test cares about.
- *
- * `shellFor` can only supply `signOut`. Clearing a preview role is the other
- * capability the shell uses, and the default context value is a no-op, so a
- * test that asserts the button works has to provide its own.
- */
-function shellWithActions(auth: AuthState, actions: Partial<AuthActions> = {}) {
-  return render(
-    <AuthActionsContext.Provider value={{ signOut: async () => {}, ...actions }}>
-      <AuthContext.Provider value={auth}>
-        <MemoryRouter initialEntries={["/dashboard"]}>
-          <AppShell>content</AppShell>
-        </MemoryRouter>
-      </AuthContext.Provider>
-    </AuthActionsContext.Provider>,
-  );
-}
-
-/** An Admin on the test deployment who has overridden their own role. */
-const previewingAs = (preview: AppRole, actual: AppRole = "admin"): AuthState => ({
-  status: "signed-in",
-  role: preview,
-  actualRole: actual,
-  previewRole: preview,
-  email: "thanush@faceprep.in",
-  campuses: [],
-});
-
-afterEach(() => vi.unstubAllEnvs());
-
-/**
  * Signing out.
  *
  * There was no way to do it at all: the only route out of a session was
@@ -146,7 +115,7 @@ describe("signing out", () => {
    * question is whose session this is — and it could not be answered.
    */
   it("names the signed-in person in the header", () => {
-    shellWithActions({
+    shellCollapsed({
       status: "signed-in",
       role: "admin",
       name: "R Karthik",
@@ -449,82 +418,6 @@ describe("AppShell navigation", () => {
   it("labels the shared dashboard for the role reading it", () => {
     shellFor(signedIn("campus_manager"));
     expect(screen.getByRole("link", { name: /campus overview/i })).toBeDefined();
-  });
-});
-
-describe("the preview-as switcher", () => {
-  it("is available in development, where there may be no database", () => {
-    vi.stubEnv("DEV", true);
-    shellFor(signedIn("student"));
-    expect(screen.getByLabelText(/preview as/i)).toBeDefined();
-  });
-
-  it("is never offered to an account the test deployment does not trust", () => {
-    vi.stubEnv("DEV", false);
-    shellFor(signedIn("student"));
-    expect(screen.queryByLabelText(/preview as/i)).toBeNull();
-  });
-
-  /**
-   * The control used to be gated on `import.meta.env.DEV` alone while
-   * `SupabaseAuthProvider` honoured a stored preview role for the allow-listed
-   * test accounts wherever the app is deployed. So on pms-test-gamma an Admin
-   * could be browsing as an Account Executive with no switcher in sight, no
-   * sign of the override and no way to clear it — and every write they then
-   * attempted was refused by a database that still knew their real role. That
-   * mismatch is what the 2026-10-31 "You do not have permission to raise a
-   * PIF" report actually was.
-   */
-  it("is offered wherever the override it sets is honoured, not only in development", () => {
-    vi.stubEnv("DEV", false);
-    shellWithActions(previewingAs("account_executive"));
-    expect(screen.getByLabelText(/preview as/i)).toBeDefined();
-  });
-});
-
-/**
- * A preview role changes which doors the app opens. It changes nothing about
- * what the database accepts, because `current_app_role()` reads the real
- * profile. Saying so on screen is what tells an Admin that a permission error
- * is their preview, not a broken role assignment — and gives them the way out.
- */
-describe("the preview banner", () => {
-  it("names both the preview and the real role, and says the database follows the real one", () => {
-    shellWithActions(previewingAs("account_executive"));
-
-    const banner = screen.getByRole("status");
-    expect(banner.textContent).toContain("Previewing as account executive");
-    expect(banner.textContent).toContain("Signed in as admin");
-    expect(banner.textContent).toMatch(/database follows your real role/i);
-  });
-
-  it("gives the way out of the override without signing the user out", () => {
-    const setPreviewRole = vi.fn();
-    shellWithActions(previewingAs("account_executive"), { setPreviewRole });
-
-    fireEvent.click(screen.getByRole("button", { name: /stop preview/i }));
-
-    expect(setPreviewRole).toHaveBeenCalledTimes(1);
-    expect(setPreviewRole.mock.calls[0]?.[0]).toBeNull();
-  });
-
-  it("says nothing when the user is simply signed in as themselves", () => {
-    shellWithActions(signedIn("admin"));
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  /** The provider stores a preview role even when it matches the real one;
-   *  a banner then would claim the viewer is impersonating someone. */
-  it("says nothing when the preview is the role the account already has", () => {
-    shellWithActions(previewingAs("admin", "admin"));
-    expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("stays on screen on a page whose role nav is empty", () => {
-    // The banner is global; a role with no sidebar destinations must not hide
-    // the one explanation the viewer needs.
-    shellWithActions(previewingAs("student"));
-    expect(screen.getByRole("status").textContent).toContain("Previewing as student");
   });
 });
 

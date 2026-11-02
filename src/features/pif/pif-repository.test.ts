@@ -357,22 +357,72 @@ describe("createSupabasePifRepository", () => {
     });
 
     /**
-     * The 2026-10-31 report: an Admin previewing as an Account Executive was
-     * told to "ask an Admin to check your role" when their role was correct and
-     * the preview was the problem. Naming the preview is the remedy that works;
-     * checking the profile row stays available for a real AE whose role column
-     * actually is wrong.
+     * The two 42501s Postgres sends mean opposite things: a policy refusing a
+     * row the AE is entitled to write is an Admin's rule, while the RPC's own
+     * `raise` is a sentence already written for the AE. Overwriting the second
+     * with the first — which is what the old single branch did — told readers
+     * to go asking for a role change they already had.
      */
-    it("names the preview role as a cause when the database refuses the writer", async () => {
-      failsWith({ code: "42501", message: "permission denied", details: null }, 403);
+    it("names the table the database refused instead of blaming the AE", async () => {
+      failsWith(
+        {
+          code: "42501",
+          message:
+            'new row for relation "company_drive_contacts" violates row-level security policy',
+          details: null,
+        },
+        403,
+      );
 
       const error = await repo()
         .saveDraft(values)
         .then(() => null)
         .catch((cause: unknown) => cause as Error);
 
-      expect(error?.message).toMatch(/preview as/i);
-      expect(error?.message).toMatch(/account executive/i);
+      expect(error?.message).toMatch(/company_drive_contacts/);
+      expect(error?.message).toMatch(/not your role/i);
+      expect(error?.message).toMatch(/code 42501/);
+    });
+
+    it("passes the RPC's own permission sentence through untouched", async () => {
+      failsWith(
+        {
+          code: "42501",
+          message: "Only an Account Executive may raise a PIF.",
+          details: null,
+        },
+        403,
+      );
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(
+        /^Only an Account Executive may raise a PIF\.$/,
+      );
+    });
+
+    it("says which figure a refused cast points at", async () => {
+      failsWith(
+        {
+          code: "22P02",
+          message: 'invalid input syntax for type integer: "15500.5"',
+          details: null,
+        },
+        400,
+      );
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(/openings or the monthly stipend/i);
+    });
+
+    it("points at the date box when a date is unreadable", async () => {
+      failsWith(
+        {
+          code: "22007",
+          message: 'invalid input syntax for type date: "31/12/2026"',
+          details: null,
+        },
+        400,
+      );
+
+      await expect(repo().saveDraft(values)).rejects.toThrow(/tentative drive date/i);
     });
   });
 });

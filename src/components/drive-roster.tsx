@@ -1,10 +1,11 @@
 import { Chevron } from "@components/accordion";
+import { TablePager } from "@components/table-pager";
 import { Badge, ButtonLink } from "@components/ui";
 import { attendanceLabel } from "@domain/attendance";
 import { offerCategoryLabelOf } from "@domain/offer-category";
 import { roundResultLabel } from "@domain/round-outcome";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export interface StudentRoundDetail {
   readonly roundId: string;
@@ -43,6 +44,16 @@ const RESULT_TONE = (result: RoundResult | null, attendance: AttendanceStatus) =
 };
 
 /**
+ * How many students the drawer mounts at once.
+ *
+ * 2026-11-02: it rendered every applicant of the role, each one a card with a
+ * drawer of its own, inside a pane that already scrolls — a whole-college drive
+ * put several hundred expanded-height rows behind one tab. 25 is what the
+ * popups elsewhere in the app page at.
+ */
+const ROSTER_PAGE_SIZE = 25;
+
+/**
  * Who is on one role of a drive, and how far each of them has come.
  *
  * The row is the student; the drawer under it is the whole cycle — academics,
@@ -65,6 +76,7 @@ export function DriveRoster({
     "all",
   );
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
 
   // College-scoped & search-filtered students
   const filteredStudents = useMemo(() => {
@@ -87,6 +99,22 @@ export function DriveRoster({
       );
     });
   }, [students, collegeFilter, stageFilter, query]);
+
+  /*
+   * A filter that moves the reader off the page they were on should hand them
+   * page one, not a page number that no longer exists in the new result.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetting the page is the point
+  useEffect(() => {
+    setPage(0);
+  }, [query, stageFilter, collegeFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredStudents.length / ROSTER_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pagedStudents = filteredStudents.slice(
+    safePage * ROSTER_PAGE_SIZE,
+    (safePage + 1) * ROSTER_PAGE_SIZE,
+  );
 
   const counts = useMemo(() => {
     const base =
@@ -112,7 +140,12 @@ export function DriveRoster({
   return (
     <div className="space-y-3">
       <p className="text-xs text-ink-500">
-        Showing {filteredStudents.length} of {counts.all} students
+        {/* The line under the rows is the pager and says which slice is mounted;
+            this one answers "how many are there", so it drops the word
+            "Showing", which the app reserves for the range. */}
+        {filteredStudents.length === counts.all
+          ? `${counts.all} ${counts.all === 1 ? "student" : "students"} on this role`
+          : `${filteredStudents.length} of ${counts.all} students match`}
         {collegeFilter !== "" ? ` · Filtered to ${collegeFilter}` : ""}
       </p>
 
@@ -181,7 +214,7 @@ export function DriveRoster({
             No students found matching the selected criteria.
           </div>
         ) : (
-          filteredStudents.map((student) => {
+          pagedStudents.map((student) => {
             const isExpanded = expandedAppId === student.applicationId;
             const hasOffer = student.offer !== null;
             const latestRound =
@@ -366,6 +399,14 @@ export function DriveRoster({
           })
         )}
       </div>
+
+      <TablePager
+        page={safePage}
+        pageSize={ROSTER_PAGE_SIZE}
+        total={filteredStudents.length}
+        unit="students"
+        onPage={setPage}
+      />
     </div>
   );
 }

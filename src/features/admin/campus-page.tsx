@@ -161,8 +161,9 @@ export function CampusPage({
         </div>
       )}
 
-      {/* Add Campus Form Card (always available or toggleable) */}
-      <Card className={`mb-6 p-6 ${showAddForm ? "block" : "hidden sm:block"}`}>
+      {/* Add Campus Form Card. `hidden sm:block` used to keep this open on any
+          screen 640px wide, so "Close campus form" closed nothing. */}
+      <Card className={`mb-6 p-6 ${showAddForm ? "block" : "hidden"}`}>
         <h2 className="mb-4 text-base font-semibold text-ink-900">Add new campus</h2>
         <form onSubmit={submit} noValidate>
           <div className="grid gap-4 sm:grid-cols-2">

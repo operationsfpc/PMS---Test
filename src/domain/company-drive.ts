@@ -226,3 +226,36 @@ export function groupByCompanyVisit<T>(
 ): Map<string, T[]> {
   return groupRowsByVisit(rows, identityOf);
 }
+
+/**
+ * Pages of WHOLE company visits, each page filled to a budget of role rows.
+ *
+ * A visit never splits across pages: half a company on one page and its other
+ * roles on the next is the "same company twice" the visit card was built to
+ * stop. A visit taller than the budget is still shown whole, on a page of its
+ * own, because cutting a role list mid-visit would hide a job the reader is on
+ * the card to find.
+ */
+export function paginateVisitsByRowBudget<T>(
+  visits: readonly T[],
+  rowsIn: (visit: T) => number,
+  rowBudget: number,
+): T[][] {
+  const pages: T[][] = [];
+  let page: T[] = [];
+  let rows = 0;
+
+  for (const visit of visits) {
+    const height = rowsIn(visit);
+    if (page.length > 0 && rows + height > rowBudget) {
+      pages.push(page);
+      page = [];
+      rows = 0;
+    }
+    page.push(visit);
+    rows += height;
+  }
+
+  if (page.length > 0) pages.push(page);
+  return pages;
+}

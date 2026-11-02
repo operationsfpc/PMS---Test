@@ -245,14 +245,22 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
             </DataTable>
           </div>
 
-          {/* Pagination Controls */}
-          {filtered.length > 25 && (
+          {/* Pagination Controls. The strip used to hide itself below 26 rows —
+              which also hid the only control that changes the page size, so
+              picking 100 and then filtering to 20 left no way back. */}
+          {filtered.length > 0 && (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-ink-500">
               <div className="flex items-center gap-2">
-                <span>Rows per page:</span>
+                <label htmlFor="roster-rows-per-page" className="text-ink-500">
+                  Rows per page:
+                </label>
                 <select
+                  id="roster-rows-per-page"
                   value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
                   className="rounded border border-line bg-surface px-2 py-1 text-xs text-ink-800"
                 >
                   {PAGE_SIZE_OPTIONS.map((sz) => (
@@ -271,19 +279,19 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  onClick={() => setPage(safePage - 1)}
                 >
                   Previous
                 </Button>
                 <span className="font-medium text-ink-700">
-                  Page {page} of {totalPages}
+                  Page {safePage} of {totalPages}
                 </span>
                 <Button
                   variant="secondary"
                   size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  onClick={() => setPage(Math.min(totalPages, safePage + 1))}
                 >
                   Next
                 </Button>

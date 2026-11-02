@@ -8,7 +8,11 @@ import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
-import { countDistinctApplicants, groupDrivesByEvent } from "@domain/company-drive";
+import {
+  countDistinctApplicants,
+  groupDrivesByEvent,
+  paginateVisitsByRowBudget,
+} from "@domain/company-drive";
 import { searchDrives } from "@domain/drive-portfolio";
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import {
@@ -96,36 +100,6 @@ const DEFAULT_ROW_BUDGET = 15;
 
 /** The slice of the cycle a coordinator is asking about, held per role. */
 type StageFilter = "all" | "shortlisted" | "in_rounds" | "offers";
-
-/** One company visit: its group id and its roles, in their table order. */
-type VisitGroup = readonly [string, readonly DriveProgressEntry[]];
-
-/**
- * Pages of WHOLE visits, filled to a row budget.
- *
- * A visit is never split across pages: half a company on each page is the
- * "same company twice" this table was rebuilt to stop. When a single visit is
- * taller than the budget it is still shown whole, on a page of its own.
- */
-function paginateVisits(events: readonly VisitGroup[], rowBudget: number): VisitGroup[][] {
-  const pages: VisitGroup[][] = [];
-  let page: VisitGroup[] = [];
-  let rows = 0;
-
-  for (const event of events) {
-    const height = event[1].length;
-    if (page.length > 0 && rows + height > rowBudget) {
-      pages.push(page);
-      page = [];
-      rows = 0;
-    }
-    page.push(event);
-    rows += height;
-  }
-
-  if (page.length > 0) pages.push(page);
-  return pages;
-}
 
 interface RoleSelection {
   readonly college: string;
@@ -255,7 +229,10 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
    */
   const events = useMemo(() => [...groupDrivesByEvent(visible).entries()], [visible]);
 
-  const pages = useMemo(() => paginateVisits(events, rowBudget), [events, rowBudget]);
+  const pages = useMemo(
+    () => paginateVisitsByRowBudget(events, (visit) => visit[1].length, rowBudget),
+    [events, rowBudget],
+  );
   const pageCount = Math.max(1, pages.length);
   const current = Math.min(page, pageCount);
   const pageEvents = pages[current - 1] ?? [];

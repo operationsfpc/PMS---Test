@@ -41,6 +41,19 @@ const optionalUrl = z
 const nullableNumber = z.number().nullable().default(null);
 
 /**
+ * The figures the drive stores as Postgres `integer`s — openings, JD size and
+ * the monthly stipend. `save_company_drive_with_roles` casts them with
+ * `::integer`, which refuses a decimal with a 400 that names no field, so an
+ * AE who typed ₹15,500.50 got "could not save the PIF" and no way to find out
+ * which box. Refused here, where the message can point at the box.
+ */
+const nullableWholeNumber = z
+  .number()
+  .int("Use a whole number — this is stored as a count, not a decimal.")
+  .nullable()
+  .default(null);
+
+/**
  * The recruiter's own JD (J1, 2026-08-18).
  *
  * Validated in a DRAFT as well as a submission. A draft may be half-finished,
@@ -182,7 +195,7 @@ export const pifDraftSchema = z.object({
   roleTitle: optionalText,
   roleCategory: z.enum(["", ...ROLE_CATEGORIES]).default(""),
   jobDescription: optionalText,
-  openings: nullableNumber,
+  openings: nullableWholeNumber,
   workLocations: optionalText,
   ctcMinLpa: nullableNumber,
   ctcMaxLpa: nullableNumber,
@@ -192,8 +205,8 @@ export const pifDraftSchema = z.object({
    * ₹ per month, whole rupees. Which of stipend/CTC a SUBMISSION must carry
    * is decided by the drive type, below.
    */
-  stipendMinMonthly: nullableNumber,
-  stipendMaxMonthly: nullableNumber,
+  stipendMinMonthly: nullableWholeNumber,
+  stipendMaxMonthly: nullableWholeNumber,
   /**
    * J2: a radio, not a text box. `""` is "not answered" — the form preselects
    * nothing, because a preselected Day is an answer nobody gave.
@@ -455,13 +468,13 @@ export const pifRoleDraftSchema = z.object({
   roleCategories: z.array(z.enum(ROLE_CATEGORIES)).default([]),
   driveType: z.enum(["", ...DRIVE_TYPES]).default(""),
   jobDescription: optionalText,
-  openings: nullableNumber,
+  openings: nullableWholeNumber,
   workLocations: optionalText,
   ctcMinLpa: nullableNumber,
   ctcMaxLpa: nullableNumber,
   ctcBreakup: optionalText,
-  stipendMinMonthly: nullableNumber,
-  stipendMaxMonthly: nullableNumber,
+  stipendMinMonthly: nullableWholeNumber,
+  stipendMaxMonthly: nullableWholeNumber,
   shiftType: z.enum(["", ...SHIFT_TYPES]).default(""),
   shiftNightTiming: optionalText,
   jobDescriptionFile,

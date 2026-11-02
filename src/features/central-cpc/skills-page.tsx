@@ -1,3 +1,4 @@
+import { ErrorPanel } from "@components/error-panel";
 import { TablePager } from "@components/table-pager";
 import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
 import { parseCsv } from "@domain/csv";
@@ -87,6 +88,9 @@ export function SkillsPage({
 
   const [areas, setAreas] = useState<readonly SkillArea[] | null>(null);
   const [students, setStudents] = useState<readonly SkillStudentRow[] | null>(null);
+  /** The read failed, so the page says so instead of loading forever. */
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -110,18 +114,23 @@ export function SkillsPage({
     readonly rejected: readonly SkillSheetRejection[];
   } | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadAttempt is the retry, not an input
   useEffect(() => {
     let active = true;
-    void Promise.all([view.areas(), view.students()]).then(([a, s]) => {
-      if (active) {
+    setLoadFailed(false);
+    void Promise.all([view.areas(), view.students()])
+      .then(([a, s]) => {
+        if (!active) return;
         setAreas(a);
         setStudents(s);
-      }
-    });
+      })
+      .catch(() => {
+        if (active) setLoadFailed(true);
+      });
     return () => {
       active = false;
     };
-  }, [view]);
+  }, [view, loadAttempt]);
 
   const visible = useMemo(() => {
     if (students === null) return [];
@@ -142,6 +151,21 @@ export function SkillsPage({
   const pagedStudents = visible.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   if (areas === null || students === null) {
+    if (loadFailed) {
+      return (
+        <>
+          <PageHeader
+            title="Skill repository"
+            subtitle="Institutional scores per student — these feed shortlisting."
+          />
+          <div className="p-6">
+            <ErrorPanel onRetry={() => setLoadAttempt((n) => n + 1)}>
+              The skill repository could not be read. Nothing was changed.
+            </ErrorPanel>
+          </div>
+        </>
+      );
+    }
     return (
       <p role="status" className="p-6 text-sm text-ink-500">
         Loading the skill repository…
@@ -313,7 +337,22 @@ export function SkillsPage({
     ].join("\n"),
   )}`;
 
-  const allVisibleSelected = visible.length > 0 && visible.every((s) => selected.has(s.studentId));
+  /**
+   * "Select all" means all the reader can see. It used to mean all the reader
+   * has filtered to — hundreds of rows off-screen — and `Apply to N selected`
+   * then wrote scores to students nobody had laid eyes on.
+   */
+  const pagedIds = pagedStudents.map((s) => s.studentId);
+  const allPagedSelected = pagedIds.length > 0 && pagedIds.every((id) => selected.has(id));
+
+  function togglePagedSelection() {
+    const next = new Set(selected);
+    for (const id of pagedIds) {
+      if (allPagedSelected) next.delete(id);
+      else next.add(id);
+    }
+    setSelected(next);
+  }
 
   return (
     <>
@@ -497,13 +536,13 @@ export function SkillsPage({
                   <th scope="col" className="px-4 py-3">
                     <input
                       type="checkbox"
-                      aria-label="Select all"
-                      checked={allVisibleSelected}
-                      onChange={() =>
-                        setSelected(
-                          allVisibleSelected ? new Set() : new Set(visible.map((s) => s.studentId)),
-                        )
+                      aria-label={
+                        allPagedSelected
+                          ? "Deselect students on this page"
+                          : "Select students on this page"
                       }
+                      checked={allPagedSelected}
+                      onChange={togglePagedSelection}
                     />
                   </th>
                 )}

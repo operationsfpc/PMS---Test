@@ -7,6 +7,7 @@ import {
   groupByVisitKey,
   groupDrivesByEvent,
   isStandaloneVisit,
+  paginateVisitsByRowBudget,
   resolveEffectiveCampuses,
   visitKey,
 } from "./company-drive";
@@ -297,6 +298,36 @@ describe("company-drive domain", () => {
       expect([...groups.keys()]).toEqual(["event-1", "standalone:a-2"]);
       expect(isStandaloneVisit("event-1")).toBe(false);
       expect(isStandaloneVisit("standalone:a-2")).toBe(true);
+    });
+  });
+
+  describe("paginateVisitsByRowBudget", () => {
+    const visit = (company: string, roles: number) => ({
+      company,
+      roles: Array.from({ length: roles }, (_, i) => `${company}-role-${i}`),
+    });
+    const rowsIn = (v: { roles: string[] }) => v.roles.length;
+
+    it("fills a page to the budget without splitting a visit", () => {
+      const visits = [visit("TCS", 4), visit("Infosys", 6), visit("Wipro", 5), visit("Zoho", 9)];
+
+      const pages = paginateVisitsByRowBudget(visits, rowsIn, 10);
+
+      expect(pages).toHaveLength(3);
+      expect(pages[0]?.map((v) => v.company)).toEqual(["TCS", "Infosys"]);
+      expect(pages[1]?.map((v) => v.company)).toEqual(["Wipro"]);
+      expect(pages[2]?.map((v) => v.company)).toEqual(["Zoho"]);
+    });
+
+    it("gives a visit taller than the budget a page of its own, whole", () => {
+      const pages = paginateVisitsByRowBudget([visit("TCS", 3), visit("Infosys", 40)], rowsIn, 15);
+
+      expect(pages).toHaveLength(2);
+      expect(pages[1]?.[0]?.roles).toHaveLength(40);
+    });
+
+    it("leaves nothing pageable", () => {
+      expect(paginateVisitsByRowBudget([], rowsIn, 15)).toEqual([]);
     });
   });
 });

@@ -336,6 +336,7 @@ export function StatCard({
   hint,
   tone = "neutral",
   variant = "card",
+  actionLabel = "See who",
   onClick,
   to,
 }: {
@@ -350,6 +351,11 @@ export function StatCard({
    * nothing and five numbers under one label say everything.
    */
   variant?: "card" | "readout";
+  /**
+   * Action link label beneath the stat readout (defaults to "See who").
+   * For drive or entity metrics, can be customized to e.g. "See drives".
+   */
+  actionLabel?: string;
   /**
    * Opens the people behind the number (UAT 2026-10-16: "if it shows a count I
    * need to know who all is there"). Omitted, the card stays the plain figure
@@ -412,7 +418,7 @@ export function StatCard({
     <>
       {body}
       <span className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-ink-500 transition-colors group-hover:text-brand-600">
-        See who
+        {actionLabel}
         <ArrowUpRight
           aria-hidden="true"
           className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"

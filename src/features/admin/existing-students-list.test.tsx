@@ -79,4 +79,46 @@ describe("ExistingStudentsList", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByRole("heading", { name: /existing students \(1\)/i })).toBeDefined();
   });
+
+  /**
+   * 2026-11-02: the whole strip was gated on `filtered.length > 25`, so choosing
+   * 100 rows and then filtering to fewer than 26 hid the strip — including the
+   * only control that sets the page size back. It now rides on any non-empty
+   * list, like the other pagers in the app.
+   */
+  it("keeps the rows-per-page control reachable on a short list", async () => {
+    connect();
+    server.use(http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json([ASHA])));
+
+    render(<ExistingStudentsList campuses={CAMPUS} />);
+
+    await screen.findByText("Asha Ramanathan");
+    expect(screen.getByLabelText(/rows per page/i)).toBeDefined();
+    expect(
+      (screen.getByRole("button", { name: /^previous$/i }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("returns to the first page when the row size changes", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      ...ASHA,
+      id: `s${i}`,
+      full_name: `Student ${i + 1}`,
+      roll_number: `R${i}`,
+    }));
+    connect();
+    server.use(http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json(many)));
+
+    const user = userEvent.setup({ delay: null });
+    render(<ExistingStudentsList campuses={CAMPUS} />);
+
+    await screen.findByText("Student 1");
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+    expect(screen.getByText(/page 2 of 2/i)).toBeDefined();
+
+    await user.selectOptions(screen.getByLabelText(/rows per page/i), "50");
+
+    expect(screen.getByText(/page 1 of 1/i)).toBeDefined();
+    expect(screen.getByText(/showing 1–30 of 30 students/i)).toBeDefined();
+  });
 });

@@ -17,7 +17,7 @@ import {
 } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
-import { groupDrivesByEvent } from "@domain/company-drive";
+import { groupDrivesByEvent, paginateVisitsByRowBudget } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import {
   type DriveOrder,
@@ -201,6 +201,18 @@ const ROLE_LABEL: Readonly<Record<DriveRole, string>> = {
   published: "Published by you",
 };
 
+/**
+ * How many role rows one page of visit cards may hold.
+ *
+ * 2026-11-02: the list mounted every visit at once, so an AE who raised twenty
+ * companies scrolled past forty cards to reach the one they were called about.
+ * A page fills with WHOLE visits up to this budget — the same rule and the same
+ * choices the CPC's Drive progress table uses, so one screen is never taller
+ * than the other for the same work.
+ */
+const ROW_BUDGETS = [10, 15, 25, 50] as const;
+const DEFAULT_ROW_BUDGET = 15;
+
 const STAGE_TONE = {
   applied: "neutral",
   in_process: "warning",
@@ -282,6 +294,9 @@ export function DrivePortfolioPage({
     startDate: null,
     endDate: null,
   });
+  /** Which page of visit cards is on screen, and how tall a page may be. */
+  const [page, setPage] = useState(1);
+  const [rowBudget, setRowBudget] = useState<number>(DEFAULT_ROW_BUDGET);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
   useEffect(() => {
@@ -334,12 +349,21 @@ export function DrivePortfolioPage({
     [dateFiltered, query, order, type],
   );
 
-  /** What each chip is worth, counted before the search narrows anything. */
+  /**
+   * What each chip is worth, counted before the search narrows anything.
+   *
+   * The chips count company visits, the same rule the Central cockpit's
+   * identical chips follow (2026-10-17): a visit that raised three roles is one
+   * card on this list, so it is one count. A visit that genuinely mixes types
+   * is honestly in both of those buckets.
+   */
   const typeCounts = useMemo(() => {
-    const counts: Record<string, number> = { "": dateFiltered.length };
+    const counts: Record<string, number> = { "": groupDrivesByEvent(dateFiltered).size };
     for (const option of DRIVE_TYPE_FILTERS) {
       if (option.value !== "") {
-        counts[option.value] = dateFiltered.filter((d) => d.driveType === option.value).length;
+        counts[option.value] = groupDrivesByEvent(
+          dateFiltered.filter((d) => d.driveType === option.value),
+        ).size;
       }
     }
     return counts;
@@ -357,6 +381,20 @@ export function DrivePortfolioPage({
   /** Group drives by company event for multi-role display. */
   const activeEvents = useMemo(() => groupPortfolioByEvent(activeDrives), [activeDrives]);
   const expiredEvents = useMemo(() => groupPortfolioByEvent(expiredDrives), [expiredDrives]);
+
+  const pages = useMemo(
+    () => paginateVisitsByRowBudget(activeEvents, (event) => event.roles.length, rowBudget),
+    [activeEvents, rowBudget],
+  );
+  const visitPageCount = Math.max(1, pages.length);
+  const current = Math.min(page, visitPageCount);
+  const pageEvents = pages[current - 1] ?? [];
+  const rowsOnPage = pageEvents.reduce((rows, event) => rows + event.roles.length, 0);
+  const visitsBefore = pages
+    .slice(0, current - 1)
+    .reduce((visits, earlier) => visits + earlier.length, 0);
+  /** Every visit the list holds, whether it is on this page or folded under Expired. */
+  const visitTotal = activeEvents.length + expiredEvents.length;
 
   if (failed) {
     return (
@@ -403,23 +441,57 @@ export function DrivePortfolioPage({
               sort used to be four stacked blocks of chrome over one list —
               each with its own margins, two of them framed. The controls are
               unchanged; only the scaffolding around them went. */}
-          <Card className="mb-6 p-4">
+          <Card className="mb-4 p-3.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <DriveSearch value={query} onChange={setQuery} compact />
-              <DriveTypeFilter value={type} onChange={setType} counts={typeCounts} className="" />
+              <DriveSearch
+                value={query}
+                onChange={(q) => {
+                  setQuery(q);
+                  setPage(1);
+                }}
+                compact
+              />
+              <DriveTypeFilter
+                value={type}
+                onChange={(t) => {
+                  setType(t);
+                  setPage(1);
+                }}
+                counts={typeCounts}
+                className=""
+              />
               <div className="ml-auto">
-                <DriveSort value={order} onChange={setOrder} />
+                <DriveSort
+                  value={order}
+                  onChange={(o) => {
+                    setOrder(o);
+                    setPage(1);
+                  }}
+                />
               </div>
             </div>
 
-            <DriveDateFilter criteria={dateCriteria} onChange={setDateCriteria} drives={visible} />
+            <DriveDateFilter
+              criteria={dateCriteria}
+              onChange={(c) => {
+                setDateCriteria(c);
+                setPage(1);
+              }}
+              drives={visible}
+            />
 
             <p className="mt-3 text-xs text-ink-500">
-              Showing {visible.length} of {inScope.length} drives
+              {/* 2026-11-02: this line counted role rows while the list under it
+                  prints one card per company visit, so "Showing 8 of 24 drives"
+                  sat over six cards. A visit and a role are two different things
+                  a reader can act on, so the line now says both. */}
+              {visitTotal} {visitTotal === 1 ? "visit" : "visits"} · {visible.length}{" "}
+              {visible.length === 1 ? "role" : "roles"} in view
+              {visible.length === inScope.length ? "" : ` of ${inScope.length} in all`}
             </p>
           </Card>
 
-          <DriveAnalyticsReadouts drives={visible} className="mb-8" />
+          <DriveAnalyticsReadouts drives={visible} className="mb-5" />
 
           {visible.length === 0 ? (
             <Card className="p-6">
@@ -430,12 +502,84 @@ export function DrivePortfolioPage({
             </Card>
           ) : (
             <>
-              <ul className="flex flex-col gap-4">
-                {activeEvents.map((event, index) => renderEvent(event, index))}
-              </ul>
+              {activeEvents.length === 0 && expiredEvents.length > 0 && (
+                <div className="mb-4 rounded-xl border border-line/80 bg-surface p-4 text-center shadow-xs">
+                  <p className="text-sm font-semibold text-ink-900">
+                    No active drives with open application deadlines
+                  </p>
+                  <p className="mt-1 text-xs text-ink-500">
+                    {expiredEvents.length}{" "}
+                    {expiredEvents.length === 1 ? "drive visit has" : "drive visits have"} passed
+                    the application deadline and {expiredEvents.length === 1 ? "is" : "are"} listed
+                    below.
+                  </p>
+                </div>
+              )}
+
+              {pageEvents.length > 0 && (
+                <ul className="flex flex-col gap-4">
+                  {pageEvents.map((event, index) => renderEvent(event, visitsBefore + index))}
+                </ul>
+              )}
+
+              {/* The strip stays on screen even at one page, so the row budget is
+                  always reachable and the reader can tell a short portfolio from a
+                  filtered one. Same words as the CPC's Drive progress. */}
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-ink-600">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {pageEvents.length === 0
+                      ? `Showing 0 active visits of ${visitTotal} · ${expiredEvents.length} past-deadline ${expiredEvents.length === 1 ? "visit" : "visits"} below`
+                      : `Showing visits ${visitsBefore + 1} to ${visitsBefore + pageEvents.length} of ${visitTotal} · ${rowsOnPage} ${rowsOnPage === 1 ? "role row" : "role rows"} on this page`}
+                  </span>
+                  <div className="ml-2 flex items-center gap-1">
+                    <span className="text-ink-500">Rows:</span>
+                    <select
+                      aria-label="Rows per page"
+                      value={rowBudget}
+                      onChange={(e) => {
+                        setRowBudget(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-ink-800"
+                    >
+                      {ROW_BUDGETS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={current <= 1}
+                    onClick={() => setPage(current - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="px-2 font-medium">
+                    Page {current} of {visitPageCount}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={current >= visitPageCount}
+                    onClick={() => setPage(current + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
 
               {expiredEvents.length > 0 && (
-                <Accordion className="mt-4 rounded-card border border-line bg-surface">
+                <Accordion
+                  className="mt-4 rounded-card border border-line bg-surface"
+                  defaultValue={activeEvents.length === 0 ? ["expired"] : []}
+                >
                   <AccordionItem value="expired">
                     <AccordionTrigger className="px-4 py-3 text-sm font-medium text-ink-500">
                       Expired — application deadline passed ({expiredEvents.length})

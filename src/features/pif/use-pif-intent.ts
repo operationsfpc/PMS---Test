@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useRef, useState } from "react";
 import {
   type DefaultValues,
+  type FieldErrors,
   type FieldValues,
   type Resolver,
   type UseFormReturn,
@@ -27,10 +28,13 @@ export function usePifIntent<TValues extends FieldValues>(args: {
   schemaFor: (intent: "draft" | "submit") => ZodType;
   defaultValues: TValues;
   onCommit: (mode: "draft" | "submit", values: TValues) => Promise<void>;
-  onInvalid?: (
-    mode: "draft" | "submit",
-    errors: import("react-hook-form").FieldErrors<TValues>,
-  ) => void;
+  onInvalid?: (mode: "draft" | "submit", errors: FieldErrors<TValues>) => void;
+  /**
+   * The save itself was refused. The form keeps the last failure on screen,
+   * but the AE is looking at the buttons when it lands, so the page is told
+   * too and can put the news where the press happened.
+   */
+  onFailed?: (mode: "draft" | "submit", message: string) => void;
   failureFallback: string;
 }): {
   form: UseFormReturn<TValues>;
@@ -54,9 +58,11 @@ export function usePifIntent<TValues extends FieldValues>(args: {
 
   const run = (mode: "draft" | "submit") => async () => {
     intent.current = mode;
+    // Every press answers for itself. Clearing the complaint only on success
+    // left the previous failure hanging over a save that had already worked.
+    setFailure(null);
     await form.handleSubmit(
       async (values) => {
-        setFailure(null);
         try {
           await args.onCommit(mode, values);
         } catch (cause) {
@@ -65,7 +71,11 @@ export function usePifIntent<TValues extends FieldValues>(args: {
           // the AE to "try again" at something that could never succeed.
           const reason =
             cause instanceof Error && cause.message !== "" ? cause.message : args.failureFallback;
-          setFailure(`${reason} Your entries are still here.`);
+          const message = `${reason} Your entries are still here.`;
+          setFailure(message);
+          if (args.onFailed) {
+            args.onFailed(mode, message);
+          }
         }
       },
       (errors) => {

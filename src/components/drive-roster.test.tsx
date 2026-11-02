@@ -88,6 +88,33 @@ const SAMPLE_STUDENTS: DriveProgressStudentItem[] = [
   },
 ];
 
+/** Thirty applicants on one role, to prove the drawer pages instead of mounting the cycle. */
+const rosterStudent = (
+  index: number,
+  overrides: Partial<DriveProgressStudentItem> = {},
+): DriveProgressStudentItem => ({
+  applicationId: `app-${index}`,
+  studentId: `s-${index}`,
+  studentName: `Applicant ${String(index + 1).padStart(3, "0")}`,
+  rollNumber: `21CSE${String(index + 1).padStart(3, "0")}`,
+  campusId: "c-1",
+  campusName: "KGiSL Institute",
+  degree: "B.Tech",
+  branch: "Computer Science",
+  cgpa: 7.5,
+  shortlisted: true,
+  rounds: [],
+  offer: null,
+  ...overrides,
+});
+
+const OFFER: DriveProgressStudentItem["offer"] = {
+  ctcLpa: 8,
+  stipendMonthly: null,
+  driveType: "placement",
+  offerCategory: "regular",
+};
+
 describe("the one-role roster", () => {
   /** Expanding a row links to the student's own record, so it needs a router. */
   const show = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -105,7 +132,48 @@ describe("the one-role roster", () => {
     expect(screen.getByText("Priya Ramesh")).toBeDefined();
     expect(screen.getByText("Arjun Menon")).toBeDefined();
     expect(screen.getByText("Sneha Nair")).toBeDefined();
-    expect(screen.getByText(/Showing 3 of 3 students/i)).toBeDefined();
+    expect(screen.getByText(/3 students on this role/i)).toBeDefined();
+  });
+
+  /*
+   * 2026-11-02: the drawer used to mount every applicant of the role at once, each
+   * one an accordion, inside a pane that already scrolls. A whole-college drive put
+   * several hundred expanded-height rows behind a single tab, and the "Showing 610
+   * of 610 students" line above them promised a scroll nobody could finish.
+   */
+  it("mounts a page of applicants, not the whole role", async () => {
+    const user = userEvent.setup();
+    list({ students: Array.from({ length: 30 }, (_, i) => rosterStudent(i)) });
+
+    expect(screen.getByText("30 students on this role")).toBeDefined();
+    expect(screen.getByText("Applicant 001")).toBeDefined();
+    expect(screen.getByText("Applicant 025")).toBeDefined();
+    expect(screen.queryByText("Applicant 026")).toBeNull();
+    expect(screen.getByText(/Showing 1 to 25 of 30 students/i)).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+
+    expect(screen.getByText("Applicant 026")).toBeDefined();
+    expect(screen.queryByText("Applicant 001")).toBeNull();
+    expect(screen.getByText(/Showing 26 to 30 of 30 students/i)).toBeDefined();
+  });
+
+  it("returns to the first page when the reader narrows the role", async () => {
+    const user = userEvent.setup();
+    // Offers on the last 55 of 60, so the narrowed list reorders against the page.
+    const sixty = Array.from({ length: 60 }, (_, i) =>
+      rosterStudent(i, i < 5 ? {} : { offer: OFFER }),
+    );
+    list({ students: sixty });
+
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+    expect(screen.getByText("Applicant 026")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /offers \(55\)/i }));
+
+    expect(screen.getByText(/Showing 1 to 25 of 55 students/i)).toBeDefined();
+    expect(screen.getByText("Applicant 006")).toBeDefined();
+    expect(screen.queryByText("Applicant 050")).toBeNull();
   });
 
   it("keeps only the students of the college it was scoped to", () => {

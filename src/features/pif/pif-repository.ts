@@ -248,6 +248,29 @@ function toRow(
 }
 
 /**
+ * The table a row-level-security refusal names. Postgres puts it in `message`
+ * ("row-level security policy for table \"company_drive_contacts\""), and it is
+ * the only clue that the failure is a database rule and not the AE's role.
+ */
+const QUOTED_TABLE = /(?:table|relation) "([^"]+)"/;
+
+/** Which box on the form holds a Postgres column of the type that refused a cast. */
+function figuresOf(type: string): string {
+  switch (type) {
+    case "integer":
+      return "openings or the monthly stipend — a whole number, so ₹15,500.50 and 12.5 people are both refused.";
+    case "date":
+      return "the tentative drive date — use the date picker rather than typing over it.";
+    case "uuid":
+      return "the company or visit this PIF was raised against.";
+    case "numeric":
+      return "the CTC or a minimum-marks bar.";
+    default:
+      return "a figure or date on the form";
+  }
+}
+
+/**
  * Turns a PostgREST failure into something with a remedy in it.
  *
  * A PIF failed against the live project and the only diagnostic anyone had was
@@ -255,21 +278,35 @@ function toRow(
  * these has a different fix, and the AE or the Admin reading it needs to know
  * which one they are looking at.
  */
-function explain(error: { code?: string; message?: string }): string {
-  const message = error.message ?? "";
+function explain(error: {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}): string {
+  const message = (error.message ?? "").trim();
 
   switch (error.code) {
-    case "42501":
-      // The database decides this one, and it reads the real profile. A
-      // "Preview as" role changes which screens the app shows and nothing else,
-      // so the old wording sent a reader whose account WAS an AE's off to ask
-      // for a role change they already had. Both remedies, in one sentence.
-      return [
-        "You do not have permission to raise a PIF: the database reads your own profile,",
-        "and it is not an Account Executive's. A 'Preview as' role changes the screens only,",
-        "never what the database accepts - stop the preview, and if your account really is",
-        "an AE, ask an Admin to check the role on it.",
-      ].join(" ");
+    case "42501": {
+      // Two very different things share this code, and the old wording blamed
+      // the reader for both of them. A policy refusing a row is an Admin's
+      // rule; the RPC's own `raise` is a sentence written for the AE, so it is
+      // already in the AE's words and must not be overwritten.
+      const refused = /row-level security/i.test(message)
+        ? message.match(QUOTED_TABLE)?.[1]
+        : undefined;
+      if (refused !== undefined) {
+        return [
+          `The database refused to save "${refused}" for this PIF even though you raised it.`,
+          "This is a rule inside the database, not your role and not anything in the form -",
+          `the Admin who owns the ${refused} permissions has to change it.`,
+          `Tell them it failed with code ${error.code ?? "42501"}.`,
+        ].join(" ");
+      }
+      return message === ""
+        ? "You do not have permission to raise a PIF. Ask an Admin to check your role."
+        : message;
+    }
     case "PGRST204":
     case "PGRST205":
       // The app is asking for a column the project does not have: migrations
@@ -277,8 +314,24 @@ function explain(error: { code?: string; message?: string }): string {
       return `The database is out of date and cannot store this PIF yet (${message}). This needs an Admin, not a retry.`;
     case "23502":
       return `A required field was empty: ${message}`;
-    case "23514":
-      return `A value broke one of the drive's rules: ${message}`;
+    case "23514": {
+      const constraint = message.match(/check constraint "([^"]+)"/)?.[1];
+      if (constraint !== undefined) {
+        return `One of the entries breaks the rule "${constraint}" that the database itself puts on a drive. ${message}`;
+      }
+      return message === "" ? "The drive's own rules refused one of the values." : message;
+    }
+    case "22P02":
+    case "22007":
+    case "22003":
+    case "22001": {
+      // A `::integer` / `::date` cast inside the RPC. Postgres names the type
+      // and the offending text but never the field, so the box has to be
+      // pointed at from the type.
+      const type = message.match(/for type (\w+)/)?.[1] ?? "";
+      const where = type === "" ? "" : ` That is the ${type} on the form — ${figuresOf(type)}.`;
+      return `The database could not read one of the values: ${message}.${where}`;
+    }
     case "23505":
       return "That drive already exists.";
     case "23503":

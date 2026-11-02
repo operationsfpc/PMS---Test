@@ -1,7 +1,6 @@
-import type { AppRole } from "@domain/types";
-import { type AuthActions, AuthActionsContext, isTestPreviewAllowed } from "@lib/auth-context";
+import { type AuthActions, AuthActionsContext } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { AuthContext, type AuthState } from "./require-auth";
 import { resolveAuthState } from "./resolve-auth";
 
@@ -17,13 +16,6 @@ import { resolveAuthState } from "./resolve-auth";
  */
 export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ status: "loading" });
-  const [previewRole, setPreviewRole] = useState<AppRole | null>(() => {
-    if (typeof window !== "undefined") {
-      const stored = sessionStorage.getItem("fpc_preview_role") as AppRole | null;
-      return stored || null;
-    }
-    return null;
-  });
 
   useEffect(() => {
     let active = true;
@@ -48,38 +40,6 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const handleSetPreviewRole = useCallback((role: AppRole | null) => {
-    setPreviewRole(role);
-    if (typeof window !== "undefined") {
-      if (role) {
-        sessionStorage.setItem("fpc_preview_role", role);
-      } else {
-        sessionStorage.removeItem("fpc_preview_role");
-      }
-    }
-  }, []);
-
-  const effectiveState = useMemo<AuthState>(() => {
-    if (state.status !== "signed-in") return state;
-    const canPreview = isTestPreviewAllowed(state.email);
-    if (!canPreview || !previewRole) return state;
-
-    return {
-      ...state,
-      actualRole: state.role,
-      role: previewRole,
-      previewRole,
-      campuses:
-        state.campuses.length > 0
-          ? state.campuses
-          : previewRole === "campus_placement_coordinator" ||
-              previewRole === "campus_manager" ||
-              previewRole === "key_account_manager"
-            ? ["Alliance University", "VIT Bangalore"]
-            : [],
-    };
-  }, [state, previewRole]);
-
   /**
    * Signing out goes through Supabase so the stored session is destroyed, not
    * merely forgotten in memory - it lives in localStorage and would otherwise
@@ -89,19 +49,15 @@ export function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const actions = useMemo<AuthActions>(
     () => ({
       signOut: async () => {
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem("fpc_preview_role");
-        }
         await supabase().auth.signOut();
       },
-      setPreviewRole: handleSetPreviewRole,
     }),
-    [handleSetPreviewRole],
+    [],
   );
 
   return (
     <AuthActionsContext.Provider value={actions}>
-      <AuthContext.Provider value={effectiveState}>{children}</AuthContext.Provider>
+      <AuthContext.Provider value={state}>{children}</AuthContext.Provider>
     </AuthActionsContext.Provider>
   );
 }

@@ -1,8 +1,7 @@
-import { landingRouteForRole } from "@domain/auth-routing";
 import { openGroupHeadings } from "@domain/navigation";
 import { campusScopeFor } from "@domain/staff";
-import { APP_ROLES, type AppRole } from "@domain/types";
-import { isTestPreviewAllowed, useAuth, useAuthActions } from "@lib/auth-context";
+import type { AppRole } from "@domain/types";
+import { useAuth, useAuthActions } from "@lib/auth-context";
 import {
   Archive,
   Award,
@@ -47,8 +46,8 @@ import {
   X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router";
-import { Badge, Button, Card } from "./ui";
+import { NavLink, useLocation } from "react-router";
+import { Card } from "./ui";
 
 /**
  * Application shell: brand header, role-scoped navigation.
@@ -445,9 +444,6 @@ export function navItemsFor(role: AppRole): readonly NavItem[] {
   return (ROLE_NAVS[role] ?? []).flatMap((group) => group.items);
 }
 
-/** Labels for the development-only preview switcher. */
-const PREVIEW_ROLES: readonly AppRole[] = APP_ROLES;
-
 function Logo() {
   return (
     <img
@@ -511,34 +507,13 @@ function RoleScope({ role, campuses }: { role: AppRole; campuses: readonly strin
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const navigate = useNavigate();
   const auth = useAuth();
-  const { signOut, setPreviewRole } = useAuthActions();
-  const actualRole = auth.status === "signed-in" ? (auth.actualRole ?? auth.role) : "student";
+  const { signOut } = useAuthActions();
   const signedInEmail = auth.status === "signed-in" ? auth.email : "";
   const signedInName = auth.status === "signed-in" ? (auth.name ?? "") : "";
   const campuses = auth.status === "signed-in" ? auth.campuses : [];
 
-  /**
-   * The switcher is shown wherever the override it sets is actually honoured.
-   *
-   * Those used to be two different rules: `SupabaseAuthProvider` applies a
-   * stored preview role whenever `isTestPreviewAllowed` accepts the email —
-   * which includes the test deployment — while this control checked
-   * `import.meta.env.DEV`. So an Admin on pms-test-gamma could be browsing as
-   * an Account Executive with no switcher in sight, no sign of the override,
-   * and no way to clear it, and every write they attempted was refused by a
-   * database that still knew their real role. That is what the "You do not
-   * have permission to raise a PIF" report on 2026-10-31 actually was.
-   */
-  const previewable =
-    Boolean(import.meta.env.DEV) || (signedInEmail !== "" && isTestPreviewAllowed(signedInEmail));
-  const previewing =
-    auth.status === "signed-in" && auth.previewRole != null && auth.previewRole !== actualRole
-      ? auth.previewRole
-      : null;
   const accountLabel = signedInName !== "" ? signedInName : signedInEmail;
-  const [localPreview, setLocalPreview] = useState<AppRole | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
@@ -581,7 +556,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     };
   }, [menuOpen]);
 
-  const role = auth.status === "signed-in" ? auth.role : (localPreview ?? "student");
+  const role = auth.status === "signed-in" ? auth.role : "student";
   const groups = ROLE_NAVS[role] ?? [];
 
   /**
@@ -656,39 +631,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Logo />
 
           <div className="ml-auto flex items-center gap-3">
-            {previewable && (
-              <>
-                <label
-                  className="hidden text-xs font-medium text-ink-500 sm:block"
-                  htmlFor="role-switch"
-                >
-                  Preview as
-                </label>
-                {/* Hidden on phones like its label: it made the DEV header
-                    ~535px wide on a 412px viewport, so mobile Chrome zoomed
-                    the whole app out to fit — which is what made every tap
-                    near the fold flaky in the student journey (2026-08-19). */}
-                <select
-                  id="role-switch"
-                  className="hidden rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-medium text-ink-700 focus:border-brand-500 focus:outline-none sm:block cursor-pointer"
-                  value={role}
-                  onChange={(e) => {
-                    const next = e.target.value as AppRole;
-                    setLocalPreview(next);
-                    if (setPreviewRole) {
-                      setPreviewRole(next === actualRole ? null : next);
-                    }
-                    navigate(landingRouteForRole(next));
-                  }}
-                >
-                  {PREVIEW_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r.replaceAll("_", " ")}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
             {/*
              * One control that says who is signed in and holds the way out.
              *
@@ -773,36 +715,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-
-      {/*
-       * Said on every screen, because the override is global. A preview role
-       * changes which doors the app opens; `current_app_role()` reads the real
-       * profile, so it changes nothing about what the database will accept.
-       * Without this the mismatch surfaces as a permission error on a form
-       * someone was just allowed to fill in.
-       */}
-      {previewing !== null && (
-        <div
-          role="status"
-          className="border-b border-gold-200 bg-gold-50 px-4 py-2.5 text-sm text-gold-800"
-        >
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2">
-            <Badge tone="warning">Previewing as {previewing.replaceAll("_", " ")}</Badge>
-            <span className="min-w-0 break-words">
-              Signed in as {actualRole.replaceAll("_", " ")}. The screens follow the preview; the
-              database follows your real role and will refuse any write it does not allow.
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="ml-auto whitespace-nowrap"
-              onClick={() => setPreviewRole?.(null)}
-            >
-              Stop preview
-            </Button>
-          </div>
-        </div>
-      )}
 
       <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
         {/*

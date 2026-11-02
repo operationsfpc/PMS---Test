@@ -8,6 +8,7 @@ import {
   PIF_DEFAULTS,
   type PifRoleValues,
   pifDraftSchema,
+  pifRoleDraftSchema,
   pifSubmitSchema,
   toSinglePifValues,
 } from "./pif-schema";
@@ -1016,5 +1017,53 @@ describe("pifSubmitSchema", () => {
       });
       expect(parsed.success).toBe(false);
     });
+  });
+});
+
+/**
+ * `save_company_drive_with_roles` casts openings and the monthly stipend with
+ * `::integer`. A decimal that survives the form dies in Postgres as a 400 that
+ * names no field at all, so the AE is left with "could not save the PIF" and
+ * four hundred boxes to guess between. The whole-number rule belongs here,
+ * where the message can point at the box.
+ */
+describe("the figures the drive stores as whole numbers", () => {
+  it("refuses a stipend that is not whole rupees", () => {
+    const result = pifDraftSchema.safeParse({
+      ...PIF_DEFAULTS,
+      companyName: "Zoho",
+      stipendMinMonthly: 15500.5,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toMatch(/whole number/i);
+    }
+  });
+
+  it("refuses a fraction of an opening, in a draft and in every role", () => {
+    expect(
+      pifDraftSchema.safeParse({ ...PIF_DEFAULTS, companyName: "Zoho", openings: 12.5 }).success,
+    ).toBe(false);
+
+    expect(
+      pifRoleDraftSchema.safeParse({
+        ...DEFAULT_ROLE_VALUES,
+        roleTitle: "Engineer",
+        openings: 12.5,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("still accepts the whole figures a real PIF carries", () => {
+    expect(
+      pifDraftSchema.safeParse({
+        ...PIF_DEFAULTS,
+        companyName: "Zoho",
+        openings: 25,
+        stipendMinMonthly: 15000,
+        stipendMaxMonthly: 20000,
+      }).success,
+    ).toBe(true);
   });
 });

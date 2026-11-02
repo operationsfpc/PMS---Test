@@ -219,18 +219,66 @@ describe("SkillsPage — bulk apply to selected students", () => {
     );
   });
 
-  it("select all selects every visible student", async () => {
-    const saveScores = vi.fn(async () => undefined);
+  /**
+   * 2026-11-02: "Select all" took every row the search had filtered to —
+   * hundreds off-screen — and `Apply to N selected` wrote their scores from a
+   * 25-row page. It now means the rows the reader can actually see.
+   */
+  it("select all takes the rendered page, not every filtered row", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      studentId: `s${i}`,
+      studentName: `Student ${i + 1}`,
+      rollNumber: `R${i}`,
+      campusName: "Alliance University",
+      scores: {},
+    }));
     const user = userEvent.setup();
-    render(<SkillsPage view={view({ saveScores })} />);
-    await screen.findByText("Priya Ramesh");
+    render(<SkillsPage view={view({ students: async () => many })} />);
+    await screen.findByText("Student 1");
 
-    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
-    await user.selectOptions(screen.getByLabelText(/^skill area$/i), "a1");
-    await user.type(screen.getByLabelText(/^score$/i), "5");
-    await user.click(screen.getByRole("button", { name: /apply to 2 selected/i }));
+    await user.click(screen.getByRole("checkbox", { name: /select students on this page/i }));
 
-    await waitFor(() => expect(saveScores).toHaveBeenCalled());
+    // Default page size is 25 of the 30 filtered — the other 5 are off-screen.
+    expect(await screen.findByRole("button", { name: /apply to 25 selected/i })).toBeDefined();
+  });
+
+  it("keeps a page's selection when the reader moves on and selects another", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      studentId: `s${i}`,
+      studentName: `Student ${i + 1}`,
+      rollNumber: `R${i}`,
+      campusName: "Alliance University",
+      scores: {},
+    }));
+    const user = userEvent.setup();
+    render(<SkillsPage view={view({ students: async () => many })} />);
+    await screen.findByText("Student 1");
+
+    await user.click(screen.getByRole("checkbox", { name: /select students on this page/i }));
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+    await user.click(screen.getByRole("checkbox", { name: /select students on this page/i }));
+
+    expect(await screen.findByRole("button", { name: /apply to 30 selected/i })).toBeDefined();
+  });
+
+  it("deselects the page it selected, leaving other pages alone", async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      studentId: `s${i}`,
+      studentName: `Student ${i + 1}`,
+      rollNumber: `R${i}`,
+      campusName: "Alliance University",
+      scores: {},
+    }));
+    const user = userEvent.setup();
+    render(<SkillsPage view={view({ students: async () => many })} />);
+    await screen.findByText("Student 1");
+
+    await user.click(screen.getByRole("checkbox", { name: /select students on this page/i }));
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+    await user.click(screen.getByRole("checkbox", { name: /select students on this page/i }));
+    await user.click(screen.getByRole("checkbox", { name: /deselect students on this page/i }));
+
+    expect(await screen.findByRole("button", { name: /apply to 25 selected/i })).toBeDefined();
   });
 
   it("refuses an invalid bulk score with a reason, and saves nothing", async () => {
@@ -392,5 +440,48 @@ describe("SkillsPage — read-only for viewing roles", () => {
     render(<SkillsPage view={view()} readOnly />);
     await screen.findByText("Priya Ramesh");
     expect(screen.getByLabelText(/search students/i)).toBeDefined();
+  });
+});
+
+/**
+ * 2026-11-02: the first read had no rejection handler, so a repository that
+ * threw left the screen on "Loading the skill repository…" forever — a reader
+ * who cannot tell a hung page from a slow one just waits.
+ */
+describe("SkillsPage — when the repository cannot be read", () => {
+  it("says the read failed instead of loading forever", async () => {
+    render(
+      <SkillsPage
+        view={view({
+          areas: async () => {
+            throw new Error("network");
+          },
+        })}
+      />,
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("could not be read");
+    expect(screen.queryByText(/loading the skill repository/i)).toBeNull();
+  });
+
+  it("reads again when the reader presses Try again", async () => {
+    const user = userEvent.setup();
+    let attempts = 0;
+    render(
+      <SkillsPage
+        view={view({
+          areas: async () => {
+            attempts += 1;
+            if (attempts === 1) throw new Error("network");
+            return AREAS;
+          },
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /try again/i }));
+
+    expect(await screen.findByText("Priya Ramesh")).toBeDefined();
   });
 });

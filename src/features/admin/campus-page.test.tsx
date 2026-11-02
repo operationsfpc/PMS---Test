@@ -60,6 +60,29 @@ describe("CampusPage", () => {
     expect(await screen.findByText(/no campuses yet/i)).toBeDefined();
   });
 
+  /**
+   * 2026-11-02: the collapsed card carried `hidden sm:block`, which Tailwind
+   * overrides at 640px and up — so on any laptop the form was open while the
+   * button read "Close campus form" and did nothing about it. jsdom has no CSS,
+   * so the class string is the behaviour being pinned.
+   */
+  it("keeps the campus form closed at every width when told to close", async () => {
+    const user = userEvent.setup();
+    render(<CampusPage repository={repo({ list: async () => EXISTING })} />);
+    await screen.findByText("Alliance University");
+
+    const card = screen.getByLabelText(/campus name/i).closest("div[class*='p-6']");
+    if (card === null) throw new Error("the add-campus card was not found");
+
+    await user.click(screen.getByRole("button", { name: /add new campus/i }));
+    expect(card.className).toContain("block");
+    expect(card.className).not.toContain("hidden");
+
+    await user.click(screen.getByRole("button", { name: /close campus form/i }));
+    expect(card.className).toContain("hidden");
+    expect(card.className).not.toMatch(/sm:block/);
+  });
+
   it("reports a refused campus read instead of loading for ever", async () => {
     const user = userEvent.setup();
     // `void refresh()` used to have no catch, so this left the reader staring at

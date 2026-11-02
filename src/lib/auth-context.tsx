@@ -44,8 +44,6 @@ export type AuthState =
   | {
       readonly status: "signed-in";
       readonly role: AppRole;
-      readonly actualRole?: AppRole;
-      readonly previewRole?: AppRole | null;
       readonly email: string;
       /**
        * The person's own name, from their `profiles` or `students` row.
@@ -87,58 +85,12 @@ export function useAuth(): AuthState {
  */
 export interface AuthActions {
   signOut(): Promise<void>;
-  setPreviewRole?(role: AppRole | null): void;
 }
 
 export const AuthActionsContext = createContext<AuthActions>({
   signOut: async () => {},
-  setPreviewRole: () => {},
 });
 
 export function useAuthActions(): AuthActions {
   return useContext(AuthActionsContext);
-}
-
-/** The two accounts the preview override was written for. */
-function isPreviewTester(normalizedEmail: string): boolean {
-  return normalizedEmail === "radhika@faceprep.in" || normalizedEmail === "thanush@faceprep.in";
-}
-
-/**
- * Test role preview switcher and route bypass are active ONLY on
- * https://pms-test-gamma.vercel.app for testing users (radhika@faceprep.in, thanush@faceprep.in)
- * or in local DEV environments.
- * It is strictly INACTIVE on real production domains.
- *
- * An unknown email is refused before any of that, in every build mode. This is
- * the one rule that lets a preview role past `RoleGuard`, so an account with no
- * profile row - whose email is therefore blank - would otherwise get in
- * anywhere while the database still knows it has no rights.
- */
-export function isTestPreviewAllowed(email?: string): boolean {
-  const normalized = email?.toLowerCase().trim() ?? "";
-  if (normalized === "") return false;
-
-  const isTestEnv =
-    (import.meta as unknown as { env?: { MODE?: string } }).env?.MODE === "test" ||
-    (typeof process !== "undefined" && process.env?.NODE_ENV === "test");
-  if (isTestEnv) {
-    return isPreviewTester(normalized);
-  }
-
-  if (import.meta.env.DEV) return true;
-
-  if (!isPreviewTester(normalized)) return false;
-
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname.toLowerCase();
-    return (
-      host === "pms-test-gamma.vercel.app" ||
-      (host.endsWith(".vercel.app") && host.includes("pms-test")) ||
-      host === "localhost" ||
-      host === "127.0.0.1"
-    );
-  }
-
-  return false;
 }

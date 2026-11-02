@@ -25,6 +25,7 @@
     "cf:dev": "pnpm build && wrangler dev",
     "deploy": "pnpm build && wrangler deploy",
     "build:test": "vite build --mode test",
+    "dev:test": "vite --mode test",
     "deploy:test": "pnpm build:test && wrangler deploy --env test"
   },
   "engines": {

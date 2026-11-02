@@ -326,6 +326,7 @@ export function createSupabaseDashboardView(
       // Reused by the drive box, so "eligible" means the same R5 number in
       // both places on the screen.
       const eligibleByDrive = new Map<string, number>();
+      const eligibleStudentIdsByDrive = new Map<string, string[]>();
 
       const liveDrives: LiveDrive[] = openDrives.map((row): LiveDrive => {
         const driveId = row.id as string;
@@ -365,6 +366,7 @@ export function createSupabaseDashboardView(
           .filter((student) => isDriveVisibleToStudent(student, drive).visible)
           .map((student) => student.studentId);
         eligibleByDrive.set(driveId, eligibleStudents.length);
+        eligibleStudentIdsByDrive.set(driveId, eligibleStudents);
 
         const onThisDrive = appliedRows.filter((a) => a.drive_id === driveId);
         const offeredOnDrive = offerRows.filter((o) => o.drive_id === driveId);
@@ -596,6 +598,7 @@ export function createSupabaseDashboardView(
           tentativeDate: (row.tentative_date as string | null) ?? null,
           campusNames: linkedNames(row.drive_target_campuses, "campuses"),
           students: driveStudents,
+          eligibleStudentIds: eligibleStudentIdsByDrive.get(driveId) ?? [],
           participation: {
             eligible: eligibleByDrive.get(driveId) ?? 0,
             applied: applications.length,

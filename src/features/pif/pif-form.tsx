@@ -1,6 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { ToastContainer, useToast } from "@components/toast";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, PageHeader } from "@components/ui";
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveStatus, describeDriveFreeze } from "@domain/drive-working";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -271,19 +271,41 @@ export function PifForm({
   const [seed] = useState(() => ({ ...UNIFIED_DEFAULTS, ...initialValues }));
   const { toasts, toast, dismiss } = useToast();
 
+  /**
+   * The last press's complaints, kept on the page until the next press.
+   *
+   * The toast that carries them auto-dismisses in nine seconds, and the AE
+   * spends that time scrolling back to the field it named — by which point the
+   * list is gone and nothing on screen says what was wrong.
+   */
+  const [issues, setIssues] = useState<readonly string[]>([]);
+  const problemsRef = useRef<HTMLDivElement>(null);
+
+  function revealProblems() {
+    setTimeout(() => {
+      const panel = problemsRef.current;
+      if (!panel) return;
+      if (typeof panel.scrollIntoView === "function") {
+        panel.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      panel.focus();
+    }, 50);
+  }
+
   const { form, run, failure } = usePifIntent<MultiRolePifValues>({
     schemaFor: (mode) => (mode === "draft" ? multiRolePifDraftSchema : multiRolePifSubmitSchema),
     defaultValues: seed,
     onInvalid: (mode, validationErrors) => {
-      const issues = extractPifValidationIssues(validationErrors);
+      const found = extractPifValidationIssues(validationErrors);
+      setIssues(found);
       const title =
         mode === "submit"
           ? "Please resolve the following issues before submitting:"
           : "Draft cannot be saved:";
       toast({
         title,
-        description: issues.length > 0 ? `${issues.length} field(s) require attention:` : undefined,
-        issues,
+        description: found.length > 0 ? `${found.length} field(s) require attention:` : undefined,
+        issues: found,
         tone: "danger",
         duration: 9000,
       });
@@ -302,7 +324,17 @@ export function PifForm({
         }, 50);
       }
     },
+    onFailed: (mode, message) => {
+      toast({
+        tone: "danger",
+        title: mode === "submit" ? "Could not submit this PIF" : "Could not save this draft",
+        description: message,
+        duration: 15_000,
+      });
+      revealProblems();
+    },
     onCommit: (mode, values) => {
+      setIssues([]);
       const commit = mode === "draft" ? onSaveDraft : onSubmit;
       const roleList = values.roles ?? [];
       /*
@@ -640,14 +672,6 @@ export function PifForm({
         title="Position Information Form"
         subtitle="Raise a new drive. It goes to the Delivery Head for approval."
       />
-
-      {failure !== null && (
-        <Card className="mb-4 border border-danger-500 bg-danger-50 p-4">
-          <p role="alert" className="text-sm text-danger-500">
-            {failure}
-          </p>
-        </Card>
-      )}
 
       <form noValidate>
         {/* G2 (UAT 2026-08-20): the convention, stated once. Before this, no
@@ -990,6 +1014,35 @@ export function PifForm({
               </p>
             )}
           </section>
+        )}
+
+        {/*
+         * Both answers to a press — the database's refusal and the list of
+         * fields still to fix — belong beside the buttons that produced them,
+         * not at the top of a page long enough to need scrolling twice. The
+         * toast fades in nine seconds; this stays until the next press.
+         */}
+        {(failure !== null || issues.length > 0) && (
+          <div
+            ref={problemsRef}
+            role="alert"
+            tabIndex={-1}
+            className="mb-4 rounded-card border border-danger-500/30 bg-danger-50 p-4 text-sm text-danger-700 outline-none"
+          >
+            <p className="font-semibold">
+              {failure !== null
+                ? "This PIF was not saved."
+                : `${issues.length} ${issues.length === 1 ? "answer needs" : "answers need"} fixing first:`}
+            </p>
+            {failure !== null && <p className="mt-1">{failure}</p>}
+            {issues.length > 0 && (
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
 
         <div className="flex flex-wrap gap-3 pb-10">

@@ -27,21 +27,31 @@ describe("AppShell", () => {
   });
 
   /**
-   * Since 2026-08-17 the sidebar collapses every group but the one in use, and
-   * these render at "/" which is inside none of them. The group is opened
-   * first so the test still asks its own question - which role's links are
-   * offered - rather than accidentally testing the collapse.
+   * Since 2026-08-17 the sidebar collapses every group but the one in use, so a
+   * link can be missing for two different reasons. These tests open the group
+   * they are asking about rather than accidentally testing the collapse.
    */
   const openGroup = async (name: RegExp) => userEvent.click(screen.getByRole("button", { name }));
 
-  it("switches navigation when previewing a different role", async () => {
+  /**
+   * The header used to carry a "Preview as" switcher that moved the sidebar
+   * without moving what the database would accept, so the screens promised
+   * writes that were then refused. It is gone; the signed-in profile is the
+   * only thing that decides which doors open.
+   */
+  it("offers no way to browse as another role", () => {
     routed(<AppShell>content</AppShell>);
-    await openGroup(/^home$/i);
-    expect(screen.getByRole("link", { name: /my dashboard/i })).toBeDefined();
+    expect(screen.queryByLabelText(/preview as/i)).toBeNull();
+    expect(screen.queryByRole("combobox")).toBeNull();
+  });
 
-    await userEvent.selectOptions(
-      screen.getByLabelText(/preview as/i),
-      screen.getByRole("option", { name: /delivery head/i }),
+  it("follows the signed-in role into the drive approval group", async () => {
+    render(
+      <AuthContext.Provider value={signedIn("delivery_head")}>
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <AppShell>content</AppShell>
+        </MemoryRouter>
+      </AuthContext.Provider>,
     );
 
     await openGroup(/^drive approval$/i);

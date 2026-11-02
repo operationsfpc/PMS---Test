@@ -164,7 +164,8 @@ describe("PifForm", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
-    expect(await screen.findByRole("alert")).toBeDefined();
+    const shown = await screen.findAllByRole("alert");
+    expect(shown.length).toBeGreaterThan(0);
     expect((screen.getByLabelText(/company name/i) as HTMLInputElement).value).toBe(
       "Zoho Corporation",
     );
@@ -186,9 +187,51 @@ describe("PifForm", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain("You do not have permission to raise a PIF.");
-    expect(alert.textContent).toContain("Your entries are still here");
+    /**
+     * A refusal arrives twice on purpose: the toast answers the press where the
+     * eye already is, and the panel stays after the toast fades. `findAllByRole`
+     * because both carry `role="alert"`.
+     */
+    const shown = await screen.findAllByRole("alert");
+    const text = shown.map((node) => node.textContent ?? "").join(" ");
+    expect(text).toContain("You do not have permission to raise a PIF.");
+    expect(text).toContain("Your entries are still here");
+  });
+
+  /**
+   * The failure used to render above the page header, a dozen sections away
+   * from the button that produced it, and the toast that named the fields
+   * dismissed itself in nine seconds while the AE scrolled back to the first
+   * one. Both answers now sit where the press happened and stay.
+   */
+  it("keeps the refusal beside the buttons", async () => {
+    const onSubmit = vi.fn().mockRejectedValue(new Error("Network down"));
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    const submit = screen.getByRole("button", { name: /submit for approval/i });
+    await user.click(submit);
+
+    const [panel] = await screen.findAllByRole("alert");
+    if (panel === undefined) throw new Error("the refusal never reached the page");
+    // Panel precedes the buttons it answers, and wraps none of them.
+    const relation = panel.compareDocumentPosition(submit);
+    expect(relation & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(relation & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeFalsy();
+  });
+
+  it("keeps the list of what to fix on the page", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    const heading = await screen.findByText(/fixing first/i);
+    const panel = heading.closest('[role="alert"]');
+    expect(panel?.textContent).toMatch(/recruiter organization must be specified/i);
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
 
@@ -1671,12 +1714,19 @@ describe("PifForm — an existing company answers for itself", () => {
     // Click submit on empty form
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
-    // Toast container should show with title and issues
+    // Toast container should show with title and issues. Scoped to the toast:
+    // the same list is now also kept on the page beside the buttons, so a
+    // document-wide query would find it twice and prove nothing about either.
+    const title = await screen.findByText(
+      /please resolve the following issues before submitting:/i,
+    );
+    const toastBox = title.closest('[role="alert"]');
+    if (!(toastBox instanceof HTMLElement))
+      throw new Error("the toast does not announce itself as an alert");
+    expect(within(toastBox).getByText(/required fixes/i)).toBeDefined();
     expect(
-      await screen.findByText(/please resolve the following issues before submitting:/i),
+      within(toastBox).getByText(/company: recruiter organization must be specified/i),
     ).toBeDefined();
-    expect(screen.getByText(/required fixes/i)).toBeDefined();
-    expect(screen.getByText(/company: recruiter organization must be specified/i)).toBeDefined();
 
     // AE can dismiss the notification
     const dismissBtn = screen.getByRole("button", { name: /dismiss notification/i });

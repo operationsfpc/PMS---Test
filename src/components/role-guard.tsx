@@ -1,5 +1,5 @@
 import type { AppRole } from "@domain/types";
-import { isTestPreviewAllowed, useAuth } from "@lib/auth-context";
+import { useAuth } from "@lib/auth-context";
 import type { ReactNode } from "react";
 import { Navigate } from "react-router";
 
@@ -25,9 +25,7 @@ export function RoleGuard({
 
   if (auth.status !== "signed-in") return <Navigate to="/login" replace />;
 
-  const permitted =
-    isTestPreviewAllowed(auth.email) ||
-    (typeof allow === "function" ? allow(auth.role) : allow.includes(auth.role));
+  const permitted = typeof allow === "function" ? allow(auth.role) : allow.includes(auth.role);
 
   if (!permitted) {
     return <p className="p-8 text-sm text-ink-700">{reason}</p>;

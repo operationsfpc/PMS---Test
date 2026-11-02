@@ -1043,3 +1043,86 @@ describe("a visit decides whether it can take one more role", () => {
     expect(screen.queryByText(/no further roles can be raised/i)).toBeNull();
   });
 });
+
+/**
+ * 2026-11-02: this list prints one card per company visit, but its header
+ * counted role rows and it mounted every card at once — an AE with twenty
+ * companies saw "Showing 40 of 40 drives" over twenty cards and scrolled past
+ * forty-odd panels to reach the one they were called about.
+ */
+describe("the portfolio pages its visit cards", () => {
+  const visitRoles = (company: number, roles: number): PortfolioDrive[] =>
+    Array.from({ length: roles }, (_, r) => ({
+      ...DRIVE,
+      driveId: `d-${company}-${r}`,
+      companyName: `Company ${String(company).padStart(2, "0")}`,
+      roleTitle: `Role ${r + 1}`,
+      companyDriveId: `e-${company}`,
+      tentativeDate: "2026-09-01",
+      applicants: [],
+    }));
+
+  const many = (visits: number, roles: number) =>
+    view(Array.from({ length: visits }, (_, i) => visitRoles(i + 1, roles)).flat());
+
+  const heading = (company: string) =>
+    screen.findByRole("heading", { level: 3, name: new RegExp(company, "i") });
+
+  const strip = () => {
+    const line = screen.getByText(/showing visits/i);
+    if (line.textContent === null) throw new Error("pager strip missing");
+    return line.textContent;
+  };
+
+  it("says the visits and the roles it is showing", async () => {
+    show({ view: many(4, 2) });
+    await heading("Company 01");
+
+    expect(screen.getByText(/4 visits · 8 roles in view/)).toBeDefined();
+    expect(screen.queryByText(/of 8 drives/i)).toBeNull();
+  });
+
+  it("mounts a page of whole visits and hands over to the next", async () => {
+    const user = userEvent.setup();
+    show({ view: many(20, 2) });
+    await heading("Company 07");
+
+    // The 15-row budget takes seven two-role visits, not eight.
+    expect(strip()).toContain("Showing visits 1 to 7 of 20 · 14 role rows on this page");
+    expect(screen.queryByRole("heading", { name: /company 08/i })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+
+    const card = await heading("Company 08");
+    expect(screen.queryByRole("heading", { name: /company 07/i })).toBeNull();
+    expect(strip()).toContain("Showing visits 8 to 14 of 20");
+
+    /* A visit is never cut in half: the card on the second page still holds
+       both of its roles. */
+    const li = card.closest("li");
+    if (li === null) throw new Error("visit card not found");
+    expect(within(li).getByText("2 roles")).toBeDefined();
+  });
+
+  it("counts visits on the type chips, as the cockpit's do", async () => {
+    show({ view: many(6, 3) });
+    await heading("Company 01");
+
+    expect(screen.getByRole("button", { name: /^all 6$/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^full time 6$/i })).toBeDefined();
+  });
+
+  it("starts the list again when the page gets taller", async () => {
+    const user = userEvent.setup();
+    show({ view: many(20, 2) });
+    await heading("Company 01");
+
+    await user.click(screen.getByRole("button", { name: /^next$/i }));
+    await heading("Company 08");
+
+    await user.selectOptions(screen.getByLabelText("Rows per page"), "50");
+
+    await heading("Company 01");
+    expect(strip()).toContain("Showing visits 1 to 20 of 20");
+  });
+});

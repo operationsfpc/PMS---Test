@@ -98,62 +98,65 @@ export function DriveDateFilter({
   };
 
   return (
-    <fieldset className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-line pt-3">
+    <fieldset className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line/60 pt-3">
       <legend className="sr-only">Date range</legend>
-      <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
-        Date
-      </span>
 
-      {/* Which date the range measures. "Created" alone is vague, so the two
-          choices are named against each other: created, or the visit itself. */}
-      <div className="inline-flex rounded-lg border border-line bg-surface-muted p-0.5">
-        <button
-          type="button"
-          onClick={() => handleDimensionChange("created_at")}
-          aria-pressed={criteria.dimension === "created_at"}
-          title="Filter by when the drive was raised"
-          className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-            criteria.dimension === "created_at"
-              ? "bg-surface text-ink-900 shadow-xs"
-              : "text-ink-600 hover:text-ink-900"
-          }`}
-        >
-          Created
-        </button>
-        <button
-          type="button"
-          onClick={() => handleDimensionChange("tentative_date")}
-          aria-pressed={criteria.dimension === "tentative_date"}
-          title="Filter by the drive / event date"
-          className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
-            criteria.dimension === "tentative_date"
-              ? "bg-surface text-ink-900 shadow-xs"
-              : "text-ink-600 hover:text-ink-900"
-          }`}
-        >
-          Drive date
-        </button>
-      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
+          Date
+        </span>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        {PRESETS.map((preset) => {
-          const active = criteria.preset === preset;
-          return (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => handlePresetChange(preset)}
-              aria-pressed={active}
-              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                active
-                  ? "border-brand-500 bg-brand-500 text-white"
-                  : "border-line bg-surface text-ink-700 hover:border-violet-400"
-              }`}
-            >
-              {PRESET_LABELS[preset]}
-            </button>
-          );
-        })}
+        {/* Which date the range measures. "Created" alone is vague, so the two
+            choices are named against each other: created, or the visit itself. */}
+        <div className="inline-flex rounded-lg border border-line bg-surface-muted p-0.5">
+          <button
+            type="button"
+            onClick={() => handleDimensionChange("created_at")}
+            aria-pressed={criteria.dimension === "created_at"}
+            title="Filter by when the drive was raised"
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+              criteria.dimension === "created_at"
+                ? "bg-surface text-ink-900 shadow-xs"
+                : "text-ink-600 hover:text-ink-900"
+            }`}
+          >
+            Created
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDimensionChange("tentative_date")}
+            aria-pressed={criteria.dimension === "tentative_date"}
+            title="Filter by the drive / event date"
+            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+              criteria.dimension === "tentative_date"
+                ? "bg-surface text-ink-900 shadow-xs"
+                : "text-ink-600 hover:text-ink-900"
+            }`}
+          >
+            Drive date
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1">
+          {PRESETS.map((preset) => {
+            const active = criteria.preset === preset;
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => handlePresetChange(preset)}
+                aria-pressed={active}
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                  active
+                    ? "border-brand-500 bg-brand-500 text-white"
+                    : "border-line bg-surface text-ink-700 hover:border-brand-400"
+                }`}
+              >
+                {PRESET_LABELS[preset]}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* From/To only when they mean something: a preset already sets them. */}
@@ -168,7 +171,7 @@ export function DriveDateFilter({
               type="date"
               value={criteria.startDate ?? ""}
               onChange={(e) => handleDateChange("startDate", e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
+              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
             />
           </div>
           <div className="flex items-center gap-1.5 text-xs text-ink-700">
@@ -180,19 +183,20 @@ export function DriveDateFilter({
               type="date"
               value={criteria.endDate ?? ""}
               onChange={(e) => handleDateChange("endDate", e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink-900 outline-none focus:border-violet-400"
+              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
             />
           </div>
         </div>
       )}
 
-      <div className="ml-auto">
+      <div>
         <Button
           variant="secondary"
           size="sm"
           onClick={handleExportCsv}
           disabled={drives.length === 0}
           title="Download the drives currently shown as a CSV"
+          className="text-xs"
         >
           Export CSV
         </Button>
@@ -223,7 +227,7 @@ export function DriveAnalyticsReadouts({
   return (
     <section
       aria-label="Drive analytics"
-      className={`grid grid-cols-2 gap-y-4 sm:grid-cols-3 lg:grid-cols-5 lg:divide-x lg:divide-line/70 ${className}`}
+      className={`rounded-2xl border border-line/80 bg-surface p-2 sm:p-3 shadow-xs grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 ${className}`}
     >
       <StatCard
         label="Drives / roles"

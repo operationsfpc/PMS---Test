@@ -351,8 +351,11 @@ Open <http://localhost:5173>.
 
 The **login screen and auth guard have not been built**. There is a Supabase
 client at `src/lib/supabase.ts`, but nothing in the app calls it to sign in.
-Use the **"Preview as" role switcher** in the header to browse the screens;
-they are still served by the MSW mock backend, not by Mumbai.
+Sign in with the Supabase account from Step 9: the login screen is built, and
+the role the app opens is read from your `profiles` row. There is no role
+switcher in the header — browsing another role's screens without changing what
+the database accepts only produced permission errors, so it was removed. The
+screens are still served by the MSW mock backend, not by Mumbai.
 
 So after Step 10 the position is:
 
