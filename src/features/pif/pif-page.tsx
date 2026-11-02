@@ -9,7 +9,7 @@ import {
   createSupabasePifRepository,
   type PifRepository,
 } from "./pif-repository";
-import type { MultiRolePifValues, PifFormValues } from "./pif-schema";
+import { expandedRoleCount, type MultiRolePifValues, type PifFormValues } from "./pif-schema";
 
 /**
  * The AE's screen for raising a drive: ONE form, one company visit, with every
@@ -115,7 +115,9 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
           ? await repo.saveCompanyDriveDraft(values, target)
           : await repo.submitCompanyDrive(values, target);
       setEventDraftId(saved.eventId === "" ? undefined : saved.eventId);
-      setOutcomeRoles((values.roles ?? []).length);
+      // The AE is told how many drive rows the visit actually raised, and one
+      // card naming two categories raises two.
+      setOutcomeRoles(expandedRoleCount(values.roles));
       setOutcome(intent);
       return;
     }

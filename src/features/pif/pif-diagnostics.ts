@@ -84,8 +84,8 @@ export function extractPifValidationIssues(
       if (roleErr.driveType?.message) {
         issues.push(formatIssue(prefix, roleErr.driveType.message));
       }
-      if (roleErr.roleCategory?.message) {
-        issues.push(formatIssue(prefix, roleErr.roleCategory.message));
+      if (roleErr.roleCategories?.message) {
+        issues.push(formatIssue(prefix, roleErr.roleCategories.message));
       }
       if (roleErr.openings?.message) {
         issues.push(formatIssue(prefix, roleErr.openings.message));

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -34,12 +34,32 @@ function renderPage(params = "") {
   return mocks;
 }
 
+/**
+ * Tick categories on a role card's picker.
+ *
+ * The five choices live in a popover, so a card's own trigger has to open them
+ * — and with two cards there are two sets of five boxes, so every tick is
+ * scoped to the card the trigger sits in.
+ */
+async function pickCategory(
+  user: ReturnType<typeof userEvent.setup>,
+  labels: string | readonly string[],
+  cardNumber = 1,
+) {
+  const trigger = screen.getAllByLabelText(/role category/i)[cardNumber - 1] as HTMLElement;
+  await user.click(trigger);
+  const card = trigger.closest("section") as HTMLElement;
+  for (const label of typeof labels === "string" ? [labels] : labels) {
+    await user.click(within(card).getByRole("checkbox", { name: label }));
+  }
+}
+
 /** Everything the submit gate asks of one role. */
 async function fillRoleOne(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("radio", { name: /^full time$/i }));
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
   await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
-  await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+  await pickCategory(user, "Software / Technical");
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
   await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -54,10 +74,7 @@ async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
   await user.click(second(screen.getAllByRole("radio", { name: /^full time$/i })));
   await user.type(second(screen.getAllByLabelText(/minimum ctc/i)), "7");
   await user.type(second(screen.getAllByLabelText(/role title/i)), "Support Engineer");
-  await user.selectOptions(
-    second(screen.getAllByLabelText(/role category/i)),
-    "technical_support_it_ops",
-  );
+  await pickCategory(user, "Technical Support / IT Operations", 2);
   await user.type(second(screen.getAllByLabelText(/number of openings/i)), "4");
   await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
   await user.click(second(screen.getAllByRole("button", { name: /add round/i })));

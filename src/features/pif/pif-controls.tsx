@@ -1,10 +1,13 @@
 import { Card } from "@components/ui";
-import { type ReactNode, useId } from "react";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
+import { ROLE_CATEGORIES, type RoleCategory } from "@domain/types";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 /**
  * The PIF's visual kit: the section card, the labelled field wrapper, the
- * radio group and the two style constants every input shares. Used by
- * `pif-fields.tsx` and by the parts of each form that stay form-specific.
+ * radio group, the category picker and the two style constants every input
+ * shares. Used by `pif-fields.tsx` and by the parts of each form that stay
+ * form-specific.
  */
 
 /**
@@ -220,5 +223,143 @@ export function RadioGroup({
         </p>
       )}
     </fieldset>
+  );
+}
+
+/**
+ * The role category, as a picker that accepts MORE THAN ONE.
+ *
+ * A recruiter visiting once for "Software / Technical" AND "Sales" states one
+ * job brief with two categories, so the AE must be able to say both on the same
+ * PIF. Each category raised here becomes its OWN drive row under the visit —
+ * students prefer categories one at a time and every eligibility gate matches a
+ * student's preference against a single `drives.role_category`, so one row per
+ * category is what makes both audiences visible to each other. The expansion
+ * happens in the repository, not here: this widget only holds the answer.
+ *
+ * `aria-expanded` on a plain button is the disclosure pattern: the panel is a
+ * checklist, not a list of options, so it is named as a group of checkboxes
+ * rather than pretended to be a `<select>`. The value travels through
+ * `onChange` exactly as `ShiftField` moves a radio choice — no hidden input,
+ * because the form reads its own state.
+ */
+export function CategoryDropdown({
+  id,
+  value,
+  onChange,
+  invalid = false,
+}: {
+  /** The id the enclosing `Labelled` hands down, so the label points at the control. */
+  id: string;
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  invalid?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Always in `ROLE_CATEGORIES` order, whatever tick order the AE used.
+  const picked = ROLE_CATEGORIES.filter((category) => value.includes(category));
+  const summary =
+    picked.length === 0
+      ? "Choose…"
+      : picked.map((category) => roleCategoryLabel(category)).join(", ");
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (boxRef.current !== null && !boxRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function onEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      // Back to the trigger, because Escape means "I am not choosing now" and
+      // the focus must not be left on a box that just disappeared.
+      document.getElementById(id)?.focus();
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onEscape);
+    };
+  }, [open, id]);
+
+  function toggle(category: RoleCategory, on: boolean) {
+    onChange(
+      on
+        ? ROLE_CATEGORIES.filter((c) => c === category || value.includes(c))
+        : value.filter((c) => c !== category),
+    );
+  }
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        id={id}
+        aria-expanded={open}
+        aria-controls={ROLE_CATEGORIES.map((category) => `${id}-${category}`).join(" ")}
+        aria-invalid={invalid || undefined}
+        onClick={() => setOpen((prev) => !prev)}
+        className={`${control} flex items-center justify-between gap-2 text-left ${
+          picked.length === 0 ? "italic text-ink-400" : "text-ink-900"
+        }`}
+      >
+        <span className="truncate">{summary}</span>
+        <span
+          aria-hidden="true"
+          className={`shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <svg
+            aria-hidden="true"
+            className="size-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </span>
+      </button>
+
+      {/* The choices stay in the DOM and hidden, because they are what the
+          trigger's `aria-controls` names and what Tab reaches — a closed
+          trigger that points at nothing would be a broken reference. */}
+      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> would print the
+          group name again inside the popover, under the label that already
+          says "Role category *". */}
+      <div
+        role="group"
+        aria-label="Role categories"
+        className={`${open ? "block" : "hidden"} absolute z-50 mt-1 w-full rounded-lg border border-line bg-surface p-1 shadow-xl`}
+      >
+        {ROLE_CATEGORIES.map((category) => (
+          <label
+            key={category}
+            className="flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm text-ink-800 hover:bg-surface-muted"
+          >
+            <input
+              id={`${id}-${category}`}
+              type="checkbox"
+              checked={value.includes(category)}
+              onChange={(event) => toggle(category, event.target.checked)}
+              className="size-4 shrink-0 accent-brand-500"
+            />
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full ${roleCategoryStyle(category).dot}`}
+            />
+            {roleCategoryLabel(category)}
+          </label>
+        ))}
+        <p className="border-t border-line px-2.5 py-2 text-xs text-ink-500">
+          Each category you choose becomes its own role row under this visit, with the same brief,
+          compensation and bar.
+        </p>
+      </div>
+    </div>
   );
 }

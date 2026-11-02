@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  categoriesOfRole,
   DEFAULT_ROLE_VALUES,
+  expandedRoleCount,
   multiRolePifDraftSchema,
   multiRolePifSubmitSchema,
   PIF_DEFAULTS,
@@ -594,7 +596,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Software Engineer",
-            roleCategory: "software_technical",
+            roleCategories: ["software_technical"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 10,
@@ -608,7 +610,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "QA Engineer",
-            roleCategory: "technical_support_it_ops",
+            roleCategories: ["technical_support_it_ops"],
             driveType: "placement",
             workLocations: "Tenkasi",
             openings: 5,
@@ -641,7 +643,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Software Engineer",
-            roleCategory: "software_technical",
+            roleCategories: ["software_technical"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 10,
@@ -667,7 +669,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Software Engineer",
-            roleCategory: "software_technical",
+            roleCategories: ["software_technical"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 10,
@@ -695,7 +697,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Support Engineer",
-            roleCategory: "technical_support_it_ops",
+            roleCategories: ["technical_support_it_ops"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 4,
@@ -724,7 +726,7 @@ describe("pifSubmitSchema", () => {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Member Technical Staff",
             additionalDesignations: ["member technical staff"],
-            roleCategory: "software_technical",
+            roleCategories: ["software_technical"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 10,
@@ -748,7 +750,7 @@ describe("pifSubmitSchema", () => {
       const role = {
         ...DEFAULT_ROLE_VALUES,
         roleTitle: "Software Engineer",
-        roleCategory: "software_technical",
+        roleCategories: ["software_technical"],
         driveType: "placement",
         workLocations: "Chennai",
         openings: 10,
@@ -789,7 +791,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Software Engineer",
-            roleCategory: "software_technical",
+            roleCategories: ["software_technical"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 10,
@@ -879,7 +881,7 @@ describe("pifSubmitSchema", () => {
         const role = {
           ...DEFAULT_ROLE_VALUES,
           roleTitle: "Member Technical Staff",
-          roleCategory: "software_technical",
+          roleCategories: ["software_technical"],
           driveType: "placement",
           workLocations: "Chennai",
           openings: 25,
@@ -892,6 +894,96 @@ describe("pifSubmitSchema", () => {
       });
     });
 
+    /*
+     * One brief, two categories: the recruiter that arrives for software AND
+     * sales on the same day. Each category the card names is raised as its own
+     * drive row, which is what the per-category preference match reads.
+     */
+    it("accepts several categories on one role card", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Engineer",
+            roleCategories: ["software_technical", "sales"],
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+        ],
+      });
+
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.roles[0]?.roleCategories).toEqual(["software_technical", "sales"]);
+      }
+    });
+
+    it("refuses to submit a role card that names no category", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Engineer",
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+        ],
+      });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        const issue = parsed.error.issues.find((i) => i.path[0] === "roles");
+        expect(issue?.path).toEqual(["roles", 0, "roleCategories"]);
+        expect(issue?.message).toMatch(/at least one role category/i);
+      }
+    });
+
+    /**
+     * The draft stays silent about it — a half-raised PIF may hold a card with
+     * no category yet, and refusing the save is how drafts get lost.
+     */
+    it("drafts a role card with no category chosen", () => {
+      const parsed = multiRolePifDraftSchema.safeParse({
+        companyName: "Zoho Corporation",
+        roles: [{ ...DEFAULT_ROLE_VALUES, roleTitle: "Engineer" }],
+      });
+      expect(parsed.success).toBe(true);
+      if (parsed.success) {
+        expect(parsed.data.roles[0]?.roleCategories).toEqual([]);
+      }
+    });
+
+    it("counts the drives a card expands to, in enum order and once each", () => {
+      const card = {
+        ...DEFAULT_ROLE_VALUES,
+        roleTitle: "Engineer",
+        roleCategories: ["sales", "software_technical", "sales"],
+      } as PifRoleValues;
+
+      // Tick order and the duplicate are the AE's; the rows are the product's.
+      expect(categoriesOfRole(card)).toEqual(["software_technical", "sales"]);
+      expect(expandedRoleCount([card, card])).toBe(4);
+    });
+
+    it("expands an unanswered card to one row, not to none", () => {
+      const blank = { ...DEFAULT_ROLE_VALUES, roleTitle: "Engineer" } as PifRoleValues;
+      expect(categoriesOfRole(blank)).toEqual([""]);
+      expect(expandedRoleCount([blank])).toBe(1);
+      expect(expandedRoleCount([])).toBe(0);
+    });
+
     it("rejects submission if any role within the event is invalid", () => {
       const parsed = multiRolePifSubmitSchema.safeParse({
         companyName: "Zoho Corporation",
@@ -901,7 +993,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "Software Engineer",
-            roleCategory: "software_technical",
+            roleCategories: ["software_technical"],
             driveType: "placement",
             workLocations: "Chennai",
             openings: 10,
@@ -912,7 +1004,7 @@ describe("pifSubmitSchema", () => {
           {
             ...DEFAULT_ROLE_VALUES,
             roleTitle: "", // INVALID: missing role title
-            roleCategory: "technical_support_it_ops",
+            roleCategories: ["technical_support_it_ops"],
             driveType: "placement",
             workLocations: "Tenkasi",
             openings: 5,

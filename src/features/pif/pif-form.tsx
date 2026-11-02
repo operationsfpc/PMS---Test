@@ -3,10 +3,9 @@ import { ToastContainer, useToast } from "@components/toast";
 import { Badge, Button, Card, PageHeader } from "@components/ui";
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveStatus, describeDriveFreeze } from "@domain/drive-working";
-import { ROLE_CATEGORIES } from "@domain/types";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type FieldErrors, useFieldArray } from "react-hook-form";
-import { control, Labelled, numeric, Section, SectionNav } from "./pif-controls";
+import { type FieldErrors, useFieldArray, useWatch } from "react-hook-form";
+import { CategoryDropdown, control, Labelled, numeric, Section, SectionNav } from "./pif-controls";
 import { extractPifValidationIssues } from "./pif-diagnostics";
 import {
   CompanyNameField,
@@ -33,13 +32,13 @@ import {
   hasAnyBarIn,
   hasAnyContactIn,
   PIF_SECTIONS,
-  ROLE_CATEGORY_LABELS,
   ROLES_SECTION,
 } from "./pif-labels";
 import type { ExistingDriveEvent } from "./pif-repository";
 import {
   DEFAULT_BAR_VALUES,
   DEFAULT_ROLE_VALUES,
+  expandedRoleCount,
   type MultiRolePifValues,
   multiRolePifDraftSchema,
   multiRolePifSubmitSchema,
@@ -119,6 +118,20 @@ function RoleBlock({
   );
   const number = PIF_SECTIONS.length + index + 1;
 
+  /*
+   * The category picker and the openings line both answer "how many drives does
+   * this card raise?", so they read the same watched values rather than each
+   * keeping their own copy of the answer.
+   */
+  const categories = (useWatch({
+    control: api.control,
+    name: `roles.${index}.roleCategories` as never,
+  }) ?? []) as readonly string[];
+  const openingsPerCategory = useWatch({
+    control: api.control,
+    name: `roles.${index}.openings` as never,
+  }) as number | null;
+
   return (
     <Section
       number={number}
@@ -154,33 +167,43 @@ function RoleBlock({
           />
         )}
       </Labelled>
-      <Labelled label="Role category" required error={roleApi.err("roleCategory")}>
+      <Labelled label="Role category" required error={roleApi.err("roleCategories")}>
         {(id, invalid) => (
-          <select
+          <CategoryDropdown
             id={id}
-            aria-invalid={invalid || undefined}
-            className={control}
-            {...roleApi.register(roleApi.field("roleCategory") as never)}
-          >
-            <option value="">Select…</option>
-            {ROLE_CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {ROLE_CATEGORY_LABELS[c]}
-              </option>
-            ))}
-          </select>
+            invalid={invalid}
+            value={categories}
+            onChange={(next) =>
+              roleApi.setValue(roleApi.field("roleCategories") as never, next as never, {
+                shouldValidate: true,
+              })
+            }
+          />
         )}
       </Labelled>
       <Labelled label="Number of openings" required error={roleApi.err("openings")}>
         {(id, invalid) => (
-          <input
-            id={id}
-            aria-invalid={invalid || undefined}
-            type="number"
-            placeholder="e.g. 10"
-            className={control}
-            {...roleApi.register(roleApi.field("openings") as never, numeric)}
-          />
+          <>
+            <input
+              id={id}
+              aria-invalid={invalid || undefined}
+              type="number"
+              placeholder="e.g. 10"
+              className={control}
+              {...roleApi.register(roleApi.field("openings") as never, numeric)}
+            />
+            {/* Each category becomes its own drive row carrying this count, so an
+                AE who means "10 across both" must say 5 here. */}
+            {categories.length > 1 && (
+              <p className="mt-1 text-xs text-ink-500">
+                {`${categories.length} categories become ${categories.length} drives under this visit, each with ${
+                  openingsPerCategory === null
+                    ? "the openings above"
+                    : `${openingsPerCategory} openings`
+                }.`}
+              </p>
+            )}
+          </>
         )}
       </Labelled>
       <Labelled label="Work location(s)" required error={roleApi.err("workLocations")}>
@@ -282,7 +305,12 @@ export function PifForm({
     onCommit: (mode, values) => {
       const commit = mode === "draft" ? onSaveDraft : onSubmit;
       const roleList = values.roles ?? [];
-      const onlyRole = roleList.length === 1 ? roleList[0] : undefined;
+      /*
+       * A card is only a plain drive when it names ONE category. Two categories
+       * on one card are two drives under one visit, which is the grouped path —
+       * so this counts the rows the cards expand to, not the cards themselves.
+       */
+      const onlyRole = expandedRoleCount(roleList) === 1 ? roleList[0] : undefined;
       if (onlyRole === undefined) {
         // Several roles: the visit IS the event. A date the AE picked in the
         // selector becomes the event these roles are added to.

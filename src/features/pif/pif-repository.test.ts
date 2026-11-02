@@ -768,7 +768,7 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
       roles: [
         {
           roleTitle: "SDE",
-          roleCategory: "software_technical",
+          roleCategories: ["software_technical"],
           driveType: "placement",
           jobDescription: "Backend dev",
           openings: 10,
@@ -835,7 +835,7 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
       roles: [
         {
           roleTitle: "SDE",
-          roleCategory: "software_technical",
+          roleCategories: ["software_technical"],
           driveType: "placement",
           openings: 10,
           workLocations: "Chennai",
@@ -844,7 +844,7 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
         },
         {
           roleTitle: "QA",
-          roleCategory: "software_technical",
+          roleCategories: ["software_technical"],
           driveType: "placement",
           openings: 5,
           workLocations: "Chennai",
@@ -865,6 +865,133 @@ describe("saveCompanyDriveDraft & submitCompanyDrive", () => {
       expect(role.arrearsPolicy).toBe("no_standing");
       expect(role.eligiblePassingYears).toEqual([2026, 2027]);
     }
+  });
+
+  /*
+   * The point of the multi-category picker: one brief, several categories, and
+   * the product's per-category reads (student preferences, the eligibility
+   * gates, shortlist filters) only ever see a single `role_category` per row.
+   */
+  it("raises one drive row per category on a role card", async () => {
+    const { client } = storageStub();
+    let rpcCalledWith: Record<string, unknown> = {};
+
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        rpcCalledWith = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          eventId: "event-1",
+          roleIds: ["r1", "r2"],
+          status: "submitted",
+        });
+      }),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    await repo.submitCompanyDrive({
+      companyName: "Zoho Corporation",
+      industry: "",
+      companyWebsite: "",
+      contacts: [],
+      driveMode: "on_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+      tentativeDate: "",
+      timelineNotes: "",
+      joiningTimeline: "immediate",
+      bondDetails: "",
+      minOverallCgpa: 7.5,
+      minOverallCgpaScale: "cgpa",
+      minTenthPercentage: null,
+      minTwelfthPercentage: null,
+      arrearsPolicy: "flexible",
+      eligiblePassingYears: [],
+      // Tick order is deliberately NOT the enum order.
+      roles: [
+        {
+          roleTitle: "Engineer",
+          roleCategories: ["sales", "software_technical"],
+          driveType: "placement",
+          openings: 10,
+          workLocations: "Chennai",
+          ctcMinLpa: 8,
+          jobDescriptionFile: jdFile(),
+          rounds: [{ sequence: 1, name: "Coding" }],
+        },
+      ],
+    });
+
+    const roles = rpcCalledWith.p_roles as Array<Record<string, unknown>>;
+    expect(roles).toHaveLength(2);
+    expect(roles.map((r) => r.roleCategory)).toEqual(["software_technical", "sales"]);
+    expect(roles.map((r) => r.roleTitle)).toEqual(["Engineer", "Engineer"]);
+    expect(roles.map((r) => r.openings)).toEqual([10, 10]);
+    expect(roles.map((r) => r.rounds)).toEqual([
+      [{ sequence: 1, name: "Coding" }],
+      [{ sequence: 1, name: "Coding" }],
+    ]);
+    // Two rows cannot share a primary key.
+    expect(new Set(roles.map((r) => r.id)).size).toBe(2);
+  });
+
+  it("uploads the role card's JD once, not once per category", async () => {
+    const { client, uploads } = storageStub();
+    let rpcCalledWith: Record<string, unknown> = {};
+
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        rpcCalledWith = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          eventId: "event-1",
+          roleIds: ["r1", "r2", "r3"],
+          status: "submitted",
+        });
+      }),
+    );
+
+    const repo = createSupabasePifRepository(client, async () => "ae-1");
+    await repo.submitCompanyDrive({
+      companyName: "Zoho Corporation",
+      industry: "",
+      companyWebsite: "",
+      contacts: [],
+      driveMode: "on_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+      tentativeDate: "",
+      timelineNotes: "",
+      joiningTimeline: "immediate",
+      bondDetails: "",
+      minOverallCgpa: null,
+      minOverallCgpaScale: "cgpa",
+      minTenthPercentage: null,
+      minTwelfthPercentage: null,
+      arrearsPolicy: "flexible",
+      eligiblePassingYears: [],
+      roles: [
+        {
+          roleTitle: "Engineer",
+          roleCategories: ["sales", "software_technical", "digital_marketing"],
+          driveType: "placement",
+          openings: 3,
+          workLocations: "Chennai",
+          jobDescriptionFile: jdFile(),
+          rounds: [],
+        },
+      ],
+    });
+
+    const roles = rpcCalledWith.p_roles as Array<Record<string, unknown>>;
+    const firstRowId = roles[0]?.id as string;
+    const jdPath = uploads[0]?.path as string;
+    expect(roles).toHaveLength(3);
+    expect(uploads).toHaveLength(1);
+    /*
+     * The file is keyed by the FIRST row's id — every category row then points
+     * at that one object rather than storing the same PDF three times.
+     */
+    expect(roles.map((r) => r.jdStoragePath)).toEqual([jdPath, jdPath, jdPath]);
+    expect(jdPath.startsWith(`${firstRowId}/`)).toBe(true);
   });
 
   it("saves a multi-role draft with draft status", async () => {

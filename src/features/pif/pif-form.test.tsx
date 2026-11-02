@@ -19,7 +19,7 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
   await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
   await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
-  await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+  await pickCategory(user, "Software / Technical");
   // Two controls now match "job description": the typed one and the PDF.
   await user.type(screen.getByLabelText(/^job description$/i), "Build backend services.");
   await user.type(screen.getByLabelText(/number of openings/i), "25");
@@ -50,16 +50,34 @@ async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
   await user.click(second(screen.getAllByRole("radio", { name: /^internship$/i })));
   await user.type(second(screen.getAllByLabelText(/role title/i)), "Data Analyst Intern");
   await user.type(screen.getByLabelText(/stipend minimum/i), "25000");
-  await user.selectOptions(
-    second(screen.getAllByLabelText(/role category/i)),
-    "operations_business",
-  );
+  await pickCategory(user, "Operations and Business Roles", 2);
   await user.type(second(screen.getAllByLabelText(/number of openings/i)), "8");
   await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
   await user.click(second(screen.getAllByRole("button", { name: /add round/i })));
   await user.type(second(screen.getAllByLabelText(/round 1 name/i)), "Case study");
   // The passing years are NOT asked again here: they belong to the visit, so
   // there is one set of boxes for the whole PIF.
+}
+
+/**
+ * Tick the categories on a role card's picker.
+ *
+ * The five choices live in a popover, so none of them can be clicked until that
+ * card's own trigger is open — and once the PIF carries two cards there are two
+ * sets of five boxes, so every tick is scoped to the card the trigger sits in.
+ */
+async function pickCategory(
+  user: ReturnType<typeof userEvent.setup>,
+  labels: string | readonly string[],
+  cardNumber = 1,
+) {
+  const trigger = screen.getAllByLabelText(/role category/i)[cardNumber - 1] as HTMLElement;
+  await user.click(trigger);
+  const card = trigger.closest("section") as HTMLElement;
+  const wanted = typeof labels === "string" ? [labels] : [...labels];
+  for (const label of wanted) {
+    await user.click(within(card).getByRole("checkbox", { name: label }));
+  }
 }
 
 /**
@@ -554,7 +572,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
       await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
       await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
       await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
-      await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+      await pickCategory(user, "Software / Technical");
       await user.type(screen.getByLabelText(/number of openings/i), "25");
       await user.type(screen.getByLabelText(/work location/i), "Chennai");
       await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -798,7 +816,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
     await user.type(screen.getByLabelText(/stipend maximum/i), "25000");
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.type(screen.getByLabelText(/role title/i), "Intern");
-    await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+    await pickCategory(user, "Software / Technical");
     await user.type(screen.getByLabelText(/number of openings/i), "10");
     await user.type(screen.getByLabelText(/work location/i), "Chennai");
     await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -812,6 +830,111 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
       driveType: "internship",
       stipendMinMonthly: 15000,
       stipendMaxMonthly: 25000,
+    });
+  });
+});
+
+/**
+ * The role category picker — several answers on one card.
+ *
+ * A recruiter's brief can cover more than one category, and each of them becomes
+ * its OWN drive row under the visit, because the eligibility gates compare a
+ * student's preference against a single `drives.role_category`. The repository
+ * does that expansion; what the form owns is that the AE can see how many rows
+ * they are raising — and that one card naming two categories cannot be quietly
+ * flattened into one drive.
+ */
+describe("PifForm — the role category picker", () => {
+  /** The box `Labelled` builds around one control: its label, its picker, its refusal. */
+  function labelledBoxOf(control: HTMLElement): HTMLElement {
+    return (control.closest("div")?.parentElement ?? control) as HTMLElement;
+  }
+
+  function categoryBox(cardNumber = 1) {
+    const trigger = screen.getAllByLabelText(/role category/i)[cardNumber - 1] as HTMLElement;
+    return { trigger, card: trigger.closest("section") as HTMLElement };
+  }
+
+  it("keeps every category the AE ticked, and only those", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await pickCategory(user, ["Software / Technical", "Sales"]);
+
+    const { trigger, card } = categoryBox(1);
+    // Stated in the picker's own order, so the summary does not depend on the
+    // order the AE happened to click in.
+    expect(trigger.textContent).toMatch(/Software \/ Technical, Sales/);
+    for (const [label, checked] of [
+      ["Software / Technical", true],
+      ["Sales", true],
+      ["Digital Marketing", false],
+    ] as const) {
+      const box = within(card).getByRole("checkbox", { name: label }) as HTMLInputElement;
+      expect(box.checked).toBe(checked);
+    }
+  });
+
+  it("tells a screen reader when the list of categories is open", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    const { trigger } = categoryBox(1);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    await user.click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    await user.keyboard("{Escape}");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("says the drives one card raises — only once it names a second category", async () => {
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/number of openings/i), "25");
+    await pickCategory(user, "Software / Technical");
+    // One category, one drive: nothing to warn about.
+    expect(screen.queryByText(/categories become/i)).toBeNull();
+
+    await pickCategory(user, "Sales");
+    expect(
+      screen.getByText("2 categories become 2 drives under this visit, each with 25 openings."),
+    ).toBeDefined();
+  });
+
+  it("refuses to submit a card whose categories are all unticked, at the field", async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    await fillRequired(user);
+
+    const { trigger, card } = categoryBox(1);
+    await user.click(within(card).getByRole("checkbox", { name: "Software / Technical" }));
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(trigger.getAttribute("aria-invalid")).toBe("true"));
+    expect(labelledBoxOf(trigger).querySelector('[role="alert"]')?.textContent).toMatch(
+      /at least one role category/i,
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("raises the visit as an event when one card names two categories", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await pickCategory(user, "Sales");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // A single card naming ONE category is flattened into a plain drive; naming
+    // two is two drives under one event, so the roles array must carry it.
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
+      roles: [{ roleCategories: ["software_technical", "sales"] }],
     });
   });
 });
@@ -1439,7 +1562,7 @@ describe("PifForm — the eligibility bar is asked once, for the visit", () => {
     await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
-    await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+    await pickCategory(user, "Software / Technical");
     await user.type(screen.getByLabelText(/number of openings/i), "25");
     await user.type(screen.getByLabelText(/work location/i), "Chennai");
     await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -1585,7 +1708,7 @@ describe("PifForm — the refusal is said at the field, not only in a toast", ()
     await user.click(screen.getByRole("radio", { name: /^full time$/i }));
     await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
-    await user.selectOptions(screen.getByLabelText(/role category/i), "software_technical");
+    await pickCategory(user, "Software / Technical");
     await user.type(screen.getByLabelText(/number of openings/i), "25");
     await user.type(screen.getByLabelText(/work location/i), "Chennai");
     await user.click(screen.getByRole("button", { name: /add round/i }));

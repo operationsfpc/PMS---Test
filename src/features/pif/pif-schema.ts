@@ -9,6 +9,7 @@ import {
   DRIVE_MODES,
   DRIVE_TYPES,
   ROLE_CATEGORIES,
+  type RoleCategory,
 } from "@domain/types";
 import { z } from "zod";
 
@@ -411,7 +412,7 @@ export type PifSubmission = z.output<typeof pifSubmitSchema>;
 
 export const DEFAULT_ROLE_VALUES = {
   roleTitle: "",
-  roleCategory: "",
+  roleCategories: [] as RoleCategory[],
   driveType: "",
   jobDescription: "",
   openings: null as number | null,
@@ -451,7 +452,7 @@ export const DEFAULT_BAR_VALUES = {
 export const pifRoleDraftSchema = z.object({
   id: z.string().optional(),
   roleTitle: optionalText,
-  roleCategory: z.enum(["", ...ROLE_CATEGORIES]).default(""),
+  roleCategories: z.array(z.enum(ROLE_CATEGORIES)).default([]),
   driveType: z.enum(["", ...DRIVE_TYPES]).default(""),
   jobDescription: optionalText,
   openings: nullableNumber,
@@ -477,7 +478,7 @@ export const pifRoleSubmitSchema = pifRoleDraftSchema
   .extend({
     roleTitle: requiredText("Role title"),
     driveType: z.enum(DRIVE_TYPES, { message: "Choose the drive type." }),
-    roleCategory: z.enum(ROLE_CATEGORIES, { message: "Choose a role category." }),
+    roleCategories: z.array(z.enum(ROLE_CATEGORIES)).min(1, "Choose at least one role category."),
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),
     rounds: z
@@ -657,10 +658,37 @@ export type MultiRolePifValues = z.input<typeof multiRolePifDraftSchema>;
 export type MultiRolePifSubmission = z.output<typeof multiRolePifSubmitSchema>;
 
 /**
+ * The categories one role card answers with, deduped and in enum order.
+ *
+ * Order matters because the repository turns each category into its own drive
+ * ROW: picking Sales then Software must produce the same two rows, in the same
+ * sequence, however the AE ticked them.
+ *
+ * An unanswered card still counts as ONE category — the empty one. A card the
+ * AE left blank must expand to a single row rather than to nothing, or a
+ * half-filled PIF saved as a draft would silently lose the role itself.
+ */
+export function categoriesOfRole(role: PifRoleValues | undefined): Array<"" | RoleCategory> {
+  const picked = ROLE_CATEGORIES.filter((category) =>
+    (role?.roleCategories ?? []).includes(category),
+  );
+  return picked.length > 0 ? picked : [""];
+}
+
+/** How many drive rows these role cards become once every category is expanded. */
+export function expandedRoleCount(roles: readonly PifRoleValues[] | undefined): number {
+  return (roles ?? []).reduce((total, role) => total + categoriesOfRole(role).length, 0);
+}
+
+/**
  * One role on the one PIF is still a plain drive, not an event of its own —
  * every list, approval and shortlist in the product reads the drive row. The
  * grouped shape is what the FORM holds; this is the only place it is flattened
  * back onto the single-drive contract.
+ *
+ * Flattening can only ever carry ONE category, which is why the form routes on
+ * `expandedRoleCount` rather than on the number of cards: a single card holding
+ * two categories is not a single drive.
  */
 export function toSinglePifValues(values: MultiRolePifValues, role: PifRoleValues): PifFormValues {
   return {
@@ -679,7 +707,7 @@ export function toSinglePifValues(values: MultiRolePifValues, role: PifRoleValue
     joiningImmediateNotes: role.joiningImmediateNotes,
     joiningLaterNotes: role.joiningLaterNotes,
     roleTitle: role.roleTitle,
-    roleCategory: role.roleCategory,
+    roleCategory: categoriesOfRole(role)[0] ?? "",
     driveType: role.driveType,
     jobDescription: role.jobDescription,
     jobDescriptionFile: role.jobDescriptionFile,

@@ -8,6 +8,7 @@ import { readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BarRow } from "./pif-labels";
 import type { MultiRolePifValues, PifFormValues } from "./pif-schema";
+import { categoriesOfRole } from "./pif-schema";
 
 export class PifError extends Error {}
 
@@ -439,61 +440,79 @@ export function createSupabasePifRepository(
      */
     const knownEventId = existingEventId ?? values.id ?? null;
 
-    const processedRoles = await Promise.all(
-      (values.roles ?? []).map(async (role) => {
-        const roleId = role.id ?? crypto.randomUUID();
-        const file = role.jobDescriptionFile ?? null;
-        let jd: JobDescriptionUpload | null = null;
-        if (file instanceof File) {
-          jd = await uploadJobDescription(roleId, file);
-        }
+    /*
+     * One role card can name SEVERAL categories, and a category is what every
+     * student preference match, eligibility gate and shortlist reads off the
+     * `drives` row. So a card naming 2 categories is raised as 2 rows sharing
+     * one brief — same job description file, same compensation, same visit bar —
+     * and only `roleCategory` differs.
+     *
+     * The expansion happens HERE, after the upload, on purpose: the JD is keyed
+     * by the role id, so a card with 3 categories would otherwise store the same
+     * PDF 3 times. The first row keeps the card's own id, which updates in place
+     * the role an AE is editing; each extra row is a fresh uuid and inserts.
+     */
+    const processedRoles = (
+      await Promise.all(
+        (values.roles ?? []).map(async (role) => {
+          const roleId = role.id ?? crypto.randomUUID();
+          const file = role.jobDescriptionFile ?? null;
+          let jd: JobDescriptionUpload | null = null;
+          if (file instanceof File) {
+            jd = await uploadJobDescription(roleId, file);
+          }
 
-        const nightTiming = nightTimingFor(role.shiftType ?? "", role.shiftNightTiming ?? "");
+          const nightTiming = nightTimingFor(role.shiftType ?? "", role.shiftNightTiming ?? "");
 
-        return {
-          id: roleId,
-          roleTitle: nullIfBlank(role.roleTitle),
-          roleCategory: nullIfBlank(role.roleCategory),
-          driveType: nullIfBlank(role.driveType),
-          openings: role.openings ?? null,
-          workLocations: nullIfBlank(role.workLocations),
-          ctcMinLpa: role.ctcMinLpa ?? null,
-          ctcMaxLpa: role.ctcMaxLpa ?? null,
-          ctcBreakup: nullIfBlank(role.ctcBreakup),
-          stipendMinMonthly: role.stipendMinMonthly ?? null,
-          stipendMaxMonthly: role.stipendMaxMonthly ?? null,
-          shiftType: nullIfBlank(role.shiftType),
-          shiftNightTiming: nullIfBlank(nightTiming),
-          /**
-           * The bar is the VISIT's. It is asked once and written onto every
-           * role the PIF raises, so one recruiter cannot end up hiring the same
-           * day at two different cutoffs.
-           */
-          bondDetails: nullIfBlank(values.bondDetails),
-          jdStoragePath: jd?.storagePath ?? null,
-          jdFileName: jd?.fileName ?? null,
-          jdSizeBytes: jd?.sizeBytes ?? null,
-          jobDescription: nullIfBlank(role.jobDescription),
-          minOverallMarks: values.minOverallCgpa ?? null,
-          minOverallCgpaScale: values.minOverallCgpaScale ?? "cgpa",
-          minOverallCgpa:
-            values.minOverallCgpa === null || values.minOverallCgpa === undefined
-              ? null
-              : normaliseToCgpa(values.minOverallCgpa, values.minOverallCgpaScale ?? "cgpa"),
-          minTenthPercentage: values.minTenthPercentage ?? null,
-          minTwelfthPercentage: values.minTwelfthPercentage ?? null,
-          arrearsPolicy: values.arrearsPolicy ?? "flexible",
-          eligiblePassingYears: values.eligiblePassingYears ?? [],
-          mandatorySkills: nullIfBlank(role.mandatorySkills),
-          joiningImmediateNotes: nullIfBlank(role.joiningImmediateNotes),
-          joiningLaterNotes: nullIfBlank(role.joiningLaterNotes),
-          rounds: (role.rounds ?? []).map((r) => ({
-            sequence: r.sequence,
-            name: r.name.trim(),
-          })),
-        };
-      }),
-    );
+          const brief = {
+            roleTitle: nullIfBlank(role.roleTitle),
+            driveType: nullIfBlank(role.driveType),
+            openings: role.openings ?? null,
+            workLocations: nullIfBlank(role.workLocations),
+            ctcMinLpa: role.ctcMinLpa ?? null,
+            ctcMaxLpa: role.ctcMaxLpa ?? null,
+            ctcBreakup: nullIfBlank(role.ctcBreakup),
+            stipendMinMonthly: role.stipendMinMonthly ?? null,
+            stipendMaxMonthly: role.stipendMaxMonthly ?? null,
+            shiftType: nullIfBlank(role.shiftType),
+            shiftNightTiming: nullIfBlank(nightTiming),
+            /**
+             * The bar is the VISIT's. It is asked once and written onto every
+             * role the PIF raises, so one recruiter cannot end up hiring the same
+             * day at two different cutoffs.
+             */
+            bondDetails: nullIfBlank(values.bondDetails),
+            jdStoragePath: jd?.storagePath ?? null,
+            jdFileName: jd?.fileName ?? null,
+            jdSizeBytes: jd?.sizeBytes ?? null,
+            jobDescription: nullIfBlank(role.jobDescription),
+            minOverallMarks: values.minOverallCgpa ?? null,
+            minOverallCgpaScale: values.minOverallCgpaScale ?? "cgpa",
+            minOverallCgpa:
+              values.minOverallCgpa === null || values.minOverallCgpa === undefined
+                ? null
+                : normaliseToCgpa(values.minOverallCgpa, values.minOverallCgpaScale ?? "cgpa"),
+            minTenthPercentage: values.minTenthPercentage ?? null,
+            minTwelfthPercentage: values.minTwelfthPercentage ?? null,
+            arrearsPolicy: values.arrearsPolicy ?? "flexible",
+            eligiblePassingYears: values.eligiblePassingYears ?? [],
+            mandatorySkills: nullIfBlank(role.mandatorySkills),
+            joiningImmediateNotes: nullIfBlank(role.joiningImmediateNotes),
+            joiningLaterNotes: nullIfBlank(role.joiningLaterNotes),
+            rounds: (role.rounds ?? []).map((r) => ({
+              sequence: r.sequence,
+              name: r.name.trim(),
+            })),
+          };
+
+          return categoriesOfRole(role).map((category, position) => ({
+            id: position === 0 ? roleId : crypto.randomUUID(),
+            roleCategory: nullIfBlank(category),
+            ...brief,
+          }));
+        }),
+      )
+    ).flat();
 
     const eventPayload = {
       id: knownEventId,
