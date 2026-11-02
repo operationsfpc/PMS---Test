@@ -233,6 +233,22 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
     );
   }, [drives, query, type]);
 
+  const driveTypeOptions = useMemo(() => {
+    if (!drives) return [];
+    const placementCount = drives.filter((d) => d.driveType === "placement").length;
+    const convertibleCount = drives.filter((d) => d.driveType === "internship_convertible").length;
+    const internshipCount = drives.filter((d) => d.driveType === "internship").length;
+    return [
+      { value: "placement", label: "Full time", count: placementCount },
+      {
+        value: "internship_convertible",
+        label: "Internship (convertible)",
+        count: convertibleCount,
+      },
+      { value: "internship", label: "Internship", count: internshipCount },
+    ];
+  }, [drives]);
+
   /**
    * One row group per company visit. A legacy drive with no event of its own
    * groups under its own drive id, so it stays the single-role visit it was.
@@ -302,96 +318,93 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         </Card>
       ) : (
         <>
-          {visible.length === 0 ? (
-            <Card className="p-6">
-              <NoDriveMatches
-                query={query}
-                {...(type === "" ? {} : { typeLabel: driveTypeLabel(type) })}
-              />
-            </Card>
-          ) : (
-            <Card className="overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[840px] border-collapse text-left text-sm">
-                  <caption className="sr-only">
-                    Company visits and their roles, and how far each role's students have come
-                  </caption>
-                  <thead>
-                    <tr className="border-b border-line bg-surface-muted/60 text-xs uppercase tracking-wide text-ink-500">
-                      <th scope="col" className="px-4 py-2.5 font-semibold">
-                        <span className="flex items-center gap-1.5">
-                          Company
-                          <ColumnFilterButton label="Company" active={query !== ""}>
-                            <ColumnFilterSearch
-                              label="Company"
-                              value={query}
-                              onChange={(q) => {
-                                setQuery(q);
-                                setPage(1);
-                                setOpenPane(null);
-                              }}
-                              placeholder="Search company…"
-                            />
-                          </ColumnFilterButton>
-                        </span>
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 font-semibold">
-                        Role
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
-                        Applicants
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
-                        Shortlisted
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
-                        In rounds
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 text-right font-semibold">
-                        Offers
-                      </th>
-                      <th scope="col" className="px-3 py-2.5 font-semibold">
-                        <span className="flex items-center gap-1.5">
-                          Status
-                          <ColumnFilterButton label="Drive type" active={type !== ""}>
-                            <ColumnFilterOptions
-                              label="Drive type"
-                              options={[
-                                { value: "placement", label: "Full time" },
-                                {
-                                  value: "internship_convertible",
-                                  label: "Internship (convertible)",
-                                },
-                                { value: "internship", label: "Internship" },
-                              ]}
-                              selected={type === "" ? [] : [type]}
-                              onChange={(next) => {
-                                setType(next.length === 0 ? "" : (next[0] as DriveTypeFilterValue));
-                                setPage(1);
-                                setOpenPane(null);
-                              }}
-                            />
-                          </ColumnFilterButton>
-                        </span>
-                      </th>
-                      <th scope="col" className="px-4 py-2.5 text-right font-semibold">
-                        <span className="sr-only">Action</span>
-                      </th>
+          <Card className="overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[840px] border-collapse text-left text-sm">
+                <caption className="sr-only">
+                  Company visits and their roles, and how far each role's students have come
+                </caption>
+                <thead>
+                  <tr className="border-b border-line bg-surface-muted/60 text-xs uppercase tracking-wide text-ink-500">
+                    <th scope="col" className="px-4 py-2.5 font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        Company
+                        <ColumnFilterButton label="Company" active={query !== ""}>
+                          <ColumnFilterSearch
+                            label="Company"
+                            value={query}
+                            onChange={(q) => {
+                              setQuery(q);
+                              setPage(1);
+                              setOpenPane(null);
+                            }}
+                            placeholder="Search company…"
+                          />
+                        </ColumnFilterButton>
+                      </span>
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      Role
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                      Applicants
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                      Shortlisted
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                      In rounds
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 text-right font-semibold">
+                      Offers
+                    </th>
+                    <th scope="col" className="px-3 py-2.5 font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        Status
+                        <ColumnFilterButton label="Drive type" active={type !== ""}>
+                          <ColumnFilterOptions
+                            label="Drive type"
+                            options={driveTypeOptions}
+                            selected={type === "" ? [] : [type]}
+                            onChange={(next) => {
+                              setType(next.length === 0 ? "" : (next[0] as DriveTypeFilterValue));
+                              setPage(1);
+                              setOpenPane(null);
+                            }}
+                          />
+                        </ColumnFilterButton>
+                      </span>
+                    </th>
+                    <th scope="col" className="px-4 py-2.5 text-right font-semibold">
+                      <span className="sr-only">Action</span>
+                    </th>
+                  </tr>
+                </thead>
+                {visible.length === 0 ? (
+                  <tbody>
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center">
+                        <NoDriveMatches
+                          query={query}
+                          {...(type === "" ? {} : { typeLabel: driveTypeLabel(type) })}
+                        />
+                      </td>
                     </tr>
-                  </thead>
-                  {pageEvents.map(([eventId, roles], index) => (
+                  </tbody>
+                ) : (
+                  pageEvents.map(([eventId, roles], index) => (
                     <VisitRows
                       key={eventId}
                       roles={roles}
                       accentIndex={visitsBefore + index}
                       onOpen={(driveId, stage) => openAt(eventId, driveId, stage)}
                     />
-                  ))}
-                </table>
-              </div>
+                  ))
+                )}
+              </table>
+            </div>
 
-              {/* Always drawn, even on a single page: the reader can see there
-                  is no more, and can change how tall a page is. */}
+            {visible.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-ink-600">
                 <div className="flex flex-wrap items-center gap-2">
                   <span>
@@ -440,8 +453,8 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                   </Button>
                 </div>
               </div>
-            </Card>
-          )}
+            )}
+          </Card>
 
           {openPane !== null && openRoles !== undefined && openHead !== undefined && (
             <VisitPane

@@ -283,6 +283,23 @@ export function StudentDirectoryPage({
    * loaded — so a college list can never offer an empty one, and the
    * registration/participation lists say their words in a stable order.
    */
+  const campuses = useMemo(
+    () => uniqueSorted((students ?? []).map((s) => s.campusName)),
+    [students],
+  );
+
+  const campusOptions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of students ?? []) {
+      counts[s.campusName] = (counts[s.campusName] ?? 0) + 1;
+    }
+    return campuses.map((name) => ({
+      value: name,
+      label: name,
+      count: counts[name] ?? 0,
+    }));
+  }, [students, campuses]);
+
   const degrees = useMemo(() => uniqueSorted((students ?? []).map((s) => s.degree)), [students]);
   const branches = useMemo(() => uniqueSorted((students ?? []).map((s) => s.branch)), [students]);
   const passingYears = useMemo(
@@ -293,6 +310,41 @@ export function StudentDirectoryPage({
     const present = new Set((students ?? []).map((s) => s.srfStatus));
     return SRF_STATUSES.filter((status) => present.has(status));
   }, [students]);
+  const srfOptionsWithCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of students ?? []) {
+      counts[s.srfStatus] = (counts[s.srfStatus] ?? 0) + 1;
+    }
+    return srfOptions.map((status) => ({
+      value: status,
+      label: SRF_LABEL[status],
+      count: counts[status] ?? 0,
+    }));
+  }, [students, srfOptions]);
+
+  const placementOptions = useMemo(() => {
+    if (!students) return [];
+    let placed = 0;
+    let notPlaced = 0;
+    let onCampus = 0;
+    let selfPlaced = 0;
+    for (const s of students) {
+      if (s.placement !== null) {
+        placed++;
+        if (s.placement.source === "on_campus") onCampus++;
+        if (s.placement.source === "self_placed") selfPlaced++;
+      } else {
+        notPlaced++;
+      }
+    }
+    return [
+      { value: "placed", label: "Placed (All)", count: placed },
+      { value: "on_campus", label: "On-campus", count: onCampus },
+      { value: "self_placed", label: "Self-placed", count: selfPlaced },
+      { value: "not_placed", label: "Not placed", count: notPlaced },
+    ];
+  }, [students]);
+
   const participationOptions = useMemo(() => {
     const present = new Set((students ?? []).map((s) => s.participationStatus));
     return PARTICIPATION_STATUSES.filter((status) => present.has(status));
@@ -620,20 +672,85 @@ export function StudentDirectoryPage({
             )}
           </div>
 
-          {/*
-           * The package and category drill-downs. They are not permanent
-           * filters, so they are not chips - they are what the reader pressed
-           * on the overview, said out loud, with the way back attached. A
-           * narrowing the reader cannot see reads as a list that lost people.
-           */}
-          {(ctc !== undefined || category !== undefined) && (
+          {/* Active filter chips: whenever the list is narrowed, show the active filters with quick clear buttons */}
+          {anyFilterActive && (
             <div className="mb-4 flex flex-wrap items-center gap-2">
+              {filter !== "all" && (
+                <button
+                  type="button"
+                  aria-label={`Clear population filter, ${filter}`}
+                  onClick={() => update({ filter: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Status: {filter.replace("_", " ")} ✕
+                </button>
+              )}
+              {campus !== "" && (
+                <button
+                  type="button"
+                  aria-label={`Clear campus filter, ${campus}`}
+                  onClick={() => update({ campus: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Campus: {campus} ✕
+                </button>
+              )}
+              {srfStatus !== undefined && (
+                <button
+                  type="button"
+                  aria-label={`Clear registration filter, ${SRF_LABEL[srfStatus]}`}
+                  onClick={() => update({ srf: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Registration: {SRF_LABEL[srfStatus]} ✕
+                </button>
+              )}
+              {degree !== "" && (
+                <button
+                  type="button"
+                  aria-label={`Clear degree filter, ${degree}`}
+                  onClick={() => update({ degree: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Degree: {degree} ✕
+                </button>
+              )}
+              {branch !== "" && (
+                <button
+                  type="button"
+                  aria-label={`Clear branch filter, ${branch}`}
+                  onClick={() => update({ branch: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Branch: {branch} ✕
+                </button>
+              )}
+              {passingYear !== undefined && (
+                <button
+                  type="button"
+                  aria-label={`Clear passing year filter, ${passingYear}`}
+                  onClick={() => update({ year: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Batch: {passingYear} ✕
+                </button>
+              )}
+              {participationStatus !== undefined && (
+                <button
+                  type="button"
+                  aria-label={`Clear standing filter, ${participationStatusLabel(participationStatus)}`}
+                  onClick={() => update({ participation: undefined })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                >
+                  Standing: {participationStatusLabel(participationStatus)} ✕
+                </button>
+              )}
               {ctc !== undefined && (
                 <button
                   type="button"
                   aria-label={`Clear the package filter, ₹${ctc} LPA`}
                   onClick={() => update({ ctc: undefined })}
-                  className="rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
                 >
                   Package ₹{ctc} LPA ✕
                 </button>
@@ -643,7 +760,7 @@ export function StudentDirectoryPage({
                   type="button"
                   aria-label={`Clear the category filter, ${offerCategoryLabel(category)}`}
                   onClick={() => update({ category: undefined })}
-                  className="rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
                 >
                   {offerCategoryLabel(category)} ✕
                 </button>
@@ -651,8 +768,6 @@ export function StudentDirectoryPage({
             </div>
           )}
 
-          {/* G7 (UAT 2026-08-20): the counts are controls, not prose — each
-              applies the filter behind its number. */}
           {/* G7 (UAT 2026-08-20): the counts are controls, not prose — each
               applies the filter behind its number. They are buttons rather
               than underlined words because underlined brand text reads as a
@@ -669,131 +784,187 @@ export function StudentDirectoryPage({
             </Button>
           </p>
 
-          {visible.length === 0 ? (
-            <Card className="p-6">
-              <p className="text-sm text-ink-700">No students match this search.</p>
-            </Card>
-          ) : (
-            <>
-              <Card className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-sm">
-                  <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
-                    <tr>
-                      <th className="px-4 py-3">Student</th>
-                      <th className="px-4 py-3">
-                        <span className="flex items-center gap-1.5">
-                          Campus
-                          <ColumnFilterButton label="Campus" active={campus !== ""}>
-                            <ColumnFilterSearch
-                              label="Campus"
-                              value={campus}
-                              onChange={(next) => update({ campus: next })}
-                              placeholder="Search campus…"
-                            />
-                          </ColumnFilterButton>
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">
-                        <span className="flex items-center gap-1.5">
-                          Registration
-                          <ColumnFilterButton label="Registration" active={srfStatus !== undefined}>
-                            <ColumnFilterOptions
-                              label="Registration status"
-                              options={srfOptions.map((status) => ({
-                                value: status,
-                                label: SRF_LABEL[status],
-                              }))}
-                              selected={srfStatus === undefined ? [] : [srfStatus]}
-                              onChange={(next) =>
-                                update({ srf: next.length === 0 ? undefined : next[0] })
-                              }
-                            />
-                          </ColumnFilterButton>
-                        </span>
-                      </th>
-                      <th className="px-4 py-3">Applications</th>
-                      <th className="px-4 py-3">Placement</th>
-                      {holds !== undefined && <th className="px-4 py-3">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody className="table-rows divide-y divide-line">
-                    {pagedStudents.map((student) => (
-                      <tr key={student.studentId}>
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-ink-900">
+          <Card className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-left text-sm">
+              <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
+                <tr>
+                  <th className="px-4 py-3">Student</th>
+                  <th className="px-4 py-3">
+                    <span className="flex items-center gap-1.5">
+                      Campus
+                      <ColumnFilterButton label="Campus" active={campus !== ""}>
+                        <ColumnFilterSearch
+                          label="Campus"
+                          value={campus}
+                          onChange={(next) => update({ campus: next })}
+                          placeholder="Search campus…"
+                          options={campusOptions}
+                        />
+                      </ColumnFilterButton>
+                    </span>
+                  </th>
+                  <th className="px-4 py-3">
+                    <span className="flex items-center gap-1.5">
+                      Registration
+                      <ColumnFilterButton label="Registration" active={srfStatus !== undefined}>
+                        <ColumnFilterOptions
+                          label="Registration status"
+                          options={srfOptionsWithCounts}
+                          selected={srfStatus === undefined ? [] : [srfStatus]}
+                          onChange={(next) =>
+                            update({ srf: next.length === 0 ? undefined : next[0] })
+                          }
+                        />
+                      </ColumnFilterButton>
+                    </span>
+                  </th>
+                  <th className="px-4 py-3">Applications</th>
+                  <th className="px-4 py-3">
+                    <span className="flex items-center gap-1.5">
+                      Placement
+                      <ColumnFilterButton
+                        label="Placement"
+                        active={
+                          filter === "placed" ||
+                          filter === "not_placed" ||
+                          filter === "on_campus" ||
+                          filter === "self_placed"
+                        }
+                      >
+                        <ColumnFilterOptions
+                          label="Placement outcome"
+                          options={placementOptions}
+                          selected={
+                            filter === "placed" ||
+                            filter === "not_placed" ||
+                            filter === "on_campus" ||
+                            filter === "self_placed"
+                              ? [filter]
+                              : []
+                          }
+                          onChange={(next) =>
+                            update({ filter: next.length === 0 ? undefined : next[0] })
+                          }
+                        />
+                      </ColumnFilterButton>
+                    </span>
+                  </th>
+                  {holds !== undefined && <th className="px-4 py-3 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="table-rows divide-y divide-line">
+                {visible.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={holds !== undefined ? 6 : 5}
+                      className="py-12 text-center text-sm text-ink-700"
+                    >
+                      <p>No students match this search.</p>
+                      {anyFilterActive && (
+                        <div className="mt-3">
+                          <Button variant="secondary" size="sm" onClick={clearAll}>
+                            Clear all filters
+                          </Button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ) : (
+                  pagedStudents.map((student) => (
+                    <tr
+                      key={student.studentId}
+                      className="hover:bg-surface-muted/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-ink-900">
                             {/* G7: the name is the door to the canonical record. */}
-                            <Link to={`/students/${student.studentId}`} className="hover:underline">
+                            <Link
+                              to={`/students/${student.studentId}`}
+                              className="hover:underline hover:text-brand-600"
+                            >
                               {student.fullName}
                             </Link>
                           </p>
-                          <p className="text-xs text-ink-500">
-                            Roll {student.rollNumber}
-                            {/* The Actions column wears an "On hold" badge when
-                              holds are switched on, so the name cell stays
-                              quiet rather than saying it twice in one row. */}
-                            {student.participationStatus !== "active" &&
-                              !(
-                                holds !== undefined && student.participationStatus === "on_hold"
-                              ) && (
-                                <>
-                                  {" · "}
-                                  <span className="text-warning">
-                                    {participationStatusLabel(student.participationStatus)}
-                                  </span>
-                                </>
-                              )}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-ink-700">
-                          <p>{student.campusName}</p>
-                          <p className="text-xs text-ink-500">
-                            {student.degree} {student.branch} · {student.passingYear}
-                            {/* 2026-10-18 (UAT): the overview's count opens a
-                              popup with a CGPA column, and this is the list it
-                              links into — the same figure, same two decimals. */}
-                            {student.cgpa !== null && <> · {student.cgpa.toFixed(2)} CGPA</>}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge tone={SRF_TONE[student.srfStatus]}>
-                            {SRF_LABEL[student.srfStatus]}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-ink-700">{student.applications}</td>
-                        <td className="px-4 py-3">
-                          {student.placement === null ? (
-                            // A fact, not a blank cell: an empty column reads as
-                            // missing data rather than as an unplaced student.
-                            <span className="text-ink-500">Not placed</span>
-                          ) : (
-                            <>
-                              <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                                {student.placement.companyName}
-                                {student.placement.source === "self_placed" && (
-                                  <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
-                                    Self-placed
-                                  </span>
-                                )}
-                              </p>
-                              <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
-                                {student.placement.roleTitle ?? "Role not recorded"} · ₹
-                                {student.placement.ctcLpa} LPA
-                                {student.placement.offerCategory !== null &&
-                                  ` · ${offerCategoryLabel(student.placement.offerCategory)}`}
-                              </p>
-                            </>
+                          {holds === undefined && (
+                            <Link
+                              to={`/students/${student.studentId}`}
+                              className="inline-flex items-center rounded-md border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50 hover:border-brand-300 transition-colors shrink-0"
+                            >
+                              Profile →
+                            </Link>
                           )}
-                        </td>
-                        {holds !== undefined && (
-                          <td className="px-4 py-3">
-                            {/* 0125 refuses a second hold on a student already
-                              held, so the row says that instead of offering a
-                              button whose only answer would be a failure. */}
+                        </div>
+                        <p className="text-xs text-ink-500">
+                          Roll {student.rollNumber}
+                          {/* The Actions column wears an "On hold" badge when
+                            holds are switched on, so the name cell stays
+                            quiet rather than saying it twice in one row. */}
+                          {student.participationStatus !== "active" &&
+                            !(holds !== undefined && student.participationStatus === "on_hold") && (
+                              <>
+                                {" · "}
+                                <span className="text-warning font-medium">
+                                  {participationStatusLabel(student.participationStatus)}
+                                </span>
+                              </>
+                            )}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-ink-700">
+                        <p className="font-medium text-ink-900">{student.campusName}</p>
+                        <p className="text-xs text-ink-500">
+                          {student.degree} {student.branch} · {student.passingYear}
+                          {/* 2026-10-18 (UAT): the overview's count opens a
+                            popup with a CGPA column, and this is the list it
+                            links into — the same figure, same two decimals. */}
+                          {student.cgpa !== null && <> · {student.cgpa.toFixed(2)} CGPA</>}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge tone={SRF_TONE[student.srfStatus]}>
+                          {SRF_LABEL[student.srfStatus]}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-sm text-ink-700">
+                        {student.applications}
+                      </td>
+                      <td className="px-4 py-3">
+                        {student.placement === null ? (
+                          // A fact, not a blank cell: an empty column reads as
+                          // missing data rather than as an unplaced student.
+                          <span className="text-xs font-medium text-ink-400">Not placed</span>
+                        ) : (
+                          <>
+                            <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                              {student.placement.companyName}
+                              {student.placement.source === "self_placed" && (
+                                <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                  Self-placed
+                                </span>
+                              )}
+                            </p>
+                            <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
+                              {student.placement.roleTitle ?? "Role not recorded"} · ₹
+                              {student.placement.ctcLpa} LPA
+                              {student.placement.offerCategory !== null &&
+                                ` · ${offerCategoryLabel(student.placement.offerCategory)}`}
+                            </p>
+                          </>
+                        )}
+                      </td>
+                      {holds !== undefined && (
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              to={`/students/${student.studentId}`}
+                              className="inline-flex items-center rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50 hover:border-brand-300 transition-colors"
+                            >
+                              Profile →
+                            </Link>
                             {student.participationStatus === "on_hold" ? (
                               <Badge tone="warning">On hold</Badge>
                             ) : pendingSet.has(student.studentId) ? (
-                              // A request waiting is the student's own words; a
-                              // second Hold button would just be refused by 0130.
                               <Badge tone="warning">Request waiting</Badge>
                             ) : (
                               <Button
@@ -811,22 +982,24 @@ export function StudentDirectoryPage({
                                 Hold
                               </Button>
                             )}
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-              <TablePager
-                page={page}
-                pageSize={pageSize}
-                total={visible.length}
-                unit="students"
-                onPage={setPage}
-                onPageSize={setPageSize}
-              />
-            </>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </Card>
+          {visible.length > 0 && (
+            <TablePager
+              page={page}
+              pageSize={pageSize}
+              total={visible.length}
+              unit="students"
+              onPage={setPage}
+              onPageSize={setPageSize}
+            />
           )}
         </>
       )}
