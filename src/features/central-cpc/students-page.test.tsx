@@ -771,3 +771,138 @@ describe("StudentDirectoryPage holds", () => {
     expect(screen.getByRole("button", { name: "Hold Rahul Nair" })).toBeDefined();
   });
 });
+
+/**
+ * 2026-11-02: the roster already prints these facts on every row; the
+ * dropdowns are how a coordinator reaches a slice without scrolling. Only
+ * choices the roster can actually offer are drawn, and every choice lives in
+ * the URL so the narrowed view can be sent to somebody else.
+ */
+describe("filtering by the facts the table does not print", () => {
+  /** A second degree, year and participation, so every dropdown has a choice. */
+  const PG: DirectoryStudent = {
+    ...UNPLACED,
+    studentId: "s9",
+    fullName: "Nithya Balan",
+    rollNumber: "21CSE1201",
+    degree: "M.Tech.",
+    branch: "CSE",
+    passingYear: 2027,
+    participationStatus: "on_hold",
+  };
+
+  it("always draws the campus dropdown, even with one college in the roster", async () => {
+    show();
+    await screen.findByText("Anjali Subramanian");
+
+    const campus = screen.getByLabelText("Campus") as HTMLSelectElement;
+    expect(campus.value).toBe("");
+    expect(within(campus).getByRole("option", { name: "SDNB Vaishnav College" })).toBeDefined();
+  });
+
+  it("draws only the dropdowns whose roster holds more than one value", async () => {
+    show();
+    await screen.findByText("Anjali Subramanian");
+
+    // One degree, one year and one participation status in this roster, so a
+    // dropdown for any of them would offer nothing to choose.
+    expect(screen.queryByLabelText("Degree")).toBeNull();
+    expect(screen.queryByLabelText("Passing year")).toBeNull();
+    expect(screen.queryByLabelText("Participation")).toBeNull();
+
+    // Two branches and two registration statuses, so both are useful.
+    expect(screen.getByLabelText("Branch")).toBeDefined();
+    expect(screen.getByLabelText("Registration")).toBeDefined();
+  });
+
+  it("narrows to one branch", async () => {
+    const user = userEvent.setup();
+    show();
+    await screen.findByText("Anjali Subramanian");
+
+    await user.selectOptions(screen.getByLabelText("Branch"), "ECE");
+
+    expect(screen.getByText("Rahul Nair")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  it("narrows to one registration status", async () => {
+    const user = userEvent.setup();
+    show();
+    await screen.findByText("Anjali Subramanian");
+
+    await user.selectOptions(screen.getByLabelText("Registration"), "srf_submitted");
+
+    expect(screen.getByText("Rahul Nair")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+  });
+
+  it("narrows to one degree when the roster offers two", async () => {
+    const user = userEvent.setup();
+    show([PLACED, UNPLACED, PG]);
+    await screen.findByText("Nithya Balan");
+
+    await user.selectOptions(screen.getByLabelText("Degree"), "M.Tech.");
+
+    expect(screen.getByText("Nithya Balan")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+  });
+
+  it("narrows to one passing year when the roster offers two", async () => {
+    const user = userEvent.setup();
+    show([PLACED, UNPLACED, PG]);
+    await screen.findByText("Nithya Balan");
+
+    await user.selectOptions(screen.getByLabelText("Passing year"), "2027");
+
+    expect(screen.getByText("Nithya Balan")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+  });
+
+  it("narrows to one participation status when the roster offers two", async () => {
+    const user = userEvent.setup();
+    show([PLACED, UNPLACED, PG]);
+    await screen.findByText("Nithya Balan");
+
+    await user.selectOptions(screen.getByLabelText("Participation"), "on_hold");
+
+    expect(screen.getByText("Nithya Balan")).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+  });
+
+  it("arrives already narrowed when the URL carries a dropdown value", async () => {
+    show([PLACED, UNPLACED], "/central/students?branch=ECE");
+    await screen.findByText("Rahul Nair");
+
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect((screen.getByLabelText("Branch") as HTMLSelectElement).value).toBe("ECE");
+  });
+
+  /** A value nobody holds must not silently empty the screen. */
+  it("ignores a dropdown value nobody in the roster holds", async () => {
+    show([PLACED, UNPLACED], "/central/students?branch=Mech&srf=srf_rejected");
+    await screen.findByText("Anjali Subramanian");
+
+    expect(screen.getByText("Rahul Nair")).toBeDefined();
+    expect((screen.getByLabelText("Branch") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText("Registration") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("clears every chip, search and dropdown at once", async () => {
+    const user = userEvent.setup();
+    show([PLACED, UNPLACED], "/central/students?branch=CSE");
+    await screen.findByText("Anjali Subramanian");
+
+    await user.type(screen.getByRole("searchbox", { name: /search/i }), "zoho");
+    await user.click(screen.getByRole("button", { name: /clear all/i }));
+
+    expect(screen.getByText("Anjali Subramanian")).toBeDefined();
+    expect(screen.getByText("Rahul Nair")).toBeDefined();
+    expect((screen.getByLabelText("Branch") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("searchbox", { name: /search/i }) as HTMLInputElement).value).toBe("");
+    expect(screen.queryByRole("button", { name: /clear all/i })).toBeNull();
+  });
+});

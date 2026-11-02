@@ -12,9 +12,9 @@ import {
   filterDirectory,
   summariseDirectory,
 } from "@domain/student-directory";
-import type { SrfStatus } from "@domain/types";
+import type { ParticipationStatus, SrfStatus } from "@domain/types";
 import type { HoldsView } from "@lib/holds-view";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 export interface StudentDirectoryView {
@@ -83,6 +83,59 @@ const FILTERS: readonly { readonly value: DirectoryFilter; readonly label: strin
   { value: "on_hold", label: "On hold" },
 ];
 
+/** The canonical order the two status dropdowns list their options in. */
+const SRF_STATUSES: readonly SrfStatus[] = [
+  "invited",
+  "registered",
+  "srf_submitted",
+  "srf_approved",
+  "srf_rejected",
+];
+
+const PARTICIPATION_STATUSES: readonly ParticipationStatus[] = ["active", "on_hold", "opted_out"];
+
+const isSrfStatus = (value: string | null): value is SrfStatus =>
+  SRF_STATUSES.some((status) => status === value);
+
+const isParticipationStatus = (value: string | null): value is ParticipationStatus =>
+  PARTICIPATION_STATUSES.some((status) => status === value);
+
+/**
+ * A labelled dropdown for the directory's filter bar (2026-11-02).
+ *
+ * `htmlFor` rather than a wrapping <label>: a wrapper's text content includes
+ * every <option>, so "Campus" would no longer be the control's exact name.
+ */
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  children,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  children: ReactNode;
+}) {
+  const id = useId();
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-ink-500">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="max-w-[190px] rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink-900"
+      >
+        {children}
+      </select>
+    </div>
+  );
+}
+
 const EXPORT_COLUMNS = [
   "Student",
   "Roll number",
@@ -124,6 +177,9 @@ const isFilter = (value: string | null): value is DirectoryFilter =>
  */
 const isCategory = (value: string | null): value is OfferCategory =>
   LADDER_CATEGORIES.some((c) => c === value);
+
+const uniqueSorted = (values: readonly string[]): string[] =>
+  [...new Set(values)].sort((a, b) => a.localeCompare(b));
 
 /** A package figure from the URL. Nonsense is ignored, never shown as an empty list. */
 function parseCtc(value: string | null): number | undefined {
@@ -174,11 +230,22 @@ export function StudentDirectoryPage({
   const filter: DirectoryFilter = isFilter(filterParam) ? filterParam : "all";
 
   /**
-   * The three drill-downs the placement overview can arrive with. All in the
-   * URL for the same reason as the filter, and all ignored when they are
-   * nonsense - a mistyped parameter must not empty the screen.
+   * The drill-downs the placement overview can arrive with, plus the roster
+   * facts the table does not print as columns (2026-11-02). All in the URL for
+   * the same reason as the filter, and all ignored when they are nonsense - a
+   * mistyped parameter must not empty the screen.
+   *
+   * The text ones are validated against the options the roster actually
+   * offers, below; validating against a list the screen draws is what keeps an
+   * unrecognised value from narrowing the list with nothing on screen to
+   * explain it.
    */
-  const campus = params.get("campus") ?? "";
+  const campusParam = params.get("campus") ?? "";
+  const degreeParam = params.get("degree");
+  const branchParam = params.get("branch");
+  const yearParam = params.get("year");
+  const srfParam = params.get("srf");
+  const participationParam = params.get("participation");
   const ctc = parseCtc(params.get("ctc"));
   const categoryParam = params.get("category");
   const category = isCategory(categoryParam) ? categoryParam : undefined;
@@ -236,9 +303,89 @@ export function StudentDirectoryPage({
   }, [holds, attempt]);
 
   const summary = useMemo(() => summariseDirectory(students ?? []), [students]);
+
+  /**
+   * The options every dropdown offers, built from the roster that is actually
+   * loaded — so a college list can never offer an empty one, and the
+   * registration/participation lists say their words in a stable order.
+   */
+  const campuses = useMemo(
+    () => uniqueSorted((students ?? []).map((s) => s.campusName)),
+    [students],
+  );
+  const degrees = useMemo(() => uniqueSorted((students ?? []).map((s) => s.degree)), [students]);
+  const branches = useMemo(() => uniqueSorted((students ?? []).map((s) => s.branch)), [students]);
+  const passingYears = useMemo(
+    () => [...new Set((students ?? []).map((s) => s.passingYear))].sort((a, b) => a - b),
+    [students],
+  );
+  const srfOptions = useMemo(() => {
+    const present = new Set((students ?? []).map((s) => s.srfStatus));
+    return SRF_STATUSES.filter((status) => present.has(status));
+  }, [students]);
+  const participationOptions = useMemo(() => {
+    const present = new Set((students ?? []).map((s) => s.participationStatus));
+    return PARTICIPATION_STATUSES.filter((status) => present.has(status));
+  }, [students]);
+
+  /*
+   * An arriving value is honoured only when the screen can draw it as the
+   * chosen option. A dropdown that is hidden for having one value is not a
+   * filter the reader can see, so it is not a filter applied silently either.
+   */
+  const campus = campuses.includes(campusParam) ? campusParam : "";
+  const degree =
+    degrees.length > 1 && degreeParam !== null && degrees.includes(degreeParam) ? degreeParam : "";
+  const branch =
+    branches.length > 1 && branchParam !== null && branches.includes(branchParam)
+      ? branchParam
+      : "";
+  const yearFigure = yearParam === null ? null : Number(yearParam);
+  const passingYear =
+    passingYears.length > 1 &&
+    yearFigure !== null &&
+    Number.isInteger(yearFigure) &&
+    passingYears.includes(yearFigure)
+      ? yearFigure
+      : undefined;
+  const srfStatus: SrfStatus | undefined =
+    srfOptions.length > 1 && isSrfStatus(srfParam) && srfOptions.includes(srfParam)
+      ? srfParam
+      : undefined;
+  const participationStatus: ParticipationStatus | undefined =
+    participationOptions.length > 1 &&
+    isParticipationStatus(participationParam) &&
+    participationOptions.includes(participationParam)
+      ? participationParam
+      : undefined;
+
   const visible = useMemo(
-    () => filterDirectory(students ?? [], { filter, query, campus, ctc, category }),
-    [students, filter, query, campus, ctc, category],
+    () =>
+      filterDirectory(students ?? [], {
+        filter,
+        query,
+        campus,
+        degree,
+        branch,
+        passingYear,
+        srfStatus,
+        participationStatus,
+        ctc,
+        category,
+      }),
+    [
+      students,
+      filter,
+      query,
+      campus,
+      degree,
+      branch,
+      passingYear,
+      srfStatus,
+      participationStatus,
+      ctc,
+      category,
+    ],
   );
 
   // A filter change can shrink the list under the page the reader was on; the
@@ -246,17 +393,40 @@ export function StudentDirectoryPage({
   // biome-ignore lint/correctness/useExhaustiveDependencies: resetting the page is the point
   useEffect(() => {
     setPage(0);
-  }, [filter, query, campus, ctc, category, pageSize]);
+  }, [
+    filter,
+    query,
+    campus,
+    degree,
+    branch,
+    passingYear,
+    srfStatus,
+    participationStatus,
+    ctc,
+    category,
+    pageSize,
+  ]);
 
   const safePage = Math.min(page, Math.max(0, Math.ceil(visible.length / pageSize) - 1));
   const pagedStudents = visible.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
-  /** Every campus actually present in the rows, so the list cannot offer an empty one. */
-  const campuses = useMemo(
-    () =>
-      [...new Set((students ?? []).map((s) => s.campusName))].sort((a, b) => a.localeCompare(b)),
-    [students],
-  );
+  const anyFilterActive =
+    filter !== "all" ||
+    query.trim() !== "" ||
+    campus !== "" ||
+    degree !== "" ||
+    branch !== "" ||
+    passingYear !== undefined ||
+    srfStatus !== undefined ||
+    participationStatus !== undefined ||
+    ctc !== undefined ||
+    category !== undefined;
+
+  /** Back to the whole roster, in one press — chips, dropdowns and search. */
+  const clearAll = () => {
+    setQuery("");
+    setParams(new URLSearchParams(), { replace: true });
+  };
 
   const pendingSet = useMemo(() => new Set(pending), [pending]);
   const pendingStudents = useMemo(
@@ -435,7 +605,12 @@ export function StudentDirectoryPage({
             </div>
           )}
 
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          {/* One filter bar (2026-11-02): the population chips, the search,
+              and a dropdown for every roster fact the table does not print as
+              a column. A coordinator asked for the college filter and for
+              dropdowns beside it; they are together here so a change to one
+              never silently drops another. */}
+          <Card className="mb-4 p-3 sm:p-4">
             <fieldset className="w-full">
               <legend className="sr-only">Filter students</legend>
               <div
@@ -467,35 +642,119 @@ export function StudentDirectoryPage({
               </div>
             </fieldset>
 
-            {/* F4 carried through (2026-08-26): a card pressed on one campus
-                lands here on that campus, and says so. */}
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {campuses.length > 1 && (
-                <select
-                  aria-label="Campus"
-                  value={campus}
-                  onChange={(e) => update({ campus: e.target.value })}
-                  className="flex-1 min-w-[130px] rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink-900 sm:flex-none"
-                >
-                  <option value="">All campuses</option>
-                  {campuses.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </select>
-              )}
-
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
               <input
                 type="search"
                 aria-label="Search students"
                 placeholder="Name, roll number, company…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full flex-1 rounded-lg border border-line px-3 py-1.5 text-sm text-ink-900 sm:w-64"
+                className="w-full flex-1 rounded-lg border border-line px-3 py-1.5 text-sm text-ink-900 sm:max-w-xs"
               />
+              {anyFilterActive && (
+                <div className="ml-auto">
+                  <Button variant="secondary" size="sm" onClick={clearAll}>
+                    Clear all
+                  </Button>
+                </div>
+              )}
             </div>
-          </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
+              {/* Always drawn, even with one college in the roster: a filter
+                  that vanishes when the roster is small is the one the reader
+                  came for (test env, 2026-11-02). */}
+              <FilterSelect
+                label="Campus"
+                value={campus}
+                onChange={(next) => update({ campus: next })}
+              >
+                <option value="">All campuses</option>
+                {campuses.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </FilterSelect>
+
+              {/* The rest appear only when the roster holds two or more
+                  values: a dropdown with one real choice is not a filter. */}
+              {degrees.length > 1 && (
+                <FilterSelect
+                  label="Degree"
+                  value={degree}
+                  onChange={(next) => update({ degree: next })}
+                >
+                  <option value="">All degrees</option>
+                  {degrees.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </FilterSelect>
+              )}
+
+              {branches.length > 1 && (
+                <FilterSelect
+                  label="Branch"
+                  value={branch}
+                  onChange={(next) => update({ branch: next })}
+                >
+                  <option value="">All branches</option>
+                  {branches.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </FilterSelect>
+              )}
+
+              {passingYears.length > 1 && (
+                <FilterSelect
+                  label="Passing year"
+                  value={passingYear === undefined ? "" : String(passingYear)}
+                  onChange={(next) => update({ year: next })}
+                >
+                  <option value="">All years</option>
+                  {passingYears.map((year) => (
+                    <option key={year} value={String(year)}>
+                      {year}
+                    </option>
+                  ))}
+                </FilterSelect>
+              )}
+
+              {srfOptions.length > 1 && (
+                <FilterSelect
+                  label="Registration"
+                  value={srfStatus ?? ""}
+                  onChange={(next) => update({ srf: next })}
+                >
+                  <option value="">All registrations</option>
+                  {srfOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {SRF_LABEL[status]}
+                    </option>
+                  ))}
+                </FilterSelect>
+              )}
+
+              {participationOptions.length > 1 && (
+                <FilterSelect
+                  label="Participation"
+                  value={participationStatus ?? ""}
+                  onChange={(next) => update({ participation: next })}
+                >
+                  <option value="">All participation</option>
+                  {participationOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {participationStatusLabel(status)}
+                    </option>
+                  ))}
+                </FilterSelect>
+              )}
+            </div>
+          </Card>
 
           {/*
            * The package and category drill-downs. They are not permanent

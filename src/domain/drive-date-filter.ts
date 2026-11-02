@@ -107,9 +107,15 @@ export function filterDrivesByDateRange<T extends DriveDateFilterItem>(
   drives: readonly T[],
   criteria: DateRangeFilterCriteria,
 ): readonly T[] {
-  const { dimension, preset, startDate, endDate } = criteria;
+  const { dimension, startDate, endDate } = criteria;
 
-  if (preset === "all" && !startDate && !endDate) {
+  /**
+   * No dates, no filter — whatever the preset is called. Choosing "Custom
+   * range" and typing nothing yet must not drop every drive that lacks a date
+   * in the chosen dimension; before the inputs were hidden behind that chip,
+   * the empty range was unreachable.
+   */
+  if (!startDate && !endDate) {
     return drives;
   }
 

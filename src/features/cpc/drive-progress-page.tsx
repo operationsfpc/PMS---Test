@@ -1,7 +1,6 @@
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveTypeFilter } from "@components/drive-type-filter";
 import { StudentIdentity } from "@components/student-identity";
-import { TablePager } from "@components/table-pager";
 import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
@@ -19,7 +18,6 @@ import { describeOfferPay } from "@domain/offer-pay";
 import type { AttendanceStatus, DriveType, RoundResult } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
 
 /**
  * D10 (2026-08-12): the placement coordinator and KAM follow students
@@ -82,14 +80,48 @@ const RESULT_TONE = (result: RoundResult | null, attendance: AttendanceStatus) =
 };
 
 /**
- * Ten company VISITS a page, not ten drives. A visit that raised four roles is
- * one row group, and paging by role would have put half a company on each
- * page — the same company twice on screen, which is what was reported.
+ * A page is filled to a budget of ROLE ROWS, not a fixed number of visits.
+ *
+ * Ten visits used to mean ten rows for a screen of legacy drives and forty for
+ * a visit that raised four roles, so the page was either half empty or three
+ * screens tall. A budget keeps the page roughly one screen high; `15` fills a
+ * laptop viewport, and the reader can ask for a taller or shorter page.
  */
-const PAGE_SIZE = 10;
+const ROW_BUDGETS = [10, 15, 25, 50] as const;
+const DEFAULT_ROW_BUDGET = 15;
 
 /** The slice of the cycle a coordinator is asking about, held per role. */
 type StageFilter = "all" | "shortlisted" | "in_rounds" | "offers";
+
+/** One company visit: its group id and its roles, in their table order. */
+type VisitGroup = readonly [string, readonly DriveProgressEntry[]];
+
+/**
+ * Pages of WHOLE visits, filled to a row budget.
+ *
+ * A visit is never split across pages: half a company on each page is the
+ * "same company twice" this table was rebuilt to stop. When a single visit is
+ * taller than the budget it is still shown whole, on a page of its own.
+ */
+function paginateVisits(events: readonly VisitGroup[], rowBudget: number): VisitGroup[][] {
+  const pages: VisitGroup[][] = [];
+  let page: VisitGroup[] = [];
+  let rows = 0;
+
+  for (const event of events) {
+    const height = event[1].length;
+    if (page.length > 0 && rows + height > rowBudget) {
+      pages.push(page);
+      page = [];
+      rows = 0;
+    }
+    page.push(event);
+    rows += height;
+  }
+
+  if (page.length > 0) pages.push(page);
+  return pages;
+}
 
 interface RoleSelection {
   readonly college: string;
@@ -148,6 +180,8 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState<DriveTypeFilterValue>("");
   const [page, setPage] = useState(1);
+  /** How many role rows a page may hold. Whole visits only. */
+  const [rowBudget, setRowBudget] = useState<number>(DEFAULT_ROW_BUDGET);
   /** The role whose students the pane is listing, and the visit it belongs to. */
   const [openPane, setOpenPane] = useState<{ eventId: string; driveId: string } | null>(null);
   /**
@@ -212,16 +246,31 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
    */
   const events = useMemo(() => [...groupDrivesByEvent(visible).entries()], [visible]);
 
-  const pageCount = Math.max(1, Math.ceil(events.length / PAGE_SIZE));
+  const pages = useMemo(() => paginateVisits(events, rowBudget), [events, rowBudget]);
+  const pageCount = Math.max(1, pages.length);
   const current = Math.min(page, pageCount);
-  const pageEvents = useMemo(
-    () => events.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
-    [events, current],
-  );
+  const pageEvents = pages[current - 1] ?? [];
+  const rowsOnPage = pageEvents.reduce((rows, [, roles]) => rows + roles.length, 0);
+  const visitsBefore = pages
+    .slice(0, current - 1)
+    .reduce((visits, pageVisits) => visits + pageVisits.length, 0);
 
   const openGroup = openPane === null ? undefined : events.find(([id]) => id === openPane.eventId);
   const openRoles = openGroup?.[1];
   const openHead = openRoles?.[0];
+
+  /**
+   * Every datum on a row opens the same pane, but a count carries the question
+   * it answered: show that role at that stage. A college narrowing is dropped
+   * because a count is role-wide — a leftover college filter would show fewer
+   * people than the number that was pressed.
+   */
+  const openAt = (eventId: string, driveId: string, stage?: StageFilter) => {
+    setOpenPane({ eventId, driveId });
+    if (stage !== undefined) {
+      select(driveId, { stage, college: "" });
+    }
+  };
 
   return (
     <div>
@@ -324,23 +373,63 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                     <VisitRows
                       key={eventId}
                       roles={roles}
-                      accentIndex={(current - 1) * PAGE_SIZE + index}
-                      onOpen={(driveId) => setOpenPane({ eventId, driveId })}
+                      accentIndex={visitsBefore + index}
+                      onOpen={(driveId, stage) => openAt(eventId, driveId, stage)}
                     />
                   ))}
                 </table>
               </div>
-              {events.length > PAGE_SIZE && (
-                <div className="border-t border-line px-4 py-3">
-                  <TablePager
-                    page={current - 1}
-                    pageSize={PAGE_SIZE}
-                    total={events.length}
-                    onPage={(next) => setPage(next + 1)}
-                    unit="company visits"
-                  />
+
+              {/* Always drawn, even on a single page: the reader can see there
+                  is no more, and can change how tall a page is. */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-ink-600">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>
+                    Showing visits {visitsBefore + 1} to {visitsBefore + pageEvents.length} of{" "}
+                    {events.length} · {rowsOnPage} {rowsOnPage === 1 ? "role row" : "role rows"}
+                  </span>
+                  <div className="ml-2 flex items-center gap-1">
+                    <span className="text-ink-500">Rows:</span>
+                    <select
+                      aria-label="Rows per page"
+                      value={rowBudget}
+                      onChange={(e) => {
+                        setRowBudget(Number(e.target.value));
+                        setPage(1);
+                      }}
+                      className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-ink-800"
+                    >
+                      {ROW_BUDGETS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              )}
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={current === 1}
+                    onClick={() => setPage(current - 1)}
+                  >
+                    Previous
+                  </Button>
+                  <span className="px-2 font-medium">
+                    Page {current} of {pageCount}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={current >= pageCount}
+                    onClick={() => setPage(current + 1)}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </Card>
           )}
 
@@ -378,7 +467,8 @@ function VisitRows({
 }: {
   roles: readonly DriveProgressEntry[];
   accentIndex: number;
-  onOpen: (driveId: string) => void;
+  /** `stage` is set when a count was pressed: open that role at that stage. */
+  onOpen: (driveId: string, stage?: StageFilter) => void;
 }) {
   const head = roles[0];
   if (head === undefined) return null;
@@ -402,6 +492,20 @@ function VisitRows({
     <tbody>
       {roles.map((drive, index) => {
         const own = countStage(drive.students);
+        const roleLabel = drive.roleTitle ?? "this role";
+
+        /** A count is a question; pressing it opens the people who answer it. */
+        const stageButton = (value: number, stage: StageFilter, description: string) => (
+          <button
+            type="button"
+            aria-label={`Open the ${description} of ${roleLabel}`}
+            onClick={() => onOpen(drive.driveId, stage)}
+            className="rounded px-1.5 py-0.5 font-semibold text-ink-900 tabular-nums transition-colors hover:bg-brand-50 hover:text-brand-700 hover:underline"
+          >
+            {value}
+          </button>
+        );
+
         return (
           <tr
             key={drive.driveId}
@@ -420,21 +524,18 @@ function VisitRows({
                   />
                   <span className="min-w-0">
                     <span className="block font-heading font-bold text-ink-900">
-                      {/* A single-role visit is one company with exactly one
-                          drive record behind it, so the name can link. A visit
-                          that raised several cannot — picking one of them
-                          silently is how a coordinator ends up reading the
-                          wrong record. */}
-                      {isVisit ? (
-                        head.companyName
-                      ) : (
-                        <Link
-                          to={`/drives/${head.driveId}`}
-                          className="transition-colors hover:text-brand-600 hover:underline"
-                        >
-                          {head.companyName}
-                        </Link>
-                      )}
+                      {/* The company opens the visit pane. A visit that raised
+                          several roles has no single record to pick, and the
+                          pane carries each role's own View to /drives/:id —
+                          the route to the record stays one deliberate press. */}
+                      <button
+                        type="button"
+                        aria-label={`Open ${head.companyName} in the side pane`}
+                        onClick={() => onOpen(head.driveId)}
+                        className="text-left transition-colors hover:text-brand-600 hover:underline"
+                      >
+                        {head.companyName}
+                      </button>
                     </span>
                     <span className="mt-0.5 block text-xs font-normal text-ink-500">
                       {meta.join(" · ")}
@@ -445,7 +546,14 @@ function VisitRows({
             )}
             <td className="px-3 py-3 font-medium text-ink-900">
               <span className="flex flex-wrap items-center gap-2">
-                {drive.roleTitle ?? "Role not set"}
+                <button
+                  type="button"
+                  aria-label={`Open ${roleLabel} in the side pane`}
+                  onClick={() => onOpen(drive.driveId)}
+                  className="text-left transition-colors hover:text-brand-700 hover:underline"
+                >
+                  {drive.roleTitle ?? "Role not set"}
+                </button>
                 {mixed && drive.driveType !== undefined && drive.driveType !== null ? (
                   <Badge tone={driveTypeTone(drive.driveType)}>
                     {driveTypeLabel(drive.driveType)}
@@ -453,10 +561,18 @@ function VisitRows({
                 ) : null}
               </span>
             </td>
-            <td className="px-3 py-3 text-right tabular-nums">{own.applicants}</td>
-            <td className="px-3 py-3 text-right tabular-nums">{own.shortlisted}</td>
-            <td className="px-3 py-3 text-right tabular-nums">{own.inRounds}</td>
-            <td className="px-3 py-3 text-right tabular-nums">{own.offers}</td>
+            <td className="px-3 py-3 text-right tabular-nums">
+              {stageButton(own.applicants, "all", "applicants")}
+            </td>
+            <td className="px-3 py-3 text-right tabular-nums">
+              {stageButton(own.shortlisted, "shortlisted", "shortlisted students")}
+            </td>
+            <td className="px-3 py-3 text-right tabular-nums">
+              {stageButton(own.inRounds, "in_rounds", "students in rounds")}
+            </td>
+            <td className="px-3 py-3 text-right tabular-nums">
+              {stageButton(own.offers, "offers", "students with an offer")}
+            </td>
             <td className="px-3 py-3">
               <Badge tone={driveStatusTone(drive.status)}>{driveStatusLabel(drive.status)}</Badge>
             </td>

@@ -144,10 +144,11 @@ describe("DriveProgressPage", () => {
 
     expect(await screen.findByText("Zoho")).toBeDefined();
     expect(screen.getByText(/2 roles/)).toBeDefined();
-    // The company no longer links: one visit, two drive records, and picking
-    // one of them silently is how the old event strip sent readers to the
-    // wrong place. Each role links to its own record from inside the pane.
+    // The company opens the pane, not a record: one visit, two drive records,
+    // and picking one of them silently is how the old event strip sent readers
+    // to the wrong place. Each role links to its own record from inside the pane.
     expect(screen.queryByRole("link", { name: "Zoho" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open Zoho in the side pane" })).toBeDefined();
 
     expect(screen.getByRole("button", { name: /view the students of engineer/i })).toBeDefined();
     expect(
@@ -256,14 +257,23 @@ describe("DriveProgressPage", () => {
   });
 
   /**
-   * The company name of a one-role visit still links to its one record, and
-   * the row offers exactly one way to its students.
+   * A one-role visit is one row. Its company opens the same pane the View
+   * button does, and the pane carries the only deliberate route to the record
+   * page — the row itself is a summary, not a navigation to a guessed record.
    */
-  it("keeps a standalone drive one row that links straight to its record", async () => {
+  it("keeps a standalone drive one row whose company opens its pane", async () => {
+    const user = userEvent.setup();
     render(<DriveProgressPage view={view([DRIVE])} />);
 
-    expect(await screen.findByRole("link", { name: "Zoho" })).toBeDefined();
-    expect(screen.getByText("Engineer")).toBeDefined();
+    await screen.findByText("Engineer");
+    await user.click(screen.getByRole("button", { name: "Open Zoho in the side pane" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog)
+        .getByRole("link", { name: /^view engineer$/i })
+        .getAttribute("href"),
+    ).toBe("/drives/d1");
     expect(screen.getAllByRole("button", { name: /view the students of zoho/i })).toHaveLength(1);
   });
 
@@ -279,7 +289,11 @@ describe("DriveProgressPage", () => {
 
     await screen.findByText("Zoho");
     expect(screen.queryByRole("checkbox")).toBeNull();
-    expect(screen.queryByRole("combobox")).toBeNull();
+    // 2026-11-02: the pager's rows-per-page select is a read-only control, like
+    // the type chips. The rule this test protects is that nothing here WRITES.
+    expect(screen.getAllByRole("combobox").map((box) => box.getAttribute("aria-label"))).toEqual([
+      "Rows per page",
+    ]);
 
     // 2026-08-27: the drive-type filter added four buttons. The rule this
     // test protects is that nothing here WRITES — narrowing a list does not.
@@ -582,4 +596,187 @@ describe("DriveProgressPage — college chips in the pane", () => {
       students.getByRole("button", { name: /all colleges/i }).getAttribute("aria-pressed"),
     ).toBe("false");
   });
+});
+
+/**
+ * 2026-11-02: the board was "too long". It paged by ten VISITS — ten rows for
+ * legacy drives, forty for a visit that raised four roles — and drew no pager
+ * at all until it had more than ten. A page is now filled to a budget of role
+ * rows, whole visits only, and the pager is always on screen.
+ */
+describe("DriveProgressPage — paging by role rows, never splitting a visit", () => {
+  const visitRoles = (company: string, eventId: string, roleTitles: readonly string[]) =>
+    roleTitles.map(
+      (roleTitle, index): DriveProgressEntry => ({
+        ...DRIVE,
+        driveId: `${eventId}-d${index}`,
+        companyDriveId: eventId,
+        companyName: company,
+        roleTitle,
+        tentativeDate: "2026-11-05T00:00:00Z",
+        students: DRIVE.students.slice(0, 1),
+      }),
+    );
+
+  /** Three visits of four roles each: 12 rows, but only three companies. */
+  const THREE_VISITS = [
+    ...visitRoles("Alpha Corp", "e1", ["Engineer", "Analyst", "Designer", "QA"]),
+    ...visitRoles("Beta Corp", "e2", ["Engineer", "Analyst", "Designer", "QA"]),
+    ...visitRoles("Gamma Corp", "e3", ["Engineer", "Analyst", "Designer", "QA"]),
+  ];
+
+  it("draws the pager even when everything fits on one page", async () => {
+    render(<DriveProgressPage view={view(THREE_VISITS)} />);
+    await screen.findByText("Alpha Corp");
+
+    expect(screen.getByText(/showing visits 1 to 3 of 3 · 12 role rows/i)).toBeDefined();
+    expect(screen.getByText(/page 1 of 1/i)).toBeDefined();
+    expect(screen.getByRole("button", { name: "Previous" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("fills a page to the row budget and never splits a visit", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={view(THREE_VISITS)} />);
+    await screen.findByText("Alpha Corp");
+
+    await user.selectOptions(screen.getByLabelText("Rows per page"), "10");
+
+    // Eight rows fit; the third visit would take the page to twelve, so it
+    // starts page two rather than leaving half a company behind.
+    expect(screen.getByText(/showing visits 1 to 2 of 3 · 8 role rows/i)).toBeDefined();
+    expect(screen.getByText("Alpha Corp")).toBeDefined();
+    expect(screen.getByText("Beta Corp")).toBeDefined();
+    expect(screen.queryByText("Gamma Corp")).toBeNull();
+
+    // All four roles of the first visit are on this page.
+    const alpha = screen.getByText("Alpha Corp").closest("tbody");
+    if (alpha === null) throw new Error("the first visit is not in a row group");
+    expect(within(alpha).getAllByRole("row")).toHaveLength(4);
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+
+    expect(screen.getByText("Gamma Corp")).toBeDefined();
+    expect(screen.queryByText("Alpha Corp")).toBeNull();
+    expect(screen.getByText(/showing visits 3 to 3 of 3 · 4 role rows/i)).toBeDefined();
+    expect(screen.getByText(/page 2 of 2/i)).toBeDefined();
+  });
+
+  it("shows a visit whole even when it alone exceeds the budget", async () => {
+    const user = userEvent.setup();
+    const tall = visitRoles(
+      "Solo Corp",
+      "e9",
+      Array.from({ length: 12 }, (_, index) => `Role ${index + 1}`),
+    );
+    render(<DriveProgressPage view={view(tall)} />);
+    await screen.findByText("Solo Corp");
+
+    await user.selectOptions(screen.getByLabelText("Rows per page"), "10");
+
+    expect(screen.getByText(/showing visits 1 to 1 of 1 · 12 role rows/i)).toBeDefined();
+    expect(screen.getByText(/page 1 of 1/i)).toBeDefined();
+  });
+});
+
+/**
+ * 2026-11-02: "each data should be proper clickable as popup read". The row is
+ * a summary of a visit, so every fact it prints opens the pane where that fact
+ * lives: the company and the role open the role, and each count opens that
+ * role already filtered to the stage the count named.
+ */
+describe("DriveProgressPage — a row opens the pane where it was pressed", () => {
+  const twoRoles = (): readonly DriveProgressEntry[] => {
+    const mts: DriveProgressEntry = { ...DRIVE, companyDriveId: "e1" };
+    const qa: DriveProgressEntry = {
+      ...DRIVE,
+      driveId: "d2",
+      roleTitle: "Quality Analyst",
+      companyDriveId: "e1",
+      students: DRIVE.students.slice(0, 1),
+    };
+    return [mts, qa];
+  };
+
+  it("opens the pane on the role whose name was pressed", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={view(twoRoles())} />);
+    await screen.findByText(/2 roles/);
+
+    await user.click(screen.getByRole("button", { name: "Open Quality Analyst in the side pane" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog)
+        .getByRole("tab", { name: "Quality Analyst (1 applicant)" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(within(dialog).getByText("Priya Ramesh")).toBeDefined();
+    expect(within(dialog).queryByText("Arjun Menon")).toBeNull();
+  });
+
+  it("opens the company on the visit's first role", async () => {
+    const user = userEvent.setup();
+    render(<DriveProgressPage view={view(twoRoles())} />);
+    await screen.findByText(/2 roles/);
+
+    await user.click(screen.getByRole("button", { name: "Open Zoho in the side pane" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(
+      within(dialog)
+        .getByRole("tab", { name: "Engineer (3 applicants)" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+
+  const STAGES: readonly {
+    readonly description: string;
+    readonly stageChip: RegExp;
+    readonly shown: readonly string[];
+    readonly hidden: readonly string[];
+  }[] = [
+    {
+      description: "applicants",
+      stageChip: /3 total applicants/i,
+      shown: ["Priya Ramesh", "Arjun Menon", "Meena V"],
+      hidden: [],
+    },
+    {
+      description: "shortlisted students",
+      stageChip: /2 shortlisted/i,
+      shown: ["Priya Ramesh", "Arjun Menon"],
+      hidden: ["Meena V"],
+    },
+    {
+      description: "students in rounds",
+      stageChip: /2 in rounds/i,
+      shown: ["Priya Ramesh", "Arjun Menon"],
+      hidden: ["Meena V"],
+    },
+    {
+      description: "students with an offer",
+      stageChip: /1 offers/i,
+      shown: ["Arjun Menon"],
+      hidden: ["Priya Ramesh", "Meena V"],
+    },
+  ];
+
+  it.each(STAGES)(
+    "opens the pane at the stage behind the $description count",
+    async ({ description, stageChip, shown, hidden }) => {
+      const user = userEvent.setup();
+      render(<DriveProgressPage view={view()} />);
+      await screen.findByText("Engineer");
+
+      await user.click(screen.getByRole("button", { name: `Open the ${description} of Engineer` }));
+
+      const dialog = screen.getByRole("dialog");
+      expect(
+        within(dialog).getByRole("button", { name: stageChip }).getAttribute("aria-pressed"),
+      ).toBe("true");
+      for (const name of shown) expect(within(dialog).getByText(name)).toBeDefined();
+      for (const name of hidden) expect(within(dialog).queryByText(name)).toBeNull();
+    },
+  );
 });

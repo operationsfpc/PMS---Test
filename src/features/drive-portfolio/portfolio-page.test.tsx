@@ -610,6 +610,25 @@ describe("DrivePortfolioPage — searching the list", () => {
     expect(screen.getByText("Accenture")).toBeDefined();
     expect(screen.getByText("LTI Mindtree")).toBeDefined();
   });
+
+  /**
+   * 2026-11-02: the analytics used to be five bordered tiles above the list,
+   * computed from the date range alone. They are now one borderless readout
+   * row computed from what is actually on screen, so narrowing by search or
+   * type cannot leave the totals disagreeing with the rows beneath them.
+   */
+  it("counts only the drives on screen in the analytics row", async () => {
+    const user = userEvent.setup();
+    renderList();
+    await screen.findByText("HCL Technologies");
+
+    const readouts = screen.getByRole("region", { name: /drive analytics/i });
+    expect(within(readouts).getByText("3 unique companies")).toBeDefined();
+
+    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "mindtree");
+
+    expect(within(readouts).getByText("1 unique company")).toBeDefined();
+  });
 });
 
 /**
@@ -651,7 +670,8 @@ describe("distinguishing same-company drives (G5b)", () => {
 describe("expired drives collapse (G5c)", () => {
   const NOW = new Date("2026-08-20T12:00:00+05:30");
 
-  it("moves a past-deadline drive behind an Expired summary", async () => {
+  it("moves a past-deadline drive behind an Expired toggle", async () => {
+    const user = userEvent.setup();
     const expired: PortfolioDrive = {
       ...DRIVE,
       driveId: "d8",
@@ -681,8 +701,16 @@ describe("expired drives collapse (G5c)", () => {
     );
 
     await screen.findByText("Current Co");
-    expect(screen.getByText(/expired — application deadline passed \(1\)/i)).toBeDefined();
+    const toggle = screen.getByRole("button", {
+      name: /expired — application deadline passed \(1\)/i,
+    });
+
+    // The shared Accordion, not a raw <details>: collapsed until asked.
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.getByText("Bygone Corp")).toBeDefined();
+
+    await user.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });
 });
 
@@ -713,7 +741,7 @@ describe("ordering the portfolio", () => {
     screen
       .getAllByRole("region")
       .map((r) => r.getAttribute("aria-label") ?? "")
-      .filter((label) => !/applicant/i.test(label));
+      .filter((label) => label !== "Drive analytics" && !/applicant/i.test(label));
 
   it("lists the newest drive first by default", async () => {
     show({ view: view([AGED, OTHERS, DRIVE]) });

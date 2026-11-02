@@ -95,6 +95,18 @@ export interface DirectoryQuery {
   readonly query: string;
   /** Exact campus name, case-insensitive. Carried from the overview's switcher. */
   readonly campus?: string | undefined;
+  /**
+   * The roster facts the table does not print as columns (2026-11-02).
+   *
+   * Degree and branch are matched case-insensitively like campus; the passing
+   * year and the two statuses are exact. Each is optional, and an empty string
+   * means "no filter" — the selects send "" when they are on their all option.
+   */
+  readonly degree?: string | undefined;
+  readonly branch?: string | undefined;
+  readonly passingYear?: number | undefined;
+  readonly srfStatus?: SrfStatus | undefined;
+  readonly participationStatus?: ParticipationStatus | undefined;
   /** A package figure to drill into. Compared with `sameMoney`, never `===`. */
   readonly ctc?: number | undefined;
   /** The placement's offer category. */
@@ -191,16 +203,32 @@ function haystack(student: DirectoryStudent): string {
  */
 export function filterDirectory(
   students: readonly DirectoryStudent[],
-  { filter, query, campus, ctc, category }: DirectoryQuery,
+  {
+    filter,
+    query,
+    campus,
+    degree,
+    branch,
+    passingYear,
+    srfStatus,
+    participationStatus,
+    ctc,
+    category,
+  }: DirectoryQuery,
 ): readonly DirectoryStudent[] {
   const needle = query.trim().toLowerCase();
-  const campusName = campus?.trim().toLowerCase();
 
   return students.filter((student) => {
     if (!matchesFilter(student, filter)) return false;
 
-    if (campusName !== undefined && campusName !== "") {
-      if (student.campusName.trim().toLowerCase() !== campusName) return false;
+    if (!matchesText(student.campusName, campus)) return false;
+    if (!matchesText(student.degree, degree)) return false;
+    if (!matchesText(student.branch, branch)) return false;
+
+    if (passingYear !== undefined && student.passingYear !== passingYear) return false;
+    if (srfStatus !== undefined && student.srfStatus !== srfStatus) return false;
+    if (participationStatus !== undefined && student.participationStatus !== participationStatus) {
+      return false;
     }
 
     // An unplaced student holds no package and no category, so a drill-down
@@ -221,6 +249,12 @@ export function filterDirectory(
     return needle === "" || haystack(student).includes(needle);
   });
 }
+
+/** A blank or absent choice is no filter, never "match the empty string". */
+const matchesText = (held: string, wanted: string | undefined): boolean =>
+  wanted === undefined ||
+  wanted.trim() === "" ||
+  held.trim().toLowerCase() === wanted.trim().toLowerCase();
 
 /** Counts for the tabs. `placed + notPlaced` is always `total`, by construction. */
 export function summariseDirectory(students: readonly DirectoryStudent[]): DirectorySummary {

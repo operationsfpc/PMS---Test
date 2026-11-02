@@ -393,3 +393,101 @@ describe("filterDirectory — campus, package and category", () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * 2026-11-02: the students screen grew dropdowns for the facts its table has
+ * no column for — degree, branch, passing year, registration and
+ * participation. Each one is the same question (narrow to the rows holding
+ * this fact), so they are tested as one family, including the rule that a
+ * blank choice is no filter rather than a match on emptiness.
+ */
+describe("filterDirectory — the facts the table does not print", () => {
+  /** A second degree and year, so each choice is one a reader could pick. */
+  const PG: DirectoryStudent = {
+    ...UNPLACED,
+    studentId: "s9",
+    fullName: "Nithya Balan",
+    degree: "M.Tech.",
+    branch: "CSE",
+    passingYear: 2027,
+  };
+
+  const ROSTER = [...ALL, PG];
+
+  it("narrows to one degree", () => {
+    expect(names(filterDirectory(ROSTER, { filter: "all", query: "", degree: "M.Tech." }))).toEqual(
+      ["Nithya Balan"],
+    );
+  });
+
+  it("does not care about the case or padding of a degree", () => {
+    expect(
+      names(filterDirectory(ROSTER, { filter: "all", query: "", degree: "  m.tech. " })),
+    ).toEqual(["Nithya Balan"]);
+  });
+
+  it("narrows to one branch", () => {
+    expect(names(filterDirectory(ROSTER, { filter: "all", query: "", branch: "ECE" }))).toEqual([
+      "Rahul Nair",
+    ]);
+  });
+
+  it("narrows to one passing year", () => {
+    expect(names(filterDirectory(ROSTER, { filter: "all", query: "", passingYear: 2026 }))).toEqual(
+      ["Anjali Subramanian", "Rahul Nair", "Meera Iyer"],
+    );
+    expect(names(filterDirectory(ROSTER, { filter: "all", query: "", passingYear: 2027 }))).toEqual(
+      ["Nithya Balan"],
+    );
+  });
+
+  it("narrows to one registration status", () => {
+    expect(
+      names(filterDirectory(ROSTER, { filter: "all", query: "", srfStatus: "srf_approved" })),
+    ).toEqual(["Anjali Subramanian"]);
+    expect(
+      names(filterDirectory(ROSTER, { filter: "all", query: "", srfStatus: "srf_submitted" })),
+    ).toEqual(["Rahul Nair", "Meera Iyer", "Nithya Balan"]);
+  });
+
+  it("narrows to one participation status", () => {
+    expect(
+      names(
+        filterDirectory(ROSTER, { filter: "all", query: "", participationStatus: "opted_out" }),
+      ),
+    ).toEqual(["Meera Iyer"]);
+  });
+
+  /** The selects send "" for their all option; that must widen, not empty, the list. */
+  it("treats a blank choice as no filter rather than a match on emptiness", () => {
+    expect(filterDirectory(ROSTER, { filter: "all", query: "", degree: "   " })).toEqual(ROSTER);
+  });
+
+  it("never matches a value nobody in the roster holds", () => {
+    expect(filterDirectory(ROSTER, { filter: "all", query: "", branch: "Mech" })).toEqual([]);
+  });
+
+  /**
+   * The dropdowns are not alternatives to the chip — they narrow inside it.
+   * Every one of them at once still answers with the one student who satisfies
+   * all of them.
+   */
+  it("composes with the chip, the search, the campus and each other", () => {
+    expect(
+      names(
+        filterDirectory(ROSTER, {
+          filter: "submitted",
+          query: "rahul",
+          campus: "SDNB Vaishnav College",
+          branch: "ECE",
+          passingYear: 2026,
+          srfStatus: "srf_submitted",
+          participationStatus: "active",
+        }),
+      ),
+    ).toEqual(["Rahul Nair"]);
+
+    // The same branch inside "placed" is nobody: Rahul holds no offer.
+    expect(filterDirectory(ROSTER, { filter: "placed", query: "", branch: "ECE" })).toEqual([]);
+  });
+});

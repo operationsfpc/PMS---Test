@@ -1,4 +1,4 @@
-import { DriveDateFilter } from "@components/drive-date-filter";
+import { DriveAnalyticsReadouts, DriveDateFilter } from "@components/drive-date-filter";
 import { DriveSearch, NoDriveMatches } from "@components/drive-search";
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
@@ -37,6 +37,7 @@ import {
   searchDrives,
   summariseFunnel,
 } from "@domain/drive-portfolio";
+import { driveStatusTone } from "@domain/drive-status";
 import {
   DRIVE_TYPE_FILTERS,
   type DriveTypeFilter as DriveTypeFilterValue,
@@ -398,21 +399,27 @@ export function DrivePortfolioPage({
         </Card>
       ) : (
         <>
-          <DriveDateFilter
-            criteria={dateCriteria}
-            onChange={setDateCriteria}
-            filteredDrives={dateFiltered}
-            allDrivesCount={inScope.length}
-            showAnalytics={true}
-          />
+          {/* One card for every filter (2026-11-02). Search, type, date and
+              sort used to be four stacked blocks of chrome over one list —
+              each with its own margins, two of them framed. The controls are
+              unchanged; only the scaffolding around them went. */}
+          <Card className="mb-6 p-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <DriveSearch value={query} onChange={setQuery} compact />
+              <DriveTypeFilter value={type} onChange={setType} counts={typeCounts} className="" />
+              <div className="ml-auto">
+                <DriveSort value={order} onChange={setOrder} />
+              </div>
+            </div>
 
-          <DriveSearch value={query} onChange={setQuery} />
+            <DriveDateFilter criteria={dateCriteria} onChange={setDateCriteria} drives={visible} />
 
-          <DriveTypeFilter value={type} onChange={setType} counts={typeCounts} />
+            <p className="mt-3 text-xs text-ink-500">
+              Showing {visible.length} of {inScope.length} drives
+            </p>
+          </Card>
 
-          <div className="mb-3 flex justify-end">
-            <DriveSort value={order} onChange={setOrder} />
-          </div>
+          <DriveAnalyticsReadouts drives={visible} className="mb-8" />
 
           {visible.length === 0 ? (
             <Card className="p-6">
@@ -428,16 +435,20 @@ export function DrivePortfolioPage({
               </ul>
 
               {expiredEvents.length > 0 && (
-                <details className="mt-4">
-                  <summary className="cursor-pointer text-sm font-medium text-ink-500">
-                    Expired — application deadline passed ({expiredEvents.length})
-                  </summary>
-                  <ul className="mt-3 flex flex-col gap-4">
-                    {expiredEvents.map((event, index) =>
-                      renderEvent(event, activeEvents.length + index),
-                    )}
-                  </ul>
-                </details>
+                <Accordion className="mt-4 rounded-card border border-line bg-surface">
+                  <AccordionItem value="expired">
+                    <AccordionTrigger className="px-4 py-3 text-sm font-medium text-ink-500">
+                      Expired — application deadline passed ({expiredEvents.length})
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <ul className="flex flex-col gap-4 p-4">
+                        {expiredEvents.map((event, index) =>
+                          renderEvent(event, activeEvents.length + index),
+                        )}
+                      </ul>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               )}
             </>
           )}
@@ -558,7 +569,6 @@ export function DrivePortfolioPage({
               <div className="mt-1 flex flex-wrap gap-3 text-sm text-ink-600">
                 {event.tentativeDate && (
                   <span>
-                    📅{" "}
                     {new Date(event.tentativeDate).toLocaleDateString("en-IN", {
                       timeZone: "Asia/Kolkata",
                       day: "numeric",
@@ -605,9 +615,11 @@ export function DrivePortfolioPage({
                           {driveTypeLabel(drive.driveType)}
                         </Badge>
                       )}
-                      <Badge tone={progress.terminal ? "neutral" : "warning"}>
-                        {progress.phase}
-                      </Badge>
+                      {/* The colour comes from the lifecycle status, not from
+                          "anything unfinished is a warning": a Live drive is
+                          healthy green, an approved-but-unpublished one is
+                          amber because someone owes the next step. */}
+                      <Badge tone={driveStatusTone(drive.status)}>{progress.phase}</Badge>
                     </AccordionTrigger>
                     <AccordionContent>{renderDrive(drive, true, event)}</AccordionContent>
                   </AccordionItem>
@@ -710,9 +722,7 @@ export function DrivePortfolioPage({
                   {ROLE_LABEL[hat]}
                 </Badge>
               ))}
-              {!nested && (
-                <Badge tone={progress.terminal ? "neutral" : "warning"}>{progress.phase}</Badge>
-              )}
+              {!nested && <Badge tone={driveStatusTone(drive.status)}>{progress.phase}</Badge>}
               {window.urgent && <Badge tone="danger">Closing soon</Badge>}
               <Badge tone={window.state === "open" ? "success" : "neutral"}>{window.label}</Badge>
               {drive.totalRounds > 0 && (

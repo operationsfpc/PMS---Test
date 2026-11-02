@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import { useId } from "react";
 
 /**
@@ -11,17 +12,50 @@ import { useId } from "react";
  * The list narrows as you type; the button submits nothing. It is there because
  * a bare box reads as decoration, and because a keyboard needs somewhere
  * obvious to land.
+ *
+ * `compact` is the toolbar version (2026-11-02): icon, box, no label, no
+ * button. It sits in a row with the type chips and the sort control, where a
+ * second block of form chrome was the clutter being removed. The accessible
+ * name stays the same, so nothing is lost to a screen reader.
  */
 export function DriveSearch({
   value,
   onChange,
   label = "Search drives",
+  compact = false,
 }: {
   value: string;
   onChange: (next: string) => void;
   label?: string;
+  compact?: boolean;
 }) {
   const id = useId();
+
+  if (compact) {
+    return (
+      <search className="min-w-0 flex-1 sm:max-w-xs">
+        <form onSubmit={(e) => e.preventDefault()}>
+          <label htmlFor={id} className="sr-only">
+            {label}
+          </label>
+          <div className="relative">
+            <Search
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-400"
+            />
+            <input
+              id={id}
+              type="search"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="Company or role"
+              className="w-full rounded-lg border border-line bg-surface py-1.5 pr-3 pl-8 text-sm text-ink-900"
+            />
+          </div>
+        </form>
+      </search>
+    );
+  }
 
   return (
     <search className="mb-6">

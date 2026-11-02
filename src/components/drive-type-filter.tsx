@@ -23,17 +23,23 @@ export function DriveTypeFilter({
   value,
   onChange,
   counts,
+  className = "mb-3 sm:mb-4",
 }: {
   value: DriveTypeFilterValue;
   onChange: (value: DriveTypeFilterValue) => void;
   /** How many drives are in each bucket. Omitted where counting is not cheap. */
   counts?: Partial<Record<DriveTypeFilterValue, number>>;
+  /**
+   * The outer margins belong to whoever places the control. In a toolbar row
+   * they are the gap's job, so the page passes a spacing-free class.
+   */
+  className?: string;
 }) {
   return (
     // A real <fieldset>/<legend>, not role="group" on a div: the semantics
     // are the same to a screen reader and the element is the one HTML already
     // has for "these controls belong together".
-    <fieldset className="mb-3 flex flex-wrap items-center gap-2 sm:mb-4">
+    <fieldset className={`${className} flex flex-wrap items-center gap-2`}>
       <legend className="sr-only">Drive type</legend>
       <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
         Type
