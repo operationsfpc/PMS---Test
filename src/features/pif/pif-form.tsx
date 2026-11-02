@@ -498,7 +498,13 @@ export function PifForm({
         const wasInherited = barSignature(held) === autoBarSignatureRef.current;
         if (!hasAnyBarIn(held) || wasInherited) {
           writeBar(evt.bar);
-          autoBarSignatureRef.current = barSignature(evt.bar);
+          /**
+           * Signed as it was WRITTEN, not as the event carried it. The event
+           * leaves out the scale and the arrear policy; the form fills them
+           * in. Comparing the two directly would never match, and an inherited
+           * bar would then look hand-typed and never be dropped.
+           */
+          autoBarSignatureRef.current = barSignature(readBar());
         }
       }
     },

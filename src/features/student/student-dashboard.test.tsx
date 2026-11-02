@@ -464,7 +464,7 @@ describe("StudentDashboard — notifications", () => {
     show(view({}, { notifications: async () => [NOTES[1] as (typeof NOTES)[1]] }));
 
     await screen.findByText("You are shortlisted for Zoho");
-    expect(screen.getByText(/✓ read/i)).toBeDefined();
+    expect(screen.getByText(/^read$/i)).toBeDefined();
   });
 });
 

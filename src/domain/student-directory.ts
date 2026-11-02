@@ -254,7 +254,7 @@ export function filterDirectory(
 const matchesText = (held: string, wanted: string | undefined): boolean =>
   wanted === undefined ||
   wanted.trim() === "" ||
-  held.trim().toLowerCase() === wanted.trim().toLowerCase();
+  held.trim().toLowerCase().includes(wanted.trim().toLowerCase());
 
 /** Counts for the tabs. `placed + notPlaced` is always `total`, by construction. */
 export function summariseDirectory(students: readonly DirectoryStudent[]): DirectorySummary {

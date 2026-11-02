@@ -330,11 +330,11 @@ describe("DriveProgressPage — searching", () => {
     ],
   };
 
-  it("offers a labelled search box", async () => {
+  it("offers a column filter on the Company header", async () => {
     render(<DriveProgressPage view={two} />);
     await screen.findByText("Cognizant");
 
-    expect(screen.getByRole("searchbox", { name: /search drives/i })).toBeDefined();
+    expect(screen.getByRole("button", { name: /filter company/i })).toBeDefined();
   });
 
   it("narrows to the company the coordinator is asking about", async () => {
@@ -342,7 +342,8 @@ describe("DriveProgressPage — searching", () => {
     render(<DriveProgressPage view={two} />);
     await screen.findByText("Cognizant");
 
-    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "accen");
+    await user.click(screen.getByRole("button", { name: /filter company/i }));
+    await user.type(screen.getByPlaceholderText(/search company/i), "accen");
 
     expect(screen.getByText("Accenture")).toBeDefined();
     expect(screen.queryByText("Cognizant")).toBeNull();
@@ -353,17 +354,18 @@ describe("DriveProgressPage — searching", () => {
     render(<DriveProgressPage view={two} />);
     await screen.findByText("Cognizant");
 
-    await user.type(screen.getByRole("searchbox", { name: /search drives/i }), "infosys");
+    await user.click(screen.getByRole("button", { name: /filter company/i }));
+    await user.type(screen.getByPlaceholderText(/search company/i), "infosys");
 
     expect(screen.getByText(/no drives match/i)).toBeDefined();
     expect(screen.queryByText(/no drives involve your students yet/i)).toBeNull();
   });
 
-  it("offers no search box at all when there is nothing to search", async () => {
+  it("offers no column filter when there is nothing to search", async () => {
     render(<DriveProgressPage view={{ drives: async () => [] }} />);
     await screen.findByText(/no drives involve your students yet/i);
 
-    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.queryByRole("button", { name: /filter company/i })).toBeNull();
   });
 });
 
@@ -401,8 +403,13 @@ describe("DriveProgressPage — filtering and tagging by drive type", () => {
     showTyped();
     await screen.findByText("ABCD Infosys");
 
-    const filter = screen.getByRole("group", { name: /drive type/i });
-    await user.click(within(filter).getByRole("button", { name: /^Internship \d+$/ }));
+    // The drive type filter is now a column filter on the Status column header.
+    const filterButton = screen.getByRole("button", { name: /filter drive type/i });
+    await user.click(filterButton);
+
+    // The dropdown opens with checkboxes for each type.
+    const internshipCheckbox = screen.getByRole("checkbox", { name: /internship$/i });
+    await user.click(internshipCheckbox);
 
     expect(screen.getByText("ABCD Infosys")).toBeDefined();
     expect(screen.queryByText("Zoho")).toBeNull();

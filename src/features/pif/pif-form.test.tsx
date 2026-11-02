@@ -62,6 +62,18 @@ async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
   // there is one set of boxes for the whole PIF.
 }
 
+/**
+ * The refusal a control carries itself.
+ *
+ * The toast repeats every refusal in a list, so a global text search finds the
+ * same sentence twice. What the AE reads AT the field is the one under the
+ * control — that is the thing this helper returns.
+ */
+function fieldMessage(control: HTMLElement): string {
+  const box = control.closest("fieldset") ?? control.closest("div");
+  return box?.querySelector('[role="alert"]')?.textContent ?? "";
+}
+
 describe("PifForm", () => {
   it("shows every AE-owned section", () => {
     render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
@@ -273,7 +285,9 @@ describe("PifForm — what the recruiter actually said", () => {
     await user.type(screen.getByLabelText(/minimum overall/i), "65");
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
-    expect(await screen.findByText(/10-point scale/i)).toBeDefined();
+    await waitFor(() =>
+      expect(fieldMessage(screen.getByLabelText(/minimum overall/i))).toMatch(/10-point scale/i),
+    );
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -1102,12 +1116,18 @@ describe("PifForm — adding a role to an existing drive (the event picker)", ()
       <PifForm
         onSubmit={vi.fn()}
         onSaveDraft={vi.fn()}
-        getCompanyEvents={vi.fn().mockResolvedValue([
-          {
-            ...existingEvent,
-            bar: { bondDetails: "1 year service agreement", minOverallCgpa: 7.5 },
-          },
-        ])}
+        // Another recruiter has drives of its own — Zoho's visit is not one of
+        // them, so the bar that came with it has nothing to attach to.
+        getCompanyEvents={vi.fn().mockImplementation(async (name: string) =>
+          name === "Zoho Corporation"
+            ? [
+                {
+                  ...existingEvent,
+                  bar: { bondDetails: "1 year service agreement", minOverallCgpa: 7.5 },
+                },
+              ]
+            : [],
+        )}
       />,
     );
 
@@ -1428,7 +1448,11 @@ describe("PifForm — the eligibility bar is asked once, for the visit", () => {
 
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
-    expect(await screen.findByText(/choose at least one passing year/i)).toBeDefined();
+    await waitFor(() =>
+      expect(fieldMessage(screen.getByRole("checkbox", { name: /2027/ }))).toMatch(
+        /choose at least one passing year/i,
+      ),
+    );
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
@@ -1605,7 +1629,7 @@ describe("PifForm — the refusal is said at the field, not only in a toast", ()
 
     const cutoff = await screen.findByLabelText(/minimum overall/i);
     expect(cutoff.getAttribute("aria-invalid")).toBe("true");
-    expect(await screen.findByText(/10-point scale/i)).toBeDefined();
+    expect(fieldMessage(cutoff)).toMatch(/10-point scale/i);
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });

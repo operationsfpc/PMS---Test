@@ -1,3 +1,8 @@
+import {
+  ColumnFilterButton,
+  ColumnFilterOptions,
+  ColumnFilterSearch,
+} from "@components/column-filter";
 import { ErrorPanel } from "@components/error-panel";
 import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
 import { TablePager } from "@components/table-pager";
@@ -14,7 +19,7 @@ import {
 } from "@domain/student-directory";
 import type { ParticipationStatus, SrfStatus } from "@domain/types";
 import type { HoldsView } from "@lib/holds-view";
-import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 export interface StudentDirectoryView {
@@ -99,42 +104,6 @@ const isSrfStatus = (value: string | null): value is SrfStatus =>
 
 const isParticipationStatus = (value: string | null): value is ParticipationStatus =>
   PARTICIPATION_STATUSES.some((status) => status === value);
-
-/**
- * A labelled dropdown for the directory's filter bar (2026-11-02).
- *
- * `htmlFor` rather than a wrapping <label>: a wrapper's text content includes
- * every <option>, so "Campus" would no longer be the control's exact name.
- */
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-  children: ReactNode;
-}) {
-  const id = useId();
-
-  return (
-    <div className="flex items-center gap-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-ink-500">
-        {label}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="max-w-[190px] rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-ink-900"
-      >
-        {children}
-      </select>
-    </div>
-  );
-}
 
 const EXPORT_COLUMNS = [
   "Student",
@@ -252,12 +221,17 @@ export function StudentDirectoryPage({
 
   /** Changing one dimension must never silently drop the others. */
   const update = (next: Readonly<Record<string, string | undefined>>) => {
-    const merged = new URLSearchParams(params);
-    for (const [key, value] of Object.entries(next)) {
-      if (value === undefined || value === "") merged.delete(key);
-      else merged.set(key, value);
-    }
-    setParams(merged, { replace: true });
+    setParams(
+      (prev) => {
+        const merged = new URLSearchParams(prev);
+        for (const [key, value] of Object.entries(next)) {
+          if (value === undefined || value === "") merged.delete(key);
+          else merged.set(key, value);
+        }
+        return merged;
+      },
+      { replace: true },
+    );
   };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt re-runs the read on purpose
@@ -309,10 +283,6 @@ export function StudentDirectoryPage({
    * loaded — so a college list can never offer an empty one, and the
    * registration/participation lists say their words in a stable order.
    */
-  const campuses = useMemo(
-    () => uniqueSorted((students ?? []).map((s) => s.campusName)),
-    [students],
-  );
   const degrees = useMemo(() => uniqueSorted((students ?? []).map((s) => s.degree)), [students]);
   const branches = useMemo(() => uniqueSorted((students ?? []).map((s) => s.branch)), [students]);
   const passingYears = useMemo(
@@ -333,7 +303,7 @@ export function StudentDirectoryPage({
    * chosen option. A dropdown that is hidden for having one value is not a
    * filter the reader can see, so it is not a filter applied silently either.
    */
-  const campus = campuses.includes(campusParam) ? campusParam : "";
+  const campus = campusParam;
   const degree =
     degrees.length > 1 && degreeParam !== null && degrees.includes(degreeParam) ? degreeParam : "";
   const branch =
@@ -605,156 +575,50 @@ export function StudentDirectoryPage({
             </div>
           )}
 
-          {/* One filter bar (2026-11-02): the population chips, the search,
-              and a dropdown for every roster fact the table does not print as
-              a column. A coordinator asked for the college filter and for
-              dropdowns beside it; they are together here so a change to one
-              never silently drops another. */}
-          <Card className="mb-4 p-3 sm:p-4">
-            <fieldset className="w-full">
-              <legend className="sr-only">Filter students</legend>
-              <div
-                role="radiogroup"
-                aria-label="Filter students"
-                className="flex flex-nowrap overflow-x-auto pb-1.5 [scrollbar-width:none] gap-2 sm:flex-wrap"
-              >
-                {FILTERS.map((option) => (
-                  <label
-                    key={option.value}
-                    className={`shrink-0 cursor-pointer rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors sm:text-sm ${
-                      filter === option.value
-                        ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-line bg-surface text-ink-700 hover:border-violet-400"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="student-filter"
-                      className="sr-only"
-                      checked={filter === option.value}
-                      onChange={() =>
-                        update({ filter: option.value === "all" ? undefined : option.value })
-                      }
-                    />
-                    {option.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-              <input
-                type="search"
-                aria-label="Search students"
-                placeholder="Name, roll number, company…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full flex-1 rounded-lg border border-line px-3 py-1.5 text-sm text-ink-900 sm:max-w-xs"
-              />
-              {anyFilterActive && (
-                <div className="ml-auto">
-                  <Button variant="secondary" size="sm" onClick={clearAll}>
-                    Clear all
-                  </Button>
-                </div>
-              )}
+          {/* Compact filter strip: population chips on one line, search beside them.
+          Column filters live in the table headers now, not in dropdowns above. */}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div
+              role="radiogroup"
+              aria-label="Filter students"
+              className="flex flex-nowrap overflow-x-auto [scrollbar-width:none] gap-1.5"
+            >
+              {FILTERS.map((option) => (
+                <label
+                  key={option.value}
+                  className={`shrink-0 cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                    filter === option.value
+                      ? "border-brand-500 bg-brand-500 text-white"
+                      : "border-line bg-surface text-ink-700 hover:border-violet-400"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="student-filter"
+                    className="sr-only"
+                    checked={filter === option.value}
+                    onChange={() =>
+                      update({ filter: option.value === "all" ? undefined : option.value })
+                    }
+                  />
+                  {option.label}
+                </label>
+              ))}
             </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-3">
-              {/* Always drawn, even with one college in the roster: a filter
-                  that vanishes when the roster is small is the one the reader
-                  came for (test env, 2026-11-02). */}
-              <FilterSelect
-                label="Campus"
-                value={campus}
-                onChange={(next) => update({ campus: next })}
-              >
-                <option value="">All campuses</option>
-                {campuses.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </FilterSelect>
-
-              {/* The rest appear only when the roster holds two or more
-                  values: a dropdown with one real choice is not a filter. */}
-              {degrees.length > 1 && (
-                <FilterSelect
-                  label="Degree"
-                  value={degree}
-                  onChange={(next) => update({ degree: next })}
-                >
-                  <option value="">All degrees</option>
-                  {degrees.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </FilterSelect>
-              )}
-
-              {branches.length > 1 && (
-                <FilterSelect
-                  label="Branch"
-                  value={branch}
-                  onChange={(next) => update({ branch: next })}
-                >
-                  <option value="">All branches</option>
-                  {branches.map((name) => (
-                    <option key={name} value={name}>
-                      {name}
-                    </option>
-                  ))}
-                </FilterSelect>
-              )}
-
-              {passingYears.length > 1 && (
-                <FilterSelect
-                  label="Passing year"
-                  value={passingYear === undefined ? "" : String(passingYear)}
-                  onChange={(next) => update({ year: next })}
-                >
-                  <option value="">All years</option>
-                  {passingYears.map((year) => (
-                    <option key={year} value={String(year)}>
-                      {year}
-                    </option>
-                  ))}
-                </FilterSelect>
-              )}
-
-              {srfOptions.length > 1 && (
-                <FilterSelect
-                  label="Registration"
-                  value={srfStatus ?? ""}
-                  onChange={(next) => update({ srf: next })}
-                >
-                  <option value="">All registrations</option>
-                  {srfOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {SRF_LABEL[status]}
-                    </option>
-                  ))}
-                </FilterSelect>
-              )}
-
-              {participationOptions.length > 1 && (
-                <FilterSelect
-                  label="Participation"
-                  value={participationStatus ?? ""}
-                  onChange={(next) => update({ participation: next })}
-                >
-                  <option value="">All participation</option>
-                  {participationOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {participationStatusLabel(status)}
-                    </option>
-                  ))}
-                </FilterSelect>
-              )}
-            </div>
-          </Card>
+            <input
+              type="search"
+              aria-label="Search students"
+              placeholder="Name, roll, company…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="ml-auto rounded-lg border border-line px-3 py-1 text-sm text-ink-900 sm:max-w-[200px]"
+            />
+            {anyFilterActive && (
+              <Button variant="ghost" size="sm" onClick={clearAll}>
+                Clear all
+              </Button>
+            )}
+          </div>
 
           {/*
            * The package and category drill-downs. They are not permanent
@@ -816,8 +680,37 @@ export function StudentDirectoryPage({
                   <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                     <tr>
                       <th className="px-4 py-3">Student</th>
-                      <th className="px-4 py-3">Campus</th>
-                      <th className="px-4 py-3">Registration</th>
+                      <th className="px-4 py-3">
+                        <span className="flex items-center gap-1.5">
+                          Campus
+                          <ColumnFilterButton label="Campus" active={campus !== ""}>
+                            <ColumnFilterSearch
+                              label="Campus"
+                              value={campus}
+                              onChange={(next) => update({ campus: next })}
+                              placeholder="Search campus…"
+                            />
+                          </ColumnFilterButton>
+                        </span>
+                      </th>
+                      <th className="px-4 py-3">
+                        <span className="flex items-center gap-1.5">
+                          Registration
+                          <ColumnFilterButton label="Registration" active={srfStatus !== undefined}>
+                            <ColumnFilterOptions
+                              label="Registration status"
+                              options={srfOptions.map((status) => ({
+                                value: status,
+                                label: SRF_LABEL[status],
+                              }))}
+                              selected={srfStatus === undefined ? [] : [srfStatus]}
+                              onChange={(next) =>
+                                update({ srf: next.length === 0 ? undefined : next[0] })
+                              }
+                            />
+                          </ColumnFilterButton>
+                        </span>
+                      </th>
                       <th className="px-4 py-3">Applications</th>
                       <th className="px-4 py-3">Placement</th>
                       {holds !== undefined && <th className="px-4 py-3">Actions</th>}

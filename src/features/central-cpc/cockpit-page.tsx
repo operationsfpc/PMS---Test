@@ -365,7 +365,9 @@ export function CockpitPage({
       )}
 
       {reviews.length > 0 && (
-        <Card className="mb-6 p-5">
+        /* Quiet, not gold: each row already wears a warning badge, and a
+           gold-50 panel would swallow it — the badge is the colour here. */
+        <Card tone="quiet" className="mb-6 p-5">
           <h2 className="text-lg text-ink-900">Absence reviews</h2>
           <p className="mt-1 text-sm text-ink-700">
             R8: reaching the absence limit raises a review. It is never an automatic sanction — the

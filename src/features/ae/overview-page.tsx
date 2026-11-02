@@ -340,7 +340,12 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
           <p className="text-sm text-ink-500">Every card opens the drives behind it.</p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        {/* Readouts in one divided row, pressable the way the landing's are.
+            These used to be six bordered tiles wrapped in a hand-rolled
+            `<button>`, which is the StatCard's own press reimplemented badly:
+            the number sat in a box, the box moved on hover, and nothing said
+            that clicking it showed the students. */}
+        <div className="grid grid-cols-2 gap-y-4 sm:grid-cols-3 lg:grid-cols-6 lg:divide-x lg:divide-line/70">
           {(
             [
               ["broughtIn", "Drives brought in", visitTotals.broughtIn, "brand"],
@@ -351,20 +356,21 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
               ["completed", "Drives completed", visitTotals.completed, undefined],
             ] as const
           ).map(([kind, label, value, tone]) => (
-            <button
+            <StatCard
               key={kind}
-              type="button"
-              aria-haspopup="dialog"
+              label={label}
+              value={value}
+              variant="readout"
               onClick={() => showStat(kind)}
-              className="rounded-card text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-            >
-              <StatCard label={label} value={value} {...(tone !== undefined ? { tone } : {})} />
-            </button>
+              {...(tone !== undefined ? { tone } : {})}
+            />
           ))}
         </div>
       </section>
 
-      <Card className="mb-6 p-5">
+      {/* The landing's tones, same meaning → same colour: a list panel is quiet
+          grey, a money panel is gold. "Most recent" is a list of drives. */}
+      <Card tone="quiet" className="mb-6 p-5">
         <section aria-label="Most recent">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-lg text-ink-900">Most recent</h2>
@@ -501,21 +507,32 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
           </p>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-          <StatCard label="Placement rate" value={`${org.placementRate}%`} tone="brand" />
+        <div className="grid grid-cols-2 gap-y-4 sm:grid-cols-3 lg:grid-cols-6 lg:divide-x lg:divide-line/70">
+          <StatCard
+            label="Placement rate"
+            value={`${org.placementRate}%`}
+            tone="brand"
+            variant="readout"
+          />
           <StatCard
             label="Placed on campus"
             value={org.placed}
             hint={`of ${org.eligible} eligible`}
+            variant="readout"
           />
-          <StatCard label="Self-placed" value={org.selfPlaced} tone="warning" />
-          <StatCard label="Opted out" value={org.optedOut} />
-          <StatCard label="Eligible" value={org.eligible} />
-          <StatCard label="Drives completed" value={org.completedDrives} hint="org-wide" />
+          <StatCard label="Self-placed" value={org.selfPlaced} tone="warning" variant="readout" />
+          <StatCard label="Opted out" value={org.optedOut} variant="readout" />
+          <StatCard label="Eligible" value={org.eligible} variant="readout" />
+          <StatCard
+            label="Drives completed"
+            value={org.completedDrives}
+            hint="org-wide"
+            variant="readout"
+          />
         </div>
       </section>
 
-      <Card className="p-5">
+      <Card tone="warn" className="p-5">
         <section aria-label="Package">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-lg text-ink-900">Package</h2>
@@ -530,7 +547,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                 ["Median", snapshot.totals.medianLpa],
                 ["Lowest", snapshot.totals.lowestLpa],
               ].map(([name, value]) => (
-                <div key={name as string} className="rounded-lg bg-surface-muted p-3">
+                <div key={name as string} className="rounded-control bg-surface/70 p-3">
                   <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
                     {name}
                   </dt>

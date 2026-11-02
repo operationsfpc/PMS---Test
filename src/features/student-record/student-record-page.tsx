@@ -16,6 +16,7 @@ import { HOLD_KIND_LABELS, holdStanding, holdWindowLine } from "@domain/holds";
 import { describeMarks } from "@domain/marks";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { participationStatusLabel, participationStatusTone } from "@domain/participation-status";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import { SKILL_SCORE_MAX } from "@domain/skills";
 import {
   canRestoreParticipation,
@@ -1282,24 +1283,34 @@ export function StudentRecordPage({
           {ROLE_CATEGORIES.map((cat) => {
             const isPreferred = rolePreferences.includes(cat);
             const doc = resumes.find((r) => r.roleCategory === cat);
+            const style = roleCategoryStyle(cat);
 
             return (
               <div
                 key={cat}
-                className={`rounded-lg border p-3 ${
-                  isPreferred ? "border-line bg-surface" : "border-line/60 bg-surface-muted/30"
+                className={`rounded-xl border p-3.5 transition-all ${
+                  isPreferred
+                    ? `${style.bg}/60 ${style.border}`
+                    : "border-line/60 bg-surface-muted/30"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className={`size-2 rounded-full ${style.dot}`} />
                       <span className="text-xs font-semibold text-ink-900">
                         {RESUME_TRACK_LABEL[cat]}
                       </span>
-                      {isPreferred && <Badge tone="brand">Active</Badge>}
+                      {isPreferred && (
+                        <span
+                          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium ${style.badgeClass}`}
+                        >
+                          Active Preference
+                        </span>
+                      )}
                     </div>
                     {doc ? (
-                      <div className="mt-1 text-xs text-ink-500">
+                      <div className="mt-1.5 pl-4 text-xs text-ink-500">
                         <p className="truncate font-medium text-ink-700" title={doc.fileName}>
                           {doc.fileName}
                         </p>
@@ -1308,7 +1319,7 @@ export function StudentRecordPage({
                         </p>
                       </div>
                     ) : (
-                      <p className="mt-1 text-[11px] text-ink-400">No resume uploaded</p>
+                      <p className="mt-1.5 pl-4 text-[11px] text-ink-400">No resume uploaded</p>
                     )}
                   </div>
 
@@ -1370,47 +1381,63 @@ export function StudentRecordPage({
         ) : (
           <ul className="divide-y divide-line text-sm">
             {skills.map(({ skill, score }) => (
-              <li key={skill} className="flex items-center gap-3 py-2 first:pt-0">
+              <li key={skill} className="flex items-center gap-3 py-2.5 first:pt-0">
                 <span className="min-w-0 flex-1 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
                   {skill} {score}/{SKILL_SCORE_MAX}
                 </span>
-                <span
-                  aria-hidden="true"
-                  className="h-2 w-20 shrink-0 overflow-hidden rounded-full bg-line"
-                >
+                <div className="flex items-center gap-2 shrink-0">
                   <span
-                    className={`block h-full rounded-full ${
-                      score >= 4 ? "bg-success-500" : score >= 3 ? "bg-brand-500" : "bg-gold-500"
-                    }`}
-                    style={{
-                      width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
-                    }}
-                  />
-                </span>
+                    aria-hidden="true"
+                    className="h-2.5 w-28 sm:w-36 overflow-hidden rounded-full bg-slate-100"
+                  >
+                    <span
+                      className={`block h-full rounded-full transition-all ${
+                        score >= 4
+                          ? "bg-emerald-500"
+                          : score >= 3
+                            ? "bg-indigo-600"
+                            : "bg-amber-500"
+                      }`}
+                      style={{
+                        width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
+                      }}
+                    />
+                  </span>
+                  <span className="w-8 text-right text-xs font-semibold tabular-nums text-ink-600">
+                    {Math.round((score / SKILL_SCORE_MAX) * 100)}%
+                  </span>
+                </div>
               </li>
             ))}
           </ul>
         )}
 
         {rolePreferences.length > 0 && (
-          <div className="mt-3 border-t border-line pt-3">
+          <div className="mt-4 border-t border-line pt-3.5">
             <span className="text-xs font-semibold text-ink-500">Preferred areas</span>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {rolePreferences.map((area) => (
-                <Badge key={area} tone="brand">
-                  {AREA_LABEL[area] ?? area}
-                </Badge>
-              ))}
+            <div className="mt-2 flex flex-wrap gap-2">
+              {rolePreferences.map((area) => {
+                const style = roleCategoryStyle(area);
+                return (
+                  <span
+                    key={area}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${style.badgeClass}`}
+                  >
+                    <span className={`size-1.5 rounded-full ${style.dot}`} />
+                    {roleCategoryLabel(area)}
+                  </span>
+                );
+              })}
             </div>
           </div>
         )}
 
-        <div className="mt-3 border-t border-line pt-3">
+        <div className="mt-3.5 border-t border-line pt-3.5">
           <span className="text-xs font-semibold text-ink-500">Drive Type Preferences:</span>
           {driveTypePreferences.length === 0 ? (
             <p className="mt-1 text-xs text-ink-500">Open to all drive types (no restrictions)</p>
           ) : (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {driveTypePreferences.map((dt) => (
                 <Badge key={dt} tone="accent">
                   {DRIVE_TYPE_LABEL[dt] ?? dt}
@@ -1794,13 +1821,19 @@ export function StudentRecordPage({
           hint={currentArrears > 0 ? "Action required" : "Zero active"}
           tone={currentArrears > 0 ? "danger" : "success"}
         />
-        <StatCard label="History Arrears" value={historyOfArrears} hint="Total recorded" />
+        <StatCard
+          label="History Arrears"
+          value={historyOfArrears}
+          hint="Total recorded"
+          tone={historyOfArrears > 0 ? "warning" : "neutral"}
+        />
         <StatCard
           label="10th / 12th Marks"
           value={`${record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} / ${
             record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"
           }`}
           hint="Class X / XII"
+          tone="accent"
         />
         <StatCard
           label="Offers & Internships"
@@ -1814,7 +1847,12 @@ export function StudentRecordPage({
           hint={offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
           tone={offers.length > 0 || record.placement ? "success" : "neutral"}
         />
-        <StatCard label="Applications" value={applications.length} hint="Campus drives" />
+        <StatCard
+          label="Applications"
+          value={applications.length}
+          hint="Campus drives"
+          tone="brand"
+        />
       </div>
 
       {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}

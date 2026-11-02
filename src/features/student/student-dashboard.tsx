@@ -7,10 +7,13 @@ import {
   AccordionItem,
   AccordionTrigger,
   Badge,
+  Button,
+  ButtonLink,
   Card,
   PageHeader,
   StatCard,
 } from "@components/ui";
+import { visitAccent } from "@components/visit-accent";
 import {
   ABSENCE_LIMIT,
   type AttendanceRecord,
@@ -31,7 +34,6 @@ import {
 import type { DriveType, OfferSource, ParticipationStatus, SrfStatus } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
 
 export interface StudentSemesterRow {
   readonly semesterNumber: number;
@@ -145,7 +147,7 @@ const ROUND_TONE = (round: ApplicantRound) => {
 };
 
 const AppliedLine = ({ entry }: { entry: ProgressedApplication }) => (
-  <p className="mt-0.5 text-xs text-ink-300">Applied {onDate(entry.application.appliedAt)}</p>
+  <p className="mt-0.5 text-xs text-ink-600">Applied {onDate(entry.application.appliedAt)}</p>
 );
 
 const RoundChips = ({ entry }: { entry: ProgressedApplication }) =>
@@ -177,27 +179,38 @@ function ApplicationVisits({ entries }: { entries: readonly ProgressedApplicatio
 
   return (
     <ul className="flex flex-col gap-3">
-      {[...visits.entries()].map(([visitId, roles]) => {
+      {[...visits.entries()].map(([visitId, roles], index) => {
         const [first] = roles;
         if (first === undefined) return null;
+        /**
+         * The visit's own colour, from the palette every other visit card on
+         * every screen already wears. A student's applications sat as plain
+         * white cards while their drive list was coloured — the same company
+         * looked like two different visits.
+         */
+        const accent = visitAccent(index);
 
         if (roles.length === 1) {
           return (
             <li key={visitId}>
-              <Card className="p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="break-words font-heading font-bold text-ink-900 [overflow-wrap:anywhere]">
-                      {first.application.companyName}
-                    </p>
-                    <p className="break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                      {first.application.roleTitle}
-                    </p>
-                    <AppliedLine entry={first} />
+              <Card className="overflow-hidden">
+                <div className={`border-b border-line px-4 py-3 sm:px-5 ${accent.band}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words font-heading font-bold text-ink-900 [overflow-wrap:anywhere]">
+                        {first.application.companyName}
+                      </p>
+                      <p className="break-words text-sm text-ink-600 [overflow-wrap:anywhere]">
+                        {first.application.roleTitle}
+                      </p>
+                      <AppliedLine entry={first} />
+                    </div>
+                    <Badge tone={STAGE_TONE[first.progress.stage]}>{first.progress.label}</Badge>
                   </div>
-                  <Badge tone={STAGE_TONE[first.progress.stage]}>{first.progress.label}</Badge>
                 </div>
-                <RoundChips entry={first} />
+                <div className="px-4 pb-4 sm:px-5">
+                  <RoundChips entry={first} />
+                </div>
               </Card>
             </li>
           );
@@ -205,36 +218,39 @@ function ApplicationVisits({ entries }: { entries: readonly ProgressedApplicatio
 
         return (
           <li key={visitId}>
-            <Card className="p-4">
-              <p className="flex flex-wrap items-center gap-2 font-heading font-bold text-ink-900">
-                <span className="min-w-0 break-words [overflow-wrap:anywhere]">
-                  {first.application.companyName}
-                </span>
-                <Badge tone="brand">{roles.length} roles</Badge>
-              </p>
-              <Accordion
-                multiple
-                className="mt-1"
-                defaultValue={roles.map((role) => role.application.applicationId)}
-              >
-                {roles.map((role) => (
-                  <AccordionItem
-                    key={role.application.applicationId}
-                    value={role.application.applicationId}
-                  >
-                    <AccordionTrigger className="py-2">
-                      <span className="font-semibold text-ink-900">
-                        {role.application.roleTitle}
-                      </span>
-                      <Badge tone={STAGE_TONE[role.progress.stage]}>{role.progress.label}</Badge>
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-2">
-                      <AppliedLine entry={role} />
-                      <RoundChips entry={role} />
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+            <Card className="overflow-hidden">
+              <div className={`border-b border-line px-4 py-3 sm:px-5 ${accent.band}`}>
+                <p className="flex flex-wrap items-center gap-2 font-heading font-bold text-ink-900">
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                    {first.application.companyName}
+                  </span>
+                  <Badge tone="brand">{roles.length} roles</Badge>
+                </p>
+              </div>
+              <div className="px-4 pb-4 sm:px-5">
+                <Accordion
+                  multiple
+                  defaultValue={roles.map((role) => role.application.applicationId)}
+                >
+                  {roles.map((role) => (
+                    <AccordionItem
+                      key={role.application.applicationId}
+                      value={role.application.applicationId}
+                    >
+                      <AccordionTrigger className="py-2">
+                        <span className="font-semibold text-ink-900">
+                          {role.application.roleTitle}
+                        </span>
+                        <Badge tone={STAGE_TONE[role.progress.stage]}>{role.progress.label}</Badge>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-2">
+                        <AppliedLine entry={role} />
+                        <RoundChips entry={role} />
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </div>
             </Card>
           </li>
         );
@@ -406,122 +422,105 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
           const { shown, hidden } = condenseNotifications(notes, 3);
           return (
             <section aria-label="Notifications" className="mb-6">
-              <Card className="rounded-2xl border border-line/70 p-5 shadow-xs sm:p-6">
-                <div className="flex items-center justify-between">
+              <Card className="p-5 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <p className="flex items-center gap-2 font-heading text-lg font-bold text-ink-900">
                       Notifications
                     </p>
                     {notes.some((n) => !n.read) && (
-                      <Badge tone="warning" className="rounded-full">
-                        {notes.filter((n) => !n.read).length} unread
-                      </Badge>
+                      <Badge tone="warning">{notes.filter((n) => !n.read).length} unread</Badge>
                     )}
                   </div>
                   {hidden > 0 && (
-                    <Link
-                      to="/student/notifications"
-                      className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline"
-                    >
-                      All ({notes.length}) →
-                    </Link>
+                    <ButtonLink to="/student/notifications" variant="secondary" size="sm">
+                      All {notes.length} notifications
+                    </ButtonLink>
                   )}
                 </div>
                 <ul className="mt-4 space-y-2.5">
                   {shown.map((note) => (
-                    <li
-                      key={note.id}
-                      className={`group rounded-xl border p-4 transition-all ${
-                        note.read
-                          ? "border-line/70 bg-surface shadow-2xs hover:border-line"
-                          : "border-brand-200/90 bg-gradient-to-br from-brand-50/70 via-white to-brand-50/20 shadow-xs"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-bold font-heading text-ink-900">
-                              {note.title}
+                    <li key={note.id}>
+                      {/* An unread note is tinted, not gradient-painted: the
+                          reader needs to see WHICH are new, and a white note
+                          among pastels does that without a third look. */}
+                      <Card
+                        tone={note.read ? "surface" : "brand"}
+                        className={note.read ? "p-4" : "border-brand-200/80 p-4"}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="break-words font-heading text-sm font-bold text-ink-900 [overflow-wrap:anywhere]">
+                                {note.title}
+                              </p>
+                              {!note.read && <Badge tone="brand">New</Badge>}
+                            </div>
+                            <p className="mt-1 text-sm leading-relaxed text-ink-700">
+                              <NotificationBody body={note.body} />
                             </p>
-                            {!note.read && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-brand-100/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-700">
-                                <span className="size-1.5 rounded-full bg-brand-600 animate-pulse" />
-                                New
-                              </span>
+                            <OfferLetterLink
+                              url={note.letterUrl}
+                              name={note.letterName}
+                              className="mt-2"
+                            />
+                            <p className="mt-2 text-xs text-ink-500">{onDate(note.createdAt)}</p>
+                          </div>
+                          <div className="shrink-0 self-start">
+                            {note.read ? (
+                              <Badge tone="success">Read</Badge>
+                            ) : (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => void markRead(note.id)}
+                              >
+                                Mark read
+                              </Button>
                             )}
                           </div>
-                          <p className="mt-1 text-sm leading-relaxed text-ink-700">
-                            <NotificationBody body={note.body} />
-                          </p>
-                          <OfferLetterLink
-                            url={note.letterUrl}
-                            name={note.letterName}
-                            className="mt-2"
-                          />
-                          <p className="mt-2 text-xs text-ink-500">{onDate(note.createdAt)}</p>
                         </div>
-                        <div className="shrink-0 self-start">
-                          {note.read ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/60 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                              ✓ Read
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => void markRead(note.id)}
-                              className="cursor-pointer inline-flex items-center gap-1 rounded-full border border-brand-200 bg-white px-3 py-1 text-xs font-semibold text-brand-700 shadow-2xs transition-all hover:border-brand-300 hover:bg-brand-50"
-                            >
-                              Mark read
-                            </button>
-                          )}
-                        </div>
-                      </div>
+                      </Card>
                     </li>
                   ))}
                 </ul>
-                {hidden > 0 && (
-                  <Link
-                    to="/student/notifications"
-                    className="mt-3.5 inline-block text-sm font-semibold text-brand-600 hover:underline"
-                  >
-                    Read all {notes.length} notifications →
-                  </Link>
-                )}
               </Card>
             </section>
           );
         })()}
 
       <section aria-label="What to do next" className="mb-6">
-        <Card className="overflow-hidden">
-          <div className="fpc-gradient h-1" aria-hidden="true" />
-          <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-            <div className="min-w-0">
-              <p className="font-heading text-lg font-bold text-ink-900">{prompt.headline}</p>
-              <p className="mt-1 text-sm text-ink-500">{prompt.detail}</p>
-            </div>
-            {prompt.action !== null && (
-              <Link
-                to={prompt.action.href}
-                className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-brand-600 sm:w-auto"
-              >
-                {prompt.action.label}
-              </Link>
-            )}
+        {/* The gold does the work the gradient strip used to: this panel is the
+            one thing on the page asking to be acted on, so it is the one panel
+            that is not white. */}
+        <Card tone="warn" className="flex flex-wrap items-center justify-between gap-4 p-5">
+          <div className="min-w-0">
+            <p className="font-heading text-lg font-bold text-ink-900">{prompt.headline}</p>
+            <p className="mt-1 text-sm text-ink-700">{prompt.detail}</p>
           </div>
+          {prompt.action !== null && (
+            <ButtonLink to={prompt.action.href} className="w-full sm:w-auto">
+              {prompt.action.label}
+            </ButtonLink>
+          )}
         </Card>
       </section>
 
+      {/* Readouts, not tiles — the same rule the staff landing runs: four
+          bordered boxes compete with the cards under them, and the only thing
+          this row has to say is the four figures. The hairlines divide them
+          without framing them. */}
       <section
         aria-label="Summary"
-        className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+        className="mb-8 grid grid-cols-2 gap-y-4 sm:grid-cols-4 lg:divide-x lg:divide-line/70"
       >
-        <StatCard label="Applications" value={snapshot.applications.length} />
-        <StatCard label="In process" value={inProcess} tone="brand" />
+        <StatCard label="Applications" value={snapshot.applications.length} variant="readout" />
+        <StatCard label="In process" value={inProcess} tone="brand" variant="readout" />
         <StatCard
           label="Offers"
           value={snapshot.offers.length}
           tone={snapshot.offers.length > 0 ? "success" : "neutral"}
+          variant="readout"
         />
         <StatCard
           label="Absences"
@@ -532,6 +531,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
               ? "Your participation is under review"
               : `${ABSENCE_LIMIT} absences lead to a review`
           }
+          variant="readout"
         />
       </section>
 

@@ -288,7 +288,7 @@ export const pifSubmitSchema = pifDraftSchema
     }),
     workLocations: requiredText("Work location"),
     openings: z.number().int().positive("There must be at least one opening."),
-    minOverallCgpa: z.number().min(0).nullable(),
+    minOverallCgpa: z.number().min(0).nullable().default(null),
     eligiblePassingYears: passingYearsRequired,
   })
   /**
@@ -597,8 +597,8 @@ export const multiRolePifDraftSchema = z.object({
   minTenthPercentage: nullableNumber,
   minTwelfthPercentage: nullableNumber,
   arrearsPolicy: z.enum(ARREAR_POLICIES).default("flexible"),
-  eligiblePassingYears: passingYears.default([]),
   roles: z.array(pifRoleDraftSchema).default([]),
+  eligiblePassingYears: passingYears.default([]),
 });
 
 export const multiRolePifSubmitSchema = multiRolePifDraftSchema
@@ -608,7 +608,7 @@ export const multiRolePifSubmitSchema = multiRolePifDraftSchema
     joiningTimeline: z.enum(JOINING_TIMELINES, {
       message: "Say whether joining is immediate or later.",
     }),
-    minOverallCgpa: z.number().min(0).nullable(),
+    minOverallCgpa: z.number().min(0).nullable().default(null),
     eligiblePassingYears: passingYearsRequired,
   })
   /**

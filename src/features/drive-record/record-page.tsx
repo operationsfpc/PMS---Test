@@ -5,6 +5,7 @@ import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import { describeDriveFreeze } from "@domain/drive-working";
 import { offerCategoryLabel, offerCategoryRestatesType } from "@domain/offer-category";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import type { AppRole, DriveStatus } from "@domain/types";
 import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState } from "react";
@@ -53,7 +54,7 @@ const when = (iso: string | null) =>
  */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
+    <Card className="rounded-2xl border border-line/70 p-5 shadow-xs transition-shadow hover:shadow-sm sm:p-6 bg-surface">
       <div className="mb-4 border-b border-line/60 pb-3">
         <h2 className="font-heading text-sm font-bold uppercase tracking-wide text-ink-900">
           {title}
@@ -82,16 +83,54 @@ function Fact({
   );
 }
 
+const TILE_STYLES = {
+  neutral: {
+    container: "border-line bg-surface",
+    label: "text-ink-500",
+    value: "text-ink-900",
+  },
+  emerald: {
+    container: "border-emerald-200/80 bg-emerald-50/40 hover:border-emerald-300",
+    label: "text-emerald-700",
+    value: "text-emerald-950 font-extrabold",
+  },
+  sky: {
+    container: "border-sky-200/80 bg-sky-50/40 hover:border-sky-300",
+    label: "text-sky-700",
+    value: "text-sky-950 font-extrabold",
+  },
+  brand: {
+    container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-300",
+    label: "text-brand-700",
+    value: "text-brand-950 font-extrabold",
+  },
+  amber: {
+    container: "border-amber-200/80 bg-amber-50/40 hover:border-amber-300",
+    label: "text-amber-700",
+    value: "text-amber-950 font-extrabold",
+  },
+} as const;
+
 /**
  * The four figures a reader scans first, in the same shape as `Fact` above.
- * One neutral card each — a package, a place, a mode and a date are four facts,
- * not four moods, and four washes made the row look like a legend.
+ * Color-coded with subtle, consistent pastel accents for immediate recognition.
  */
-function Tile({ label, value }: { label: string; value: string }) {
+function Tile({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "emerald" | "sky" | "brand" | "amber" | "neutral";
+}) {
+  const s = TILE_STYLES[tone] ?? TILE_STYLES.neutral;
   return (
-    <div className="min-w-0 rounded-xl border border-line bg-surface p-4 shadow-xs">
-      <span className="text-xs font-bold uppercase tracking-wide text-ink-500">{label}</span>
-      <p className="mt-1 break-words font-heading text-sm font-bold text-ink-900 [overflow-wrap:anywhere]">
+    <div className={`min-w-0 rounded-xl border p-4 shadow-xs transition-colors ${s.container}`}>
+      <span className={`text-xs font-bold uppercase tracking-wide ${s.label}`}>{label}</span>
+      <p
+        className={`mt-1 break-words font-heading text-sm font-bold [overflow-wrap:anywhere] ${s.value}`}
+      >
         {value}
       </p>
     </div>
@@ -312,8 +351,20 @@ export function DriveRecordPage({
         </section>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Badge tone={driveStatusTone(record.status)}>{driveStatusLabel(record.status)}</Badge>
+        {record.roleCategory !== null && (
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              roleCategoryStyle(record.roleCategory).badgeClass
+            }`}
+          >
+            <span
+              className={`size-1.5 rounded-full ${roleCategoryStyle(record.roleCategory).dot}`}
+            />
+            {roleCategoryLabel(record.roleCategory)}
+          </span>
+        )}
         {/* UAT 2026-08-27: an internship's category IS its type. Two badges
             reading "Internship" are one fact wearing two colours. */}
         {record.offerCategory !== null &&
@@ -332,8 +383,13 @@ export function DriveRecordPage({
         <Tile
           label="Package / CTC"
           value={record.ctcLabel === "" ? "Not stated" : record.ctcLabel}
+          tone="emerald"
         />
-        <Tile label="Location" value={record.locations === "" ? "Not stated" : record.locations} />
+        <Tile
+          label="Location"
+          value={record.locations === "" ? "Not stated" : record.locations}
+          tone="sky"
+        />
         <Tile
           label="Drive Mode"
           value={
@@ -341,10 +397,12 @@ export function DriveRecordPage({
               ? "Not stated"
               : `${record.driveMode.replaceAll("_", " ")} drive`
           }
+          tone="brand"
         />
         <Tile
           label="Apply Deadline"
           value={record.applicationEnd ? when(record.applicationEnd) : "Open"}
+          tone="amber"
         />
       </div>
 

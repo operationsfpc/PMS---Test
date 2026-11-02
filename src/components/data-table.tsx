@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, ChevronUp, Search } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Button } from "./ui";
 
@@ -353,9 +353,19 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       <span className="font-semibold">{col.header}</span>
                       <span
                         aria-hidden="true"
-                        className={`text-[10px] ${sortColumnId === col.id ? "font-bold text-brand-600" : "text-ink-400"}`}
+                        className={`flex shrink-0 ${
+                          sortColumnId === col.id ? "text-brand-600" : "text-ink-400"
+                        }`}
                       >
-                        {sortColumnId === col.id ? (sortDirection === "asc" ? "▲" : "▼") : "⇅"}
+                        {sortColumnId === col.id ? (
+                          sortDirection === "asc" ? (
+                            <ChevronUp className="size-3.5" />
+                          ) : (
+                            <ChevronDown className="size-3.5" />
+                          )
+                        ) : (
+                          <ChevronsUpDown className="size-3.5" />
+                        )}
                       </span>
                     </button>
                   ) : (

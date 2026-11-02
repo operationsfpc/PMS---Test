@@ -245,15 +245,26 @@ export function ButtonAnchor({
  * that a whole page sits behind it. This is that way out — one circle, no
  * words, so it does not compete with the rows under it.
  *
+ * `quiet` is the default and the only one a panel header needs: a bordered
+ * ring that takes the brand colour under the pointer. The two filled tones
+ * exist for a header that must lead, and four solid ink circles across one
+ * page is what this default replaced.
+ *
  * Icon-only means `label` is the only name a screen reader hears, so it has to
  * carry the object the way the card rule demands ("Open the drives list",
  * never a bare "Open"). `title` repeats it for a sighted pointer.
  */
+const ROUND_TONES = {
+  quiet: "border border-line bg-surface text-ink-600 hover:border-brand-300 hover:text-brand-600",
+  ink: "bg-ink-900 text-surface shadow-xs hover:bg-ink-700",
+  brand: "bg-brand-500 text-surface shadow-xs hover:bg-brand-600",
+} as const;
+
 export function RoundAction({
   label,
   to,
   onClick,
-  tone = "ink",
+  tone = "quiet",
   className = "",
   children,
 }: {
@@ -262,13 +273,11 @@ export function RoundAction({
   to?: string | undefined;
   /** Opens something in place when there is no page to go to. */
   onClick?: (() => void) | undefined;
-  tone?: "ink" | "brand";
+  tone?: keyof typeof ROUND_TONES;
   className?: string;
   children: ReactNode;
 }) {
-  const shape = `flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full shadow-xs transition-transform duration-200 hover:scale-105 ${
-    tone === "ink" ? "bg-ink-900 text-surface" : "bg-brand-500 text-surface"
-  } ${className}`;
+  const shape = `flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ${ROUND_TONES[tone]} ${className}`;
 
   return to === undefined ? (
     <button type="button" aria-label={label} title={label} onClick={onClick} className={shape}>
@@ -391,17 +400,24 @@ export function StatCard({
     );
   }
 
+  /**
+   * Words and a bare arrow, not a filled circle.
+   *
+   * Every pressable readout used to end in its own `bg-ink-900` dot, so the
+   * headline row — five borderless figures whose whole point was quiet —
+   * arrived with five black buttons under it, and the four panel exits made
+   * nine on one screen. The hint is the same sentence; only its weight went.
+   */
   const press = (
     <>
       {body}
-      <div className="mt-3 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-ink-600 opacity-80 transition-opacity group-hover:opacity-100">
-          See who
-        </span>
-        <span className="flex size-7 items-center justify-center rounded-full bg-ink-900 text-surface shadow-xs transition-transform duration-200 group-hover:scale-110">
-          <ArrowUpRight className="size-3.5" aria-hidden="true" />
-        </span>
-      </div>
+      <span className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-ink-500 transition-colors group-hover:text-brand-600">
+        See who
+        <ArrowUpRight
+          aria-hidden="true"
+          className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+        />
+      </span>
     </>
   );
 

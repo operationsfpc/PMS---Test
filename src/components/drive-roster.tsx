@@ -1,3 +1,4 @@
+import { Chevron } from "@components/accordion";
 import { Badge, ButtonLink } from "@components/ui";
 import { attendanceLabel } from "@domain/attendance";
 import { offerCategoryLabelOf } from "@domain/offer-category";
@@ -246,8 +247,8 @@ export function DriveRoster({
                       <Badge tone="neutral">Applied</Badge>
                     )}
 
-                    <span className="text-ink-400 text-xs transition-transform">
-                      {isExpanded ? "▲" : "▼"}
+                    <span className="shrink-0 text-ink-400">
+                      <Chevron open={isExpanded} />
                     </span>
                   </div>
                 </button>

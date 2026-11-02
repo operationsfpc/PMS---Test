@@ -1,5 +1,9 @@
-import { DriveSearch, NoDriveMatches } from "@components/drive-search";
-import { DriveTypeFilter } from "@components/drive-type-filter";
+import {
+  ColumnFilterButton,
+  ColumnFilterOptions,
+  ColumnFilterSearch,
+} from "@components/column-filter";
+import { NoDriveMatches } from "@components/drive-search";
 import { StudentIdentity } from "@components/student-identity";
 import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
@@ -229,17 +233,6 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
     );
   }, [drives, query, type]);
 
-  const typeCounts =
-    drives === null
-      ? undefined
-      : {
-          "": drives.length,
-          placement: drives.filter((d) => d.driveType === "placement").length,
-          internship_convertible: drives.filter((d) => d.driveType === "internship_convertible")
-            .length,
-          internship: drives.filter((d) => d.driveType === "internship").length,
-        };
-
   /**
    * One row group per company visit. A legacy drive with no event of its own
    * groups under its own drive id, so it stays the single-role visit it was.
@@ -309,24 +302,6 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         </Card>
       ) : (
         <>
-          <DriveSearch
-            value={query}
-            onChange={(q) => {
-              setQuery(q);
-              setPage(1);
-              setOpenPane(null);
-            }}
-          />
-          <DriveTypeFilter
-            value={type}
-            onChange={(t) => {
-              setType(t);
-              setPage(1);
-              setOpenPane(null);
-            }}
-            {...(typeCounts === undefined ? {} : { counts: typeCounts })}
-          />
-
           {visible.length === 0 ? (
             <Card className="p-6">
               <NoDriveMatches
@@ -344,7 +319,21 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                   <thead>
                     <tr className="border-b border-line bg-surface-muted/60 text-xs uppercase tracking-wide text-ink-500">
                       <th scope="col" className="px-4 py-2.5 font-semibold">
-                        Company
+                        <span className="flex items-center gap-1.5">
+                          Company
+                          <ColumnFilterButton label="Company" active={query !== ""}>
+                            <ColumnFilterSearch
+                              label="Company"
+                              value={query}
+                              onChange={(q) => {
+                                setQuery(q);
+                                setPage(1);
+                                setOpenPane(null);
+                              }}
+                              placeholder="Search company…"
+                            />
+                          </ColumnFilterButton>
+                        </span>
                       </th>
                       <th scope="col" className="px-3 py-2.5 font-semibold">
                         Role
@@ -362,7 +351,28 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
                         Offers
                       </th>
                       <th scope="col" className="px-3 py-2.5 font-semibold">
-                        Status
+                        <span className="flex items-center gap-1.5">
+                          Status
+                          <ColumnFilterButton label="Drive type" active={type !== ""}>
+                            <ColumnFilterOptions
+                              label="Drive type"
+                              options={[
+                                { value: "placement", label: "Full time" },
+                                {
+                                  value: "internship_convertible",
+                                  label: "Internship (convertible)",
+                                },
+                                { value: "internship", label: "Internship" },
+                              ]}
+                              selected={type === "" ? [] : [type]}
+                              onChange={(next) => {
+                                setType(next.length === 0 ? "" : (next[0] as DriveTypeFilterValue));
+                                setPage(1);
+                                setOpenPane(null);
+                              }}
+                            />
+                          </ColumnFilterButton>
+                        </span>
                       </th>
                       <th scope="col" className="px-4 py-2.5 text-right font-semibold">
                         <span className="sr-only">Action</span>

@@ -81,6 +81,17 @@ const UNPLACED: DirectoryStudent = {
   placement: null,
 };
 
+/** Holds an on-campus record AND a self-placed offer. */
+const BOTH: DirectoryStudent = {
+  ...PLACED,
+  studentId: "s4",
+  fullName: "Divya Ramesh",
+  campusName: "Alliance University",
+  hasSelfPlacement: true,
+};
+
+const EVERYONE = [PLACED, UNPLACED, SELF_PLACED, BOTH];
+
 const view = (
   students: readonly DirectoryStudent[],
   overrides: Partial<StudentDirectoryView> = {},
@@ -378,17 +389,6 @@ describe("drilling into a student (G7)", () => {
  * undo is a screen that appears to have lost half its students.
  */
 describe("arriving from the placement overview", () => {
-  /** Holds an on-campus record AND a self-placed offer. */
-  const BOTH: DirectoryStudent = {
-    ...PLACED,
-    studentId: "s4",
-    fullName: "Divya Ramesh",
-    campusName: "Alliance University",
-    hasSelfPlacement: true,
-  };
-
-  const EVERYONE = [PLACED, UNPLACED, SELF_PLACED, BOTH];
-
   it("shows only on-campus placements for filter=on_campus", async () => {
     show(EVERYONE, "/central/students?filter=on_campus");
     await screen.findByText("Anjali Subramanian");
@@ -429,9 +429,10 @@ describe("arriving from the placement overview", () => {
     await screen.findByText("Divya Ramesh");
 
     expect(screen.queryByText("Anjali Subramanian")).toBeNull();
-    expect((screen.getByLabelText("Campus") as HTMLSelectElement).value).toBe(
-      "Alliance University",
-    );
+    // The campus filter is now a column filter on the Campus column header.
+    // The URL parameter still narrows the list, and the filter icon shows active.
+    const filterButton = screen.getByRole("button", { name: /filter campus/i });
+    expect(filterButton.className).toMatch(/text-brand-600/);
   });
 
   it("lets the reader change or clear the campus", async () => {
@@ -439,7 +440,10 @@ describe("arriving from the placement overview", () => {
     show(EVERYONE, "/central/students?campus=Alliance+University");
     await screen.findByText("Divya Ramesh");
 
-    await user.selectOptions(screen.getByLabelText("Campus"), "");
+    // Open the campus column filter and clear it.
+    await user.click(screen.getByRole("button", { name: /filter campus/i }));
+    const searchInput = screen.getByPlaceholderText(/search campus/i);
+    await user.clear(searchInput);
 
     expect(screen.getByText("Anjali Subramanian")).toBeDefined();
   });
@@ -778,131 +782,79 @@ describe("StudentDirectoryPage holds", () => {
  * choices the roster can actually offer are drawn, and every choice lives in
  * the URL so the narrowed view can be sent to somebody else.
  */
-describe("filtering by the facts the table does not print", () => {
-  /** A second degree, year and participation, so every dropdown has a choice. */
-  const PG: DirectoryStudent = {
-    ...UNPLACED,
-    studentId: "s9",
-    fullName: "Nithya Balan",
-    rollNumber: "21CSE1201",
-    degree: "M.Tech.",
-    branch: "CSE",
-    passingYear: 2027,
-    participationStatus: "on_hold",
-  };
-
-  it("always draws the campus dropdown, even with one college in the roster", async () => {
-    show();
-    await screen.findByText("Anjali Subramanian");
-
-    const campus = screen.getByLabelText("Campus") as HTMLSelectElement;
-    expect(campus.value).toBe("");
-    expect(within(campus).getByRole("option", { name: "SDNB Vaishnav College" })).toBeDefined();
-  });
-
-  it("draws only the dropdowns whose roster holds more than one value", async () => {
-    show();
-    await screen.findByText("Anjali Subramanian");
-
-    // One degree, one year and one participation status in this roster, so a
-    // dropdown for any of them would offer nothing to choose.
-    expect(screen.queryByLabelText("Degree")).toBeNull();
-    expect(screen.queryByLabelText("Passing year")).toBeNull();
-    expect(screen.queryByLabelText("Participation")).toBeNull();
-
-    // Two branches and two registration statuses, so both are useful.
-    expect(screen.getByLabelText("Branch")).toBeDefined();
-    expect(screen.getByLabelText("Registration")).toBeDefined();
-  });
-
-  it("narrows to one branch", async () => {
+/**
+ * Column filters replace the dropdowns above the table (2026-11-02).
+ *
+ * The Campus and Registration columns now carry filter icons in their headers.
+ * Clicking a filter icon opens a popover with filter controls for that column.
+ * The other filters (degree, branch, passing year, participation) were removed
+ * to reduce congestion — coordinators rarely used them, and the URL parameters
+ * are still honoured if they arrive.
+ */
+describe("column filters in the table headers", () => {
+  it("opens a campus filter popover when the column header filter icon is pressed", async () => {
     const user = userEvent.setup();
     show();
     await screen.findByText("Anjali Subramanian");
 
-    await user.selectOptions(screen.getByLabelText("Branch"), "ECE");
+    await user.click(screen.getByRole("button", { name: /filter campus/i }));
+
+    // The popover opens with a search input for the campus name.
+    expect(screen.getByPlaceholderText(/search campus/i)).toBeDefined();
+  });
+
+  it("narrows the list when a campus is typed in the column filter", async () => {
+    const user = userEvent.setup();
+    show(EVERYONE);
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /filter campus/i }));
+    await user.type(screen.getByPlaceholderText(/search campus/i), "Alliance");
+
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect(screen.getByText("Divya Ramesh")).toBeDefined();
+  });
+
+  it("opens a registration filter popover with checkboxes", async () => {
+    const user = userEvent.setup();
+    show();
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /filter registration/i }));
+
+    // The popover opens with checkboxes for each SRF status.
+    expect(screen.getByRole("checkbox", { name: /verified/i })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: /submitted/i })).toBeDefined();
+  });
+
+  it("narrows the list when a registration status is checked", async () => {
+    const user = userEvent.setup();
+    show();
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /filter registration/i }));
+    await user.click(screen.getByRole("checkbox", { name: /submitted/i }));
 
     expect(screen.getByText("Rahul Nair")).toBeDefined();
     expect(screen.queryByText("Anjali Subramanian")).toBeNull();
   });
 
-  it("narrows to one registration status", async () => {
+  it("shows the filter icon as active when a filter is applied", async () => {
+    show(EVERYONE, "/central/students?campus=Alliance+University");
+    await screen.findByText("Divya Ramesh");
+
+    const filterButton = screen.getByRole("button", { name: /filter campus/i });
+    expect(filterButton.className).toMatch(/text-brand-600/);
+  });
+
+  it("clears the filter when the clear button in the popover is pressed", async () => {
     const user = userEvent.setup();
-    show();
-    await screen.findByText("Anjali Subramanian");
+    show(EVERYONE, "/central/students?campus=Alliance+University");
+    await screen.findByText("Divya Ramesh");
 
-    await user.selectOptions(screen.getByLabelText("Registration"), "srf_submitted");
-
-    expect(screen.getByText("Rahul Nair")).toBeDefined();
-    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
-  });
-
-  it("narrows to one degree when the roster offers two", async () => {
-    const user = userEvent.setup();
-    show([PLACED, UNPLACED, PG]);
-    await screen.findByText("Nithya Balan");
-
-    await user.selectOptions(screen.getByLabelText("Degree"), "M.Tech.");
-
-    expect(screen.getByText("Nithya Balan")).toBeDefined();
-    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
-    expect(screen.queryByText("Rahul Nair")).toBeNull();
-  });
-
-  it("narrows to one passing year when the roster offers two", async () => {
-    const user = userEvent.setup();
-    show([PLACED, UNPLACED, PG]);
-    await screen.findByText("Nithya Balan");
-
-    await user.selectOptions(screen.getByLabelText("Passing year"), "2027");
-
-    expect(screen.getByText("Nithya Balan")).toBeDefined();
-    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
-    expect(screen.queryByText("Rahul Nair")).toBeNull();
-  });
-
-  it("narrows to one participation status when the roster offers two", async () => {
-    const user = userEvent.setup();
-    show([PLACED, UNPLACED, PG]);
-    await screen.findByText("Nithya Balan");
-
-    await user.selectOptions(screen.getByLabelText("Participation"), "on_hold");
-
-    expect(screen.getByText("Nithya Balan")).toBeDefined();
-    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
-    expect(screen.queryByText("Rahul Nair")).toBeNull();
-  });
-
-  it("arrives already narrowed when the URL carries a dropdown value", async () => {
-    show([PLACED, UNPLACED], "/central/students?branch=ECE");
-    await screen.findByText("Rahul Nair");
-
-    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
-    expect((screen.getByLabelText("Branch") as HTMLSelectElement).value).toBe("ECE");
-  });
-
-  /** A value nobody holds must not silently empty the screen. */
-  it("ignores a dropdown value nobody in the roster holds", async () => {
-    show([PLACED, UNPLACED], "/central/students?branch=Mech&srf=srf_rejected");
-    await screen.findByText("Anjali Subramanian");
-
-    expect(screen.getByText("Rahul Nair")).toBeDefined();
-    expect((screen.getByLabelText("Branch") as HTMLSelectElement).value).toBe("");
-    expect((screen.getByLabelText("Registration") as HTMLSelectElement).value).toBe("");
-  });
-
-  it("clears every chip, search and dropdown at once", async () => {
-    const user = userEvent.setup();
-    show([PLACED, UNPLACED], "/central/students?branch=CSE");
-    await screen.findByText("Anjali Subramanian");
-
-    await user.type(screen.getByRole("searchbox", { name: /search/i }), "zoho");
-    await user.click(screen.getByRole("button", { name: /clear all/i }));
+    await user.click(screen.getByRole("button", { name: /filter campus/i }));
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
 
     expect(screen.getByText("Anjali Subramanian")).toBeDefined();
-    expect(screen.getByText("Rahul Nair")).toBeDefined();
-    expect((screen.getByLabelText("Branch") as HTMLSelectElement).value).toBe("");
-    expect((screen.getByRole("searchbox", { name: /search/i }) as HTMLInputElement).value).toBe("");
-    expect(screen.queryByRole("button", { name: /clear all/i })).toBeNull();
   });
 });
