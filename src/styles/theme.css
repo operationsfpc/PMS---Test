@@ -66,15 +66,46 @@
   --color-orange-500: #f05136;
 
   /*
-   * Logo gradient, sampled from the supplied wordmark.
-   * Reserved for brand moments (logo, progress, hero accents) — NOT for routine
-   * UI. Magenta at #c702d2 fails contrast as a button fill and is fatiguing in
-   * an application used all day.
+   * Logo gradient tokens, aligned to FACE Prep Brand Orange (#f05136) palette.
    */
-  --color-fpc-magenta: #c702d2;
-  --color-fpc-pink: #e14182;
+  --color-fpc-magenta: #d63d22;
+  --color-fpc-pink: #fa7e66;
   --color-fpc-coral: #f0735e;
-  --color-fpc-orange: #f3a863;
+  --color-fpc-orange: #f05136;
+
+  /* Warm mappings for legacy ramps ensuring 100% theme harmony */
+  --color-slate-50: #fffbf9;
+  --color-slate-100: #fff5f2;
+  --color-slate-200: #ffe8e3;
+  --color-slate-400: #a8a29e;
+  --color-slate-500: #78716c;
+  --color-slate-600: #57534e;
+  --color-slate-700: #44403c;
+  --color-slate-800: #292524;
+  --color-slate-900: #1c1917;
+
+  --color-fuchsia-50: #fff8e6;
+  --color-fuchsia-100: #ffedbf;
+  --color-fuchsia-200: #ffe699;
+  --color-fuchsia-500: #ffb800;
+  --color-fuchsia-700: #a67700;
+
+  --color-emerald-50: #e6f7f0;
+  --color-emerald-100: #ccf0e1;
+  --color-emerald-200: #b3e8d1;
+  --color-emerald-500: #00a86b;
+  --color-emerald-600: #00915d;
+  --color-emerald-700: #00744b;
+  --color-emerald-950: #002619;
+
+  --color-amber-50: #fff8e6;
+  --color-amber-100: #ffedbf;
+  --color-amber-200: #ffe699;
+  --color-amber-500: #ffb800;
+  --color-amber-600: #d99c00;
+  --color-amber-700: #a67700;
+  --color-amber-800: #7d5900;
+  --color-amber-950: #362905;
 
   /* Feedback */
   --color-danger-50: #fff0ec;

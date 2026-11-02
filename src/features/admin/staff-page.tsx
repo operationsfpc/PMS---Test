@@ -587,10 +587,10 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                             </div>
                           )}
                           {campusScopeFor(member.role) === "none" && (
-                            <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 border border-slate-200/80 shadow-2xs">
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-700 border border-line shadow-2xs">
                               <svg
                                 aria-hidden="true"
-                                className="h-3.5 w-3.5 text-slate-500 shrink-0"
+                                className="h-3.5 w-3.5 text-ink-400 shrink-0"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"

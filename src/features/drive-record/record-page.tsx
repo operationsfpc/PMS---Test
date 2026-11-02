@@ -96,14 +96,14 @@ const TILE_STYLES = {
     value: "text-ink-900",
   },
   emerald: {
-    container: "border-emerald-200/80 bg-emerald-50/40 hover:border-emerald-300",
-    label: "text-emerald-700",
-    value: "text-emerald-950 font-extrabold",
+    container: "border-success-200/80 bg-success-50/40 hover:border-success-300",
+    label: "text-success-700",
+    value: "text-success-950 font-extrabold",
   },
   sky: {
-    container: "border-sky-200/80 bg-sky-50/40 hover:border-sky-300",
-    label: "text-sky-700",
-    value: "text-sky-950 font-extrabold",
+    container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-300",
+    label: "text-brand-700",
+    value: "text-brand-950 font-extrabold",
   },
   brand: {
     container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-300",
@@ -111,9 +111,9 @@ const TILE_STYLES = {
     value: "text-brand-950 font-extrabold",
   },
   amber: {
-    container: "border-amber-200/80 bg-amber-50/40 hover:border-amber-300",
-    label: "text-amber-700",
-    value: "text-amber-950 font-extrabold",
+    container: "border-gold-200/80 bg-gold-50/40 hover:border-gold-300",
+    label: "text-gold-700",
+    value: "text-gold-950 font-extrabold",
   },
 } as const;
 

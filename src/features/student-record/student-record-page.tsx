@@ -1388,11 +1388,11 @@ export function StudentRecordPage({
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     aria-hidden="true"
-                    className="h-2.5 w-28 sm:w-36 overflow-hidden rounded-full bg-slate-100"
+                    className="h-2.5 w-28 sm:w-36 overflow-hidden rounded-full bg-surface-muted border border-line/60"
                   >
                     <span
                       className={`block h-full rounded-full transition-all ${
-                        score >= 4 ? "bg-emerald-500" : score >= 3 ? "bg-brand-500" : "bg-amber-500"
+                        score >= 4 ? "bg-success-500" : score >= 3 ? "bg-brand-500" : "bg-gold-500"
                       }`}
                       style={{
                         width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,

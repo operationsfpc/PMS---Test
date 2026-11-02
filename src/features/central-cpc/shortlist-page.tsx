@@ -632,7 +632,7 @@ export function ShortlistPage({
         </p>
       )}
 
-      <p className="mb-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-ink-700">
+      <p className="mb-4 rounded-lg border border-brand-200/80 bg-brand-50/60 px-4 py-3 text-sm text-ink-700">
         Ranking and rationale are internal and are <strong>never shown to students</strong>. The
         order is advisory — your selection is what is recorded. Saving{" "}
         <strong>notifies the shortlisted students</strong> and{" "}
@@ -657,7 +657,7 @@ export function ShortlistPage({
               drive.mandatorySkills.map((skill) => (
                 <span
                   key={skill}
-                  className="rounded-full border border-accent/40 bg-accent/5 px-2.5 py-0.5 text-xs font-medium text-ink-900"
+                  className="rounded-full border border-brand-200/80 bg-brand-50/60 px-2.5 py-0.5 text-xs font-medium text-ink-900"
                 >
                   {skill}
                 </span>
