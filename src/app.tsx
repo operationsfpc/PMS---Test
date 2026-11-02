@@ -1,4 +1,5 @@
 import { AppShell } from "@components/app-shell";
+import { ToastProvider } from "@components/toast";
 import {
   canApproveDrive,
   canPublishDrive,
@@ -159,170 +160,172 @@ function PublishersOnly({ children }: { children: ReactNode }) {
 
 export function App() {
   return (
-    <Routes>
-      {/* The only public route. Everything else is behind RequireAuth. */}
-      <Route path="/login" element={<LoginPage />} />
+    <ToastProvider>
+      <Routes>
+        {/* The only public route. Everything else is behind RequireAuth. */}
+        <Route path="/login" element={<LoginPage />} />
 
-      {/* The SRF is full-bleed: it has its own focused chrome. */}
-      <Route
-        path="/srf"
-        element={
-          <RequireAuth>
-            <SrfRoute />
-          </RequireAuth>
-        }
-      />
+        {/* The SRF is full-bleed: it has its own focused chrome. */}
+        <Route
+          path="/srf"
+          element={
+            <RequireAuth>
+              <SrfRoute />
+            </RequireAuth>
+          }
+        />
 
-      <Route
-        path="*"
-        element={
-          <RequireAuth>
-            <AppShell>
-              <Routes>
-                {/* Post-login routing is a domain rule, not a hardcoded path. */}
-                <Route path="/" element={<RoleLanding />} />
-                <Route path="/dashboard" element={<DashboardRoute />} />
-                <Route path="/admin/campuses" element={<AdminCampusRoute />} />
-                <Route path="/admin/staff" element={<AdminStaffRoute />} />
-                {/* F6: degrees and branches are no longer a page. They belong
+        <Route
+          path="*"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <Routes>
+                  {/* Post-login routing is a domain rule, not a hardcoded path. */}
+                  <Route path="/" element={<RoleLanding />} />
+                  <Route path="/dashboard" element={<DashboardRoute />} />
+                  <Route path="/admin/campuses" element={<AdminCampusRoute />} />
+                  <Route path="/admin/staff" element={<AdminStaffRoute />} />
+                  {/* F6: degrees and branches are no longer a page. They belong
                     to a college, for a passing year, under /admin/campuses. */}
-                <Route path="/admin/roster" element={<AdminRosterPage />} />
-                <Route path="/student" element={<StudentDashboardRoute />} />
-                <Route path="/student/notifications" element={<StudentNotificationsRoute />} />
-                <Route path="/student/drives" element={<StudentDrivesPage />} />
-                {/* N1: the one canonical drive page, for every role. */}
-                <Route
-                  path="/drives/:driveId"
-                  element={
-                    <DriveRecordRoute
-                      studentApplyView={() => createSupabaseDrivesView(supabase())}
-                    />
-                  }
-                />
-                {/* G7 (UAT 2026-08-20, Q7b): the canonical student record —
+                  <Route path="/admin/roster" element={<AdminRosterPage />} />
+                  <Route path="/student" element={<StudentDashboardRoute />} />
+                  <Route path="/student/notifications" element={<StudentNotificationsRoute />} />
+                  <Route path="/student/drives" element={<StudentDrivesPage />} />
+                  {/* N1: the one canonical drive page, for every role. */}
+                  <Route
+                    path="/drives/:driveId"
+                    element={
+                      <DriveRecordRoute
+                        studentApplyView={() => createSupabaseDrivesView(supabase())}
+                      />
+                    }
+                  />
+                  {/* G7 (UAT 2026-08-20, Q7b): the canonical student record —
                     N1's second canonical page. RLS scopes who reads whom. */}
-                <Route path="/students/:studentId" element={<StudentRecordRoute />} />
-                {/* F2: two decisions, two heads. */}
-                <Route path="/student/opt-out" element={<StudentOptOutRoute />} />
-                <Route path="/student/off-campus" element={<StudentOffCampusRoute />} />
-                <Route path="/student/profile" element={<StudentProfileRoute />} />
-                <Route
-                  path="/cpc/verification"
-                  element={
-                    <CampusCpcOnly>
-                      <SrfVerificationQueue />
-                    </CampusCpcOnly>
-                  }
-                />
-                <Route path="/cpc/attendance" element={<AttendanceRoute />} />
-                {/* D10: the campus CPC follows the whole cycle, read-only. */}
-                <Route path="/cpc/drives" element={<DriveProgressRoute />} />
-                {/* 2026-08-06: certificates are verified like a CGPA. */}
-                <Route
-                  path="/cpc/certificates"
-                  element={
-                    <CampusCpcOnly>
-                      <CertificateQueue />
-                    </CampusCpcOnly>
-                  }
-                />
-                {/* 2026-08-24: …and a CGPA is finally verified like a
+                  <Route path="/students/:studentId" element={<StudentRecordRoute />} />
+                  {/* F2: two decisions, two heads. */}
+                  <Route path="/student/opt-out" element={<StudentOptOutRoute />} />
+                  <Route path="/student/off-campus" element={<StudentOffCampusRoute />} />
+                  <Route path="/student/profile" element={<StudentProfileRoute />} />
+                  <Route
+                    path="/cpc/verification"
+                    element={
+                      <CampusCpcOnly>
+                        <SrfVerificationQueue />
+                      </CampusCpcOnly>
+                    }
+                  />
+                  <Route path="/cpc/attendance" element={<AttendanceRoute />} />
+                  {/* D10: the campus CPC follows the whole cycle, read-only. */}
+                  <Route path="/cpc/drives" element={<DriveProgressRoute />} />
+                  {/* 2026-08-06: certificates are verified like a CGPA. */}
+                  <Route
+                    path="/cpc/certificates"
+                    element={
+                      <CampusCpcOnly>
+                        <CertificateQueue />
+                      </CampusCpcOnly>
+                    }
+                  />
+                  {/* 2026-08-24: …and a CGPA is finally verified like a
                     certificate. Semesters added after SRF approval. */}
-                <Route
-                  path="/cpc/semesters"
-                  element={
-                    <CampusCpcOnly>
-                      <SemesterQueue />
-                    </CampusCpcOnly>
-                  }
-                />
-                <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
-                <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
-                {/* 2026-08-26: the AE's landing page. Their own drives and
+                  <Route
+                    path="/cpc/semesters"
+                    element={
+                      <CampusCpcOnly>
+                        <SemesterQueue />
+                      </CampusCpcOnly>
+                    }
+                  />
+                  <Route path="/cpc/opt-outs" element={<OptOutQueueRoute />} />
+                  <Route path="/cpc/off-campus" element={<OffCampusQueueRoute />} />
+                  {/* 2026-08-26: the AE's landing page. Their own drives and
                     the organisation's aggregate figures (0064) - never the
                     roster dashboard, which they cannot read. */}
-                <Route path="/ae/overview" element={<AeOverviewRoute />} />
-                <Route
-                  path="/ae/pif"
-                  element={
-                    <RaisersOnly>
-                      <PifPage />
-                    </RaisersOnly>
-                  }
-                />
-                {/*
-                 * Not in any sidebar: 2026-08-18 gave every non-student one
-                 * Drives group of three status tabs, and this is the whole
-                 * portfolio those tabs split. PIF-approval mails written before
-                 * that still carry the link, so it keeps answering rather than
-                 * stranding someone in a content area with nothing in it.
-                 */}
-                <Route path="/my-drives" element={<DrivePortfolioRoute />} />
-                <Route
-                  path="/delivery-head/pif-approvals"
-                  element={
-                    <ApproversOnly>
-                      <PifApprovalQueue />
-                    </ApproversOnly>
-                  }
-                />
-                <Route
-                  path="/central/shortlisting"
-                  element={
-                    <ShortlistersOnly>
-                      <ShortlistRoute />
-                    </ShortlistersOnly>
-                  }
-                />
-                {/* PRD §5: the Central Student Skill Repository. */}
-                <Route path="/central/skills" element={<SkillsRoute />} />
-                {/* 2026-08-24 (1a/2a/3a): the assessed-skills master list. */}
-                <Route path="/central/skills-assessed" element={<SkillsAssessedRoute />} />
-                {/* Every student in the placement process. Also the
+                  <Route path="/ae/overview" element={<AeOverviewRoute />} />
+                  <Route
+                    path="/ae/pif"
+                    element={
+                      <RaisersOnly>
+                        <PifPage />
+                      </RaisersOnly>
+                    }
+                  />
+                  {/*
+                   * Not in any sidebar: 2026-08-18 gave every non-student one
+                   * Drives group of three status tabs, and this is the whole
+                   * portfolio those tabs split. PIF-approval mails written before
+                   * that still carry the link, so it keeps answering rather than
+                   * stranding someone in a content area with nothing in it.
+                   */}
+                  <Route path="/my-drives" element={<DrivePortfolioRoute />} />
+                  <Route
+                    path="/delivery-head/pif-approvals"
+                    element={
+                      <ApproversOnly>
+                        <PifApprovalQueue />
+                      </ApproversOnly>
+                    }
+                  />
+                  <Route
+                    path="/central/shortlisting"
+                    element={
+                      <ShortlistersOnly>
+                        <ShortlistRoute />
+                      </ShortlistersOnly>
+                    }
+                  />
+                  {/* PRD §5: the Central Student Skill Repository. */}
+                  <Route path="/central/skills" element={<SkillsRoute />} />
+                  {/* 2026-08-24 (1a/2a/3a): the assessed-skills master list. */}
+                  <Route path="/central/skills-assessed" element={<SkillsAssessedRoute />} />
+                  {/* Every student in the placement process. Also the
                     destination of the Placed count on the overview. */}
-                <Route path="/central/students" element={<StudentDirectoryRoute />} />
-                {/*
-                 * Three tabs, 2026-08-18: approved = Yet to publish, Live,
-                 * Completed. Drafts are gone from this coordinator's screens.
-                 *
-                 * Yet to publish stays the COCKPIT because it carries the
-                 * publish action and the drive ids every other Central CPC
-                 * screen needs. Live and Completed are the card design, which
-                 * shows what has become of a drive rather than what it is
-                 * waiting for.
-                 */}
-                <Route
-                  path="/central/drives/yet-to-publish"
-                  element={<CockpitRoute filter="yet-to-publish" />}
-                />
-                <Route path="/central/drives/live" element={<DrivePortfolioRoute tab="live" />} />
-                <Route
-                  path="/central/drives/completed"
-                  element={<DrivePortfolioRoute tab="completed" />}
-                />
-                {/* Both old links still answer, pointing at what replaced them:
+                  <Route path="/central/students" element={<StudentDirectoryRoute />} />
+                  {/*
+                   * Three tabs, 2026-08-18: approved = Yet to publish, Live,
+                   * Completed. Drafts are gone from this coordinator's screens.
+                   *
+                   * Yet to publish stays the COCKPIT because it carries the
+                   * publish action and the drive ids every other Central CPC
+                   * screen needs. Live and Completed are the card design, which
+                   * shows what has become of a drive rather than what it is
+                   * waiting for.
+                   */}
+                  <Route
+                    path="/central/drives/yet-to-publish"
+                    element={<CockpitRoute filter="yet-to-publish" />}
+                  />
+                  <Route path="/central/drives/live" element={<DrivePortfolioRoute tab="live" />} />
+                  <Route
+                    path="/central/drives/completed"
+                    element={<DrivePortfolioRoute tab="completed" />}
+                  />
+                  {/* Both old links still answer, pointing at what replaced them:
                     /central/drives was the cockpit and /central/drives/published
                     was the list that is now called Live. */}
-                <Route path="/central/drives" element={<DrivePortfolioRoute tab="live" />} />
-                <Route
-                  path="/central/drives/published"
-                  element={<DrivePortfolioRoute tab="live" />}
-                />
-                <Route
-                  path="/central/publish"
-                  element={
-                    <PublishersOnly>
-                      <PublishRoute />
-                    </PublishersOnly>
-                  }
-                />
-                <Route path="/central/results" element={<ResultsRoute />} />
-                <Route path="/central/offers" element={<OfferRoute />} />
-              </Routes>
-            </AppShell>
-          </RequireAuth>
-        }
-      />
-    </Routes>
+                  <Route path="/central/drives" element={<DrivePortfolioRoute tab="live" />} />
+                  <Route
+                    path="/central/drives/published"
+                    element={<DrivePortfolioRoute tab="live" />}
+                  />
+                  <Route
+                    path="/central/publish"
+                    element={
+                      <PublishersOnly>
+                        <PublishRoute />
+                      </PublishersOnly>
+                    }
+                  />
+                  <Route path="/central/results" element={<ResultsRoute />} />
+                  <Route path="/central/offers" element={<OfferRoute />} />
+                </Routes>
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+      </Routes>
+    </ToastProvider>
   );
 }

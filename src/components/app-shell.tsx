@@ -794,6 +794,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                             <li key={item.to}>
                               <NavLink
                                 to={item.to}
+                                end
                                 className={linkClass}
                                 onClick={() => setMenuOpen(false)}
                               >

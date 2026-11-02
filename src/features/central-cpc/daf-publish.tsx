@@ -300,15 +300,18 @@ function CityFilter({
   cities,
   selected,
   onToggle,
+  onSelectAll,
 }: {
   cities: readonly string[];
   selected: readonly string[];
   onToggle: (city: string) => void;
+  onSelectAll: () => void;
 }) {
+  const allSelected = cities.length > 0 && selected.length === cities.length;
   return (
     <fieldset>
       <legend className="mb-1.5 text-sm font-medium text-ink-700">Filter colleges by city</legend>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {cities.map((city) => {
           const on = selected.includes(city);
           return (
@@ -330,6 +333,13 @@ function CityFilter({
             </label>
           );
         })}
+        <button
+          type="button"
+          onClick={onSelectAll}
+          className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-300"
+        >
+          {allSelected ? "Clear all" : "Select all"}
+        </button>
       </div>
       <p className="mt-1 text-xs text-ink-500">
         Tick a city to add every college in it to the list below, and to narrow that list to them.
@@ -357,8 +367,7 @@ export function DafPublish({ view }: { view: PublishView }) {
    */
   const [cityFilter, setCityFilter] = useState<readonly string[]>([]);
   const [campuses, setCampuses] = useState<readonly string[]>([]);
-  const [degrees, setDegrees] = useState<readonly string[]>([]);
-  const [branches, setBranches] = useState<readonly string[]>([]);
+  const [combinedDegreeBranch, setCombinedDegreeBranch] = useState<readonly string[]>([]);
   // Seeded from the drive in `load()`. There is no sensible default for either:
   // a hardcoded cutoff is a rule nobody approved, and it used to be published.
   const [minCgpa, setMinCgpa] = useState("");
@@ -404,8 +413,18 @@ export function DafPublish({ view }: { view: PublishView }) {
       setArrearPolicy(next.drive.arrearPolicy);
       setCityFilter([...next.drive.targeting.cities]);
       setCampuses([...next.drive.targeting.campuses]);
-      setDegrees([...next.drive.targeting.degrees]);
-      setBranches([...next.drive.targeting.branches]);
+      // Seed combined degree-branch from the drive's degrees + branches
+      const seedCombined: string[] = [];
+      for (const p of next.options.programmes) {
+        if (
+          next.drive.targeting.degrees.includes(p.degree) &&
+          (p.branch === "" || next.drive.targeting.branches.includes(p.branch))
+        ) {
+          const label = p.branch === "" ? p.degree : `${p.degree} — ${p.branch}`;
+          if (!seedCombined.includes(label)) seedCombined.push(label);
+        }
+      }
+      setCombinedDegreeBranch(seedCombined);
       /**
        * R5a, seeded rather than assumed. The box used to open unticked on a
        * drive that was ALREADY open to all, so the coordinator saw no override
@@ -459,6 +478,18 @@ export function DafPublish({ view }: { view: PublishView }) {
     setCampuses(next.colleges);
   };
 
+  const allCities = citiesOf(colleges);
+  const allCityChipsSelected = allCities.length > 0 && cityFilter.length === allCities.length;
+  const toggleAllCities = (): void => {
+    if (allCityChipsSelected) {
+      setCityFilter([]);
+      setCampuses([]);
+    } else {
+      setCityFilter(allCities);
+      setCampuses(colleges.map((c) => c.name));
+    }
+  };
+
   const visibleColleges = collegesIn(cityFilter, colleges).map((college) => college.name);
   const retiredColleges = colleges
     .filter((college) => !college.isActive)
@@ -479,40 +510,45 @@ export function DafPublish({ view }: { view: PublishView }) {
    * can untick, and the drive would carry targeting invisible to its editor.
    */
   const programmes = loaded?.options.programmes ?? [];
-  const narrowedDegrees =
-    campuses.length === 0
-      ? null
-      : [
-          ...new Set(programmes.filter((p) => campuses.includes(p.campus)).map((p) => p.degree)),
-        ].sort((a, b) => a.localeCompare(b));
-  const narrowedBranches =
-    degrees.length === 0
-      ? null
-      : [
-          ...new Set(
-            programmes
-              .filter(
-                (p) =>
-                  (campuses.length === 0 || campuses.includes(p.campus)) &&
-                  degrees.includes(p.degree) &&
-                  p.branch !== "",
-              )
-              .map((p) => p.branch),
-          ),
-        ].sort((a, b) => a.localeCompare(b));
 
-  const degreeOptions =
-    narrowedDegrees === null
-      ? (loaded?.options.degrees ?? [])
-      : [...new Set([...narrowedDegrees, ...degrees])].sort((a, b) => a.localeCompare(b));
-  const inactiveDegrees =
-    narrowedDegrees === null ? [] : degrees.filter((d) => !narrowedDegrees.includes(d));
-  const branchOptions =
-    narrowedBranches === null
-      ? (loaded?.options.branches ?? [])
-      : [...new Set([...narrowedBranches, ...branches])].sort((a, b) => a.localeCompare(b));
-  const inactiveBranches =
-    narrowedBranches === null ? [] : branches.filter((b) => !narrowedBranches.includes(b));
+  // Combined degree-branch options for a single control
+  const combinedDegreeBranchOptions = useMemo(() => {
+    if (programmes.length === 0) return [];
+    const seen = new Set<string>();
+    const options: string[] = [];
+    for (const p of programmes) {
+      // Narrow by campus if any are ticked
+      if (campuses.length > 0 && !campuses.includes(p.campus)) continue;
+      const label = p.branch === "" ? p.degree : `${p.degree} — ${p.branch}`;
+      if (!seen.has(label)) {
+        seen.add(label);
+        options.push(label);
+      }
+    }
+    return options.sort((a, b) => a.localeCompare(b));
+  }, [programmes, campuses]);
+
+  // Parse combined "Degree — Branch" labels back into separate arrays
+  const parsedDegrees = useMemo(() => {
+    const set = new Set<string>();
+    for (const label of combinedDegreeBranch) {
+      const dashIndex = label.indexOf(" — ");
+      const degree = dashIndex === -1 ? label : label.slice(0, dashIndex);
+      set.add(degree);
+    }
+    return Array.from(set);
+  }, [combinedDegreeBranch]);
+
+  const parsedBranches = useMemo(() => {
+    const set = new Set<string>();
+    for (const label of combinedDegreeBranch) {
+      const dashIndex = label.indexOf(" — ");
+      if (dashIndex !== -1) {
+        set.add(label.slice(dashIndex + 3));
+      }
+    }
+    return Array.from(set);
+  }, [combinedDegreeBranch]);
 
   const drive: VisibleDrive | null = useMemo(
     () =>
@@ -532,8 +568,8 @@ export function DafPublish({ view }: { view: PublishView }) {
             applicationStart: openNow ? new Date() : (loadedDrive.applicationStart ?? new Date(0)),
             applicationEnd: loadedDrive.applicationEnd ?? new Date(8.64e15),
             criteria: {
-              eligibleDegrees: degrees,
-              eligibleBranches: branches,
+              eligibleDegrees: parsedDegrees,
+              eligibleBranches: parsedBranches,
               eligiblePassingYears: [],
               minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
               minTenthPercentage: minTenth === "" ? null : Number(minTenth),
@@ -552,8 +588,8 @@ export function DafPublish({ view }: { view: PublishView }) {
     [
       loadedDrive,
       colleges,
-      degrees,
-      branches,
+      parsedDegrees,
+      parsedBranches,
       minCgpa,
       minTenth,
       minTwelfth,
@@ -676,8 +712,8 @@ export function DafPublish({ view }: { view: PublishView }) {
       await view.publish({
         driveId: loadedDrive.id,
         campuses,
-        degrees,
-        branches,
+        degrees: parsedDegrees,
+        branches: parsedBranches,
         minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
         // An empty box is "no bar", never a bar of zero - the same distinction
         // the CGPA cutoff makes, and the one an invented 7.0 got wrong before.
@@ -769,9 +805,10 @@ export function DafPublish({ view }: { view: PublishView }) {
             </p>
             <div className="flex flex-col gap-5">
               <CityFilter
-                cities={citiesOf(colleges)}
+                cities={allCities}
                 selected={cityFilter}
                 onToggle={toggleCityChip}
+                onSelectAll={toggleAllCities}
               />
               <MultiSelect
                 label={
@@ -785,31 +822,19 @@ export function DafPublish({ view }: { view: PublishView }) {
                 emptyNote="No campus ticked — this drive is open to every college on the roster."
               />
               <MultiSelect
-                label={narrowedDegrees === null ? "Degrees" : "Degrees the ticked campuses run"}
-                options={degreeOptions}
-                selected={degrees}
-                onToggle={toggle(setDegrees)}
-                onSelectAll={setDegrees}
-                inactive={inactiveDegrees}
-                inactiveNote="not on the ticked campuses"
-                emptyNote={
-                  narrowedDegrees === null
-                    ? "No degree ticked — every degree on the roster is included."
-                    : "The ticked campuses run none of the roster's degrees."
+                label={
+                  campuses.length === 0
+                    ? "Degrees & branches"
+                    : `Degrees & branches on ${campuses.length === 1 ? campuses[0] : `${campuses.length} campuses`}`
                 }
-              />
-              <MultiSelect
-                label={narrowedBranches === null ? "Branches" : "Branches on the ticked degrees"}
-                options={branchOptions}
-                selected={branches}
-                onToggle={toggle(setBranches)}
-                onSelectAll={setBranches}
-                inactive={inactiveBranches}
-                inactiveNote="not on the ticked degrees"
+                options={combinedDegreeBranchOptions}
+                selected={combinedDegreeBranch}
+                onToggle={toggle(setCombinedDegreeBranch)}
+                onSelectAll={setCombinedDegreeBranch}
                 emptyNote={
-                  narrowedBranches === null
-                    ? "No branch ticked — every branch on the roster is included."
-                    : "The ticked degrees carry none of the roster's branches."
+                  campuses.length === 0
+                    ? "No degree/branch ticked — every programme on the roster is included."
+                    : "The ticked campuses run none of the roster's programmes."
                 }
               />
 

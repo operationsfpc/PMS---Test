@@ -1,5 +1,5 @@
 import { ErrorPanel } from "@components/error-panel";
-import { ToastContainer, useToast } from "@components/toast";
+import { useToast } from "@components/toast";
 import { Badge, Button, PageHeader } from "@components/ui";
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveStatus, describeDriveFreeze } from "@domain/drive-working";
@@ -269,7 +269,7 @@ export function PifForm({
   getCompanyEvents?: (companyName: string) => Promise<readonly ExistingDriveEvent[]>;
 }) {
   const [seed] = useState(() => ({ ...UNIFIED_DEFAULTS, ...initialValues }));
-  const { toasts, toast, dismiss } = useToast();
+  const { toast } = useToast();
 
   /**
    * The last press's complaints, kept on the page until the next press.
@@ -1054,8 +1054,6 @@ export function PifForm({
           </Button>
         </div>
       </form>
-
-      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

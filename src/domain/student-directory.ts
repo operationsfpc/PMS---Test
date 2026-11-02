@@ -91,7 +91,9 @@ export type DirectoryFilter =
   | "verified";
 
 export interface DirectoryQuery {
-  readonly filter: DirectoryFilter;
+  readonly filter?: DirectoryFilter | undefined;
+  /** Multi-filter: matches if any of the provided filters match. */
+  readonly filters?: readonly DirectoryFilter[] | undefined;
   readonly query: string;
   /** Exact campus name, case-insensitive. Carried from the overview's switcher. */
   readonly campus?: string | undefined;
@@ -106,6 +108,8 @@ export interface DirectoryQuery {
   readonly branch?: string | undefined;
   readonly passingYear?: number | undefined;
   readonly srfStatus?: SrfStatus | undefined;
+  /** Multi-selection of SRF statuses. */
+  readonly srfStatuses?: readonly SrfStatus[] | undefined;
   readonly participationStatus?: ParticipationStatus | undefined;
   /** A package figure to drill into. Compared with `sameMoney`, never `===`. */
   readonly ctc?: number | undefined;
@@ -204,13 +208,15 @@ function haystack(student: DirectoryStudent): string {
 export function filterDirectory(
   students: readonly DirectoryStudent[],
   {
-    filter,
+    filter = "all",
+    filters,
     query,
     campus,
     degree,
     branch,
     passingYear,
     srfStatus,
+    srfStatuses,
     participationStatus,
     ctc,
     category,
@@ -219,14 +225,22 @@ export function filterDirectory(
   const needle = query.trim().toLowerCase();
 
   return students.filter((student) => {
-    if (!matchesFilter(student, filter)) return false;
+    if (filters !== undefined && filters.length > 0) {
+      if (!filters.some((f) => matchesFilter(student, f))) return false;
+    } else if (filter !== "all") {
+      if (!matchesFilter(student, filter)) return false;
+    }
 
     if (!matchesText(student.campusName, campus)) return false;
     if (!matchesText(student.degree, degree)) return false;
     if (!matchesText(student.branch, branch)) return false;
 
     if (passingYear !== undefined && student.passingYear !== passingYear) return false;
-    if (srfStatus !== undefined && student.srfStatus !== srfStatus) return false;
+    if (srfStatuses !== undefined && srfStatuses.length > 0) {
+      if (!srfStatuses.includes(student.srfStatus)) return false;
+    } else if (srfStatus !== undefined && student.srfStatus !== srfStatus) {
+      return false;
+    }
     if (participationStatus !== undefined && student.participationStatus !== participationStatus) {
       return false;
     }

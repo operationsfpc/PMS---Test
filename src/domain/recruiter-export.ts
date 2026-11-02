@@ -92,9 +92,12 @@ export function buildRecruiterCsvRows(
   return included.map(({ snapshot }): RecruiterCsvRow => {
     const p = snapshot.profile;
     const resumeUrl = snapshot.resumeId ? (resumeSignedUrls.get(snapshot.resumeId) ?? "") : "";
+    const name = resumeUrl
+      ? `=HYPERLINK("${resumeUrl}", "${p.fullName.replaceAll('"', '""')}")`
+      : p.fullName;
     return {
       "Roll number": p.rollNumber,
-      Name: p.fullName,
+      Name: name,
       Email: p.email,
       Degree: p.degree,
       Branch: p.branch,

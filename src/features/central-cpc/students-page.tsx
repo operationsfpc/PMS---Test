@@ -19,7 +19,7 @@ import {
 } from "@domain/student-directory";
 import type { ParticipationStatus, SrfStatus } from "@domain/types";
 import type { HoldsView } from "@lib/holds-view";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 
 export interface StudentDirectoryView {
@@ -196,7 +196,15 @@ export function StudentDirectoryPage({
   // The filter lives in the URL so the dashboard can link straight to a
   // breakdown, and so a coordinator can send someone the exact view they mean.
   const filterParam = params.get("filter");
-  const filter: DirectoryFilter = isFilter(filterParam) ? filterParam : "all";
+  const selectedFilters: DirectoryFilter[] = useMemo(() => {
+    if (!filterParam) return [];
+    return filterParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s): s is DirectoryFilter => isFilter(s) && s !== "all");
+  }, [filterParam]);
+  const _filter: DirectoryFilter =
+    selectedFilters.length === 1 ? (selectedFilters[0] ?? "all") : "all";
 
   /**
    * The drill-downs the placement overview can arrive with, plus the roster
@@ -214,10 +222,45 @@ export function StudentDirectoryPage({
   const branchParam = params.get("branch");
   const yearParam = params.get("year");
   const srfParam = params.get("srf");
+  const srfStatuses: SrfStatus[] = useMemo(() => {
+    if (!srfParam) return [];
+    return srfParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(isSrfStatus);
+  }, [srfParam]);
+  const srfStatus: SrfStatus | undefined = srfStatuses.length === 1 ? srfStatuses[0] : undefined;
   const participationParam = params.get("participation");
   const ctc = parseCtc(params.get("ctc"));
   const categoryParam = params.get("category");
   const category = isCategory(categoryParam) ? categoryParam : undefined;
+
+  const isPlacementFilter = useCallback(
+    (f: string): f is DirectoryFilter =>
+      f === "placed" || f === "on_campus" || f === "self_placed" || f === "not_placed",
+    [],
+  );
+
+  const isRegistrationFilter = useCallback(
+    (f: string): f is DirectoryFilter => f === "submitted" || f === "verified",
+    [],
+  );
+
+  const selectedPlacementFilters = useMemo(
+    () => selectedFilters.filter(isPlacementFilter),
+    [selectedFilters, isPlacementFilter],
+  );
+
+  const selectedSrfForColumn = useMemo(() => {
+    const result = [...srfStatuses];
+    if (selectedFilters.includes("submitted") && !result.includes("srf_submitted")) {
+      result.push("srf_submitted");
+    }
+    if (selectedFilters.includes("verified") && !result.includes("srf_approved")) {
+      result.push("srf_approved");
+    }
+    return result;
+  }, [srfStatuses, selectedFilters]);
 
   /** Changing one dimension must never silently drop the others. */
   const update = (next: Readonly<Record<string, string | undefined>>) => {
@@ -276,33 +319,14 @@ export function StudentDirectoryPage({
     };
   }, [holds, attempt]);
 
-  const summary = useMemo(() => summariseDirectory(students ?? []), [students]);
-
-  /**
-   * The options every dropdown offers, built from the roster that is actually
-   * loaded — so a college list can never offer an empty one, and the
-   * registration/participation lists say their words in a stable order.
-   */
   const campuses = useMemo(
     () => uniqueSorted((students ?? []).map((s) => s.campusName)),
     [students],
   );
 
-  const campusOptions = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const s of students ?? []) {
-      counts[s.campusName] = (counts[s.campusName] ?? 0) + 1;
-    }
-    return campuses.map((name) => ({
-      value: name,
-      label: name,
-      count: counts[name] ?? 0,
-    }));
-  }, [students, campuses]);
-
-  const degrees = useMemo(() => uniqueSorted((students ?? []).map((s) => s.degree)), [students]);
-  const branches = useMemo(() => uniqueSorted((students ?? []).map((s) => s.branch)), [students]);
-  const passingYears = useMemo(
+  const _degrees = useMemo(() => uniqueSorted((students ?? []).map((s) => s.degree)), [students]);
+  const _branches = useMemo(() => uniqueSorted((students ?? []).map((s) => s.branch)), [students]);
+  const _passingYears = useMemo(
     () => [...new Set((students ?? []).map((s) => s.passingYear))].sort((a, b) => a - b),
     [students],
   );
@@ -310,9 +334,111 @@ export function StudentDirectoryPage({
     const present = new Set((students ?? []).map((s) => s.srfStatus));
     return SRF_STATUSES.filter((status) => present.has(status));
   }, [students]);
+
+  const _participationOptions = useMemo(() => {
+    const present = new Set((students ?? []).map((s) => s.participationStatus));
+    return PARTICIPATION_STATUSES.filter((status) => present.has(status));
+  }, [students]);
+
+  /*
+   * An arriving value is honoured whenever it is a valid choice in the domain.
+   */
+  const campus = campusParam;
+  const degree = degreeParam !== null && degreeParam.trim() !== "" ? degreeParam : "";
+  const branch = branchParam !== null && branchParam.trim() !== "" ? branchParam : "";
+  const yearFigure = yearParam === null ? null : Number(yearParam);
+  const passingYear = yearFigure !== null && Number.isInteger(yearFigure) ? yearFigure : undefined;
+  const participationStatus: ParticipationStatus | undefined = isParticipationStatus(
+    participationParam,
+  )
+    ? participationParam
+    : undefined;
+
+  /**
+   * Cross-synced faceted counts:
+   * To show the correct count for options in dimension X, filter all students
+   * by every active dimension EXCEPT dimension X.
+   */
+  const studentsForCampus = useMemo(
+    () =>
+      filterDirectory(students ?? [], {
+        filters: selectedFilters.length > 0 ? selectedFilters : undefined,
+        filter: selectedFilters.length === 0 ? "all" : undefined,
+        query,
+        degree,
+        branch,
+        passingYear,
+        srfStatuses: srfStatuses.length > 0 ? srfStatuses : undefined,
+        srfStatus,
+        participationStatus,
+        ctc,
+        category,
+      }),
+    [
+      students,
+      selectedFilters,
+      query,
+      degree,
+      branch,
+      passingYear,
+      srfStatuses,
+      srfStatus,
+      participationStatus,
+      ctc,
+      category,
+    ],
+  );
+
+  const campusOptions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const s of studentsForCampus) {
+      counts[s.campusName] = (counts[s.campusName] ?? 0) + 1;
+    }
+    return campuses
+      .map((name) => ({
+        value: name,
+        label: name,
+        count: counts[name] ?? 0,
+      }))
+      .sort((a, b) => {
+        if (a.count > 0 !== b.count > 0) {
+          return a.count > 0 ? -1 : 1;
+        }
+        return a.label.localeCompare(b.label);
+      });
+  }, [studentsForCampus, campuses]);
+
+  const studentsForSrf = useMemo(
+    () =>
+      filterDirectory(students ?? [], {
+        filters: selectedFilters.filter((f) => !isRegistrationFilter(f)),
+        query,
+        campus,
+        degree,
+        branch,
+        passingYear,
+        participationStatus,
+        ctc,
+        category,
+      }),
+    [
+      students,
+      selectedFilters,
+      query,
+      campus,
+      degree,
+      branch,
+      passingYear,
+      participationStatus,
+      ctc,
+      category,
+      isRegistrationFilter,
+    ],
+  );
+
   const srfOptionsWithCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const s of students ?? []) {
+    for (const s of studentsForSrf) {
       counts[s.srfStatus] = (counts[s.srfStatus] ?? 0) + 1;
     }
     return srfOptions.map((status) => ({
@@ -320,15 +446,46 @@ export function StudentDirectoryPage({
       label: SRF_LABEL[status],
       count: counts[status] ?? 0,
     }));
-  }, [students, srfOptions]);
+  }, [studentsForSrf, srfOptions]);
+
+  const studentsForPlacement = useMemo(
+    () =>
+      filterDirectory(students ?? [], {
+        filters: selectedFilters.filter((f) => !isPlacementFilter(f)),
+        query,
+        campus,
+        degree,
+        branch,
+        passingYear,
+        srfStatuses: srfStatuses.length > 0 ? srfStatuses : undefined,
+        srfStatus,
+        participationStatus,
+        ctc,
+        category,
+      }),
+    [
+      students,
+      selectedFilters,
+      query,
+      campus,
+      degree,
+      branch,
+      passingYear,
+      srfStatuses,
+      srfStatus,
+      participationStatus,
+      ctc,
+      category,
+      isPlacementFilter,
+    ],
+  );
 
   const placementOptions = useMemo(() => {
-    if (!students) return [];
     let placed = 0;
     let notPlaced = 0;
     let onCampus = 0;
     let selfPlaced = 0;
-    for (const s of students) {
+    for (const s of studentsForPlacement) {
       if (s.placement !== null) {
         placed++;
         if (s.placement.source === "on_campus") onCampus++;
@@ -343,53 +500,17 @@ export function StudentDirectoryPage({
       { value: "self_placed", label: "Self-placed", count: selfPlaced },
       { value: "not_placed", label: "Not placed", count: notPlaced },
     ];
-  }, [students]);
+  }, [studentsForPlacement]);
 
-  const participationOptions = useMemo(() => {
-    const present = new Set((students ?? []).map((s) => s.participationStatus));
-    return PARTICIPATION_STATUSES.filter((status) => present.has(status));
-  }, [students]);
-
-  /*
-   * An arriving value is honoured only when the screen can draw it as the
-   * chosen option. A dropdown that is hidden for having one value is not a
-   * filter the reader can see, so it is not a filter applied silently either.
-   */
-  const campus = campusParam;
-  const degree =
-    degrees.length > 1 && degreeParam !== null && degrees.includes(degreeParam) ? degreeParam : "";
-  const branch =
-    branches.length > 1 && branchParam !== null && branches.includes(branchParam)
-      ? branchParam
-      : "";
-  const yearFigure = yearParam === null ? null : Number(yearParam);
-  const passingYear =
-    passingYears.length > 1 &&
-    yearFigure !== null &&
-    Number.isInteger(yearFigure) &&
-    passingYears.includes(yearFigure)
-      ? yearFigure
-      : undefined;
-  const srfStatus: SrfStatus | undefined =
-    srfOptions.length > 1 && isSrfStatus(srfParam) && srfOptions.includes(srfParam)
-      ? srfParam
-      : undefined;
-  const participationStatus: ParticipationStatus | undefined =
-    participationOptions.length > 1 &&
-    isParticipationStatus(participationParam) &&
-    participationOptions.includes(participationParam)
-      ? participationParam
-      : undefined;
-
-  const visible = useMemo(
+  const studentsForPopulation = useMemo(
     () =>
       filterDirectory(students ?? [], {
-        filter,
         query,
         campus,
         degree,
         branch,
         passingYear,
+        srfStatuses: srfStatuses.length > 0 ? srfStatuses : undefined,
         srfStatus,
         participationStatus,
         ctc,
@@ -397,12 +518,57 @@ export function StudentDirectoryPage({
       }),
     [
       students,
-      filter,
       query,
       campus,
       degree,
       branch,
       passingYear,
+      srfStatuses,
+      srfStatus,
+      participationStatus,
+      ctc,
+      category,
+    ],
+  );
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const opt of FILTERS) {
+      counts[opt.value] = filterDirectory(studentsForPopulation, {
+        filter: opt.value,
+        query: "",
+      }).length;
+    }
+    return counts;
+  }, [studentsForPopulation]);
+
+  const summary = useMemo(() => summariseDirectory(studentsForPopulation), [studentsForPopulation]);
+
+  const visible = useMemo(
+    () =>
+      filterDirectory(students ?? [], {
+        filters: selectedFilters.length > 0 ? selectedFilters : undefined,
+        filter: selectedFilters.length === 0 ? "all" : undefined,
+        query,
+        campus,
+        degree,
+        branch,
+        passingYear,
+        srfStatuses: srfStatuses.length > 0 ? srfStatuses : undefined,
+        srfStatus,
+        participationStatus,
+        ctc,
+        category,
+      }),
+    [
+      students,
+      selectedFilters,
+      query,
+      campus,
+      degree,
+      branch,
+      passingYear,
+      srfStatuses,
       srfStatus,
       participationStatus,
       ctc,
@@ -416,13 +582,13 @@ export function StudentDirectoryPage({
   useEffect(() => {
     setPage(0);
   }, [
-    filter,
+    selectedFilters,
     query,
     campus,
     degree,
     branch,
     passingYear,
-    srfStatus,
+    srfStatuses,
     participationStatus,
     ctc,
     category,
@@ -433,16 +599,17 @@ export function StudentDirectoryPage({
   const pagedStudents = visible.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const anyFilterActive =
-    filter !== "all" ||
+    selectedFilters.length > 0 ||
     query.trim() !== "" ||
     campus !== "" ||
     degree !== "" ||
     branch !== "" ||
     passingYear !== undefined ||
-    srfStatus !== undefined ||
+    srfStatuses.length > 0 ||
     participationStatus !== undefined ||
     ctc !== undefined ||
     category !== undefined;
+  ctc !== undefined || category !== undefined;
 
   /** Back to the whole roster, in one press — chips, dropdowns and search. */
   const clearAll = () => {
@@ -490,7 +657,10 @@ export function StudentDirectoryPage({
       }));
 
       // BOM-prefixed so Excel reads it as UTF-8 rather than mangling every name.
-      download(`students-${filter}.csv`, `\uFEFF${serialiseCsv([...EXPORT_COLUMNS], rows)}`);
+      download(
+        `students-${selectedFilters.join("-") || "all"}.csv`,
+        `\uFEFF${serialiseCsv([...EXPORT_COLUMNS], rows)}`,
+      );
       /*
        * #78/#79 (UAT 2026-10-18): the file is not the same thing as the list.
        * A resume link is minted per stored file, and a student whose CV row is
@@ -635,27 +805,46 @@ export function StudentDirectoryPage({
               aria-label="Filter students"
               className="flex flex-nowrap overflow-x-auto [scrollbar-width:none] gap-1.5"
             >
-              {FILTERS.map((option) => (
-                <label
-                  key={option.value}
-                  className={`shrink-0 cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                    filter === option.value
-                      ? "border-brand-500 bg-brand-500 text-white"
-                      : "border-line bg-surface text-ink-700 hover:border-violet-400"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="student-filter"
-                    className="sr-only"
-                    checked={filter === option.value}
-                    onChange={() =>
-                      update({ filter: option.value === "all" ? undefined : option.value })
-                    }
-                  />
-                  {option.label}
-                </label>
-              ))}
+              {FILTERS.map((option) => {
+                const isOptionActive =
+                  option.value === "all"
+                    ? !anyFilterActive
+                    : selectedFilters.includes(option.value);
+                return (
+                  <label
+                    key={option.value}
+                    className={`shrink-0 cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                      isOptionActive
+                        ? "border-brand-500 bg-brand-500 text-white"
+                        : "border-line bg-surface text-ink-700 hover:border-violet-400"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="student-filter"
+                      aria-label={option.label}
+                      className="sr-only"
+                      checked={isOptionActive}
+                      onChange={() =>
+                        update({ filter: option.value === "all" ? undefined : option.value })
+                      }
+                    />
+                    <span>{option.label}</span>
+                    {filterCounts[option.value] !== undefined && (
+                      <span
+                        aria-hidden="true"
+                        className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                          isOptionActive
+                            ? "bg-white/25 text-white"
+                            : "bg-surface-muted text-ink-500"
+                        }`}
+                      >
+                        {filterCounts[option.value]}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
             </div>
             <input
               type="search"
@@ -675,16 +864,38 @@ export function StudentDirectoryPage({
           {/* Active filter chips: whenever the list is narrowed, show the active filters with quick clear buttons */}
           {anyFilterActive && (
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              {filter !== "all" && (
-                <button
-                  type="button"
-                  aria-label={`Clear population filter, ${filter}`}
-                  onClick={() => update({ filter: undefined })}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
-                >
-                  Status: {filter.replace("_", " ")} ✕
-                </button>
-              )}
+              {selectedFilters.map((f) => {
+                const label = isPlacementFilter(f)
+                  ? `Placement: ${
+                      f === "placed"
+                        ? "Placed (All)"
+                        : f === "on_campus"
+                          ? "On-campus"
+                          : f === "self_placed"
+                            ? "Self-placed"
+                            : "Not placed"
+                    }`
+                  : f === "submitted"
+                    ? "Registration: Form submitted"
+                    : f === "verified"
+                      ? "Registration: Verified"
+                      : `Status: ${String(f).replace("_", " ")}`;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    aria-label={`Clear filter, ${String(f).replace("_", " ")}`}
+                    onClick={() => {
+                      const next = selectedFilters.filter((x) => x !== f);
+                      update({ filter: next.length === 0 ? undefined : next.join(",") });
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
+                  >
+                    <span>{label}</span>
+                    <span aria-hidden="true">✕</span>
+                  </button>
+                );
+              })}
               {campus !== "" && (
                 <button
                   type="button"
@@ -695,16 +906,20 @@ export function StudentDirectoryPage({
                   Campus: {campus} ✕
                 </button>
               )}
-              {srfStatus !== undefined && (
+              {srfStatuses.map((status) => (
                 <button
+                  key={status}
                   type="button"
-                  aria-label={`Clear registration filter, ${SRF_LABEL[srfStatus]}`}
-                  onClick={() => update({ srf: undefined })}
+                  aria-label={`Clear registration filter, ${SRF_LABEL[status]}`}
+                  onClick={() => {
+                    const next = srfStatuses.filter((s) => s !== status);
+                    update({ srf: next.length === 0 ? undefined : next.join(",") });
+                  }}
                   className="inline-flex items-center gap-1.5 rounded-full border border-brand-300 bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700 hover:border-brand-500 transition-colors"
                 >
-                  Registration: {SRF_LABEL[srfStatus]} ✕
+                  Registration: {SRF_LABEL[status]} ✕
                 </button>
-              )}
+              ))}
               {degree !== "" && (
                 <button
                   type="button"
@@ -806,14 +1021,27 @@ export function StudentDirectoryPage({
                   <th className="px-4 py-3">
                     <span className="flex items-center gap-1.5">
                       Registration
-                      <ColumnFilterButton label="Registration" active={srfStatus !== undefined}>
+                      <ColumnFilterButton
+                        label="Registration"
+                        active={selectedSrfForColumn.length > 0}
+                      >
                         <ColumnFilterOptions
                           label="Registration status"
                           options={srfOptionsWithCounts}
-                          selected={srfStatus === undefined ? [] : [srfStatus]}
-                          onChange={(next) =>
-                            update({ srf: next.length === 0 ? undefined : next[0] })
-                          }
+                          selected={selectedSrfForColumn}
+                          onChange={(next) => {
+                            const nextSrf = next.filter((v) => isSrfStatus(v));
+                            const remainingFilters = selectedFilters.filter(
+                              (f) => !isRegistrationFilter(f),
+                            );
+                            update({
+                              srf: nextSrf.length === 0 ? undefined : nextSrf.join(","),
+                              filter:
+                                remainingFilters.length === 0
+                                  ? undefined
+                                  : remainingFilters.join(","),
+                            });
+                          }}
                         />
                       </ColumnFilterButton>
                     </span>
@@ -824,27 +1052,21 @@ export function StudentDirectoryPage({
                       Placement
                       <ColumnFilterButton
                         label="Placement"
-                        active={
-                          filter === "placed" ||
-                          filter === "not_placed" ||
-                          filter === "on_campus" ||
-                          filter === "self_placed"
-                        }
+                        active={selectedPlacementFilters.length > 0}
                       >
                         <ColumnFilterOptions
                           label="Placement outcome"
                           options={placementOptions}
-                          selected={
-                            filter === "placed" ||
-                            filter === "not_placed" ||
-                            filter === "on_campus" ||
-                            filter === "self_placed"
-                              ? [filter]
-                              : []
-                          }
-                          onChange={(next) =>
-                            update({ filter: next.length === 0 ? undefined : next[0] })
-                          }
+                          selected={selectedPlacementFilters}
+                          onChange={(next) => {
+                            const nonPlacementFilters = selectedFilters.filter(
+                              (f) => !isPlacementFilter(f),
+                            );
+                            const combined = [...nonPlacementFilters, ...next];
+                            update({
+                              filter: combined.length === 0 ? undefined : combined.join(","),
+                            });
+                          }}
                         />
                       </ColumnFilterButton>
                     </span>

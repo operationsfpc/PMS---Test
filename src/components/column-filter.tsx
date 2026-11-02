@@ -1,14 +1,14 @@
 import { Filter } from "lucide-react";
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./ui";
 
 /**
  * A column header filter button, shadcn-style.
  *
  * Clicking opens a dropdown with filter controls for that column. The dropdown
- * closes on outside click or Escape. The button shows a filled icon when a
- * filter is active, so a coordinator scanning the headers sees which columns
- * are narrowed.
+ * is rendered in a portal with fixed positioning so it never gets clipped by
+ * table overflow or moves inside scrollable containers.
  */
 export function ColumnFilterButton({
   label,
@@ -26,13 +26,40 @@ export function ColumnFilterButton({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!open) return;
 
+    function updatePosition() {
+      if (!buttonRef.current) return;
+      const rect = buttonRef.current.getBoundingClientRect();
+      const width = 240;
+      let left = align === "right" ? rect.right - width : rect.left;
+      if (typeof window !== "undefined") {
+        if (left + width > window.innerWidth - 12) {
+          left = Math.max(12, window.innerWidth - width - 12);
+        }
+        if (left < 12) left = 12;
+      }
+      setCoords({
+        top: rect.bottom + 4,
+        left,
+      });
+    }
+
+    updatePosition();
+
     function handleOutsideClick(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        buttonRef.current &&
+        !buttonRef.current.contains(target) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     }
@@ -40,41 +67,59 @@ export function ColumnFilterButton({
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setOpen(false);
+        buttonRef.current?.focus();
       }
     }
 
     document.addEventListener("mousedown", handleOutsideClick);
     document.addEventListener("keydown", handleEscape);
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
       document.removeEventListener("keydown", handleEscape);
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
     };
-  }, [open]);
+  }, [open, align]);
 
   return (
-    <div ref={containerRef} className="relative inline-flex items-center">
+    <div className="inline-flex items-center">
       <button
+        ref={buttonRef}
         type="button"
         aria-label={`Filter ${label}`}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen((prev) => !prev)}
-        className={`flex items-center gap-1 rounded p-0.5 transition-colors hover:text-ink-900 ${
+        className={`flex min-h-[32px] min-w-[32px] items-center justify-center gap-1 rounded p-0.5 transition-colors hover:text-ink-900 sm:min-h-0 sm:min-w-0 ${
           active ? "text-brand-600" : "text-ink-400"
         }`}
       >
         <Filter aria-hidden="true" className={`size-3.5 ${active ? "fill-current" : ""}`} />
       </button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-label={`Filter ${label}`}
-          className={`absolute ${align === "right" ? "right-0" : "left-0"} top-full z-50 mt-1.5 min-w-[230px] max-w-xs rounded-xl border border-line bg-surface p-3 shadow-xl`}
-        >
-          {children}
-        </div>
-      )}
+      {open &&
+        coords &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            role="dialog"
+            aria-label={`Filter ${label}`}
+            style={{
+              position: "fixed",
+              top: `${coords.top}px`,
+              left: `${coords.left}px`,
+              zIndex: 9999,
+            }}
+            className="min-w-[230px] max-w-xs rounded-xl border border-line bg-surface p-3 shadow-xl"
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

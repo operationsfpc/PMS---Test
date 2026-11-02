@@ -1,6 +1,12 @@
 import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitDayInParentheses } from "@domain/drive-aging";
-import { FUNNEL_STAGES, type FunnelStageKey, filterFunnelStage } from "@domain/drive-portfolio";
+import {
+  canPublishDrive,
+  canShortlistFromPortfolio,
+  FUNNEL_STAGES,
+  type FunnelStageKey,
+  filterFunnelStage,
+} from "@domain/drive-portfolio";
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import { describeDriveFreeze } from "@domain/drive-working";
@@ -169,12 +175,14 @@ export function DriveRecordPage({
   role,
   driveId,
   stage,
+  headerAction,
 }: {
   view: DriveRecordView;
   role: AppRole;
   driveId: string;
   /** C8: the funnel number that linked here — `?stage=` on the route. */
   stage?: string | undefined;
+  headerAction?: React.ReactNode;
 }) {
   const [record, setRecord] = useState<DriveRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -269,7 +277,25 @@ export function DriveRecordPage({
           .filter((part) => part !== null)
           .join(" · ")}
         actions={
-          staff && (role === "account_executive" || role === "admin") ? (
+          headerAction !== undefined ? (
+            headerAction
+          ) : canPublishDrive(role) &&
+            (record.status === "approved" || record.status === "draft") ? (
+            <ButtonLink size="sm" to={`/central/publish?drive=${record.id}`}>
+              Publish
+            </ButtonLink>
+          ) : canShortlistFromPortfolio(role) &&
+            (record.status === "live" ||
+              record.status === "applications_closed" ||
+              record.status === "in_rounds") ? (
+            <ButtonLink
+              size="sm"
+              variant="secondary"
+              to={`/central/shortlisting?drive=${record.id}`}
+            >
+              Shortlist
+            </ButtonLink>
+          ) : staff && (role === "account_executive" || role === "admin") ? (
             rolesRefused === null ? (
               <ButtonLink
                 size="sm"

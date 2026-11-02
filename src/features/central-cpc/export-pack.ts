@@ -1,4 +1,9 @@
-import { EXPORT_COLUMNS, type ExportRow, resumeHyperlink } from "@domain/recruiter-export";
+import {
+  EXPORT_COLUMNS,
+  type ExportRow,
+  resumeHyperlink,
+  type ShortlistEntry,
+} from "@domain/recruiter-export";
 
 /**
  * Answer 5a (2026-08-24): the recruiter pack is ONE zip — `shortlist.xlsx`
@@ -29,8 +34,12 @@ export async function buildRecruiterZip(
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Shortlist");
+  // Freeze header row (1) and columns up to register number and name (columns A & B: xSplit 2)
+  sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 1 }];
   sheet.addRow([...EXPORT_COLUMNS, "Resume"]);
   sheet.getRow(1).font = { bold: true };
+
+  const nameColIndex = EXPORT_COLUMNS.indexOf("Name") + 1;
 
   for (const row of rows) {
     const values = EXPORT_COLUMNS.map((column) => row[column]);
@@ -41,9 +50,14 @@ export async function buildRecruiterZip(
       // Thanush Krishna.pdf` — raw spaces — is what Excel answered "Cannot
       // open the specified file" to. The TEXT stays human; the LINK is
       // encoded, exactly as Excel writes it itself.
+      const link = resumeHyperlink(file.filename);
+      added.getCell(nameColIndex).value = {
+        text: String(row.Name),
+        hyperlink: link,
+      };
       added.getCell(EXPORT_COLUMNS.length + 1).value = {
         text: file.filename,
-        hyperlink: resumeHyperlink(file.filename),
+        hyperlink: link,
       };
     }
   }
@@ -80,5 +94,74 @@ export async function buildRecruiterZip(
     type: "blob",
     // Named so the recruiter knows what landed in their downloads folder.
     comment: `Shortlist pack — ${companyName}`,
+  });
+}
+
+/**
+ * Builds a direct standalone Excel workbook (.xlsx) with signed URLs.
+ * Freezes the header row and columns up to register number / name (columns A & B),
+ * and hyperlinks candidate names directly to their resume PDFs.
+ */
+export async function buildRecruiterExcel(
+  _companyName: string,
+  entries: readonly ShortlistEntry[],
+  resumeSignedUrls: ReadonlyMap<string, string>,
+): Promise<Blob> {
+  const { default: ExcelJS } = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Shortlist");
+
+  // Freezes top header row and columns up to register number & name (A & B)
+  sheet.views = [{ state: "frozen", xSplit: 2, ySplit: 1 }];
+
+  const headerRow = sheet.addRow([...EXPORT_COLUMNS, "Resume link"]);
+  headerRow.font = { bold: true };
+
+  const nameColIndex = EXPORT_COLUMNS.indexOf("Name") + 1;
+  const resumeColIndex = EXPORT_COLUMNS.length + 1;
+
+  const included = entries.filter((e) => e.included);
+  for (const { snapshot } of included) {
+    const p = snapshot.profile;
+    const resumeUrl = snapshot.resumeId ? (resumeSignedUrls.get(snapshot.resumeId) ?? "") : "";
+    const added = sheet.addRow([
+      p.rollNumber,
+      p.fullName,
+      p.email,
+      p.degree,
+      p.branch,
+      p.passingYear,
+      p.overallCgpa,
+      p.tenthPercentage,
+      p.twelfthPercentage,
+      p.currentArrears,
+      p.historyOfArrears,
+      p.technicalSkills,
+      resumeUrl ? "View resume" : "",
+    ]);
+
+    if (resumeUrl) {
+      added.getCell(nameColIndex).value = {
+        text: p.fullName,
+        hyperlink: resumeUrl,
+      };
+      added.getCell(nameColIndex).font = {
+        color: { argb: "FF2563EB" },
+        underline: true,
+      };
+      added.getCell(resumeColIndex).value = {
+        text: "View resume",
+        hyperlink: resumeUrl,
+      };
+      added.getCell(resumeColIndex).font = {
+        color: { argb: "FF2563EB" },
+        underline: true,
+      };
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 }

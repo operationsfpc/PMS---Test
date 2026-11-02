@@ -490,4 +490,26 @@ describe("filterDirectory — the facts the table does not print", () => {
     // The same branch inside "placed" is nobody: Rahul holds no offer.
     expect(filterDirectory(ROSTER, { filter: "placed", query: "", branch: "ECE" })).toEqual([]);
   });
+
+  it("supports multi-selection of SRF statuses", () => {
+    expect(
+      names(
+        filterDirectory(ROSTER, {
+          query: "",
+          srfStatuses: ["srf_approved", "srf_submitted"],
+        }),
+      ),
+    ).toEqual(["Anjali Subramanian", "Rahul Nair", "Meera Iyer", "Nithya Balan"]);
+  });
+
+  it("supports multi-selection of filters", () => {
+    expect(
+      names(
+        filterDirectory(ROSTER, {
+          query: "",
+          filters: ["on_campus", "opted_out"],
+        }),
+      ),
+    ).toEqual(["Anjali Subramanian", "Meera Iyer"]);
+  });
 });

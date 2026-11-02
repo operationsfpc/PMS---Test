@@ -817,6 +817,17 @@ describe("the student reaches their notifications from the sidebar", () => {
     );
   });
 
+  it("does not mark 'My dashboard' active when at /student/notifications", () => {
+    shellCollapsed(signedIn("student"), async () => {}, "/student/notifications");
+
+    expect(
+      screen.getByRole("link", { name: /^notifications$/i }).getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      screen.getByRole("link", { name: /^my dashboard$/i }).getAttribute("aria-current"),
+    ).toBeNull();
+  });
+
   it("does not offer it to staff — the log is the student's own", () => {
     shellFor(signedIn("central_placement_coordinator"));
     expect(screen.queryByRole("link", { name: /^notifications$/i })).toBeNull();

@@ -55,7 +55,7 @@ const applyView: StudentApplyView = {
   apply: async () => undefined,
 };
 
-function at(role: AppRole) {
+function at(role: AppRole, customPageView: DriveRecordView = pageView) {
   return render(
     <AuthContext.Provider
       value={{ status: "signed-in", role, email: "test@example.com", campuses: [] }}
@@ -64,7 +64,7 @@ function at(role: AppRole) {
         <Routes>
           <Route
             path="/drives/:driveId"
-            element={<DriveRecordRoute view={pageView} studentApplyView={() => applyView} />}
+            element={<DriveRecordRoute view={customPageView} studentApplyView={() => applyView} />}
           />
         </Routes>
       </MemoryRouter>
@@ -81,10 +81,73 @@ describe("DriveRecordRoute", () => {
     ).toBeDefined();
   });
 
+  it("offers Apply in the page header actions when the drive is loaded", async () => {
+    const loadedPageView: DriveRecordView = {
+      record: async () => ({
+        id: "d1",
+        companyDriveId: null,
+        companyName: "Zoho",
+        industry: "Technology",
+        companyWebsite: "https://zoho.com",
+        roleTitle: "Member Technical Staff",
+        additionalDesignations: [],
+        roleCategory: "software_technical",
+        status: "live",
+        driveType: "placement",
+        driveMode: "on_campus",
+        venue: null,
+        offerCategory: "dream",
+        openings: 25,
+        ctcLabel: "₹6.5–9 LPA",
+        ctcBreakup: "",
+        bondDetails: "",
+        locations: "Chennai",
+        applicationStart: "2026-09-01T00:00:00Z",
+        applicationEnd: "2026-09-10T00:00:00Z",
+        tentativeDate: null,
+        shift: "Day",
+        joining: "Immediate",
+        jobDescription: "Build backend services",
+        jobDescriptionUrl: null,
+        jobDescriptionName: null,
+        eligibility: {
+          cgpaLabel: "≥ 7.0 CGPA",
+          tenthLabel: "≥ 70%",
+          twelfthLabel: "≥ 70%",
+          arrearsLabel: "No arrears",
+          passingYears: [2027],
+          mandatorySkills: "TypeScript",
+          degrees: ["B.E"],
+          branches: ["CSE"],
+          campuses: [],
+        },
+        rounds: [],
+        recruiters: [],
+        provenance: {
+          raisedBy: null,
+          raisedAt: null,
+          approvedBy: null,
+          approvedAt: null,
+          publishedBy: null,
+          publishedAt: null,
+        },
+        applicants: [],
+        siblingRoles: [],
+      }),
+    };
+    at("student", loadedPageView);
+
+    expect(
+      await screen.findByRole("heading", { name: /zoho — member technical staff/i }),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: /^apply$/i })).toBeDefined();
+  });
+
   it("does not offer staff an Apply", async () => {
     at("account_executive");
 
     expect(await screen.findByText(/does not exist, or you cannot see it/i)).toBeDefined();
     expect(screen.queryByRole("button", { name: /apply to Zoho/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^apply$/i })).toBeNull();
   });
 });

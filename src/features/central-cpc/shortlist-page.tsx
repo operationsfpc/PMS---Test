@@ -19,7 +19,7 @@ import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { DriveStatus, RoleCategory } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildRecruiterZip } from "./export-pack";
+import { buildRecruiterExcel, buildRecruiterZip } from "./export-pack";
 
 export interface ShortlistApplicant {
   readonly applicationId: string;
@@ -203,6 +203,7 @@ export function ShortlistPage({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   /**
    * F16 (UAT 2026-08-06): "After shortlisting the candidates, the screen stays
@@ -425,6 +426,46 @@ export function ShortlistPage({
   }
 
   /**
+   * Recruiter Excel export with frozen columns up to register number & name (A & B)
+   * and direct DB signed URLs for resumes as clickable hyperlinks on student names.
+   */
+  async function exportShortlistExcel() {
+    setError(null);
+    setExportFeedback(null);
+    setExportingExcel(true);
+    try {
+      const entries = await view.exportEntries(driveId);
+      const pack = buildRecruiterExport(entries);
+
+      if (pack.rows.length === 0) {
+        setError("No shortlisted candidates to export.");
+        return;
+      }
+
+      const signedUrls =
+        (await view.resumeSignedUrls?.(pack.resumeIds)) ?? new Map<string, string>();
+
+      const companyName = drive?.companyName ?? "drive";
+      const company = companyName.toLowerCase().replaceAll(/\s+/g, "-");
+      const blob = await buildRecruiterExcel(companyName, entries, signedUrls);
+      const columns = [...RECRUITER_CSV_COLUMNS];
+
+      await view.logExport(driveId, columns, pack.rows.length);
+      download(`shortlist-${company}.xlsx`, blob);
+
+      const csvRows = buildRecruiterCsvRows(entries, signedUrls);
+      setExportFeedback(
+        `Exported ${csvRows.length} shortlisted candidates. ${describeResumeLinks(csvRows)}`,
+      );
+      setMissingResumes(resumeLinkShortfall(csvRows));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
+    } finally {
+      setExportingExcel(false);
+    }
+  }
+
+  /**
    * WS8 (D4), reshaped by answers 5a/5b (2026-08-24): ONE zip —
    * shortlist.xlsx beside resumes/, each row hyperlinking its candidate's
    * file — built from the SNAPSHOTS (R7), included students only. A missing
@@ -524,12 +565,31 @@ export function ShortlistPage({
                   variant="secondary"
                   isLoading={exporting}
                   onClick={() => void exportShortlistCsv()}
-                  disabled={exporting || alreadyShortlisted.length === 0 || freeze !== null}
-                  title="Downloads the shortlist as it is saved in the database"
+                  disabled={
+                    exporting ||
+                    exportingExcel ||
+                    alreadyShortlisted.length === 0 ||
+                    freeze !== null
+                  }
+                  title="Downloads the shortlist as it is saved in the database with hyperlinked names"
                 >
                   {exporting ? "Exporting CSV…" : "Export shortlist (CSV)"}
                 </Button>
-                {/* Both exports read the SAVED shortlist, so on a drive where nobody
+                <Button
+                  variant="secondary"
+                  isLoading={exportingExcel}
+                  onClick={() => void exportShortlistExcel()}
+                  disabled={
+                    exporting ||
+                    exportingExcel ||
+                    alreadyShortlisted.length === 0 ||
+                    freeze !== null
+                  }
+                  title="Downloads shortlist as an Excel sheet with frozen columns up to register number and hyperlinked names"
+                >
+                  {exportingExcel ? "Exporting Excel…" : "Export Excel (.xlsx)"}
+                </Button>
+                {/* Exports read the SAVED shortlist, so on a drive where nobody
                     is on it yet they could only refuse. A control that cannot do
                     anything is not offered — and a greyed button says why. */}
                 <Button
@@ -542,7 +602,7 @@ export function ShortlistPage({
                 </Button>
                 {alreadyShortlisted.length === 0 && freeze === null && (
                   <span className="text-xs text-ink-500">
-                    Both exports send the saved shortlist — shortlist someone first.
+                    Exports send the saved shortlist — shortlist someone first.
                   </span>
                 )}
               </>

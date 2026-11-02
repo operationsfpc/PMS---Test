@@ -1,5 +1,13 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 export type ToastTone = "danger" | "success" | "warning" | "info";
 
@@ -10,6 +18,7 @@ export interface ToastItem {
   description?: string | undefined;
   issues?: readonly string[] | undefined;
   duration?: number | undefined;
+  createdAt: number;
 }
 
 const TONE_CLASSES: Record<
@@ -42,6 +51,14 @@ const TONE_CLASSES: Record<
   },
 };
 
+const MAX_VISIBLE = 3;
+const DEFAULT_DURATION = 6000;
+const DANGER_DURATION = 0; // sticky
+
+function dedupeKey(title: string, description?: string): string {
+  return `${title}::${description ?? ""}`;
+}
+
 export function Toast({
   tone = "info",
   title,
@@ -62,7 +79,7 @@ export function Toast({
     <div
       role={tone === "danger" ? "alert" : "status"}
       aria-live="polite"
-      className={`pointer-events-auto flex w-full max-w-md flex-col rounded-2xl border p-4 shadow-xl transition-all ${style.card}`}
+      className={`pointer-events-auto flex w-full flex-col rounded-2xl border p-4 shadow-xl transition-all ${style.card}`}
     >
       <div className="flex items-start gap-3">
         <div
@@ -112,7 +129,117 @@ export function Toast({
   );
 }
 
-export function ToastContainer({
+interface ToastContextValue {
+  toast: (opts: {
+    tone?: ToastTone | undefined;
+    title: string;
+    description?: string | undefined;
+    issues?: readonly string[] | undefined;
+    duration?: number | undefined;
+  }) => string;
+  dismiss: (id: string) => void;
+}
+
+const ToastContext = createContext<ToastContextValue | null>(null);
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<readonly ToastItem[]>([]);
+  const timersRef = useRef<Map<string, number>>(new Map());
+  const seenRef = useRef<Map<string, number>>(new Map());
+
+  const clearTimer = useCallback((id: string) => {
+    const timer = timersRef.current.get(id);
+    if (timer !== undefined) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
+  }, []);
+
+  const dismiss = useCallback(
+    (id: string) => {
+      clearTimer(id);
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    },
+    [clearTimer],
+  );
+
+  const toast = useCallback(
+    ({
+      tone = "info",
+      title,
+      description,
+      issues,
+      duration,
+    }: {
+      tone?: ToastTone | undefined;
+      title: string;
+      description?: string | undefined;
+      issues?: readonly string[] | undefined;
+      duration?: number | undefined;
+    }) => {
+      // Dedupe: same title+description within 2s → skip
+      const key = dedupeKey(title, description);
+      const lastSeen = seenRef.current.get(key);
+      const now = Date.now();
+      if (lastSeen !== undefined && now - lastSeen < 2000) {
+        return "";
+      }
+      seenRef.current.set(key, now);
+
+      const id = Math.random().toString(36).substring(2, 9);
+      const effectiveDuration =
+        duration ?? (tone === "danger" ? DANGER_DURATION : DEFAULT_DURATION);
+      const item: ToastItem = {
+        id,
+        tone,
+        title,
+        description,
+        issues,
+        duration: effectiveDuration,
+        createdAt: now,
+      };
+      setToasts((prev) => [...prev, item]);
+
+      if (effectiveDuration > 0) {
+        const timer = window.setTimeout(() => {
+          dismiss(id);
+        }, effectiveDuration);
+        timersRef.current.set(id, timer);
+      }
+      return id;
+    },
+    [dismiss],
+  );
+
+  // Cleanup all timers on unmount
+  useEffect(() => {
+    return () => {
+      timersRef.current.forEach((timer) => {
+        clearTimeout(timer);
+      });
+      timersRef.current.clear();
+    };
+  }, []);
+
+  return (
+    <ToastContext.Provider value={{ toast, dismiss }}>
+      {children}
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
+    </ToastContext.Provider>
+  );
+}
+
+const NOOP_TOAST: ToastContextValue = {
+  toast: () => "",
+  dismiss: () => {},
+};
+
+export function useAppToast(): ToastContextValue {
+  const ctx = useContext(ToastContext);
+  return ctx ?? NOOP_TOAST;
+}
+
+function ToastContainer({
   toasts,
   onDismiss,
 }: {
@@ -121,12 +248,15 @@ export function ToastContainer({
 }) {
   if (toasts.length === 0) return null;
 
+  const visible = toasts.slice(0, MAX_VISIBLE);
+  const overflow = toasts.length - MAX_VISIBLE;
+
   return (
     <section
       aria-label="Notifications"
-      className="fixed bottom-5 right-5 z-50 flex max-w-md w-full flex-col gap-2.5 px-4 pointer-events-none"
+      className="fixed inset-x-4 bottom-4 z-[70] flex flex-col gap-2.5 pointer-events-none sm:inset-x-auto sm:right-5 sm:max-w-md"
     >
-      {toasts.map((t) => (
+      {visible.map((t) => (
         <Toast
           key={t.id}
           tone={t.tone}
@@ -136,44 +266,16 @@ export function ToastContainer({
           onClose={() => onDismiss(t.id)}
         />
       ))}
+      {overflow > 0 && (
+        <div className="pointer-events-auto rounded-2xl border border-line bg-surface px-4 py-2 text-xs font-medium text-ink-600 shadow-lg">
+          +{overflow} more notification{overflow === 1 ? "" : "s"}
+        </div>
+      )}
     </section>
   );
 }
 
+// Backwards-compatible alias for existing callers
 export function useToast() {
-  const [toasts, setToasts] = useState<readonly ToastItem[]>([]);
-
-  const dismiss = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const toast = useCallback(
-    ({
-      tone = "info",
-      title,
-      description,
-      issues,
-      duration = 6000,
-    }: {
-      tone?: ToastTone | undefined;
-      title: string;
-      description?: string | undefined;
-      issues?: readonly string[] | undefined;
-      duration?: number | undefined;
-    }) => {
-      const id = Math.random().toString(36).substring(2, 9);
-      const item: ToastItem = { id, tone, title, description, issues, duration };
-      setToasts((prev) => [...prev, item]);
-
-      if (duration > 0) {
-        setTimeout(() => {
-          dismiss(id);
-        }, duration);
-      }
-      return id;
-    },
-    [dismiss],
-  );
-
-  return { toasts, toast, dismiss };
+  return useAppToast();
 }

@@ -857,4 +857,31 @@ describe("column filters in the table headers", () => {
 
     expect(screen.getByText("Anjali Subramanian")).toBeDefined();
   });
+
+  it("cross-syncs placement options counts with the selected campus", async () => {
+    const user = userEvent.setup();
+    // SDNB Vaishnav College has Anjali (on-campus), Thanush (self-placed), and Rahul (unplaced)
+    show(EVERYONE, "/central/students?campus=SDNB+Vaishnav+College");
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /filter placement/i }));
+
+    // The placement counts reflect SDNB Vaishnav College (2 placed, 1 not placed)
+    expect(screen.getByRole("checkbox", { name: /placed \(all\)/i })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: /not placed/i })).toBeDefined();
+    expect(screen.getByText("2 placed")).toBeDefined();
+    expect(screen.getByText("1 not placed")).toBeDefined();
+  });
+
+  it("cross-syncs registration status counts with the selected campus", async () => {
+    const user = userEvent.setup();
+    // Filter to SDNB Vaishnav College which has 1 verified (Anjali) and 1 submitted (Rahul)
+    show(EVERYONE, "/central/students?campus=SDNB+Vaishnav+College");
+    await screen.findByText("Anjali Subramanian");
+
+    await user.click(screen.getByRole("button", { name: /filter registration/i }));
+
+    expect(screen.getByRole("checkbox", { name: /verified/i })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: /submitted/i })).toBeDefined();
+  });
 });

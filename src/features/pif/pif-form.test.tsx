@@ -1,9 +1,15 @@
 // @vitest-environment jsdom
+
+import { ToastProvider } from "@components/toast";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { PifForm } from "./pif-form";
 import { PIF_SECTIONS } from "./pif-labels";
+
+function renderWithToast(ui: React.ReactElement) {
+  return render(<ToastProvider>{ui}</ToastProvider>);
+}
 
 /**
  * The AE's PIF form.
@@ -94,21 +100,21 @@ function fieldMessage(control: HTMLElement): string {
 
 describe("PifForm", () => {
   it("shows every AE-owned section", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
     for (const section of PIF_SECTIONS) {
       expect(screen.getByRole("heading", { level: 2, name: section.title })).toBeDefined();
     }
   });
 
   it("never offers the offer category - that is the Delivery Head's decision", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
     expect(screen.queryByLabelText(/offer category/i)).toBeNull();
   });
 
   it("refuses to submit an empty PIF and says what is missing", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
@@ -119,7 +125,7 @@ describe("PifForm", () => {
   it("submits a complete PIF", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -136,7 +142,7 @@ describe("PifForm", () => {
   it("saves a half-finished draft without demanding the rest", async () => {
     const onSaveDraft = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.click(screen.getByRole("button", { name: /save draft/i }));
@@ -148,7 +154,7 @@ describe("PifForm", () => {
   it("will not save a draft with no company name at all", async () => {
     const onSaveDraft = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
 
     await user.click(screen.getByRole("button", { name: /save draft/i }));
 
@@ -159,7 +165,7 @@ describe("PifForm", () => {
   it("surfaces a failure without losing what the AE typed", async () => {
     const onSubmit = vi.fn().mockRejectedValue(new Error("Network down"));
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -182,7 +188,7 @@ describe("PifForm", () => {
       .fn()
       .mockRejectedValue(new Error("You do not have permission to raise a PIF."));
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -207,7 +213,7 @@ describe("PifForm", () => {
   it("keeps the refusal beside the buttons", async () => {
     const onSubmit = vi.fn().mockRejectedValue(new Error("Network down"));
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     const submit = screen.getByRole("button", { name: /submit for approval/i });
@@ -224,7 +230,7 @@ describe("PifForm", () => {
   it("keeps the list of what to fix on the page", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
@@ -241,7 +247,7 @@ describe("PifForm", () => {
 describe("the off-campus venue on the PIF (UAT 2026-08-21, item 2)", () => {
   it("asks for the venue only when the mode happens off campus", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     expect(screen.queryByRole("radio", { name: /venue not yet confirmed/i })).toBeNull();
 
@@ -255,7 +261,7 @@ describe("the off-campus venue on the PIF (UAT 2026-08-21, item 2)", () => {
   it("submits with the venue not yet confirmed — the AE is never blocked", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.selectOptions(screen.getByLabelText(/drive mode/i), "physical_outside_campus");
@@ -268,7 +274,7 @@ describe("the off-campus venue on the PIF (UAT 2026-08-21, item 2)", () => {
   it("collects a confirmed venue, and clears it when the mode moves back on campus", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.selectOptions(screen.getByLabelText(/drive mode/i), "pooled");
@@ -293,7 +299,7 @@ describe("the off-campus venue on the PIF (UAT 2026-08-21, item 2)", () => {
   it("demands the venue text once the AE says it is confirmed", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.selectOptions(screen.getByLabelText(/drive mode/i), "physical_outside_campus");
@@ -306,7 +312,7 @@ describe("the off-campus venue on the PIF (UAT 2026-08-21, item 2)", () => {
 });
 
 describe("PifForm — what the recruiter actually said", () => {
-  const show = () => render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+  const show = () => renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
   /**
    * F12: "Under eligibility criteria the Minimum overall CGPA must be
@@ -323,7 +329,7 @@ describe("PifForm — what the recruiter actually said", () => {
   it("submits the cutoff on the scale the AE chose", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.selectOptions(screen.getByLabelText(/cutoff scale/i), "percentage");
@@ -340,7 +346,7 @@ describe("PifForm — what the recruiter actually said", () => {
   it("refuses a CGPA of 65, which is the mistake the scale exists to catch", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.type(screen.getByLabelText(/minimum overall/i), "65");
@@ -356,7 +362,7 @@ describe("PifForm — what the recruiter actually said", () => {
   it("collects the rounds by name and sends them", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -385,7 +391,7 @@ describe("PifForm \u2014 submit validates as a submission, not as a draft", () =
   it("refuses to submit a PIF that only has a company name", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -397,7 +403,7 @@ describe("PifForm \u2014 submit validates as a submission, not as a draft", () =
   it("still saves that same PIF as a draft", async () => {
     const onSaveDraft = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.click(screen.getByRole("button", { name: /save draft/i }));
@@ -409,7 +415,7 @@ describe("PifForm \u2014 submit validates as a submission, not as a draft", () =
   it("does not let a draft save loosen the next submit", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.click(screen.getByRole("button", { name: /save draft/i }));
@@ -433,7 +439,7 @@ describe("PifForm \u2014 a blank number is not a zero", () => {
   it("sends no maximum CTC when the AE left it blank", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -445,7 +451,7 @@ describe("PifForm \u2014 a blank number is not a zero", () => {
   it("sends no CGPA cutoff when the AE set none", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -469,7 +475,7 @@ describe("PifForm \u2014 a blank number is not a zero", () => {
 describe("the rounds the AE was told about", () => {
   it("asks for a name per round, numbered", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add round/i }));
 
@@ -478,7 +484,7 @@ describe("the rounds the AE was told about", () => {
 
   it("numbers each new round after the last", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add round/i }));
     await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -488,7 +494,7 @@ describe("the rounds the AE was told about", () => {
 
   it("renumbers what is left when a round is removed, leaving no gap", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add round/i }));
     await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -504,7 +510,7 @@ describe("the rounds the AE was told about", () => {
   it("submits the rounds in order, with their names", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
     await fillRequired(user);
 
     await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -522,7 +528,7 @@ describe("the rounds the AE was told about", () => {
   it("refuses a submission whose round has no name", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
     await fillRequired(user);
 
     // A second round, added and left unnamed.
@@ -550,7 +556,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("takes the recruiter's PDF and carries it to the submission", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
@@ -563,7 +569,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
     it("names the file it is holding, so the AE can see it attached", async () => {
       const user = userEvent.setup();
-      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
       await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
 
@@ -576,7 +582,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
       // file dragged onto the input, or chosen through "All files", reaches
       // the form regardless of `accept`.
       const user = userEvent.setup({ applyAccept: false });
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.upload(
@@ -592,7 +598,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("submits with no attachment at all — it is optional (answer 1)", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
       await fillRequired(user);
       await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -607,7 +613,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("keeps the typed description, and no longer demands it", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
       expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
 
@@ -630,7 +636,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
   describe("the shift", () => {
     it("offers the four shifts as radios, and no text box", async () => {
-      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
       for (const shift of ["Day", "Night", "Rotational", "Flexible"]) {
         expect(screen.getByRole("radio", { name: shift })).toBeDefined();
@@ -640,7 +646,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     });
 
     it("preselects nothing — a preselected Day is an answer nobody gave", () => {
-      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
       for (const shift of ["Day", "Night", "Rotational", "Flexible"]) {
         expect((screen.getByRole("radio", { name: shift }) as HTMLInputElement).checked).toBe(
@@ -651,7 +657,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
     it("asks for the hours only once Night is chosen", async () => {
       const user = userEvent.setup();
-      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
       expect(screen.queryByLabelText(/night shift timing/i)).toBeNull();
 
@@ -663,7 +669,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("submits the shift with its hours", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.click(screen.getByRole("radio", { name: "Night" }));
@@ -680,7 +686,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("refuses a night shift with no hours", async () => {
       const onSubmit = vi.fn();
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.click(screen.getByRole("radio", { name: "Night" }));
@@ -693,7 +699,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("forgets the hours when the AE switches back to a day shift", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.click(screen.getByRole("radio", { name: "Night" }));
@@ -711,7 +717,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
   describe("the joining timeline", () => {
     it("offers the two options as radios, and no prose box", () => {
-      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
       expect(screen.getByRole("radio", { name: /immediate joining/i })).toBeDefined();
       expect(screen.getByRole("radio", { name: /joining later/i })).toBeDefined();
@@ -720,7 +726,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
 
     it("gives each option its own comments box (answer 6)", async () => {
       const user = userEvent.setup();
-      render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
       expect(screen.queryByLabelText(/comments/i)).toBeNull();
 
@@ -735,7 +741,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("submits the choice and only its own comment", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.type(screen.getByLabelText(/comments on immediate joining/i), "Within 30 days");
@@ -759,12 +765,12 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("refuses to submit until one of them is chosen (answer 7)", async () => {
       const onSubmit = vi.fn();
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       // Undo the choice `fillRequired` made, the only way a radio group can be
       // emptied: re-render is not available, so this asserts on a fresh form.
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       const forms = screen.getAllByRole("button", { name: /submit for approval/i });
       await user.click(forms[forms.length - 1] as HTMLElement);
 
@@ -774,7 +780,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
     it("accepts either option with no comment at all", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
       const user = userEvent.setup();
-      render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+      renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
       await fillRequired(user);
 
       await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -791,7 +797,7 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
  */
 describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
   it("asks each role for its drive type before anything else in it", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     // The visit is stated first — company, then the day it happens, then the
     // bar every role under it is raised against — and every role block opens
@@ -812,7 +818,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
   });
 
   it("shows no compensation until the type is chosen", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     expect(screen.queryByLabelText(/minimum ctc/i)).toBeNull();
     expect(screen.queryByLabelText(/stipend/i)).toBeNull();
@@ -821,7 +827,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
 
   it("a placement asks for CTC and never a stipend", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("radio", { name: /^full time$/i }));
 
@@ -831,7 +837,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
 
   it("an internship asks for a stipend and never a CTC", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("radio", { name: /^internship$/i }));
 
@@ -841,7 +847,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
 
   it("a convertible internship asks for both", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("radio", { name: /internship → full time/i }));
 
@@ -852,7 +858,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
   it("submits an internship with its stipend", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("radio", { name: /^internship$/i }));
     await user.type(screen.getByLabelText(/stipend minimum/i), "15000");
@@ -900,7 +906,7 @@ describe("PifForm — the role category picker", () => {
 
   it("keeps every category the AE ticked, and only those", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await pickCategory(user, ["Software / Technical", "Sales"]);
 
@@ -920,7 +926,7 @@ describe("PifForm — the role category picker", () => {
 
   it("tells a screen reader when the list of categories is open", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     const { trigger } = categoryBox(1);
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
@@ -934,7 +940,7 @@ describe("PifForm — the role category picker", () => {
 
   it("says the drives one card raises — only once it names a second category", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/number of openings/i), "25");
     await pickCategory(user, "Software / Technical");
@@ -950,7 +956,7 @@ describe("PifForm — the role category picker", () => {
   it("refuses to submit a card whose categories are all unticked, at the field", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
     await fillRequired(user);
 
     const { trigger, card } = categoryBox(1);
@@ -967,7 +973,7 @@ describe("PifForm — the role category picker", () => {
   it("raises the visit as an event when one card names two categories", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await pickCategory(user, "Sales");
@@ -984,14 +990,14 @@ describe("PifForm — the role category picker", () => {
 
 describe("PifForm — the contacts (A4/A5)", () => {
   it("starts with no contact and says the Central CPC is the point of contact", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     expect(screen.getByRole("note").textContent).toMatch(/central placement coordinator/i);
   });
 
   it("adds contacts with the + button and drops the alert once one is real", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add a contact/i }));
     // An empty row is not a contact — the alert stays.
@@ -1007,7 +1013,7 @@ describe("PifForm — the contacts (A4/A5)", () => {
   it("sends every contact with the submission", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /add a contact/i }));
@@ -1023,7 +1029,7 @@ describe("PifForm — the contacts (A4/A5)", () => {
 
   it("removes a contact row", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add a contact/i }));
     await user.click(screen.getByRole("button", { name: /remove contact 1/i }));
@@ -1040,12 +1046,12 @@ describe("PifForm — the contacts (A4/A5)", () => {
  */
 describe("PifForm — required-field markers (G2)", () => {
   it("states the convention once, at the top", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
     expect(screen.getByText(/fields marked \* are required to submit/i)).toBeDefined();
   });
 
   it("marks every unconditionally required field with *", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     for (const label of [
       /company name \*/i,
@@ -1064,7 +1070,7 @@ describe("PifForm — required-field markers (G2)", () => {
 
   it("marks the compensation the chosen type demands", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("radio", { name: /internship → full time/i }));
     expect(screen.getByLabelText(/minimum ctc \(lpa\) \*/i)).toBeDefined();
@@ -1074,7 +1080,7 @@ describe("PifForm — required-field markers (G2)", () => {
   });
 
   it("leaves optional fields unmarked", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
     expect(screen.getByLabelText(/^industry \/ domain$/i)).toBeDefined();
     expect(screen.getByLabelText(/^job description$/i)).toBeDefined();
   });
@@ -1092,7 +1098,7 @@ describe("PifForm — mandatory skills come from the assessed-skills catalogue",
   const catalogue = ["AI skills", "Aptitude", "Communication skills"];
 
   it("offers a checkbox per assessed skill and no free-text skills input", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
 
     for (const name of catalogue) {
       expect(screen.getByRole("checkbox", { name })).toBeDefined();
@@ -1103,7 +1109,7 @@ describe("PifForm — mandatory skills come from the assessed-skills catalogue",
   it("submits picked skills and called-out other skills as the stored text", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("checkbox", { name: "Aptitude" }));
@@ -1116,13 +1122,13 @@ describe("PifForm — mandatory skills come from the assessed-skills catalogue",
   });
 
   it("says an other skill cannot be scored until it is assessed", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
     expect(screen.getByText(/can't be scored until they are assessed/i)).toBeDefined();
   });
 
   it("removes an added other skill when its chip is dismissed", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} skillAreas={catalogue} />);
 
     await user.type(screen.getByLabelText("Other skill"), "Testing");
     await user.click(screen.getByRole("button", { name: /add other skill/i }));
@@ -1368,7 +1374,7 @@ describe("PifForm — adding a role to an existing drive (the event picker)", ()
  */
 describe("PifForm — several roles under one drive", () => {
   it("opens with one role block and nothing to remove", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     expect(screen.getByRole("heading", { name: "Role 1" })).toBeDefined();
     expect(screen.queryByRole("button", { name: /remove role/i })).toBeNull();
@@ -1376,7 +1382,7 @@ describe("PifForm — several roles under one drive", () => {
 
   it("adds and removes role blocks", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add another role/i }));
     expect(screen.getByRole("heading", { name: "Role 2" })).toBeDefined();
@@ -1388,7 +1394,7 @@ describe("PifForm — several roles under one drive", () => {
   it("saves a single role as a plain drive, not as an event of its own", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -1449,7 +1455,7 @@ describe("PifForm — several roles under one drive", () => {
   it("refuses a night shift with no hours on the role that asked for it", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /add another role/i }));
@@ -1464,7 +1470,7 @@ describe("PifForm — several roles under one drive", () => {
 
   it("shows every role the comment box for the option the drive chose", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add another role/i }));
     expect(screen.queryAllByLabelText(/comments on immediate joining/i)).toHaveLength(0);
@@ -1485,7 +1491,7 @@ describe("PifForm — several roles under one drive", () => {
   it("drops the joining comment the drive no longer chooses", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.type(
@@ -1518,7 +1524,7 @@ describe("PifForm — several roles under one drive", () => {
  */
 describe("PifForm — the eligibility bar is asked once, for the visit", () => {
   it("shows the bar in its own section, above the roles", () => {
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     const bar = screen.getByRole("heading", { level: 2, name: "Eligibility and bond" });
     const barSection = bar.closest("section");
@@ -1527,7 +1533,7 @@ describe("PifForm — the eligibility bar is asked once, for the visit", () => {
 
   it("asks the bar ONCE however many roles the visit carries", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /add another role/i }));
     await user.click(screen.getByRole("button", { name: /add another role/i }));
@@ -1545,7 +1551,7 @@ describe("PifForm — the eligibility bar is asked once, for the visit", () => {
   it("carries the bar on the visit, not on each role", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /add another role/i }));
@@ -1576,7 +1582,7 @@ describe("PifForm — the eligibility bar is asked once, for the visit", () => {
   it("carries the visit's bar onto the flat drive of a one-role visit", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.type(screen.getByLabelText(/bond \/ service agreement/i), "No bond");
@@ -1599,7 +1605,7 @@ describe("PifForm — the eligibility bar is asked once, for the visit", () => {
   it("refuses a visit with no passing year, and says it at the bar", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("radio", { name: /^full time$/i }));
     await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
@@ -1645,7 +1651,9 @@ describe("PifForm — an existing company answers for itself", () => {
 
   it("fills what the record already knows when the AE names the company", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+    renderWithToast(
+      <PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />,
+    );
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
 
@@ -1674,7 +1682,9 @@ describe("PifForm — an existing company answers for itself", () => {
 
   it("keeps an industry the AE typed over the one on the record", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+    renderWithToast(
+      <PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />,
+    );
 
     await user.type(screen.getByLabelText(/^industry \/ domain$/i), "Edtech");
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
@@ -1686,7 +1696,9 @@ describe("PifForm — an existing company answers for itself", () => {
 
   it("follows the AE to another company instead of leaving the first one's details behind", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+    renderWithToast(
+      <PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />,
+    );
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
     await user.clear(screen.getByLabelText(/company name/i));
@@ -1700,7 +1712,9 @@ describe("PifForm — an existing company answers for itself", () => {
 
   it("says plainly that the drive is being added to an existing company", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />);
+    renderWithToast(
+      <PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} existingCompanies={companies} />,
+    );
 
     await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
 
@@ -1709,7 +1723,7 @@ describe("PifForm — an existing company answers for itself", () => {
 
   it("surfaces validation toast with exact missing issues when submission fails validation", async () => {
     const user = userEvent.setup();
-    render(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     // Click submit on empty form
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
@@ -1752,7 +1766,7 @@ describe("PifForm — the refusal is said at the field, not only in a toast", ()
   it("marks the field that was refused and leaves the ones that were not", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     // Everything answered except the role title.
     await user.click(screen.getByRole("radio", { name: /^full time$/i }));
@@ -1781,7 +1795,7 @@ describe("PifForm — the refusal is said at the field, not only in a toast", ()
   it("says the reason under the field it belongs to", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
@@ -1794,7 +1808,7 @@ describe("PifForm — the refusal is said at the field, not only in a toast", ()
   it("marks the bar's own field when the cutoff is impossible on its scale", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
-    render(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
     await user.type(screen.getByLabelText(/minimum overall/i), "65");

@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { buildRecruiterZip } from "./export-pack";
+import { buildRecruiterExcel, buildRecruiterZip } from "./export-pack";
 
 /**
  * Answer 5a (2026-08-24): "all resumes in one folder. inside folder have an
@@ -127,5 +127,96 @@ describe("the Resume link a recruiter actually clicks", () => {
     expect(readme).toMatch(/extract/i);
     expect(readme).toMatch(/shortlist\.xlsx/);
     expect(readme).toMatch(/Zoho/);
+  });
+
+  it("freezes the header row and columns up to register number and name in shortlist.xlsx", async () => {
+    const { workbook } = await packed();
+    const sheet = workbook.worksheets[0];
+    expect(sheet?.views).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: "frozen",
+          xSplit: 2,
+          ySplit: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("hyperlinks the candidate's name to their resume in shortlist.xlsx", async () => {
+    const { workbook } = await packed();
+    const sheet = workbook.worksheets[0];
+    const header = sheet?.getRow(1).values as unknown[];
+    const nameCell = sheet?.getRow(2).getCell(header.indexOf("Name")).value as {
+      hyperlink?: string;
+      text?: string;
+    };
+    expect(nameCell?.hyperlink).toBe("resumes/124%20-%20Thanush%20Krishna.pdf");
+    expect(nameCell?.text).toBe("Thanush Krishna");
+  });
+});
+
+describe("buildRecruiterExcel", () => {
+  it("generates an Excel sheet with frozen columns up to register number & name, and hyperlinked resumes", async () => {
+    const entries = [
+      {
+        applicationId: "a1",
+        included: true,
+        snapshot: {
+          profile: {
+            id: "s1",
+            fullName: "Thanush Krishna",
+            rollNumber: "124",
+            email: "t@x.in",
+            degree: "BCA",
+            branch: "AI and DS",
+            passingYear: 2027,
+            overallCgpa: 7.5,
+            tenthPercentage: 95,
+            twelfthPercentage: 92,
+            currentArrears: 0,
+            historyOfArrears: 0,
+            technicalSkills: "React",
+          },
+          resumeId: "r1",
+        },
+      },
+    ];
+    const signedUrls = new Map([["r1", "https://supabase.co/signed/resume.pdf"]]);
+
+    const blob = await buildRecruiterExcel("Zoho", entries, signedUrls);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await blob.arrayBuffer());
+
+    const sheet = workbook.worksheets[0];
+    expect(sheet).toBeDefined();
+
+    // Freezes columns up to roll number & name (A & B) and top header row
+    expect(sheet?.views).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: "frozen",
+          xSplit: 2,
+          ySplit: 1,
+        }),
+      ]),
+    );
+
+    // Name cell has direct resume hyperlink
+    const header = sheet?.getRow(1).values as unknown[];
+    const nameCell = sheet?.getRow(2).getCell(header.indexOf("Name")).value as {
+      hyperlink?: string;
+      text?: string;
+    };
+    expect(nameCell?.hyperlink).toBe("https://supabase.co/signed/resume.pdf");
+    expect(nameCell?.text).toBe("Thanush Krishna");
+
+    // Resume link cell has clickable link
+    const linkCell = sheet?.getRow(2).getCell(header.indexOf("Resume link")).value as {
+      hyperlink?: string;
+      text?: string;
+    };
+    expect(linkCell?.hyperlink).toBe("https://supabase.co/signed/resume.pdf");
+    expect(linkCell?.text).toBe("View resume");
   });
 });

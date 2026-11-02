@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import { ToastProvider } from "@components/toast";
 import { AuthActionsContext } from "@lib/auth-context";
 import { act, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -8,7 +10,12 @@ import type { SrfUploadKind, UploadedEvidence } from "./srf-api";
 import { SRF_SECTIONS, SrfPage } from "./srf-page";
 
 /** The form links back to the dashboard, so every render needs a router. */
-const render = (ui: React.ReactNode) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>);
+const render = (ui: React.ReactNode) =>
+  rtlRender(
+    <ToastProvider>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </ToastProvider>,
+  );
 
 /**
  * Structural contract for the Student Registration Form.

@@ -168,6 +168,33 @@ describe("linkifyBody", () => {
   it("returns nothing for an empty body", () => {
     expect(linkifyBody("")).toEqual([]);
   });
+
+  it("splits **bold** markers into bold segments", () => {
+    expect(linkifyBody("Your **record** is ready.")).toEqual([
+      { kind: "text", text: "Your " },
+      { kind: "bold", text: "record" },
+      { kind: "text", text: " is ready." },
+    ]);
+  });
+
+  it("handles bold and URLs in the same body", () => {
+    expect(linkifyBody("See **TCS** at https://tcs.example now.")).toEqual([
+      { kind: "text", text: "See " },
+      { kind: "bold", text: "TCS" },
+      { kind: "text", text: " at " },
+      { kind: "link", text: "https://tcs.example" },
+      { kind: "text", text: " now." },
+    ]);
+  });
+
+  it("handles several bold runs", () => {
+    expect(linkifyBody("**Name:** A124 • **Branch:** BCA")).toEqual([
+      { kind: "bold", text: "Name:" },
+      { kind: "text", text: " A124 • " },
+      { kind: "bold", text: "Branch:" },
+      { kind: "text", text: " BCA" },
+    ]);
+  });
 });
 
 describe("linkifyBody — a body that IS a link", () => {

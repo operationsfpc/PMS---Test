@@ -6,8 +6,8 @@ import {
   FormSection as Section,
   TextField,
 } from "@components/form";
-import { ToastContainer, useToast } from "@components/toast";
-import { Button, Spinner } from "@components/ui";
+import { useToast } from "@components/toast";
+import { Button, ButtonLink, Spinner } from "@components/ui";
 import { MAX_SEMESTERS } from "@domain/academics";
 import { boardLabel, INDIAN_STATES, SCHOOL_BOARDS, type SchoolLevel } from "@domain/boards";
 import { marksScaleQuestion, UG_COLLEGE_MARKS_SCALE_QUESTION } from "@domain/marks";
@@ -24,7 +24,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAuthActions } from "@lib/auth-context";
 import { forwardRef, type SelectHTMLAttributes, useEffect, useId, useRef, useState } from "react";
 import { Controller, type FieldErrors, useFieldArray, useForm } from "react-hook-form";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import type { AddSemesterView } from "./add-semester";
 import {
   evidenceKey,
@@ -330,7 +330,7 @@ export function SrfPage({
 
   const [draftState, setDraftState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
   const [draftSavedAt, setDraftSavedAt] = useState<Date | null>(null);
-  const { toasts, toast, dismiss } = useToast();
+  const { toast } = useToast();
   /**
    * Every picked document and where its upload stands. Marksheets and resumes
    * are keyed exactly as the repository keys evidence; certificate rows are
@@ -914,13 +914,12 @@ export function SrfPage({
           />
           <div className="flex items-center gap-2">
             {/* A student filling this in had no way back to their own
-                dashboard, or to anything else. */}
-            <Link
-              to="/student"
-              className="rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:bg-surface-muted"
-            >
+                dashboard, or to anything else. Drawn with `ButtonLink`, not a
+                hand-rolled border, so it is the same height as the Sign out
+                beside it and inherits the phone tap floor from there. */}
+            <ButtonLink variant="secondary" size="sm" to="/student">
               My dashboard
-            </Link>
+            </ButtonLink>
             {/* This screen has its own chrome, so it needs its own way out.
                 For a student it is the first screen they ever see. */}
             <Button variant="secondary" size="sm" type="button" onClick={() => void signOut()}>
@@ -2202,8 +2201,6 @@ export function SrfPage({
           </>
         )}
       </main>
-
-      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

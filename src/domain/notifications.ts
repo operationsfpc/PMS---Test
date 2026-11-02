@@ -71,25 +71,33 @@ export function filterNotifications<T extends NotificationItem>(
  * than no link at all.
  */
 export interface BodySegment {
-  readonly kind: "text" | "link";
+  readonly kind: "text" | "link" | "bold";
   readonly text: string;
 }
 
-const URL_PATTERN = /https?:\/\/[^\s]+/g;
 const TRAILING_PUNCTUATION = /[.,;)\]}!?]+$/;
 
 export function linkifyBody(body: string): readonly BodySegment[] {
   const segments: BodySegment[] = [];
   let cursor = 0;
 
-  for (const match of body.matchAll(URL_PATTERN)) {
+  // Combined pattern: match **bold** or URLs, whichever comes first
+  const COMBINED = /\*\*[^*]+\*\*|https?:\/\/[^\s]+/g;
+
+  for (const match of body.matchAll(COMBINED)) {
     const raw = match[0];
-    const trimmed = raw.replace(TRAILING_PUNCTUATION, "");
-    const start = match.index;
+    const start = match.index ?? 0;
 
     if (start > cursor) segments.push({ kind: "text", text: body.slice(cursor, start) });
-    segments.push({ kind: "link", text: trimmed });
-    cursor = start + trimmed.length;
+
+    if (raw.startsWith("**")) {
+      segments.push({ kind: "bold", text: raw.slice(2, -2) });
+      cursor = start + raw.length;
+    } else {
+      const trimmed = raw.replace(TRAILING_PUNCTUATION, "");
+      segments.push({ kind: "link", text: trimmed });
+      cursor = start + trimmed.length;
+    }
   }
 
   if (cursor < body.length) segments.push({ kind: "text", text: body.slice(cursor) });

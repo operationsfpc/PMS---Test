@@ -671,6 +671,42 @@ describe("ShortlistPage \u2014 exporting the shortlist", () => {
     expect(alert.textContent).toMatch(/no resume link for R9/i);
   });
 
+  it("exports an Excel (.xlsx) file with frozen columns and hyperlinked resumes", async () => {
+    const download = vi.fn();
+    const logExport = vi.fn();
+    const user = userEvent.setup();
+    inRouter(
+      <ShortlistPage
+        driveId="d1"
+        canExport
+        view={view({
+          applicants: async () => [saved("R1", "Priya")],
+          exportEntries: async () => [
+            {
+              applicationId: "a1",
+              included: true,
+              snapshot: { ...snapshot("R1", "Priya"), resumeId: "resume-1" },
+            },
+          ],
+          resumeSignedUrls: async () => new Map([["resume-1", "https://x/priya.pdf"]]),
+          logExport,
+        })}
+        download={download}
+      />,
+    );
+
+    const excelButton = await screen.findByRole("button", { name: /export excel/i });
+    expect((excelButton as HTMLButtonElement).disabled).toBe(false);
+
+    await user.click(excelButton);
+
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    const [filename, blob] = download.mock.calls[0] as [string, Blob];
+    expect(filename).toMatch(/\.xlsx$/);
+    expect(blob).toBeInstanceOf(Blob);
+    expect(logExport).toHaveBeenCalledWith("d1", expect.any(Array), 1);
+  });
+
   /**
    * The other half of #78: the links are fetched in batches now, because a
    * three-hundred-candidate shortlist puts three hundred UUIDs into one URL and

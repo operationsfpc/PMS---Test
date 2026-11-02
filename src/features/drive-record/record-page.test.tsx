@@ -578,3 +578,43 @@ describe("what the visit decides about one more role", () => {
     expect(screen.getByRole("link", { name: /add another role/i })).toBeDefined();
   });
 });
+
+describe("CPC drive view page actions", () => {
+  it("offers Publish button on an approved drive to Central CPC", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "approved" })}
+          role={CENTRAL}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    const publishLink = await screen.findByRole("link", { name: /publish/i });
+    expect(publishLink.getAttribute("href")).toBe("/central/publish?drive=d1");
+  });
+
+  it("offers Shortlist button on a live drive to Central CPC", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={view({ ...RECORD, status: "live" })} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    const shortlistLink = await screen.findByRole("link", { name: /shortlist/i });
+    expect(shortlistLink.getAttribute("href")).toBe("/central/shortlisting?drive=d1");
+  });
+
+  it("does not offer Publish or Shortlist button to Account Executive", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={view({ ...RECORD, status: "approved" })} role={AE} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("heading", { name: /accenture — jr\. software engineer/i });
+    expect(screen.queryByRole("link", { name: /^publish$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^shortlist$/i })).toBeNull();
+  });
+});

@@ -121,8 +121,17 @@ const DISABLED = "disabled:cursor-not-allowed disabled:opacity-60";
  * The two heights every control comes in, shared by the press and the
  * navigation below so a `View` button and a `View` link in one card are the
  * same size and cannot drift apart.
+ *
+ * `min-h` is phone-only (`sm:min-h-0` hands the desktop back to padding). The
+ * padding alone made `size="sm"` about 28px tall and `md` about 40, and 165
+ * call sites inherit that — on a 412px screen the small one is the size of the
+ * text in it, which is why "Approve", "View" and "Try again" read as dead when
+ * pressed. A thumb needs the box, not the glyphs.
  */
-const SIZING = { sm: "px-3 py-1.5 text-xs", md: "px-4 py-2.5 text-sm" } as const;
+const SIZING = {
+  sm: "px-3 py-1.5 text-xs min-h-[40px] sm:min-h-0",
+  md: "px-4 py-2.5 text-sm min-h-[44px] sm:min-h-0",
+} as const;
 
 const SHAPE =
   "inline-flex items-center justify-center gap-2 rounded-control font-semibold transition-colors";

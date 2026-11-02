@@ -134,9 +134,12 @@ describe("buildRecruiterCsvRows", () => {
     expect(rows[0]?.["Resume link"]).toBe(
       "https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc",
     );
+    expect(rows[0]?.Name).toBe(
+      '=HYPERLINK("https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc", "Asha Ramanathan")',
+    );
   });
 
-  it("leaves Resume link empty when a candidate has no resume on file", () => {
+  it("leaves Resume link empty and keeps plain name when a candidate has no resume on file", () => {
     const [first] = shortlisted;
     if (first === undefined) throw new Error("fixture missing");
     const noResume = [{ ...first, snapshot: { ...first.snapshot, resumeId: null } }];
@@ -144,6 +147,23 @@ describe("buildRecruiterCsvRows", () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.["Resume link"]).toBe("");
+    expect(rows[0]?.Name).toBe("Asha Ramanathan");
+  });
+
+  it("escapes quotes in student full name when constructing HYPERLINK formula", () => {
+    const [first] = shortlisted;
+    if (first === undefined) throw new Error("fixture missing");
+    const withQuote = [
+      {
+        ...first,
+        snapshot: {
+          ...first.snapshot,
+          profile: { ...first.snapshot.profile, fullName: 'Asha "Joy" Ramanathan' },
+        },
+      },
+    ];
+    const rows = buildRecruiterCsvRows(withQuote, new Map([["r1", "https://x.com/cv.pdf"]]));
+    expect(rows[0]?.Name).toBe('=HYPERLINK("https://x.com/cv.pdf", "Asha ""Joy"" Ramanathan")');
   });
 });
 
