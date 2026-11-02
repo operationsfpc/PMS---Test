@@ -45,10 +45,14 @@ export function DriveDateFilter({
   onChange,
   /** The drives currently on screen. The CSV copies exactly this set. */
   drives,
+  className = "",
+  compact = false,
 }: {
   criteria: DateRangeFilterCriteria;
   onChange: (next: DateRangeFilterCriteria) => void;
   drives: readonly DriveDateFilterItem[];
+  className?: string;
+  compact?: boolean;
 }) {
   const fromId = useId();
   const toId = useId();
@@ -97,26 +101,100 @@ export function DriveDateFilter({
     URL.revokeObjectURL(url);
   };
 
+  if (compact) {
+    return (
+      <fieldset className={`inline-flex flex-wrap items-center gap-2 ${className}`}>
+        <legend className="sr-only">Date filter</legend>
+        <div className="flex items-center gap-1.5">
+          <span
+            aria-hidden="true"
+            className="text-xs font-semibold text-ink-500 uppercase tracking-wider"
+          >
+            Date
+          </span>
+          <select
+            aria-label="Date field"
+            value={criteria.dimension}
+            onChange={(e) => handleDimensionChange(e.target.value as DateDimension)}
+            className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-800 outline-none hover:border-brand-300 focus:border-brand-500"
+          >
+            <option value="created_at">Created date</option>
+            <option value="tentative_date">Drive date</option>
+          </select>
+        </div>
+
+        <select
+          aria-label="Date range preset"
+          value={criteria.preset}
+          onChange={(e) => handlePresetChange(e.target.value as DateRangePreset)}
+          className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-800 outline-none hover:border-brand-300 focus:border-brand-500"
+        >
+          {PRESETS.map((p) => (
+            <option key={p} value={p}>
+              {PRESET_LABELS[p]}
+            </option>
+          ))}
+        </select>
+
+        {criteria.preset === "custom" && (
+          <div className="flex items-center gap-1.5 text-xs text-ink-700">
+            <input
+              id={fromId}
+              type="date"
+              aria-label="From date"
+              value={criteria.startDate ?? ""}
+              onChange={(e) => handleDateChange("startDate", e.target.value)}
+              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
+            />
+            <span className="text-ink-400">to</span>
+            <input
+              id={toId}
+              type="date"
+              aria-label="To date"
+              value={criteria.endDate ?? ""}
+              onChange={(e) => handleDateChange("endDate", e.target.value)}
+              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
+            />
+          </div>
+        )}
+
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={handleExportCsv}
+          disabled={drives.length === 0}
+          title="Download the drives currently shown as a CSV"
+          className="text-xs"
+        >
+          Export CSV
+        </Button>
+      </fieldset>
+    );
+  }
+
   return (
-    <fieldset className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line/60 pt-3">
+    <fieldset className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-t border-line/50 pt-3">
       <legend className="sr-only">Date range</legend>
 
       <div className="flex flex-wrap items-center gap-2">
-        <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
+        <span
+          aria-hidden="true"
+          className="text-xs font-medium text-ink-400 uppercase tracking-wider mr-0.5"
+        >
           Date
         </span>
 
         {/* Which date the range measures. "Created" alone is vague, so the two
             choices are named against each other: created, or the visit itself. */}
-        <div className="inline-flex rounded-lg border border-line bg-surface-muted p-0.5">
+        <div className="inline-flex rounded-lg border border-line/70 bg-surface-muted/50 p-0.5 text-xs">
           <button
             type="button"
             onClick={() => handleDimensionChange("created_at")}
             aria-pressed={criteria.dimension === "created_at"}
             title="Filter by when the drive was raised"
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
               criteria.dimension === "created_at"
-                ? "bg-surface text-ink-900 shadow-xs"
+                ? "bg-surface text-ink-900 shadow-2xs font-semibold"
                 : "text-ink-600 hover:text-ink-900"
             }`}
           >
@@ -127,9 +205,9 @@ export function DriveDateFilter({
             onClick={() => handleDimensionChange("tentative_date")}
             aria-pressed={criteria.dimension === "tentative_date"}
             title="Filter by the drive / event date"
-            className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-all ${
               criteria.dimension === "tentative_date"
-                ? "bg-surface text-ink-900 shadow-xs"
+                ? "bg-surface text-ink-900 shadow-2xs font-semibold"
                 : "text-ink-600 hover:text-ink-900"
             }`}
           >
@@ -146,10 +224,10 @@ export function DriveDateFilter({
                 type="button"
                 onClick={() => handlePresetChange(preset)}
                 aria-pressed={active}
-                className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
                   active
-                    ? "border-brand-500 bg-brand-500 text-white"
-                    : "border-line bg-surface text-ink-700 hover:border-brand-400"
+                    ? "border-brand-500 bg-brand-500 text-white shadow-2xs font-semibold"
+                    : "border-line/80 bg-surface text-ink-600 hover:border-brand-300 hover:text-ink-900 hover:bg-surface-muted/50"
                 }`}
               >
                 {PRESET_LABELS[preset]}
@@ -217,18 +295,21 @@ export function DriveDateFilter({
 export function DriveAnalyticsReadouts({
   drives,
   className = "",
+  embedded = false,
 }: {
   drives: readonly DriveDateFilterItem[];
   className?: string;
+  embedded?: boolean;
 }) {
   const analytics = useMemo(() => summariseDriveAnalytics(drives), [drives]);
   const companyWord = analytics.uniqueCompanies === 1 ? "company" : "companies";
 
+  const containerClasses = embedded
+    ? `grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 ${className}`
+    : `rounded-2xl border border-line/80 bg-surface p-3 sm:px-5 sm:py-3.5 shadow-xs grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 ${className}`;
+
   return (
-    <section
-      aria-label="Drive analytics"
-      className={`rounded-2xl border border-line/80 bg-surface p-2 sm:p-3 shadow-xs grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 ${className}`}
-    >
+    <section aria-label="Drive analytics" className={containerClasses}>
       <StatCard
         label="Drives / roles"
         value={analytics.totalDrives}

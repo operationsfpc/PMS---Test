@@ -82,6 +82,11 @@ export function DrivePortfolioRoute({ tab }: { tab?: DriveTab } = {}) {
           ? ((role === null ? undefined : TITLES[role]) ?? "My drives")
           : TABS[tab].title
       }
+      subtitle={
+        tab === undefined
+          ? "Every drive I raise or approve — and what has become of it."
+          : TABS[tab].subtitle
+      }
       {...(tab === undefined ? {} : { statuses: DRIVE_TAB_STATUSES[tab] })}
     />
   );

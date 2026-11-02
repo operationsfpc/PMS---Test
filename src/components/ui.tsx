@@ -336,7 +336,9 @@ export function StatCard({
   hint,
   tone = "neutral",
   variant = "card",
+  size = "md",
   actionLabel = "See who",
+  className = "",
   onClick,
   to,
 }: {
@@ -351,11 +353,13 @@ export function StatCard({
    * nothing and five numbers under one label say everything.
    */
   variant?: "card" | "readout";
+  size?: "sm" | "md";
   /**
    * Action link label beneath the stat readout (defaults to "See who").
    * For drive or entity metrics, can be customized to e.g. "See drives".
    */
   actionLabel?: string;
+  className?: string;
   /**
    * Opens the people behind the number (UAT 2026-10-16: "if it shows a count I
    * need to know who all is there"). Omitted, the card stays the plain figure
@@ -373,19 +377,28 @@ export function StatCard({
   const valueColor = STAT_VALUES[tone] ?? STAT_VALUES.neutral;
   const containerTone = STAT_TONES[tone] ?? STAT_TONES.neutral;
   const isReadout = variant === "readout";
+  const isSmall = size === "sm";
 
   const body = (
     <div className="flex flex-col">
       {isReadout ? (
         <p className="text-[13px] text-ink-500">{label}</p>
       ) : (
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-500">{label}</p>
+        <p
+          className={`${
+            isSmall ? "text-[11px]" : "text-xs"
+          } font-semibold uppercase tracking-wider text-ink-500`}
+        >
+          {label}
+        </p>
       )}
       <p
         className={
           isReadout
             ? `mt-0.5 font-heading text-readout font-light tabular-nums ${valueColor}`
-            : `mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`
+            : isSmall
+              ? `mt-0.5 font-heading text-lg sm:text-xl font-bold tracking-tight ${valueColor}`
+              : `mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`
         }
       >
         {value}
@@ -396,10 +409,12 @@ export function StatCard({
 
   if (onClick === undefined && to === undefined) {
     return isReadout ? (
-      <div className="flex flex-col justify-between">{body}</div>
+      <div className={`flex flex-col justify-between ${className}`}>{body}</div>
     ) : (
       <div
-        className={`flex flex-col justify-between rounded-card border p-4 shadow-xs transition-all ${containerTone}`}
+        className={`flex flex-col justify-between rounded-card border ${
+          isSmall ? "p-3" : "p-4"
+        } shadow-xs transition-all ${containerTone} ${className}`}
       >
         {body}
       </div>
@@ -417,13 +432,21 @@ export function StatCard({
   const press = (
     <>
       {body}
-      <span className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-ink-500 transition-colors group-hover:text-brand-600">
-        {actionLabel}
-        <ArrowUpRight
-          aria-hidden="true"
-          className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-        />
-      </span>
+      {actionLabel ? (
+        <span
+          className={`${
+            isSmall ? "mt-1.5 text-[10px]" : "mt-2.5 text-[11px]"
+          } inline-flex items-center gap-1 font-semibold text-ink-500 transition-colors group-hover:text-brand-600`}
+        >
+          {actionLabel}
+          <ArrowUpRight
+            aria-hidden="true"
+            className={`${
+              isSmall ? "size-3" : "size-3.5"
+            } transition-transform duration-200 group-hover:translate-x-0.5`}
+          />
+        </span>
+      ) : null}
     </>
   );
 
@@ -433,8 +456,10 @@ export function StatCard({
    * competing with the row of figures it sits in.
    */
   const shape = isReadout
-    ? "group flex cursor-pointer flex-col justify-between rounded-card p-3 text-left transition-colors hover:bg-surface-muted"
-    : `group flex cursor-pointer flex-col justify-between rounded-card border p-4 text-left shadow-xs transition-all hover:shadow-sm ${containerTone}`;
+    ? `group flex cursor-pointer flex-col justify-between rounded-card p-3 text-left transition-colors hover:bg-surface-muted ${className}`
+    : `group flex cursor-pointer flex-col justify-between rounded-card border ${
+        isSmall ? "p-3" : "p-4"
+      } text-left shadow-xs transition-all hover:shadow-sm ${containerTone} ${className}`;
 
   return to === undefined ? (
     <button type="button" onClick={onClick} aria-haspopup="dialog" className={shape}>

@@ -919,21 +919,19 @@ export function DashboardPage({
           </section>
 
           {/*
-           * Three panels across, each a different pastel, each answering one
-           * question — where the cohort stands, what it earned, how the drives
-           * are going. They used to be four equal white cards in two rows,
-           * which made the funnel and the drive counts look like the same kind
-           * of object. A tone says which queue is which before the title is
-           * read, and the circle says there is a whole page behind it.
+           * Cohort Overview & Package Breakdown
+           * Balanced 2-column layout giving each section ample room.
            */}
-          <div className="mb-6 grid gap-5 lg:grid-cols-3">
-            <Card tone="brand" className="p-5">
+          <div className="mb-6 grid gap-6 lg:grid-cols-2">
+            <Card className="rounded-2xl border border-line/80 bg-surface p-5 sm:p-6 shadow-xs">
               {/* F5: renamed, because "funnel" promised a drive-by-drive story
                   it could not tell. These four are facts about a STUDENT. */}
               <section aria-label="Students overview">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h2 className="text-lg text-ink-900">Students overview</h2>
+                    <h2 className="text-lg font-heading font-semibold text-ink-900">
+                      Students overview
+                    </h2>
                     <p className="mt-1 text-sm text-ink-500">
                       Where the cohort is, from the roster to a signed offer.
                     </p>
@@ -942,7 +940,7 @@ export function DashboardPage({
                     <ArrowUpRight className="size-4" aria-hidden="true" />
                   </RoundAction>
                 </div>
-                <ol className="mt-3 space-y-2">
+                <ol className="mt-4 space-y-3">
                   {funnel.map((stage) => {
                     /*
                      * 2026-08-17: the Placed count opens the students behind
@@ -952,7 +950,7 @@ export function DashboardPage({
                      */
                     const row = (
                       <div className="flex items-baseline justify-between gap-3 text-sm">
-                        <span className="text-ink-700">{stage.label}</span>
+                        <span className="font-medium text-ink-700">{stage.label}</span>
                         <span className="shrink-0">
                           <span className="font-semibold text-ink-900">{stage.count}</span>{" "}
                           <span className="text-xs text-ink-500">{stage.percentOfRoster}%</span>
@@ -981,15 +979,15 @@ export function DashboardPage({
                                   : `${stage.percentOfRoster}% of the roster`,
                             })
                           }
-                          className="block w-full rounded-control text-left transition-colors hover:bg-surface"
+                          className="block w-full rounded-control text-left transition-colors hover:bg-surface-muted/50 py-0.5"
                         >
                           {row}
                         </button>
                         {/* The bar is the point: a stage that drops off a cliff
                           is visible before the numbers are read. */}
-                        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted border border-line/40">
                           <div
-                            className="h-full bg-brand-500"
+                            className="h-full rounded-full bg-brand-500 transition-all duration-300"
                             style={{ width: `${stage.percentOfRoster}%` }}
                           />
                         </div>
@@ -1000,37 +998,34 @@ export function DashboardPage({
               </section>
             </Card>
 
-            <Card tone="warn" className="p-5">
+            <Card className="rounded-2xl border border-line/80 bg-surface p-5 sm:p-6 shadow-xs">
               <section aria-label="Package">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-lg text-ink-900">Package</h2>
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-heading font-semibold text-ink-900">Package</h2>
+                    <p className="mt-1 text-sm text-ink-500">
+                      One figure per placed student. A student holding several offers is counted
+                      once, at their best one.
+                    </p>
+                  </div>
                   <RoundAction label="Open every offer and its package" to="/central/offers">
                     <ArrowUpRight className="size-4" aria-hidden="true" />
                   </RoundAction>
                 </div>
                 {packages === null || packages.count === 0 ? (
-                  <p className="mt-3 text-sm text-ink-700">
+                  <p className="mt-4 text-sm text-ink-600">
                     No packages yet. Figures appear as soon as the first offer is declared.
                   </p>
                 ) : (
                   <>
-                    <p className="mt-1 mb-3 text-sm text-ink-500">
-                      One figure per placed student. A student holding several offers is counted
-                      once, at their best one.
-                    </p>
-                    <section aria-label="Package figures">
-                      <dl className="grid grid-cols-2 gap-3">
+                    <section aria-label="Package figures" className="mt-4">
+                      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                         {[
                           { name: "Highest", figure: packages.highestLpa },
                           { name: "Average", figure: packages.averageLpa },
                           { name: "Median", figure: packages.medianLpa },
                           { name: "Lowest", figure: packages.lowestLpa },
                         ].map(({ name, figure }) => {
-                          // Somebody earns the highest and the lowest. The
-                          // average is nobody's salary and the median of an
-                          // even cohort is a midpoint between two — so those
-                          // two open the placed list and SAY so, rather than
-                          // landing the reader on a list of one or none.
                           const holders =
                             figure === null
                               ? []
@@ -1063,12 +1058,12 @@ export function DashboardPage({
                                         } at this package`,
                                 })
                               }
-                              className="block rounded-control bg-surface/70 p-3 text-left transition-colors hover:bg-surface"
+                              className="group flex flex-col justify-between rounded-xl border border-line/70 bg-surface-muted/40 p-3 text-left transition-all hover:border-gold-300 hover:bg-surface-muted hover:shadow-2xs"
                             >
-                              <dt className="text-xs font-medium uppercase tracking-wide text-ink-500">
+                              <dt className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 group-hover:text-ink-700">
                                 {name}
                               </dt>
-                              <dd className="mt-0.5 font-heading text-lg font-bold text-ink-900">
+                              <dd className="mt-1 font-heading text-lg font-bold text-ink-900">
                                 {lpa(figure)}
                               </dd>
                             </button>
@@ -1078,202 +1073,263 @@ export function DashboardPage({
                     </section>
 
                     {packagesByCategory.length > 0 && (
-                      <ul
-                        aria-label="Package by category"
-                        className="mt-4 divide-y divide-line border-t border-line"
-                      >
-                        {packagesByCategory.map(({ category, stats: byCategory }) => (
-                          <li key={category}>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openStudents({
-                                  eyebrow: "Package by category",
-                                  title: offerCategoryLabelOf(category),
-                                  href: studentsLink({ filter: "placed", category }),
-                                  rows: placedRows((record) => record.category === category),
-                                  status: (student) => lpa(ctcById.get(student.studentId) ?? null),
-                                  note: `avg ${lpa(byCategory.averageLpa)} · high ${lpa(
-                                    byCategory.highestLpa,
-                                  )}`,
-                                })
-                              }
-                              className="flex w-full flex-wrap items-center justify-between gap-2 rounded-control py-2 pr-1 text-left text-sm transition-colors hover:bg-surface"
-                            >
-                              {/* 2026-08-27: the domain's spelling. The
-                                  `capitalize` class was a stylesheet spelling
-                                  a domain value — and it could not have
-                                  rescued "internship" once (10) made it a
-                                  category. */}
-                              <span className="text-ink-700">{offerCategoryLabelOf(category)}</span>
-                              <span className="text-ink-500">
-                                {byCategory.count} placed · avg{" "}
-                                <span className="font-semibold text-ink-900">
-                                  {lpa(byCategory.averageLpa)}
-                                </span>{" "}
-                                · high {lpa(byCategory.highestLpa)}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="mt-4 pt-3 border-t border-line/60">
+                        <ul aria-label="Package by category" className="divide-y divide-line/60">
+                          {packagesByCategory.map(({ category, stats: byCategory }) => (
+                            <li key={category}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openStudents({
+                                    eyebrow: "Package by category",
+                                    title: offerCategoryLabelOf(category),
+                                    href: studentsLink({ filter: "placed", category }),
+                                    rows: placedRows((record) => record.category === category),
+                                    status: (student) =>
+                                      lpa(ctcById.get(student.studentId) ?? null),
+                                    note: `avg ${lpa(byCategory.averageLpa)} · high ${lpa(
+                                      byCategory.highestLpa,
+                                    )}`,
+                                  })
+                                }
+                                className="flex w-full flex-wrap items-center justify-between gap-2 rounded-control py-2 pr-1 text-left text-sm transition-colors hover:bg-surface-muted/50"
+                              >
+                                <span className="font-medium text-ink-700">
+                                  {offerCategoryLabelOf(category)}
+                                </span>
+                                <span className="text-ink-500">
+                                  {byCategory.count} placed · avg{" "}
+                                  <span className="font-semibold text-ink-900">
+                                    {lpa(byCategory.averageLpa)}
+                                  </span>{" "}
+                                  · high {lpa(byCategory.highestLpa)}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </>
                 )}
               </section>
             </Card>
-
-            <Card tone="quiet" className="p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-lg text-ink-900">Drives by status</h2>
-                  <p className="mt-1 text-xs text-ink-500">
-                    Company visits, not role rows — a visit that raised three roles is one drive.
-                  </p>
-                </div>
-                <RoundAction label="Open the drives list" to="/central/drives">
-                  <ArrowUpRight className="size-4" aria-hidden="true" />
-                </RoundAction>
-              </div>
-              <ul className="mt-3 space-y-1">
-                {Object.entries(snapshot.drivesByStatus).map(([status, count]) => {
-                  const roles = rolesByStatus[status] ?? count;
-                  const drives = `${count} drive${count === 1 ? "" : "s"}`;
-                  return (
-                    <li key={status}>
-                      <button
-                        type="button"
-                        aria-label={
-                          roles === count
-                            ? `${driveStatusLabel(status)}: ${drives}`
-                            : `${driveStatusLabel(status)}: ${drives}, ${roles} roles`
-                        }
-                        onClick={() => setStatusOpen(status)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-brand-50"
-                      >
-                        <span className="flex flex-wrap items-baseline gap-2">
-                          <span className="text-ink-700">{driveStatusLabel(status)}</span>
-                          {roles !== count && (
-                            <span className="text-xs text-ink-500">{roles} roles</span>
-                          )}
-                        </span>
-                        <span className="font-semibold text-ink-900">{count}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Card>
           </div>
 
-          <div className="mb-6 grid gap-5 lg:grid-cols-2">
-            <Card tone="good" className="p-5">
-              <section aria-label="Offers by category">
-                <h2 className="text-lg text-ink-900">Offers by category</h2>
-                {/* 2026-10-16: these are STUDENTS, each at the one offer that is
-                    their placement record (R9) — the same population as the
-                    placed count and the package table above. They used to count
-                    offer rows, so one student holding two Dream offers was two
-                    here and one everywhere else on the screen. */}
-                <ul className="mt-3 space-y-2">
-                  {snapshot.offerCategories.map(({ category, studentIds }) => (
-                    <li key={category}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openStudents({
-                            eyebrow: "Offers by category",
-                            title: `${offerCategoryLabelOf(category)} offers`,
-                            href: studentsLink({
-                              filter: "placed",
-                              category: category as OfferCategory,
-                            }),
-                            rows: rowsWithIds(studentIds),
-                            status: (student) => lpa(ctcById.get(student.studentId) ?? null),
-                            note: "one student per placement record (R9)",
-                          })
-                        }
-                        className="flex w-full justify-between rounded-lg py-1 pr-1 text-left text-sm transition-colors hover:bg-brand-50"
-                      >
-                        <span className="text-ink-700">{offerCategoryLabelOf(category)}</span>
-                        <span className="font-semibold text-ink-900">{studentIds.length}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            </Card>
-
-            <Card tone="quiet" className="p-5">
-              <section aria-label="By campus">
+          {/*
+           * Operations & Campus Breakdown
+           * Drives by status & Offers by category stacked in 1 col, By campus in 2 cols.
+           */}
+          <div className="mb-6 grid gap-6 lg:grid-cols-3">
+            <div className="flex flex-col gap-6">
+              <Card className="rounded-2xl border border-line/80 bg-surface p-5 shadow-xs">
                 <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-lg text-ink-900">By campus</h2>
-                  {snapshot.campuses.length > 7 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllCampuses((prev) => !prev)}
-                      className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline"
-                    >
-                      {showAllCampuses ? "Show fewer" : `Show all (${snapshot.campuses.length})`}
-                    </button>
-                  )}
+                  <div className="min-w-0">
+                    <h2 className="text-base font-heading font-semibold text-ink-900">
+                      Drives by status
+                    </h2>
+                    <p className="mt-0.5 text-xs text-ink-500">Company visits, not role rows</p>
+                  </div>
+                  <RoundAction label="Open the drives list" to="/central/drives">
+                    <ArrowUpRight className="size-4" aria-hidden="true" />
+                  </RoundAction>
                 </div>
-                <ul className="mt-3 divide-y divide-line max-h-80 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                  {(() => {
-                    const sortedCampuses = [...snapshot.campuses].sort(
-                      (a, b) => b.placed - a.placed || b.eligible - a.eligible,
-                    );
-                    const displayed = showAllCampuses ? sortedCampuses : sortedCampuses.slice(0, 7);
-                    return displayed.map((campus) => (
-                      <li key={campus.campusId}>
-                        {/* Its own campus, not the switcher's: this row is the
-                          answer for THAT college. */}
+                <ul className="mt-3 divide-y divide-line/60">
+                  {Object.entries(snapshot.drivesByStatus).map(([status, count]) => {
+                    const roles = rolesByStatus[status] ?? count;
+                    const drives = `${count} drive${count === 1 ? "" : "s"}`;
+                    return (
+                      <li key={status}>
                         <button
                           type="button"
-                          onClick={() => {
-                            const at = snapshot.students.filter(
-                              (student) =>
-                                student.campusId === campus.campusId &&
-                                countsInPlacementDenominator(student),
-                            );
-                            openStudents({
-                              eyebrow: "By campus",
-                              title: `In the denominator at ${campus.campusName}`,
-                              href: studentsLink({ campus: campus.campusName }),
-                              rows: at,
-                              status: (student) =>
-                                student.hasOnCampusPlacement ? "Placed" : "Not placed",
-                              group: (student) =>
-                                student.hasOnCampusPlacement ? "Placed" : "Not placed",
-                              note: `${rate(campus.placed, campus.eligible)}% placed`,
-                              where: campus.campusName,
-                            });
-                          }}
-                          className="flex w-full items-center justify-between gap-4 rounded-control py-2 pr-1 text-left text-sm transition-colors hover:bg-surface"
+                          aria-label={
+                            roles === count
+                              ? `${driveStatusLabel(status)}: ${drives}`
+                              : `${driveStatusLabel(status)}: ${drives}, ${roles} roles`
+                          }
+                          onClick={() => setStatusOpen(status)}
+                          className="flex w-full items-center justify-between gap-3 rounded-lg py-1.5 px-1 text-sm transition-colors hover:bg-surface-muted"
                         >
-                          <span className="text-ink-800">{campus.campusName}</span>
                           <span className="flex items-center gap-2">
-                            <span className="text-ink-500">
-                              {campus.placed} of {campus.eligible} ·{" "}
-                              <span className="font-semibold text-ink-900">
-                                {rate(campus.placed, campus.eligible)}%
-                              </span>
+                            <span className="text-ink-700 font-medium">
+                              {driveStatusLabel(status)}
                             </span>
-                            {campus.placed > 0 && <Badge tone="success">Placed</Badge>}
+                            {roles !== count && (
+                              <span className="rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
+                                {roles} roles
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-semibold text-ink-900 tabular-nums">{count}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+
+              <Card className="rounded-2xl border border-line/80 bg-surface p-5 shadow-xs">
+                <section aria-label="Offers by category">
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="text-base font-heading font-semibold text-ink-900">
+                      Offers by category
+                    </h2>
+                  </div>
+                  <ul className="mt-3 divide-y divide-line/60">
+                    {snapshot.offerCategories.map(({ category, studentIds }) => (
+                      <li key={category}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openStudents({
+                              eyebrow: "Offers by category",
+                              title: `${offerCategoryLabelOf(category)} offers`,
+                              href: studentsLink({
+                                filter: "placed",
+                                category: category as OfferCategory,
+                              }),
+                              rows: rowsWithIds(studentIds),
+                              status: (student) => lpa(ctcById.get(student.studentId) ?? null),
+                              note: "one student per placement record (R9)",
+                            })
+                          }
+                          className="flex w-full items-center justify-between rounded-lg py-1.5 px-1 text-left text-sm transition-colors hover:bg-surface-muted"
+                        >
+                          <span className="text-ink-700 font-medium">
+                            {offerCategoryLabelOf(category)}
+                          </span>
+                          <span className="font-semibold text-ink-900 tabular-nums">
+                            {studentIds.length}
                           </span>
                         </button>
                       </li>
-                    ));
-                  })()}
-                </ul>
-              </section>
-            </Card>
+                    ))}
+                  </ul>
+                </section>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-2">
+              <Card className="h-full rounded-2xl border border-line/80 bg-surface p-5 sm:p-6 shadow-xs flex flex-col justify-between">
+                <section aria-label="By campus" className="flex flex-col h-full">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <h2 className="text-base sm:text-lg font-heading font-semibold text-ink-900">
+                        By campus
+                      </h2>
+                      <p className="mt-0.5 text-xs text-ink-500">
+                        Placement rate and eligible student breakdown
+                      </p>
+                    </div>
+                    {snapshot.campuses.length > 6 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllCampuses((prev) => !prev)}
+                        className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline shrink-0"
+                      >
+                        {showAllCampuses ? "Show fewer" : `Show all (${snapshot.campuses.length})`}
+                      </button>
+                    )}
+                  </div>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1 [scrollbar-width:thin]">
+                    {(() => {
+                      const sortedCampuses = [...snapshot.campuses].sort(
+                        (a, b) => b.placed - a.placed || b.eligible - a.eligible,
+                      );
+                      const displayed = showAllCampuses
+                        ? sortedCampuses
+                        : sortedCampuses.slice(0, 6);
+                      return displayed.map((campus) => {
+                        const placementPercentage = rate(campus.placed, campus.eligible);
+                        const hasPlacements = campus.placed > 0;
+                        return (
+                          <li key={campus.campusId} className="flex">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const at = snapshot.students.filter(
+                                  (student) =>
+                                    student.campusId === campus.campusId &&
+                                    countsInPlacementDenominator(student),
+                                );
+                                openStudents({
+                                  eyebrow: "By campus",
+                                  title: `In the denominator at ${campus.campusName}`,
+                                  href: studentsLink({ campus: campus.campusName }),
+                                  rows: at,
+                                  status: (student) =>
+                                    student.hasOnCampusPlacement ? "Placed" : "Not placed",
+                                  group: (student) =>
+                                    student.hasOnCampusPlacement ? "Placed" : "Not placed",
+                                  note: `${placementPercentage}% placed`,
+                                  where: campus.campusName,
+                                });
+                              }}
+                              className={`group flex w-full flex-col justify-between rounded-xl border p-3 text-left transition-all ${
+                                hasPlacements
+                                  ? "border-success-200/80 bg-success-50/30 hover:border-success-300 hover:bg-success-50/60 shadow-2xs"
+                                  : "border-line/70 bg-surface-muted/30 hover:border-line hover:bg-surface-muted/60"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-sm font-semibold text-ink-900 group-hover:text-brand-700 line-clamp-1">
+                                  {campus.campusName}
+                                </span>
+                                {hasPlacements ? (
+                                  <Badge tone="success" variant="pill">
+                                    Placed
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs font-semibold text-ink-400">
+                                    {placementPercentage}%
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="mt-2.5 flex items-center justify-between text-xs text-ink-500">
+                                <span>
+                                  <strong className="font-semibold text-ink-800">
+                                    {campus.placed}
+                                  </strong>{" "}
+                                  of {campus.eligible} eligible
+                                </span>
+                                {hasPlacements && (
+                                  <span className="font-bold text-success-700">
+                                    {placementPercentage}%
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line/50">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    hasPlacements ? "bg-success-500" : "bg-transparent"
+                                  }`}
+                                  style={{
+                                    width: `${Math.max(hasPlacements ? 5 : 0, placementPercentage)}%`,
+                                  }}
+                                />
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      });
+                    })()}
+                  </ul>
+                </section>
+              </Card>
+            </div>
           </div>
 
-          <Card className="mb-6 p-5">
+          <Card className="mb-6 rounded-2xl border border-line/80 bg-surface p-5 sm:p-6 shadow-xs">
             <section aria-label="Open drives">
               <div className="flex items-start justify-between gap-3">
-                <h2 className="text-lg text-ink-900">Open drives</h2>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-heading font-semibold text-ink-900">Open drives</h2>
+                  <p className="mt-1 text-sm text-ink-500">
+                    Live drives currently accepting applications
+                  </p>
+                </div>
                 <RoundAction label="Open the live drives queue" to="/central/drives/live">
                   <ArrowUpRight className="size-4" aria-hidden="true" />
                 </RoundAction>

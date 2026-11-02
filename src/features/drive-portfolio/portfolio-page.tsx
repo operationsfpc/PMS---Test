@@ -236,6 +236,7 @@ export function DrivePortfolioPage({
   view,
   profileId,
   title,
+  subtitle,
   role,
   statuses,
   /** Passed in, never read from the browser — see src/domain/drive-analytics. */
@@ -244,6 +245,7 @@ export function DrivePortfolioPage({
   view: PortfolioView;
   profileId: string;
   title: string;
+  subtitle?: string;
   /** Decides shortlisting access, and nothing else (F15). */
   role: AppRole;
   /**
@@ -421,10 +423,7 @@ export function DrivePortfolioPage({
     <div>
       <PageHeader
         title={title}
-        /* Publishing became the Central CPC's alone, so a blurb telling the AE
-           and the Delivery Head they publish was describing a power neither
-           has. Karthik's words, 2026-08-17. */
-        subtitle="Every drive I raise or approve — and what has become of it."
+        subtitle={subtitle ?? "Every drive I raise or approve — and what has become of it."}
       />
 
       {inScope.length === 0 ? (
@@ -438,60 +437,74 @@ export function DrivePortfolioPage({
       ) : (
         <>
           {/* One card for every filter (2026-11-02). Search, type, date and
-              sort used to be four stacked blocks of chrome over one list —
-              each with its own margins, two of them framed. The controls are
-              unchanged; only the scaffolding around them went. */}
-          <Card className="mb-4 p-3.5">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <DriveSearch
-                value={query}
-                onChange={(q) => {
-                  setQuery(q);
-                  setPage(1);
-                }}
-                compact
-              />
-              <DriveTypeFilter
-                value={type}
-                onChange={(t) => {
-                  setType(t);
-                  setPage(1);
-                }}
-                counts={typeCounts}
-                className=""
-              />
-              <div className="ml-auto">
-                <DriveSort
-                  value={order}
-                  onChange={(o) => {
-                    setOrder(o);
-                    setPage(1);
-                  }}
-                />
+              sort used to be four stacked blocks of chrome over one list.
+              Unified into a sleek, clean, modern control center. */}
+          {/* Unified Filters & Analytics Command Center (2026-11-02).
+              Combined all filtering controls and live analytics into a single cohesive,
+              modern dashboard card instead of stacked disjointed chrome panels. */}
+          <Card className="mb-5 overflow-hidden rounded-2xl border border-line/80 bg-surface p-0 shadow-xs">
+            {/* Filter toolbar */}
+            <div className="p-3.5 sm:p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <DriveSearch
+                    value={query}
+                    onChange={(q) => {
+                      setQuery(q);
+                      setPage(1);
+                    }}
+                    compact
+                  />
+                  <DriveTypeFilter
+                    value={type}
+                    onChange={(t) => {
+                      setType(t);
+                      setPage(1);
+                    }}
+                    counts={typeCounts}
+                    className=""
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <DriveDateFilter
+                    criteria={dateCriteria}
+                    onChange={(c) => {
+                      setDateCriteria(c);
+                      setPage(1);
+                    }}
+                    drives={visible}
+                    compact
+                  />
+                  <DriveSort
+                    value={order}
+                    onChange={(o) => {
+                      setOrder(o);
+                      setPage(1);
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
-            <DriveDateFilter
-              criteria={dateCriteria}
-              onChange={(c) => {
-                setDateCriteria(c);
-                setPage(1);
-              }}
-              drives={visible}
-            />
+            {/* Integrated Live Analytics Metrics */}
+            <div className="border-t border-line/60 bg-surface-muted/20 px-4 py-3 sm:px-6">
+              <DriveAnalyticsReadouts
+                drives={visible}
+                embedded
+                className="border-0 bg-transparent p-0 shadow-none"
+              />
+            </div>
 
-            <p className="mt-3 text-xs text-ink-500">
-              {/* 2026-11-02: this line counted role rows while the list under it
-                  prints one card per company visit, so "Showing 8 of 24 drives"
-                  sat over six cards. A visit and a role are two different things
-                  a reader can act on, so the line now says both. */}
-              {visitTotal} {visitTotal === 1 ? "visit" : "visits"} · {visible.length}{" "}
-              {visible.length === 1 ? "role" : "roles"} in view
-              {visible.length === inScope.length ? "" : ` of ${inScope.length} in all`}
-            </p>
+            {/* Scope / visit count footer */}
+            <div className="border-t border-line/40 bg-surface px-4 py-2 sm:px-5">
+              <p className="text-xs text-ink-500">
+                {visitTotal} {visitTotal === 1 ? "visit" : "visits"} · {visible.length}{" "}
+                {visible.length === 1 ? "role" : "roles"} in view
+                {visible.length === inScope.length ? "" : ` of ${inScope.length} in all`}
+              </p>
+            </div>
           </Card>
-
-          <DriveAnalyticsReadouts drives={visible} className="mb-5" />
 
           {visible.length === 0 ? (
             <Card className="p-6">
@@ -502,38 +515,42 @@ export function DrivePortfolioPage({
             </Card>
           ) : (
             <>
-              {activeEvents.length === 0 && expiredEvents.length > 0 && (
-                <div className="mb-4 rounded-xl border border-line/80 bg-surface p-4 text-center shadow-xs">
-                  <p className="text-sm font-semibold text-ink-900">
-                    No active drives with open application deadlines
-                  </p>
-                  <p className="mt-1 text-xs text-ink-500">
-                    {expiredEvents.length}{" "}
-                    {expiredEvents.length === 1 ? "drive visit has" : "drive visits have"} passed
-                    the application deadline and {expiredEvents.length === 1 ? "is" : "are"} listed
-                    below.
-                  </p>
-                </div>
-              )}
-
               {pageEvents.length > 0 && (
                 <ul className="flex flex-col gap-4">
                   {pageEvents.map((event, index) => renderEvent(event, visitsBefore + index))}
                 </ul>
               )}
 
-              {/* The strip stays on screen even at one page, so the row budget is
-                  always reachable and the reader can tell a short portfolio from a
-                  filtered one. Same words as the CPC's Drive progress. */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-xs text-ink-600">
+              {expiredEvents.length > 0 && (
+                <Accordion
+                  className="mt-4 rounded-2xl border border-line/80 bg-surface shadow-xs"
+                  defaultValue={activeEvents.length === 0 ? ["expired"] : []}
+                >
+                  <AccordionItem value="expired">
+                    <AccordionTrigger className="px-5 py-3.5 text-sm font-semibold text-ink-600 hover:text-ink-900">
+                      Expired — application deadline passed ({expiredEvents.length})
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <ul className="flex flex-col gap-4 p-4 sm:p-5 pt-0">
+                        {expiredEvents.map((event, index) =>
+                          renderEvent(event, activeEvents.length + index),
+                        )}
+                      </ul>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              )}
+
+              {/* The strip stays on screen at the bottom of the list */}
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-surface px-4 py-3 text-xs text-ink-600 shadow-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <span>
                     {pageEvents.length === 0
                       ? `Showing 0 active visits of ${visitTotal} · ${expiredEvents.length} past-deadline ${expiredEvents.length === 1 ? "visit" : "visits"} below`
                       : `Showing visits ${visitsBefore + 1} to ${visitsBefore + pageEvents.length} of ${visitTotal} · ${rowsOnPage} ${rowsOnPage === 1 ? "role row" : "role rows"} on this page`}
                   </span>
-                  <div className="ml-2 flex items-center gap-1">
-                    <span className="text-ink-500">Rows:</span>
+                  <div className="ml-2 flex items-center gap-1.5">
+                    <span className="text-ink-500 font-medium">Rows:</span>
                     <select
                       aria-label="Rows per page"
                       value={rowBudget}
@@ -541,7 +558,7 @@ export function DrivePortfolioPage({
                         setRowBudget(Number(e.target.value));
                         setPage(1);
                       }}
-                      className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-ink-800"
+                      className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink-800 outline-none focus:border-brand-500"
                     >
                       {ROW_BUDGETS.map((size) => (
                         <option key={size} value={size}>
@@ -552,16 +569,17 @@ export function DrivePortfolioPage({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2">
                   <Button
                     size="sm"
                     variant="secondary"
                     disabled={current <= 1}
                     onClick={() => setPage(current - 1)}
+                    className="rounded-lg text-xs"
                   >
                     Previous
                   </Button>
-                  <span className="px-2 font-medium">
+                  <span className="px-1.5 font-semibold text-ink-700">
                     Page {current} of {visitPageCount}
                   </span>
                   <Button
@@ -569,31 +587,12 @@ export function DrivePortfolioPage({
                     variant="secondary"
                     disabled={current >= visitPageCount}
                     onClick={() => setPage(current + 1)}
+                    className="rounded-lg text-xs"
                   >
                     Next
                   </Button>
                 </div>
               </div>
-
-              {expiredEvents.length > 0 && (
-                <Accordion
-                  className="mt-4 rounded-card border border-line bg-surface"
-                  defaultValue={activeEvents.length === 0 ? ["expired"] : []}
-                >
-                  <AccordionItem value="expired">
-                    <AccordionTrigger className="px-4 py-3 text-sm font-medium text-ink-500">
-                      Expired — application deadline passed ({expiredEvents.length})
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <ul className="flex flex-col gap-4 p-4">
-                        {expiredEvents.map((event, index) =>
-                          renderEvent(event, activeEvents.length + index),
-                        )}
-                      </ul>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              )}
             </>
           )}
         </>
@@ -698,21 +697,31 @@ export function DrivePortfolioPage({
 
     return (
       <li key={event.eventId}>
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden rounded-2xl border border-line/80 bg-surface shadow-xs transition-all hover:border-line hover:shadow-sm">
           {/* Event Header for multi-role drives */}
           {isMultiRole && (
-            <div className={`border-b border-line ${accent.band} p-4`}>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-heading text-lg font-bold text-ink-900">{event.companyName}</h3>
-                {!types.mixed && types.single !== null && (
-                  <Badge tone={driveTypeTone(types.single)}>{driveTypeLabel(types.single)}</Badge>
-                )}
-                {types.mixed && <Badge tone="neutral">Mixed types</Badge>}
-                <Badge tone="brand">{event.roles.length} roles</Badge>
-              </div>
-              <div className="mt-1 flex flex-wrap gap-3 text-sm text-ink-600">
+            <div className={`border-b border-line/70 ${accent.band} p-4 sm:p-5`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-heading text-lg font-bold text-ink-900">
+                    {event.companyName}
+                  </h3>
+                  {!types.mixed && types.single !== null && (
+                    <Badge tone={driveTypeTone(types.single)} variant="pill">
+                      {driveTypeLabel(types.single)}
+                    </Badge>
+                  )}
+                  {types.mixed && (
+                    <Badge tone="neutral" variant="pill">
+                      Mixed types
+                    </Badge>
+                  )}
+                  <Badge tone="brand" variant="pill">
+                    {event.roles.length} roles
+                  </Badge>
+                </div>
                 {event.tentativeDate && (
-                  <span>
+                  <span className="text-xs font-medium text-ink-500">
                     {new Date(event.tentativeDate).toLocaleDateString("en-IN", {
                       timeZone: "Asia/Kolkata",
                       day: "numeric",
@@ -722,7 +731,7 @@ export function DrivePortfolioPage({
                   </span>
                 )}
               </div>
-              <div className="mt-2 flex flex-wrap gap-4 text-sm">
+              <div className="mt-2 flex flex-wrap gap-4 text-xs text-ink-700">
                 <span className="font-semibold">
                   <strong>{event.totalFunnel.applied}</strong> applied
                 </span>
@@ -743,19 +752,23 @@ export function DrivePortfolioPage({
               is named once above; nothing here repeats it, and no role's counts
               are summed with another's. */}
           {isMultiRole ? (
-            <Accordion multiple defaultValue={event.roles.map((drive) => drive.driveId)}>
+            <Accordion
+              multiple
+              defaultValue={event.roles.map((drive) => drive.driveId)}
+              className="divide-y divide-line/60"
+            >
               {event.roles.map((drive) => {
                 const progress = driveProgress(drive);
                 const ctc = describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa);
                 return (
                   <AccordionItem key={drive.driveId} value={drive.driveId}>
-                    <AccordionTrigger className="px-4 py-3">
+                    <AccordionTrigger className="px-4 py-3 sm:px-5 hover:bg-surface-muted/30">
                       <span className="font-semibold text-ink-900">
                         {drive.roleTitle}
                         {ctc !== null && ` · ${ctc}`}
                       </span>
                       {types.mixed && (
-                        <Badge tone={driveTypeTone(drive.driveType)}>
+                        <Badge tone={driveTypeTone(drive.driveType)} variant="pill">
                           {driveTypeLabel(drive.driveType)}
                         </Badge>
                       )}
@@ -763,7 +776,24 @@ export function DrivePortfolioPage({
                           "anything unfinished is a warning": a Live drive is
                           healthy green, an approved-but-unpublished one is
                           amber because someone owes the next step. */}
-                      <Badge tone={driveStatusTone(drive.status)}>{progress.phase}</Badge>
+                      {(() => {
+                        const isExpired =
+                          drive.applicationEnd !== null &&
+                          new Date(drive.applicationEnd).getTime() < now.getTime();
+                        const phaseText =
+                          isExpired && progress.phase === "Applications open"
+                            ? "Applications closed"
+                            : progress.phase;
+                        const phaseTone =
+                          phaseText === "Applications closed"
+                            ? "neutral"
+                            : driveStatusTone(drive.status);
+                        return (
+                          <Badge tone={phaseTone} variant="pill">
+                            {phaseText}
+                          </Badge>
+                        );
+                      })()}
                     </AccordionTrigger>
                     <AccordionContent>{renderDrive(drive, true, event)}</AccordionContent>
                   </AccordionItem>
@@ -781,7 +811,7 @@ export function DrivePortfolioPage({
               once per visit — the roles listed above each used to repeat the
               offer, so a single-role visit showed it twice on one card. */}
           {(role === "account_executive" || role === "admin") && (
-            <div className="border-t border-line bg-surface-muted p-3">
+            <div className="border-t border-line/60 bg-surface-muted/30 px-4 py-2.5 sm:px-5">
               {(() => {
                 const refused = visitRoleFreeze(event);
                 return refused !== null ? (
@@ -793,6 +823,7 @@ export function DrivePortfolioPage({
                     to={`/ae/pif?companyName=${encodeURIComponent(event.companyName)}&companyDriveId=${encodeURIComponent(
                       visitEventId(event),
                     )}&tentativeDate=${encodeURIComponent(event.tentativeDate ?? "")}`}
+                    className="text-xs font-semibold text-brand-600 hover:text-brand-700"
                   >
                     + Add another role
                     {isMultiRole ? "" : visitDayInParentheses(event.tentativeDate)}
@@ -834,9 +865,9 @@ export function DrivePortfolioPage({
     const who = nested ? drive.roleTitle : drive.companyName;
 
     const content = (
-      <section aria-label={who} className={nested ? "p-4" : "p-5"}>
+      <section aria-label={who} className={nested ? "p-4 sm:p-5" : "p-5 sm:p-6"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             {!nested && (
               <>
                 {/* The name is the fact; the card's one `View` below is the way
@@ -844,31 +875,47 @@ export function DrivePortfolioPage({
                     the coordinator complained about. */}
                 <p className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
                   {drive.companyName}
-                  <Badge tone={driveTypeTone(drive.driveType)}>
+                  <Badge tone={driveTypeTone(drive.driveType)} variant="pill">
                     {driveTypeLabel(drive.driveType)}
                   </Badge>
                 </p>
-                <p className="text-sm text-ink-500">
-                  {`${drive.roleTitle}${ctc !== null ? ` · ${ctc}` : ""}`}
+                <p className="text-sm text-ink-600 mt-0.5">
+                  <span className="font-semibold text-ink-800">{drive.roleTitle}</span>
+                  {ctc !== null && ` · ${ctc}`}
                   {closeDate !== null &&
                     ` · applications ${closed ? "closed" : "close"} ${closeDate}`}
                 </p>
               </>
             )}
             {nested && closeDate !== null && (
-              <p className="text-sm text-ink-500">
+              <p className="text-xs text-ink-500">
                 applications {closed ? "closed" : "close"} {closeDate}
               </p>
             )}
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
               {hats.map((hat) => (
-                <Badge key={hat} tone="brand">
+                <Badge key={hat} tone="brand" variant="pill">
                   {ROLE_LABEL[hat]}
                 </Badge>
               ))}
-              {!nested && <Badge tone={driveStatusTone(drive.status)}>{progress.phase}</Badge>}
-              {window.urgent && <Badge tone="danger">Closing soon</Badge>}
-              <Badge tone={window.state === "open" ? "success" : "neutral"}>{window.label}</Badge>
+              {!nested &&
+                !(
+                  window.state === "closed" &&
+                  (progress.phase === "Applications open" ||
+                    progress.phase === "Applications closed")
+                ) && (
+                  <Badge tone={driveStatusTone(drive.status)} variant="pill">
+                    {progress.phase}
+                  </Badge>
+                )}
+              {window.urgent && (
+                <Badge tone="danger" variant="pill">
+                  Closing soon
+                </Badge>
+              )}
+              <Badge tone={window.state === "open" ? "success" : "neutral"} variant="pill">
+                {window.label}
+              </Badge>
               {drive.totalRounds > 0 && (
                 <span className="text-xs text-ink-500">
                   {progress.roundsDecided} of {progress.totalRounds} rounds decided
@@ -877,9 +924,13 @@ export function DrivePortfolioPage({
             </div>
           </div>
 
-          <div className="w-full sm:w-48">
+          <div className="w-full sm:w-44 shrink-0">
+            <div className="flex items-center justify-between text-xs mb-1 text-ink-500">
+              <span className="font-medium">Pipeline</span>
+              <span className="font-semibold text-ink-800">{progress.percentComplete}%</span>
+            </div>
             <div
-              className="h-2 w-full overflow-hidden rounded-full bg-surface-muted"
+              className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted border border-line/40"
               role="progressbar"
               aria-label={`${who} progress`}
               aria-valuenow={progress.percentComplete}
@@ -887,57 +938,69 @@ export function DrivePortfolioPage({
               aria-valuemax={100}
             >
               <div
-                className="h-full bg-brand-500"
+                className="h-full rounded-full bg-brand-500 transition-all duration-300"
                 style={{ width: `${progress.percentComplete}%` }}
               />
             </div>
-            <p className="mt-1 text-right text-xs text-ink-500">
-              {progress.percentComplete}% through the pipeline
-            </p>
           </div>
         </div>
 
         {progress.blocked !== null && (
-          <p className="mt-3 rounded-lg bg-gold-50 px-3 py-2 text-xs text-gold-700">
+          <p className="mt-3 rounded-xl border border-gold-200/80 bg-gold-50/60 px-3.5 py-2 text-xs text-gold-800">
             {progress.blocked}
           </p>
         )}
 
         <section
           aria-label={`${who} applicants`}
-          className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+          className="mt-3.5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5"
         >
           <StatCard
+            size="sm"
+            actionLabel=""
             label="Applied"
             value={funnel.applied}
             to={`/drives/${drive.driveId}?stage=applied`}
+            className="!bg-surface !border-line/70 hover:!border-brand-400 hover:!bg-surface-muted/20"
           />
           <StatCard
+            size="sm"
+            actionLabel=""
             label="Shortlisted"
             value={funnel.shortlisted}
             tone="brand"
             to={`/drives/${drive.driveId}?stage=shortlisted`}
+            className="!bg-surface !border-line/70 hover:!border-brand-400 hover:!bg-surface-muted/20"
           />
           <StatCard
+            size="sm"
+            actionLabel=""
             label="In rounds"
             value={funnel.inRounds}
             tone="warning"
             to={`/drives/${drive.driveId}?stage=in_rounds`}
+            className="!bg-surface !border-line/70 hover:!border-brand-400 hover:!bg-surface-muted/20"
           />
           <StatCard
+            size="sm"
+            actionLabel=""
             label="Offers"
             value={funnel.offers}
             tone="success"
             to={`/drives/${drive.driveId}?stage=offers`}
+            className="!bg-surface !border-line/70 hover:!border-brand-400 hover:!bg-surface-muted/20"
           />
           <StatCard
+            size="sm"
+            actionLabel=""
             label="Not selected"
             value={funnel.notSelected}
             to={`/drives/${drive.driveId}?stage=not_selected`}
+            className="!bg-surface !border-line/70 hover:!border-brand-400 hover:!bg-surface-muted/20"
           />
         </section>
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-3.5 flex flex-wrap items-center gap-2 pt-3 border-t border-line/50">
           {/* The card's ONE `View`: it opens the role's record, and the role it
               belongs to is in the accessible name because a visit's panels sit
               side by side on the same card. */}
@@ -945,6 +1008,7 @@ export function DrivePortfolioPage({
             size="sm"
             to={`/drives/${drive.driveId}`}
             aria-label={`View ${drive.companyName} — ${drive.roleTitle}`}
+            className="rounded-lg font-medium"
           >
             View
           </ButtonLink>
@@ -966,6 +1030,7 @@ export function DrivePortfolioPage({
                   activeId: drive.driveId,
                 })
               }
+              className="rounded-lg font-medium"
             >
               See applicants
             </Button>
@@ -976,6 +1041,7 @@ export function DrivePortfolioPage({
               size="sm"
               variant="secondary"
               to={`/central/shortlisting?drive=${drive.driveId}`}
+              className="rounded-lg font-medium"
             >
               Shortlist
             </ButtonLink>

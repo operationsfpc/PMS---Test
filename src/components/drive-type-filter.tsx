@@ -39,9 +39,12 @@ export function DriveTypeFilter({
     // A real <fieldset>/<legend>, not role="group" on a div: the semantics
     // are the same to a screen reader and the element is the one HTML already
     // has for "these controls belong together".
-    <fieldset className={`${className} flex flex-wrap items-center gap-2`}>
+    <fieldset className={`${className} flex flex-wrap items-center gap-1.5`}>
       <legend className="sr-only">Drive type</legend>
-      <span aria-hidden="true" className="text-xs font-semibold text-ink-500">
+      <span
+        aria-hidden="true"
+        className="text-xs font-medium text-ink-400 uppercase tracking-wider mr-0.5"
+      >
         Type
       </span>
       {DRIVE_TYPE_FILTERS.map((option) => {
@@ -53,10 +56,10 @@ export function DriveTypeFilter({
             type="button"
             aria-pressed={selected}
             onClick={() => onChange(option.value)}
-            className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors ${
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
               selected
-                ? "border-brand-500 bg-brand-500 text-white"
-                : "border-line bg-surface text-ink-700 hover:border-violet-400"
+                ? "border-brand-500 bg-brand-500 text-white shadow-2xs"
+                : "border-line/80 bg-surface text-ink-700 hover:border-brand-300 hover:text-ink-900 hover:bg-surface-muted/50"
             }`}
           >
             {option.label}
@@ -65,7 +68,11 @@ export function DriveTypeFilter({
             {count !== undefined && (
               <>
                 {" "}
-                <span className={`font-medium ${selected ? "opacity-70" : "text-ink-500"}`}>
+                <span
+                  className={`ml-1 inline-flex items-center justify-center rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                    selected ? "bg-white/25 text-white" : "bg-surface-muted text-ink-500"
+                  }`}
+                >
                   {count}
                 </span>
               </>
