@@ -114,12 +114,12 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
         <div className="space-y-5">
           {/* Executive KPI overview pills */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-sky-100 bg-sky-50/70 p-4 transition-all">
+            <div className="rounded-2xl border border-brand-100 bg-brand-50/70 p-4 transition-all">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wider text-sky-700">
+                <span className="text-xs font-semibold uppercase tracking-wider text-brand-700">
                   Total Updates
                 </span>
-                <div className="flex size-7 items-center justify-center rounded-xl bg-sky-100 text-sky-700">
+                <div className="flex size-7 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
                   <Mail aria-hidden="true" className="size-3.5" />
                 </div>
               </div>

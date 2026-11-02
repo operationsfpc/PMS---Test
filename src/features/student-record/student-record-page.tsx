@@ -1392,11 +1392,7 @@ export function StudentRecordPage({
                   >
                     <span
                       className={`block h-full rounded-full transition-all ${
-                        score >= 4
-                          ? "bg-emerald-500"
-                          : score >= 3
-                            ? "bg-indigo-600"
-                            : "bg-amber-500"
+                        score >= 4 ? "bg-emerald-500" : score >= 3 ? "bg-brand-500" : "bg-amber-500"
                       }`}
                       style={{
                         width: `${Math.round((score / SKILL_SCORE_MAX) * 100)}%`,
@@ -1459,64 +1455,56 @@ export function StudentRecordPage({
           </div>
           <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
         </div>
-        <dl className="grid gap-2 text-sm">
-          <div className="flex justify-between gap-4">
-            <dt className="shrink-0 text-ink-500">Programme</dt>
-            <dd className="min-w-0 break-words text-right text-ink-900 [overflow-wrap:anywhere]">
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+          <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
+            <p className="text-xs font-semibold text-ink-500">Programme</p>
+            <p className="mt-1 font-medium text-ink-900 break-words">
               {record.degree}
               {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
-            </dd>
+            </p>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt className="shrink-0 text-ink-500">Email</dt>
-            <dd className="min-w-0 break-all text-right text-ink-900">{record.email}</dd>
+          <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
+            <p className="text-xs font-semibold text-ink-500">Email</p>
+            <p className="mt-1 font-medium text-ink-900 break-all">{record.email}</p>
           </div>
-          <div className="flex justify-between gap-4">
-            <dt className="shrink-0 text-ink-500">Mobile</dt>
-            <dd className="min-w-0 break-all text-right text-ink-900">
+          <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
+            <p className="text-xs font-semibold text-ink-500">Mobile</p>
+            <p className="mt-1 font-medium text-ink-900 break-all">
               {record.mobile ?? "Not recorded"}
-            </dd>
+            </p>
           </div>
-          {record.whatsapp && (
-            <div className="flex justify-between gap-4">
-              <dt className="shrink-0 text-ink-500">WhatsApp</dt>
-              <dd className="min-w-0 break-all text-right font-medium text-success-700">
-                {record.whatsapp}
-              </dd>
+          <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
+            <p className="text-xs font-semibold text-ink-500">WhatsApp / Alt</p>
+            <p className="mt-1 font-medium text-ink-900 break-all">
+              {record.whatsapp ?? record.alternateContact ?? "Not recorded"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line/60 pt-3 text-xs text-ink-500">
+          <div>
+            <span className="font-semibold text-ink-700">Submitted:</span>{" "}
+            <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
+          </div>
+          {record.srfDecidedAt && (
+            <div>
+              <span className="font-semibold text-ink-700">Approved:</span>{" "}
+              <span>{onDate(record.srfDecidedAt)}</span>
             </div>
           )}
-          {record.alternateContact && (
-            <div className="flex justify-between gap-4">
-              <dt className="shrink-0 text-ink-500">Alt Phone</dt>
-              <dd className="min-w-0 break-all text-right text-ink-900">
-                {record.alternateContact}
-              </dd>
+          {record.consentGivenAt && (
+            <div>
+              <span className="font-semibold text-ink-700">Consent Recorded:</span>{" "}
+              <span>{onDate(record.consentGivenAt)}</span>
             </div>
           )}
-          <div className="mt-2 border-t border-line pt-2 text-xs">
-            <div className="flex justify-between text-ink-500">
-              <span>Submitted:</span>
-              <span>{record.srfSubmittedAt ? onDate(record.srfSubmittedAt) : "—"}</span>
+          {record.srfRejectionReason && (
+            <div className="w-full rounded bg-danger-50 p-2 text-danger-700">
+              Rejection reason: {record.srfRejectionReason}
             </div>
-            {record.srfDecidedAt && (
-              <div className="mt-1 flex justify-between text-ink-500">
-                <span>Approved:</span>
-                <span>{onDate(record.srfDecidedAt)}</span>
-              </div>
-            )}
-            {record.consentGivenAt && (
-              <div className="mt-1 flex justify-between text-ink-500">
-                <span>Consent Recorded:</span>
-                <span>{onDate(record.consentGivenAt)}</span>
-              </div>
-            )}
-            {record.srfRejectionReason && (
-              <div className="mt-2 rounded bg-danger-50 p-2 text-danger-700">
-                Rejection reason: {record.srfRejectionReason}
-              </div>
-            )}
-          </div>
-        </dl>
+          )}
+        </div>
       </Card>
     </section>
   );
@@ -1592,7 +1580,7 @@ export function StudentRecordPage({
               className="flex items-center justify-between rounded-lg border border-line p-2 hover:bg-surface-muted"
             >
               <span className="flex items-center gap-2 text-ink-900">
-                <Globe className="size-4 text-violet-500" /> {p.label}
+                <Globe className="size-4 text-brand-600" /> {p.label}
               </span>
               <ExternalLink className="size-3.5 text-ink-400" />
             </a>
@@ -1807,35 +1795,40 @@ export function StudentRecordPage({
         </p>
       )}
 
-      {/* Top Quick Stats Strip — one palette; colour only where the figure is a signal */}
+      {/* Top Quick Stats Strip — unified clean palette with signals only for alerts */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
+          size="sm"
           label="Overall CGPA"
           value={record.overallCgpa != null ? describeMarks(record.overallCgpa, "cgpa") : "—"}
           hint="Normalised out of 10"
-          tone="brand"
+          tone="neutral"
         />
         <StatCard
+          size="sm"
           label="Standing Arrears"
           value={currentArrears}
           hint={currentArrears > 0 ? "Action required" : "Zero active"}
-          tone={currentArrears > 0 ? "danger" : "success"}
+          tone={currentArrears > 0 ? "danger" : "neutral"}
         />
         <StatCard
+          size="sm"
           label="History Arrears"
           value={historyOfArrears}
           hint="Total recorded"
           tone={historyOfArrears > 0 ? "warning" : "neutral"}
         />
         <StatCard
+          size="sm"
           label="10th / 12th Marks"
           value={`${record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} / ${
             record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"
           }`}
           hint="Class X / XII"
-          tone="accent"
+          tone="neutral"
         />
         <StatCard
+          size="sm"
           label="Offers & Internships"
           value={
             offers.length > 0
@@ -1845,13 +1838,14 @@ export function StudentRecordPage({
                 : "0"
           }
           hint={offers.length > 0 || record.placement ? "Outcome secured" : "Unplaced"}
-          tone={offers.length > 0 || record.placement ? "success" : "neutral"}
+          tone="neutral"
         />
         <StatCard
+          size="sm"
           label="Applications"
           value={applications.length}
           hint="Campus drives"
-          tone="brand"
+          tone="neutral"
         />
       </div>
 
@@ -1859,7 +1853,7 @@ export function StudentRecordPage({
       {(hold !== null || pending !== null || pastHolds.length > 0) && (
         <section aria-label="Placement hold" className="flex flex-col gap-3">
           {pending !== null && (
-            <Card className="border-violet-300 bg-violet-50 p-5">
+            <Card className="border-brand-200 bg-brand-50/60 p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="font-heading text-lg font-bold text-ink-900">
                   Requested — {HOLD_KIND_LABELS[pending.kind]}

@@ -696,7 +696,7 @@ export function StudentDirectoryPage({
   }
 
   return (
-    <div>
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden">
       <PageHeader
         title="Students"
         subtitle="Everyone in the placement process, and what became of them."
@@ -799,11 +799,11 @@ export function StudentDirectoryPage({
 
           {/* Compact filter strip: population chips on one line, search beside them.
           Column filters live in the table headers now, not in dropdowns above. */}
-          <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="mb-4 flex flex-wrap items-center gap-3 w-full min-w-0 max-w-full">
             <div
               role="radiogroup"
               aria-label="Filter students"
-              className="flex flex-nowrap overflow-x-auto [scrollbar-width:none] gap-1.5"
+              className="flex flex-nowrap overflow-x-auto gap-1.5 min-w-0 flex-1 max-w-full [&::-webkit-scrollbar]:hidden"
             >
               {FILTERS.map((option) => {
                 const isOptionActive =
@@ -816,7 +816,7 @@ export function StudentDirectoryPage({
                     className={`shrink-0 cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
                       isOptionActive
                         ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-line bg-surface text-ink-700 hover:border-violet-400"
+                        : "border-line bg-surface text-ink-700 hover:border-brand-400"
                     }`}
                   >
                     <input
@@ -852,7 +852,7 @@ export function StudentDirectoryPage({
               placeholder="Name, roll, company…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="ml-auto rounded-lg border border-line px-3 py-1 text-sm text-ink-900 sm:max-w-[200px]"
+              className="ml-auto shrink-0 rounded-lg border border-line px-3 py-1 text-sm text-ink-900 sm:max-w-[200px]"
             />
             {anyFilterActive && (
               <Button variant="ghost" size="sm" onClick={clearAll}>
@@ -999,12 +999,12 @@ export function StudentDirectoryPage({
             </Button>
           </p>
 
-          <Card className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+          <Card className="w-full min-w-0 max-w-full overflow-x-auto">
+            <table className="w-full table-fixed text-left text-sm">
               <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                 <tr>
-                  <th className="px-4 py-3">Student</th>
-                  <th className="px-4 py-3">
+                  <th className="px-4 py-3 w-[25%]">Student</th>
+                  <th className="px-4 py-3 w-[30%]">
                     <span className="flex items-center gap-1.5">
                       Campus
                       <ColumnFilterButton label="Campus" active={campus !== ""}>
@@ -1018,7 +1018,7 @@ export function StudentDirectoryPage({
                       </ColumnFilterButton>
                     </span>
                   </th>
-                  <th className="px-4 py-3">
+                  <th className="px-4 py-3 w-[15%]">
                     <span className="flex items-center gap-1.5">
                       Registration
                       <ColumnFilterButton
@@ -1046,8 +1046,8 @@ export function StudentDirectoryPage({
                       </ColumnFilterButton>
                     </span>
                   </th>
-                  <th className="px-4 py-3">Applications</th>
-                  <th className="px-4 py-3">
+                  <th className="px-4 py-3 w-[10%]">Applications</th>
+                  <th className="px-4 py-3 w-[20%]">
                     <span className="flex items-center gap-1.5">
                       Placement
                       <ColumnFilterButton
@@ -1071,7 +1071,7 @@ export function StudentDirectoryPage({
                       </ColumnFilterButton>
                     </span>
                   </th>
-                  {holds !== undefined && <th className="px-4 py-3 text-right">Actions</th>}
+                  {holds !== undefined && <th className="px-4 py-3 text-right w-[10%]">Actions</th>}
                 </tr>
               </thead>
               <tbody className="table-rows divide-y divide-line">
@@ -1097,9 +1097,9 @@ export function StudentDirectoryPage({
                       key={student.studentId}
                       className="hover:bg-surface-muted/30 transition-colors"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 overflow-hidden">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="font-semibold text-ink-900">
+                          <p className="font-semibold text-ink-900 break-words">
                             {/* G7: the name is the door to the canonical record. */}
                             <Link
                               to={`/students/${student.studentId}`}
@@ -1117,7 +1117,7 @@ export function StudentDirectoryPage({
                             </Link>
                           )}
                         </div>
-                        <p className="text-xs text-ink-500">
+                        <p className="text-xs text-ink-500 break-words">
                           Roll {student.rollNumber}
                           {/* The Actions column wears an "On hold" badge when
                             holds are switched on, so the name cell stays
@@ -1134,8 +1134,8 @@ export function StudentDirectoryPage({
                         </p>
                       </td>
                       <td className="px-4 py-3 text-ink-700">
-                        <p className="font-medium text-ink-900">{student.campusName}</p>
-                        <p className="text-xs text-ink-500">
+                        <p className="font-medium text-ink-900 break-words">{student.campusName}</p>
+                        <p className="text-xs text-ink-500 break-words">
                           {student.degree} {student.branch} · {student.passingYear}
                           {/* 2026-10-18 (UAT): the overview's count opens a
                             popup with a CGPA column, and this is the list it

@@ -414,7 +414,7 @@ export function DriveRecordPage({
         <Tile
           label="Location"
           value={record.locations === "" ? "Not stated" : record.locations}
-          tone="sky"
+          tone="brand"
         />
         <Tile
           label="Drive Mode"

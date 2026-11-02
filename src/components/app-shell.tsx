@@ -607,11 +607,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     }`;
 
   return (
-    <div className="min-h-dvh bg-surface-muted">
+    <div className="min-h-dvh w-full max-w-full overflow-x-clip bg-surface-muted">
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
         {/* Brand gradient hairline — the logo's own palette, used sparingly. */}
         <div className="fpc-gradient h-1" aria-hidden="true" />
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+        <div className="mx-auto flex w-full max-w-7xl min-w-0 items-center gap-4 px-4 py-3">
           {/* The drawer slides over exactly this corner, so the header stands
               down while it is up: a buried second button named "Close
               navigation", still in the tab order behind the panel, is a control
@@ -716,7 +716,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
+      <div className="mx-auto flex w-full max-w-7xl min-w-0 gap-6 px-4 py-6">
         {/*
          * ONE nav element, moved rather than duplicated. The mobile drawer used
          * to be the same <nav> swapped to `block`, which filled the whole row

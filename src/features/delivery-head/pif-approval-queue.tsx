@@ -54,7 +54,7 @@ function CtcBandNote() {
     <aside
       role="note"
       aria-label="CTC bands for offer categories"
-      className="mb-4 rounded-card border border-violet-400 bg-violet-400/5 p-4"
+      className="mb-4 rounded-card border border-brand-300 bg-brand-500/5 p-4"
     >
       <p className="text-sm font-semibold text-ink-900">How CTC maps to an offer category</p>
       <ul className="mt-2 flex flex-col gap-1 text-sm text-ink-700">

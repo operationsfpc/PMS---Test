@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMS Dashboard Color Themes Preview</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+    /* Theme color variables */
+    :root {
+      --bg-page: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f1f5f9;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --primary-border: #c7d2fe;
+      --primary-text: #4338ca;
+      --badge-bg: #eef2ff;
+      --badge-text: #4338ca;
+      --accent-stat: #4f46e5;
+      --sidebar-bg: #ffffff;
+      --sidebar-active: #f5f3ff;
+      --sidebar-active-text: #4f46e5;
+    }
+
+    [data-theme="emerald"] {
+      --bg-page: #f8faf9;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f0fdf4;
+      --border-color: #dcfce7;
+      --text-main: #064e3b;
+      --text-muted: #4b6358;
+      --primary: #059669;
+      --primary-hover: #047857;
+      --primary-light: #ecfdf5;
+      --primary-border: #a7f3d0;
+      --primary-text: #065f46;
+      --badge-bg: #ecfdf5;
+      --badge-text: #065f46;
+      --accent-stat: #059669;
+      --sidebar-bg: #ffffff;
+      --sidebar-active: #ecfdf5;
+      --sidebar-active-text: #059669;
+    }
+
+    [data-theme="royal-blue"] {
+      --bg-page: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-subtle: #eff6ff;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-light: #eff6ff;
+      --primary-border: #bfdbfe;
+      --primary-text: #1e40af;
+      --badge-bg: #dbeafe;
+      --badge-text: #1e40af;
+      --accent-stat: #2563eb;
+      --sidebar-bg: #ffffff;
+      --sidebar-active: #eff6ff;
+      --sidebar-active-text: #2563eb;
+    }
+
+    [data-theme="faceprep-amber"] {
+      --bg-page: #fffbf9;
+      --bg-surface: #ffffff;
+      --bg-subtle: #fff5f2;
+      --border-color: #ffe8e3;
+      --text-main: #292524;
+      --text-muted: #78716c;
+      --primary: #f05136;
+      --primary-hover: #d63d22;
+      --primary-light: #fff5f2;
+      --primary-border: #ffd4cb;
+      --primary-text: #b02e17;
+      --badge-bg: #ffe8e3;
+      --badge-text: #d63d22;
+      --accent-stat: #f05136;
+      --sidebar-bg: #ffffff;
+      --sidebar-active: #fff5f2;
+      --sidebar-active-text: #f05136;
+    }
+
+    [data-theme="monochrome"] {
+      --bg-page: #fafafa;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f4f4f5;
+      --border-color: #e4e4e7;
+      --text-main: #18181b;
+      --text-muted: #71717a;
+      --primary: #18181b;
+      --primary-hover: #27272a;
+      --primary-light: #f4f4f5;
+      --primary-border: #d4d4d8;
+      --primary-text: #18181b;
+      --badge-bg: #f4f4f5;
+      --badge-text: #27272a;
+      --accent-stat: #09090b;
+      --sidebar-bg: #ffffff;
+      --sidebar-active: #f4f4f5;
+      --sidebar-active-text: #18181b;
+    }
+
+    [data-theme="midnight-dark"] {
+      --bg-page: #0b0f19;
+      --bg-surface: #111827;
+      --bg-subtle: #1f2937;
+      --border-color: #374151;
+      --text-main: #f9fafb;
+      --text-muted: #9ca3af;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-light: #1e1b4b;
+      --primary-border: #4338ca;
+      --primary-text: #a5b4fc;
+      --badge-bg: #1e1b4b;
+      --badge-text: #c7d2fe;
+      --accent-stat: #818cf8;
+      --sidebar-bg: #111827;
+      --sidebar-active: #1f2937;
+      --sidebar-active-text: #a5b4fc;
+    }
+  </style>
+</head>
+<body class="bg-[var(--bg-page)] text-[var(--text-main)] min-h-screen transition-colors duration-200">
+
+  <!-- THEME SWITCHER TOOLBAR (Sticky Top) -->
+  <header class="sticky top-0 z-50 bg-[var(--bg-surface)] border-b border-[var(--border-color)] px-6 py-3.5 shadow-sm">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-2.5">
+        <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--primary-light)] text-[var(--primary)] text-sm font-bold">
+          🎨
+        </span>
+        <div>
+          <h1 class="text-sm font-semibold text-[var(--text-main)]">Dashboard Color Themes Preview</h1>
+          <p class="text-xs text-[var(--text-muted)]">Click any palette below to preview live in the dashboard</p>
+        </div>
+      </div>
+
+      <!-- Theme buttons -->
+      <div class="flex flex-wrap items-center gap-2 text-xs font-medium">
+        <button onclick="setTheme('default')" id="btn-default"
+          class="theme-btn px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center gap-1.5 shadow-xs ring-2 ring-indigo-500">
+          <span class="w-3 h-3 rounded-full bg-indigo-600"></span> Soft Indigo (Current)
+        </button>
+
+        <button onclick="setTheme('faceprep-amber')" id="btn-faceprep-amber"
+          class="theme-btn px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-orange-50 hover:text-orange-700 flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-full bg-orange-500"></span> FACE Prep Amber
+        </button>
+
+        <button onclick="setTheme('royal-blue')" id="btn-royal-blue"
+          class="theme-btn px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-full bg-blue-600"></span> Royal Tech Blue
+        </button>
+
+        <button onclick="setTheme('emerald')" id="btn-emerald"
+          class="theme-btn px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-full bg-emerald-600"></span> Forest Emerald
+        </button>
+
+        <button onclick="setTheme('monochrome')" id="btn-monochrome"
+          class="theme-btn px-3 py-1.5 rounded-full border border-gray-200 bg-white text-gray-700 hover:bg-zinc-100 hover:text-zinc-900 flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-full bg-zinc-800"></span> Minimal Slate
+        </button>
+
+        <button onclick="setTheme('midnight-dark')" id="btn-midnight-dark"
+          class="theme-btn px-3 py-1.5 rounded-full border border-gray-700 bg-gray-900 text-gray-200 hover:bg-black flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded-full bg-indigo-400"></span> Midnight Dark
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN APP SHELL -->
+  <div class="max-w-7xl mx-auto flex min-h-[calc(100vh-65px)]">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 shrink-0 bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] p-5 hidden md:block">
+      <!-- Logo -->
+      <div class="flex items-center gap-2 mb-8">
+        <div class="w-8 h-8 rounded-lg bg-[var(--primary)] flex items-center justify-center text-white font-bold text-base shadow-sm">
+          F
+        </div>
+        <div>
+          <span class="font-bold text-sm tracking-tight text-[var(--text-main)]">FACE Prep</span>
+          <span class="text-[10px] tracking-wider uppercase block text-[var(--text-muted)] font-semibold">Campus</span>
+        </div>
+      </div>
+
+      <!-- Navigation groups -->
+      <div class="space-y-6">
+        <div>
+          <div class="px-2.5 mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Admin</div>
+          <nav class="space-y-1">
+            <a href="#" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)] transition-colors">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                Overview
+              </span>
+              <span class="text-[10px] text-[var(--text-muted)]">›</span>
+            </a>
+          </nav>
+        </div>
+
+        <div>
+          <div class="px-2.5 mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Drives</div>
+          <nav class="space-y-1">
+            <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)] transition-colors">
+              <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+              Yet to publish
+            </a>
+            <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[var(--sidebar-active)] text-[var(--sidebar-active-text)] shadow-xs transition-colors">
+              <span class="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse"></span>
+              Live
+            </a>
+            <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)] transition-colors">
+              <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Completed
+            </a>
+          </nav>
+        </div>
+
+        <div>
+          <div class="px-2.5 mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Student details</div>
+          <nav class="space-y-1">
+            <a href="#" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)] transition-colors">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                All students
+              </span>
+              <span class="text-[10px] text-[var(--text-muted)]">›</span>
+            </a>
+            <a href="#" class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)] transition-colors">
+              <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+              Skill repository
+            </a>
+          </nav>
+        </div>
+
+        <div>
+          <div class="px-2.5 mb-2 text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">Organisation</div>
+          <nav class="space-y-1">
+            <a href="#" class="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--bg-subtle)] hover:text-[var(--text-main)] transition-colors">
+              <span class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                Campuses
+              </span>
+              <span class="text-[10px] text-[var(--text-muted)]">›</span>
+            </a>
+          </nav>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CONTENT AREA -->
+    <main class="flex-1 p-6 md:p-8 space-y-6">
+
+      <!-- Top Header & Breadcrumb -->
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight text-[var(--text-main)]">Live</h2>
+          <p class="text-sm text-[var(--text-muted)] mt-0.5">Published and running — what students can see, and how far each has got.</p>
+        </div>
+
+        <!-- User profile preview -->
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-[var(--primary)] text-white font-semibold flex items-center justify-center text-xs shadow-xs">
+            TK
+          </div>
+          <div class="hidden sm:block text-right">
+            <div class="text-xs font-semibold text-[var(--text-main)]">Thanush K</div>
+            <div class="text-[11px] text-[var(--text-muted)]">thanush@faceprep.in</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FILTER & SEARCH BAR -->
+      <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 shadow-xs space-y-3.5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <!-- Search input -->
+          <div class="relative flex-1 min-w-[240px]">
+            <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" placeholder="Company or role" class="w-full pl-9.5 pr-4 py-2 bg-[var(--bg-page)] border border-[var(--border-color)] rounded-xl text-xs text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]">
+          </div>
+
+          <!-- Type Filter Pills -->
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)] mr-1">Type</span>
+            <button class="px-3 py-1.5 rounded-full text-xs font-semibold bg-[var(--primary)] text-white shadow-xs">All (2)</button>
+            <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--bg-subtle)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors">Full time (2)</button>
+            <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--bg-subtle)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors">Internship - Full time (0)</button>
+            <button class="px-3 py-1.5 rounded-full text-xs font-medium bg-[var(--bg-subtle)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors">Internship (0)</button>
+          </div>
+
+          <!-- Sort dropdown -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-[var(--text-muted)]">Sort</span>
+            <select class="text-xs font-medium bg-[var(--bg-page)] border border-[var(--border-color)] rounded-xl px-2.5 py-1.5 text-[var(--text-main)] focus:outline-none">
+              <option>Newest first</option>
+              <option>CTC: High to Low</option>
+              <option>Application deadline</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Secondary Date Filter Line -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--border-color)] text-xs">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mr-1">Date</span>
+            <span class="font-semibold text-[var(--primary)] bg-[var(--primary-light)] px-2.5 py-1 rounded-lg">Created</span>
+            <button class="text-[var(--text-muted)] hover:text-[var(--text-main)] px-2 py-1">Drive date</button>
+            <div class="h-4 w-px bg-[var(--border-color)] mx-1"></div>
+            <button class="px-2.5 py-1 rounded-full bg-[var(--primary)] text-white font-medium">All time</button>
+            <button class="px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text-main)]">Today</button>
+            <button class="px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text-main)]">Last 7 days</button>
+            <button class="px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text-main)]">Last 30 days</button>
+            <button class="px-2.5 py-1 text-[var(--text-muted)] hover:text-[var(--text-main)]">This month</button>
+          </div>
+
+          <button class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] text-xs font-medium text-[var(--text-main)] hover:bg-[var(--bg-subtle)] shadow-xs">
+            <svg class="w-3.5 h-3.5 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- METRIC STATS ROW (5 Cards) -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+        <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-medium text-[var(--text-muted)]">Drives / roles</div>
+          <div class="text-2xl font-bold text-[var(--accent-stat)] mt-1">2</div>
+          <div class="text-[11px] text-[var(--text-muted)] mt-1">1 unique company</div>
+        </div>
+
+        <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-medium text-[var(--text-muted)]">Total openings</div>
+          <div class="text-2xl font-bold text-[var(--accent-stat)] mt-1">8</div>
+          <div class="text-[11px] text-[var(--text-muted)] mt-1">declared vacancies</div>
+        </div>
+
+        <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-medium text-[var(--text-muted)]">Average max CTC</div>
+          <div class="text-2xl font-bold text-[var(--accent-stat)] mt-1">₹4 <span class="text-sm font-semibold">LPA</span></div>
+          <div class="text-[11px] text-[var(--text-muted)] mt-1">peak ₹4.5 LPA</div>
+        </div>
+
+        <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 shadow-xs">
+          <div class="text-[11px] font-medium text-[var(--text-muted)]">Applicants / shortlisted</div>
+          <div class="text-2xl font-bold text-[var(--accent-stat)] mt-1">1 <span class="text-lg text-[var(--text-muted)] font-normal">/</span> 0</div>
+          <div class="text-[11px] text-[var(--text-muted)] mt-1">students in recruitment</div>
+        </div>
+
+        <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4 shadow-xs col-span-2 md:col-span-1">
+          <div class="text-[11px] font-medium text-[var(--text-muted)]">Final offers</div>
+          <div class="text-2xl font-bold text-emerald-600 mt-1">1</div>
+          <div class="text-[11px] text-[var(--text-muted)] mt-1">offers made</div>
+        </div>
+      </div>
+
+      <!-- NOTICE ALERT BANNER -->
+      <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-4.5 shadow-xs flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-[var(--primary-light)] text-[var(--primary)] flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="flex-1 text-xs">
+          <p class="font-semibold text-[var(--text-main)]">Application deadline passed for drives in this view</p>
+          <p class="text-[var(--text-muted)] mt-0.5">2 drive visits have passed the initial application deadline and are listed below in recruitment / interview rounds.</p>
+        </div>
+      </div>
+
+      <!-- DRIVE CARD 1 -->
+      <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 shadow-xs space-y-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-lg font-bold text-[var(--text-main)]">FACE Prep tst</h3>
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--badge-bg)] text-[var(--badge-text)]">Full time</span>
+            </div>
+            <p class="text-xs text-[var(--text-muted)] mt-1">
+              Associate Software Engineer · ₹4.5 LPA · applications closed 30 Oct 2026
+            </p>
+            <div class="flex items-center gap-2 mt-2.5">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Applications open</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">Closed</span>
+              <span class="text-xs text-[var(--text-muted)]">0 of 2 rounds decided</span>
+            </div>
+          </div>
+
+          <!-- Pipeline progress bar -->
+          <div class="w-48 text-right">
+            <div class="flex justify-between text-xs font-semibold mb-1">
+              <span class="text-[var(--text-muted)]">Pipeline</span>
+              <span class="text-[var(--primary)]">50%</span>
+            </div>
+            <div class="w-full bg-[var(--bg-subtle)] h-2 rounded-full overflow-hidden">
+              <div class="bg-[var(--primary)] h-2 rounded-full" style="width: 50%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 Stage Round Counters -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">APPLIED</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">SHORTLISTED</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">IN ROUNDS</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-emerald-600 uppercase">OFFERS</div>
+            <div class="text-xl font-bold text-emerald-700 mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)] col-span-2 sm:col-span-1">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">NOT SELECTED</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-3 pt-2">
+          <button class="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors">
+            View
+          </button>
+          <button class="px-3.5 py-2 border border-[var(--border-color)] hover:bg-[var(--bg-subtle)] text-xs font-medium text-[var(--text-main)] rounded-xl transition-colors">
+            + Add another role (31 Oct 2026)
+          </button>
+        </div>
+      </div>
+
+      <!-- DRIVE CARD 2 (With actual offers) -->
+      <div class="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 shadow-xs space-y-5">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="text-lg font-bold text-[var(--text-main)]">FACE Prep tst</h3>
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[var(--badge-bg)] text-[var(--badge-text)]">Full time</span>
+            </div>
+            <p class="text-xs text-[var(--text-muted)] mt-1">
+              test - dev · ₹3–4 LPA · applications closed 30 Oct 2026
+            </p>
+            <div class="flex items-center gap-2 mt-2.5">
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Applications open</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700">Closed</span>
+              <span class="text-xs text-[var(--text-muted)]">2 of 2 rounds decided</span>
+            </div>
+          </div>
+
+          <!-- Pipeline progress bar -->
+          <div class="w-48 text-right">
+            <div class="flex justify-between text-xs font-semibold mb-1">
+              <span class="text-[var(--text-muted)]">Pipeline</span>
+              <span class="text-emerald-600 font-bold">100%</span>
+            </div>
+            <div class="w-full bg-[var(--bg-subtle)] h-2 rounded-full overflow-hidden">
+              <div class="bg-emerald-500 h-2 rounded-full" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5 Stage Round Counters -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">APPLIED</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">1</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">SHORTLISTED</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)]">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">IN ROUNDS</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-emerald-50/60 rounded-xl p-3 text-center border border-emerald-200">
+            <div class="text-[10px] font-bold tracking-wider text-emerald-800 uppercase">OFFERS</div>
+            <div class="text-xl font-bold text-emerald-600 mt-0.5">1</div>
+            <a href="#" class="text-[11px] font-medium text-emerald-700 hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+
+          <div class="bg-[var(--bg-subtle)] rounded-xl p-3 text-center border border-[var(--border-color)] col-span-2 sm:col-span-1">
+            <div class="text-[10px] font-bold tracking-wider text-[var(--text-muted)] uppercase">NOT SELECTED</div>
+            <div class="text-xl font-bold text-[var(--text-main)] mt-0.5">0</div>
+            <a href="#" class="text-[11px] font-medium text-[var(--primary)] hover:underline inline-flex items-center gap-0.5 mt-1">View ↗</a>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-3 pt-2">
+          <button class="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-hover)] text-white text-xs font-semibold rounded-xl shadow-xs transition-colors">
+            View
+          </button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function setTheme(themeName) {
+      if (themeName === 'default') {
+        document.documentElement.removeAttribute('data-theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', themeName);
+      }
+
+      // Highlight active button
+      document.querySelectorAll('.theme-btn').forEach(btn => {
+        btn.classList.remove('ring-2', 'ring-indigo-500', 'ring-orange-500', 'ring-blue-500', 'ring-emerald-500', 'ring-zinc-800', 'ring-indigo-400');
+      });
+
+      const activeBtn = document.getElementById('btn-' + themeName);
+      if (activeBtn) {
+        activeBtn.classList.add('ring-2');
+        if (themeName === 'faceprep-amber') activeBtn.classList.add('ring-orange-500');
+        else if (themeName === 'royal-blue') activeBtn.classList.add('ring-blue-500');
+        else if (themeName === 'emerald') activeBtn.classList.add('ring-emerald-500');
+        else if (themeName === 'monochrome') activeBtn.classList.add('ring-zinc-800');
+        else if (themeName === 'midnight-dark') activeBtn.classList.add('ring-indigo-400');
+        else activeBtn.classList.add('ring-indigo-500');
+      }
+    }
+  </script>
+</body>
+</html>

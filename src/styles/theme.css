@@ -8,17 +8,17 @@
  * run light-first on the same palette. Dark mode is a later toggle.
  */
 @theme {
-  /* Brand */
-  --color-brand-50: #f2f0fa;
-  --color-brand-100: #ddd8f0;
-  --color-brand-200: #bdb4e2;
-  --color-brand-300: #9a8dd2;
-  --color-brand-400: #6f61b0;
-  --color-brand-500: #3d3777; /* primary — deep indigo */
-  --color-brand-600: #352f66;
-  --color-brand-700: #2a2551;
-  --color-brand-800: #1f1b3c;
-  --color-brand-900: #151228;
+  /* Brand — FACE Prep Brand Orange (#f05136) */
+  --color-brand-50: #fff5f2;
+  --color-brand-100: #ffe8e3;
+  --color-brand-200: #ffd4cb;
+  --color-brand-300: #ffb4a3;
+  --color-brand-400: #fa7e66;
+  --color-brand-500: #f05136; /* primary brand orange */
+  --color-brand-600: #d63d22;
+  --color-brand-700: #b02e17;
+  --color-brand-800: #8c2513;
+  --color-brand-900: #59160a;
 
   /* Secondary — amber */
   --color-gold-50: #fff8e6;
@@ -29,21 +29,41 @@
   --color-gold-600: #d99c00;
   --color-gold-700: #a67700;
 
-  /* Accents */
-  --color-violet-50: #f5eeff;
-  --color-violet-100: #ecdffe;
-  --color-violet-200: #dcc2fd;
-  --color-violet-300: #cbaefd;
-  --color-violet-400: #a46afc;
-  --color-violet-500: #8b45fa;
-  --color-violet-700: #6a3fc0;
-  --color-violet-900: #3b1d77;
+  /* Accents — FACE Prep Brand Orange (#f05136) palette */
+  --color-violet-50: #fff5f2;
+  --color-violet-100: #ffe8e3;
+  --color-violet-200: #ffd4cb;
+  --color-violet-300: #ffb4a3;
+  --color-violet-400: #fa7e66;
+  --color-violet-500: #f05136;
+  --color-violet-700: #b02e17;
+  --color-violet-900: #59160a;
+
+  /* Cool ramps remapped to warm brand palette */
+  --color-indigo-50: #fff5f2;
+  --color-indigo-100: #ffe8e3;
+  --color-indigo-200: #ffd4cb;
+  --color-indigo-300: #ffb4a3;
+  --color-indigo-400: #fa7e66;
+  --color-indigo-500: #f05136;
+  --color-indigo-600: #d63d22;
+  --color-indigo-700: #b02e17;
+  --color-indigo-900: #59160a;
+  --color-indigo-950: #330b05;
+
+  --color-sky-50: #fff8e6;
+  --color-sky-100: #ffedbf;
+  --color-sky-200: #ffe699;
+  --color-sky-300: #ffd463;
+  --color-sky-500: #ffb800;
+  --color-sky-700: #a67700;
+  --color-sky-950: #362905;
   /* The saved-notice pair: a cyan rule around a wash pale enough to sit under
      body copy. Written as a ramp step so the four screens that say "Attendance
      saved" paint the same notice rather than four hand-typed hexes. */
   --color-cyan-50: #ecf1f0;
   --color-cyan-400: #1ee0e1;
-  --color-orange-500: #ff7200;
+  --color-orange-500: #f05136;
 
   /*
    * Logo gradient, sampled from the supplied wordmark.
@@ -66,6 +86,7 @@
   --color-danger-700: #a63317;
   --color-danger-800: #7d2611;
   --color-danger-900: #571a0c;
+  --color-danger-950: #380f07;
   --color-success-50: #e6f7f0;
   --color-success-100: #ccf0e1;
   --color-success-200: #b3e8d1;
@@ -75,6 +96,7 @@
   --color-success-700: #00744b;
   --color-success-800: #005739;
   --color-success-900: #003d28;
+  --color-success-950: #002619;
 
   /*
    * The shadcn name. Roughly forty files ask for `text-destructive` — error
@@ -96,22 +118,23 @@
    * a warning wash and a warning badge are the same amber.
    */
   --color-warning: var(--color-gold-700);
-  --color-accent: var(--color-violet-500);
+  --color-accent: var(--color-brand-500);
 
-  /* Neutrals */
-  --color-brand-950: #0d0b19;
+  /* Neutrals — Warm Stone / Terracotta */
+  --color-brand-950: #330b05;
   --color-gold-800: #7d5900;
   --color-gold-900: #52400a;
-  --color-ink-900: #151228;
-  --color-ink-800: #2b2940;
-  --color-ink-700: #3f3d56;
-  --color-ink-600: #55526b;
-  --color-ink-500: #6b6880;
-  --color-ink-400: #8d8aa3;
-  --color-ink-300: #a8a6b8;
-  --color-line: #e2e0ea;
+  --color-gold-950: #362905;
+  --color-ink-900: #1c1917;
+  --color-ink-800: #292524;
+  --color-ink-700: #44403c;
+  --color-ink-600: #57534e;
+  --color-ink-500: #78716c;
+  --color-ink-400: #a8a29e;
+  --color-ink-300: #d6d3d1;
+  --color-line: #ffe8e3;
   --color-surface: #ffffff;
-  --color-surface-muted: #f7f6fb;
+  --color-surface-muted: #fffbf9;
 
   /* Typography — matches the marketing site */
   --font-heading: "Raleway", ui-sans-serif, system-ui, sans-serif;
@@ -171,11 +194,10 @@
 
 @utility fpc-gradient {
   background-image: linear-gradient(
-    100deg,
-    var(--color-fpc-magenta) 0%,
-    var(--color-fpc-pink) 42%,
-    var(--color-fpc-coral) 70%,
-    var(--color-fpc-orange) 100%
+    90deg,
+    var(--color-brand-600) 0%,
+    var(--color-brand-500) 50%,
+    var(--color-gold-500) 100%
   );
 }
 
@@ -304,14 +326,39 @@
 }
 
 @layer base {
+  :root {
+    --color-brand-50: #fff5f2;
+    --color-brand-100: #ffe8e3;
+    --color-brand-200: #ffd4cb;
+    --color-brand-300: #ffb4a3;
+    --color-brand-400: #fa7e66;
+    --color-brand-500: #f05136;
+    --color-brand-600: #d63d22;
+    --color-brand-700: #b02e17;
+    --color-brand-800: #8c2513;
+    --color-brand-900: #59160a;
+    --color-brand-950: #330b05;
+    --color-surface: #ffffff;
+    --color-surface-muted: #fffbf9;
+    --color-line: #ffe8e3;
+    --color-accent: #f05136;
+    --color-primary: #f05136;
+    --color-secondary: #fffbf9;
+    --color-border: #ffe8e3;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
+    background-color: var(--color-surface-muted);
+    overflow-x: hidden;
   }
 
   body {
     font-family: var(--font-sans);
     color: var(--color-ink-900);
     background-color: var(--color-surface-muted);
+    overflow-x: hidden;
+    max-width: 100%;
   }
 
   h1,
@@ -345,7 +392,7 @@
 
   /* Visible focus for keyboard users — accessibility is not optional. */
   :focus-visible {
-    outline: 2px solid var(--color-violet-400);
+    outline: 2px solid var(--color-brand-400);
     outline-offset: 2px;
     border-radius: 4px;
   }

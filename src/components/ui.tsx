@@ -396,7 +396,7 @@ export function StatCard({
         <p
           className={`${
             isSmall ? "text-[11px]" : "text-xs"
-          } font-semibold uppercase tracking-wider text-ink-500`}
+          } font-semibold uppercase tracking-wider text-ink-500 truncate`}
         >
           {label}
         </p>
@@ -406,13 +406,17 @@ export function StatCard({
           isReadout
             ? `mt-0.5 font-heading text-readout font-light tabular-nums ${valueColor}`
             : isSmall
-              ? `mt-0.5 font-heading text-lg sm:text-xl font-bold tracking-tight ${valueColor}`
+              ? `mt-1 font-heading text-lg sm:text-xl font-bold tracking-tight whitespace-nowrap ${valueColor}`
               : `mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`
         }
       >
         {value}
       </p>
-      {hint !== undefined && <p className="mt-1 text-xs text-ink-500">{hint}</p>}
+      {hint !== undefined && (
+        <p className={`${isSmall ? "mt-0.5 text-[11px]" : "mt-1 text-xs"} text-ink-500 truncate`}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 
@@ -421,8 +425,8 @@ export function StatCard({
       <div className={`flex flex-col justify-between ${className}`}>{body}</div>
     ) : (
       <div
-        className={`flex flex-col justify-between rounded-card border ${
-          isSmall ? "p-3" : "p-4"
+        className={`flex h-full flex-col justify-between rounded-card border ${
+          isSmall ? "p-3 sm:p-3.5" : "p-4"
         } shadow-xs transition-all ${containerTone} ${className}`}
       >
         {body}

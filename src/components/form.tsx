@@ -13,7 +13,7 @@ export const baseControlClass =
 export const getControlClass = (hasError?: boolean, extraClass?: string) => {
   const stateClass = hasError
     ? "border-danger-500 ring-1 ring-danger-500 focus:border-danger-600 focus:ring-2 focus:ring-danger-400/40 bg-danger-50/10"
-    : "border-line hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-violet-400/40";
+    : "border-line hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-400/40";
   return [baseControlClass, stateClass, extraClass].filter(Boolean).join(" ");
 };
 
