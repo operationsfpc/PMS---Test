@@ -10,6 +10,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  LottieLoader,
   RoundAction,
   StatCard,
 } from "@components/ui";
@@ -718,32 +719,29 @@ export function DashboardPage({
   );
 
   if (snapshot === null) {
+    if (failure === null) {
+      return <LottieLoader size="fullscreen" message="Loading placement overview…" />;
+    }
     return (
       <div>
         {header}
-        {failure === null ? (
-          <p role="status" className="text-sm text-ink-500">
-            Loading…
+        <Card className="p-6">
+          <p className="text-sm font-medium text-danger-700" role="alert">
+            {failure}
           </p>
-        ) : (
-          <Card className="p-6">
-            <p className="text-sm font-medium text-danger-700" role="alert">
-              {failure}
-            </p>
-            <p className="mt-1 text-sm text-ink-500">
-              This overview reads the roster, the offers and the drives together. Showing the part
-              that did arrive would put a number on the screen that does not add up, so nothing is
-              shown until the whole read works.
-            </p>
-            <Button
-              variant="secondary"
-              className="mt-4"
-              onClick={() => setAttempt((current) => current + 1)}
-            >
-              Try again
-            </Button>
-          </Card>
-        )}
+          <p className="mt-1 text-sm text-ink-500">
+            This overview reads the roster, the offers and the drives together. Showing the part
+            that did arrive would put a number on the screen that does not add up, so nothing is
+            shown until the whole read works.
+          </p>
+          <Button
+            variant="secondary"
+            className="mt-4"
+            onClick={() => setAttempt((current) => current + 1)}
+          >
+            Try again
+          </Button>
+        </Card>
       </div>
     );
   }
@@ -1280,7 +1278,7 @@ export function DashboardPage({
                                     Placed
                                   </Badge>
                                 ) : (
-                                  <span className="text-xs font-semibold text-ink-400">
+                                  <span className="text-xs font-semibold text-ink-500">
                                     {placementPercentage}%
                                   </span>
                                 )}
@@ -1438,7 +1436,7 @@ export function DashboardPage({
                       setDriveQuery(e.target.value);
                       setDrivePage(1);
                     }}
-                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-none"
+                    className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-none"
                   >
                     <option value="">All companies</option>
                     {driveNames.map((name) => (
@@ -1462,7 +1460,7 @@ export function DashboardPage({
                       setCollegeFilter(e.target.value);
                       setDrivePage(1);
                     }}
-                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-none"
+                    className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-none"
                   >
                     <option value="">All colleges</option>
                     {colleges.map((college) => (
@@ -1603,7 +1601,7 @@ export function DashboardPage({
                                   });
                                 }
                               }}
-                              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                              className="inline-flex items-center gap-1 rounded-md border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-400 hover:bg-brand-50 transition-colors"
                             >
                               <span className="text-ink-500">Eligible:</span>
                               <span className="font-semibold text-ink-900">
@@ -1638,7 +1636,7 @@ export function DashboardPage({
                                   });
                                 }
                               }}
-                              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                              className="inline-flex items-center gap-1 rounded-md border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-400 hover:bg-brand-50 transition-colors"
                             >
                               <span className="text-ink-500">Applied:</span>
                               <span className="font-semibold text-ink-900">
@@ -1660,7 +1658,7 @@ export function DashboardPage({
                                   note: `${shortlisted.length} shortlisted students`,
                                 });
                               }}
-                              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                              className="inline-flex items-center gap-1 rounded-md border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-400 hover:bg-brand-50 transition-colors"
                             >
                               <span className="text-ink-500">Shortlisted:</span>
                               <span className="font-semibold text-ink-900">
@@ -1695,7 +1693,7 @@ export function DashboardPage({
                                     setFunnelDrive(drive);
                                   }
                                 }}
-                                className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                                className="inline-flex items-center gap-1 rounded-md border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-400 hover:bg-brand-50 transition-colors"
                               >
                                 <span className="text-ink-500">In rounds:</span>
                                 <span className="font-semibold text-ink-900">
@@ -1725,7 +1723,7 @@ export function DashboardPage({
                                   note: `${offered.length} student${offered.length === 1 ? "" : "s"} received final offers`,
                                 });
                               }}
-                              className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-300 hover:bg-brand-50 transition-colors"
+                              className="inline-flex items-center gap-1 rounded-md border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-700 hover:border-brand-400 hover:bg-brand-50 transition-colors"
                             >
                               <span className="text-ink-500">Final offer:</span>
                               <span className="font-semibold text-success-700">
@@ -1757,7 +1755,7 @@ export function DashboardPage({
                                           activeId: drive.driveId,
                                         })
                                       }
-                                      className="inline-flex items-center rounded-md bg-surface border border-line px-2 py-0.5 text-xs text-ink-800 hover:border-brand-400 hover:text-brand-600 cursor-pointer transition-colors"
+                                      className="inline-flex items-center rounded-md bg-surface border border-field px-2 py-0.5 text-xs text-ink-800 hover:border-brand-400 hover:text-brand-600 cursor-pointer transition-colors"
                                       title={`View placement details for ${s.studentName}`}
                                     >
                                       {s.studentName}
@@ -1869,7 +1867,7 @@ export function DashboardPage({
                             onClick={() => setDrivePage(p)}
                             className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                               p === drivePage
-                                ? "bg-brand-500 text-white"
+                                ? "bg-brand-600 text-white"
                                 : "border border-line text-ink-700 hover:bg-surface-muted"
                             }`}
                           >
@@ -1994,7 +1992,7 @@ export function DashboardPage({
           }
           onClose={() => setFunnelDrive(null)}
         >
-          <div className="overflow-x-auto">
+          <div className="scroll-bare overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-xs font-semibold uppercase tracking-wider text-ink-500 border-b border-line/40">
@@ -2040,7 +2038,7 @@ export function DashboardPage({
                             <span className="font-medium text-ink-700">{round.clearanceRate}%</span>
                           </div>
                         ) : (
-                          <span className="text-ink-400">—</span>
+                          <span className="text-ink-500">—</span>
                         )}
                       </td>
                     </tr>

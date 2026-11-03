@@ -478,7 +478,7 @@ describe("the card's two controls", () => {
     expect(sizing(viewLink)).toEqual(["px-4", "py-2.5"]);
     expect(sizing(viewLink)).toEqual(sizing(apply));
     expect(viewLink.className).toMatch(/bg-brand-50\b/);
-    expect(apply.className).toMatch(/bg-brand-500\b/);
+    expect(apply.className).toMatch(/bg-brand-600\b/);
   });
 });
 

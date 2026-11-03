@@ -116,7 +116,7 @@ export function DriveDateFilter({
             aria-label="Date field"
             value={criteria.dimension}
             onChange={(e) => handleDimensionChange(e.target.value as DateDimension)}
-            className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-800 outline-none hover:border-brand-300 focus:border-brand-500"
+            className="rounded-lg border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-800 outline-none hover:border-brand-400 focus:border-brand-600"
           >
             <option value="created_at">Created date</option>
             <option value="tentative_date">Drive date</option>
@@ -127,7 +127,7 @@ export function DriveDateFilter({
           aria-label="Date range preset"
           value={criteria.preset}
           onChange={(e) => handlePresetChange(e.target.value as DateRangePreset)}
-          className="rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-ink-800 outline-none hover:border-brand-300 focus:border-brand-500"
+          className="rounded-lg border border-field bg-surface px-2.5 py-1 text-xs font-medium text-ink-800 outline-none hover:border-brand-400 focus:border-brand-600"
         >
           {PRESETS.map((p) => (
             <option key={p} value={p}>
@@ -144,16 +144,16 @@ export function DriveDateFilter({
               aria-label="From date"
               value={criteria.startDate ?? ""}
               onChange={(e) => handleDateChange("startDate", e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
+              className="rounded-lg border border-field bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-600"
             />
-            <span className="text-ink-400">to</span>
+            <span className="text-ink-500">to</span>
             <input
               id={toId}
               type="date"
               aria-label="To date"
               value={criteria.endDate ?? ""}
               onChange={(e) => handleDateChange("endDate", e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
+              className="rounded-lg border border-field bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-600"
             />
           </div>
         )}
@@ -179,7 +179,7 @@ export function DriveDateFilter({
       <div className="flex flex-wrap items-center gap-2">
         <span
           aria-hidden="true"
-          className="text-xs font-medium text-ink-400 uppercase tracking-wider mr-0.5"
+          className="text-xs font-medium text-ink-500 uppercase tracking-wider mr-0.5"
         >
           Date
         </span>
@@ -226,8 +226,8 @@ export function DriveDateFilter({
                 aria-pressed={active}
                 className={`rounded-full border px-2.5 py-1 text-xs font-medium transition-all ${
                   active
-                    ? "border-brand-500 bg-brand-500 text-white shadow-2xs font-semibold"
-                    : "border-line/80 bg-surface text-ink-600 hover:border-brand-300 hover:text-ink-900 hover:bg-surface-muted/50"
+                    ? "border-brand-500 bg-brand-600 text-white shadow-2xs font-semibold"
+                    : "border-field bg-surface text-ink-600 hover:border-brand-400 hover:text-ink-900 hover:bg-surface-muted/50"
                 }`}
               >
                 {PRESET_LABELS[preset]}
@@ -249,7 +249,7 @@ export function DriveDateFilter({
               type="date"
               value={criteria.startDate ?? ""}
               onChange={(e) => handleDateChange("startDate", e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
+              className="rounded-lg border border-field bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-600"
             />
           </div>
           <div className="flex items-center gap-1.5 text-xs text-ink-700">
@@ -261,7 +261,7 @@ export function DriveDateFilter({
               type="date"
               value={criteria.endDate ?? ""}
               onChange={(e) => handleDateChange("endDate", e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-400"
+              className="rounded-lg border border-field bg-surface px-2 py-0.5 text-xs text-ink-900 outline-none focus:border-brand-600"
             />
           </div>
         </div>

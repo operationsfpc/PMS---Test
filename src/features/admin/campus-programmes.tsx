@@ -228,7 +228,7 @@ export function CampusProgrammes({
                 setBranch("");
               }}
               placeholder="Pick or type a new one"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+              className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-hidden"
             />
             <datalist id={`degree-options-${campusId}`}>
               {options.map((option) => (
@@ -250,7 +250,7 @@ export function CampusProgrammes({
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               placeholder="No branch, or pick / type one"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+              className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-hidden"
             />
             <datalist id={`branch-options-${campusId}`}>
               {branchSuggestions.map((name) => (
@@ -272,7 +272,7 @@ export function CampusProgrammes({
               value={year}
               onChange={(e) => setYear(e.target.value)}
               placeholder="e.g. 2027"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+              className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-hidden"
             />
           </div>
 

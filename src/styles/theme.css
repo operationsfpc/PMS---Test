@@ -113,17 +113,28 @@
   --color-amber-800: #7d5900;
   --color-amber-950: #362905;
 
-  /* Feedback */
-  --color-danger-50: #fff0ec;
-  --color-danger-100: #ffddd2;
-  --color-danger-200: #ffc4b2;
-  --color-danger-400: #e46b45;
-  --color-danger-500: #dd4820;
-  --color-danger-600: #c23d19;
-  --color-danger-700: #a63317;
-  --color-danger-800: #7d2611;
-  --color-danger-900: #571a0c;
-  --color-danger-950: #380f07;
+  /**
+   * A red, not a darker orange. The previous ramp was brand-orange wearing
+   * danger names (`#dd4820` against `#f05136` — four hue degrees and twelve
+   * L* points apart), so a "Remove student" sat beside a "Save" and read as
+   * two grades of the same button. Readers decide whether a click is
+   * reversible by its colour before they read the label.
+   *
+   * Every step is now AA-legible on white: `danger-500` is 5.7:1, so
+   * `text-destructive` — error copy in about forty screens — finally clears
+   * 4.5:1 instead of failing it.
+   */
+  --color-danger-50: #fdf1f0;
+  --color-danger-100: #fbe1de;
+  --color-danger-200: #f6c2bc;
+  --color-danger-300: #ee9189;
+  --color-danger-400: #e05a52;
+  --color-danger-500: #c81e1e;
+  --color-danger-600: #a91a1a;
+  --color-danger-700: #8a1515;
+  --color-danger-800: #6b1111;
+  --color-danger-900: #4f0d0d;
+  --color-danger-950: #330808;
   --color-success-50: #e6f7f0;
   --color-success-100: #ccf0e1;
   --color-success-200: #b3e8d1;
@@ -169,6 +180,14 @@
   --color-ink-500: #78716c;
   --color-ink-400: #a8a29e;
   --color-ink-300: #d6d3d1;
+  /**
+   * The edge a control needs in order to look like a control. `line` is a
+   * 1.17:1 hairline against white — right for the decorative ruling between
+   * table rows and card sections, wrong for the box a person has to find and
+   * click. Field is the same warm hue, darkened to 3.2:1 so it satisfies
+   * WCAG 1.4.11 for component boundaries.
+   */
+  --color-field: #9b8d88;
   --color-line: #ffe8e3;
   --color-surface: #ffffff;
   --color-surface-muted: #fffbf9;
@@ -217,16 +236,22 @@
   --color-card-foreground: var(--color-ink-900);
   --color-popover: var(--color-surface);
   --color-popover-foreground: var(--color-ink-900);
-  --color-primary: var(--color-brand-500);
+  /**
+   * `brand-600`, not `brand-500`, because these are fills carrying white
+   * text: white on `#f05136` is 3.5:1, which fails AA for body copy, while
+   * white on `#d63d22` is 4.6:1. The hue is the brand's own, one step down
+   * the same ramp.
+   */
+  --color-primary: var(--color-brand-600);
   --color-primary-foreground: var(--color-surface);
   --color-secondary: var(--color-surface-muted);
   --color-secondary-foreground: var(--color-ink-900);
   --color-muted: var(--color-surface-muted);
   --color-muted-foreground: var(--color-ink-500);
   --color-destructive-foreground: var(--color-surface);
-  --color-border: var(--color-line);
-  --color-input: var(--color-line);
-  --color-ring: var(--color-brand-300);
+  --color-border: var(--color-field);
+  --color-input: var(--color-field);
+  --color-ring: var(--color-brand-600);
 }
 
 /**
@@ -385,27 +410,15 @@
 }
 
 @layer base {
-  :root {
-    --color-brand-50: #fff5f2;
-    --color-brand-100: #ffe8e3;
-    --color-brand-200: #ffd4cb;
-    --color-brand-300: #ffb4a3;
-    --color-brand-400: #fa7e66;
-    --color-brand-500: #f05136;
-    --color-brand-600: #d63d22;
-    --color-brand-700: #b02e17;
-    --color-brand-800: #8c2513;
-    --color-brand-900: #59160a;
-    --color-brand-950: #330b05;
-    --color-surface: #ffffff;
-    --color-surface-muted: #fffbf9;
-    --color-line: #ffe8e3;
-    --color-accent: #f05136;
-    --color-primary: #f05136;
-    --color-secondary: #fffbf9;
-    --color-border: #ffe8e3;
-  }
-
+  /**
+   * This block used to re-declare `--color-brand-*`, `--color-surface`,
+   * `--color-line`, `--color-accent`, `--color-primary`, `--color-secondary`
+   * and `--color-border` in raw hex. A later `@layer` wins over Tailwind's
+   * own `@layer theme`, so it silently overrode `@theme` and any token edited
+   * above never reached the screen. Deleted rather than rewritten: a
+   * pass-through `var()` of the same name would be a CSS self-reference and
+   * resolve to guaranteed-invalid.
+   */
   html {
     -webkit-text-size-adjust: 100%;
     background-color: var(--color-surface-muted);
@@ -451,7 +464,7 @@
 
   /* Visible focus for keyboard users — accessibility is not optional. */
   :focus-visible {
-    outline: 2px solid var(--color-brand-400);
+    outline: 2px solid var(--color-brand-600);
     outline-offset: 2px;
     border-radius: 4px;
   }

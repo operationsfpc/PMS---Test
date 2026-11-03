@@ -97,7 +97,7 @@ export function Toast({
                 type="button"
                 aria-label="Dismiss notification"
                 onClick={onClose}
-                className="cursor-pointer rounded-lg p-1 text-ink-400 transition-colors hover:bg-black/5 hover:text-ink-700"
+                className="cursor-pointer rounded-lg p-1 text-ink-500 transition-colors hover:bg-black/5 hover:text-ink-700"
               >
                 <X aria-hidden="true" className="h-3.5 w-3.5" />
               </button>

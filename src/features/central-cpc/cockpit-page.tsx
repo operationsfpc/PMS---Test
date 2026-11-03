@@ -18,6 +18,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
   Sheet,
   SheetContent,
@@ -404,9 +405,7 @@ export function CockpitPage({
           </Button>
         </Card>
       ) : drives === null || split === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading drives…
-        </p>
+        <LottieLoader size="fullscreen" message="Loading drives…" />
       ) : drives.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line p-6 text-center">
           <p className="text-sm font-medium text-ink-700">{scope?.empty ?? "No drives yet."}</p>

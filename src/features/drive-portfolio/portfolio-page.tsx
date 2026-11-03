@@ -12,6 +12,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
   StatCard,
 } from "@components/ui";
@@ -24,11 +25,11 @@ import {
   describeVisitDay,
   orderDrives,
   partitionExpired,
-  visitDayInParentheses,
 } from "@domain/drive-aging";
 import { applicationWindow } from "@domain/drive-analytics";
 import { type DateRangeFilterCriteria, filterDrivesByDateRange } from "@domain/drive-date-filter";
 import {
+  canPublishDrive,
   canRaiseDrive,
   canShortlistFromPortfolio,
   canViewDriveApplicants,
@@ -413,11 +414,7 @@ export function DrivePortfolioPage({
   }
 
   if (drives === null) {
-    return (
-      <p role="status" className="text-sm text-ink-500">
-        Loading your drives…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading your drives…" />;
   }
 
   return (
@@ -559,7 +556,7 @@ export function DrivePortfolioPage({
                         setRowBudget(Number(e.target.value));
                         setPage(1);
                       }}
-                      className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-ink-800 outline-none focus:border-brand-500"
+                      className="rounded-lg border border-field bg-surface px-2 py-1 text-xs text-ink-800 outline-none focus:border-brand-600"
                     >
                       {ROW_BUDGETS.map((size) => (
                         <option key={size} value={size}>
@@ -810,8 +807,7 @@ export function DrivePortfolioPage({
           {/* One or the other: an offer to raise a role, or the state that
               refuses it. Both on screen at once reads as two controls. Said
               once per visit — the roles listed above each used to repeat the
-              offer, so a single-role visit showed it twice on one card.
-              Strictly restricted to Account Executive (canRaiseDrive). */}
+              offer, so a single-role visit showed it twice on one card. */}
           {canRaiseDrive(role) && (
             <div className="border-t border-line/60 bg-surface-muted/30 px-4 py-2.5 sm:px-5">
               {(() => {
@@ -828,7 +824,6 @@ export function DrivePortfolioPage({
                     className="text-xs font-semibold text-brand-600 hover:text-brand-700"
                   >
                     + Add another role
-                    {isMultiRole ? "" : visitDayInParentheses(event.tentativeDate)}
                   </ButtonLink>
                 );
               })()}

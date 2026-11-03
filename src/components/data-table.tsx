@@ -226,7 +226,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         {/* Search Box */}
         <div className="relative flex-1 min-w-[220px] max-w-sm">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-400"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-500"
             aria-hidden="true"
           />
           <input
@@ -237,7 +237,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
               setPageIndex(0);
             }}
             placeholder={searchPlaceholder}
-            className="w-full rounded-xl border border-line/80 bg-surface py-2 pl-9 pr-8 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden focus:ring-2 focus:ring-brand-500/15 shadow-xs transition-colors"
+            className="w-full rounded-xl border border-field bg-surface py-2 pl-9 pr-8 text-sm text-ink-900 placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden focus:ring-2 focus:ring-brand-600/30 shadow-xs transition-colors"
           />
           {searchQuery && (
             <button
@@ -247,7 +247,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                 setSearchQuery("");
                 setPageIndex(0);
               }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-500 hover:text-ink-700"
             >
               <svg
                 aria-hidden="true"
@@ -294,7 +294,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
         className={
           fit
             ? "min-h-0 flex-1 overflow-auto rounded-2xl border border-line/70 bg-surface shadow-xs focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500"
-            : "overflow-x-auto rounded-2xl border border-line/70 bg-surface shadow-xs"
+            : "scroll-bare overflow-x-auto rounded-2xl border border-line/70 bg-surface shadow-xs"
         }
       >
         <table className="w-full min-w-[640px] border-collapse text-left text-sm">
@@ -314,7 +314,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                     aria-label="Select all visible rows"
                     checked={areAllVisibleSelected}
                     onChange={handleToggleAllVisible}
-                    className="size-4 rounded border-line text-brand-600 focus:ring-brand-500"
+                    className="size-4 rounded border-field text-brand-600 focus:ring-brand-500"
                   />
                 </th>
               )}
@@ -354,7 +354,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                       <span
                         aria-hidden="true"
                         className={`flex shrink-0 ${
-                          sortColumnId === col.id ? "text-brand-600" : "text-ink-400"
+                          sortColumnId === col.id ? "text-brand-600" : "text-ink-500"
                         }`}
                       >
                         {sortColumnId === col.id ? (
@@ -418,7 +418,7 @@ export function ShadcnDataTable<T extends { id?: string | number }>({
                           aria-label={`Select row ${idx + 1}`}
                           checked={isSelected}
                           onChange={() => handleToggleRow(row)}
-                          className="size-4 rounded border-line text-brand-600 focus:ring-brand-500"
+                          className="size-4 rounded border-field text-brand-600 focus:ring-brand-500"
                         />
                       </td>
                     )}

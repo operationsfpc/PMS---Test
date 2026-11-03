@@ -100,7 +100,7 @@ export function HoldDialog({
                 className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
                   draft.kind === kind
                     ? "border-brand-500 bg-brand-50"
-                    : "border-line bg-surface hover:border-brand-300"
+                    : "border-field bg-surface hover:border-brand-400"
                 }`}
               >
                 <input

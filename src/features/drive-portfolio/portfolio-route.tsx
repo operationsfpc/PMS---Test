@@ -1,3 +1,4 @@
+import { LottieLoader } from "@components/ui";
 import { DRIVE_TAB_STATUSES, type DriveTab } from "@domain/drive-lifecycle";
 import type { AppRole } from "@domain/types";
 import { useAuth } from "@lib/auth-context";
@@ -64,11 +65,7 @@ export function DrivePortfolioRoute({ tab }: { tab?: DriveTab } = {}) {
   }, []);
 
   if (profileId === null) {
-    return (
-      <p role="status" className="text-sm text-ink-500">
-        Loading your drives…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading your drives…" />;
   }
 
   return (

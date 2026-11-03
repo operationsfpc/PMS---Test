@@ -130,7 +130,7 @@ export function Combobox({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           autoComplete="off"
-          className={`h-10 w-full rounded-lg border bg-surface px-3 pr-8 text-sm text-ink-900 transition-colors placeholder:italic placeholder:text-ink-400 placeholder:font-normal focus:border-brand-500 focus:outline-hidden focus:ring-1 focus:ring-brand-500 disabled:opacity-50 ${
+          className={`h-10 w-full rounded-lg border bg-surface px-3 pr-8 text-sm text-ink-900 transition-colors placeholder:italic placeholder:text-ink-500 placeholder:font-normal focus:border-brand-600 focus:outline-hidden focus:ring-1 focus:ring-brand-500 disabled:opacity-50 ${
             error ? "border-destructive/60 ring-1 ring-destructive/20" : "border-line"
           } ${className}`}
         />
@@ -146,7 +146,7 @@ export function Combobox({
             setIsOpen((prev) => !prev);
             inputRef.current?.focus();
           }}
-          className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-400 hover:text-ink-700"
+          className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-500 hover:text-ink-700"
         >
           <svg
             aria-hidden="true"

@@ -122,7 +122,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
               setPage(1);
             }}
             placeholder="Search by name, roll no, or email…"
-            className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[200px]"
+            className="rounded-lg border border-field bg-surface px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden min-w-[200px]"
           />
 
           {/* Campus Filter */}
@@ -137,7 +137,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                 setFilterCampus(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+              className="rounded-lg border border-field bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-600 focus:outline-hidden"
             >
               <option value="">All campuses</option>
               {campuses.map((c) => (
@@ -156,7 +156,7 @@ export function ExistingStudentsList({ campuses }: { campuses: readonly CampusOp
                 setFilterYear(e.target.value);
                 setPage(1);
               }}
-              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+              className="rounded-lg border border-field bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-600 focus:outline-hidden"
             >
               <option value="">All years</option>
               {passingYears.map((yr) => (

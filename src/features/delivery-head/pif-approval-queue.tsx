@@ -1,4 +1,12 @@
-import { Badge, Button, ButtonAnchor, ButtonLink, Card, PageHeader } from "@components/ui";
+import {
+  Badge,
+  Button,
+  ButtonAnchor,
+  ButtonLink,
+  Card,
+  LottieLoader,
+  PageHeader,
+} from "@components/ui";
 import { visitKey } from "@domain/company-drive";
 import { describeCtcRange } from "@domain/ctc";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
@@ -390,9 +398,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading the queue…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading the approval queue…" />
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">

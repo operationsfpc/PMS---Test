@@ -8,12 +8,12 @@ import { useId } from "react";
 
 export const baseControlClass =
   "w-full rounded-lg border bg-surface px-3 py-2.5 text-[15px] " +
-  "text-ink-900 placeholder:text-ink-300 transition-colors focus:outline-none disabled:bg-surface-muted";
+  "text-ink-900 placeholder:text-ink-500 transition-colors focus:outline-none disabled:bg-surface-muted";
 
 export const getControlClass = (hasError?: boolean, extraClass?: string) => {
   const stateClass = hasError
-    ? "border-danger-500 ring-1 ring-danger-500 focus:border-danger-600 focus:ring-2 focus:ring-danger-400/40 bg-danger-50/10"
-    : "border-line hover:border-brand-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-400/40";
+    ? "border-danger-500 ring-1 ring-danger-500 focus:border-danger-600 focus:ring-2 focus:ring-danger-500/40 bg-danger-50/10"
+    : "border-field hover:border-brand-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30";
   return [baseControlClass, stateClass, extraClass].filter(Boolean).join(" ");
 };
 
@@ -125,7 +125,7 @@ export function FormSection({
       <div className="mb-5 flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
+          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white"
         >
           {step}
         </span>
@@ -218,11 +218,11 @@ export function CheckboxField({
 }: { label: ReactNode; description?: string | undefined } & InputHTMLAttributes<HTMLInputElement>) {
   const id = useId();
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-line bg-surface p-3 transition-colors hover:border-brand-300 has-checked:border-brand-500 has-checked:bg-brand-50">
+    <div className="flex items-start gap-3 rounded-lg border border-field bg-surface p-3 transition-colors hover:border-brand-400 has-checked:border-brand-600 has-checked:bg-brand-50">
       <input
         id={id}
         type="checkbox"
-        className="mt-0.5 size-4 shrink-0 accent-brand-500"
+        className="mt-0.5 size-4 shrink-0 accent-brand-600"
         {...props}
       />
       <div className="min-w-0">
@@ -275,8 +275,8 @@ export function FileField({
           className={`w-full cursor-pointer rounded-lg border ${
             hasError
               ? "border-danger-500 ring-1 ring-danger-500 bg-danger-50/10 text-danger-900"
-              : "border-dashed border-line bg-surface-muted hover:border-brand-300 text-ink-500"
-          } px-3 py-2.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white ${
+              : "border-dashed border-field bg-surface-muted hover:border-brand-400 text-ink-500"
+          } px-3 py-2.5 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white ${
             className ?? ""
           }`}
           {...props}

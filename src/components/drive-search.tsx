@@ -41,7 +41,7 @@ export function DriveSearch({
           <div className="relative">
             <Search
               aria-hidden="true"
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-400"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-500"
             />
             <input
               id={id}
@@ -74,7 +74,7 @@ export function DriveSearch({
           />
           <button
             type="submit"
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >
             Search
           </button>

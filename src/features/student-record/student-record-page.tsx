@@ -7,6 +7,7 @@ import {
   ButtonAnchor,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
   StatCard,
 } from "@components/ui";
@@ -607,25 +608,7 @@ export function StudentRecordPage({
       );
     }
 
-    return (
-      <div role="status" aria-busy="true" className="space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-52" />
-          <Skeleton className="h-4 w-36" />
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {LOADING_STATS.map((key) => (
-            <Skeleton key={key} className="h-[88px]" />
-          ))}
-        </div>
-        <div className="space-y-4">
-          {LOADING_SECTIONS.map((key) => (
-            <Skeleton key={key} className="h-44" />
-          ))}
-        </div>
-        <p className="text-sm text-ink-500">Loading the student record…</p>
-      </div>
-    );
+    return <LottieLoader size="fullscreen" message="Loading the student record…" />;
   }
 
   if (record === null) {
@@ -907,7 +890,7 @@ export function StudentRecordPage({
         {semesters.length === 0 ? (
           <p className="text-sm text-ink-500">No semester records filed.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-line">
+          <div className="scroll-bare overflow-x-auto rounded-lg border border-line">
             <Table>
               <TableHeader className="bg-surface-muted text-xs font-semibold text-ink-700">
                 <TableRow>
@@ -937,7 +920,7 @@ export function StudentRecordPage({
                       >
                         Standing: {semester.currentArrears ?? 0}
                       </span>
-                      <p className="text-ink-400">History: {semester.historyOfArrears ?? 0}</p>
+                      <p className="text-ink-500">History: {semester.historyOfArrears ?? 0}</p>
                     </TableCell>
                     <TableCell>
                       <Badge tone={semester.verified ? "success" : "warning"}>
@@ -958,7 +941,7 @@ export function StudentRecordPage({
                           View PDF
                         </ButtonAnchor>
                       ) : (
-                        <span className="text-xs text-ink-400">Not filed</span>
+                        <span className="text-xs text-ink-500">Not filed</span>
                       )}
                     </TableCell>
                   </TableRow>
@@ -1003,7 +986,7 @@ export function StudentRecordPage({
                   {record.tenthInstitution ?? "School not recorded"}
                 </p>
                 {record.tenthBoard && (
-                  <p className="text-[11px] text-ink-400">
+                  <p className="text-[11px] text-ink-500">
                     Board: {boardLabel(record.tenthBoard, "tenth")}
                     {record.tenthBoardState ? ` · ${record.tenthBoardState}` : ""}
                   </p>
@@ -1042,7 +1025,7 @@ export function StudentRecordPage({
                   {record.twelfthInstitution ?? "School not recorded"}
                 </p>
                 {record.twelfthBoard && (
-                  <p className="text-[11px] text-ink-400">
+                  <p className="text-[11px] text-ink-500">
                     Board: {boardLabel(record.twelfthBoard, "twelfth")}
                     {record.twelfthBoardState ? ` · ${record.twelfthBoardState}` : ""}
                   </p>
@@ -1079,7 +1062,7 @@ export function StudentRecordPage({
                   </p>
                   <p className="mt-1 text-xs text-ink-600">{record.diplomaInstitution}</p>
                   {record.diplomaUniversity && (
-                    <p className="text-[11px] text-ink-400">
+                    <p className="text-[11px] text-ink-500">
                       University: {record.diplomaUniversity}
                     </p>
                   )}
@@ -1119,7 +1102,7 @@ export function StudentRecordPage({
                     {record.ugBranch ? ` · ${record.ugBranch}` : ""}
                   </p>
                   {record.ugCollege && (
-                    <p className="text-[11px] text-ink-400">{record.ugCollege}</p>
+                    <p className="text-[11px] text-ink-500">{record.ugCollege}</p>
                   )}
                 </div>
                 {record.ugMarksheetUrl && (
@@ -1161,13 +1144,13 @@ export function StudentRecordPage({
           {applications.length > 0 && (
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               <div className="relative w-full sm:w-auto">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-400" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-ink-500" />
                 <input
                   type="text"
                   value={appSearch}
                   onChange={(e) => setAppSearch(e.target.value)}
                   placeholder="Search company or role…"
-                  className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-xs placeholder:text-ink-400 focus:outline-hidden sm:w-52"
+                  className="w-full rounded-lg border border-line bg-surface py-1.5 pl-8 pr-3 text-xs placeholder:text-ink-500 focus:outline-hidden sm:w-52"
                 />
               </div>
               <Tabs
@@ -1319,7 +1302,7 @@ export function StudentRecordPage({
                         </p>
                       </div>
                     ) : (
-                      <p className="mt-1.5 pl-4 text-[11px] text-ink-400">No resume uploaded</p>
+                      <p className="mt-1.5 pl-4 text-[11px] text-ink-500">No resume uploaded</p>
                     )}
                   </div>
 
@@ -1529,7 +1512,7 @@ export function StudentRecordPage({
               <span className="flex items-center gap-2 text-ink-900">
                 <Globe className="size-4 text-brand-600" /> LinkedIn
               </span>
-              <ExternalLink className="size-3.5 text-ink-400" />
+              <ExternalLink className="size-3.5 text-ink-500" />
             </a>
           )}
           {record.githubUrl && (
@@ -1542,7 +1525,7 @@ export function StudentRecordPage({
               <span className="flex items-center gap-2 text-ink-900">
                 <Globe className="size-4 text-ink-900" /> GitHub
               </span>
-              <ExternalLink className="size-3.5 text-ink-400" />
+              <ExternalLink className="size-3.5 text-ink-500" />
             </a>
           )}
           {record.leetcodeUrl && (
@@ -1555,7 +1538,7 @@ export function StudentRecordPage({
               <span className="flex items-center gap-2 text-ink-900">
                 <span className="font-mono font-bold text-gold-600">LC</span> LeetCode
               </span>
-              <ExternalLink className="size-3.5 text-ink-400" />
+              <ExternalLink className="size-3.5 text-ink-500" />
             </a>
           )}
           {record.hackerrankUrl && (
@@ -1568,7 +1551,7 @@ export function StudentRecordPage({
               <span className="flex items-center gap-2 text-ink-900">
                 <span className="font-mono font-bold text-success-600">HR</span> HackerRank
               </span>
-              <ExternalLink className="size-3.5 text-ink-400" />
+              <ExternalLink className="size-3.5 text-ink-500" />
             </a>
           )}
           {record.otherProfiles?.map((p) => (
@@ -1582,7 +1565,7 @@ export function StudentRecordPage({
               <span className="flex items-center gap-2 text-ink-900">
                 <Globe className="size-4 text-brand-600" /> {p.label}
               </span>
-              <ExternalLink className="size-3.5 text-ink-400" />
+              <ExternalLink className="size-3.5 text-ink-500" />
             </a>
           ))}
           {!record.linkedinUrl &&
@@ -1820,7 +1803,7 @@ export function StudentRecordPage({
         />
         <StatCard
           size="sm"
-          label="10th / 12th Marks"
+          label="10th / 12th"
           value={`${record.tenthPercentage != null ? `${record.tenthPercentage}%` : "—"} / ${
             record.twelfthPercentage != null ? `${record.twelfthPercentage}%` : "—"
           }`}
@@ -1829,7 +1812,7 @@ export function StudentRecordPage({
         />
         <StatCard
           size="sm"
-          label="Offers & Internships"
+          label="Offers"
           value={
             offers.length > 0
               ? `${offers.length} Offer${offers.length > 1 ? "s" : ""}`

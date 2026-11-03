@@ -1,4 +1,4 @@
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { type DriveReadiness, missingBeforeGoLive } from "@domain/drive-lifecycle";
 import {
   areAllSelected,
@@ -270,8 +270,8 @@ function MultiSelect({
               key={o}
               className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 on
-                  ? "border-brand-500 bg-brand-500 text-white"
-                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+                  ? "border-brand-500 bg-brand-600 text-white"
+                  : "border-field bg-surface text-ink-700 hover:border-brand-400"
               }`}
             >
               <input
@@ -282,7 +282,7 @@ function MultiSelect({
               />
               {o}
               {inactive.includes(o) && (
-                <span className={on ? "text-white/70" : "text-ink-300"}> · {inactiveNote}</span>
+                <span className={on ? "text-white" : "text-ink-500"}> · {inactiveNote}</span>
               )}
             </label>
           );
@@ -319,8 +319,8 @@ function CityFilter({
               key={city}
               className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 on
-                  ? "border-brand-500 bg-brand-500 text-white"
-                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+                  ? "border-brand-500 bg-brand-600 text-white"
+                  : "border-field bg-surface text-ink-700 hover:border-brand-400"
               }`}
             >
               <input
@@ -336,7 +336,7 @@ function CityFilter({
         <button
           type="button"
           onClick={onSelectAll}
-          className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-300"
+          className="rounded-full border border-field bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-400"
         >
           {allSelected ? "Clear all" : "Select all"}
         </button>
@@ -745,11 +745,7 @@ export function DafPublish({ view }: { view: PublishView }) {
   }
 
   if (loaded === null || loadedDrive === null) {
-    return (
-      <p role="status" className="p-6 text-sm text-ink-500">
-        Loading this drive…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading this drive…" />;
   }
 
   if (published) {
@@ -981,7 +977,7 @@ export function DafPublish({ view }: { view: PublishView }) {
               )}
 
               {rounds.length === 0 ? (
-                <p className="mb-2 text-xs text-ink-300">
+                <p className="mb-2 text-xs text-ink-500">
                   No rounds yet. A drive cannot go live without at least one.
                 </p>
               ) : (
@@ -1108,7 +1104,7 @@ export function DafPublish({ view }: { view: PublishView }) {
         {/* Live audience — the whole point of the screen. */}
         <div className="lg:sticky lg:top-24 lg:self-start">
           <Card className="overflow-hidden">
-            <div className="border-b border-line bg-brand-500 px-4 py-3 text-white">
+            <div className="border-b border-line bg-brand-600 px-4 py-3 text-white">
               <p className="text-xs uppercase tracking-wide text-white/70">Live audience</p>
               <p className="font-heading text-3xl font-bold" data-testid="audience-count">
                 {audience.included.length}

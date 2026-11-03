@@ -79,7 +79,7 @@ describe("ButtonLink", () => {
 
     const view = screen.getByRole("link", { name: "View Accenture — Jr. Software Engineer" });
     expect(view.getAttribute("href")).toBe("/drives/d1");
-    expect(view.className).toContain("bg-brand-500");
+    expect(view.className).toContain("bg-brand-600");
     // The whole complaint, in one assertion: a link's underline is prose.
     expect(view.className).not.toContain("underline");
   });

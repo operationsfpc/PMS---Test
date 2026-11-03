@@ -5,7 +5,7 @@ import {
 } from "@components/column-filter";
 import { NoDriveMatches } from "@components/drive-search";
 import { StudentIdentity } from "@components/student-identity";
-import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
 import { VisitPane, type VisitPaneRole } from "@components/visit-pane";
 import {
@@ -113,7 +113,7 @@ const chipClass = (active: boolean, on: string, off: string) =>
     active ? on : off
   }`;
 
-const BRAND_ON = "bg-brand-500 text-white border-brand-600";
+const BRAND_ON = "bg-brand-600 text-white border-brand-600";
 const BRAND_OFF = "bg-surface text-ink-700 border-line hover:bg-surface-muted";
 const GOLD_OFF = "bg-surface text-gold-700 border-gold-300 hover:bg-gold-50";
 const SUCCESS_ON = "bg-success-600 text-white border-success-700";
@@ -286,9 +286,7 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
           </Button>
         </Card>
       ) : drives === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading drives…
-        </p>
+        <LottieLoader size="fullscreen" message="Loading drives…" />
       ) : drives.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">No drives involve your students yet.</p>
@@ -296,7 +294,7 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
       ) : (
         <>
           <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="scroll-bare overflow-x-auto">
               <table className="w-full min-w-[840px] border-collapse text-left text-sm">
                 <caption className="sr-only">
                   Company visits and their roles, and how far each role's students have come

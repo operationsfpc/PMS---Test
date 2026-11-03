@@ -1,5 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
-import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, Card, LottieLoader, PageHeader } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -110,9 +110,7 @@ export function SemesterQueue({ repository }: { repository?: SemesterQueueReposi
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading the CGPA verification queue…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading the CGPA verification queue…" />
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">

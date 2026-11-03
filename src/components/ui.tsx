@@ -101,10 +101,21 @@ export function Badge({
 }
 
 const VARIANTS = {
-  primary: "bg-brand-500 text-white hover:bg-brand-600 shadow-sm",
-  secondary: "bg-surface text-ink-700 border border-line hover:border-brand-300",
+  /**
+   * `brand-600` carries the white label at 4.6:1; `brand-500` held it at
+   * 3.5:1, which is below AA for the 13-14px text these buttons actually use.
+   * Same hue, one step down the ramp the brand already owns.
+   */
+  primary: "bg-brand-600 text-white hover:bg-brand-700 shadow-sm",
+  /*
+   * `border-field`, not `border-line`: the light hairline sits 1.17:1 off a
+   * white card, so a secondary button was a word floating in space and staff
+   * pressed it expecting a link. A control's edge has to be found by eye
+   * before the label is read (WCAG 1.4.11, 3:1).
+   */
+  secondary: "bg-surface text-ink-700 border border-field hover:border-brand-500",
   gold: "bg-gold-500 text-brand-900 hover:bg-gold-600 shadow-sm",
-  danger: "bg-surface text-danger-700 border border-danger-500/40 hover:bg-danger-50",
+  danger: "bg-surface text-danger-700 border border-danger-400 hover:bg-danger-50",
   /*
    * The quiet one — for actions that matter less than the primary but are
    * still actions. It used to be brand-coloured text that underlined on hover,
@@ -264,9 +275,9 @@ export function ButtonAnchor({
  * never a bare "Open"). `title` repeats it for a sighted pointer.
  */
 const ROUND_TONES = {
-  quiet: "border border-line bg-surface text-ink-600 hover:border-brand-300 hover:text-brand-600",
+  quiet: "border border-field bg-surface text-ink-600 hover:border-brand-500 hover:text-brand-700",
   ink: "bg-ink-900 text-surface shadow-xs hover:bg-ink-700",
-  brand: "bg-brand-500 text-surface shadow-xs hover:bg-brand-600",
+  brand: "bg-brand-600 text-surface shadow-xs hover:bg-brand-700",
 } as const;
 
 export function RoundAction({
@@ -323,7 +334,7 @@ export function PageHeader({
 
 const STAT_TONES: Record<Tone, string> = {
   neutral: "bg-surface border-line/70 hover:border-line",
-  brand: "bg-brand-50/70 border-brand-200/70 hover:border-brand-300",
+  brand: "bg-brand-50/70 border-brand-200/70 hover:border-brand-400",
   accent: "bg-violet-50/70 border-violet-300/70 hover:border-violet-400",
   success: "bg-success-50/70 border-success-200/70 hover:border-success-300",
   warning: "bg-gold-50/70 border-gold-300/70 hover:border-gold-500",
@@ -406,7 +417,7 @@ export function StatCard({
           isReadout
             ? `mt-0.5 font-heading text-readout font-light tabular-nums ${valueColor}`
             : isSmall
-              ? `mt-1 font-heading text-lg sm:text-xl font-bold tracking-tight whitespace-nowrap ${valueColor}`
+              ? `mt-1 font-heading text-base sm:text-lg font-bold tracking-tight whitespace-nowrap ${valueColor}`
               : `mt-1.5 font-heading text-2xl sm:text-3xl font-bold tracking-tight ${valueColor}`
         }
       >
@@ -495,7 +506,7 @@ export function DataTable({
   children: ReactNode;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="scroll-bare overflow-x-auto">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead>
@@ -522,6 +533,7 @@ export * from "./accordion";
 export * from "./alert-dialog";
 export * from "./combobox";
 export * from "./data-table";
+export * from "./lottie-loader";
 export * from "./sheet";
 export * from "./tabs";
 export * from "./toast";

@@ -655,7 +655,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <span
                   title={signedInEmail}
                   aria-hidden="true"
-                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white"
                 >
                   {initialsOf(accountLabel)}
                 </span>
@@ -669,7 +669,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </span>
                 <ChevronDown
                   aria-hidden="true"
-                  className={`size-3.5 shrink-0 text-ink-400 transition-transform ${
+                  className={`size-3.5 shrink-0 text-ink-500 transition-transform ${
                     accountOpen ? "rotate-180" : ""
                   }`}
                 />
@@ -779,7 +779,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         <span className="min-w-0 flex-1 truncate">{group.heading}</span>
                         <ChevronRight
                           aria-hidden="true"
-                          className={`size-4 shrink-0 text-ink-400 transition-transform ${
+                          className={`size-4 shrink-0 text-ink-500 transition-transform ${
                             open ? "rotate-90" : ""
                           }`}
                         />
@@ -809,7 +809,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                                     <ItemIcon
                                       aria-hidden="true"
                                       className={`size-4 shrink-0 ${
-                                        isActive ? "text-brand-600" : "text-ink-400"
+                                        isActive ? "text-brand-600" : "text-ink-500"
                                       }`}
                                     />
                                     <span className="min-w-0 truncate">{item.label}</span>

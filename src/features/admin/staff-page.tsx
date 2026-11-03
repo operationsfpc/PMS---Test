@@ -1,6 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { TablePager } from "@components/table-pager";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { campusScopeFor, requiresCampusAssignment, validateCampusSelection } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -213,6 +213,10 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
   const safePage = Math.min(page, Math.max(0, Math.ceil(staffRows.length / pageSize) - 1));
   const pagedStaff = staffRows.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
+  if (staff === null && readProblem === null) {
+    return <LottieLoader size="fullscreen" message="Loading staff…" />;
+  }
+
   return (
     <div>
       <PageHeader
@@ -273,7 +277,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="e.g. John Doe"
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-hidden"
               />
             </div>
             <div>
@@ -286,7 +290,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@faceprep.in"
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-hidden"
               />
             </div>
             <div>
@@ -297,7 +301,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 id="staff-role"
                 value={role}
                 onChange={(e) => setRole(e.target.value as AppRole)}
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm capitalize text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm capitalize text-ink-900 focus:border-brand-600 focus:outline-hidden"
               >
                 {INVITABLE.map((r) => (
                   <option key={r} value={r}>
@@ -352,7 +356,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
         {staff !== null && staff.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-ink-400">
+              <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-ink-500">
                 <svg
                   aria-hidden="true"
                   className="h-3.5 w-3.5"
@@ -373,14 +377,14 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Filter staff by name or email…"
-                className="h-8.5 w-44 sm:w-56 rounded-lg border border-line bg-surface pl-8 pr-3 text-xs text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-hidden"
+                className="h-8.5 w-44 sm:w-56 rounded-lg border border-field bg-surface pl-8 pr-3 text-xs text-ink-900 placeholder:text-ink-500 focus:border-brand-600 focus:ring-1 focus:ring-brand-500 focus:outline-hidden"
               />
             </div>
             <div className="relative">
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="h-8.5 appearance-none rounded-lg border border-line bg-surface pl-3 pr-7 text-xs font-medium text-ink-800 capitalize focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-hidden cursor-pointer"
+                className="h-8.5 appearance-none rounded-lg border border-field bg-surface pl-3 pr-7 text-xs font-medium text-ink-800 capitalize focus:border-brand-600 focus:ring-1 focus:ring-brand-500 focus:outline-hidden cursor-pointer"
               >
                 <option value="">All roles</option>
                 {INVITABLE.map((r) => (
@@ -389,7 +393,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                   </option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-ink-400">
+              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-ink-500">
                 <svg
                   aria-hidden="true"
                   className="h-3.5 w-3.5"
@@ -410,14 +414,14 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-8.5 appearance-none rounded-lg border border-line bg-surface pl-3 pr-7 text-xs font-medium text-ink-800 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-hidden cursor-pointer"
+                className="h-8.5 appearance-none rounded-lg border border-field bg-surface pl-3 pr-7 text-xs font-medium text-ink-800 focus:border-brand-600 focus:ring-1 focus:ring-brand-500 focus:outline-hidden cursor-pointer"
               >
                 <option value="">All statuses</option>
                 <option value="active">Active</option>
                 <option value="deactivated">Deactivated</option>
                 <option value="pending">Pending sign-in</option>
               </select>
-              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-ink-400">
+              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-ink-500">
                 <svg
                   aria-hidden="true"
                   className="h-3.5 w-3.5"
@@ -452,17 +456,13 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
         )}
       </div>
 
-      {staff === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading staff…
-        </p>
-      ) : staff.length === 0 ? (
+      {staff !== null && staff.length === 0 ? (
         <Card className="p-8 text-center">
           <p className="text-sm text-ink-700">No staff invited yet.</p>
         </Card>
       ) : (
         <div className="rounded-xl border border-line bg-surface shadow-xs overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="scroll-bare overflow-x-auto">
             <table className="w-full min-w-[780px] border-collapse text-left text-sm">
               <caption className="sr-only">Staff directory</caption>
               <thead>
@@ -488,7 +488,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 {filteredStaff !== null && filteredStaff.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-12 text-center text-sm text-ink-500">
-                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-ink-400 mb-2">
+                      <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-ink-500 mb-2">
                         <svg
                           aria-hidden="true"
                           className="h-5 w-5"
@@ -510,6 +510,10 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                 ) : (
                   pagedStaff.map((member) => {
                     const initials = getInitials(member.fullName);
+                    if (staff === null && readProblem === null) {
+                      return <LottieLoader size="fullscreen" message="Loading staff…" />;
+                    }
+
                     return (
                       <tr key={member.email} className="transition-colors hover:bg-surface-muted">
                         {/* Staff Member Info with Avatar */}
@@ -590,7 +594,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                             <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink-700 border border-line shadow-2xs">
                               <svg
                                 aria-hidden="true"
-                                className="h-3.5 w-3.5 text-ink-400 shrink-0"
+                                className="h-3.5 w-3.5 text-ink-500 shrink-0"
                                 fill="none"
                                 viewBox="0 0 24 24"
                                 stroke="currentColor"
@@ -683,7 +687,7 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
                                 aria-label={`Activate ${member.fullName}`}
                                 disabled={busy === member.email}
                                 onClick={() => void setActive(member.email, true)}
-                                className="bg-brand-500 text-white hover:bg-brand-600 shadow-2xs"
+                                className="bg-brand-600 text-white hover:bg-brand-700 shadow-2xs"
                               >
                                 Activate
                               </Button>

@@ -8,6 +8,7 @@ import {
   Badge,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
   StatCard,
 } from "@components/ui";
@@ -291,14 +292,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
   }
 
   if (snapshot === null) {
-    return (
-      <div>
-        <PageHeader title="My overview" />
-        <p role="status" className="text-sm text-ink-500">
-          Loading your overview…
-        </p>
-      </div>
-    );
+    return <LottieLoader size="fullscreen" message="Loading your overview…" />;
   }
 
   const mine = summariseAeDrives(snapshot.drives);
@@ -382,7 +376,7 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
               No drives yet. Raise one with the Position information form and it appears here.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="scroll-bare overflow-x-auto">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                   <tr>
@@ -597,8 +591,8 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                   onClick={() => setStatTypeFilter(option.value)}
                   className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
                     selected
-                      ? "bg-brand-500 text-white shadow-sm"
-                      : "border border-line bg-surface text-ink-700 hover:border-brand-300"
+                      ? "bg-brand-600 text-white shadow-sm"
+                      : "border border-field bg-surface text-ink-700 hover:border-brand-400"
                   }`}
                 >
                   {option.label} ({count})

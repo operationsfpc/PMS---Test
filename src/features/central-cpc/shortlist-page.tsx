@@ -1,5 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { describeDriveFreeze } from "@domain/drive-working";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
@@ -552,6 +552,10 @@ export function ShortlistPage({
     }
   }
 
+  if (applicants === null && error === null) {
+    return <LottieLoader size="fullscreen" message="Loading applicants…" />;
+  }
+
   return (
     <div>
       <PageHeader
@@ -741,17 +745,9 @@ export function ShortlistPage({
       )}
 
       {applicants === null ? (
-        error === null ? (
-          <p role="status" className="text-sm text-ink-500">
-            Loading applicants…
-          </p>
-        ) : (
-          /* The sentence is already in the alert above; this is the way out of
-              the dead end, so the screen does not stay empty with no control. */
-          <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
-            Load the applicants again
-          </Button>
-        )
+        <Button variant="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+          Load the applicants again
+        </Button>
       ) : applicants.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">Nobody has applied to this drive yet.</p>
@@ -818,8 +814,8 @@ export function ShortlistPage({
               onClick={() => setTab("pending")}
               className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
                 tab === "pending"
-                  ? "border-brand-500 bg-brand-500 text-white"
-                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+                  ? "border-brand-500 bg-brand-600 text-white"
+                  : "border-field bg-surface text-ink-700 hover:border-brand-400"
               }`}
             >
               Not shortlisted ({applicants.length - alreadyShortlisted.length})
@@ -829,8 +825,8 @@ export function ShortlistPage({
               onClick={() => setTab("shortlisted")}
               className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
                 tab === "shortlisted"
-                  ? "border-brand-500 bg-brand-500 text-white"
-                  : "border-line bg-surface text-ink-700 hover:border-brand-300"
+                  ? "border-brand-500 bg-brand-600 text-white"
+                  : "border-field bg-surface text-ink-700 hover:border-brand-400"
               }`}
             >
               Shortlisted ({alreadyShortlisted.length})
@@ -875,6 +871,7 @@ export function ShortlistPage({
               // hold. The database treats both the same (0126), so the card does.
               const blocked = applicant?.optedOut === true || applicant?.onHold === true;
               const overridden = overrides[candidate.applicationId] !== undefined;
+
               return (
                 <li
                   key={candidate.applicationId}

@@ -1,5 +1,5 @@
 import { ErrorPanel } from "@components/error-panel";
-import { Badge, Button, Card, DataTable, PageHeader } from "@components/ui";
+import { Badge, Button, Card, DataTable, LottieLoader, PageHeader } from "@components/ui";
 import { useAsyncAction } from "@lib/use-async-action";
 import { type FormEvent, Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { CampusProgrammes, type CampusProgrammesView } from "./campus-programmes";
@@ -137,6 +137,10 @@ export function CampusPage({
     });
   }, [campuses, search, statusFilter]);
 
+  if (campuses === null && listProblem === null) {
+    return <LottieLoader size="fullscreen" message="Loading campuses…" />;
+  }
+
   return (
     <div>
       <PageHeader
@@ -181,7 +185,7 @@ export function CampusPage({
                   value={values[field.name]}
                   onChange={(e) => setValues({ ...values, [field.name]: e.target.value })}
                   placeholder={`Enter ${field.label.toLowerCase()}`}
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-500 focus:outline-hidden"
+                  className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 focus:border-brand-600 focus:outline-hidden"
                 />
                 {missing.includes(field.name) && (
                   <p className="mt-1 text-xs text-destructive">{field.label} is required.</p>
@@ -221,12 +225,12 @@ export function CampusPage({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search campuses by name, code, or city…"
-              className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden min-w-[240px]"
+              className="rounded-lg border border-field bg-surface px-3 py-1.5 text-xs text-ink-800 placeholder:text-ink-500 focus:border-brand-600 focus:outline-hidden min-w-[240px]"
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-500 focus:outline-hidden"
+              className="rounded-lg border border-field bg-surface px-2.5 py-1.5 text-xs text-ink-800 focus:border-brand-600 focus:outline-hidden"
             >
               <option value="">All statuses</option>
               <option value="active">Active</option>
@@ -258,11 +262,7 @@ export function CampusPage({
         >
           {listProblem} Until they load, no campus can be added to or taken from.
         </ErrorPanel>
-      ) : campuses === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading campuses…
-        </p>
-      ) : campuses.length === 0 ? (
+      ) : campuses !== null && campuses.length === 0 ? (
         <Card className="p-6 text-center">
           <p className="text-sm text-ink-700">No campuses yet. Add the first one above.</p>
         </Card>
@@ -319,7 +319,7 @@ export function CampusPage({
                           </div>
                         </div>
                       ) : (
-                        <span className="text-xs text-ink-400">—</span>
+                        <span className="text-xs text-ink-500">—</span>
                       )}
                     </td>
 

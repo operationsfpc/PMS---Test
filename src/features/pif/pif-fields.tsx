@@ -586,7 +586,7 @@ export function JobDescriptionField<T extends FieldValues>({
               aria-invalid={invalid || undefined}
               type="file"
               accept="application/pdf,.pdf"
-              className={`${controlClass} file:mr-3 file:rounded-md file:border-0 file:bg-brand-500 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
+              className={`${controlClass} file:mr-3 file:rounded-md file:border-0 file:bg-brand-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white`}
               onChange={(e) =>
                 api.setValue(
                   api.field("jobDescriptionFile") as never,

@@ -1,7 +1,7 @@
 import { ErrorPanel } from "@components/error-panel";
 import { NotificationBody } from "@components/notification-body";
 import { OfferLetterLink } from "@components/offer-letter-link";
-import { Badge, Card, PageHeader } from "@components/ui";
+import { Badge, Card, LottieLoader, PageHeader } from "@components/ui";
 import {
   filterNotifications,
   NOTIFICATION_FILTERS,
@@ -80,6 +80,10 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
   const readCount = sorted.length - unread;
   const visible = filterNotifications(sorted, filter);
 
+  if (notes === null && !loadingError) {
+    return <LottieLoader size="fullscreen" message="Loading notifications…" />;
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -91,15 +95,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
         <ErrorPanel onRetry={() => void load()}>Could not load your notifications.</ErrorPanel>
       )}
 
-      {notes === null ? (
-        loadingError ? null : (
-          <div className="rounded-2xl border border-line/70 bg-surface p-8 text-center shadow-xs">
-            <p role="status" className="text-sm font-medium text-ink-500">
-              Loading notifications…
-            </p>
-          </div>
-        )
-      ) : sorted.length === 0 ? (
+      {sorted.length === 0 ? (
         <Card className="rounded-2xl border border-line/70 p-8 text-center shadow-xs">
           <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
             <Inbox aria-hidden="true" className="size-6" />
@@ -175,7 +171,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                       key={option}
                       className={`cursor-pointer rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
                         filter === option
-                          ? "border border-brand-500 bg-brand-500 text-white shadow-2xs"
+                          ? "border border-brand-500 bg-brand-600 text-white shadow-2xs"
                           : "text-ink-700 hover:bg-surface hover:text-ink-900"
                       }`}
                     >
@@ -217,7 +213,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                             className={`flex size-10 shrink-0 items-center justify-center rounded-2xl transition-transform group-hover:scale-105 ${
                               isUnread
                                 ? "bg-brand-500/10 text-brand-600 shadow-2xs"
-                                : "bg-surface-muted text-ink-400"
+                                : "bg-surface-muted text-ink-500"
                             }`}
                           >
                             {isUnread ? (
@@ -266,7 +262,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                             <button
                               type="button"
                               onClick={() => void markRead(note.id)}
-                              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-brand-700 shadow-2xs transition-all hover:border-brand-300 hover:bg-brand-50 active:scale-95"
+                              className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-brand-700 shadow-2xs transition-all hover:border-brand-400 hover:bg-brand-50 active:scale-95"
                             >
                               Mark read
                             </button>

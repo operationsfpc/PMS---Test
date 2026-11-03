@@ -198,7 +198,7 @@ function Visit({
           they needed two clicks each — one to open, one to choose — and a panel
           left open by default is a table that pays the height for nothing. So:
           one row per role, each with its own link. */}
-      <div className="mt-2 overflow-x-auto">
+      <div className="mt-2 scroll-bare overflow-x-auto">
         <table className="w-full min-w-[520px] text-left text-sm">
           <thead>
             <tr className="text-xs uppercase tracking-wide text-ink-500">

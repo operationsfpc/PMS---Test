@@ -1033,13 +1033,13 @@ describe("a visit decides whether it can take one more role", () => {
     expect(v.queryByText(/no further roles can be raised/i)).toBeNull();
   });
 
-  it("names the visit's day on a standalone drive, where it is not already printed", async () => {
+  it("offers the clean Add another role button for an AE on a standalone drive", async () => {
     show({
       view: view([{ ...DRIVE, driveId: "d44", companyDriveId: "e8", tentativeDate: "2026-09-01" }]),
     });
 
     const link = await screen.findByRole("link", { name: /add another role/i });
-    expect(link.textContent).toContain("(1 Sept 2026)");
+    expect(link.textContent.trim()).toBe("+ Add another role");
     expect(screen.queryByText(/no further roles can be raised/i)).toBeNull();
   });
 });

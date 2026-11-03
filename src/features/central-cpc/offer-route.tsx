@@ -1,6 +1,6 @@
 import { DrivePicker } from "@components/drive-picker";
 import { ErrorPanel } from "@components/error-panel";
-import { Card } from "@components/ui";
+import { Card, LottieLoader } from "@components/ui";
 import { useAuth } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { usePickerDrives } from "@lib/use-picker-drives";
@@ -39,13 +39,7 @@ export function OfferRoute() {
       );
     }
     if (drives === null) {
-      return (
-        <Card className="p-6">
-          <p role="status" className="text-sm text-ink-500">
-            Loading drives…
-          </p>
-        </Card>
-      );
+      return <LottieLoader size="fullscreen" message="Loading drives…" />;
     }
     return (
       <DrivePicker

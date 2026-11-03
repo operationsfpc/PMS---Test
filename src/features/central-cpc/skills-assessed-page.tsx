@@ -1,4 +1,4 @@
-import { Button, Card, PageHeader } from "@components/ui";
+import { Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { canRemoveSkillArea, validateSkillAreaName } from "@domain/skills";
 import { useCallback, useEffect, useState } from "react";
 import type { SkillAreaUsage, SkillsView } from "./skills-page";
@@ -118,6 +118,10 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
     }
   }
 
+  if (skills === null && error === null) {
+    return <LottieLoader size="fullscreen" message="Loading the skills…" />;
+  }
+
   return (
     <>
       <PageHeader
@@ -168,13 +172,7 @@ export function SkillsAssessedPage({ view }: { view: SkillsView }) {
         </div>
       </Card>
 
-      {skills === null ? (
-        error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading the skills…
-          </p>
-        ) : null
-      ) : (
+      {skills !== null && (
         <div className="flex flex-col gap-3">
           {skills.map((skill) => {
             const removal = canRemoveSkillArea(skill.scoreCount);

@@ -1,6 +1,6 @@
 import { DrivePicker } from "@components/drive-picker";
 import { ErrorPanel } from "@components/error-panel";
-import { Card, PageHeader } from "@components/ui";
+import { Card, LottieLoader, PageHeader } from "@components/ui";
 import { useAuth } from "@lib/auth-context";
 import { fetchDriveRounds, type PickerRound } from "@lib/drive-picker-data";
 import { supabase } from "@lib/supabase";
@@ -81,9 +81,7 @@ export function AttendanceRoute() {
         ) : (
           <Card className="p-6">
             {rounds === null ? (
-              <p role="status" className="text-sm text-ink-500">
-                Loading rounds…
-              </p>
+              <LottieLoader size="fullscreen" message="Loading rounds…" />
             ) : rounds.length === 0 ? (
               <p className="text-sm text-ink-700">
                 This drive has no rounds yet. Rounds are created on the Rounds &amp; results screen.
@@ -117,13 +115,7 @@ export function AttendanceRoute() {
   }
 
   if (drives === null) {
-    return (
-      <Card className="p-6">
-        <p role="status" className="text-sm text-ink-500">
-          Loading drives…
-        </p>
-      </Card>
-    );
+    return <LottieLoader size="fullscreen" message="Loading drives…" />;
   }
 
   return (

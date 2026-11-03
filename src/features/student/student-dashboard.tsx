@@ -10,6 +10,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
   StatCard,
 } from "@components/ui";
@@ -360,11 +361,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
   }
 
   if (snapshot === null) {
-    return (
-      <p role="status" className="text-sm text-ink-500">
-        Loading your dashboard…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading your dashboard…" />;
   }
 
   const prompt = studentPrompt({

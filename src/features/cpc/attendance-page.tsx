@@ -1,4 +1,4 @@
-import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import { ABSENCE_LIMIT, needsDisbarmentReview } from "@domain/attendance";
 import type { AttendanceStatus } from "@domain/types";
 import { useCallback, useEffect, useState } from "react";
@@ -115,9 +115,7 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading the attendance list…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading the attendance list…" />
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">

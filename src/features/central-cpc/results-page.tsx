@@ -1,5 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { attendanceLabel } from "@domain/attendance";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
 import { describeDriveFreeze } from "@domain/drive-working";
@@ -314,9 +314,7 @@ export function ResultsPage({
 
       {participants === null ? (
         readProblem === null ? (
-          <p role="status" className="text-sm text-ink-500">
-            Loading participants…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading participants…" />
         ) : (
           /* The sentence is already in the alert above; this is the way out, so
              the table does not stay empty with no control on it. */
@@ -1078,9 +1076,7 @@ export function DriveRoundsPage({
            read. The strip is not drawn over that — the alert above already says
            what failed and offers the retry. */
         readProblem === null ? (
-          <p role="status" className="mb-4 text-sm text-ink-500">
-            Loading rounds…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading rounds…" />
         ) : null
       ) : (
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -1094,7 +1090,7 @@ export function DriveRoundsPage({
               }}
               className={`rounded-lg border px-3 py-2 text-sm font-medium ${
                 round.roundId === active
-                  ? "border-brand-500 bg-brand-500 text-white"
+                  ? "border-brand-500 bg-brand-600 text-white"
                   : "border-line bg-surface text-ink-700 hover:bg-surface-muted"
               }`}
             >

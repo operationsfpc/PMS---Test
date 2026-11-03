@@ -7,6 +7,7 @@ import {
   Button,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
 } from "@components/ui";
 import { visitAccent } from "@components/visit-accent";
@@ -256,9 +257,7 @@ export function DrivesList({
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading your drives…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading your drives…" />
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">

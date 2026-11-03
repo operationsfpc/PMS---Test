@@ -43,7 +43,7 @@ export function DriveTypeFilter({
       <legend className="sr-only">Drive type</legend>
       <span
         aria-hidden="true"
-        className="text-xs font-medium text-ink-400 uppercase tracking-wider mr-0.5"
+        className="text-xs font-medium text-ink-500 uppercase tracking-wider mr-0.5"
       >
         Type
       </span>
@@ -58,8 +58,8 @@ export function DriveTypeFilter({
             onClick={() => onChange(option.value)}
             className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
               selected
-                ? "border-brand-500 bg-brand-500 text-white shadow-2xs"
-                : "border-line/80 bg-surface text-ink-700 hover:border-brand-300 hover:text-ink-900 hover:bg-surface-muted/50"
+                ? "border-brand-500 bg-brand-600 text-white shadow-2xs"
+                : "border-field bg-surface text-ink-700 hover:border-brand-400 hover:text-ink-900 hover:bg-surface-muted/50"
             }`}
           >
             {option.label}

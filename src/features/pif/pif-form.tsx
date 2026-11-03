@@ -702,7 +702,7 @@ export function PifForm({
             <div className="sm:col-span-2 rounded-lg border border-brand-200 bg-brand-50 p-3.5 text-xs text-brand-900">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  <span className="rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                     Existing Company
                   </span>
                   <span className="font-semibold text-brand-900">

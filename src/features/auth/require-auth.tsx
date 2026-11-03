@@ -1,3 +1,4 @@
+import { LottieLoader } from "@components/ui";
 import { type AuthState, useAuth } from "@lib/auth-context";
 import type { ReactNode } from "react";
 import { Navigate } from "react-router";
@@ -10,11 +11,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const auth: AuthState = useAuth();
 
   if (auth.status === "loading") {
-    return (
-      <p role="status" className="p-8 text-sm text-ink-500">
-        Checking your sign-in…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Checking your sign-in…" />;
   }
 
   // An unrecognised account is authenticated but belongs to nobody here. A

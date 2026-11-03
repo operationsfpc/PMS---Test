@@ -1,4 +1,12 @@
-import { Badge, Button, ButtonAnchor, Card, DataTable, PageHeader } from "@components/ui";
+import {
+  Badge,
+  Button,
+  ButtonAnchor,
+  Card,
+  DataTable,
+  LottieLoader,
+  PageHeader,
+} from "@components/ui";
 import { describeBoard } from "@domain/boards";
 import { decideSrf } from "@domain/srf-decision";
 import { describeUncheckedClaims, type EvidenceClaim } from "@domain/verification";
@@ -176,9 +184,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading the queue…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading the verification queue…" />
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">
@@ -478,7 +484,7 @@ export function SrfVerificationQueue({ repository }: { repository?: Verification
                             rows={3}
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
-                            className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                            className="w-full rounded-md border border-field bg-surface px-2.5 py-1.5 text-xs text-ink-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-500"
                             placeholder="Name what is wrong, and what to change."
                           />
                           <div className="flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
 import { FormSection, TextField } from "@components/form";
-import { Button, ButtonAnchor, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, LottieLoader, PageHeader } from "@components/ui";
 import {
   canRemoveCertificate,
   canUploadCertificate,
@@ -224,11 +224,7 @@ export function ProfileEditPage({
   }
 
   if (!loaded) {
-    return (
-      <p role="status" className="text-sm text-ink-500">
-        Loading your profile…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading your profile…" />;
   }
 
   return (

@@ -210,7 +210,7 @@ export function SheetContent({
           type="button"
           aria-label="Close panel"
           onClick={close}
-          className="absolute right-3 top-3 z-20 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-ink-400 hover:bg-surface-muted hover:text-ink-700 transition-colors"
+          className="absolute right-3 top-3 z-20 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 text-ink-500 hover:bg-surface-muted hover:text-ink-700 transition-colors"
         >
           <svg
             aria-hidden="true"

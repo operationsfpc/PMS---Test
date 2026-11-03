@@ -75,7 +75,7 @@ export function SectionNav({
         <a
           key={item.id}
           href={`#${item.id}`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors hover:border-brand-300 hover:text-brand-700"
+          className="inline-flex items-center gap-1.5 rounded-full border border-field bg-surface px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors hover:border-brand-400 hover:text-brand-700"
         >
           {item.number !== undefined && (
             <span
@@ -154,7 +154,7 @@ export function Labelled({
  * says it is wrong.
  */
 export const control =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-400 placeholder:font-normal transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500 aria-invalid:border-danger-500 aria-invalid:ring-1 aria-invalid:ring-danger-500/30 focus:aria-invalid:border-danger-600";
+  "w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm outline-none placeholder:italic placeholder:text-ink-500 placeholder:font-normal transition-colors focus:border-brand-600 focus:ring-1 focus:ring-brand-500 aria-invalid:border-danger-500 aria-invalid:ring-1 aria-invalid:ring-danger-500/30 focus:aria-invalid:border-danger-600";
 
 /**
  * An untouched optional number is NOT zero.
@@ -304,13 +304,13 @@ export function CategoryDropdown({
         aria-invalid={invalid || undefined}
         onClick={() => setOpen((prev) => !prev)}
         className={`${control} flex items-center justify-between gap-2 text-left ${
-          picked.length === 0 ? "italic text-ink-400" : "text-ink-900"
+          picked.length === 0 ? "italic text-ink-500" : "text-ink-900"
         }`}
       >
         <span className="truncate">{summary}</span>
         <span
           aria-hidden="true"
-          className={`shrink-0 text-ink-400 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`shrink-0 text-ink-500 transition-transform ${open ? "rotate-180" : ""}`}
         >
           <svg
             aria-hidden="true"

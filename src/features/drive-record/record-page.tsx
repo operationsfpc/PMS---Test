@@ -1,5 +1,4 @@
-import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
-import { visitDayInParentheses } from "@domain/drive-aging";
+import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import {
   canPublishDrive,
   canRaiseDrive,
@@ -102,12 +101,12 @@ const TILE_STYLES = {
     value: "text-success-950 font-extrabold",
   },
   sky: {
-    container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-300",
+    container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-400",
     label: "text-brand-700",
     value: "text-brand-950 font-extrabold",
   },
   brand: {
-    container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-300",
+    container: "border-brand-200/80 bg-brand-50/40 hover:border-brand-400",
     label: "text-brand-700",
     value: "text-brand-950 font-extrabold",
   },
@@ -217,23 +216,7 @@ export function DriveRecordPage({
   }
 
   if (record === null) {
-    return (
-      <div role="status" aria-busy="true" className="space-y-6">
-        <Skeleton className="h-8 w-80" />
-        <Skeleton className="h-5 w-24" />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {LOADING_TILES.map((key) => (
-            <Skeleton key={key} className="h-[70px]" />
-          ))}
-        </div>
-        <div className="space-y-4">
-          {LOADING_SECTIONS.map((key) => (
-            <Skeleton key={key} className="h-44" />
-          ))}
-        </div>
-        <p className="text-sm text-ink-500">Loading the drive…</p>
-      </div>
-    );
+    return <LottieLoader size="fullscreen" message="Loading the drive…" />;
   }
 
   const staff = role !== "student";
@@ -307,7 +290,7 @@ export function DriveRecordPage({
                     : ""
                 }&tentativeDate=${encodeURIComponent(record.tentativeDate ?? "")}`}
               >
-                + Add another role{visitDayInParentheses(record.tentativeDate)}
+                + Add another role
               </ButtonLink>
             ) : (
               // A closed visit cannot take a fifth role onto it. The offer is
@@ -324,7 +307,7 @@ export function DriveRecordPage({
       {activeStage !== null && stageApplicants !== null && (
         <section aria-label="Applicants by stage" className="mb-4">
           <Card className="p-5">
-            <div className="mb-3 flex flex-nowrap overflow-x-auto pb-1 [scrollbar-width:none] gap-1.5 sm:flex-wrap">
+            <div className="mb-3 flex flex-nowrap scroll-bare overflow-x-auto pb-1 gap-1.5 sm:flex-wrap">
               {FUNNEL_STAGES.map((key) => {
                 const count = filterFunnelStage(record.applicants, key).length;
                 return key === activeStage ? (
@@ -339,7 +322,7 @@ export function DriveRecordPage({
                   <Link
                     key={key}
                     to={`/drives/${driveId}?stage=${key}`}
-                    className="rounded-full border border-line bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+                    className="rounded-full border border-field bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
                   >
                     {STAGE_LABEL[key]} ({count})
                   </Link>
@@ -555,7 +538,7 @@ export function DriveRecordPage({
 
         {staff && record.applicants.length > 0 && (
           <Section title={`Applicants (${record.applicants.length})`}>
-            <div className="overflow-x-auto rounded-lg border border-line">
+            <div className="scroll-bare overflow-x-auto rounded-lg border border-line">
               <Table>
                 <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
                   <TableRow className="border-line">

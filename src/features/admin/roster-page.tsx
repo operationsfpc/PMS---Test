@@ -1,5 +1,5 @@
 import { ErrorPanel } from "@components/error-panel";
-import { Card } from "@components/ui";
+import { Card, LottieLoader } from "@components/ui";
 import { type EmailHolder, normaliseEmail } from "@domain/email-identity";
 import { readAllRows } from "@lib/postgrest-read";
 import { supabase } from "@lib/supabase";
@@ -108,11 +108,7 @@ export function AdminRosterPage() {
   }
 
   if (campuses === null) {
-    return (
-      <p role="status" className="p-6 text-sm text-ink-500">
-        Loading campuses…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading campuses…" />;
   }
 
   if (campuses.length === 0) {

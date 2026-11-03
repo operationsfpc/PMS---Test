@@ -1032,7 +1032,7 @@ export function SrfPage({
                         title={s.title}
                         className={`block rounded-full py-1 text-center text-[10px] font-semibold transition-colors ${
                           isComplete
-                            ? "bg-brand-500 text-white"
+                            ? "bg-brand-600 text-white"
                             : "bg-line text-ink-500 hover:bg-brand-50 hover:text-brand-600"
                         }`}
                       >

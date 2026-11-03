@@ -1,6 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { StudentIdentity } from "@components/student-identity";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { describeDriveFreeze } from "@domain/drive-working";
 import type { OfferCategory } from "@domain/offer-category";
 import { offerCountsAsPackage, offerPayProblem } from "@domain/offer-pay";
@@ -151,6 +151,30 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
   // the same rule the shortlisting and rounds screens read, in the same words.
   const closed = describeDriveFreeze("offers", drive?.status ?? null);
 
+  if (candidates === null) {
+    if (!failed) {
+      return <LottieLoader size="fullscreen" message="Loading candidates…" />;
+    }
+    return (
+      <div>
+        <PageHeader
+          title={drive === null ? "Final selection" : `${drive.companyName} — final selection`}
+          subtitle="Being placed is declared here. It is never inferred from the last round."
+        />
+        <ErrorPanel
+          onRetry={() => {
+            setFailed(false);
+            setAttempt((count) => count + 1);
+          }}
+          retryLabel="Load this drive again"
+        >
+          We could not load this drive or the students who reached its final round, so nothing here
+          can be declared.
+        </ErrorPanel>
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
@@ -178,22 +202,7 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
         </p>
       )}
 
-      {failed ? (
-        <ErrorPanel
-          onRetry={() => {
-            setFailed(false);
-            setAttempt((count) => count + 1);
-          }}
-          retryLabel="Load this drive again"
-        >
-          We could not load this drive or the students who reached its final round, so nothing here
-          can be declared.
-        </ErrorPanel>
-      ) : candidates === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading candidates…
-        </p>
-      ) : candidates.length === 0 ? (
+      {candidates.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">Nobody has reached the final round of this drive.</p>
         </Card>

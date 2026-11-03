@@ -1,5 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
-import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, Card, LottieLoader, PageHeader } from "@components/ui";
 import { evidenceProblem } from "@domain/verification";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
@@ -111,9 +111,7 @@ export function CertificateQueue({ repository }: { repository?: CertificateQueue
 
       {rows === null ? (
         error === null ? (
-          <p role="status" className="p-6 text-sm text-ink-500">
-            Loading the certificate queue…
-          </p>
+          <LottieLoader size="fullscreen" message="Loading the certificate queue…" />
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">

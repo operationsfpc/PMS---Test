@@ -1,3 +1,4 @@
+import { LottieLoader } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 import { createSupabaseAddSemesterView } from "./add-semester-repository";
@@ -66,11 +67,7 @@ export function SrfRoute() {
   );
 
   if (profile === undefined) {
-    return (
-      <p role="status" className="p-8 text-sm text-ink-500">
-        Loading your details…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading your details…" />;
   }
 
   return (

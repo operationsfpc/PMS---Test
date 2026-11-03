@@ -134,7 +134,7 @@ export function DriveRoster({
       active ? on : off
     }`;
 
-  const BRAND = "bg-brand-500 text-white border-brand-600";
+  const BRAND = "bg-brand-600 text-white border-brand-600";
   const PLAIN = "bg-surface text-ink-700 border-line hover:bg-surface-muted";
 
   return (
@@ -156,13 +156,13 @@ export function DriveRoster({
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Search students on this role"
           placeholder="Search student by name or roll number…"
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:outline-none"
+          className="w-full rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-900 placeholder:text-ink-500 focus:border-brand-600 focus:outline-none"
         />
         {query !== "" && (
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="absolute right-2.5 top-2.5 text-xs text-ink-400 hover:text-ink-700 cursor-pointer"
+            className="absolute right-2.5 top-2.5 text-xs text-ink-500 hover:text-ink-700 cursor-pointer"
           >
             Clear
           </button>
@@ -228,7 +228,7 @@ export function DriveRoster({
                 className={`rounded-xl border transition-all ${
                   isExpanded
                     ? "border-brand-300 bg-brand-50/20 shadow-xs"
-                    : "border-line bg-surface hover:border-brand-300 hover:bg-surface-muted/20"
+                    : "border-field bg-surface hover:border-brand-400 hover:bg-surface-muted/20"
                 }`}
               >
                 {/* Clickable student summary row */}
@@ -280,7 +280,7 @@ export function DriveRoster({
                       <Badge tone="neutral">Applied</Badge>
                     )}
 
-                    <span className="shrink-0 text-ink-400">
+                    <span className="shrink-0 text-ink-500">
                       <Chevron open={isExpanded} />
                     </span>
                   </div>

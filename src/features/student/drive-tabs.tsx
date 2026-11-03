@@ -6,6 +6,7 @@ import {
   Badge,
   ButtonLink,
   Card,
+  LottieLoader,
   PageHeader,
 } from "@components/ui";
 import { groupByCompanyVisit } from "@domain/company-drive";
@@ -273,13 +274,13 @@ export function DriveTabs({
           placeholder="Company or role"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full rounded-lg border border-line bg-surface px-3.5 py-2 text-sm shadow-xs transition-colors placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 focus:outline-none sm:w-60"
+          className="w-full rounded-lg border border-field bg-surface px-3.5 py-2 text-sm shadow-xs transition-colors placeholder:text-ink-500 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30 focus:outline-none sm:w-60"
         />
         <select
           aria-label="Filter by location"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
-          className="min-w-[130px] flex-1 cursor-pointer rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-700 shadow-xs transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 focus:outline-none sm:flex-none"
+          className="min-w-[130px] flex-1 cursor-pointer rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-700 shadow-xs transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30 focus:outline-none sm:flex-none"
         >
           <option value="">All locations</option>
           {locationOptions.map((loc) => (
@@ -294,7 +295,7 @@ export function DriveTabs({
           aria-label="Filter by drive type"
           value={type}
           onChange={(e) => setType(e.target.value as DriveTypeFilterValue)}
-          className="min-w-[130px] flex-1 cursor-pointer rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-700 shadow-xs transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 focus:outline-none sm:flex-none"
+          className="min-w-[130px] flex-1 cursor-pointer rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-700 shadow-xs transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30 focus:outline-none sm:flex-none"
         >
           {DRIVE_TYPE_FILTERS.map((option) => (
             <option key={option.value === "" ? "all" : option.value} value={option.value}>
@@ -306,7 +307,7 @@ export function DriveTabs({
           aria-label="Filter by role area"
           value={area}
           onChange={(e) => setArea(e.target.value as "" | RoleCategory)}
-          className="w-full cursor-pointer rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-700 shadow-xs transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 focus:outline-none sm:w-auto sm:flex-none"
+          className="w-full cursor-pointer rounded-lg border border-field bg-surface px-3 py-2 text-sm text-ink-700 shadow-xs transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-600/30 focus:outline-none sm:w-auto sm:flex-none"
         >
           <option value="">All role areas</option>
           {Object.entries(AREA_LABEL).map(([value, label]) => (
@@ -318,9 +319,7 @@ export function DriveTabs({
       </div>
 
       {lists === null && error === null ? (
-        <p role="status" className="p-6 text-sm text-ink-500">
-          Loading your drives…
-        </p>
+        <LottieLoader size="fullscreen" message="Loading your drives…" />
       ) : filtered === null ? null : tab === "to_apply" ? (
         <div role="tabpanel" aria-label="To apply">
           {/* keyed so a filter change re-reads the adapter's rows */}

@@ -99,7 +99,7 @@ export function TabsTrigger({
       onClick={() => onChange(value)}
       className={`inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-semibold transition-all focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 disabled:pointer-events-none disabled:opacity-50 ${
         isSelected
-          ? "bg-brand-500 text-white shadow-xs font-bold"
+          ? "bg-brand-600 text-white shadow-xs font-bold"
           : "text-ink-600 hover:text-ink-900 hover:bg-surface/80"
       } ${className}`}
     >

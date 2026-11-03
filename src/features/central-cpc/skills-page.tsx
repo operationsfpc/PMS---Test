@@ -1,6 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { TablePager } from "@components/table-pager";
-import { Button, ButtonAnchor, Card, PageHeader } from "@components/ui";
+import { Button, ButtonAnchor, Card, LottieLoader, PageHeader } from "@components/ui";
 import { parseCsv } from "@domain/csv";
 import {
   parseSkillScore,
@@ -166,11 +166,7 @@ export function SkillsPage({
         </>
       );
     }
-    return (
-      <p role="status" className="p-6 text-sm text-ink-500">
-        Loading the skill repository…
-      </p>
-    );
+    return <LottieLoader size="fullscreen" message="Loading the skill repository…" />;
   }
 
   const say = (message: string) => {

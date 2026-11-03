@@ -276,7 +276,7 @@ export function StatDrilldown({
           ""
         ) : (
           <>
-            <span className="mx-1.5 text-ink-400">·</span>
+            <span className="mx-1.5 text-ink-500">·</span>
             <span className="inline-flex items-center rounded-md border border-success-500/30 bg-success-50 px-2 py-0.5 text-xs font-semibold text-success-700">
               {note}
             </span>
@@ -288,7 +288,7 @@ export function StatDrilldown({
   );
 
   const filterStrip = (
-    <div className="-mb-1 overflow-x-auto pt-1">
+    <div className="-mb-1 scroll-bare overflow-x-auto pt-1">
       <TabsList aria-label={`${title} filters`}>
         {groups.map((group) => (
           <TabsTrigger key={group.key} value={group.key}>

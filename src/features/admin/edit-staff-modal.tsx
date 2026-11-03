@@ -133,7 +133,7 @@ export function EditStaffModal({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-ink-400 hover:bg-surface-muted hover:text-ink-700 transition-colors"
+            className="rounded-lg p-1.5 text-ink-500 hover:bg-surface-muted hover:text-ink-700 transition-colors"
           >
             <svg
               aria-hidden="true"
@@ -199,7 +199,7 @@ export function EditStaffModal({
                 value={selectedRole}
                 disabled={isCurrentAdmin || saving}
                 onChange={(e) => handleRoleChange(e.target.value as AppRole)}
-                className="h-10 w-full appearance-none rounded-lg border border-line bg-surface px-3 pr-8 text-sm font-medium text-ink-900 capitalize shadow-2xs transition-colors hover:border-brand-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-hidden disabled:opacity-50 cursor-pointer"
+                className="h-10 w-full appearance-none rounded-lg border border-field bg-surface px-3 pr-8 text-sm font-medium text-ink-900 capitalize shadow-2xs transition-colors hover:border-brand-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-500 focus:outline-hidden disabled:opacity-50 cursor-pointer"
               >
                 <optgroup label="Organisation-Wide (All Organisations)">
                   {ORG_WIDE_ROLES.map((r) => (
@@ -223,7 +223,7 @@ export function EditStaffModal({
                   ))}
                 </optgroup>
               </select>
-              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-400">
+              <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-500">
                 <svg
                   aria-hidden="true"
                   className="h-4 w-4"
@@ -301,7 +301,7 @@ export function EditStaffModal({
                     value={selectedCampusIds[0] ?? ""}
                     onChange={(e) => setSelectedCampusIds(e.target.value ? [e.target.value] : [])}
                     disabled={saving}
-                    className="h-10 w-full appearance-none rounded-lg border border-line bg-surface px-3 pr-8 text-sm text-ink-900 shadow-2xs transition-colors hover:border-brand-400 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-hidden disabled:opacity-50 cursor-pointer"
+                    className="h-10 w-full appearance-none rounded-lg border border-field bg-surface px-3 pr-8 text-sm text-ink-900 shadow-2xs transition-colors hover:border-brand-400 focus:border-brand-600 focus:ring-1 focus:ring-brand-500 focus:outline-hidden disabled:opacity-50 cursor-pointer"
                   >
                     <option value="">Select an organisation / campus…</option>
                     {campuses.map((c) => (
@@ -310,7 +310,7 @@ export function EditStaffModal({
                       </option>
                     ))}
                   </select>
-                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-400">
+                  <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-ink-500">
                     <svg
                       aria-hidden="true"
                       className="h-4 w-4"
@@ -373,7 +373,7 @@ export function EditStaffModal({
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleCampus(campus.id)}
-                          className="rounded border-line text-brand-600 focus:ring-brand-500"
+                          className="rounded border-field text-brand-600 focus:ring-brand-500"
                         />
                         <span className="min-w-0 truncate" title={campus.name}>
                           {campus.name}

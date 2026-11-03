@@ -6,7 +6,7 @@ import {
 import { ErrorPanel } from "@components/error-panel";
 import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
 import { TablePager } from "@components/table-pager";
-import { Badge, Button, Card, PageHeader } from "@components/ui";
+import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { LADDER_CATEGORIES, type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { participationStatusLabel } from "@domain/participation-status";
@@ -695,13 +695,16 @@ export function StudentDirectoryPage({
     );
   }
 
+  if (students === null) {
+    return <LottieLoader size="fullscreen" message="Loading students…" />;
+  }
+
   return (
     <div className="w-full min-w-0">
       <PageHeader
         title="Students"
         subtitle="Everyone in the placement process, and what became of them."
         actions={
-          students !== null &&
           students.length > 0 && (
             <Button
               variant="secondary"
@@ -754,11 +757,7 @@ export function StudentDirectoryPage({
         </p>
       )}
 
-      {students === null ? (
-        <p role="status" className="text-sm text-ink-500">
-          Loading students…
-        </p>
-      ) : students.length === 0 ? (
+      {students.length === 0 ? (
         <Card className="p-6">
           <p className="text-sm text-ink-700">
             No students yet. They appear here as soon as a campus roster is imported.
@@ -803,7 +802,7 @@ export function StudentDirectoryPage({
             <div
               role="radiogroup"
               aria-label="Filter students"
-              className="scroll-bare flex min-w-0 max-w-full flex-1 flex-nowrap gap-1.5 overflow-x-auto"
+              className="flex min-w-0 max-w-full flex-1 flex-nowrap gap-1.5 scroll-bare overflow-x-auto"
             >
               {FILTERS.map((option) => {
                 const isOptionActive =
@@ -815,8 +814,8 @@ export function StudentDirectoryPage({
                     key={option.value}
                     className={`shrink-0 cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
                       isOptionActive
-                        ? "border-brand-500 bg-brand-500 text-white"
-                        : "border-line bg-surface text-ink-700 hover:border-brand-400"
+                        ? "border-brand-500 bg-brand-600 text-white"
+                        : "border-field bg-surface text-ink-700 hover:border-brand-400"
                     }`}
                   >
                     <input
@@ -999,7 +998,7 @@ export function StudentDirectoryPage({
             </Button>
           </p>
 
-          <Card className="scroll-bare w-full min-w-0 max-w-full overflow-x-auto">
+          <Card className="w-full min-w-0 max-w-full scroll-bare overflow-x-auto">
             {/* Auto layout, floored at 720px: `table-fixed` with percentage
                 columns gave "Applications" 86px at a normal desktop width, and
                 its uppercase label needs ~118, so the header ran into the next
@@ -1116,7 +1115,7 @@ export function StudentDirectoryPage({
                           {holds === undefined && (
                             <Link
                               to={`/students/${student.studentId}`}
-                              className="inline-flex items-center rounded-md border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50 hover:border-brand-300 transition-colors shrink-0"
+                              className="inline-flex items-center rounded-md border border-field bg-surface px-2 py-0.5 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50 hover:border-brand-400 transition-colors shrink-0"
                             >
                               Profile →
                             </Link>
@@ -1160,7 +1159,7 @@ export function StudentDirectoryPage({
                         {student.placement === null ? (
                           // A fact, not a blank cell: an empty column reads as
                           // missing data rather than as an unplaced student.
-                          <span className="text-xs font-medium text-ink-400">Not placed</span>
+                          <span className="text-xs font-medium text-ink-500">Not placed</span>
                         ) : (
                           <>
                             <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
@@ -1185,7 +1184,7 @@ export function StudentDirectoryPage({
                           <div className="flex items-center justify-end gap-2">
                             <Link
                               to={`/students/${student.studentId}`}
-                              className="inline-flex items-center rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50 hover:border-brand-300 transition-colors"
+                              className="inline-flex items-center rounded-md border border-field bg-surface px-2.5 py-1 text-xs font-semibold text-brand-700 shadow-2xs hover:bg-brand-50 hover:border-brand-400 transition-colors"
                             >
                               Profile →
                             </Link>

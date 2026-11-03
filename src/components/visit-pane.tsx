@@ -103,7 +103,7 @@ export function VisitPane({
   );
 
   const tabStrip = (
-    <div className="-mb-1 overflow-x-auto pt-1">
+    <div className="-mb-1 scroll-bare overflow-x-auto pt-1">
       <TabsList aria-label={`${company} roles`}>
         {roles.map((role) => (
           <TabsTrigger key={role.id} value={role.id}>
