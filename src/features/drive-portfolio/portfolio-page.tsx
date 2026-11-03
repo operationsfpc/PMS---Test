@@ -29,6 +29,7 @@ import {
 import { applicationWindow } from "@domain/drive-analytics";
 import { type DateRangeFilterCriteria, filterDrivesByDateRange } from "@domain/drive-date-filter";
 import {
+  canRaiseDrive,
   canShortlistFromPortfolio,
   canViewDriveApplicants,
   type DriveRole,
@@ -809,8 +810,9 @@ export function DrivePortfolioPage({
           {/* One or the other: an offer to raise a role, or the state that
               refuses it. Both on screen at once reads as two controls. Said
               once per visit — the roles listed above each used to repeat the
-              offer, so a single-role visit showed it twice on one card. */}
-          {(role === "account_executive" || role === "admin") && (
+              offer, so a single-role visit showed it twice on one card.
+              Strictly restricted to Account Executive (canRaiseDrive). */}
+          {canRaiseDrive(role) && (
             <div className="border-t border-line/60 bg-surface-muted/30 px-4 py-2.5 sm:px-5">
               {(() => {
                 const refused = visitRoleFreeze(event);

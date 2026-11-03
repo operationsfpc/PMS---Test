@@ -65,13 +65,19 @@
   --color-cyan-400: #1ee0e1;
   --color-orange-500: #f05136;
 
-  /*
-   * Logo gradient tokens, aligned to FACE Prep Brand Orange (#f05136) palette.
+  /**
+   * Logo gradient tokens, sampled from the pixels of
+   * `public/brand/faceprep-campus-dark.png` (top-left of the mark `#c602d1`,
+   * its middle `#ef6d5d`, the bottom-right `#f2a363`).
+   *
+   * They used to be the brand-orange ramp wearing these names — `magenta` was
+   * `#d63d22`, a red — so the hairline painted from them read as a different
+   * hue family than the logo it sat directly under.
    */
-  --color-fpc-magenta: #d63d22;
-  --color-fpc-pink: #fa7e66;
-  --color-fpc-coral: #f0735e;
-  --color-fpc-orange: #f05136;
+  --color-fpc-magenta: #c602d1;
+  --color-fpc-pink: #dd388e;
+  --color-fpc-coral: #ef6d5d;
+  --color-fpc-amber: #f2a363;
 
   /* Warm mappings for legacy ramps ensuring 100% theme harmony */
   --color-slate-50: #fffbf9;
@@ -223,13 +229,35 @@
   --color-ring: var(--color-brand-300);
 }
 
+/**
+ * The logo's own sweep, so a hairline wearing the brand reads as the brand.
+ * Four surfaces carry it: the app header, the sheet and drill-down drawer
+ * heads, and the SRF page.
+ */
 @utility fpc-gradient {
   background-image: linear-gradient(
     90deg,
-    var(--color-brand-600) 0%,
-    var(--color-brand-500) 50%,
-    var(--color-gold-500) 100%
+    var(--color-fpc-magenta) 0%,
+    var(--color-fpc-coral) 55%,
+    var(--color-fpc-amber) 100%
   );
+}
+
+/**
+ * A strip that scrolls sideways without admitting it: the chip row and the
+ * students table both need inner horizontal scroll on a narrow screen, and a
+ * visible bar in either one looks like the page itself had escaped its width.
+ *
+ * Named rather than written as `[&::-webkit-scrollbar]:hidden` at the call
+ * sites because that only covers WebKit — Firefox keeps the bar.
+ */
+@utility scroll-bare {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /**

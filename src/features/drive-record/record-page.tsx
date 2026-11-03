@@ -2,6 +2,7 @@ import { Badge, Button, ButtonLink, Card, PageHeader } from "@components/ui";
 import { visitDayInParentheses } from "@domain/drive-aging";
 import {
   canPublishDrive,
+  canRaiseDrive,
   canShortlistFromPortfolio,
   FUNNEL_STAGES,
   type FunnelStageKey,
@@ -295,7 +296,7 @@ export function DriveRecordPage({
             >
               Shortlist
             </ButtonLink>
-          ) : staff && (role === "account_executive" || role === "admin") ? (
+          ) : staff && canRaiseDrive(role) ? (
             rolesRefused === null ? (
               <ButtonLink
                 size="sm"

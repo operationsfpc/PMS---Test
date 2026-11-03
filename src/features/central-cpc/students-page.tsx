@@ -696,7 +696,7 @@ export function StudentDirectoryPage({
   }
 
   return (
-    <div className="w-full min-w-0 max-w-full overflow-x-hidden">
+    <div className="w-full min-w-0">
       <PageHeader
         title="Students"
         subtitle="Everyone in the placement process, and what became of them."
@@ -803,7 +803,7 @@ export function StudentDirectoryPage({
             <div
               role="radiogroup"
               aria-label="Filter students"
-              className="flex flex-nowrap overflow-x-auto gap-1.5 min-w-0 flex-1 max-w-full [&::-webkit-scrollbar]:hidden"
+              className="scroll-bare flex min-w-0 max-w-full flex-1 flex-nowrap gap-1.5 overflow-x-auto"
             >
               {FILTERS.map((option) => {
                 const isOptionActive =
@@ -999,12 +999,17 @@ export function StudentDirectoryPage({
             </Button>
           </p>
 
-          <Card className="w-full min-w-0 max-w-full overflow-x-auto">
-            <table className="w-full table-fixed text-left text-sm">
+          <Card className="scroll-bare w-full min-w-0 max-w-full overflow-x-auto">
+            {/* Auto layout, floored at 720px: `table-fixed` with percentage
+                columns gave "Applications" 86px at a normal desktop width, and
+                its uppercase label needs ~118, so the header ran into the next
+                column. Columns now size to what they say, and the Card above
+                this scrolls sideways silently when the window is narrow. */}
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-line text-xs uppercase tracking-wide text-ink-500">
                 <tr>
-                  <th className="px-4 py-3 w-[25%]">Student</th>
-                  <th className="px-4 py-3 w-[30%]">
+                  <th className="px-4 py-3">Student</th>
+                  <th className="px-4 py-3">
                     <span className="flex items-center gap-1.5">
                       Campus
                       <ColumnFilterButton label="Campus" active={campus !== ""}>
@@ -1018,7 +1023,7 @@ export function StudentDirectoryPage({
                       </ColumnFilterButton>
                     </span>
                   </th>
-                  <th className="px-4 py-3 w-[15%]">
+                  <th className="px-4 py-3">
                     <span className="flex items-center gap-1.5">
                       Registration
                       <ColumnFilterButton
@@ -1046,8 +1051,8 @@ export function StudentDirectoryPage({
                       </ColumnFilterButton>
                     </span>
                   </th>
-                  <th className="px-4 py-3 w-[10%]">Applications</th>
-                  <th className="px-4 py-3 w-[20%]">
+                  <th className="px-4 py-3">Applications</th>
+                  <th className="px-4 py-3">
                     <span className="flex items-center gap-1.5">
                       Placement
                       <ColumnFilterButton
@@ -1071,7 +1076,7 @@ export function StudentDirectoryPage({
                       </ColumnFilterButton>
                     </span>
                   </th>
-                  {holds !== undefined && <th className="px-4 py-3 text-right w-[10%]">Actions</th>}
+                  {holds !== undefined && <th className="px-4 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="table-rows divide-y divide-line">
