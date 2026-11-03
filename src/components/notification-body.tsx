@@ -1,13 +1,17 @@
-import { type BodySegment, linkifyBody } from "@domain/notifications";
+import { type BodySegment, cleanNotificationBody, linkifyBody } from "@domain/notifications";
 
 /**
  * Spec C (2026-08-21, approved 2026-08-24): one renderer for notification
  * bodies, shared by the notifications page and the dashboard panel — a URL
  * must never be a link on one screen and dead text on the other.
+ *
+ * Automatically sanitises out external email boilerplates ("Log in to portal",
+ * "Sign in with Google", email signatures) so notifications read like crisp
+ * in-app system notices rather than raw email replicas.
  */
-export function NotificationBody({ body }: { body: string }) {
-  // Split on line breaks so \n\n becomes visible paragraph breaks
-  const lines = body.split("\n");
+export function NotificationBody({ body, clean = true }: { body: string; clean?: boolean }) {
+  const displayBody = clean ? cleanNotificationBody(body) : body;
+  const lines = displayBody.split("\n");
 
   return (
     <>

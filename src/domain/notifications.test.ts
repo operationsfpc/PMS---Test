@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  cleanNotificationBody,
   condenseNotifications,
+  extractNotificationMetadata,
   filterNotifications,
+  formatRelativeTime,
+  getNotificationCategory,
   linkifyBody,
   type NotificationItem,
   notificationCarriesOfferLetter,
@@ -230,5 +234,70 @@ describe("notificationCarriesOfferLetter", () => {
     expect(notificationCarriesOfferLetter("shortlisted")).toBe(false);
     expect(notificationCarriesOfferLetter("meeting_link")).toBe(false);
     expect(notificationCarriesOfferLetter("")).toBe(false);
+  });
+});
+
+describe("getNotificationCategory", () => {
+  it("categorises drive-related notifications", () => {
+    expect(getNotificationCategory("drive_published")).toBe("drive");
+    expect(getNotificationCategory("drive_deadline_reminder")).toBe("drive");
+    expect(getNotificationCategory("application_confirmed")).toBe("drive");
+  });
+
+  it("categorises interview and round notifications", () => {
+    expect(getNotificationCategory("round_scheduled")).toBe("interview");
+    expect(getNotificationCategory("meeting_link")).toBe("interview");
+    expect(getNotificationCategory("round_cleared")).toBe("interview");
+    expect(getNotificationCategory("round_not_selected")).toBe("interview");
+  });
+
+  it("categorises offers", () => {
+    expect(getNotificationCategory("offer")).toBe("offer");
+    expect(getNotificationCategory("self_placement_decision")).toBe("offer");
+  });
+
+  it("categorises profile, srf and account notices", () => {
+    expect(getNotificationCategory("srf_approved")).toBe("profile");
+    expect(getNotificationCategory("srf_rejected")).toBe("profile");
+    expect(getNotificationCategory("welcome")).toBe("profile");
+  });
+});
+
+describe("extractNotificationMetadata", () => {
+  it("extracts company, role, ctc and deadline from drive notifications", () => {
+    const body = `A new drive is open.\n\n**Company:** Acme Corp\n**Role:** SDE\n**CTC Range:** 12 LPA\n**Application Deadline:** 15 Nov 2026`;
+    const meta = extractNotificationMetadata(body);
+    expect(meta.company).toBe("Acme Corp");
+    expect(meta.role).toBe("SDE");
+    expect(meta.ctc).toBe("12 LPA");
+    expect(meta.deadline).toBe("15 Nov 2026");
+  });
+
+  it("extracts meeting link and venue", () => {
+    const body = `Round 1. Join at: https://meet.google.com/abc-xyz. Venue: Hall A. Please report on time.`;
+    const meta = extractNotificationMetadata(body);
+    expect(meta.meetingLink).toBe("https://meet.google.com/abc-xyz");
+    expect(meta.venue).toBe("Hall A");
+  });
+});
+
+describe("cleanNotificationBody", () => {
+  it("removes portal login reminders and Google sign-in boilerplate", () => {
+    const body = `Drive details.\n\nLog in to the portal at https://pms.example to view full details.\n\nPlease sign in with your registered Google account to complete your profile.`;
+    const cleaned = cleanNotificationBody(body);
+    expect(cleaned).not.toMatch(/Log in to the portal/i);
+    expect(cleaned).not.toMatch(/Please sign in with/i);
+  });
+});
+
+describe("formatRelativeTime", () => {
+  const base = new Date("2026-11-03T12:00:00Z").getTime();
+
+  it("formats recent intervals cleanly without emojis", () => {
+    expect(formatRelativeTime("2026-11-03T11:59:30Z", base)).toBe("Just now");
+    expect(formatRelativeTime("2026-11-03T11:45:00Z", base)).toBe("15m ago");
+    expect(formatRelativeTime("2026-11-03T09:00:00Z", base)).toBe("3h ago");
+    expect(formatRelativeTime("2026-11-02T10:00:00Z", base)).toBe("Yesterday");
+    expect(formatRelativeTime("2026-10-31T10:00:00Z", base)).toBe("3d ago");
   });
 });

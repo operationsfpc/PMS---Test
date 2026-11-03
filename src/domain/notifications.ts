@@ -120,3 +120,128 @@ export function linkifyBody(body: string): readonly BodySegment[] {
 export function notificationCarriesOfferLetter(kind: string): boolean {
   return kind === "offer";
 }
+
+/**
+ * High-level notification categories for UI filtering and visual badging.
+ * Zero emojis — clean enterprise categorisation.
+ */
+export type NotificationCategory = "drive" | "interview" | "offer" | "profile" | "general";
+
+export function getNotificationCategory(kind: string): NotificationCategory {
+  switch (kind) {
+    case "drive_published":
+    case "drive_deadline_reminder":
+    case "application_confirmed":
+    case "campus_drive_alert":
+      return "drive";
+    case "shortlisted":
+    case "round_scheduled":
+    case "meeting_link":
+    case "interview_day_reminder":
+    case "round_cleared":
+    case "round_not_selected":
+      return "interview";
+    case "offer":
+    case "self_placement_decision":
+    case "super_dream_milestone":
+      return "offer";
+    case "srf_approved":
+    case "srf_rejected":
+    case "welcome":
+    case "opt_out_confirmed":
+    case "absent":
+      return "profile";
+    default:
+      return "general";
+  }
+}
+
+export interface ExtractedNotificationMetadata {
+  readonly company?: string;
+  readonly role?: string;
+  readonly ctc?: string;
+  readonly deadline?: string;
+  readonly venue?: string;
+  readonly meetingLink?: string;
+  readonly mode?: string;
+}
+
+/**
+ * Extracts structured metadata fields from notification bodies so the in-app
+ * view can render crisp info chips rather than a wall of email text.
+ */
+export function extractNotificationMetadata(body: string): ExtractedNotificationMetadata {
+  const meta: Record<string, string> = {};
+
+  const companyMatch = body.match(/\*\*Company:\*\*\s*([^\n]+)/i);
+  if (companyMatch?.[1]) meta.company = companyMatch[1].trim();
+
+  const roleMatch = body.match(/\*\*Role:\*\*\s*([^\n]+)/i);
+  if (roleMatch?.[1]) meta.role = roleMatch[1].trim();
+
+  const ctcMatch = body.match(/\*\*(?:CTC Range|CTC):\*\*\s*([^\n]+)/i);
+  if (ctcMatch?.[1]) meta.ctc = ctcMatch[1].trim();
+
+  const deadlineMatch = body.match(/\*\*Application Deadline:\*\*\s*([^\n]+)/i);
+  if (deadlineMatch?.[1]) meta.deadline = deadlineMatch[1].trim();
+
+  const venueMatch = body.match(/(?:\.|\n|^)\s*Venue:\s*([^.\n]+)/i);
+  if (venueMatch?.[1]) meta.venue = venueMatch[1].trim();
+
+  const linkMatch = body.match(/(?:Join at:|meeting link:)\s*(https?:\/\/[^\s]+)/i);
+  if (linkMatch?.[1]) meta.meetingLink = linkMatch[1].trim().replace(/[.,;)\]}]+$/, "");
+
+  const modeMatch = body.match(/(?:•\s*\*\*Mode:\*\*|Mode:)\s*([^\n.]+)/i);
+  if (modeMatch?.[1]) meta.mode = modeMatch[1].trim();
+
+  return meta;
+}
+
+/**
+ * Strips out redundant email boilerplate from notification messages for in-app viewing:
+ * - "Log in to the portal at..."
+ * - "Please sign in with your registered Google account..."
+ * - Email signatures and salutations
+ */
+export function cleanNotificationBody(body: string): string {
+  return body
+    .replace(/(?:Please\s+)?(?:Log in|Sign in)\s+to\s+the\s+portal[^\n.]*(?:\.|$)/gi, "")
+    .replace(
+      /Please\s+sign\s+in\s+with\s+your\s+registered\s+Google\s+account[^\n.]*(?:\.|$)/gi,
+      "",
+    )
+    .replace(/Dear\s+(?:Candidate|Student)[^\n,]*,?/gi, "")
+    .replace(/Warm\s+regards,?\s*(?:Placement\s+Cell,?)?\s*(?:FACE\s+Prep\s+Campus)?/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * User-friendly relative time string (e.g. "Just now", "15m ago", "2h ago", "Yesterday").
+ * Guaranteed zero emojis.
+ */
+export function formatRelativeTime(iso: string, referenceTime: number = Date.now()): string {
+  const timestamp = new Date(iso).getTime();
+  if (Number.isNaN(timestamp)) return "";
+
+  const diffMs = referenceTime - timestamp;
+  if (diffMs < 0) return "Just now";
+
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHours = Math.floor(diffMin / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffSec < 60) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return new Date(iso).toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
