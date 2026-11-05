@@ -295,7 +295,14 @@ function MultiSelect({
   );
 }
 
-/** A city is a way of moving through the college list, never a targeting itself. */
+/**
+ * Cities are a way of moving through the college list, never a targeting itself.
+ *
+ * The bulk action sits in the panel header like the two below it. It used to
+ * trail inside the chip wrap, so it read as one more city, landed wherever the
+ * wrap left it, and was the only `Select all` on the screen not named for the
+ * thing it selects.
+ */
 function CityFilter({
   cities,
   selected,
@@ -307,11 +314,23 @@ function CityFilter({
   onToggle: (city: string) => void;
   onSelectAll: () => void;
 }) {
-  const allSelected = cities.length > 0 && selected.length === cities.length;
+  const allSelected = areAllSelected(cities, selected);
   return (
     <fieldset>
-      <legend className="mb-1.5 text-sm font-medium text-ink-700">Filter colleges by city</legend>
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="mb-1.5 flex items-center justify-between">
+        <legend className="text-sm font-medium text-ink-700">Filter colleges by city</legend>
+        {cities.length > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`${allSelected ? "Clear all" : "Select all"} cities`}
+            onClick={onSelectAll}
+          >
+            {allSelected ? "Clear all" : "Select all"}
+          </Button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
         {cities.map((city) => {
           const on = selected.includes(city);
           return (
@@ -333,13 +352,6 @@ function CityFilter({
             </label>
           );
         })}
-        <button
-          type="button"
-          onClick={onSelectAll}
-          className="rounded-full border border-field bg-surface px-3 py-1 text-xs font-medium text-ink-700 transition-colors hover:border-brand-400"
-        >
-          {allSelected ? "Clear all" : "Select all"}
-        </button>
       </div>
       <p className="mt-1 text-xs text-ink-500">
         Tick a city to add every college in it to the list below, and to narrow that list to them.
@@ -479,7 +491,7 @@ export function DafPublish({ view }: { view: PublishView }) {
   };
 
   const allCities = citiesOf(colleges);
-  const allCityChipsSelected = allCities.length > 0 && cityFilter.length === allCities.length;
+  const allCityChipsSelected = areAllSelected(allCities, cityFilter);
   const toggleAllCities = (): void => {
     if (allCityChipsSelected) {
       setCityFilter([]);
@@ -550,6 +562,23 @@ export function DafPublish({ view }: { view: PublishView }) {
     return Array.from(set);
   }, [combinedDegreeBranch]);
 
+  /**
+   * The degree each ticked branch was ticked under — the part the one control
+   * knows and the two link tables forget. "B.Sc — AI and ML" beside "BCA"
+   * targets those B.Sc specialisations AND every BCA student; without this, the
+   * branch half of the tick refuses the BCA students the degree half invited.
+   */
+  const parsedBranchDegrees = useMemo(() => {
+    const set = new Set<string>();
+    for (const label of combinedDegreeBranch) {
+      const dashIndex = label.indexOf(" — ");
+      if (dashIndex !== -1) {
+        set.add(label.slice(0, dashIndex));
+      }
+    }
+    return Array.from(set);
+  }, [combinedDegreeBranch]);
+
   const drive: VisibleDrive | null = useMemo(
     () =>
       loadedDrive === null
@@ -570,6 +599,7 @@ export function DafPublish({ view }: { view: PublishView }) {
             criteria: {
               eligibleDegrees: parsedDegrees,
               eligibleBranches: parsedBranches,
+              eligibleBranchDegrees: parsedBranchDegrees,
               eligiblePassingYears: [],
               minOverallCgpa: minCgpa === "" ? null : Number(minCgpa),
               minTenthPercentage: minTenth === "" ? null : Number(minTenth),
@@ -590,6 +620,7 @@ export function DafPublish({ view }: { view: PublishView }) {
       colleges,
       parsedDegrees,
       parsedBranches,
+      parsedBranchDegrees,
       minCgpa,
       minTenth,
       minTwelfth,

@@ -82,7 +82,7 @@ async function pickCategory(
   const card = trigger.closest("section") as HTMLElement;
   const wanted = typeof labels === "string" ? [labels] : [...labels];
   for (const label of wanted) {
-    await user.click(within(card).getByRole("checkbox", { name: label }));
+    await user.click(within(card).getByRole("radio", { name: label }));
   }
 }
 
@@ -904,22 +904,24 @@ describe("PifForm — the role category picker", () => {
     return { trigger, card: trigger.closest("section") as HTMLElement };
   }
 
-  it("keeps every category the AE ticked, and only those", async () => {
+  it("shows the chosen category and clears the previous one on a new pick", async () => {
     const user = userEvent.setup();
     renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
-    await pickCategory(user, ["Software / Technical", "Sales"]);
+    await pickCategory(user, "Software / Technical");
+    // A second pick replaces the first — single-select.
+    await pickCategory(user, "Sales");
 
     const { trigger, card } = categoryBox(1);
-    // Stated in the picker's own order, so the summary does not depend on the
-    // order the AE happened to click in.
-    expect(trigger.textContent).toMatch(/Software \/ Technical, Sales/);
+    // Only the last-picked category appears in the summary.
+    expect(trigger.textContent).toMatch(/Sales/);
+    expect(trigger.textContent).not.toMatch(/Software/);
     for (const [label, checked] of [
-      ["Software / Technical", true],
+      ["Software / Technical", false],
       ["Sales", true],
       ["Digital Marketing", false],
     ] as const) {
-      const box = within(card).getByRole("checkbox", { name: label }) as HTMLInputElement;
+      const box = within(card).getByRole("radio", { name: label }) as HTMLInputElement;
       expect(box.checked).toBe(checked);
     }
   });
@@ -938,29 +940,38 @@ describe("PifForm — the role category picker", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("says the drives one card raises — only once it names a second category", async () => {
+  it("keeps a single category selection when another is chosen", async () => {
     const user = userEvent.setup();
     renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/number of openings/i), "25");
     await pickCategory(user, "Software / Technical");
-    // One category, one drive: nothing to warn about.
+    // One category, one drive: no multi-drive warning.
     expect(screen.queryByText(/categories become/i)).toBeNull();
 
     await pickCategory(user, "Sales");
-    expect(
-      screen.getByText("2 categories become 2 drives under this visit, each with 25 openings."),
-    ).toBeDefined();
+    // Single-select: selecting another category replaces the choice, so no warning appears.
+    expect(screen.queryByText(/categories become/i)).toBeNull();
   });
 
   it("refuses to submit a card whose categories are all unticked, at the field", async () => {
     const onSubmit = vi.fn();
     const user = userEvent.setup();
     renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
-    await fillRequired(user);
+    // Fill everything EXCEPT the category so the field starts empty.
+    await user.click(screen.getByRole("radio", { name: /^full time$/i }));
+    await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
+    await user.type(screen.getByLabelText(/company name/i), "Zoho Corporation");
+    await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
+    await user.type(screen.getByLabelText(/^job description$/i), "Build backend services.");
+    await user.type(screen.getByLabelText(/number of openings/i), "25");
+    await user.type(screen.getByLabelText(/work location/i), "Chennai");
+    await user.click(screen.getByRole("button", { name: /add round/i }));
+    await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
+    await user.click(screen.getByRole("checkbox", { name: /2027/ }));
+    await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
 
-    const { trigger, card } = categoryBox(1);
-    await user.click(within(card).getByRole("checkbox", { name: "Software / Technical" }));
+    const { trigger } = categoryBox(1);
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
     await waitFor(() => expect(trigger.getAttribute("aria-invalid")).toBe("true"));
@@ -970,20 +981,19 @@ describe("PifForm — the role category picker", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it("raises the visit as an event when one card names two categories", async () => {
+  it("submits the chosen category in the single-role payload", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
     renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
     await fillRequired(user);
+    // fillRequired already picks "Software / Technical"; picking Sales replaces it.
     await pickCategory(user, "Sales");
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    // A single card naming ONE category is flattened into a plain drive; naming
-    // two is two drives under one event, so the roles array must carry it.
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
-      roles: [{ roleCategories: ["software_technical", "sales"] }],
+      roleCategory: "sales",
     });
   });
 });

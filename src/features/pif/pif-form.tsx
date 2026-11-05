@@ -127,11 +127,6 @@ function RoleBlock({
     control: api.control,
     name: `roles.${index}.roleCategories` as never,
   }) ?? []) as readonly string[];
-  const openingsPerCategory = useWatch({
-    control: api.control,
-    name: `roles.${index}.openings` as never,
-  }) as number | null;
-
   return (
     <Section
       number={number}
@@ -192,17 +187,6 @@ function RoleBlock({
               className={control}
               {...roleApi.register(roleApi.field("openings") as never, numeric)}
             />
-            {/* Each category becomes its own drive row carrying this count, so an
-                AE who means "10 across both" must say 5 here. */}
-            {categories.length > 1 && (
-              <p className="mt-1 text-xs text-ink-500">
-                {`${categories.length} categories become ${categories.length} drives under this visit, each with ${
-                  openingsPerCategory === null
-                    ? "the openings above"
-                    : `${openingsPerCategory} openings`
-                }.`}
-              </p>
-            )}
           </>
         )}
       </Labelled>

@@ -34,6 +34,17 @@ export interface EligibilityResult {
 export interface EligibilityCriteria {
   readonly eligibleDegrees: readonly string[];
   readonly eligibleBranches: readonly string[];
+  /**
+   * The degrees the ticked branches belong to.
+   *
+   * The publish screen ticks whole programmes — "BCA", "B.Sc — AI and ML" — and
+   * two link tables flatten that into a degree list and a branch list. Read as
+   * one AND, a bare "BCA" tick refuses EVERY BCA student as soon as any branch
+   * is ticked: no branch of another degree can be theirs, so their only way
+   * through a non-empty branch list would be to have no branch at all. The
+   * owner of each branch is what makes the two lists mean the ticks again.
+   */
+  readonly eligibleBranchDegrees: readonly string[];
   readonly eligiblePassingYears: readonly number[];
   /** Tested against overall CGPA, never the latest semester (decision Q7). */
   readonly minOverallCgpa: number | null;
@@ -79,7 +90,20 @@ export function evaluateEligibility(
   };
 
   requireMembership(criteria.eligibleDegrees, profile.degree, "degree", "Degree");
-  requireMembership(criteria.eligibleBranches, profile.branch, "branch", "Branch");
+
+  /* A ticked branch narrows the students who run its degree, and no further.
+     A degree ticked beside it, holding none of the ticked branches, was ticked
+     for its own sake — that is the "BCA" beside "B.Sc — AI and ML" the interlock
+     offers on the publish screen. A branch tick with NO degree tick still binds
+     everyone: then the specialisation is the whole targeting, and the tightening
+     that stopped a B.E CSE drive reaching a BCA student has to hold. */
+  const branchListIsTheirs =
+    criteria.eligibleDegrees.length === 0 ||
+    criteria.eligibleBranchDegrees.includes(profile.degree);
+  if (branchListIsTheirs) {
+    requireMembership(criteria.eligibleBranches, profile.branch, "branch", "Branch");
+  }
+
   requireMembership(
     criteria.eligiblePassingYears,
     profile.passingYear,

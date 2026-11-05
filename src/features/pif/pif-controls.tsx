@@ -257,12 +257,9 @@ export function CategoryDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
-  // Always in `ROLE_CATEGORIES` order, whatever tick order the AE used.
+  // Single-select: at most one category can be chosen.
   const picked = ROLE_CATEGORIES.filter((category) => value.includes(category));
-  const summary =
-    picked.length === 0
-      ? "Choose…"
-      : picked.map((category) => roleCategoryLabel(category)).join(", ");
+  const summary = picked.length === 0 ? "Choose…" : roleCategoryLabel(picked[0] ?? null);
 
   useEffect(() => {
     if (!open) return;
@@ -286,12 +283,11 @@ export function CategoryDropdown({
     };
   }, [open, id]);
 
-  function toggle(category: RoleCategory, on: boolean) {
-    onChange(
-      on
-        ? ROLE_CATEGORIES.filter((c) => c === category || value.includes(c))
-        : value.filter((c) => c !== category),
-    );
+  function select(category: RoleCategory) {
+    // Replace whatever was chosen before with the single clicked category,
+    // then close so the AE sees their pick immediately.
+    onChange([category]);
+    setOpen(false);
   }
 
   return (
@@ -300,7 +296,7 @@ export function CategoryDropdown({
         type="button"
         id={id}
         aria-expanded={open}
-        aria-controls={ROLE_CATEGORIES.map((category) => `${id}-${category}`).join(" ")}
+        aria-controls={`${id}-listbox`}
         aria-invalid={invalid || undefined}
         onClick={() => setOpen((prev) => !prev)}
         className={`${control} flex items-center justify-between gap-2 text-left ${
@@ -328,12 +324,10 @@ export function CategoryDropdown({
       {/* The choices stay in the DOM and hidden, because they are what the
           trigger's `aria-controls` names and what Tab reaches — a closed
           trigger that points at nothing would be a broken reference. */}
-      {/* biome-ignore lint/a11y/useSemanticElements: <fieldset> would print the
-          group name again inside the popover, under the label that already
-          says "Role category *". */}
       <div
-        role="group"
-        aria-label="Role categories"
+        role="radiogroup"
+        id={`${id}-listbox`}
+        aria-label="Role category"
         className={`${open ? "block" : "hidden"} absolute z-50 mt-1 w-full rounded-lg border border-line bg-surface p-1 shadow-xl`}
       >
         {ROLE_CATEGORIES.map((category) => (
@@ -343,9 +337,10 @@ export function CategoryDropdown({
           >
             <input
               id={`${id}-${category}`}
-              type="checkbox"
+              type="radio"
+              name={id}
               checked={value.includes(category)}
-              onChange={(event) => toggle(category, event.target.checked)}
+              onChange={() => select(category)}
               className="size-4 shrink-0 accent-brand-500"
             />
             <span
@@ -355,10 +350,6 @@ export function CategoryDropdown({
             {roleCategoryLabel(category)}
           </label>
         ))}
-        <p className="border-t border-line px-2.5 py-2 text-xs text-ink-500">
-          Each category you choose becomes its own role row under this visit, with the same brief,
-          compensation and bar.
-        </p>
       </div>
     </div>
   );

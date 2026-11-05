@@ -153,6 +153,7 @@ describe("PifApprovalQueue", () => {
     joining: "Immediate joining",
     companyDriveId: null,
     event: null,
+    roleCategory: null,
   };
   const stub = {
     pending: async () => [

@@ -2,7 +2,7 @@ import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { describeJoining } from "@domain/joining";
 import { describeShift } from "@domain/shift";
-import type { DriveStatus, DriveType } from "@domain/types";
+import type { DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -55,6 +55,8 @@ export interface PendingPif {
   /** Set when this role was raised under a recruitment event (multi-role PIF). */
   readonly companyDriveId: string | null;
   readonly event: PendingDriveEvent | null;
+  /** The functional area of the role — disambiguates drives with the same title. */
+  readonly roleCategory: RoleCategory | null;
 }
 
 export interface ApprovalRepository {
@@ -72,7 +74,7 @@ export type GetActorId = () => Promise<string | null>;
 // One string literal, deliberately: PostgREST infers the row type from the
 // literal, and a concatenation types every column as an error object.
 export const COLUMNS =
-  "id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes, company_drive_id";
+  "id, company_name, role_title, role_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes, company_drive_id";
 
 /** Long enough to open and read the PDF, short enough not to be forwardable. */
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -228,6 +230,7 @@ export function createSupabaseApprovalRepository(
         jobDescriptionName: (row.jd_file_name as string | null) ?? null,
         companyDriveId: (row.company_drive_id as string | null) ?? null,
         event: events.get((row.company_drive_id as string | null) ?? "") ?? null,
+        roleCategory: (row.role_category as RoleCategory | null) ?? null,
         shift: describeShift(
           row.shift_type as string | null,
           row.shift_night_timing as string | null,

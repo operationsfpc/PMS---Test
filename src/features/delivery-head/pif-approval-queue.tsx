@@ -20,6 +20,7 @@ import {
   requiredOfferCategoryFor,
   suggestOfferCategory,
 } from "@domain/offer-category";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import { describeStipendRange } from "@domain/stipend";
 import {
   ApprovalError,
@@ -144,6 +145,13 @@ function PendingRoleCard({
         )}
         {/* 2026-08-27: the type, on every drive summary. */}
         <Badge tone={driveTypeTone(pif.driveType)}>{driveTypeLabel(pif.driveType)}</Badge>
+        {pif.roleCategory != null && (
+          <span
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleCategoryStyle(pif.roleCategory).badgeClass}`}
+          >
+            {roleCategoryLabel(pif.roleCategory)}
+          </span>
+        )}
         {pif.onHold && <Badge tone="warning">On hold</Badge>}
         {/* N1: "delivery head should be able to click and view all
             relevant fields of the drive." */}

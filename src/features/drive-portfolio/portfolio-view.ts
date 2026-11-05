@@ -1,5 +1,11 @@
 import type { ApplicantRound } from "@domain/student-progress";
-import type { AttendanceStatus, DriveStatus, DriveType, RoundResult } from "@domain/types";
+import type {
+  AttendanceStatus,
+  DriveStatus,
+  DriveType,
+  RoleCategory,
+  RoundResult,
+} from "@domain/types";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PortfolioApplicant, PortfolioDrive, PortfolioView } from "./portfolio-page";
@@ -25,7 +31,7 @@ const rows = (value: unknown): Array<Record<string, unknown>> =>
  * Head, who is an org reader, gets the campus.
  */
 export const PORTFOLIO_DRIVE_COLUMNS = `
-  id, company_name, role_title, status, on_hold, created_at,
+  id, company_name, role_title, role_category, status, on_hold, created_at,
   ctc_min_lpa, ctc_max_lpa, drive_type,
   created_by, approved_by, published_by,
   application_start, application_end,
@@ -197,6 +203,7 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
           driveId,
           companyName: (row.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (row.role_title as string | null) ?? "Role not specified",
+          roleCategory: (row.role_category as RoleCategory | null) ?? null,
           status: (row.status as DriveStatus | null) ?? "draft",
           onHold: (row.on_hold as boolean | null) ?? false,
           // G5b: numerics arrive from PostgREST as strings.

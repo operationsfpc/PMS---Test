@@ -252,6 +252,61 @@ describe("lists — future drives and applications still moving", () => {
 });
 
 /**
+ * `lists()` is the only read that sees every live drive, so it is the only
+ * place the empty To-apply card can learn WHICH silence it is printing.
+ * 2026-11-05: a whole college on the test project was hidden by a flattened
+ * branch tick, a CGPA bar or a campus target, and the card told them to wait
+ * for news of drives that were already running.
+ */
+describe("lists — how many live drives this student was not shown", () => {
+  it("counts a drive R5 hid instead of dropping it silently", async () => {
+    stub({ drives: [{ ...openDrive, min_overall_cgpa: 9.9 }] });
+
+    expect(await view().lists()).toHaveProperty("notForYou", 1);
+  });
+
+  it("counts one per hidden drive, because the card quotes the number", async () => {
+    stub({
+      drives: [
+        { ...openDrive, min_overall_cgpa: 9.9 },
+        { ...openDrive, id: "d2", company_name: "Freshworks", min_overall_cgpa: 9.9 },
+      ],
+    });
+
+    expect(await view().lists()).toHaveProperty("notForYou", 2);
+  });
+
+  /**
+   * "4 drives are open right now, but none of them is open to you" must not
+   * count a drive that only shut its window: that student WAS eligible, and
+   * the sentence would move the blame from the clock onto a bar.
+   */
+  it("does not count a drive whose window shut while it suited them", async () => {
+    stub({ drives: [{ ...openDrive, application_end: "2026-09-02T00:00:00Z" }] });
+    const lists = await view().lists();
+
+    expect(lists.toApply).toEqual([]);
+    expect(lists).toHaveProperty("notForYou", 0);
+  });
+
+  it("counts none when the drive reaches the student", async () => {
+    stub();
+
+    expect(await view().lists()).toHaveProperty("notForYou", 0);
+  });
+
+  /** The count is per DRIVE, not per student, and applies never count. */
+  it("does not re-count an applied drive the student has since become ineligible for", async () => {
+    stub({
+      drives: [{ ...openDrive, status: "in_rounds", min_overall_cgpa: 9.9 }],
+      applications: [{ id: "a1", drive_id: "d1", applied_at: "2026-09-01T12:00:00Z" }],
+    });
+
+    expect(await view().lists()).toHaveProperty("notForYou", 0);
+  });
+});
+
+/**
  * 0125/0130: the student reads their own unreleased hold row. A pending
  * self-placed request is the same row with `confirmed_at` still null, so the
  * screen can tell "held" from "waiting" without a second read.

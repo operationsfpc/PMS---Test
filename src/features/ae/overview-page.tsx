@@ -25,7 +25,8 @@ import {
   matchesDriveType,
 } from "@domain/drive-type";
 import { type PlacementCounts, summarisePlacementTotals } from "@domain/placement-totals";
-import type { DriveStatus, DriveType } from "@domain/types";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
+import type { DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import { Fragment, useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -51,6 +52,7 @@ export interface AeOverviewDrive {
   readonly tentativeDate?: string | null;
   readonly companyName: string;
   readonly roleTitle: string | null;
+  readonly roleCategory?: RoleCategory | null;
   readonly status: DriveStatus;
   readonly driveType: DriveType | null;
   readonly ctcMinLpa: number | null;
@@ -454,6 +456,13 @@ export function AeOverviewPage({ view }: { view: AeOverviewView }) {
                                     </Link>
                                   )}
                                 </p>
+                                {role.roleCategory != null && (
+                                  <span
+                                    className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleCategoryStyle(role.roleCategory).badgeClass}`}
+                                  >
+                                    {roleCategoryLabel(role.roleCategory)}
+                                  </span>
+                                )}
                                 {ctc !== null && (
                                   <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
                                     {ctc}

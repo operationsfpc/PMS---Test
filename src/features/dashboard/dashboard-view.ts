@@ -37,6 +37,15 @@ const linkedNames = (value: unknown, key: string): readonly string[] =>
     .filter((name): name is string => typeof name === "string" && name !== "");
 
 /**
+ * The degrees the drive's ticked branches belong to, so R2 can tell a branch
+ * tick that speaks to this student's degree from one that cannot reach them.
+ */
+const branchOwnerDegrees = (value: unknown): readonly string[] =>
+  rows(value)
+    .map((row) => one<{ name?: string }>(one<Record<string, unknown>>(row.branches)?.degrees)?.name)
+    .filter((name): name is string => typeof name === "string" && name !== "");
+
+/**
  * Exported so src/db/query-contract.test.ts can prove it against the real schema.
  *
  * The link tables are the drive's targeting. Without them every targeted drive
@@ -49,7 +58,7 @@ export const DASHBOARD_LIVE_DRIVE_COLUMNS = `
   min_overall_cgpa, min_tenth_percentage, min_twelfth_percentage,
   arrears_policy, eligible_passing_years,
   drive_eligible_degrees(degrees(name)),
-  drive_eligible_branches(branches(name)),
+  drive_eligible_branches(branches(name, degrees(name))),
   drive_target_campuses(campuses(name, cities(name)))
 `;
 
@@ -346,6 +355,7 @@ export function createSupabaseDashboardView(
           criteria: {
             eligibleDegrees: linkedNames(row.drive_eligible_degrees, "degrees"),
             eligibleBranches: linkedNames(row.drive_eligible_branches, "branches"),
+            eligibleBranchDegrees: branchOwnerDegrees(row.drive_eligible_branches),
             eligiblePassingYears: (row.eligible_passing_years as number[]) ?? [],
             minOverallCgpa: (row.min_overall_cgpa as number | null) ?? null,
             minTenthPercentage: (row.min_tenth_percentage as number | null) ?? null,

@@ -1,5 +1,5 @@
 import { countAbsences, needsDisbarmentReview } from "@domain/attendance";
-import type { AttendanceStatus, DriveStatus, DriveType } from "@domain/types";
+import type { AttendanceStatus, DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CockpitView, DisbarmentReview, DriveSummary } from "./cockpit-page";
@@ -12,7 +12,7 @@ const one = <T>(value: unknown): T | null =>
  * schema — a select that drifts from the columns cannot hide in unit tests.
  */
 export const COCKPIT_DRIVE_COLUMNS = `
-  id, company_name, role_title, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly,
+  id, company_name, role_title, role_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly,
   drive_type, status, on_hold, created_at, application_end, drive_mode, venue, company_drive_id,
   tentative_date, drive_rounds(id, sequence, name), drive_target_campuses(campuses(name))
 `;
@@ -71,6 +71,7 @@ export function createSupabaseCockpitView(client: SupabaseClient): CockpitView {
           driveId: row.id as string,
           companyName: (row.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (row.role_title as string | null) ?? null,
+          roleCategory: (row.role_category as RoleCategory | null) ?? null,
           // Numerics arrive from PostgREST as strings.
           ctcMinLpa: row.ctc_min_lpa == null ? null : Number(row.ctc_min_lpa),
           ctcMaxLpa: row.ctc_max_lpa == null ? null : Number(row.ctc_max_lpa),

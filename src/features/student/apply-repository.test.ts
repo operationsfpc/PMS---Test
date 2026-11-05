@@ -63,6 +63,7 @@ const drive = {
   criteria: {
     eligibleDegrees: [],
     eligibleBranches: [],
+    eligibleBranchDegrees: [],
     eligiblePassingYears: [],
     minOverallCgpa: null,
     minTenthPercentage: null,

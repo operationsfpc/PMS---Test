@@ -543,3 +543,52 @@ describe("the card leads with the deadline", () => {
     expect(screen.queryByText(/drive day/i)).toBeNull();
   });
 });
+
+/**
+ * 2026-11-05: an empty list meant two opposite things and said one sentence.
+ * "No drives are open to you right now — you will be notified when one is" is
+ * true when nothing is running, and a lie when drives ARE running that this
+ * student was never eligible for, because the notification never comes. A
+ * whole college sat in that second state on the test project and the screen
+ * could not show it. So the card now asks the screen, which reads every live
+ * drive before the filters and before R5, which silence this is.
+ */
+describe("the empty card says which silence it is", () => {
+  const empty = view({ openDrives: async () => [] });
+
+  it("blames the filters when the screen still held drives", async () => {
+    render(<DrivesList view={empty} openCount={7} notForYou={0} />);
+
+    expect(await screen.findByText(/no drive matches your search or filters/i)).toBeDefined();
+    expect(screen.queryByText(/you will be notified/i)).toBeNull();
+  });
+
+  it("says the drives are open and none of them is open to the student", async () => {
+    render(<DrivesList view={empty} openCount={0} notForYou={4} />);
+
+    expect(await screen.findByText(/4 drives are open right now/i)).toBeDefined();
+    expect(screen.getByText(/none of them is open to you/i)).toBeDefined();
+    expect(screen.getByText(/a drive that fits you opens/i)).toBeDefined();
+  });
+
+  it("switches the sentence to one drive, not a plural count beside a singular verb", async () => {
+    render(<DrivesList view={empty} openCount={0} notForYou={1} />);
+
+    expect(
+      await screen.findByText(/^1 drive is open right now, but it is not open to you/i),
+    ).toBeDefined();
+    expect(screen.queryByText(/4 drives/i)).toBeNull();
+  });
+
+  it("keeps the plain empty sentence when the screen cannot tell — nothing was counted", async () => {
+    render(<DrivesList view={empty} openCount={0} notForYou={0} />);
+
+    expect(await screen.findByText(/no drives are open to you right now/i)).toBeDefined();
+  });
+
+  it("says nothing it cannot back up on a screen that passes no counts", async () => {
+    render(<DrivesList view={empty} />);
+
+    expect(await screen.findByText(/no drives are open to you right now/i)).toBeDefined();
+  });
+});

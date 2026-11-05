@@ -50,7 +50,7 @@ async function pickCategory(
   await user.click(trigger);
   const card = trigger.closest("section") as HTMLElement;
   for (const label of typeof labels === "string" ? [labels] : labels) {
-    await user.click(within(card).getByRole("checkbox", { name: label }));
+    await user.click(within(card).getByRole("radio", { name: label }));
   }
 }
 

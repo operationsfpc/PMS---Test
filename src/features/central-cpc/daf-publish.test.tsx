@@ -213,6 +213,26 @@ describe("DafPublish — live audience", () => {
 
     await waitFor(() => expect(count()).toBe(1));
   });
+
+  /**
+   * Two ticks, one control: "B.E — CSE" and a bare "BCA" flatten into degrees
+   * [B.E, BCA] and branches [CSE], and read as one AND that refuses every BCA
+   * student — no branch of theirs can be a B.E one, so the branch half voided
+   * the degree half the coordinator just ticked. Live on 2026-11-05, where it
+   * emptied the audience of every BCA and MCA student at once: the four open
+   * test drives tick B.Sc branches beside BCA and MCA.
+   */
+  it("reaches a degree ticked bare beside another degree's branch", async () => {
+    routed(view());
+    await waitFor(() => expect(count()).toBe(3));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "B.E — CSE" }));
+    // The cohort is all BCA, so a B.E-only tick legitimately reaches nobody.
+    await waitFor(() => expect(count()).toBe(0));
+
+    await userEvent.click(screen.getByRole("checkbox", { name: "BCA" }));
+    await waitFor(() => expect(count()).toBe(3));
+  });
 });
 
 /**
@@ -520,6 +540,23 @@ describe("DafPublish — area targeting", () => {
     ).toBeDefined();
     // Bengaluru is outside the filter, so it was never in play.
     expect(screen.queryByRole("checkbox", { name: "VIT Bangalore" })).toBeNull();
+  });
+
+  /**
+   * The city panel's bulk action used to trail inside the chip wrap, so it
+   * looked like one more city, landed wherever the wrap put it, and was the
+   * only "Select all" on the screen whose name did not say what it selected.
+   */
+  it("keeps the city ticker in the panel header, named for the cities", async () => {
+    routed(view());
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Select all cities$/ }));
+    expect(screen.getByRole("checkbox", { name: "Chennai", checked: true })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "Bengaluru", checked: true })).toBeDefined();
+
+    // All of them are on, so the same control is now the way back out.
+    await userEvent.click(screen.getByRole("button", { name: /^Clear all cities$/ }));
+    expect(screen.getByRole("checkbox", { name: "Chennai", checked: false })).toBeDefined();
   });
 
   it("says what an empty area means, because here empty means everyone", async () => {

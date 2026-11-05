@@ -611,6 +611,7 @@ describe("the live roster, judged against the live cutoff", () => {
           criteria: {
             eligibleDegrees: [],
             eligibleBranches: [],
+            eligibleBranchDegrees: [],
             eligiblePassingYears: [],
             minOverallCgpa: drive.minOverallCgpa,
             minTenthPercentage: null,

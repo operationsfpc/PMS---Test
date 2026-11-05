@@ -48,8 +48,9 @@ import {
   matchesDriveType,
 } from "@domain/drive-type";
 import { describeDriveFreeze } from "@domain/drive-working";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
-import type { AppRole, DriveStatus, DriveType } from "@domain/types";
+import type { AppRole, DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -160,6 +161,7 @@ export interface PortfolioDrive {
   readonly driveId: string;
   readonly companyName: string;
   readonly roleTitle: string;
+  readonly roleCategory?: RoleCategory | null;
   readonly status: DriveStatus;
   readonly onHold: boolean;
   /** 2026-08-27: what the drive IS — filtered on, and tagged on every card. */
@@ -765,6 +767,13 @@ export function DrivePortfolioPage({
                         {drive.roleTitle}
                         {ctc !== null && ` · ${ctc}`}
                       </span>
+                      {drive.roleCategory != null && (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleCategoryStyle(drive.roleCategory).badgeClass}`}
+                        >
+                          {roleCategoryLabel(drive.roleCategory)}
+                        </span>
+                      )}
                       {types.mixed && (
                         <Badge tone={driveTypeTone(drive.driveType)} variant="pill">
                           {driveTypeLabel(drive.driveType)}
@@ -875,6 +884,13 @@ export function DrivePortfolioPage({
                   <Badge tone={driveTypeTone(drive.driveType)} variant="pill">
                     {driveTypeLabel(drive.driveType)}
                   </Badge>
+                  {drive.roleCategory != null && (
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleCategoryStyle(drive.roleCategory).badgeClass}`}
+                    >
+                      {roleCategoryLabel(drive.roleCategory)}
+                    </span>
+                  )}
                 </p>
                 <p className="text-sm text-ink-600 mt-0.5">
                   <span className="font-semibold text-ink-800">{drive.roleTitle}</span>

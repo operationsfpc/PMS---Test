@@ -25,6 +25,7 @@ const student: AcademicProfile = {
 const openCriteria: EligibilityCriteria = {
   eligibleDegrees: [],
   eligibleBranches: [],
+  eligibleBranchDegrees: [],
   eligiblePassingYears: [],
   minOverallCgpa: null,
   minTenthPercentage: null,
@@ -66,6 +67,72 @@ describe("evaluateEligibility", () => {
 
     it("rejects a branch that is not listed", () => {
       expect(codesFor({}, { eligibleBranches: ["ECE"] })).toEqual(["branch"]);
+    });
+
+    /**
+     * The publish screen ticks whole programmes and the two link tables flatten
+     * them, so "BCA" beside "B.Sc — AI and ML" arrives as degrees [B.Sc, BCA]
+     * and branches [AI and ML]. Read as one AND that refuses every BCA student —
+     * none of the ticked branches can be theirs, so not even a blank branch
+     * gets through, and the degree tick is void. It was live on 2026-11-05: the
+     * four open test drives all list BCA and every BCA student saw none of them.
+     */
+    describe("a branch tick binds only the degree it belongs to", () => {
+      const bscAiAndBca = {
+        eligibleDegrees: ["B.Sc", "BCA"],
+        eligibleBranches: ["Artificial Intelligence and Machine Learning"],
+        eligibleBranchDegrees: ["B.Sc"],
+      };
+
+      it("reaches a degree ticked beside another degree's branches", () => {
+        expect(codesFor({ degree: "BCA", branch: "" }, bscAiAndBca)).toEqual([]);
+      });
+
+      it("still binds the degree whose branches were ticked", () => {
+        expect(codesFor({ degree: "B.Sc", branch: "Computer Technology" }, bscAiAndBca)).toEqual([
+          "branch",
+        ]);
+      });
+
+      it("lets the B.Sc student whose specialisation was ticked through", () => {
+        expect(
+          codesFor(
+            { degree: "B.Sc", branch: "Artificial Intelligence and Machine Learning" },
+            bscAiAndBca,
+          ),
+        ).toEqual([]);
+      });
+
+      it("keeps refusing a degree nobody ticked", () => {
+        expect(codesFor({ degree: "MCA", branch: "" }, bscAiAndBca)).toEqual(["degree"]);
+      });
+
+      /**
+       * The tightening 0119 was written for: a branch tick alone IS the
+       * targeting, so it binds whoever turns up — a BCA student must not read a
+       * B.E CSE drive as open just because no degree was ticked.
+       */
+      it("binds every student when a branch is ticked with no degree", () => {
+        expect(
+          codesFor(
+            { degree: "BCA", branch: "" },
+            { eligibleBranches: ["CSE"], eligibleBranchDegrees: ["B.E"] },
+          ),
+        ).toEqual(["branch"]);
+      });
+
+      it("narrows a students own degree once a branch of it is ticked", () => {
+        expect(
+          codesFor(
+            { degree: "BCA", branch: "" },
+            {
+              eligibleDegrees: ["BCA"],
+              eligibleBranches: ["AI DS"],
+              eligibleBranchDegrees: ["BCA"],
+            },
+          ),
+        ).toEqual(["branch"]);
+      });
     });
 
     it("rejects a passing year that is not listed", () => {

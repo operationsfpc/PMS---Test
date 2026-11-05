@@ -55,8 +55,9 @@ import {
   requiredOfferCategoryFor,
   suggestOfferCategory,
 } from "@domain/offer-category";
+import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import { describeStipendRange } from "@domain/stipend";
-import type { AppRole, DriveStatus, DriveType } from "@domain/types";
+import type { AppRole, DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useState } from "react";
 
@@ -70,6 +71,8 @@ export interface DriveSummary {
   readonly driveId: string;
   readonly companyName: string;
   readonly roleTitle: string | null;
+  /** The functional area of the role — disambiguates drives with the same title. */
+  readonly roleCategory?: RoleCategory | null;
   /** C3 (UAT 2026-08-19): role + CTC is what tells two same-company drives apart. */
   readonly ctcMinLpa: number | null;
   readonly ctcMaxLpa: number | null;
@@ -687,12 +690,13 @@ function countVisitApplicants(roles: readonly DriveSummary[]): number {
 function roleFacts(drive: DriveSummary): string {
   return [
     drive.roleTitle ?? "Role not set",
+    roleCategoryLabel(drive.roleCategory ?? null) || null,
     describeCtcRange(drive.ctcMinLpa, drive.ctcMaxLpa),
     // An internship has no CTC — the stipend is the number.
     describeStipendRange(drive.stipendMinMonthly ?? null, drive.stipendMaxMonthly ?? null),
     `${drive.applicationCount} applicants`,
   ]
-    .filter((part): part is string => part !== null)
+    .filter((part): part is string => part !== null && part !== "")
     .join(" · ");
 }
 
@@ -799,6 +803,16 @@ function VisitCard({
                   <span className="font-medium text-ink-900">
                     {drive.roleTitle ?? "Role not set"}
                   </span>
+                  {drive.roleCategory != null && (
+                    <>
+                      {" · "}
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleCategoryStyle(drive.roleCategory).badgeClass}`}
+                      >
+                        {roleCategoryLabel(drive.roleCategory)}
+                      </span>
+                    </>
+                  )}
                   {" · "}
                   {mixed && drive.driveType !== undefined && drive.driveType !== null && (
                     <Badge tone={driveTypeTone(drive.driveType)}>

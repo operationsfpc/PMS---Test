@@ -156,6 +156,34 @@ function RoleFacts({ drive, showType }: { drive: OpenDrive; showType: boolean })
   );
 }
 
+const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? "" : "s"}`;
+
+/**
+ * The empty list says WHICH silence this is.
+ *
+ * Three different states reach this one card and used to get one sentence —
+ * "no drives are open to you right now. You will be notified when one is." It
+ * is true only when nothing is live. After a search it is false (the drives are
+ * there, the filters hid them), and it is false when drives ARE running that R5
+ * hides: those students are told to wait for news of something already open.
+ * 2026-11-05 put a whole college into that second state when a drive's branch
+ * ticks were flattened onto its degree ticks, and nothing on screen could tell
+ * the student it was not the first.
+ */
+function emptyMessage(openCount: number | undefined, notForYou: number | undefined): string {
+  if (openCount !== undefined && openCount > 0) {
+    return "No drive matches your search or filters.";
+  }
+  if (notForYou === undefined || notForYou === 0) {
+    return "No drives are open to you right now. You will be notified when one is.";
+  }
+  const closed =
+    notForYou === 1
+      ? "1 drive is open right now, but it is not open to you."
+      : `${plural(notForYou, "drive")} are open right now, but none of them is open to you.`;
+  return `${closed} You will be notified when a drive that fits you opens.`;
+}
+
 /**
  * The student's open drives.
  *
@@ -170,11 +198,17 @@ export function DrivesList({
   view,
   embedded = false,
   now = () => new Date(),
+  openCount,
+  notForYou,
 }: {
   view: DrivesView;
   /** True inside the four-tab screen, which brings its own heading. */
   embedded?: boolean;
   now?: () => Date;
+  /** How many drives the screen had BEFORE the student's own search and filters. */
+  openCount?: number | undefined;
+  /** How many live drives R5 hid from this student. Comes from the view, which reads them all. */
+  notForYou?: number | undefined;
 }) {
   const [rows, setRows] = useState<readonly OpenDrive[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -261,9 +295,7 @@ export function DrivesList({
         ) : null
       ) : rows.length === 0 ? (
         <Card className="p-6">
-          <p className="text-sm text-ink-700">
-            No drives are open to you right now. You will be notified when one is.
-          </p>
+          <p className="text-sm text-ink-700">{emptyMessage(openCount, notForYou)}</p>
         </Card>
       ) : (
         <div className="flex flex-col gap-4">

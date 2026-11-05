@@ -1,3 +1,4 @@
+import type { RoleCategory } from "@domain/types";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AeOverviewDrive, AeOverviewSnapshot, AeOverviewView } from "./overview-page";
@@ -32,7 +33,7 @@ const orNull = (value: unknown): number | null => (value == null ? null : Number
  * truncated set. Read separately, paged by drive.
  */
 export const AE_OVERVIEW_DRIVE_COLUMNS = `
-  id, company_name, role_title, status, drive_type, ctc_min_lpa, ctc_max_lpa, created_at,
+  id, company_name, role_title, role_category, status, drive_type, ctc_min_lpa, ctc_max_lpa, created_at,
   company_drive_id, tentative_date,
   drive_target_campuses(campuses(name))
 `;
@@ -129,6 +130,7 @@ export function createSupabaseAeOverviewView(client: SupabaseClient): AeOverview
           tentativeDate: (row.tentative_date as string | null) ?? null,
           companyName: (row.company_name as string | null) ?? "Unnamed drive",
           roleTitle: (row.role_title as string | null) ?? null,
+          roleCategory: (row.role_category as RoleCategory | null) ?? null,
           status: (row.status as AeOverviewDrive["status"] | null) ?? "draft",
           driveType: (row.drive_type as AeOverviewDrive["driveType"]) ?? null,
           ctcMinLpa: orNull(row.ctc_min_lpa),

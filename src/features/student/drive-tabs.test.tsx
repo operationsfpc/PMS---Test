@@ -471,3 +471,38 @@ describe("DriveTabs — one card per company visit", () => {
     expect(screen.getByText("SDE · Software / Technical")).toBeDefined();
   });
 });
+
+/**
+ * 2026-11-05: the empty To apply card promised "you will be notified when one
+ * is" whether or not drives were running — so a student hidden behind a branch
+ * tick, a CGPA bar or their own campus was told to wait for news of drives open
+ * that same minute. Only the view sees every live drive, so the screen, not the
+ * list, has to tell the card which silence it is looking at.
+ */
+describe("the empty To apply card says which silence it is", () => {
+  it("says the drives are open when the view counted some hidden", async () => {
+    render(<DriveTabs view={view({ toApply: [], inProgress: [], notForYou: 4 })} now={NOW} />);
+
+    expect(await screen.findByText(/4 drives are open right now/i)).toBeDefined();
+    expect(screen.getByText(/none of them is open to you/i)).toBeDefined();
+    // The sentence the student used to get, and the promise it broke.
+    expect(screen.queryByText(/no drives are open to you right now/i)).toBeNull();
+  });
+
+  it("keeps the plain sentence when the view counted nothing hidden", async () => {
+    render(<DriveTabs view={view({ toApply: [], inProgress: [], notForYou: 0 })} now={NOW} />);
+
+    expect(await screen.findByText(/no drives are open to you right now/i)).toBeDefined();
+  });
+
+  it("blames the search, not the student, when a filter emptied a list that had drives", async () => {
+    const user = userEvent.setup();
+    render(<DriveTabs view={view()} now={NOW} />);
+    await screen.findByText("Zoho");
+
+    await user.type(screen.getByRole("searchbox", { name: "Search drives" }), "zzzz");
+
+    expect(await screen.findByText(/no drive matches your search or filters/i)).toBeDefined();
+    expect(screen.queryByText(/none of them is open to you/i)).toBeNull();
+  });
+});

@@ -39,6 +39,7 @@ const pif = {
   // A legacy single-role PIF has no recruitment event behind it.
   companyDriveId: null as string | null,
   event: null,
+  roleCategory: null,
 };
 
 function repo(overrides: Partial<ApprovalRepository> = {}): ApprovalRepository {

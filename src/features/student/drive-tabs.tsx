@@ -81,6 +81,14 @@ export interface StudentDriveLists {
    * lie the day an internship drive fails to appear.
    */
   readonly internshipCapConsumed?: boolean;
+  /**
+   * 2026-11-05: the live drives R5 hid from this student. An empty list means
+   * two opposite things — nothing is running, or plenty is running and none of
+   * it reaches them — and only the view, which reads every drive, can tell
+   * them apart. The empty card says which, because "you will be notified" is
+   * not the same promise in both.
+   */
+  readonly notForYou?: number;
 }
 
 export interface StudentDriveListsView extends DrivesView {
@@ -328,6 +336,11 @@ export function DriveTabs({
             view={toApplyView}
             embedded
             now={now}
+            /* The list shows the filtered rows; these two come from the rows
+               before the filters, so the empty card can tell "no match" from
+               "nothing open" from "open, but not for you". */
+            openCount={lists?.toApply.length ?? 0}
+            notForYou={lists?.notForYou ?? 0}
           />
         </div>
       ) : (

@@ -40,6 +40,7 @@ const drive = (over: Partial<VisibleDrive> = {}): VisibleDrive => ({
   criteria: {
     eligibleDegrees: [],
     eligibleBranches: [],
+    eligibleBranchDegrees: [],
     eligiblePassingYears: [],
     minOverallCgpa: null,
     minTenthPercentage: null,

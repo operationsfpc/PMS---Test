@@ -77,6 +77,9 @@ export const STUDENT_COLUMNS = `
  * `evaluateEligibility` treats an empty list as "any, never none", every
  * targeted drive was silently open to the whole roster - a B.E CSE drive at
  * one campus was visible, and applyable, to a BCA student at another.
+ *
+ * A branch arrives with the degree that owns it, because the two lists on
+ * their own cannot say which tick was meant (see `branchOwnerDegrees`).
  */
 export const DRIVE_COLUMNS = `
   id, company_name, role_title, role_category, drive_type, offer_category,
@@ -89,7 +92,7 @@ export const DRIVE_COLUMNS = `
   mandatory_skills, drive_mode, venue, openings, additional_designations,
   company_drive_id, tentative_date,
   drive_eligible_degrees(degrees(name)),
-  drive_eligible_branches(branches(name)),
+  drive_eligible_branches(branches(name, degrees(name))),
   drive_target_campuses(campuses(name, cities(name))),
   drive_rounds(id, sequence, name)
 `;
@@ -111,6 +114,25 @@ function linkedNames(rows: unknown, key: string): readonly string[] {
   return rows
     .map((row) => one<{ name?: string }>((row as Record<string, unknown>)[key])?.name)
     .filter((name): name is string => typeof name === "string" && name !== "");
+}
+
+/**
+ * Which degrees the drive's ticked branches actually belong to, read off the
+ * same embedded rows as the branch names.
+ *
+ * R2 needs it: the publish screen ticks whole programmes and two link tables
+ * flatten them, so without the owner a branch tick silently refuses every
+ * student of a degree ticked beside it. See `EligibilityCriteria`.
+ */
+function branchOwnerDegrees(rows: unknown): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  const owners: string[] = [];
+  for (const link of rows as Array<Record<string, unknown>>) {
+    const degree = one<{ name?: string }>(one<Record<string, unknown>>(link.branches)?.degrees);
+    const name = degree?.name;
+    if (typeof name === "string" && name !== "" && !owners.includes(name)) owners.push(name);
+  }
+  return owners;
 }
 
 /** Cities are reached through the targeted campus, which is where they live. */
@@ -351,6 +373,7 @@ export function createSupabaseDrivesView(
       criteria: {
         eligibleDegrees: linkedNames(raw.drive_eligible_degrees, "degrees"),
         eligibleBranches: linkedNames(raw.drive_eligible_branches, "branches"),
+        eligibleBranchDegrees: branchOwnerDegrees(raw.drive_eligible_branches),
         eligiblePassingYears: ((raw.eligible_passing_years as unknown[]) ?? []).map(Number),
         minOverallCgpa: (raw.min_overall_cgpa as number | null) ?? null,
         minTenthPercentage: (raw.min_tenth_percentage as number | null) ?? null,
@@ -584,6 +607,7 @@ export function createSupabaseDrivesView(
 
       const toApplyIds = new Set<string>();
       const inProgress: ProgressDriveRow[] = [];
+      let notForYou = 0;
 
       for (const raw of drives) {
         const drive = toDrive(raw);
@@ -660,7 +684,13 @@ export function createSupabaseDrivesView(
         const hidden =
           !verdict.allowed &&
           !["window_not_open", "window_closed", "drive_not_live"].includes(verdict.reason);
-        if (hidden) continue;
+        // Counted on the way past, because the empty list has to be able to
+        // say WHICH of its two silences this is. `lists()` already holds every
+        // live drive; a screen that only sees the survivors cannot.
+        if (hidden) {
+          notForYou += 1;
+          continue;
+        }
 
         const list = classifyStudentDrive(
           { applied: false, driveStatus, applicationEnd: drive.applicationEnd, stage: null },
@@ -681,6 +711,7 @@ export function createSupabaseDrivesView(
         toApply: openCards.filter((card) => toApplyIds.has(card.id)),
         inProgress,
         hold,
+        notForYou,
         // C2 (UAT 2026-08-19): the rung they hold, so the tabs can say what
         // remains open instead of looking shut.
         placedAt: highestOfferCategory(student.offers),

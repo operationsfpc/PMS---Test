@@ -325,6 +325,42 @@ describe("drive targeting is enforced, not just recorded", () => {
     expect(await view().openDrives()).toHaveLength(1);
   });
 
+  /**
+   * The two link tables flatten the "Degree — Branch" ticks of the publish
+   * screen, so a bare "BCA" beside "B.Sc — AI and ML" arrives as a degree the
+   * branch list can never name. Each branch arrives with the degree that owns
+   * it, which is the only thing that makes the two lists mean the ticks again.
+   * Live on 2026-11-05: every open test drive lists BCA this way and no BCA
+   * student saw any of them.
+   */
+  it("reaches a degree ticked beside another degree's branches", async () => {
+    stub({
+      student: { degrees: { name: "BCA" }, branches: null },
+      drives: targeted({
+        drive_eligible_degrees: [{ degrees: { name: "B.Sc" } }, { degrees: { name: "BCA" } }],
+        drive_eligible_branches: [
+          { branches: { name: "Artificial Intelligence", degrees: { name: "B.Sc" } } },
+        ],
+      }),
+    });
+
+    expect(await view().openDrives()).toHaveLength(1);
+  });
+
+  it("still hides that drive from the degree whose branch was not ticked", async () => {
+    stub({
+      student: { degrees: { name: "B.Sc" }, branches: { name: "Computer Technology" } },
+      drives: targeted({
+        drive_eligible_degrees: [{ degrees: { name: "B.Sc" } }, { degrees: { name: "BCA" } }],
+        drive_eligible_branches: [
+          { branches: { name: "Artificial Intelligence", degrees: { name: "B.Sc" } } },
+        ],
+      }),
+    });
+
+    expect(await view().openDrives()).toHaveLength(0);
+  });
+
   it("hides a drive targeted at a different branch", async () => {
     stub({ drives: targeted({ drive_eligible_branches: [{ branches: { name: "ECE" } }] }) });
 
