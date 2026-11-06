@@ -20,6 +20,17 @@ export type DriveType = (typeof DRIVE_TYPES)[number];
 export const DRIVE_MODES = ["on_campus", "physical_outside_campus", "virtual", "pooled"] as const;
 export type DriveMode = (typeof DRIVE_MODES)[number];
 
+/**
+ * Where the work actually happens, as the recruiter states it per role.
+ *
+ * Order is the Postgres enum's own (0138); types-drift compares in order.
+ * `drive_mode` says how the SELECTION is run (on campus, virtual, pooled) and
+ * `work_locations` is free text the AE types — neither answers "does this job
+ * make me move to Chennai", which is the question a student asks.
+ */
+export const WORK_TYPES = ["hybrid", "work_from_home", "work_from_office"] as const;
+export type WorkType = (typeof WORK_TYPES)[number];
+
 /** `no_history` is the strictest: it implies no standing arrears either. */
 export const ARREAR_POLICIES = ["no_standing", "no_history", "flexible"] as const;
 export type ArrearPolicy = (typeof ARREAR_POLICIES)[number];

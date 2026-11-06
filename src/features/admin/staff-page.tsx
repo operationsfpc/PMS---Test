@@ -1,5 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { TablePager } from "@components/table-pager";
+import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { campusScopeFor, requiresCampusAssignment, validateCampusSelection } from "@domain/staff";
 import { APP_ROLES, type AppRole } from "@domain/types";
@@ -30,6 +31,7 @@ function getInitials(name: string): string {
  * would sign in successfully and then see nothing at all.
  */
 export function StaffPage({ repository }: { repository: StaffRepository }) {
+  const { toast } = useToast();
   const [staff, setStaff] = useState<readonly StaffMember[] | null>(null);
   const [campuses, setCampuses] = useState<readonly CampusOption[]>([]);
   const [fullName, setFullName] = useState("");
@@ -103,12 +105,24 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
         role,
         campusIds: needsCampus ? campusIds : [],
       });
+      const invitedEmail = email.trim();
       setFullName("");
       setEmail("");
       setCampusIds([]);
+      toast({
+        tone: "success",
+        title: "Invitation sent",
+        description: `Invitation sent to ${invitedEmail}.`,
+      });
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not send the invitation.");
+      const msg = cause instanceof Error ? cause.message : "Could not send the invitation.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not send invitation",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }
@@ -118,9 +132,20 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     setError(null);
     try {
       await repository.setActive(target, isActive);
+      toast({
+        tone: "success",
+        title: isActive ? "Account activated" : "Account suspended",
+        description: `Account status updated for ${target}.`,
+      });
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not update that staff member.");
+      const msg = cause instanceof Error ? cause.message : "Could not update that staff member.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not update account status",
+        description: msg,
+      });
     }
   }
 
@@ -130,9 +155,20 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
     try {
       await repository.remove(target);
       setConfirmingMember(null);
+      toast({
+        tone: "info",
+        title: "Staff member removed",
+        description: `Removed ${target} from staff directory.`,
+      });
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not remove that staff member.");
+      const msg = cause instanceof Error ? cause.message : "Could not remove that staff member.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not remove staff member",
+        description: msg,
+      });
       setConfirmingMember(null);
       await refresh();
     } finally {
@@ -155,11 +191,23 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       } else if (editingMember.campuses.length > 0) {
         await repository.setCampuses(target, []);
       }
+      const msg = `Updated permissions for ${editingMember.fullName}.`;
       setEditingMember(null);
-      setToastMessage(`Updated permissions for ${editingMember.fullName}.`);
+      setToastMessage(msg);
+      toast({
+        tone: "success",
+        title: "Permissions updated",
+        description: msg,
+      });
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not update staff member.");
+      const msg = cause instanceof Error ? cause.message : "Could not update staff member.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not update permissions",
+        description: msg,
+      });
       await refresh();
       throw cause;
     } finally {
@@ -174,9 +222,21 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
       if (repository.resendInvite) {
         await repository.resendInvite(targetEmail);
       }
-      setToastMessage(`Invitation successfully queued and resent to ${targetEmail}.`);
+      const msg = `Invitation successfully queued and resent to ${targetEmail}.`;
+      setToastMessage(msg);
+      toast({
+        tone: "success",
+        title: "Invitation resent",
+        description: msg,
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not resend the invitation.");
+      const msg = cause instanceof Error ? cause.message : "Could not resend the invitation.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not resend invitation",
+        description: msg,
+      });
     } finally {
       setResendingEmail(null);
     }

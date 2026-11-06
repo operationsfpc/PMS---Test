@@ -1,4 +1,5 @@
 import { DrilldownModal } from "@components/drilldown-modal";
+import { useToast } from "@components/toast";
 import { Badge, Button } from "@components/ui";
 import { applicationEvidenceProblems } from "@domain/application-snapshot";
 import { useCallback, useEffect, useState } from "react";
@@ -15,6 +16,7 @@ export interface StudentApplyView {
  * Hook providing student apply state and operations for a drive.
  */
 export function useStudentApply(driveId: string, view: StudentApplyView) {
+  const { toast } = useToast();
   const [card, setCard] = useState<OpenDrive | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -71,10 +73,20 @@ export function useStudentApply(driveId: string, view: StudentApplyView) {
       setCard({ ...card, applied: true, canApply: false });
       setConfirming(false);
       setResume(null);
+      toast({
+        tone: "success",
+        title: "Application submitted",
+        description: `You have successfully applied to ${card.companyName} — ${card.roleTitle}.`,
+      });
     } catch (caught) {
-      setError(
-        caught instanceof ApplyError ? caught.message : "Could not submit your application.",
-      );
+      const msg =
+        caught instanceof ApplyError ? caught.message : "Could not submit your application.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Application failed",
+        description: msg,
+      });
     } finally {
       setBusy(false);
     }

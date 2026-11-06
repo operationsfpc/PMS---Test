@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { visitAccent } from "@components/visit-accent";
+import type { WorkType } from "@domain/types";
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
@@ -39,6 +40,8 @@ const open = {
     jobDescription: "Build and maintain backend services.",
     designations: ["Associate Engineer"],
     locations: "Chennai, Tenkasi",
+    // 0138: null is the AE not having answered, which the card hides.
+    workType: null as WorkType | null,
     openings: 25,
     ctcBreakup: "6.5 fixed + 2.5 variable",
     bondDetails: "No bond",
@@ -412,6 +415,76 @@ describe("DrivesList — several roles under one company event", () => {
 
     await waitFor(() => expect(apply).toHaveBeenCalledWith("d2", expect.any(File)));
     expect(apply).not.toHaveBeenCalledWith("d1", expect.anything());
+  });
+});
+
+/**
+ * 0138: the PIF now asks how the work happens — Hybrid, Work from home, Work
+ * from office — and the student's card is where that answer is worth most.
+ *
+ * Two rules, both taken from the type badge above it: the card says a thing
+ * once, at the level that owns the answer; and a question the AE never
+ * answered is not printed as an empty box, still less invented. "Not stated"
+ * is the approval queue's sentence, because there it is a gap to chase.
+ */
+describe("DrivesList — the work type", () => {
+  const withWorkType = (workType: WorkType | null) => ({
+    ...open,
+    details: { ...open.details, workType },
+  });
+
+  it("says how the work happens, in the company's own words", async () => {
+    render(
+      <DrivesList view={view({ openDrives: async () => [withWorkType("work_from_home")] })} />,
+    );
+
+    expect(await screen.findByText("Work from home")).toBeDefined();
+  });
+
+  it("says nothing at all when the AE never answered the question", async () => {
+    render(<DrivesList view={view({ openDrives: async () => [withWorkType(null)] })} />);
+
+    expect(await screen.findByText("Zoho")).toBeDefined();
+    expect(screen.queryByText(/work from|hybrid|not stated/i)).toBeNull();
+  });
+
+  it("states the work type once on a visit whose roles all share it", async () => {
+    const hybridA = { ...withWorkType("hybrid"), companyDriveId: "evt-1" };
+    const hybridB = {
+      ...withWorkType("hybrid"),
+      id: "d2",
+      roleTitle: "QA Engineer",
+      companyDriveId: "evt-1",
+    };
+    render(<DrivesList view={view({ openDrives: async () => [hybridA, hybridB] })} />);
+
+    expect(await screen.findByRole("heading", { name: /^Zoho/ })).toBeDefined();
+    expect(screen.getAllByText("Hybrid")).toHaveLength(1);
+  });
+
+  it("gives each role its own work type when the visit mixes them", async () => {
+    const office = {
+      ...withWorkType("work_from_office"),
+      companyDriveId: "evt-1",
+      tentativeDate: "2026-11-05T00:00:00Z",
+    };
+    const remote = {
+      ...withWorkType("work_from_home"),
+      id: "d2",
+      roleTitle: "Support Intern",
+      companyDriveId: "evt-1",
+      tentativeDate: "2026-11-05T00:00:00Z",
+    };
+    render(<DrivesList view={view({ openDrives: async () => [office, remote] })} />);
+
+    expect(await screen.findByRole("heading", { name: /Member Technical Staff/ })).toBeDefined();
+    expect(screen.getByRole("heading", { name: /Member Technical Staff/ }).textContent).toContain(
+      "Work from office",
+    );
+    expect(screen.getByRole("heading", { name: /Support Intern/ }).textContent).toContain(
+      "Work from home",
+    );
+    expect(screen.getAllByText(/work from/i)).toHaveLength(2);
   });
 });
 

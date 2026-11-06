@@ -8,6 +8,7 @@ import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AcademicProfile, DriveStatus, RoleCategory } from "@domain/types";
 import { canApply } from "@domain/visibility";
+import { asWorkType } from "@domain/work-type";
 import { readAll, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
@@ -86,7 +87,7 @@ export const DRIVE_COLUMNS = `
   open_to_all_override, status, application_start, application_end,
   ctc_min_lpa, ctc_max_lpa, min_overall_cgpa, min_tenth_percentage,
   min_twelfth_percentage, arrears_policy, eligible_passing_years,
-  job_description, work_locations, ctc_breakup, bond_details, shift_type,
+  job_description, work_locations, work_type, ctc_breakup, bond_details, shift_type,
   shift_night_timing, timeline_notes, joining_timeline, joining_immediate_notes,
   joining_later_notes, jd_storage_path, jd_file_name,
   mandatory_skills, drive_mode, venue, openings, additional_designations,
@@ -472,6 +473,7 @@ export function createSupabaseDrivesView(
             jobDescription: text(raw.job_description),
             designations: (raw.additional_designations as string[] | null) ?? [],
             locations: text(raw.work_locations),
+            workType: asWorkType(raw.work_type as string | null),
             openings: (raw.openings as number | null) ?? null,
             ctcBreakup: text(raw.ctc_breakup),
             bondDetails: text(raw.bond_details),
@@ -653,6 +655,7 @@ export function createSupabaseDrivesView(
             companyDriveId: (raw.company_drive_id as string | null) ?? null,
             tentativeDate: (raw.tentative_date as string | null) ?? null,
             locations: text(raw.work_locations),
+            workType: asWorkType(raw.work_type as string | null),
             appliedAt: application.applied_at,
             progressLabel: progress.label,
             roundsCleared: progress.roundsCleared,

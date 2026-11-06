@@ -15,6 +15,7 @@ import {
   ROUND_RESULTS,
   SRF_STATUSES,
   VERIFICATION_STATUSES,
+  WORK_TYPES,
 } from "@domain/types";
 import { describe, expect, it } from "vitest";
 import { createTestDb } from "./harness";
@@ -31,6 +32,9 @@ describe("Postgres enums match the domain vocabularies", () => {
     ["role_category", ROLE_CATEGORIES],
     ["drive_type", DRIVE_TYPES],
     ["drive_mode", DRIVE_MODES],
+    // 0138. Where the work happens, per role. The order is the dropdown's and
+    // the database's, and `src/domain/types.ts` holds it in that order.
+    ["work_type", WORK_TYPES],
     ["arrear_policy", ARREAR_POLICIES],
     // Membership must match; the ORDER deliberately does not — see the
     // separate case below.

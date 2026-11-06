@@ -54,12 +54,16 @@ async function pickCategory(
   }
 }
 
+const pdf = (name = "JD.pdf") =>
+  new File([new Uint8Array(2048)], name, { type: "application/pdf" });
+
 /** Everything the submit gate asks of one role. */
 async function fillRoleOne(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("radio", { name: /^full time$/i }));
   await user.type(screen.getByLabelText(/minimum ctc/i), "6.5");
   await user.type(screen.getByLabelText(/role title/i), "Member Technical Staff");
   await pickCategory(user, "Software / Technical");
+  await user.upload(screen.getByLabelText(/attach the job description/i), pdf("Role-1-JD.pdf"));
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
   await user.click(screen.getByRole("button", { name: /add round/i }));
@@ -75,6 +79,10 @@ async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
   await user.type(second(screen.getAllByLabelText(/minimum ctc/i)), "7");
   await user.type(second(screen.getAllByLabelText(/role title/i)), "Support Engineer");
   await pickCategory(user, "Technical Support / IT Operations", 2);
+  await user.upload(
+    second(screen.getAllByLabelText(/attach the job description/i)),
+    pdf("Role-2-JD.pdf"),
+  );
   await user.type(second(screen.getAllByLabelText(/number of openings/i)), "4");
   await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
   await user.click(second(screen.getAllByRole("button", { name: /add round/i })));

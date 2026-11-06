@@ -4,7 +4,14 @@ import { describeJoining } from "@domain/joining";
 import type { OfferCategory } from "@domain/offer-category";
 import { describeShift } from "@domain/shift";
 import type { ApplicantRound } from "@domain/student-progress";
-import type { AttendanceStatus, DriveStatus, RoleCategory, RoundResult } from "@domain/types";
+import type {
+  AttendanceStatus,
+  DriveStatus,
+  RoleCategory,
+  RoundResult,
+  WorkType,
+} from "@domain/types";
+import { asWorkType } from "@domain/work-type";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -69,10 +76,14 @@ export interface DriveRecord {
   readonly venue: string | null;
   readonly offerCategory: OfferCategory | null;
   readonly openings: number | null;
+  readonly ctcMinLpa: number | null;
+  readonly ctcMaxLpa: number | null;
   readonly ctcLabel: string;
   readonly ctcBreakup: string;
   readonly bondDetails: string;
   readonly locations: string;
+  /** 0138: null means the AE never answered the work-type question. */
+  readonly workType: WorkType | null;
   readonly applicationStart: string | null;
   readonly applicationEnd: string | null;
   readonly tentativeDate: string | null;
@@ -137,7 +148,7 @@ export interface DriveRecordView {
 export const RECORD_DRIVE_COLUMNS = `
   id, company_drive_id, company_name, industry, company_website, role_title, additional_designations,
   role_category, status, drive_type, drive_mode, venue, offer_category, openings,
-  ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations,
+  ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations, work_type,
   application_start, application_end, tentative_date,
   shift_type, shift_night_timing, joining_timeline, joining_immediate_notes,
   joining_later_notes, timeline_notes, job_description, jd_storage_path, jd_file_name,
@@ -385,6 +396,8 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         ),
         offerCategory: (row.offer_category as OfferCategory | null) ?? null,
         openings: (row.openings as number | null) ?? null,
+        ctcMinLpa: min,
+        ctcMaxLpa: max,
         ctcLabel:
           min === null && max === null
             ? "Not stated"
@@ -394,6 +407,7 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         ctcBreakup: text(row.ctc_breakup),
         bondDetails: text(row.bond_details),
         locations: text(row.work_locations),
+        workType: asWorkType(row.work_type as string | null),
         applicationStart: (row.application_start as string | null) ?? null,
         applicationEnd: (row.application_end as string | null) ?? null,
         tentativeDate: (row.tentative_date as string | null) ?? null,

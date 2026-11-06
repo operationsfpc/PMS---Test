@@ -1,3 +1,4 @@
+import { useToast } from "@components/toast";
 import {
   Accordion,
   AccordionContent,
@@ -20,7 +21,8 @@ import {
   offerCategoryRestatesType,
 } from "@domain/offer-category";
 import { describeTimeLeft } from "@domain/student-drive-lists";
-import type { DriveType, RoleCategory } from "@domain/types";
+import type { DriveType, RoleCategory, WorkType } from "@domain/types";
+import { workTypeLabel } from "@domain/work-type";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApplyError } from "./apply-repository";
 
@@ -59,6 +61,8 @@ export interface OpenDriveDetails {
   /** F7: other job titles this ONE interview process covers. */
   readonly designations: readonly string[];
   readonly locations: string;
+  /** 0138: null means the AE never answered, and the badge stays off the card. */
+  readonly workType: WorkType | null;
   readonly openings: number | null;
   readonly ctcBreakup: string;
   readonly bondDetails: string;
@@ -140,8 +144,20 @@ const day = (iso: string | null) =>
  * the same word twice, in two colours, says nothing the second time. That rule
  * lives in `@domain/offer-category`, moved there 2026-08-27 because three
  * other screens that show both facts never got it.
+ *
+ * `showWorkType` follows the same rule for where the work happens: a visit
+ * whose roles all answer "Hybrid" says it once at the top, and only a visit
+ * that mixes answers repeats it per role.
  */
-function RoleFacts({ drive, showType }: { drive: OpenDrive; showType: boolean }) {
+function RoleFacts({
+  drive,
+  showType,
+  showWorkType,
+}: {
+  drive: OpenDrive;
+  showType: boolean;
+  showWorkType: boolean;
+}) {
   return (
     <>
       {showType && drive.driveType !== undefined && drive.driveType !== null && (
@@ -151,6 +167,9 @@ function RoleFacts({ drive, showType }: { drive: OpenDrive; showType: boolean })
         !offerCategoryRestatesType(drive.driveType ?? null, drive.offerCategory) && (
           <Badge tone="brand">{offerCategoryLabel(drive.offerCategory)}</Badge>
         )}
+      {showWorkType && drive.details.workType !== null && (
+        <Badge tone="neutral">{workTypeLabel(drive.details.workType)}</Badge>
+      )}
       {drive.applied && <Badge tone="success">Applied</Badge>}
     </>
   );
@@ -210,6 +229,7 @@ export function DrivesList({
   /** How many live drives R5 hid from this student. Comes from the view, which reads them all. */
   notForYou?: number | undefined;
 }) {
+  const { toast } = useToast();
   const [rows, setRows] = useState<readonly OpenDrive[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -261,10 +281,20 @@ export function DrivesList({
       setRows((current) =>
         (current ?? []).map((r) => (r.id === drive.id ? { ...r, applied: true } : r)),
       );
+      toast({
+        tone: "success",
+        title: "Application submitted",
+        description: `You have successfully applied to ${drive.companyName} — ${drive.roleTitle}.`,
+      });
     } catch (caught) {
-      setError(
-        caught instanceof ApplyError ? caught.message : "Could not submit your application.",
-      );
+      const msg =
+        caught instanceof ApplyError ? caught.message : "Could not submit your application.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Application failed",
+        description: msg,
+      });
     } finally {
       setBusyId(null);
     }
@@ -309,6 +339,14 @@ export function DrivesList({
             const [singleType] = types;
             const visitType = types.size === 1 ? (singleType ?? null) : undefined;
 
+            /* The same rule for the work type: one answer shared by every role
+               is the visit's, and said once at the top. Mixed answers are each
+               role's own and stay on their rows. */
+            const workTypes = new Set(event.roles.map((role) => role.details.workType));
+            const [singleWorkType] = workTypes;
+            const visitWorkType = workTypes.size === 1 ? (singleWorkType ?? null) : null;
+            const mixedWorkTypes = workTypes.size > 1;
+
             /* The visit's deadline (2026-10-29 UAT: "swap the dates of published
                and closing dates"). The 📅 slot held the tentative drive day,
                which is routinely already past while a window is still open — the
@@ -321,7 +359,11 @@ export function DrivesList({
             const roleLine = (drive: OpenDrive) => (
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <h3 className="font-semibold text-ink-900">{drive.roleTitle}</h3>
-                <RoleFacts drive={drive} showType={visitType === undefined} />
+                <RoleFacts
+                  drive={drive}
+                  showType={visitType === undefined}
+                  showWorkType={mixedWorkTypes}
+                />
               </div>
             );
 
@@ -513,6 +555,9 @@ export function DrivesList({
                           {visitType === undefined ? "Mixed types" : driveTypeLabel(visitType)}
                         </Badge>
                       )}
+                      {visitWorkType !== null && (
+                        <Badge tone="neutral">{workTypeLabel(visitWorkType)}</Badge>
+                      )}
                       {isMultiRole && <Badge tone="brand">{event.roles.length} roles</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-3 text-sm text-ink-600 sm:justify-end">
@@ -543,7 +588,11 @@ export function DrivesList({
                       <AccordionItem key={drive.id} value={drive.id}>
                         <AccordionTrigger className="py-3">
                           <span className="font-semibold text-ink-900">{drive.roleTitle}</span>
-                          <RoleFacts drive={drive} showType={visitType === undefined} />
+                          <RoleFacts
+                            drive={drive}
+                            showType={visitType === undefined}
+                            showWorkType={mixedWorkTypes}
+                          />
                           <span className="text-sm font-normal text-ink-600">{drive.ctcLabel}</span>
                         </AccordionTrigger>
                         <AccordionContent className="pb-4">

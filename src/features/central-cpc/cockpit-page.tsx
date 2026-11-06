@@ -9,6 +9,7 @@ import {
 import { DriveSort } from "@components/drive-sort";
 import { DriveTypeFilter } from "@components/drive-type-filter";
 import { StudentIdentity } from "@components/student-identity";
+import { useToast } from "@components/toast";
 import {
   Accordion,
   AccordionContent,
@@ -195,6 +196,7 @@ export function CockpitPage({
     driveType?: DriveType | null,
   ) => Promise<void>;
 }) {
+  const { toast } = useToast();
   // 2026-08-17 (Karthik): the AE views drive status and results; they neither
   // publish nor shortlist. The domain owns both answers - this screen only asks.
   const mayPublish = canPublishDrive(role);
@@ -308,9 +310,20 @@ export function CockpitPage({
       setVenueEditing(null);
       setVenueText("");
       setVenueError(null);
+      toast({
+        tone: "success",
+        title: "Venue updated",
+        description: "Venue details saved successfully.",
+      });
       load();
     } catch (cause) {
-      setVenueError(cause instanceof Error ? cause.message : "Could not save the venue.");
+      const msg = cause instanceof Error ? cause.message : "Could not save the venue.";
+      setVenueError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not save venue",
+        description: msg,
+      });
     } finally {
       setSavingVenue(false);
     }
@@ -346,10 +359,23 @@ export function CockpitPage({
     setSavingDecision(true);
     try {
       await decide(deciding.drive.driveId, "submitted", intent, deciding.drive.driveType ?? null);
+      const isApprove = deciding.kind === "approve";
+      const driveInfo = `${deciding.drive.companyName} — ${deciding.drive.roleTitle}`;
       setDeciding(null);
+      toast({
+        tone: isApprove ? "success" : "danger",
+        title: isApprove ? "Drive approved" : "Drive rejected",
+        description: `${driveInfo}: ${isApprove ? `approved${category ? ` as ${offerCategoryLabel(category)}` : ""}` : "rejected permanently"}.`,
+      });
       load();
     } catch (cause) {
-      setDecisionError(cause instanceof Error ? cause.message : "Could not save the decision.");
+      const msg = cause instanceof Error ? cause.message : "Could not save the decision.";
+      setDecisionError(msg);
+      toast({
+        tone: "danger",
+        title: deciding.kind === "approve" ? "Could not approve drive" : "Could not reject drive",
+        description: msg,
+      });
     } finally {
       setSavingDecision(false);
     }

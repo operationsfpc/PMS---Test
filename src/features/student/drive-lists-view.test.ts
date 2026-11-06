@@ -344,3 +344,57 @@ describe("the student's own hold", () => {
     expect((await view().lists()).hold).toBeNull();
   });
 });
+
+/**
+ * 0138: the work type has to reach BOTH lists, because the card rule puts the
+ * answer wherever the drive is shown — the door still open, and the one the
+ * student is already walking through.
+ *
+ * The application's own row carries it, not the drive read a second time: a
+ * student mid-rounds asks "do I move to Bengaluru or not" about the drive they
+ * are already in.
+ */
+describe("the work type in both lists", () => {
+  it("carries it on a drive still open to apply", async () => {
+    stub({ drives: [{ ...openDrive, work_type: "work_from_home" }] });
+
+    const lists = await view().lists();
+
+    expect(lists.toApply[0]?.details.workType).toBe("work_from_home");
+  });
+
+  it("carries it on the application still moving", async () => {
+    stub({
+      drives: [{ ...openDrive, work_type: "hybrid", status: "in_rounds" }],
+      applications: [{ id: "a1", drive_id: "d1", applied_at: "2026-09-01T12:00:00Z" }],
+      participants: [{ round_id: "r1", application_id: "a1" }],
+    });
+
+    const lists = await view().lists();
+
+    expect(lists.inProgress).toEqual([expect.objectContaining({ id: "d1", workType: "hybrid" })]);
+  });
+
+  it("leaves both rows without an answer when the AE never gave one", async () => {
+    stub({
+      drives: [
+        { ...openDrive, work_type: null },
+        {
+          ...openDrive,
+          id: "d2",
+          role_title: "QA Engineer",
+          work_type: "",
+          status: "in_rounds",
+          application_end: "2026-09-02T00:00:00Z",
+        },
+      ],
+      applications: [{ id: "a2", drive_id: "d2", applied_at: "2026-09-01T12:00:00Z" }],
+      participants: [{ round_id: "r1", application_id: "a2" }],
+    });
+
+    const lists = await view().lists();
+
+    expect(lists.toApply[0]?.details.workType).toBeNull();
+    expect(lists.inProgress[0]?.workType).toBeNull();
+  });
+});

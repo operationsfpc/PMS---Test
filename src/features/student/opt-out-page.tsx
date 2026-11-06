@@ -1,5 +1,6 @@
 import { QuotedText } from "@components/quoted-text";
 import { StatusHistory } from "@components/status-history";
+import { useToast } from "@components/toast";
 import { Button, Card, PageHeader } from "@components/ui";
 import { canRequestOptOut, MAX_OPT_OUT_REASON, optOutReasonProblem } from "@domain/participation";
 import type { StatusEvent } from "@domain/status-changes";
@@ -21,6 +22,7 @@ import { RequestOutcome, submittedOn } from "./request-outcome";
  * students are on phones (PRD §21.2).
  */
 export function OptOutPage({ view }: { view: ParticipationView }) {
+  const { toast } = useToast();
   const [status, setStatus] = useState<ParticipationStatusView | null>(null);
   /** Separate from the action's error: this is about a read, not a request. */
   const [readProblem, setReadProblem] = useState<string | null>(null);
@@ -114,6 +116,11 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
     await view.requestOptOut({ reason: reason.trim(), declaration: declaration as File });
     setReason("");
     setDeclaration(null);
+    toast({
+      tone: "info",
+      title: "Opt-out request submitted",
+      description: "Your request has been submitted to the placement office for review.",
+    });
     await refresh();
   }
 

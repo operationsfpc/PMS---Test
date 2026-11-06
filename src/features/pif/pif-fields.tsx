@@ -547,6 +547,10 @@ export function RoundsEditor<T extends FieldValues>({ api }: { api: PifFieldApi<
  * The typed description sits BESIDE the attached PDF (J1/answer 1), never
  * instead of it: the text is what a drive card and the recruiter export can
  * actually show, the file is what the company actually wrote.
+ *
+ * Since 2026-11-06 the FILE is the mandatory half at submit and the text is
+ * not — so the hint below says which is which rather than leaving the AE to
+ * work it out from a single asterisk.
  */
 export function JobDescriptionField<T extends FieldValues>({
   api,
@@ -578,7 +582,12 @@ export function JobDescriptionField<T extends FieldValues>({
           </>
         )}
       </Labelled>
-      <Labelled label="Attach the job description (PDF)" error={api.err("jobDescriptionFile")} wide>
+      <Labelled
+        label="Attach the job description (PDF)"
+        required
+        error={api.err("jobDescriptionFile")}
+        wide
+      >
         {(id, invalid) => (
           <>
             <input

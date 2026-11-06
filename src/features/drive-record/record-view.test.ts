@@ -31,6 +31,7 @@ const driveRow = {
   ctc_breakup: "30000 + 5000",
   bond_details: "2 years",
   work_locations: "Bengaluru, Chennai",
+  work_type: "work_from_office",
   application_start: "2026-08-11T10:17:00Z",
   application_end: "2026-08-12T10:18:00Z",
   tentative_date: "2026-08-15",
@@ -130,6 +131,7 @@ describe("createSupabaseDriveRecordView", () => {
       offerCategory: "dream",
       ctcLabel: "₹4–6 LPA",
       locations: "Bengaluru, Chennai",
+      workType: "work_from_office",
       jobDescription: "IT Coding",
       jobDescriptionName: "Accenture-JD.pdf",
     });
@@ -285,10 +287,27 @@ describe("createSupabaseDriveRecordView", () => {
       companyName: "Bare Minimum Ltd",
       ctcLabel: "Not stated",
       jobDescriptionUrl: null,
+      workType: null,
       applicants: [],
     });
     expect(record?.eligibility.cgpaLabel).toBe("None declared");
     expect(record?.provenance.raisedBy).toBeNull();
+  });
+
+  /**
+   * 0138: `drives.work_type` is an enum with no empty label, so an AE who never
+   * answered leaves it NULL — and a row predating the column has no key at all.
+   * Both have to read as the same "no answer", never as an answer called "".
+   */
+  it("reads an unanswered work type as no answer", async () => {
+    stub({ drive: { ...driveRow, work_type: null } });
+    expect((await view().record("d1"))?.workType).toBeNull();
+
+    stub({ drive: { ...driveRow, work_type: "" } });
+    expect((await view().record("d1"))?.workType).toBeNull();
+
+    stub({ drive: { ...driveRow, work_type: "hybrid" } });
+    expect((await view().record("d1"))?.workType).toBe("hybrid");
   });
 
   it("states a percentage cutoff on the scale it was declared on", async () => {

@@ -11,6 +11,10 @@ function renderWithToast(ui: React.ReactElement) {
   return render(<ToastProvider>{ui}</ToastProvider>);
 }
 
+/** A JD the bucket would accept. Mandatory at submit since 2026-11-06. */
+const pdf = (name = "Zoho-GET-JD.pdf") =>
+  new File([new Uint8Array(2048)], name, { type: "application/pdf" });
+
 /**
  * The AE's PIF form.
  *
@@ -18,7 +22,10 @@ function renderWithToast(ui: React.ReactElement) {
  * targeting are not the AE's to set, and must not appear here at all - §3.3
  * makes offer_category immutable once approval sets it.
  */
-async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
+async function fillRequired(
+  user: ReturnType<typeof userEvent.setup>,
+  { jdFile = true }: { jdFile?: boolean } = {},
+) {
   // A1 (UAT 2026-08-19): the type comes FIRST — choosing it reveals the
   // compensation fields that belong to it.
   await user.click(screen.getByRole("radio", { name: /^full time$/i }));
@@ -28,6 +35,15 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await pickCategory(user, "Software / Technical");
   // Two controls now match "job description": the typed one and the PDF.
   await user.type(screen.getByLabelText(/^job description$/i), "Build backend services.");
+  /**
+   * The recruiter's own PDF. Not the typed summary: since 2026-11-06 a
+   * submission without the file is refused, so every submit test carries one
+   * and the tests about the text stay tests about the text. Pass
+   * `{jdFile: false}` to test the refusal itself.
+   */
+  if (jdFile) {
+    await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
+  }
   await user.type(screen.getByLabelText(/number of openings/i), "25");
   await user.type(screen.getByLabelText(/work location/i), "Chennai");
   /**
@@ -61,6 +77,11 @@ async function fillRoleTwo(user: ReturnType<typeof userEvent.setup>) {
   await user.type(second(screen.getAllByLabelText(/work location/i)), "Chennai");
   await user.click(second(screen.getAllByRole("button", { name: /add round/i })));
   await user.type(second(screen.getAllByLabelText(/round 1 name/i)), "Case study");
+  // Each card is raised as its own drive row, so each carries its own PDF.
+  await user.upload(
+    second(screen.getAllByLabelText(/attach the job description/i)),
+    pdf("Data-Analyst-Intern-JD.pdf"),
+  );
   // The passing years are NOT asked again here: they belong to the visit, so
   // there is one set of boxes for the whole PIF.
 }
@@ -549,9 +570,6 @@ describe("the rounds the AE was told about", () => {
  *    radio button for immediate joining and joining later."
  */
 describe("PifForm — the attached JD, the shift and the joining timeline", () => {
-  const pdf = (name = "Zoho-GET-JD.pdf") =>
-    new File([new Uint8Array(2048)], name, { type: "application/pdf" });
-
   describe("the attached JD", () => {
     it("takes the recruiter's PDF and carries it to the submission", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -595,20 +613,39 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
       expect(onSubmit).not.toHaveBeenCalled();
     });
 
-    it("submits with no attachment at all — it is optional (answer 1)", async () => {
-      const onSubmit = vi.fn().mockResolvedValue(undefined);
+    /**
+     * 2026-11-06: the PDF is the price of handing the PIF over. The AE is told
+     * at the box, and a draft still saves without it.
+     */
+    it("refuses to submit with no attachment, and says so at the box", async () => {
+      const onSubmit = vi.fn();
       const user = userEvent.setup();
       renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
 
-      await fillRequired(user);
+      await fillRequired(user, { jdFile: false });
       await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
-      await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+      const box = screen.getByLabelText(/attach the job description/i);
+      expect(await screen.findByText(/job description PDF the company sent/i)).toBeDefined();
+      expect(fieldMessage(box)).toMatch(/job description PDF the company sent/i);
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("still saves a draft with no attachment, before the company sends it", async () => {
+      const onSaveDraft = vi.fn().mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={onSaveDraft} />);
+
+      await fillRequired(user, { jdFile: false });
+      await user.click(screen.getByRole("button", { name: /save draft/i }));
+
+      await waitFor(() => expect(onSaveDraft).toHaveBeenCalled());
     });
 
     /**
      * Answer 2: "keep space to type JD. Field is not mandatory." The typed
-     * description survives as the thing a drive card and a CSV can show.
+     * description survives as the thing a drive card and a CSV can show — and
+     * it is still not demanded, even though the PDF now is.
      */
     it("keeps the typed description, and no longer demands it", async () => {
       const onSubmit = vi.fn().mockResolvedValue(undefined);
@@ -628,6 +665,8 @@ describe("PifForm — the attached JD, the shift and the joining timeline", () =
       await user.type(screen.getByLabelText(/round 1 name/i), "Aptitude test");
       await user.click(screen.getByRole("checkbox", { name: /2027/ }));
       await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+      // Nothing typed into the description box; the recruiter's PDF stands in.
+      await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
       await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
       await waitFor(() => expect(onSubmit).toHaveBeenCalled());
@@ -872,6 +911,7 @@ describe("PifForm — drive type first, compensation follows (A1/A2)", () => {
     await user.type(screen.getByLabelText(/round 1 name/i), "Interview");
     await user.click(screen.getByRole("checkbox", { name: /2027/ }));
     await user.click(screen.getByRole("radio", { name: /immediate joining/i }));
+    await user.upload(screen.getByLabelText(/attach the job description/i), pdf());
     await user.click(screen.getByRole("button", { name: /submit for approval/i }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
@@ -1828,5 +1868,85 @@ describe("PifForm — the refusal is said at the field, not only in a toast", ()
     expect(cutoff.getAttribute("aria-invalid")).toBe("true");
     expect(fieldMessage(cutoff)).toMatch(/10-point scale/i);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 2026-11-06 (0138): "on pif i need new dropdown work type as Hybrid, work
+ * from home, work from office".
+ *
+ * The free-text "Work location(s)" box above it stays — a student reads
+ * "Remote + Delhi" and still cannot tell whether they are expected in an
+ * office. This is the question the recruiter answers, so the form asks it as
+ * three named choices and nothing else, and preselects none: an answer the
+ * company never gave must not be invented by a default.
+ */
+describe("PifForm — the work type", () => {
+  it("offers the three answers, and no free text", () => {
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    const select = screen.getByLabelText(/work type/i) as HTMLSelectElement;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      "Choose…",
+      "Hybrid",
+      "Work from home",
+      "Work from office",
+    ]);
+    expect(screen.queryByRole("textbox", { name: /work type/i })).toBeNull();
+  });
+
+  it("preselects nothing, so an untouched PIF says the AE did not answer", () => {
+    renderWithToast(<PifForm onSubmit={vi.fn()} onSaveDraft={vi.fn()} />);
+
+    expect((screen.getByLabelText(/work type/i) as HTMLSelectElement).value).toBe("");
+  });
+
+  it("carries the chosen answer into the submission", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.selectOptions(screen.getByLabelText(/work type/i), "hybrid");
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ workType: "hybrid" });
+  });
+
+  it("submits without one — the question is optional, not a gate", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ workType: "" });
+  });
+
+  it("asks each role separately, because two roles of one visit can differ", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    renderWithToast(<PifForm onSubmit={onSubmit} onSaveDraft={vi.fn()} />);
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /add another role/i }));
+    await fillRoleTwo(user);
+    const selects = screen.getAllByLabelText(/work type/i);
+    await user.selectOptions(selects[0] as HTMLElement, "work_from_office");
+    await user.selectOptions(selects[1] as HTMLElement, "work_from_home");
+
+    await user.click(screen.getByRole("button", { name: /submit for approval/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const values = onSubmit.mock.calls[0]?.[0] as {
+      roles: Array<{ roleTitle: string; workType: string }>;
+    };
+    expect(values.roles.map((role) => [role.roleTitle, role.workType])).toEqual([
+      ["Member Technical Staff", "work_from_office"],
+      ["Data Analyst Intern", "work_from_home"],
+    ]);
   });
 });

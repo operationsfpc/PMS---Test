@@ -1,3 +1,4 @@
+import { useToast } from "@components/toast";
 import {
   Badge,
   Button,
@@ -22,6 +23,7 @@ import {
 } from "@domain/offer-category";
 import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import { describeStipendRange } from "@domain/stipend";
+import { workTypeLabel } from "@domain/work-type";
 import {
   ApprovalError,
   type ApprovalRepository,
@@ -175,7 +177,7 @@ function PendingRoleCard({
        * work, when they would start, and the recruiter's own JD were
        * all things the approver had to take on trust.
        */}
-      <dl className="mt-3 grid gap-3 rounded-lg bg-surface-muted p-3 sm:grid-cols-3">
+      <dl className="mt-3 grid gap-3 rounded-lg bg-surface-muted p-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">Shift</dt>
           <dd className="mt-0.5 text-sm text-ink-800">{pif.shift}</dd>
@@ -183,6 +185,13 @@ function PendingRoleCard({
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">Joining</dt>
           <dd className="mt-0.5 text-sm text-ink-800">{pif.joining}</dd>
+        </div>
+        {/* 0138: where the work happens. Said here even when the AE said
+            nothing, because an approver who cannot see the gap cannot ask
+            for it. */}
+        <div>
+          <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">Work type</dt>
+          <dd className="mt-0.5 text-sm text-ink-800">{workTypeLabel(pif.workType)}</dd>
         </div>
         <div>
           <dt className="text-xs font-semibold uppercase tracking-wide text-ink-500">
@@ -285,6 +294,7 @@ function PendingRoleCard({
 }
 
 export function PifApprovalQueue({ repository }: { repository?: ApprovalRepository }) {
+  const { toast } = useToast();
   const [repo] = useState<ApprovalRepository>(
     () => repository ?? createSupabaseApprovalRepository(supabase()),
   );
@@ -355,8 +365,22 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
     try {
       await repo.decide(pif.id, "submitted", intent);
       setRows((current) => (current ?? []).filter((r) => r.id !== pif.id));
+      const chosenCategory = categories[pif.id];
+      const categoryLabel =
+        approve && chosenCategory !== undefined ? ` as ${offerCategoryLabel(chosenCategory)}` : "";
+      toast({
+        tone: approve ? "success" : "danger",
+        title: approve ? "Drive approved" : "Drive rejected",
+        description: `${pif.companyName} — ${pif.roleTitle} ${approve ? `approved${categoryLabel}` : "rejected"}.`,
+      });
     } catch (caught) {
-      setError(caught instanceof ApprovalError ? caught.message : "Could not save the decision.");
+      const msg = caught instanceof ApprovalError ? caught.message : "Could not save the decision.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: approve ? "Could not approve drive" : "Could not reject drive",
+        description: msg,
+      });
     } finally {
       setPending(null);
     }

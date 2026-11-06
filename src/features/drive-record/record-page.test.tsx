@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+
+import type { WorkType } from "@domain/types";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DriveRecordPage } from "./record-page";
 import type { DriveRecord, DriveRecordView } from "./record-view";
 
@@ -28,9 +30,12 @@ const RECORD: DriveRecord = {
   offerCategory: "dream",
   openings: 10,
   ctcLabel: "₹4–6 LPA",
+  ctcMinLpa: 4,
+  ctcMaxLpa: 6,
   ctcBreakup: "30000 + 5000",
   bondDetails: "2 years",
   locations: "Bengaluru, Chennai, Hyderabad",
+  workType: null,
   applicationStart: "2026-08-11T10:17:00Z",
   applicationEnd: "2026-08-12T10:18:00Z",
   tentativeDate: "2026-08-15",
@@ -101,6 +106,7 @@ const view = (record: DriveRecord | null = RECORD): DriveRecordView => ({
 const CENTRAL = "central_placement_coordinator" as const;
 const AE = "account_executive" as const;
 const STUDENT = "student" as const;
+const DELIVERY_HEAD = "delivery_head" as const;
 
 describe("DriveRecordPage", () => {
   it("shows the whole record to a staff reader, every section on the page at once", async () => {
@@ -137,7 +143,8 @@ describe("DriveRecordPage", () => {
       "https://signed.example/jd.pdf",
     );
     // One Compensation section, and it does not repeat the tile above it.
-    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(1);
+    expect(screen.getAllByText("₹4–6")).toHaveLength(1);
+    expect(screen.getAllByText("LPA")).toHaveLength(1);
   });
 
   it("hides the recruiter contact from everyone but the AE", async () => {
@@ -186,7 +193,7 @@ describe("DriveRecordPage", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Open to every campus")).toBeDefined();
+    expect(await screen.findByText("Open to all campuses")).toBeDefined();
   });
 
   it("hides the campuses list from a student reader", async () => {
@@ -212,7 +219,7 @@ describe("DriveRecordPage", () => {
     );
 
     await screen.findByRole("heading", { name: /accenture/i });
-    expect(screen.queryByText("Open to every campus")).toBeNull();
+    expect(screen.queryByText("Open to all campuses")).toBeNull();
   });
 
   /** A4/A5 (UAT 2026-08-19): several contacts, or an honest "none". */
@@ -258,7 +265,8 @@ describe("DriveRecordPage", () => {
     expect(screen.queryByRole("heading", { name: /Recruiter contacts/ })).toBeNull();
     expect(screen.getByRole("heading", { name: "Where and when" })).toBeDefined();
     // The package is stated once, on its tile — Compensation no longer repeats it.
-    expect(screen.getAllByText("₹4–6 LPA")).toHaveLength(1);
+    expect(screen.getAllByText("₹4–6")).toHaveLength(1);
+    expect(screen.getAllByText("LPA")).toHaveLength(1);
     expect(screen.queryByText("Thanush Krishna")).toBeNull();
     expect(screen.queryByText(/Raised by/)).toBeNull();
     expect(screen.queryByText("testabcd@example.com")).toBeNull();
@@ -524,6 +532,41 @@ describe("the badge row", () => {
 });
 
 /**
+ * 0138: "where does the work happen" is a different question from the drive
+ * mode above it — an on-campus drive can hire into a hybrid role — so the
+ * record answers it in its own line under "Where and when".
+ *
+ * The AE chose it per role on the PIF and may have chosen nothing, in which
+ * case there is no line. "Not stated" belongs to the approval queue, where the
+ * gap is something the Delivery Head can send back; on the record it would be
+ * an invented fact.
+ */
+describe("the work type", () => {
+  const show = async (workType: WorkType | null) => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={view({ ...RECORD, workType })} role={CENTRAL} driveId="d1" />
+      </MemoryRouter>,
+    );
+    return screen.findByRole("heading", { name: "Where and when" });
+  };
+
+  it("states the answer in the domain's words, beside the mode", async () => {
+    await show("work_from_home");
+
+    expect(screen.getByText("Work type")).toBeDefined();
+    expect(screen.getByText("Work from home")).toBeDefined();
+  });
+
+  it("says nothing at all when the AE never answered", async () => {
+    await show(null);
+
+    expect(screen.queryByText("Work type")).toBeNull();
+    expect(screen.queryByText("Not stated")).toBeNull();
+  });
+});
+
+/**
  * 2026-10-18 (UAT): the header's "+ Add another role" was offered on
  * drives nobody is hiring through any more. A new role attaches to the company
  * visit, so the visit decides — this role plus its siblings — in the same words
@@ -616,5 +659,160 @@ describe("CPC drive view page actions", () => {
     await screen.findByRole("heading", { name: /accenture — jr\. software engineer/i });
     expect(screen.queryByRole("link", { name: /^publish$/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /^shortlist$/i })).toBeNull();
+  });
+
+  it("shows Submitted — Pending Delivery Head Approval badge to Central CPC on a submitted drive", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "submitted" })}
+          role={CENTRAL}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/submitted — pending delivery head approval/i)).toBeDefined();
+  });
+
+  it("shows Submitted for Approval badge to Account Executive on a submitted drive", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage view={view({ ...RECORD, status: "submitted" })} role={AE} driveId="d1" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/submitted for approval/i)).toBeDefined();
+  });
+});
+
+describe("Delivery Head drive view page actions", () => {
+  it("offers Approve and Reject buttons and bottom bar when decide is provided", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "submitted" })}
+          role={DELIVERY_HEAD}
+          driveId="d1"
+          decide={decide}
+        />
+      </MemoryRouter>,
+    );
+
+    const approveButtons = await screen.findAllByRole("button", { name: /^approve$/i });
+    expect(approveButtons.length).toBeGreaterThanOrEqual(1);
+
+    const rejectButtons = await screen.findAllByRole("button", { name: /^reject$/i });
+    expect(rejectButtons.length).toBeGreaterThanOrEqual(1);
+
+    expect(screen.getByText(/awaiting your approval/i)).toBeDefined();
+  });
+
+  it("links to approval queue when decide is not provided", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "submitted" })}
+          role={DELIVERY_HEAD}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    const queueLink = await screen.findByRole("link", { name: /review in approval queue/i });
+    expect(queueLink.getAttribute("href")).toBe("/delivery-head/approvals");
+  });
+
+  it("allows Delivery Head to approve a drive with an offer category", async () => {
+    const user = userEvent.setup();
+    const decide = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "submitted" })}
+          role={DELIVERY_HEAD}
+          driveId="d1"
+          decide={decide}
+        />
+      </MemoryRouter>,
+    );
+
+    const [firstApprove] = await screen.findAllByRole("button", { name: /^approve$/i });
+    if (!firstApprove) throw new Error("Expected approve button");
+    await user.click(firstApprove);
+
+    expect(
+      await screen.findByRole("heading", { name: /approve accenture — jr\. software engineer/i }),
+    ).toBeDefined();
+
+    const confirmButton = screen.getByRole("button", { name: /confirm — approve/i });
+    await user.click(confirmButton);
+
+    expect(decide).toHaveBeenCalledWith(
+      "d1",
+      "submitted",
+      expect.objectContaining({ decision: "approve" }),
+      "internship_convertible",
+    );
+  });
+
+  it("allows Delivery Head to reject a drive with a mandatory reason", async () => {
+    const user = userEvent.setup();
+    const decide = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "submitted" })}
+          role={DELIVERY_HEAD}
+          driveId="d1"
+          decide={decide}
+        />
+      </MemoryRouter>,
+    );
+
+    const [firstReject] = await screen.findAllByRole("button", { name: /^reject$/i });
+    if (!firstReject) throw new Error("Expected reject button");
+    await user.click(firstReject);
+
+    expect(
+      await screen.findByRole("heading", { name: /reject accenture — jr\. software engineer/i }),
+    ).toBeDefined();
+
+    const confirmButton = screen.getByRole("button", { name: /confirm — reject permanently/i });
+    const reasonInput = screen.getByLabelText(/rejection reason/i);
+
+    // Empty reason shows error
+    await user.click(confirmButton);
+    expect(await screen.findByRole("alert")).toBeDefined();
+
+    await user.type(reasonInput, "CTC below campus eligibility policy.");
+    await user.click(confirmButton);
+
+    expect(decide).toHaveBeenCalledWith(
+      "d1",
+      "submitted",
+      {
+        decision: "reject",
+        reason: "CTC below campus eligibility policy.",
+      },
+      "internship_convertible",
+    );
+  });
+
+  it("shows Approved — Awaiting Publishing badge to Delivery Head when drive is approved", async () => {
+    render(
+      <MemoryRouter>
+        <DriveRecordPage
+          view={view({ ...RECORD, status: "approved" })}
+          role={DELIVERY_HEAD}
+          driveId="d1"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/approved — awaiting publishing/i)).toBeDefined();
   });
 });

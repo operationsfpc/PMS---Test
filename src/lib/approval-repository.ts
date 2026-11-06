@@ -2,7 +2,8 @@ import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
 import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
 import { describeJoining } from "@domain/joining";
 import { describeShift } from "@domain/shift";
-import type { DriveStatus, DriveType, RoleCategory } from "@domain/types";
+import type { DriveStatus, DriveType, RoleCategory, WorkType } from "@domain/types";
+import { asWorkType } from "@domain/work-type";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -39,6 +40,13 @@ export interface PendingPif {
   readonly stipendMinMonthly: number | null;
   readonly stipendMaxMonthly: number | null;
   readonly driveType: DriveType | null;
+  /**
+   * 0138: the third of the three things a Delivery Head judges a role on —
+   * where the work happens. Null is "the AE did not say", which the queue
+   * prints rather than hides, because an unanswered question is exactly what
+   * an approver needs to see.
+   */
+  readonly workType: WorkType | null;
   readonly onHold: boolean;
   readonly createdAt: string | null;
   /**
@@ -74,7 +82,7 @@ export type GetActorId = () => Promise<string | null>;
 // One string literal, deliberately: PostgREST infers the row type from the
 // literal, and a concatenation types every column as an error object.
 export const COLUMNS =
-  "id, company_name, role_title, role_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes, company_drive_id";
+  "id, company_name, role_title, role_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, work_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes, company_drive_id";
 
 /** Long enough to open and read the PDF, short enough not to be forwardable. */
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -224,6 +232,7 @@ export function createSupabaseApprovalRepository(
         stipendMinMonthly: (row.stipend_min_monthly as number | null) ?? null,
         stipendMaxMonthly: (row.stipend_max_monthly as number | null) ?? null,
         driveType: (row.drive_type as DriveType | null) ?? null,
+        workType: asWorkType(row.work_type as string | null),
         onHold: Boolean(row.on_hold),
         createdAt: (row.created_at as string | null) ?? null,
         jobDescriptionUrl: signed.get((row.jd_storage_path as string | null) ?? "") ?? null,

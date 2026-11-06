@@ -1,4 +1,5 @@
 import { ErrorPanel } from "@components/error-panel";
+import { useToast } from "@components/toast";
 import { Card } from "@components/ui";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -31,6 +32,7 @@ function isGrouped(values: PifFormValues | MultiRolePifValues): values is MultiR
 }
 
 export function PifPage({ repository }: { repository?: PifRepository }) {
+  const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const companyNameParam = searchParams.get("companyName");
   const companyDriveIdParam = searchParams.get("companyDriveId");
@@ -117,8 +119,22 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
       setEventDraftId(saved.eventId === "" ? undefined : saved.eventId);
       // The AE is told how many drive rows the visit actually raised, and one
       // card naming two categories raises two.
-      setOutcomeRoles(expandedRoleCount(values.roles));
+      const roleCount = expandedRoleCount(values.roles);
+      setOutcomeRoles(roleCount);
       setOutcome(intent);
+      if (intent === "submitted") {
+        toast({
+          tone: "success",
+          title: "Company drive submitted for approval",
+          description: `${roleCount} role(s) submitted to Delivery Head for review.`,
+        });
+      } else {
+        toast({
+          tone: "info",
+          title: "Draft saved",
+          description: "Company drive draft has been saved.",
+        });
+      }
       return;
     }
     const saved =
@@ -128,6 +144,19 @@ export function PifPage({ repository }: { repository?: PifRepository }) {
     setDraftId(saved.id);
     setOutcomeRoles(null);
     setOutcome(intent);
+    if (intent === "submitted") {
+      toast({
+        tone: "success",
+        title: "PIF submitted for approval",
+        description: "Submitted to Delivery Head for review.",
+      });
+    } else {
+      toast({
+        tone: "info",
+        title: "Draft saved",
+        description: "PIF draft has been saved.",
+      });
+    }
   }
 
   const getCompanyEvents = repo.getCompanyEvents?.bind(repo);

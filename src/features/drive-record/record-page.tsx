@@ -1,5 +1,24 @@
-import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@components/alert-dialog";
+import { useToast } from "@components/toast";
+import {
+  Badge,
+  Button,
+  ButtonLink,
+  Card,
+  LottieLoader,
+  PageHeader,
+  type Tone,
+} from "@components/ui";
+import { decidePif, type PifDecision } from "@domain/drive-lifecycle";
+import {
+  canApproveDrive,
   canPublishDrive,
   canRaiseDrive,
   canShortlistFromPortfolio,
@@ -10,13 +29,20 @@ import {
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveType, driveTypeLabel, driveTypeTone } from "@domain/drive-type";
 import { describeDriveFreeze } from "@domain/drive-working";
-import { offerCategoryLabel, offerCategoryRestatesType } from "@domain/offer-category";
+import type { OfferCategory } from "@domain/offer-category";
+import {
+  offerCategoriesFor,
+  offerCategoryLabel,
+  offerCategoryRestatesType,
+  requiredOfferCategoryFor,
+  suggestOfferCategory,
+} from "@domain/offer-category";
 import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
-import type { AppRole, DriveStatus } from "@domain/types";
+import type { AppRole, DriveStatus, DriveType } from "@domain/types";
+import { workTypeLabel } from "@domain/work-type";
 import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Skeleton } from "@/components/shadcn/skeleton";
 import {
   Table,
   TableBody,
@@ -26,6 +52,7 @@ import {
   TableRow,
 } from "@/components/shadcn/table";
 import type { DriveRecord, DriveRecordView } from "./record-view";
+import { Bar } from "./student-apply-bar";
 
 /**
  * N1 — the drive's one canonical page (approved mockup 2026-08-19).
@@ -117,6 +144,86 @@ const TILE_STYLES = {
   },
 } as const;
 
+function formatLocation(locations: string): string {
+  if (!locations || locations.trim() === "") return "Not stated";
+  return locations
+    .split(",")
+    .map((part) => {
+      const trimmed = part.trim();
+      if (!trimmed) return "";
+      return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function formatDriveMode(driveMode: string): string {
+  if (!driveMode || driveMode.trim() === "") return "Not stated";
+  const raw = `${driveMode.replaceAll("_", " ")} drive`;
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function renderCtc(ctcLabel: string) {
+  if (!ctcLabel || ctcLabel.trim() === "" || ctcLabel === "Not stated") {
+    return "Not stated";
+  }
+  const match = ctcLabel.match(/^(.*?)\s*(LPA|lpa)(.*)$/);
+  if (match?.[2]) {
+    const numberPart = match[1]?.trim();
+    const unitPart = match[2]?.trim();
+    const extra = match[3]?.trim();
+    return (
+      <span className="inline-flex flex-wrap items-baseline gap-1.5">
+        <span className="text-xl sm:text-2xl font-extrabold tracking-tight font-heading text-success-950">
+          {numberPart}
+        </span>{" "}
+        <span className="text-xs font-bold uppercase tracking-wider text-success-800">
+          {unitPart}
+        </span>
+        {extra ? ` ${extra}` : null}
+      </span>
+    );
+  }
+  return (
+    <span className="text-xl sm:text-2xl font-extrabold tracking-tight text-success-950">
+      {ctcLabel}
+    </span>
+  );
+}
+
+function statusTone(status: string): Tone {
+  const t = driveStatusTone(status);
+  return t === "neutral" ? "brand" : t;
+}
+
+function offerCategoryBadgeTone(category: OfferCategory): Tone {
+  switch (category) {
+    case "regular":
+      return "brand";
+    case "dream":
+      return "accent";
+    case "super_dream":
+      return "success";
+    case "internship":
+      return "warning";
+    default:
+      return "brand";
+  }
+}
+
+function driveTypeBadgeTone(type: DriveType | null): Tone {
+  switch (type) {
+    case "placement":
+      return "brand";
+    case "internship_convertible":
+      return "accent";
+    case "internship":
+      return "warning";
+    default:
+      return "brand";
+  }
+}
+
 /**
  * The four figures a reader scans first, in the same shape as `Fact` above.
  * Color-coded with subtle, consistent pastel accents for immediate recognition.
@@ -127,25 +234,21 @@ function Tile({
   tone = "neutral",
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   tone?: "emerald" | "sky" | "brand" | "amber" | "neutral";
 }) {
   const s = TILE_STYLES[tone] ?? TILE_STYLES.neutral;
   return (
     <div className={`min-w-0 rounded-xl border p-4 shadow-xs transition-colors ${s.container}`}>
       <span className={`text-xs font-bold uppercase tracking-wide ${s.label}`}>{label}</span>
-      <p
+      <div
         className={`mt-1 break-words font-heading text-sm font-bold [overflow-wrap:anywhere] ${s.value}`}
       >
         {value}
-      </p>
+      </div>
     </div>
   );
 }
-
-/** Skeleton rows for the drive read, in the shape of the tiles and one section stack. */
-const LOADING_TILES = ["ctc", "location", "mode", "deadline"];
-const LOADING_SECTIONS = ["description", "eligibility", "process", "window", "applicants"];
 
 /**
  * A snapshot value, read from the REAL envelope: `buildApplicationSnapshot`
@@ -176,6 +279,7 @@ export function DriveRecordPage({
   driveId,
   stage,
   headerAction,
+  decide,
 }: {
   view: DriveRecordView;
   role: AppRole;
@@ -183,10 +287,26 @@ export function DriveRecordPage({
   /** C8: the funnel number that linked here — `?stage=` on the route. */
   stage?: string | undefined;
   headerAction?: React.ReactNode;
+  /** Optional approval callback for delivery heads reviewing submitted drives. */
+  decide?:
+    | ((
+        driveId: string,
+        current: DriveStatus,
+        decision: PifDecision,
+        driveType?: DriveType | null,
+      ) => Promise<void>)
+    | undefined;
 }) {
+  const { toast } = useToast();
   const [record, setRecord] = useState<DriveRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSnapshot, setOpenSnapshot] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState<"approve" | "reject" | null>(null);
+  const [category, setCategory] = useState<OfferCategory | null>(null);
+  const [reason, setReason] = useState("");
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [savingDecision, setSavingDecision] = useState(false);
+  const [decisionSuccess, setDecisionSuccess] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -204,6 +324,63 @@ export function DriveRecordPage({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const openDecision = useCallback(
+    (kind: "approve" | "reject") => {
+      if (record === null) return;
+      const type = asDriveType(record.driveType);
+      setCategory(
+        requiredOfferCategoryFor(type) ??
+          suggestOfferCategory(record.ctcMaxLpa ?? record.ctcMinLpa),
+      );
+      setReason("");
+      setDecisionError(null);
+      setDeciding(kind);
+    },
+    [record],
+  );
+
+  async function confirmDecision() {
+    if (deciding === null || decide === undefined || savingDecision || record === null) return;
+    const type = asDriveType(record.driveType);
+    const intent: PifDecision =
+      deciding === "approve"
+        ? { decision: "approve", offerCategory: category ?? (undefined as never) }
+        : { decision: "reject", reason: reason.trim() };
+
+    const check = decidePif("submitted", intent, type);
+    if (!check.ok) {
+      setDecisionError(check.error);
+      return;
+    }
+
+    setSavingDecision(true);
+    try {
+      await decide(record.id, "submitted", intent, type);
+      setDeciding(null);
+      const message =
+        deciding === "approve"
+          ? `Drive approved${category ? ` as ${offerCategoryLabel(category)}` : ""}.`
+          : "Drive rejected.";
+      setDecisionSuccess(message);
+      toast({
+        tone: deciding === "approve" ? "success" : "danger",
+        title: deciding === "approve" ? "Drive approved" : "Drive rejected",
+        description: `${record.companyName} — ${record.roleTitle}: ${message}`,
+      });
+      void load();
+    } catch (cause) {
+      const msg = cause instanceof Error ? cause.message : "Could not save the decision.";
+      setDecisionError(msg);
+      toast({
+        tone: "danger",
+        title: deciding === "approve" ? "Could not approve drive" : "Could not reject drive",
+        description: msg,
+      });
+    } finally {
+      setSavingDecision(false);
+    }
+  }
 
   if (error !== null) {
     return (
@@ -257,17 +434,37 @@ export function DriveRecordPage({
           record.additionalDesignations.length === 0
             ? null
             : `also hiring: ${record.additionalDesignations.join(", ")}`,
+          record.applicationStart ? `Application start: ${when(record.applicationStart)}` : null,
         ]
           .filter((part) => part !== null)
           .join(" · ")}
         actions={
           headerAction !== undefined ? (
             headerAction
+          ) : canApproveDrive(role) && record.status === "submitted" ? (
+            decide !== undefined ? (
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => openDecision("approve")}>
+                  Approve
+                </Button>
+                <Button size="sm" variant="danger" onClick={() => openDecision("reject")}>
+                  Reject
+                </Button>
+              </div>
+            ) : (
+              <ButtonLink size="sm" to="/delivery-head/approvals">
+                Review in approval queue
+              </ButtonLink>
+            )
+          ) : canApproveDrive(role) && record.status === "approved" ? (
+            <Badge tone="success">Approved — Awaiting Publishing</Badge>
           ) : canPublishDrive(role) &&
             (record.status === "approved" || record.status === "draft") ? (
             <ButtonLink size="sm" to={`/central/publish?drive=${record.id}`}>
               Publish
             </ButtonLink>
+          ) : canPublishDrive(role) && record.status === "submitted" ? (
+            <Badge tone="neutral">Submitted — Pending Delivery Head Approval</Badge>
           ) : canShortlistFromPortfolio(role) &&
             (record.status === "live" ||
               record.status === "applications_closed" ||
@@ -280,7 +477,9 @@ export function DriveRecordPage({
               Shortlist
             </ButtonLink>
           ) : staff && canRaiseDrive(role) ? (
-            rolesRefused === null ? (
+            record.status === "submitted" ? (
+              <Badge tone="neutral">Submitted for Approval</Badge>
+            ) : rolesRefused === null ? (
               <ButtonLink
                 size="sm"
                 variant="ghost"
@@ -362,7 +561,7 @@ export function DriveRecordPage({
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Badge tone={driveStatusTone(record.status)}>{driveStatusLabel(record.status)}</Badge>
+        <Badge tone={statusTone(record.status)}>{driveStatusLabel(record.status)}</Badge>
         {record.roleCategory !== null && (
           <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
@@ -379,36 +578,22 @@ export function DriveRecordPage({
             reading "Internship" are one fact wearing two colours. */}
         {record.offerCategory !== null &&
           !offerCategoryRestatesType(driveType, record.offerCategory) && (
-            <Badge tone="neutral">{offerCategoryLabel(record.offerCategory)}</Badge>
+            <Badge tone={offerCategoryBadgeTone(record.offerCategory)}>
+              {offerCategoryLabel(record.offerCategory)}
+            </Badge>
           )}
         {/* The domain's words, not `replaceAll("_", " ")` — which is where
             the lower-case "internship" in the screenshot came from. */}
         {driveType !== null && (
-          <Badge tone={driveTypeTone(driveType)}>{driveTypeLabel(driveType)}</Badge>
+          <Badge tone={driveTypeBadgeTone(driveType)}>{driveTypeLabel(driveType)}</Badge>
         )}
       </div>
 
       {/* Quick Highlights — one tile shape, one type scale */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile
-          label="Package / CTC"
-          value={record.ctcLabel === "" ? "Not stated" : record.ctcLabel}
-          tone="emerald"
-        />
-        <Tile
-          label="Location"
-          value={record.locations === "" ? "Not stated" : record.locations}
-          tone="brand"
-        />
-        <Tile
-          label="Drive Mode"
-          value={
-            record.driveMode === ""
-              ? "Not stated"
-              : `${record.driveMode.replaceAll("_", " ")} drive`
-          }
-          tone="brand"
-        />
+        <Tile label="Package / CTC" value={renderCtc(record.ctcLabel)} tone="emerald" />
+        <Tile label="Location" value={formatLocation(record.locations)} tone="brand" />
+        <Tile label="Drive Mode" value={formatDriveMode(record.driveMode)} tone="brand" />
         <Tile
           label="Apply Deadline"
           value={record.applicationEnd ? when(record.applicationEnd) : "Open"}
@@ -479,7 +664,7 @@ export function DriveRecordPage({
                 label="Campuses"
                 value={
                   record.eligibility.campuses.length === 0
-                    ? "Open to every campus"
+                    ? "Open to all campuses"
                     : `Open to: ${record.eligibility.campuses.join(", ")}`
                 }
                 className="sm:col-span-2 lg:col-span-3"
@@ -526,6 +711,13 @@ export function DriveRecordPage({
           <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Fact label="Locations" value={record.locations} />
             <Fact label="Mode" value={record.driveMode.replaceAll("_", " ")} />
+            {/* Where the work actually happens, which is not the same question as
+                the drive mode above: an on-campus drive can hire into a hybrid
+                role. 0138; nothing said when the AE said nothing. */}
+            <Fact
+              label="Work type"
+              value={record.workType === null ? "" : workTypeLabel(record.workType)}
+            />
             {/* UAT 2026-08-21 item 2: worded by the domain; null hides it. */}
             <Fact label="Venue" value={record.venue ?? ""} />
             <Fact label="Applications open" value={when(record.applicationStart)} />
@@ -743,6 +935,116 @@ export function DriveRecordPage({
           </Section>
         )}
       </div>
+
+      {canApproveDrive(role) && record.status === "submitted" && decide !== undefined && (
+        <Bar>
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-500 sm:inline">
+            Awaiting your approval
+          </span>
+          <Button size="sm" onClick={() => openDecision("approve")}>
+            Approve…
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => openDecision("reject")}>
+            Reject…
+          </Button>
+        </Bar>
+      )}
+
+      {decisionSuccess !== null && (
+        <Bar>
+          <Badge tone="success">{decisionSuccess}</Badge>
+        </Bar>
+      )}
+
+      {deciding !== null && (
+        <AlertDialog open={deciding !== null} onOpenChange={(open) => !open && setDeciding(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {deciding === "approve"
+                  ? `Approve ${record.companyName} — ${record.roleTitle}`
+                  : `Reject ${record.companyName} — ${record.roleTitle}`}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {deciding === "approve"
+                  ? "Choose the offer category. It decides the student allowance (§3.3) and cannot be changed later."
+                  : "State the reason for rejection. Rejection is permanent (§3.1); the PIF cannot be resubmitted."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            {decisionError !== null && (
+              <p role="alert" className="rounded-card bg-danger-50 p-3 text-sm text-danger-700">
+                {decisionError}
+              </p>
+            )}
+
+            {deciding === "approve" ? (
+              <div>
+                <label
+                  htmlFor="record-offer-category"
+                  className="mb-1 block text-sm font-medium text-ink-900"
+                >
+                  Offer category
+                </label>
+                <select
+                  id="record-offer-category"
+                  value={category ?? ""}
+                  onChange={(e) => setCategory(e.target.value as OfferCategory)}
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                >
+                  <option value="" disabled>
+                    Choose a category…
+                  </option>
+                  {offerCategoriesFor(asDriveType(record.driveType)).map((c) => (
+                    <option key={c} value={c}>
+                      {offerCategoryLabel(c)}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-amber-700">
+                  {requiredOfferCategoryFor(asDriveType(record.driveType)) !== null
+                    ? "This drive is an internship, so Internship is the only category it can carry. This cannot be changed later."
+                    : category === null
+                      ? "No CTC on this PIF, so nothing is suggested — choose the category. This cannot be changed later."
+                      : "Suggested from the CTC. This cannot be changed later."}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label
+                  htmlFor="record-rejection-reason"
+                  className="mb-1 block text-sm font-medium text-ink-900"
+                >
+                  Rejection reason
+                </label>
+                <input
+                  id="record-rejection-reason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="e.g. Compensation below organisation threshold"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                />
+                <p className="mt-1 text-xs text-ink-500">
+                  Required. Rejection is final — the PIF cannot be edited or resubmitted.
+                </p>
+              </div>
+            )}
+
+            <AlertDialogFooter>
+              <Button variant="secondary" onClick={() => setDeciding(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={deciding === "approve" ? "primary" : "danger"}
+                isLoading={savingDecision}
+                onClick={() => void confirmDecision()}
+              >
+                {deciding === "approve" ? "Confirm — approve" : "Confirm — reject permanently"}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }

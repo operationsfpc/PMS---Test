@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type { WorkType } from "@domain/types";
 import { ApprovalError, type ApprovalRepository } from "@lib/approval-repository";
 import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -33,6 +34,9 @@ const pif = {
   jobDescriptionName: null as string | null,
   shift: "Day shift",
   joining: "Immediate joining",
+  // 0138: where the work happens. Null is the AE not having answered, which
+  // this screen still has to show rather than leave as a blank cell.
+  workType: null as WorkType | null,
   // 2026-08-27: what an internship is paid.
   stipendMinMonthly: null as number | null,
   stipendMaxMonthly: null as number | null,
@@ -378,6 +382,31 @@ describe("PifApprovalQueue — the JD, the shift and the joining timeline", () =
 
     expect(await screen.findByText("Night shift (9pm – 6am)")).toBeDefined();
     expect(screen.getByText("Joining later — Joining July 2027")).toBeDefined();
+  });
+
+  /**
+   * 0138. The approver is the one person who can ask the AE for the answer, so
+   * this is the one screen that prints the gap instead of hiding it — and it
+   * prints the company's own words, not the enum's.
+   */
+  it("shows the work type the AE chose", async () => {
+    render(
+      <PifApprovalQueue
+        repository={repo({
+          pending: async () => [{ ...pif, workType: "hybrid" }],
+        })}
+      />,
+    );
+
+    expect(await screen.findByText("Work type")).toBeDefined();
+    expect(screen.getByText("Hybrid")).toBeDefined();
+  });
+
+  it("says the work type was not stated, rather than leaving the cell blank", async () => {
+    render(<PifApprovalQueue repository={repo()} />);
+
+    expect(await screen.findByText("Work type")).toBeDefined();
+    expect(screen.getByText("Not stated")).toBeDefined();
   });
 });
 

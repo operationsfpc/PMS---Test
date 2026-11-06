@@ -10,6 +10,7 @@ import {
   DRIVE_TYPES,
   ROLE_CATEGORIES,
   type RoleCategory,
+  WORK_TYPES,
 } from "@domain/types";
 import { z } from "zod";
 
@@ -110,6 +111,7 @@ export const PIF_DEFAULTS = {
   jobDescription: "",
   openings: null,
   workLocations: "",
+  workType: "",
   ctcMinLpa: null,
   ctcMaxLpa: null,
   ctcBreakup: "",
@@ -197,6 +199,15 @@ export const pifDraftSchema = z.object({
   jobDescription: optionalText,
   openings: nullableWholeNumber,
   workLocations: optionalText,
+  /**
+   * 2026-11-06: which of Hybrid / Work from home / Work from office the role
+   * is. Optional on purpose — `""` means "the AE did not say", which the cards
+   * read as "Not stated" rather than refusing the submit. It is NOT
+   * `workLocations`, which stays the free-text city list: nothing can read a
+   * work mode out of "Remote + Delhi" reliably, and `drive_mode` says how the
+   * SELECTION is run, not where the job is.
+   */
+  workType: z.enum(["", ...WORK_TYPES]).default(""),
   ctcMinLpa: nullableNumber,
   ctcMaxLpa: nullableNumber,
   ctcBreakup: optionalText,
@@ -396,6 +407,19 @@ export const pifSubmitSchema = pifDraftSchema
     },
   )
   /**
+   * The recruiter's own JD, attached — mandatory from 2026-11-06.
+   *
+   * It is the one thing on the PIF the company actually wrote; every other
+   * answer is the AE's summary of it. A drive published without it hands the
+   * student only that summary to decide on, and the Delivery Head nothing to
+   * check the summary against. A DRAFT still saves without it, because the
+   * mail with the PDF in it often arrives after the AE started the form.
+   */
+  .refine((v) => v.jobDescriptionFile !== null, {
+    path: ["jobDescriptionFile"],
+    message: "Attach the job description PDF the company sent.",
+  })
+  /**
    * Anything the AE typed and then abandoned by changing a radio is dropped
    * HERE, not merely hidden by the form. A hidden field still submits, and
    * `0051` refuses a night timing on a day shift outright.
@@ -430,6 +454,7 @@ export const DEFAULT_ROLE_VALUES = {
   jobDescription: "",
   openings: null as number | null,
   workLocations: "",
+  workType: "",
   ctcMinLpa: null as number | null,
   ctcMaxLpa: null as number | null,
   ctcBreakup: "",
@@ -470,6 +495,8 @@ export const pifRoleDraftSchema = z.object({
   jobDescription: optionalText,
   openings: nullableWholeNumber,
   workLocations: optionalText,
+  /** Optional, and un-answered rather than preselected — see `pifDraftSchema`. */
+  workType: z.enum(["", ...WORK_TYPES]).default(""),
   ctcMinLpa: nullableNumber,
   ctcMaxLpa: nullableNumber,
   ctcBreakup: optionalText,
@@ -561,6 +588,17 @@ export const pifRoleSubmitSchema = pifRoleDraftSchema
   .refine((v) => !nightTimingIsMissing(v.shiftType, v.shiftNightTiming), {
     path: ["shiftNightTiming"],
     message: "Give the hours of the night shift — a student plans their travel around them.",
+  })
+  /**
+   * The JD attachment, per role card — the single-form rule above, carried
+   * onto the grouped shape. It belongs on the card, not on the visit, because
+   * each card is raised as its own drive row and the row's `jd_storage_path`
+   * comes from that card's file: a brief with no PDF of its own publishes a
+   * drive with nothing behind it.
+   */
+  .refine((v) => v.jobDescriptionFile !== null, {
+    path: ["jobDescriptionFile"],
+    message: "Attach the job description PDF the company sent.",
   })
   .transform((v) => {
     const wantsCtc = v.driveType === "placement" || v.driveType === "internship_convertible";
@@ -726,6 +764,7 @@ export function toSinglePifValues(values: MultiRolePifValues, role: PifRoleValue
     jobDescriptionFile: role.jobDescriptionFile,
     openings: role.openings,
     workLocations: role.workLocations,
+    workType: role.workType,
     ctcMinLpa: role.ctcMinLpa,
     ctcMaxLpa: role.ctcMaxLpa,
     ctcBreakup: role.ctcBreakup,

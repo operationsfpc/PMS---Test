@@ -1,3 +1,4 @@
+import type { WorkType } from "@domain/types";
 import { createClient } from "@supabase/supabase-js";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
@@ -1297,5 +1298,85 @@ describe("the visit an event save names", () => {
     );
 
     expect(sent().p_event).toMatchObject({ id: "event-12" });
+  });
+});
+
+/**
+ * 2026-11-06 (0138): the work type is written BOTH ways a PIF can go up — a
+ * one-role visit inserts its drive row straight, a multi-role visit hands its
+ * roles to the RPC.
+ *
+ * `drives.work_type` is an enum with no empty label, so "the AE said nothing"
+ * has to reach the database as NULL. An empty string would be refused by the
+ * cast rather than stored, which is how an optional field turns into a failed
+ * submit.
+ */
+describe("the work type reaches the drive", () => {
+  /** The body of the single-role insert, whichever write the PIF made. */
+  async function insertedDrive(over: Partial<PifFormValues>) {
+    let body: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/drives`, async ({ request }) => {
+        body = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "d1", status: "submitted" });
+      }),
+    );
+
+    await repo().submit({ ...values, ...over });
+
+    return body;
+  }
+
+  it("writes the answer the AE chose", async () => {
+    expect(await insertedDrive({ workType: "hybrid" })).toMatchObject({ work_type: "hybrid" });
+  });
+
+  it("writes null, not an empty string, when the AE chose nothing", async () => {
+    const body = await insertedDrive({ workType: "" });
+
+    expect(body.work_type).toBeNull();
+    expect(body.work_locations).toBe("Chennai");
+  });
+
+  it("gives each role of a visit its own answer", async () => {
+    const { client } = storageStub();
+    let sent: Record<string, unknown> = {};
+    server.use(
+      http.post(`${BASE}/rest/v1/rpc/save_company_drive_with_roles`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({ eventId: "event-1", roleIds: [], status: "submitted" });
+      }),
+    );
+
+    const role = (roleTitle: string, workType: WorkType | "") => ({
+      roleTitle,
+      roleCategories: ["software_technical" as const],
+      driveType: "placement" as const,
+      openings: 10,
+      workLocations: "Chennai",
+      workType,
+      ctcMinLpa: 8,
+      rounds: [{ sequence: 1, name: "Coding" }],
+    });
+
+    await createSupabasePifRepository(client, async () => "ae-1").submitCompanyDrive({
+      companyName: "Zoho Corporation",
+      industry: "",
+      companyWebsite: "",
+      contacts: [],
+      driveMode: "on_campus",
+      venueStatus: "not_yet_confirmed",
+      venue: "",
+      tentativeDate: "",
+      timelineNotes: "",
+      joiningTimeline: "immediate",
+      roles: [role("SDE", "work_from_office"), role("Intern", "")],
+    });
+
+    const roles = sent.p_roles as Array<Record<string, unknown>>;
+    expect(roles.map((one) => [one.roleTitle, one.workType])).toEqual([
+      ["SDE", "work_from_office"],
+      ["Intern", null],
+    ]);
   });
 });

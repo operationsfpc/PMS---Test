@@ -25,6 +25,7 @@ export interface Enums {
   school_board: "state_board" | "cbse" | "cisce" | "nios" | "ib" | "cambridge" | "other";
   srf_status: "invited" | "registered" | "srf_submitted" | "srf_approved" | "srf_rejected";
   verification_status: "pending" | "verified" | "rejected";
+  work_type: "hybrid" | "work_from_home" | "work_from_office";
 }
 
 export interface ApplicationsRow {
@@ -291,9 +292,10 @@ export interface DrivesRow {
   completed_reason: string | null;
   company_drive_id: string | null;
   has_custom_targeting: boolean;
+  work_type: Enums["work_type"] | null;
 }
 
-export type DrivesInsert = Pick<DrivesRow, "company_name"> & Partial<Pick<DrivesRow, "id" | "industry" | "company_website" | "spoc_name" | "spoc_designation" | "spoc_email" | "spoc_phone" | "role_title" | "role_category" | "job_description" | "openings" | "work_locations" | "ctc_min_lpa" | "ctc_max_lpa" | "ctc_breakup" | "shift_type" | "bond_details" | "min_overall_cgpa" | "min_tenth_percentage" | "min_twelfth_percentage" | "arrears_policy" | "eligible_passing_years" | "mandatory_skills" | "drive_mode" | "tentative_date" | "timeline_notes" | "drive_type" | "offer_category" | "status" | "on_hold" | "on_hold_reason" | "open_to_all_override" | "open_to_all_reason" | "application_start" | "application_end" | "created_by" | "approved_by" | "approved_at" | "rejection_reason" | "published_by" | "published_at" | "created_at" | "updated_at" | "additional_designations" | "round_count" | "min_overall_marks" | "min_overall_cgpa_scale" | "jd_storage_path" | "jd_file_name" | "jd_size_bytes" | "shift_night_timing" | "joining_timeline" | "joining_immediate_notes" | "joining_later_notes" | "stipend_min_monthly" | "stipend_max_monthly" | "venue" | "completed_reason" | "company_drive_id" | "has_custom_targeting">>;
+export type DrivesInsert = Pick<DrivesRow, "company_name"> & Partial<Pick<DrivesRow, "id" | "industry" | "company_website" | "spoc_name" | "spoc_designation" | "spoc_email" | "spoc_phone" | "role_title" | "role_category" | "job_description" | "openings" | "work_locations" | "ctc_min_lpa" | "ctc_max_lpa" | "ctc_breakup" | "shift_type" | "bond_details" | "min_overall_cgpa" | "min_tenth_percentage" | "min_twelfth_percentage" | "arrears_policy" | "eligible_passing_years" | "mandatory_skills" | "drive_mode" | "tentative_date" | "timeline_notes" | "drive_type" | "offer_category" | "status" | "on_hold" | "on_hold_reason" | "open_to_all_override" | "open_to_all_reason" | "application_start" | "application_end" | "created_by" | "approved_by" | "approved_at" | "rejection_reason" | "published_by" | "published_at" | "created_at" | "updated_at" | "additional_designations" | "round_count" | "min_overall_marks" | "min_overall_cgpa_scale" | "jd_storage_path" | "jd_file_name" | "jd_size_bytes" | "shift_night_timing" | "joining_timeline" | "joining_immediate_notes" | "joining_later_notes" | "stipend_min_monthly" | "stipend_max_monthly" | "venue" | "completed_reason" | "company_drive_id" | "has_custom_targeting" | "work_type">>;
 
 export interface EmailDeliveriesRow {
   id: string;

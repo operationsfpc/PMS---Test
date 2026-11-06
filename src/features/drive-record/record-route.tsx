@@ -1,5 +1,7 @@
 import { Badge, Button } from "@components/ui";
-import type { AppRole } from "@domain/types";
+import type { PifDecision } from "@domain/drive-lifecycle";
+import type { AppRole, DriveStatus, DriveType } from "@domain/types";
+import { createSupabaseApprovalRepository } from "@lib/approval-repository";
 import { useAuth } from "@lib/auth-context";
 import { supabase } from "@lib/supabase";
 import { useState } from "react";
@@ -126,9 +128,16 @@ function StudentDriveRecord({
 export function DriveRecordRoute({
   view,
   studentApplyView,
+  decide,
 }: {
   view?: DriveRecordView;
   studentApplyView: () => StudentApplyView;
+  decide?: (
+    driveId: string,
+    current: DriveStatus,
+    decision: PifDecision,
+    driveType?: DriveType | null,
+  ) => Promise<void>;
 }) {
   const { driveId } = useParams();
   // C8: the funnel number that linked here, e.g. `?stage=shortlisted`.
@@ -138,8 +147,11 @@ export function DriveRecordRoute({
     () => view ?? createSupabaseDriveRecordView(supabase()),
   );
   const [studentView] = useState<StudentApplyView>(studentApplyView);
+  const [approvals] = useState(() => createSupabaseApprovalRepository(supabase()));
 
   if (driveId === undefined || auth.status !== "signed-in") return null;
+
+  const decideHandler = decide ?? (auth.role === "delivery_head" ? approvals.decide : undefined);
 
   if (auth.role === "student") {
     return (
@@ -159,6 +171,7 @@ export function DriveRecordRoute({
       role={auth.role}
       driveId={driveId}
       stage={params.get("stage") ?? undefined}
+      decide={decideHandler}
     />
   );
 }

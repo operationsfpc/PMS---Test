@@ -688,3 +688,40 @@ describe("reading a drive list bigger than one page", () => {
     expect(participantUrls[0]).toContain("offset=0&limit=1000");
   });
 });
+
+/**
+ * 0138: the PIF now asks, per role, how the work happens — Hybrid, Work from
+ * home, Work from office — and the card has to answer it.
+ *
+ * The question is separate from `drive_mode`, which says where the SELECTING
+ * happens: an on-campus drive can hire into a hybrid role. An AE who left it
+ * blank is recorded as having said nothing, which the card then keeps off the
+ * student's screen rather than printing an empty box.
+ */
+describe("the work type reaches the student", () => {
+  it("carries the AE's answer on the open drive", async () => {
+    stub({ drives: [liveDrive({ work_type: "hybrid" })] });
+
+    const [drive] = await view().openDrives();
+
+    expect(drive?.details.workType).toBe("hybrid");
+  });
+
+  it("says no answer when the column is empty", async () => {
+    stub({ drives: [liveDrive({ work_type: null })] });
+    expect((await view().openDrives())[0]?.details.workType).toBeNull();
+
+    // A blank string is not one of the enum's labels; reading it as an answer
+    // would put `""` on the card as a fact the company never stated.
+    stub({ drives: [liveDrive({ work_type: "" })] });
+    expect((await view().openDrives())[0]?.details.workType).toBeNull();
+  });
+
+  it("says no answer for a drive raised before the question existed", async () => {
+    stub({ drives: [liveDrive()] });
+
+    const [drive] = await view().openDrives();
+
+    expect(drive?.details.workType).toBeNull();
+  });
+});

@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
+
+import type { WorkType } from "@domain/types";
 import { render as rtlRender, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
-import { DriveTabs, type StudentDriveLists, type StudentDriveListsView } from "./drive-tabs";
+import {
+  DriveTabs,
+  type ProgressDriveRow,
+  type StudentDriveLists,
+  type StudentDriveListsView,
+} from "./drive-tabs";
 import type { OpenDrive } from "./drives-list";
 
 /**
@@ -43,6 +50,7 @@ const openCard: OpenDrive = {
     mandatorySkills: "",
     driveMode: "",
     venue: "",
+    workType: null,
     applicationStart: null,
     rounds: [],
   },
@@ -469,6 +477,96 @@ describe("DriveTabs — one card per company visit", () => {
     expect(screen.queryByText("1 roles")).toBeNull();
     expect(screen.getByText("FACE Prep tst")).toBeDefined();
     expect(screen.getByText("SDE · Software / Technical")).toBeDefined();
+  });
+});
+
+/**
+ * 2026-11-06 (0138): the PIF now asks the AE where the work actually happens,
+ * per role. A visit whose roles all answer "Hybrid" says it once in the header
+ * — the same rule the drive type already follows — and only a visit that gives
+ * different answers repeats it per role, because picking one at random lies.
+ *
+ * An unstated answer is invisible here: the student has nothing to do with the
+ * gap, and a blank they cannot fill reads as a rendering fault. The approval
+ * queue is where "Not stated" belongs.
+ */
+describe("DriveTabs — the work type", () => {
+  const workRow = (id: string, roleTitle: string, workType: WorkType | null): ProgressDriveRow => ({
+    id,
+    companyName: "FACE Prep tst",
+    roleTitle,
+    roleCategory: "software_technical",
+    companyDriveId: "e1",
+    locations: "Bengaluru",
+    workType,
+    appliedAt: "2026-09-01T00:00:00Z",
+    progressLabel: "Round 1 of 2 — Aptitude",
+    roundsCleared: 0,
+    totalRounds: 2,
+  });
+
+  const inProgressTab = async (rows: readonly ProgressDriveRow[]) => {
+    const user = userEvent.setup();
+    render(<DriveTabs view={view({ ...LISTS, inProgress: rows })} now={NOW} />);
+    await screen.findByText("Zoho");
+    await user.click(screen.getByRole("tab", { name: /^In progress/ }));
+    return screen.getByRole("tabpanel", { name: /in progress/i });
+  };
+
+  it("says a work type every role shares once, on the visit", async () => {
+    const panel = await inProgressTab([
+      workRow("w1", "SDE", "hybrid"),
+      workRow("w2", "Data analyst", "hybrid"),
+    ]);
+
+    expect(within(panel).getAllByText("Hybrid")).toHaveLength(1);
+  });
+
+  it("gives each role its own when the visit gives different answers", async () => {
+    const panel = await inProgressTab([
+      workRow("w1", "SDE", "work_from_home"),
+      workRow("w2", "Data analyst", "work_from_office"),
+    ]);
+
+    // The visit header holds none of them — picking one at random would lie
+    // about the other role.
+    const visit = within(panel).getByRole("heading", { name: /FACE Prep tst/i });
+    expect(visit.textContent).not.toMatch(/work from/i);
+    expect(
+      within(within(panel).getByRole("button", { name: /sde/i })).getByText("Work from home"),
+    ).toBeDefined();
+    expect(
+      within(within(panel).getByRole("button", { name: /data analyst/i })).getByText(
+        "Work from office",
+      ),
+    ).toBeDefined();
+  });
+
+  it("gives the answer to the role that has one when the visit cannot pick", async () => {
+    const panel = await inProgressTab([
+      workRow("w1", "SDE", "hybrid"),
+      workRow("w2", "Analyst", null),
+    ]);
+
+    expect(within(panel).getAllByText("Hybrid")).toHaveLength(1);
+    expect(
+      within(within(panel).getByRole("button", { name: /analyst/i })).queryByText("Hybrid"),
+    ).toBeNull();
+  });
+
+  it("says nothing about work when no role answered", async () => {
+    const panel = await inProgressTab([workRow("w1", "SDE", null), workRow("w2", "Analyst", null)]);
+
+    expect(within(panel).queryByText(/work from|hybrid|not stated/i)).toBeNull();
+  });
+
+  it("tags a single-role card with its own work type", async () => {
+    const [only] = [workRow("w1", "SDE", "work_from_office")];
+    const panel = await inProgressTab(
+      only === undefined ? [] : [{ ...only, companyDriveId: null }],
+    );
+
+    expect(within(panel).getByText("Work from office")).toBeDefined();
   });
 });
 

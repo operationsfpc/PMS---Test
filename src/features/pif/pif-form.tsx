@@ -3,6 +3,7 @@ import { useToast } from "@components/toast";
 import { Badge, Button, PageHeader } from "@components/ui";
 import { driveStatusLabel, driveStatusTone } from "@domain/drive-status";
 import { asDriveStatus, describeDriveFreeze } from "@domain/drive-working";
+import { WORK_TYPES } from "@domain/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type FieldErrors, useFieldArray, useWatch } from "react-hook-form";
 import { CategoryDropdown, control, Labelled, numeric, Section, SectionNav } from "./pif-controls";
@@ -33,6 +34,7 @@ import {
   hasAnyContactIn,
   PIF_SECTIONS,
   ROLES_SECTION,
+  WORK_TYPE_LABELS,
 } from "./pif-labels";
 import type { ExistingDriveEvent } from "./pif-repository";
 import {
@@ -195,10 +197,31 @@ function RoleBlock({
           <input
             id={id}
             aria-invalid={invalid || undefined}
-            placeholder="e.g. Chennai / Bangalore / Hybrid"
+            placeholder="e.g. Chennai / Bangalore"
             className={control}
             {...roleApi.register(roleApi.field("workLocations") as never)}
           />
+        )}
+      </Labelled>
+      {/* 0138: the free-text city line above stays; this is the one thing about
+          it a student actually asks — do I have to be in an office. Optional,
+          and nothing preselected, so an untouched PIF says "Not stated" rather
+          than inventing an answer the recruiter never gave. */}
+      <Labelled label="Work type" error={roleApi.err("workType")}>
+        {(id, invalid) => (
+          <select
+            id={id}
+            aria-invalid={invalid || undefined}
+            className={control}
+            {...roleApi.register(roleApi.field("workType") as never)}
+          >
+            <option value="">Choose…</option>
+            {WORK_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {WORK_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
         )}
       </Labelled>
       <JobDescriptionField

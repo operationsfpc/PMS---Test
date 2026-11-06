@@ -1,5 +1,6 @@
 import { driveTypeLabel } from "@domain/drive-type";
-import { DRIVE_TYPES } from "@domain/types";
+import { DRIVE_TYPES, WORK_TYPES } from "@domain/types";
+import { workTypeLabel } from "@domain/work-type";
 
 /**
  * Label maps and small helpers shared by both PIF forms and the AE screens
@@ -54,6 +55,11 @@ export const DRIVE_MODE_LABELS: Record<string, string> = {
  */
 export const DRIVE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   DRIVE_TYPES.map((type) => [type, driveTypeLabel(type)]),
+);
+
+/** 0138: the three work types, spelled once and here — see `@domain/work-type`. */
+export const WORK_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  WORK_TYPES.map((type) => [type, workTypeLabel(type)]),
 );
 
 export const ARREAR_LABELS: Record<string, string> = {

@@ -36,7 +36,7 @@ const EXISTING = [
 ];
 
 async function fillCampusForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByLabelText(/campus name/i), "VIT Bangalore");
+  await user.type(await screen.findByLabelText(/campus name/i), "VIT Bangalore");
   await user.type(screen.getByLabelText(/^city/i), "Bengaluru");
   await user.type(screen.getByLabelText(/state/i), "Karnataka");
   await user.type(screen.getByLabelText(/code/i), "VITB");
@@ -132,7 +132,7 @@ describe("CampusPage", () => {
     const user = userEvent.setup();
     render(<CampusPage repository={repo({ create })} />);
 
-    await user.type(screen.getByLabelText(/campus name/i), "Half Filled College");
+    await user.type(await screen.findByLabelText(/campus name/i), "Half Filled College");
     await user.click(screen.getByRole("button", { name: /add campus/i }));
 
     // Every missing field is named, not just the first - the admin should not

@@ -1,4 +1,5 @@
 import { FormSection, TextField } from "@components/form";
+import { useToast } from "@components/toast";
 import { Button, ButtonAnchor, LottieLoader, PageHeader } from "@components/ui";
 import {
   canRemoveCertificate,
@@ -110,6 +111,7 @@ export function ProfileEditPage({
   repository: StudentProfileRepository;
   certificates: StudentCertificatesRepository;
 }) {
+  const { toast } = useToast();
   const [values, setValues] = useState<StudentProfileValues>(EMPTY);
   const [profiles, setProfiles] = useState<readonly ProfileRow[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -167,9 +169,20 @@ export function ProfileEditPage({
     try {
       await repository.save({ ...values, otherProfiles: normaliseProfileLinks(profiles) });
       setState("saved");
+      toast({
+        tone: "success",
+        title: "Profile saved",
+        description: "Your profile changes have been saved.",
+      });
     } catch (cause) {
+      const msg = cause instanceof Error ? cause.message : "Could not save your profile.";
       setState("failed");
-      setProblem(cause instanceof Error ? cause.message : "Could not save your profile.");
+      setProblem(msg);
+      toast({
+        tone: "danger",
+        title: "Could not save profile",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }
@@ -197,16 +210,26 @@ export function ProfileEditPage({
 
     setUploading(true);
     try {
-      await certificates.add(certificateName.trim(), certificateFile);
+      const uploadedName = certificateName.trim();
+      await certificates.add(uploadedName, certificateFile);
       setCertificateName("");
       setCertificateFile(null);
+      toast({
+        tone: "success",
+        title: "Certificate uploaded",
+        description: `Uploaded certificate "${uploadedName}".`,
+      });
       await refresh();
     } catch (cause) {
       // Deliberately keeps what the student typed: making them retype the
       // name is how a second, slightly different copy gets created.
-      setCertificateProblems([
-        cause instanceof Error ? cause.message : "Could not upload your certificate.",
-      ]);
+      const msg = cause instanceof Error ? cause.message : "Could not upload your certificate.";
+      setCertificateProblems([msg]);
+      toast({
+        tone: "danger",
+        title: "Could not upload certificate",
+        description: msg,
+      });
     } finally {
       setUploading(false);
     }
@@ -215,11 +238,20 @@ export function ProfileEditPage({
   async function removeCertificate(id: string) {
     try {
       await certificates.remove(id);
+      toast({
+        tone: "info",
+        title: "Certificate removed",
+        description: "Certificate has been removed from your profile.",
+      });
       await refresh();
     } catch (cause) {
-      setCertificateProblems([
-        cause instanceof Error ? cause.message : "Could not remove this certificate.",
-      ]);
+      const msg = cause instanceof Error ? cause.message : "Could not remove this certificate.";
+      setCertificateProblems([msg]);
+      toast({
+        tone: "danger",
+        title: "Could not remove certificate",
+        description: msg,
+      });
     }
   }
 

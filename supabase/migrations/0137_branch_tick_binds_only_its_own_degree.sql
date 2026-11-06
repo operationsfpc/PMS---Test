@@ -33,92 +33,28 @@
 --   ticks name instead of only the one whose branches were listed. Students
 --   already notified stay notified; nothing here re-sends.
 --
--- HOW TO RUN
---   Supabase Dashboard -> the TEST project (jpejihmcbgerekyiikgb) -> SQL Editor
---   -> paste -> Run. Both bodies are the ones deployed there today, read out
---   with pg_get_functiondef and restated with ONLY the branch block changed, so
---   nothing else in them drifts. Verification SELECTs at the bottom.
+-- HOW IT IS WRITTEN
+--   Both function bodies are the repo's own latest restatements of them — 0126
+--   for the gate, 0119 for the notifier — with ONLY the branch block changed, so
+--   nothing else can drift and this file applies in order on any project. It is
+--   replayed by `pnpm db:types` and the src/db suite against a fresh database,
+--   which is why it carries no transaction and no project guard: either one
+--   would abort that build for every developer.
 --
---   Checked against the database on 2026-11-05: the untouched half of the gate
---   body is byte-for-byte its stored prosrc. The notifier was originally applied
---   from a CRLF file, so its stored body carries CR before every LF; pasting
---   this normalises those to LF and nothing else. That cannot change a sentence
---   a student reads — every string the notifier builds is a single-line literal
---   with explicit E'\n' escapes, so no CR was ever inside the text it stores.
---
--- WHY IT REFUSES TO RUN ANYWHERE ELSE
---   These bodies were read out of TEST, and prod's copies are not the same file
---   — prod is behind the repo on several migrations. Pasting this there would
---   not fix the branch rule; it would roll the rest of both functions back to
---   what test happens to hold. So the guard below stops before the first write
---   unless this is the test project's database.
+-- HOW TO RUN IT BY HAND
+--   scripts/paste-0137-test.sql — the same two statements, wrapped in one
+--   transaction with the precondition checked and the audience read back.
 --
 -- UNDO  scripts/undo-0137-branch-tick.sql
 -- ============================================================================
 
-begin;
-
--- ---------------------------------------------------------------------------
--- 0. Ask the database who it is
--- ---------------------------------------------------------------------------
--- The SQL editor shows no project ref and current_database() is 'postgres'
--- everywhere, so the person pasting cannot answer "which project is this tab?"
--- from inside the editor. KG College's own test code, holding the small test
--- roster, is the signature only test has — the same shape
--- scripts/seed-10-colleges-test.sql checks for. 3 at KG-1 now, 4 before that
--- seed moved Radhika C M to SDNB.
-do $$
-declare
-  n_campuses    integer;
-  n_kg_students integer;
-begin
-  select count(*) into n_campuses from campuses;
-  select count(*) into n_kg_students
-    from students s
-    join campuses c on c.id = s.campus_id
-   where c.code = 'KG-1';
-
-  if not exists (select 1 from campuses where code = 'KG-1') then
-    raise exception
-      'Refused: no KG-1 campus among the % campuses here, so this is not the TEST project '
-      '(jpejihmcbgerekyiikgb). The two gate functions below were read out of test and would '
-      'overwrite whatever this database has. Nothing was written. Switch the Dashboard to '
-      'the test project and run it again.',
-      n_campuses
-      using errcode = 'check_violation';
-  end if;
-
-  if n_kg_students not in (3, 4) then
-    raise exception
-      'Refused: KG-1 holds % students here, not the 3 or 4 the TEST project was seeded '
-      'with, and there are % campuses. Nothing was written.',
-      n_kg_students, n_campuses
-      using errcode = 'check_violation';
-  end if;
-
-  if not exists (
-        select 1 from pg_proc p
-          join pg_namespace n on n.oid = p.pronamespace
-         where n.nspname = 'public' and proname = 'enforce_application_gates'
-     )
-  then
-    raise exception
-      'Refused: enforce_application_gates is not here, so 0119 has not been applied to this '
-      'database yet. Apply the migrations before this one first.'
-      using errcode = 'check_violation';
-  end if;
-end;
-$$;
-
 -- ---------------------------------------------------------------------------
 -- 1. The gate that refuses an application
 -- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.enforce_application_gates()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+-- Restated from supabase/migrations/0126_hold_reaches_the_student.sql, which is the body the test project is
+-- running there today, code for code.
+create or replace function enforce_application_gates() returns trigger
+language plpgsql security definer set search_path = public as $$
 declare
   d drives%rowtype;
   s students%rowtype;
@@ -350,17 +286,23 @@ begin
 
   return new;
 end;
-$function$;
+$$;
+
 
 -- ---------------------------------------------------------------------------
 -- 2. The notifier that decides who is told about a drive
 -- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.notify_eligible_students_on_drive_live()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+-- Restated from supabase/migrations/0119_eligibility_gates_before_the_override.sql. On the test project this replaces more than
+-- the branch block: what is deployed there predates 0119's verified-transcript
+-- eligibility, so a drive going live there stops notifying students on the
+-- strength of a self-reported CGPA and starts using the verified semester, the
+-- same figure the apply gate and the browser already judge.
+create or replace function notify_eligible_students_on_drive_live()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 declare
   v_student_rec record;
   v_notification_id uuid;
@@ -385,25 +327,40 @@ begin
 
   v_drive_title := new.company_name || ' — ' || coalesce(new.role_title, 'Placement Opportunity');
 
+  -- `latest` and `hist` are the two figures §7.2 takes from the transcript: the
+  -- newest verified semester, and the worst arrear history across every
+  -- verified one — a backlog cleared in semester 3 is still on the record.
   for v_student_rec in
-    select distinct s.id, s.full_name, s.email
+    select s.id, s.full_name
       from students s
+      left join lateral (
+        select m.cgpa, m.current_arrears
+          from student_semesters m
+         where m.student_id = s.id and m.status = 'verified'
+         order by m.semester_number desc
+         limit 1
+      ) latest on true
+      left join lateral (
+        select max(m.history_of_arrears) as history_of_arrears
+          from student_semesters m
+         where m.student_id = s.id and m.status = 'verified'
+      ) hist on true
      where s.srf_status = 'srf_approved'
        and s.participation_status = 'active'
+
+       -- --------------------------------------------- what the company asked for
        and (
          not exists (select 1 from drive_target_campuses dtc where dtc.drive_id = new.id)
          or exists (
            select 1 from drive_target_campuses dtc
-            where dtc.drive_id = new.id
-              and dtc.campus_id = s.campus_id
+            where dtc.drive_id = new.id and dtc.campus_id = s.campus_id
          )
        )
        and (
          not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
          or exists (
            select 1 from drive_eligible_degrees ded
-            where ded.drive_id = new.id
-              and ded.degree_id = s.degree_id
+            where ded.drive_id = new.id and ded.degree_id = s.degree_id
          )
        )
        -- 0137: the exact mirror of the branch gate in enforce_application_gates.
@@ -430,27 +387,89 @@ begin
        )
        and (
          array_length(new.eligible_passing_years, 1) is null
-         or s.passing_year = any(new.eligible_passing_years)
+         or s.passing_year = any (new.eligible_passing_years)
        )
-       and (
-         new.min_overall_cgpa is null
-         or s.overall_cgpa >= new.min_overall_cgpa
-       )
+
+       -- ------------------------------------------------- the school marks bars
        and (
          new.min_tenth_percentage is null
-         or s.tenth_percentage >= new.min_tenth_percentage
+         or (s.tenth_percentage is not null and s.tenth_percentage >= new.min_tenth_percentage)
        )
        and (
          new.min_twelfth_percentage is null
-         or s.twelfth_percentage >= new.min_twelfth_percentage
+         or (s.twelfth_percentage is not null
+             and s.twelfth_percentage >= new.min_twelfth_percentage)
        )
-       -- Fixed: use actual enum values ('no_standing', 'no_history', 'flexible')
+
+       -- ---------------------------------------------------- the CGPA and arrears
+       and (
+         new.min_overall_cgpa is null
+         or coalesce(latest.cgpa, s.overall_cgpa, 0) >= new.min_overall_cgpa
+       )
        and (
          new.arrears_policy = 'flexible'
-         or (new.arrears_policy = 'no_history' and s.current_arrears = 0 and s.history_of_arrears = 0)
-         or (new.arrears_policy = 'no_standing' and s.current_arrears = 0)
+         or coalesce(latest.current_arrears, s.current_arrears, 0) = 0
        )
-       -- Dedup guard: skip students who already have a drive_published notification for this drive
+       and (
+         new.arrears_policy <> 'no_history'
+         or case when latest.cgpa is not null
+                 then coalesce(hist.history_of_arrears, 0)
+                 else coalesce(s.history_of_arrears, 0)
+            end = 0
+       )
+
+       -- R5a: below this line is the audience the override widens — which is
+       -- exactly why it has to be skipped here as well as in the gate.
+       and (
+         new.open_to_all_override
+         or (
+              ------------------------------------------------------ the area
+              (
+                new.role_category is null
+                or not exists (
+                  select 1 from student_role_preferences p where p.student_id = s.id
+                )
+                or exists (
+                  select 1 from student_role_preferences p
+                   where p.student_id = s.id and p.category = new.role_category
+                )
+              )
+              -- ------------------------------------------------- the drive type
+              and (
+                new.drive_type is null
+                or coalesce(cardinality(s.drive_type_preferences), 0) = 0
+                or new.drive_type = any (s.drive_type_preferences)
+              )
+              -- ------------------------------------------------ internship cap
+              and (
+                new.drive_type <> 'internship'
+                or not exists (
+                  select 1 from offers o
+                   where o.student_id = s.id
+                     and o.drive_type in ('internship', 'internship_convertible')
+                )
+              )
+              -- ------------------------------------------------------ the ladder
+              and (
+                new.drive_type not in ('placement', 'internship_convertible')
+                or new.offer_category is null
+                or not exists (
+                  select 1 from offers o
+                   where o.student_id = s.id
+                     and o.drive_type in ('placement', 'internship_convertible')
+                     and o.offer_category is not null
+                     and case o.offer_category
+                           when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                         end
+                       >= case new.offer_category
+                           when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                         end
+                )
+              )
+         )
+       )
+
+       -- Dedup guard: skip students already notified about this drive.
        and not exists (
          select 1 from notifications n
           where n.student_id = s.id
@@ -464,7 +483,8 @@ begin
               '**CTC Range:** ' || v_ctc_display || E'\n';
 
     if new.application_end is not null then
-      v_body := v_body || '**Application Deadline:** ' || to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
+      v_body := v_body || '**Application Deadline:** ' ||
+                to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
     end if;
 
     v_body := v_body || E'\n' || 'Log in to the portal to view full details and submit your application.';
@@ -486,101 +506,4 @@ begin
 
   return new;
 end;
-$function$;
-
-commit;
-
--- ---------------------------------------------------------------------------
--- 3. The rule is in both functions
--- ---------------------------------------------------------------------------
--- Both flags true. A false one means that function was not replaced, so the
--- statement that made it raise is still holding the transaction open.
-select proname,
-       prosrc like '%br.degree_id = s.degree_id%' as branch_tick_scoped_to_its_degree
-  from pg_proc p
-  join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public'
-   and proname in ('enforce_application_gates', 'notify_eligible_students_on_drive_live')
- order by proname;
-
--- ---------------------------------------------------------------------------
--- 4. Whom the flattened targeting was shutting out
--- ---------------------------------------------------------------------------
--- Every drive that ticks branches owned by a DIFFERENT degree beside a ticked
--- degree, with the headcount that other degree carries. Until this file those
--- students were refused by a branch list they can never appear in.
-select d.company_name,
-       d.role_title,
-       d.status,
-       dg.name as degree_ticked,
-       (
-         select string_agg(distinct br.name, ', ')
-           from drive_eligible_branches deb
-           join branches br on br.id = deb.branch_id
-          where deb.drive_id = d.id
-       ) as branches_ticked,
-       count(s.id) filter (where s.participation_status = 'active') as students_of_that_degree
-  from drives d
-  join drive_eligible_degrees ded on ded.drive_id = d.id
-  join degrees dg on dg.id = ded.degree_id
-  left join students s on s.degree_id = dg.id
- where exists (
-         select 1 from drive_eligible_branches deb
-           join branches br on br.id = deb.branch_id
-          where deb.drive_id = d.id and br.degree_id <> dg.id
-       )
- group by d.id, d.company_name, d.role_title, d.status, dg.name
- order by d.company_name, d.role_title, dg.name;
-
--- ---------------------------------------------------------------------------
--- 5. Whom each live drive reaches under the new rule
--- ---------------------------------------------------------------------------
--- The degrees that used to read zero are the ones to look for here. A drive
--- still reading zero for a degree it ticks is a campus, passing-year, CGPA or
--- arrear bar doing the refusing, not the branch list.
-select d.company_name,
-       d.role_title,
-       dg.name as degree,
-       count(*) filter (
-         where s.srf_status = 'srf_approved'
-           and s.participation_status = 'active'
-           and d.application_start <= now() and d.application_end >= now()
-           and (
-             not exists (select 1 from drive_target_campuses tc where tc.drive_id = d.id)
-             or exists (
-               select 1 from drive_target_campuses tc
-                where tc.drive_id = d.id and tc.campus_id = s.campus_id
-             )
-           )
-           and (
-             not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = d.id)
-             or exists (
-               select 1 from drive_eligible_degrees ded
-                where ded.drive_id = d.id and ded.degree_id = s.degree_id
-             )
-           )
-           and (
-             not exists (select 1 from drive_eligible_branches deb where deb.drive_id = d.id)
-             or (
-               exists (select 1 from drive_eligible_degrees ded where ded.drive_id = d.id)
-               and not exists (
-                 select 1 from drive_eligible_branches deb
-                   join branches br on br.id = deb.branch_id
-                  where deb.drive_id = d.id
-                    and br.degree_id = s.degree_id
-               )
-             )
-             or exists (
-               select 1 from drive_eligible_branches deb
-                where deb.drive_id = d.id and deb.branch_id = s.branch_id
-             )
-           )
-       ) as students_reached_by_this_rule,
-       count(*) as students_of_that_degree
-  from drives d
-  join drive_eligible_degrees ded on ded.drive_id = d.id
-  join degrees dg on dg.id = ded.degree_id
-  join students s on s.degree_id = dg.id
- where d.status = 'live'
- group by d.id, d.company_name, d.role_title, dg.name
- order by d.company_name, d.role_title, dg.name;
+$$;

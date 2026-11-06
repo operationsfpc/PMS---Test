@@ -21,7 +21,8 @@ import {
 import { HOLD_KIND_LABELS, holdWindowLine } from "@domain/holds";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { matchesLocation, parseLocations } from "@domain/student-drive-lists";
-import type { DriveType, HoldKind, RoleCategory } from "@domain/types";
+import type { DriveType, HoldKind, RoleCategory, WorkType } from "@domain/types";
+import { workTypeLabel } from "@domain/work-type";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { DrivesList, type DrivesView, type OpenDrive } from "./drives-list";
 
@@ -38,6 +39,8 @@ export interface ProgressDriveRow {
   /** The visit's day, so same-company visits on different days stay apart. */
   readonly tentativeDate?: string | null;
   readonly locations: string;
+  /** 0138: Hybrid / Work from home / Work from office, or nothing stated. */
+  readonly workType?: WorkType | null;
   readonly appliedAt: string;
   readonly progressLabel: string;
   readonly roundsCleared: number;
@@ -426,6 +429,7 @@ interface TabRow {
   readonly roleTitle: string;
   readonly roleCategory: RoleCategory;
   readonly driveType?: DriveType | null;
+  readonly workType?: WorkType | null;
   readonly companyDriveId?: string | null;
   readonly tentativeDate?: string | null;
 }
@@ -471,6 +475,10 @@ function TabVisits<T extends TabRow>({
         const [singleType] = types;
         const mixed = types.size > 1;
 
+        const workTypes = new Set(roles.map((role) => role.workType ?? null));
+        const [singleWorkType] = workTypes;
+        const mixedWork = workTypes.size > 1;
+
         return (
           <Card key={eventId} className="p-5">
             <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold text-ink-900">
@@ -482,6 +490,9 @@ function TabVisits<T extends TabRow>({
               {mixed ? <Badge tone="neutral">Mixed types</Badge> : null}
               {!mixed && singleType != null && (
                 <Badge tone={driveTypeTone(singleType)}>{driveTypeLabel(singleType)}</Badge>
+              )}
+              {!mixedWork && singleWorkType != null && (
+                <Badge tone="neutral">{workTypeLabel(singleWorkType)}</Badge>
               )}
               <Badge tone="brand">{roles.length} roles</Badge>
             </h2>
@@ -498,6 +509,9 @@ function TabVisits<T extends TabRow>({
                       <Badge tone={driveTypeTone(role.driveType)}>
                         {driveTypeLabel(role.driveType)}
                       </Badge>
+                    )}
+                    {mixedWork && role.workType != null && (
+                      <Badge tone="neutral">{workTypeLabel(role.workType)}</Badge>
                     )}
                   </AccordionTrigger>
                   <AccordionContent className="pb-2">{body(role)}</AccordionContent>
@@ -519,6 +533,7 @@ function RowHead({
     roleTitle: string;
     roleCategory: RoleCategory;
     driveType?: DriveType | null;
+    workType?: WorkType | null;
   };
 }) {
   return (
@@ -528,6 +543,11 @@ function RowHead({
         {/* 2026-08-27: the type, on every drive summary the student sees. */}
         {row.driveType !== undefined && row.driveType !== null && (
           <Badge tone={driveTypeTone(row.driveType)}>{driveTypeLabel(row.driveType)}</Badge>
+        )}
+        {/* An unstated work type is hidden from the student, who has nothing to
+            do with the gap; the approval queue shows it as "Not stated". */}
+        {row.workType !== undefined && row.workType !== null && (
+          <Badge tone="neutral">{workTypeLabel(row.workType)}</Badge>
         )}
       </h2>
       <p className="text-sm text-ink-500">

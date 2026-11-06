@@ -1,4 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
+import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { describeDriveFreeze } from "@domain/drive-working";
@@ -195,6 +196,7 @@ export function ShortlistPage({
   canExport: boolean;
   download?: (filename: string, content: Blob | string) => void;
 }) {
+  const { toast } = useToast();
   const [drive, setDrive] = useState<ShortlistDrive | null>(null);
   const [applicants, setApplicants] = useState<readonly ShortlistApplicant[] | null>(null);
   /** Bumped to re-run the first read after it failed. */
@@ -418,8 +420,19 @@ export function ShortlistPage({
         `Exported ${csvRows.length} shortlisted candidates. ${describeResumeLinks(csvRows)}`,
       );
       setMissingResumes(resumeLinkShortfall(csvRows));
+      toast({
+        tone: "success",
+        title: "Shortlist exported",
+        description: `Exported ${csvRows.length} shortlisted candidates as CSV.`,
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
+      const msg = cause instanceof Error ? cause.message : "Could not export the shortlist.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not export shortlist",
+        description: msg,
+      });
     } finally {
       setExporting(false);
     }
@@ -458,8 +471,19 @@ export function ShortlistPage({
         `Exported ${csvRows.length} shortlisted candidates. ${describeResumeLinks(csvRows)}`,
       );
       setMissingResumes(resumeLinkShortfall(csvRows));
+      toast({
+        tone: "success",
+        title: "Shortlist exported",
+        description: `Exported ${csvRows.length} shortlisted candidates as CSV.`,
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not export the shortlist.");
+      const msg = cause instanceof Error ? cause.message : "Could not export the shortlist.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not export shortlist",
+        description: msg,
+      });
     } finally {
       setExportingExcel(false);
     }
@@ -544,9 +568,20 @@ export function ShortlistPage({
       // returns stale rows must not be able to report a success it did not
       // have. A failure throws before this line.
       setSavedCount(selected.length);
+      toast({
+        tone: "success",
+        title: "Shortlist saved",
+        description: `${selected.length} student${selected.length === 1 ? " is" : "s are"} shortlisted for ${drive?.companyName ?? "this drive"}.`,
+      });
       await refresh();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not save the shortlist.");
+      const msg = cause instanceof Error ? cause.message : "Could not save the shortlist.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not save shortlist",
+        description: msg,
+      });
     } finally {
       setSaving(false);
     }

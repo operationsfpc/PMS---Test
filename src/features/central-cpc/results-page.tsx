@@ -1,4 +1,5 @@
 import { StudentIdentity } from "@components/student-identity";
+import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { attendanceLabel } from "@domain/attendance";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
@@ -187,6 +188,7 @@ export function ResultsPage({
    * they land (0043's trigger), so those two ask first; `on_hold` is an
    * interim state and records quietly.
    */
+  const { toast } = useToast();
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<RoundResult | null>(null);
   /**
@@ -223,14 +225,26 @@ export function ResultsPage({
     try {
       // Sequential on purpose: each write notifies a student, and a pile of
       // parallel failures produces one unreadable error.
+      const count = checked.size;
       for (const applicationId of checked) {
         await view.record(roundId, applicationId, result);
       }
       setChecked(new Set());
+      toast({
+        tone: "success",
+        title: "Results recorded",
+        description: `Recorded ${result.replaceAll("_", " ")} for ${count} candidate(s).`,
+      });
       await refresh();
       await onRecorded?.();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not record the results.");
+      const msg = cause instanceof Error ? cause.message : "Could not record the results.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not record results",
+        description: msg,
+      });
       // The sequential loop may have landed SOME results before failing —
       // the embedder's derived state must see those too.
       await refresh();
@@ -616,6 +630,7 @@ export function DriveRoundsPage({
   view: DriveRoundsView;
   download?: (filename: string, text: string) => void;
 }) {
+  const { toast } = useToast();
   const [rounds, setRounds] = useState<readonly DriveRoundInfo[] | null>(null);
   /** 2026-10-18: the drive's own lifecycle state, which closes this whole screen. */
   const [status, setStatus] = useState<DriveStatus | null>(null);
@@ -770,15 +785,25 @@ export function DriveRoundsPage({
     setError(null);
     try {
       const moved = await view.advance(activeRound.roundId, nextRound.roundId, proof);
-      setNotice(
-        `${moved} ${moved === 1 ? "student" : "students"} scheduled for Round ${nextRound.sequence} (${nextRound.name}).`,
-      );
+      const text = `${moved} ${moved === 1 ? "student" : "students"} scheduled for Round ${nextRound.sequence} (${nextRound.name}).`;
+      setNotice(text);
+      toast({
+        tone: "success",
+        title: "Candidates advanced",
+        description: text,
+      });
       setProof(null);
       // Re-read the world instead of arguing with it (the F5 bug).
       await loadParticipants();
       setReloadKey((k) => k + 1);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not advance the students.");
+      const msg = cause instanceof Error ? cause.message : "Could not advance the students.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not advance candidates",
+        description: msg,
+      });
     }
   }
 
@@ -843,6 +868,11 @@ export function DriveRoundsPage({
     if (staged === null) {
       setEditingDetails(false);
       setNotice("Round details saved. Participating students are notified.");
+      toast({
+        tone: "success",
+        title: "Round details saved",
+        description: "Round details updated. Participating students are notified.",
+      });
       await loadRounds();
       return;
     }
@@ -859,17 +889,27 @@ export function DriveRoundsPage({
         setError(`${missingRolls(notAssigned)} ${links(matched)} assigned.`);
       } else {
         setNotice(`Round details saved. ${links(matched)} assigned and notified.`);
+        toast({
+          tone: "success",
+          title: "Round details saved",
+          description: `${links(matched)} assigned and notified.`,
+        });
       }
       setReloadKey((k) => k + 1);
       await loadRounds();
     } catch (cause) {
       // The details ARE saved; only the links failed. Say exactly that, so
       // nobody re-enters a time that is already recorded.
-      setError(
+      const msg =
         cause instanceof Error
           ? `Round details saved, but the links were not assigned. ${cause.message}`
-          : "Round details saved, but the links were not assigned.",
-      );
+          : "Round details saved, but the links were not assigned.";
+      setError(msg);
+      toast({
+        tone: "warning",
+        title: "Links not assigned",
+        description: msg,
+      });
     }
   }
 
@@ -967,10 +1007,22 @@ export function DriveRoundsPage({
     setError(null);
     try {
       await view.renameRound(round.roundId, name);
-      setNotice(`Round ${round.sequence} renamed to “${name}”.`);
+      const text = `Round ${round.sequence} renamed to “${name}”.`;
+      setNotice(text);
+      toast({
+        tone: "success",
+        title: "Round renamed",
+        description: text,
+      });
       await loadRounds();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not rename the round.");
+      const msg = cause instanceof Error ? cause.message : "Could not rename the round.";
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not rename round",
+        description: msg,
+      });
     }
   }
 
@@ -979,15 +1031,27 @@ export function DriveRoundsPage({
     setError(null);
     try {
       await view.removeRound(driveId, removing.roundId);
-      setNotice(`Round ${removing.sequence} (${removing.name}) removed. Rounds renumbered.`);
+      const text = `Round ${removing.sequence} (${removing.name}) removed. Rounds renumbered.`;
+      setNotice(text);
+      toast({
+        tone: "info",
+        title: "Round removed",
+        description: text,
+      });
       setRemoving(null);
       setManaging(false);
       setActive(null);
       await loadRounds();
       setReloadKey((k) => k + 1);
     } catch (cause) {
+      const msg = cause instanceof Error ? cause.message : "Could not remove the round.";
       setRemoving(null);
-      setError(cause instanceof Error ? cause.message : "Could not remove the round.");
+      setError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not remove round",
+        description: msg,
+      });
     }
   }
 
@@ -1014,8 +1078,19 @@ export function DriveRoundsPage({
       await view.completeDrive(driveId, completing.ready ? null : completionReason.trim());
       setCompleting(null);
       setNotice("Drive marked completed. It now appears under Drives → Completed.");
+      toast({
+        tone: "success",
+        title: "Drive completed",
+        description: "Drive marked completed. It now appears under Drives → Completed.",
+      });
     } catch (cause) {
-      setCompletionError(cause instanceof Error ? cause.message : "Could not complete the drive.");
+      const msg = cause instanceof Error ? cause.message : "Could not complete the drive.";
+      setCompletionError(msg);
+      toast({
+        tone: "danger",
+        title: "Could not complete drive",
+        description: msg,
+      });
     }
   }
 

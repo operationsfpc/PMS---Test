@@ -1,3 +1,4 @@
+import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { type DriveReadiness, missingBeforeGoLive } from "@domain/drive-lifecycle";
 import {
@@ -362,6 +363,7 @@ function CityFilter({
 }
 
 export function DafPublish({ view }: { view: PublishView }) {
+  const { toast } = useToast();
   const [loaded, setLoaded] = useState<Awaited<ReturnType<PublishView["load"]>> | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -758,8 +760,19 @@ export function DafPublish({ view }: { view: PublishView }) {
         rounds,
       });
       setPublished(true);
+      toast({
+        tone: "success",
+        title: "Drive published",
+        description: `${loadedDrive.companyName} — ${loadedDrive.roleTitle} is now live for eligible students.`,
+      });
     } catch (cause) {
-      setFailure(cause instanceof Error ? cause.message : "Could not publish this drive.");
+      const msg = cause instanceof Error ? cause.message : "Could not publish this drive.";
+      setFailure(msg);
+      toast({
+        tone: "danger",
+        title: "Could not publish drive",
+        description: msg,
+      });
     } finally {
       setPublishing(false);
     }

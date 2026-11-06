@@ -151,6 +151,7 @@ describe("PifApprovalQueue", () => {
     jobDescriptionName: null,
     shift: "Day shift",
     joining: "Immediate joining",
+    workType: null,
     companyDriveId: null,
     event: null,
     roleCategory: null,

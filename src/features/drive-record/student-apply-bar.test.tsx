@@ -28,6 +28,7 @@ const ZOHO: OpenDrive = {
     jobDescription: "Build and maintain backend services.",
     designations: [],
     locations: "Chennai",
+    workType: null,
     openings: 25,
     ctcBreakup: "",
     bondDetails: "",

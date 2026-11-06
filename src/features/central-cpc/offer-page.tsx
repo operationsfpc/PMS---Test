@@ -1,5 +1,6 @@
 import { ErrorPanel } from "@components/error-panel";
 import { StudentIdentity } from "@components/student-identity";
+import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { describeDriveFreeze } from "@domain/drive-working";
 import type { OfferCategory } from "@domain/offer-category";
@@ -65,6 +66,7 @@ export interface OfferView {
  * screen asks for one of them, never both, and the domain decides which.
  */
 export function OfferPage({ driveId, view }: { driveId: string; view: OfferView }) {
+  const { toast } = useToast();
   const [drive, setDrive] = useState<OfferDrive | null>(null);
   const [candidates, setCandidates] = useState<readonly OfferCandidate[] | null>(null);
   // These two reads used to be a bare `void refresh()` in an effect: when the
@@ -143,6 +145,11 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
       stipendMonthly,
       // Spec B: the letter travels with the declaration when one was chosen.
       letter: letters[candidate.studentId] ?? null,
+    });
+    toast({
+      tone: "success",
+      title: "Offer declared",
+      description: `Placement offer declared for ${candidate.studentName}.`,
     });
     await refresh();
   }

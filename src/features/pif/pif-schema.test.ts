@@ -20,6 +20,16 @@ import {
  * hands the PIF to the Delivery Head and must be complete. One schema with
  * everything optional would let an empty PIF reach an approver.
  */
+/**
+ * A JD the bucket would accept. Every submit fixture carries one: the file has
+ * been mandatory at submit since 2026-11-06, so a fixture without it is
+ * refused for a reason the test is not about.
+ */
+const pdf = (over: Partial<{ name: string; size: number; type: string }> = {}) =>
+  new File([new Uint8Array(2048)], over.name ?? "jd.pdf", {
+    type: over.type ?? "application/pdf",
+  });
+
 const complete = {
   ...PIF_DEFAULTS,
   companyName: "Zoho Corporation",
@@ -37,6 +47,7 @@ const complete = {
   roleTitle: "Member Technical Staff",
   roleCategory: "software_technical",
   jobDescription: "Build and maintain backend services.",
+  jobDescriptionFile: pdf(),
   openings: 25,
   workLocations: "Chennai, Tenkasi",
   ctcMinLpa: 6.5,
@@ -327,21 +338,30 @@ describe("pifSubmitSchema", () => {
 
   /**
    * 2026-08-18, J1: the recruiter's own JD, attached.
+   * 2026-11-06: attaching it became the price of submitting.
    *
    * The file itself is validated by `@domain/attachments`, which the bucket in
-   * `0051` mirrors. The schema's job is only to carry it and to refuse one
-   * that could never be stored.
+   * `0051` mirrors. The schema carries that verdict and, at submit only, also
+   * refuses a drive with no file at all.
    */
   describe("the attached job description", () => {
-    const pdf = (over: Partial<{ name: string; size: number; type: string }> = {}) =>
-      new File([new Uint8Array(2048)], over.name ?? "jd.pdf", {
-        type: over.type ?? "application/pdf",
-      });
+    it("refuses a submission with no attachment — the PDF is the company's own words", () => {
+      const parsed = pifSubmitSchema.safeParse({ ...complete, jobDescriptionFile: null });
 
-    it("submits with no attachment — it is optional", () => {
-      expect(pifSubmitSchema.safeParse({ ...complete, jobDescriptionFile: null }).success).toBe(
-        true,
-      );
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues.some((i) => i.path[0] === "jobDescriptionFile")).toBe(true);
+      }
+    });
+
+    it("still lets a draft be saved before the company sends the file", () => {
+      expect(
+        pifDraftSchema.safeParse({
+          ...PIF_DEFAULTS,
+          companyName: "Zoho",
+          jobDescriptionFile: null,
+        }).success,
+      ).toBe(true);
     });
 
     it("accepts a PDF", () => {
@@ -415,6 +435,78 @@ describe("pifSubmitSchema", () => {
 
     it("still allows no shift at all — it was never a required field", () => {
       expect(pifSubmitSchema.safeParse({ ...complete, shiftType: "" }).success).toBe(true);
+    });
+  });
+
+  /**
+   * 2026-11-06: the AE is asked where the work happens — Hybrid, Work from
+   * home or Work from office. Optional by decision: a PIF with no answer still
+   * submits, and the cards say "Not stated" rather than inventing one.
+   *
+   * The three answers are the only words accepted, in a form that has spent
+   * years storing "Remote + Delhi" as free text. A work mode cannot be read
+   * out of a city list, so the dropdown is what makes the fact stateable.
+   */
+  describe("the work type", () => {
+    it("accepts each of the three answers", () => {
+      for (const workType of ["hybrid", "work_from_home", "work_from_office"]) {
+        expect(pifSubmitSchema.safeParse({ ...complete, workType }).success).toBe(true);
+      }
+    });
+
+    it("still submits with no answer, because the question is optional", () => {
+      expect(pifSubmitSchema.safeParse({ ...complete, workType: "" }).success).toBe(true);
+    });
+
+    it("refuses free text where an answer is expected", () => {
+      const parsed = pifSubmitSchema.safeParse({ ...complete, workType: "Remote + Delhi" });
+
+      expect(parsed.success).toBe(false);
+      expect(parsed.success ? "" : parsed.error.issues[0]?.path).toEqual(["workType"]);
+    });
+
+    it("leaves an untouched form unanswered rather than preselecting a mode", () => {
+      expect(pifSubmitSchema.parse(complete).workType).toBe("");
+      expect(PIF_DEFAULTS.workType).toBe("");
+    });
+
+    it("is optional on a draft too, so a half-known role can be saved", () => {
+      expect(
+        pifDraftSchema.safeParse({
+          ...PIF_DEFAULTS,
+          companyName: "Zoho",
+          workType: "work_from_home",
+        }).success,
+      ).toBe(true);
+    });
+
+    it("is asked of each role, not once for the company", () => {
+      const parsed = multiRolePifDraftSchema.parse({
+        companyName: "Zoho Corporation",
+        roles: [
+          { ...DEFAULT_ROLE_VALUES, roleTitle: "SDE", workType: "hybrid" },
+          { ...DEFAULT_ROLE_VALUES, roleTitle: "Intern", workType: "work_from_home" },
+        ],
+      });
+
+      expect(parsed.roles.map((role) => role.workType)).toEqual(["hybrid", "work_from_home"]);
+    });
+
+    it("refuses free text on a role row, where the dropdown also lives", () => {
+      expect(
+        pifRoleDraftSchema.safeParse({
+          ...DEFAULT_ROLE_VALUES,
+          roleTitle: "SDE",
+          workType: "wfh",
+        }).success,
+      ).toBe(false);
+    });
+
+    it("answers nothing for a role row nobody filled in", () => {
+      expect(pifRoleDraftSchema.parse({ ...DEFAULT_ROLE_VALUES, roleTitle: "SDE" }).workType).toBe(
+        "",
+      );
+      expect(DEFAULT_ROLE_VALUES.workType).toBe("");
     });
   });
 
@@ -603,6 +695,7 @@ describe("pifSubmitSchema", () => {
             openings: 10,
             ctcMinLpa: 8,
             ctcMaxLpa: 12,
+            jobDescriptionFile: pdf(),
             rounds: [
               { sequence: 1, name: "Coding" },
               { sequence: 2, name: "Interview" },
@@ -617,6 +710,7 @@ describe("pifSubmitSchema", () => {
             openings: 5,
             ctcMinLpa: 5,
             ctcMaxLpa: 6,
+            jobDescriptionFile: pdf(),
             rounds: [{ sequence: 1, name: "Aptitude" }],
           },
         ],
@@ -756,6 +850,7 @@ describe("pifSubmitSchema", () => {
         workLocations: "Chennai",
         openings: 10,
         ctcMinLpa: 8,
+        jobDescriptionFile: pdf(),
         rounds: [{ sequence: 1, name: "Coding" }],
         joiningImmediateNotes: "Relocating this month",
         joiningLaterNotes: "After the exams",
@@ -797,6 +892,7 @@ describe("pifSubmitSchema", () => {
             workLocations: "Chennai",
             openings: 10,
             ctcMinLpa: 8,
+            jobDescriptionFile: pdf(),
             rounds: [{ sequence: 1, name: "Coding" }],
           },
         ],
@@ -887,6 +983,7 @@ describe("pifSubmitSchema", () => {
           workLocations: "Chennai",
           openings: 25,
           ctcMinLpa: 6.5,
+          jobDescriptionFile: pdf(),
           rounds: [{ sequence: 1, name: "Aptitude test" }],
         } as PifRoleValues;
         const flat = toSinglePifValues(visit, role);
@@ -914,6 +1011,7 @@ describe("pifSubmitSchema", () => {
             workLocations: "Chennai",
             openings: 10,
             ctcMinLpa: 8,
+            jobDescriptionFile: pdf(),
             rounds: [{ sequence: 1, name: "Coding" }],
           },
         ],
@@ -922,6 +1020,38 @@ describe("pifSubmitSchema", () => {
       expect(parsed.success).toBe(true);
       if (parsed.success) {
         expect(parsed.data.roles[0]?.roleCategories).toEqual(["software_technical", "sales"]);
+      }
+    });
+
+    /**
+     * The PDF is asked of every card, not once per visit: each card is raised
+     * as its own drive row, and that row's `jd_storage_path` comes from this
+     * card's file.
+     */
+    it("refuses a role card with no job description PDF of its own", () => {
+      const parsed = multiRolePifSubmitSchema.safeParse({
+        companyName: "Zoho Corporation",
+        joiningTimeline: "immediate",
+        eligiblePassingYears: [2026],
+        roles: [
+          {
+            ...DEFAULT_ROLE_VALUES,
+            roleTitle: "Engineer",
+            roleCategories: ["software_technical"],
+            driveType: "placement",
+            workLocations: "Chennai",
+            openings: 10,
+            ctcMinLpa: 8,
+            jobDescriptionFile: null,
+            rounds: [{ sequence: 1, name: "Coding" }],
+          },
+        ],
+      });
+
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        const issue = parsed.error.issues.find((i) => i.path[0] === "roles");
+        expect(issue?.path).toEqual(["roles", 0, "jobDescriptionFile"]);
       }
     });
 
