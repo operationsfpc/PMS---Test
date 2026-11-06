@@ -20,7 +20,7 @@ import {
 } from "@domain/drive-type";
 import { HOLD_KIND_LABELS, holdWindowLine } from "@domain/holds";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
-import { matchesLocation, parseLocations } from "@domain/student-drive-lists";
+import { dateStamp, matchesLocation, parseLocations } from "@domain/student-drive-lists";
 import type { DriveType, HoldKind, RoleCategory, WorkType } from "@domain/types";
 import { workTypeLabel } from "@domain/work-type";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
@@ -126,8 +126,7 @@ const AREA_LABEL: Record<RoleCategory, string> = {
   operations_business: "Operations and Business Roles",
 };
 
-const day = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
+const day = (iso: string) => dateStamp(iso) ?? "—";
 
 /**
  * N7 — the student's Drives area: the lists they can still act on, search and

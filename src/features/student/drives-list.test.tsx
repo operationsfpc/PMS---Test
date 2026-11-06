@@ -556,28 +556,59 @@ describe("the card's two controls", () => {
 });
 
 /**
- * 2026-10-29 UAT: "swap the dates of published and closing dates". The 📅 in the
- * visit band held the tentative drive day, which is routinely already past while
- * the window is still open, so the card's headline date read as stale and the
- * deadline that actually decides the student's next hour sat below it.
+ * 2026-11-06 UAT: "on near the role i need that as badge, not on top of that
+ * card". The band had been holding the deadline since the 2026-10-29 "swap the
+ * dates" note, but `application_end` is a per-role column: a visit running
+ * three windows was announcing one date above three roles, and the date a
+ * student acts on is the one that shuts their own role. The band keeps only the
+ * visit's drive day, which is one answer the visit really does share.
+ *
+ * The same pass killed the numeric wording. The card printed 6/11/2026 while
+ * the drive record it links to printed 6 Nov 2026 — same fact, two wordings,
+ * and the numeric one is ambiguous to the only person who has to act on it
+ * before it passes.
  */
-describe("the card leads with the deadline", () => {
-  it("puts the closing date in the band and the drive day beside it", async () => {
+describe("each role states its own deadline", () => {
+  /** 2026-09-05, a week before the fixture's window shuts. */
+  const before = { now: () => new Date("2026-09-05T00:00:00Z") };
+
+  it("badges the worded closing date on the role's own row", async () => {
+    render(<DrivesList view={view()} {...before} />);
+
+    const badge = await screen.findByText("Closes 10 Sept 2026");
+    expect(badge.closest("span")?.className).toMatch(/bg-surface-muted\b/);
+  });
+
+  it("prints no numeric date anywhere on the card", async () => {
     render(
       <DrivesList
         view={view({
           openDrives: async () => [{ ...open, tentativeDate: "2026-11-05T00:00:00Z" }],
         })}
+        {...before}
       />,
     );
+    await screen.findByText("Zoho");
 
-    expect(await screen.findByText(/applications close \d/i)).toBeDefined();
-    expect(screen.getByText(/drive day/i)).toBeDefined();
-    // Said once: the role's own row defers to the band above it.
-    expect(screen.getAllByText(/applications close \d/i)).toHaveLength(1);
+    expect(screen.queryByText(/\d{1,2}\/\d{1,2}\/\d{4}/)).toBeNull();
   });
 
-  it("says the visit's drive day once, whatever the number of roles under it", async () => {
+  it("keeps the visit's drive day in the band and the deadline out of it", async () => {
+    render(
+      <DrivesList
+        view={view({
+          openDrives: async () => [{ ...open, tentativeDate: "2026-11-05T00:00:00Z" }],
+        })}
+        {...before}
+      />,
+    );
+    await screen.findByText("Zoho");
+
+    expect(screen.getByText("Drive day 5 Nov 2026")).toBeDefined();
+    expect(screen.getAllByText("Closes 10 Sept 2026")).toHaveLength(1);
+  });
+
+  it("says the drive day once, whatever the number of roles under it", async () => {
     const mts = { ...open, companyDriveId: "evt-1", tentativeDate: "2026-11-05T00:00:00Z" };
     const qa = {
       ...open,
@@ -586,14 +617,13 @@ describe("the card leads with the deadline", () => {
       companyDriveId: "evt-1",
       tentativeDate: "2026-11-05T00:00:00Z",
     };
-    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} {...before} />);
     await screen.findByText("Zoho");
 
-    expect(screen.getAllByText(/drive day/i)).toHaveLength(1);
-    expect(screen.getAllByText(/applications close \d/i)).toHaveLength(1);
+    expect(screen.getAllByText("Drive day 5 Nov 2026")).toHaveLength(1);
   });
 
-  it("lets a role whose window shuts on another day state its own", async () => {
+  it("lets every role state its own window, rather than one date for the visit", async () => {
     const mts = { ...open, companyDriveId: "evt-1" };
     const qa = {
       ...open,
@@ -602,18 +632,18 @@ describe("the card leads with the deadline", () => {
       companyDriveId: "evt-1",
       applicationEnd: "2026-09-14T00:00:00Z",
     };
-    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} />);
+    render(<DrivesList view={view({ openDrives: async () => [mts, qa] })} {...before} />);
     await screen.findByText("Zoho");
 
-    // The band names the first window to shut; only the later row contradicts it.
-    expect(screen.getAllByText(/applications close \d/i)).toHaveLength(2);
+    expect(screen.getByText("Closes 10 Sept 2026")).toBeDefined();
+    expect(screen.getByText("Closes 14 Sept 2026")).toBeDefined();
   });
 
-  it("still heads the card when a visit never declared a drive day", async () => {
-    render(<DrivesList view={view()} />);
+  it("turns to Closed and warns once the window has shut", async () => {
+    render(<DrivesList view={view()} now={() => new Date("2026-09-11T00:00:00Z")} />);
 
-    expect(await screen.findByText(/applications close \d/i)).toBeDefined();
-    expect(screen.queryByText(/drive day/i)).toBeNull();
+    const badge = await screen.findByText("Closed 10 Sept 2026");
+    expect(badge.closest("span")?.className).toMatch(/bg-danger-50\b/);
   });
 });
 

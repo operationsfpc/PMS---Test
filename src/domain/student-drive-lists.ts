@@ -124,3 +124,50 @@ export function matchesLocation(workLocations: string, location: string): boolea
   const wanted = location.trim().toLowerCase();
   return parseLocations(workLocations).some((part) => part.toLowerCase() === wanted);
 }
+
+/**
+ * "6 Nov 2026" — a date a student reads, not one a database stores.
+ *
+ * The student's own screens were the last to print toLocaleDateString with no
+ * options, so a deadline reached them as 6/11/2026 while the drive record they
+ * click into said 6 Nov 2026. Same fact, two wordings, and the numeric one is
+ * ambiguous to the only person who has to act on it before it passes.
+ *
+ * Null for a stamp that never was a date, so no screen has to decide what an
+ * unreadable one looks like.
+ */
+export function dateStamp(iso: string | null | undefined): string | null {
+  if (iso === null || iso === undefined) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export interface Deadline {
+  /** "Closes 10 Nov 2026" while the window is open, "Closed 6 Nov 2026" after. */
+  readonly label: string;
+  /** The window has shut: the row says so rather than promising more time. */
+  readonly closed: boolean;
+}
+
+/**
+ * The deadline on its own row, in the words the row is acted on.
+ *
+ * Null when the drive never declared an end date. A card that showed
+ * "Applications close —" was inventing a question the AE did not answer, and the
+ * same rule the work type follows on this card hides it.
+ */
+export function describeDeadline(
+  applicationEnd: string | null | undefined,
+  now: Date,
+): Deadline | null {
+  const stamp = dateStamp(applicationEnd);
+  if (stamp === null) return null;
+  const closed = now.getTime() >= Date.parse(applicationEnd as string);
+  return { label: `${closed ? "Closed" : "Closes"} ${stamp}`, closed };
+}

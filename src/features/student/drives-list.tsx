@@ -20,7 +20,7 @@ import {
   offerCategoryLabel,
   offerCategoryRestatesType,
 } from "@domain/offer-category";
-import { describeTimeLeft } from "@domain/student-drive-lists";
+import { dateStamp, describeDeadline, describeTimeLeft } from "@domain/student-drive-lists";
 import type { DriveType, RoleCategory, WorkType } from "@domain/types";
 import { workTypeLabel } from "@domain/work-type";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -130,9 +130,6 @@ export interface DrivesView {
    */
   apply(driveId: string, resume: File | null): Promise<void>;
 }
-
-const day = (iso: string | null) =>
-  iso === null ? "—" : new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
 
 /**
  * What tells one role on a visit apart from its siblings: its category when
@@ -347,13 +344,23 @@ export function DrivesList({
             const visitWorkType = workTypes.size === 1 ? (singleWorkType ?? null) : null;
             const mixedWorkTypes = workTypes.size > 1;
 
-            /* The visit's deadline (2026-10-29 UAT: "swap the dates of published
-               and closing dates"). The 📅 slot held the tentative drive day,
-               which is routinely already past while a window is still open — the
-               header read as stale and the one date that decides whether a
-               student can act sat two lines down. ISO stamps sort as written, so
-               the first is the first window to shut. */
-            const closesOn = event.roles.map((role) => role.applicationEnd).sort()[0] ?? null;
+            /** The day the visit itself happens on. The deadlines are per role. */
+            const visitDay = dateStamp(event.tentativeDate);
+
+            /**
+             * The deadline as the role's own badge.
+             *
+             * `application_end` is a per-role column, so a visit that runs three
+             * windows cannot honestly state one date above them. The date a
+             * student acts on is the one that shuts their own role, so it goes
+             * beside their own role's name — on both the plain row and the
+             * folded trigger, which are the two places a role is named.
+             */
+            const deadlineBadge = (drive: OpenDrive) => {
+              const deadline = describeDeadline(drive.applicationEnd, now());
+              if (deadline === null) return null;
+              return <Badge tone={deadline.closed ? "danger" : "neutral"}>{deadline.label}</Badge>;
+            };
 
             /** A single-role visit needs no folding, so its name is a plain row. */
             const roleLine = (drive: OpenDrive) => (
@@ -364,6 +371,7 @@ export function DrivesList({
                   showType={visitType === undefined}
                   showWorkType={mixedWorkTypes}
                 />
+                {deadlineBadge(drive)}
               </div>
             );
 
@@ -387,16 +395,8 @@ export function DrivesList({
                   );
               return (
                 <>
-                  {/* The deadline is the card's headline date and is said in the
-                      band above. A row names its own only when it shuts on a
-                      different day than the visit — the one case where the
-                      header's date would be a lie beside this role. */}
-                  {drive.applicationEnd !== closesOn && (
-                    <p className="mt-1 text-xs text-ink-500">
-                      Applications close {day(drive.applicationEnd)}
-                    </p>
-                  )}
-                  {/* N7: closing time SHOWN, hot under 24 hours. */}
+                  {/* N7: closing time SHOWN, hot under 24 hours. The date itself
+                      is the badge on the row above; this is how long is left. */}
                   {left !== null && (
                     <p
                       className={`mt-2 inline-block rounded-lg px-2.5 py-1 text-xs font-semibold ${
@@ -561,8 +561,10 @@ export function DrivesList({
                       {isMultiRole && <Badge tone="brand">{event.roles.length} roles</Badge>}
                     </div>
                     <div className="flex flex-wrap gap-3 text-sm text-ink-600 sm:justify-end">
-                      <span>📅 Applications close {day(closesOn)}</span>
-                      {event.tentativeDate && <span>· Drive day {day(event.tentativeDate)}</span>}
+                      {/* The visit's own day, in the same words as every other
+                          date on the screen. The deadline each student must meet
+                          is on the role's row, under its name. */}
+                      {visitDay !== null && <span>Drive day {visitDay}</span>}
                       {event.driveMode && <span>· {event.driveMode.replace(/_/g, " ")}</span>}
                       {event.venue && event.venue !== "Venue to be confirmed" && (
                         <span>· {event.venue}</span>
@@ -593,6 +595,7 @@ export function DrivesList({
                             showType={visitType === undefined}
                             showWorkType={mixedWorkTypes}
                           />
+                          {deadlineBadge(drive)}
                           <span className="text-sm font-normal text-ink-600">{drive.ctcLabel}</span>
                         </AccordionTrigger>
                         <AccordionContent className="pb-4">

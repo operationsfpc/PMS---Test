@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyStudentDrive,
+  dateStamp,
+  describeDeadline,
   describeTimeLeft,
   matchesLocation,
   parseLocations,
@@ -184,5 +186,60 @@ describe("location matching", () => {
     expect(matchesLocation("Bengaluru, Chennai", "Pune")).toBe(false);
     expect(matchesLocation("Bengaluru, Chennai", "")).toBe(true);
     expect(matchesLocation("", "")).toBe(true);
+  });
+});
+
+/**
+ * 2026-11-06: the student's screens were the last to print a bare
+ * `toLocaleDateString`, so a deadline reached them as 6/11/2026 while the drive
+ * record they click into said 6 Nov 2026. The numeric form is the ambiguous one
+ * — 6/11 is 6 November in the convention this app uses everywhere else and
+ * June 11th in the other one — and it is read by the only person who has to act
+ * on it before it passes.
+ */
+describe("dateStamp", () => {
+  it("words the date, in India's own calendar", () => {
+    // The locale's own abbreviation, Sept included — the same formatter every
+    // other student screen already runs, so the card cannot say Sep where the
+    // notifications area says Sept.
+    expect(dateStamp("2026-09-10T00:00:00Z")).toBe("10 Sept 2026");
+    expect(dateStamp("2026-11-06T00:00:00Z")).toBe("6 Nov 2026");
+  });
+
+  it("reads the date the student is in, not the one the database stored", () => {
+    // 20:00 UTC is already the next morning in IST.
+    expect(dateStamp("2026-11-05T20:00:00Z")).toBe("6 Nov 2026");
+  });
+
+  it("says nothing rather than printing Invalid Date", () => {
+    expect(dateStamp(null)).toBeNull();
+    expect(dateStamp(undefined)).toBeNull();
+    expect(dateStamp("not a date")).toBeNull();
+  });
+});
+
+/**
+ * The deadline as the student is acted on it. `application_end` is a per-role
+ * column, so this answers one role's window and never the visit's.
+ */
+describe("describeDeadline", () => {
+  const before = new Date("2026-09-05T00:00:00Z");
+  const after = new Date("2026-09-11T00:00:00Z");
+  const end = "2026-09-10T00:00:00Z";
+
+  it("promises more time while the window is open", () => {
+    expect(describeDeadline(end, before)).toEqual({
+      label: "Closes 10 Sept 2026",
+      closed: false,
+    });
+  });
+
+  it("admits the chance has gone once it has", () => {
+    expect(describeDeadline(end, after)).toEqual({ label: "Closed 10 Sept 2026", closed: true });
+  });
+
+  it("invents no deadline for a drive that never declared one", () => {
+    expect(describeDeadline(null, before)).toBeNull();
+    expect(describeDeadline(undefined, before)).toBeNull();
   });
 });

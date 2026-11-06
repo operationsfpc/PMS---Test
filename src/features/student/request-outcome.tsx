@@ -1,5 +1,6 @@
 import { Badge } from "@components/ui";
 import { participationOutcome } from "@domain/participation";
+import { dateStamp } from "@domain/student-drive-lists";
 import type { RequestStatus } from "./participation-contract";
 
 /**
@@ -29,6 +30,5 @@ export function RequestOutcome({
   );
 }
 
-/** Asia/Kolkata, because that is where every student reading it is. */
-export const submittedOn = (iso: string): string =>
-  new Date(iso).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" });
+/** The day the student pressed send, worded like every other date they read. */
+export const submittedOn = (iso: string): string => dateStamp(iso) ?? "—";
