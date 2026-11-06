@@ -117,29 +117,33 @@ export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepo
           );
         }
 
-        const { data: document, error: documentError } = await client
+        // If a prior failed attempt already saved a resume row for this drive,
+        // update it instead of inserting to avoid the one_resume_per_drive 409 conflict.
+        const { data: existingDoc } = await client
           .from("student_documents")
-          .insert({
-            student_id: student.id,
-            kind: "resume",
-            role_category: drive.roleCategory,
-            // 0033: what keeps this off the student's PROFILE resume slot.
-            // Without it, applying to a second drive in the same category
-            // would collide on one_resume_per_category.
-            drive_id: drive.id,
-            /*
-             * The OBJECT KEY, not the bucket-qualified path (fixed
-             * 2026-08-26, rows repaired by 0063). Written with the bucket in
-             * front, it made the recruiter export ask the resumes bucket for
-             * `resumes/resumes/<student>/<file>`, so every export failed on
-             * the first resume it reached. Every other uploader on this
-             * table writes the key.
-             */
-            storage_path: path,
-            size_bytes: driveResume.size,
-          })
           .select("id")
-          .single();
+          .eq("student_id", student.id)
+          .eq("drive_id", drive.id)
+          .eq("kind", "resume")
+          .maybeSingle();
+
+        const docPayload = {
+          student_id: student.id,
+          kind: "resume" as const,
+          role_category: drive.roleCategory,
+          drive_id: drive.id,
+          storage_path: path,
+          size_bytes: driveResume.size,
+        };
+
+        const { data: document, error: documentError } = existingDoc
+          ? await client
+              .from("student_documents")
+              .update(docPayload)
+              .eq("id", existingDoc.id)
+              .select("id")
+              .single()
+          : await client.from("student_documents").insert(docPayload).select("id").single();
 
         if (documentError !== null || document === null) {
           throw new ApplyError("Could not save your resume. Please try again.");

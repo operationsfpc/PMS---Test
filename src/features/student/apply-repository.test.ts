@@ -169,6 +169,7 @@ describe("applying with a drive-specific resume", () => {
         );
         return HttpResponse.json({ Key: "resumes/s1/zoho.pdf" });
       }),
+      http.get(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json([])),
       http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
         writes.push({
           table: "student_documents",
