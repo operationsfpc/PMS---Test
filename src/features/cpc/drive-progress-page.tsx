@@ -66,7 +66,13 @@ export interface DriveProgressEntry {
   readonly roleTitle: string | null;
   /** 2026-08-27: filtered on, and tagged on every card. */
   readonly driveType?: DriveType | null;
-  readonly status: string;
+  /**
+   * Null when the drive row did not come back with the applications. 2026-11-06:
+   * this used to be defaulted to `live`, which told a coordinator that students
+   * could apply to a drive that may still be sitting unapproved — the one thing
+   * this screen exists to let them check.
+   */
+  readonly status: string | null;
   readonly students: readonly DriveProgressStudent[];
   /** Multi-role grouping: the parent event ID (null for legacy standalone drives). */
   readonly companyDriveId?: string | null;
@@ -150,7 +156,34 @@ const dayIn = (iso: string | null | undefined) =>
         year: "numeric",
       });
 
-export function DriveProgressPage({ view }: { view: DriveProgressView }) {
+/**
+ * Which onward screens the reader may open, asked of the domain by the route.
+ *
+ * The pane names its own links, so the page is told the two facts it needs
+ * rather than the reader's identity: a link to a screen the role cannot open
+ * is a door onto the refusal page, which is worse than no door.
+ */
+export interface DriveProgressOnward {
+  readonly shortlist: boolean;
+  readonly attendance: boolean;
+}
+
+const NO_ONWARD: DriveProgressOnward = { shortlist: false, attendance: false };
+
+export function DriveProgressPage({
+  view,
+  onward = NO_ONWARD,
+  campusUnmapped = false,
+}: {
+  view: DriveProgressView;
+  onward?: DriveProgressOnward;
+  /**
+   * True when this account is scoped to campuses and is mapped to none. RLS
+   * then hands back nothing at all, so an empty list is a broken account
+   * rather than a quiet week — two facts the screen must not blur.
+   */
+  campusUnmapped?: boolean;
+}) {
   const [drives, setDrives] = useState<readonly DriveProgressEntry[] | null>(null);
   /** The read failed — said plainly, never drawn as an empty cycle. */
   const [failure, setFailure] = useState<string | null>(null);
@@ -289,7 +322,14 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
         <LottieLoader size="fullscreen" message="Loading drives…" />
       ) : drives.length === 0 ? (
         <Card className="p-6">
-          <p className="text-sm text-ink-700">No drives involve your students yet.</p>
+          {campusUnmapped ? (
+            <p className="text-sm text-ink-700">
+              No campus is mapped to your account, so there is nothing this screen is allowed to
+              show — every list here is scoped to your campuses. An Admin sets the mapping.
+            </p>
+          ) : (
+            <p className="text-sm text-ink-700">No drives involve your students yet.</p>
+          )}
         </Card>
       ) : (
         <>
@@ -437,7 +477,7 @@ export function DriveProgressPage({ view }: { view: DriveProgressView }) {
               onClose={() => setOpenPane(null)}
               company={openHead.companyName}
               description={dayIn(openHead.tentativeDate) ?? undefined}
-              roles={paneRolesFor(openRoles, selection, select)}
+              roles={paneRolesFor(openRoles, selection, select, onward)}
               activeId={openPane.driveId}
             />
           )}
@@ -572,7 +612,11 @@ function VisitRows({
               {stageButton(own.offers, "offers", "students with an offer")}
             </td>
             <td className="px-3 py-3">
-              <Badge tone={driveStatusTone(drive.status)}>{driveStatusLabel(drive.status)}</Badge>
+              {drive.status === null ? (
+                <Badge tone="neutral">Status not loaded</Badge>
+              ) : (
+                <Badge tone={driveStatusTone(drive.status)}>{driveStatusLabel(drive.status)}</Badge>
+              )}
             </td>
             <td className="px-4 py-3 text-right whitespace-nowrap">
               <Button
@@ -598,12 +642,14 @@ function paneRolesFor(
   roles: readonly DriveProgressEntry[],
   selection: Record<string, RoleSelection>,
   onSelect: (driveId: string, next: Partial<RoleSelection>) => void,
+  onward: { readonly shortlist: boolean; readonly attendance: boolean },
 ): readonly VisitPaneRole[] {
   const types = new Set(roles.map((role) => role.driveType ?? null));
   const mixed = types.size > 1;
 
   return roles.map((drive) => {
     const applicants = countStage(drive.students).applicants;
+    const roleLabel = drive.roleTitle ?? "this role";
     return {
       id: drive.driveId,
       label: drive.roleTitle ?? "Role not set",
@@ -614,15 +660,41 @@ function paneRolesFor(
         ),
       content: (
         <>
-          <p className="mb-3">
+          {/* Reading where a student stands and acting on it used to be two
+              trips: the pane is the only place a coordinator learns who is
+              shortlisted, and the screens that decide it were back at the
+              sidebar, reached with no drive chosen. So the onward presses
+              carry this role's id and land past the picker. Only the screens
+              this account may open are offered. */}
+          <p className="mb-3 flex flex-wrap items-center gap-2">
             <ButtonLink
               variant="secondary"
               size="sm"
               to={`/drives/${drive.driveId}`}
-              aria-label={`View ${drive.roleTitle ?? "this role"}`}
+              aria-label={`View ${roleLabel}`}
             >
               View
             </ButtonLink>
+            {onward.shortlist && (
+              <ButtonLink
+                variant="secondary"
+                size="sm"
+                to={`/central/shortlisting?drive=${drive.driveId}`}
+                aria-label={`Shortlist the applicants of ${roleLabel}`}
+              >
+                Shortlist
+              </ButtonLink>
+            )}
+            {onward.attendance && (
+              <ButtonLink
+                variant="secondary"
+                size="sm"
+                to={`/cpc/attendance?drive=${drive.driveId}`}
+                aria-label={`Mark the attendance of ${roleLabel}`}
+              >
+                Attendance
+              </ButtonLink>
+            )}
           </p>
           <RoleProgress
             drive={drive}

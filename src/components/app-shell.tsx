@@ -1,5 +1,5 @@
 import { openGroupHeadings } from "@domain/navigation";
-import { campusScopeFor } from "@domain/staff";
+import { isScopedByCampusMapping } from "@domain/staff";
 import type { AppRole } from "@domain/types";
 import { useAuth, useAuthActions } from "@lib/auth-context";
 import {
@@ -479,7 +479,7 @@ function initialsOf(person: string): string {
  * week rather than a broken account, so it says so outright.
  */
 function RoleScope({ role, campuses }: { role: AppRole; campuses: readonly string[] }) {
-  const scoped = campusScopeFor(role) !== "none" && role !== "key_account_manager";
+  const scoped = isScopedByCampusMapping(role);
   const broken = scoped && campuses.length === 0;
 
   return (

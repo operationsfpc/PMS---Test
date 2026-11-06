@@ -67,8 +67,29 @@ export interface PendingPif {
   readonly roleCategory: RoleCategory | null;
 }
 
+/**
+ * A drive the Delivery Head sent back, and the reason they wrote doing it.
+ *
+ * 2026-11-06: "rejected drive list is not shows". A rejection wrote the row and
+ * dropped the card, and no read the Delivery Head can reach asked for status
+ * rejected — so the drive they had just refused existed only on the dashboard.
+ * Rejection is final (§3.3), which makes this the only record of a decision
+ * they need to be able to stand behind.
+ */
+export interface SentBackPif {
+  readonly id: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly roleCategory: RoleCategory | null;
+  /** 0004 requires a reason on rejection; null is a row predating that rule. */
+  readonly reason: string | null;
+  /** When the decision was made. `approved_at` is written by both verbs. */
+  readonly decidedAt: string | null;
+}
+
 export interface ApprovalRepository {
   pending(): Promise<readonly PendingPif[]>;
+  sentBack(): Promise<readonly SentBackPif[]>;
   decide(
     driveId: string,
     current: DriveStatus,
@@ -83,6 +104,10 @@ export type GetActorId = () => Promise<string | null>;
 // literal, and a concatenation types every column as an error object.
 export const COLUMNS =
   "id, company_name, role_title, role_category, ctc_min_lpa, ctc_max_lpa, stipend_min_monthly, stipend_max_monthly, drive_type, work_type, on_hold, created_at, jd_storage_path, jd_file_name, shift_type, shift_night_timing, joining_timeline, joining_immediate_notes, joining_later_notes, timeline_notes, company_drive_id";
+
+/** Only what the sent-back list names a decision with — no documents, no links. */
+const SENT_BACK_COLUMNS =
+  "id, company_name, role_title, role_category, rejection_reason, approved_at";
 
 /** Long enough to open and read the PDF, short enough not to be forwardable. */
 const SIGNED_URL_TTL_SECONDS = 60 * 10;
@@ -251,6 +276,36 @@ export function createSupabaseApprovalRepository(
           ((row.joining_immediate_notes ?? row.joining_later_notes) as string | null) ??
             (row.timeline_notes as string | null),
         ),
+      }));
+    },
+
+    async sentBack() {
+      /**
+       * Paged like the queue itself. The Delivery Head can read rejected rows
+       * (0008's `drives_staff_read`), so nothing here reaches past what they
+       * are allowed to see — the rows were simply never asked for.
+       */
+      let rows: Array<Record<string, unknown>>;
+      try {
+        rows = await readAllRows((from, to) =>
+          client
+            .from("drives")
+            .select(SENT_BACK_COLUMNS)
+            .eq("status", "rejected")
+            .order("approved_at", { ascending: false })
+            .range(from, to),
+        );
+      } catch {
+        throw new ApprovalError("Could not load the drives you sent back.");
+      }
+
+      return rows.map((row) => ({
+        id: row.id as string,
+        companyName: row.company_name as string,
+        roleTitle: (row.role_title as string | null) ?? null,
+        roleCategory: (row.role_category as RoleCategory | null) ?? null,
+        reason: (row.rejection_reason as string | null) ?? null,
+        decidedAt: (row.approved_at as string | null) ?? null,
       }));
     },
 

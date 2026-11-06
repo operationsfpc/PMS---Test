@@ -1,4 +1,5 @@
 import type { ApplicationSnapshot } from "./application-snapshot";
+import { extractOriginalFilename } from "./storage-path";
 
 /**
  * The recruiter export (PRD §14).
@@ -80,6 +81,32 @@ export function buildRecruiterExport(entries: readonly ShortlistEntry[]): Recrui
 }
 
 /**
+ * What a resume cell says, read off the link it points at.
+ *
+ * 2026-11-06 (Karthik): "the resume column data shows hyperlink name as View
+ * resume — I need the name there instead". "View resume" was the same two words
+ * in every row, so a recruiter scanning the column could not tell whose CV a
+ * cell would open, and had to click each one to find out.
+ */
+export function resumeCellLabel(resumeUrl: string): string {
+  if (resumeUrl.trim() === "") return "";
+
+  const objectPath = resumeUrl.split(/[?#]/)[0] ?? "";
+  const segment = objectPath.split("/").pop() ?? "";
+
+  return extractOriginalFilename(decodeSegment(segment)) ?? segment;
+}
+
+/** Storage answers with a percent-encoded path; a broken escape is its own text. */
+function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+/**
  * Builds rows for the recruiter CSV export with direct DB signed URLs
  * for each candidate's resume (instead of bundling separate files in a zip).
  */
@@ -95,6 +122,7 @@ export function buildRecruiterCsvRows(
     const name = resumeUrl
       ? `=HYPERLINK("${resumeUrl}", "${p.fullName.replaceAll('"', '""')}")`
       : p.fullName;
+    const resumeLabel = resumeCellLabel(resumeUrl);
     return {
       "Roll number": p.rollNumber,
       Name: name,
@@ -108,7 +136,9 @@ export function buildRecruiterCsvRows(
       "Standing arrears": p.currentArrears,
       "Arrear history": p.historyOfArrears,
       "Technical skills": p.technicalSkills,
-      "Resume link": resumeUrl,
+      "Resume link": resumeUrl
+        ? `=HYPERLINK("${resumeUrl}", "${resumeLabel.replaceAll('"', '""')}")`
+        : "",
     };
   });
 }

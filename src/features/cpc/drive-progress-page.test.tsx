@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import {
   type DriveProgressEntry,
+  type DriveProgressOnward,
   DriveProgressPage,
   type DriveProgressView,
 } from "./drive-progress-page";
@@ -311,6 +312,109 @@ describe("DriveProgressPage", () => {
     render(<DriveProgressPage view={view([])} />);
 
     expect(await screen.findByText(/no drives involve your students yet/i)).toBeDefined();
+  });
+
+  /**
+   * 2026-11-06: a drive row that came back without its status used to be shown
+   * as "Live". The one question this screen exists to answer is whether
+   * students can act on a drive, so guessing the answer was worse than
+   * admitting the row is missing — an unapproved drive read as live and a
+   * coordinator stops chasing the approval.
+   */
+  it("says the status did not come back instead of calling the drive Live", async () => {
+    render(<DriveProgressPage view={view([{ ...DRIVE, status: null }])} />);
+
+    expect(await screen.findByText("Status not loaded")).toBeDefined();
+    expect(screen.queryByText("Live")).toBeNull();
+  });
+
+  it("still spells a status it was given", async () => {
+    render(<DriveProgressPage view={view()} />);
+
+    const row = (await screen.findByText("Engineer")).closest("tr");
+    if (row === null) throw new Error("row not found");
+    expect(within(row).getByText("In rounds")).toBeDefined();
+    expect(within(row).queryByText("Status not loaded")).toBeNull();
+  });
+
+  /**
+   * 2026-11-06: this screen tells a coordinator who is shortlisted and where
+   * each student stands, and then leaves them with one exit — the drive
+   * record. The two screens where they act on that (shortlisting, attendance)
+   * were back at the sidebar and opened with no drive chosen, so the read and
+   * the decision were two trips apart. The pane now carries both, already
+   * pointed at the role being read.
+   */
+  describe("the onward press", () => {
+    const asRole = async (
+      user: ReturnType<typeof userEvent.setup>,
+      onward: DriveProgressOnward,
+    ) => {
+      render(<DriveProgressPage view={view()} onward={onward} />);
+      return await openVisit(user, "Zoho");
+    };
+
+    it("carries a coordinator to the two screens they act on, with this role chosen", async () => {
+      const user = userEvent.setup();
+      const students = await asRole(user, { shortlist: true, attendance: true });
+
+      expect(
+        students
+          .getByRole("link", { name: "Shortlist the applicants of Engineer" })
+          .getAttribute("href"),
+      ).toBe("/central/shortlisting?drive=d1");
+      expect(
+        students
+          .getByRole("link", { name: "Mark the attendance of Engineer" })
+          .getAttribute("href"),
+      ).toBe("/cpc/attendance?drive=d1");
+    });
+
+    it("offers only the onward screen the account may open", async () => {
+      const user = userEvent.setup();
+      const students = await asRole(user, { shortlist: false, attendance: true });
+
+      expect(students.queryByRole("link", { name: /shortlist/i })).toBeNull();
+      expect(
+        students
+          .getByRole("link", { name: "Mark the attendance of Engineer" })
+          .getAttribute("href"),
+      ).toBe("/cpc/attendance?drive=d1");
+    });
+
+    it("offers neither when the account may open neither", async () => {
+      const user = userEvent.setup();
+      const students = await asRole(user, { shortlist: false, attendance: false });
+
+      expect(students.queryByRole("link", { name: /shortlist/i })).toBeNull();
+      expect(students.queryByRole("link", { name: /attendance/i })).toBeNull();
+      // The record is still one press away for everyone.
+      expect(students.getByRole("link", { name: "View Engineer" })).toBeDefined();
+    });
+  });
+
+  /**
+   * RLS hands an unmapped coordinator nothing at all, so their empty list and
+   * a genuinely quiet campus look identical. The auth state already knows the
+   * difference — the sidebar says so — and the page is now told.
+   *
+   * Which roles that applies to is `isScopedByCampusMapping`'s own question,
+   * answered in the domain tests; the page only says what it is told.
+   */
+  describe("an account with nothing in front of it", () => {
+    it("says the mapping is missing rather than that there are no drives", async () => {
+      render(<DriveProgressPage view={view([])} campusUnmapped />);
+
+      expect(await screen.findByText(/no campus is mapped to your account/i)).toBeDefined();
+      expect(screen.queryByText(/no drives involve your students yet/i)).toBeNull();
+    });
+
+    it("still says no drives to an account that does have a campus", async () => {
+      render(<DriveProgressPage view={view([])} />);
+
+      expect(await screen.findByText(/no drives involve your students yet/i)).toBeDefined();
+      expect(screen.queryByText(/no campus is mapped to your account/i)).toBeNull();
+    });
   });
 });
 

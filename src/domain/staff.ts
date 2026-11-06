@@ -147,6 +147,19 @@ export function campusScopeFor(role: AppRole): CampusScope {
   return CAMPUS_SCOPED.includes(role) ? "many" : "none";
 }
 
+/**
+ * Whether this role's lists are emptied by a missing campus mapping.
+ *
+ * The mapping is where a coordinator's authority comes from — `my_student_ids()`
+ * reads it — so mapped to nothing every queue they open is empty, and a screen
+ * that says "none yet" sends them looking for work instead of for an Admin.
+ * A Key Account Manager is the exception the sidebar already makes: they follow
+ * named accounts, so a blank campus list is the job rather than a broken account.
+ */
+export function isScopedByCampusMapping(role: AppRole): boolean {
+  return campusScopeFor(role) !== "none" && role !== "key_account_manager";
+}
+
 export type CampusSelection =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: string };

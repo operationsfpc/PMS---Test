@@ -83,9 +83,31 @@ export function AttendanceRoute() {
             {rounds === null ? (
               <LottieLoader size="fullscreen" message="Loading rounds…" />
             ) : rounds.length === 0 ? (
-              <p className="text-sm text-ink-700">
-                This drive has no rounds yet. Rounds are created on the Rounds &amp; results screen.
-              </p>
+              /**
+               * 2026-11-06: this used to send every reader to "the Rounds &
+               * results screen", which is /central/results — a route only the
+               * Central Placement Coordinator's sidebar links (app-shell).
+               * A campus coordinator followed the words to a page they cannot
+               * reach and found nothing. Say who creates the round instead,
+               * and put the link only where it opens.
+               */
+              auth.status === "signed-in" && auth.role === "central_placement_coordinator" ? (
+                <p className="text-sm text-ink-700">
+                  This drive has no rounds yet.{" "}
+                  <Link
+                    to="/central/results"
+                    className="font-medium text-brand-600 hover:underline"
+                  >
+                    Rounds &amp; results
+                  </Link>{" "}
+                  is where you create the first one.
+                </p>
+              ) : (
+                <p className="text-sm text-ink-700">
+                  This drive has no rounds yet. The central placement team creates them, and
+                  attendance can be marked here once the first one exists.
+                </p>
+              )
             ) : (
               <ul className="divide-y divide-line">
                 {rounds.map((round) => (

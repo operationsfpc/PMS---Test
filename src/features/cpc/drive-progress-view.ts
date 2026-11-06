@@ -211,7 +211,10 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
             roleTitle: drive?.role_title ?? null,
             // 2026-08-27: filtered on, and tagged on every card.
             driveType: (drive?.drive_type as DriveType | null) ?? null,
-            status: drive?.status ?? "live",
+            // Passed through unread: a drive whose row did not come back has
+            // no status here, and the screen says so rather than guessing the
+            // one word that would make the coordinator stop looking.
+            status: (drive?.status as string | null) ?? null,
             companyDriveId: drive?.company_drive_id ?? null,
             tentativeDate: drive?.tentative_date ?? null,
             students: [entry],

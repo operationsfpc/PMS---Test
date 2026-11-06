@@ -157,6 +157,7 @@ describe("PifApprovalQueue", () => {
     roleCategory: null,
   };
   const stub = {
+    sentBack: async () => [],
     pending: async () => [
       {
         id: "p3",

@@ -4,6 +4,7 @@ import {
   canChangeStaffRole,
   canInviteRole,
   canRemoveStaff,
+  isScopedByCampusMapping,
   requiresCampusAssignment,
   type StaffChangeContext,
   validateCampusSelection,
@@ -199,6 +200,28 @@ describe("campusScopeFor", () => {
   it("gives organisation-wide roles no campus scope at all", () => {
     for (const role of ["admin", "central_placement_coordinator", "ceo"] as const) {
       expect(campusScopeFor(role)).toBe("none");
+    }
+  });
+});
+
+/**
+ * Which roles an empty campus mapping breaks — the rule behind the sidebar's
+ * warning and the Drive progress screen's own reason for an empty list.
+ */
+describe("isScopedByCampusMapping", () => {
+  it("marks the roles whose authority the mapping is", () => {
+    expect(isScopedByCampusMapping("campus_placement_coordinator")).toBe(true);
+    expect(isScopedByCampusMapping("campus_manager")).toBe(true);
+  });
+
+  /** Their queues hold named accounts, so nothing is missing from them. */
+  it("spares the key account manager, who follows accounts rather than campuses", () => {
+    expect(isScopedByCampusMapping("key_account_manager")).toBe(false);
+  });
+
+  it("spares roles that are never scoped by campus at all", () => {
+    for (const role of ["admin", "central_placement_coordinator", "delivery_head"] as const) {
+      expect(isScopedByCampusMapping(role)).toBe(false);
     }
   });
 });

@@ -211,12 +211,12 @@ describe("buildRecruiterExcel", () => {
     expect(nameCell?.hyperlink).toBe("https://supabase.co/signed/resume.pdf");
     expect(nameCell?.text).toBe("Thanush Krishna");
 
-    // Resume link cell has clickable link
+    // Resume link cell says which file it opens, not "View resume"
     const linkCell = sheet?.getRow(2).getCell(header.indexOf("Resume link")).value as {
       hyperlink?: string;
       text?: string;
     };
     expect(linkCell?.hyperlink).toBe("https://supabase.co/signed/resume.pdf");
-    expect(linkCell?.text).toBe("View resume");
+    expect(linkCell?.text).toBe("resume.pdf");
   });
 });

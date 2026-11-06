@@ -1,11 +1,13 @@
 import { AppShell } from "@components/app-shell";
 import { ToastProvider } from "@components/toast";
+import { canCompleteDrive } from "@domain/drive-completion";
 import {
   canApproveDrive,
   canPublishDrive,
   canRaiseDrive,
   canShortlistFromPortfolio,
 } from "@domain/drive-portfolio";
+import { canManageRounds } from "@domain/round-editing";
 import { AdminCampusRoute } from "@features/admin/campus-route";
 import { AdminRosterPage } from "@features/admin/roster-page";
 import { AdminStaffRoute } from "@features/admin/staff-route";
@@ -151,6 +153,48 @@ function PublishersOnly({ children }: { children: ReactNode }) {
       <p className="p-8 text-sm text-ink-700">
         Publishing a drive belongs to the central placement coordinator. Raising and approving a
         drive is not the same as announcing it to students.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+/**
+ * 2026-11-06: these two were the last screens in the drive funnel mounted
+ * without a door — shortlisting, publishing, approval and raising all have one
+ * above. A campus coordinator who typed /central/results got the whole rounds
+ * editor and learned that only the writes were refused (canManageRounds,
+ * `0047`) when the save came back red.
+ */
+function RoundManagersOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && !canManageRounds(role)) {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        Rounds and results belong to the central placement coordinator. Creating a round and
+        recording how a student did in it is their decision — you can follow this drive under{" "}
+        <strong>Drives</strong> in the sidebar.
+      </p>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+/** Declaring the final selection is the same single verb on the same single role. */
+function CompletionOnly({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const role = auth.status === "signed-in" ? auth.role : null;
+
+  if (role !== null && !canCompleteDrive(role)) {
+    return (
+      <p className="p-8 text-sm text-ink-700">
+        The final selection is declared by the central placement coordinator. Who stands at the end
+        of a drive follows from the results they record, not from a second opinion — you can follow
+        this drive under <strong>Drives</strong> in the sidebar.
       </p>
     );
   }
@@ -318,8 +362,22 @@ export function App() {
                       </PublishersOnly>
                     }
                   />
-                  <Route path="/central/results" element={<ResultsRoute />} />
-                  <Route path="/central/offers" element={<OfferRoute />} />
+                  <Route
+                    path="/central/results"
+                    element={
+                      <RoundManagersOnly>
+                        <ResultsRoute />
+                      </RoundManagersOnly>
+                    }
+                  />
+                  <Route
+                    path="/central/offers"
+                    element={
+                      <CompletionOnly>
+                        <OfferRoute />
+                      </CompletionOnly>
+                    }
+                  />
                 </Routes>
               </AppShell>
             </RequireAuth>

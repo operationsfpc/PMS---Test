@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@components/alert-dialog";
 import { useToast } from "@components/toast";
 import {
   Badge,
@@ -23,6 +33,7 @@ import {
 } from "@domain/offer-category";
 import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import { describeStipendRange } from "@domain/stipend";
+import { dateStamp } from "@domain/student-drive-lists";
 import { workTypeLabel } from "@domain/work-type";
 import {
   ApprovalError,
@@ -30,6 +41,7 @@ import {
   createSupabaseApprovalRepository,
   type PendingDriveEvent,
   type PendingPif,
+  type SentBackPif,
 } from "@lib/approval-repository";
 import { supabase } from "@lib/supabase";
 import { useCallback, useEffect, useState } from "react";
@@ -92,6 +104,13 @@ const EVENT_MODE_LABELS: Record<string, string> = {
 };
 
 /**
+ * A rejection is final (§3.3), so the sent-back list only ever grows. The most
+ * recent are what a decision gets questioned about, so the screen keeps those
+ * and names how many it held back rather than pretending the list ended there.
+ */
+const SENT_BACK_DISPLAY_LIMIT = 12;
+
+/**
  * One pending role, decided on its own. A standalone PIF renders as its own
  * card with the company name on it; a role under a recruitment event renders
  * inside that event's card, where the company — and the date, the venue and
@@ -118,6 +137,15 @@ function PendingRoleCard({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  /**
+   * Which verb the card is about to carry out, or none. §3.1 makes a rejection
+   * final and §3.3 makes the category immutable, so neither may fire on a bare
+   * click — the drive record already asks first, and this screen is the one
+   * that decides.
+   */
+  const [confirming, setConfirming] = useState<"approve" | "reject" | null>(null);
+  const reasonTyped = reason.trim() !== "";
+
   // One formatter for every screen (C3) — the inline version here
   // printed "₹— LPA" for an internship that has no CTC at all.
   const ctc = describeCtcRange(pif.ctcMinLpa, pif.ctcMaxLpa);
@@ -273,19 +301,92 @@ function PendingRoleCard({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        <Button isLoading={pending === "approve"} disabled={pending !== null} onClick={onApprove}>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          isLoading={pending === "approve"}
+          // A written reason means the mind is on sending the drive back, and
+          // the two verbs are opposites: only one of them may be armed.
+          disabled={pending !== null || reasonTyped}
+          onClick={() => setConfirming("approve")}
+        >
           Approve
         </Button>
         <Button
           variant="secondary"
           isLoading={pending === "reject"}
           disabled={pending !== null}
-          onClick={onReject}
+          onClick={() => setConfirming("reject")}
         >
           Reject permanently
         </Button>
+        {reasonTyped && pending === null && (
+          <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-500">
+            A reason is written, so Approve is off.
+            <Button variant="ghost" size="sm" onClick={() => onReason("")}>
+              Clear it
+            </Button>
+            to approve this role.
+          </span>
+        )}
       </div>
+
+      <AlertDialog
+        open={confirming !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirming === "approve"
+                ? `Approve ${pif.companyName} — ${pif.roleTitle ?? "Role not specified"}`
+                : `Send back ${pif.companyName} — ${pif.roleTitle ?? "Role not specified"}`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming === "approve"
+                ? "This fixes the offer category, and §3.3 makes it unchangeable afterwards. The students hear about the drive only when a coordinator publishes it."
+                : "Rejection is final: this PIF cannot be edited or resubmitted, and a fresh one must be raised. The reason below is what the account executive reads."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <p className="text-sm text-ink-700 [overflow-wrap:anywhere]">
+            {confirming === "approve"
+              ? category === undefined
+                ? "No offer category has been chosen yet."
+                : `Offer category: ${offerCategoryLabel(category)} · ${pay}`
+              : reason.trim() === ""
+                ? "No reason has been written yet."
+                : `Reason: ${reason.trim()}`}
+          </p>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel />
+            {confirming === "approve" ? (
+              <AlertDialogAction
+                disabled={category === undefined}
+                onClick={() => {
+                  setConfirming(null);
+                  onApprove();
+                }}
+              >
+                Confirm — approve
+              </AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                variant="danger"
+                disabled={reason.trim() === ""}
+                onClick={() => {
+                  setConfirming(null);
+                  onReject();
+                }}
+              >
+                Confirm — reject permanently
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 
@@ -312,7 +413,33 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
   const [categories, setCategories] = useState<Record<string, OfferCategory>>({});
   const [reasons, setReasons] = useState<Record<string, string>>({});
 
+  /**
+   * 2026-11-06: "rejected drive list is not shows". A rejection wrote the row
+   * and dropped the card, and no read this screen makes asked for status
+   * rejected, so the drives the Delivery Head refused were findable only on the
+   * dashboard — while §3.3 makes each refusal final and unedited.
+   *
+   * Kept apart from the queue's own error because they mean different things:
+   * a pending list that will not load stops every approval, and a sent-back
+   * list that will not load must not.
+   */
+  const [sentBack, setSentBack] = useState<readonly SentBackPif[] | null>(null);
+  const [sentBackProblem, setSentBackProblem] = useState<string | null>(null);
+
+  const loadSentBack = useCallback(async () => {
+    try {
+      setSentBack(await repo.sentBack());
+      setSentBackProblem(null);
+    } catch (caught) {
+      setSentBack(null);
+      setSentBackProblem(caught instanceof ApprovalError ? caught.message : "Could not load them.");
+    }
+  }, [repo]);
+
   const load = useCallback(async () => {
+    // The two reads are independent and neither waits on the other: a sent-back
+    // list that will not load must not stop an approval, and vice versa.
+    void loadSentBack();
     try {
       const pending = await repo.pending();
       setRows(pending);
@@ -341,7 +468,7 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
       // Never []: an empty queue and a broken one mean opposite things.
       setRows(null);
     }
-  }, [repo]);
+  }, [repo, loadSentBack]);
 
   useEffect(() => {
     void load();
@@ -365,6 +492,11 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
     try {
       await repo.decide(pif.id, "submitted", intent);
       setRows((current) => (current ?? []).filter((r) => r.id !== pif.id));
+      if (!approve) {
+        // The card leaves the queue, so the only place it can still be found is
+        // the list below — re-read it before saying the drive was rejected.
+        await loadSentBack();
+      }
       const chosenCategory = categories[pif.id];
       const categoryLabel =
         approve && chosenCategory !== undefined ? ` as ${offerCategoryLabel(chosenCategory)}` : "";
@@ -408,6 +540,9 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
       standalone.push(pif);
     }
   }
+
+  const sentBackShown = (sentBack ?? []).slice(0, SENT_BACK_DISPLAY_LIMIT);
+  const sentBackHidden = (sentBack?.length ?? 0) - sentBackShown.length;
 
   return (
     <>
@@ -508,6 +643,81 @@ export function PifApprovalQueue({ repository }: { repository?: ApprovalReposito
           ))}
         </div>
       )}
+
+      <section aria-labelledby="sent-back-heading" className="mt-6">
+        <div className="mb-1 flex flex-wrap items-center gap-2">
+          <h2 id="sent-back-heading" className="font-heading text-base font-bold text-ink-900">
+            Sent back
+          </h2>
+          {sentBack !== null && sentBack.length > 0 && (
+            <Badge tone="neutral">
+              {sentBack.length} drive{sentBack.length === 1 ? "" : "s"}
+            </Badge>
+          )}
+        </div>
+        <p className="text-sm text-ink-500">
+          A drive you send back is not edited or resubmitted — this is the record of each refusal.
+        </p>
+
+        {sentBackProblem !== null ? (
+          <p role="alert" className="mt-3 text-sm text-danger-700">
+            {sentBackProblem}
+          </p>
+        ) : sentBack === null ? (
+          <p className="mt-3 text-sm text-ink-500">Loading the drives you sent back…</p>
+        ) : sentBack.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-700">Nothing sent back yet.</p>
+        ) : (
+          <ul className="mt-3 flex flex-col gap-3">
+            {sentBackShown.map((pif) => {
+              const role = pif.roleTitle ?? "Role not specified";
+              const sentDay = dateStamp(pif.decidedAt);
+
+              return (
+                <li key={pif.id} className="rounded-card border border-line bg-surface p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="min-w-0 break-words font-heading text-sm font-bold text-ink-900 [overflow-wrap:anywhere]">
+                      {pif.companyName}
+                    </h3>
+                    <span className="min-w-0 break-words text-sm text-ink-700 [overflow-wrap:anywhere]">
+                      {role}
+                    </span>
+                    {pif.roleCategory !== null && (
+                      <span
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${roleCategoryStyle(pif.roleCategory).badgeClass}`}
+                      >
+                        {roleCategoryLabel(pif.roleCategory)}
+                      </span>
+                    )}
+                    <ButtonLink
+                      size="sm"
+                      to={`/drives/${pif.id}`}
+                      aria-label={`View ${pif.companyName} — ${role}`}
+                    >
+                      View
+                    </ButtonLink>
+                  </div>
+                  <p className="mt-2 text-sm text-ink-700 [overflow-wrap:anywhere]">
+                    {pif.reason ?? "No reason was recorded."}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-500">
+                    {sentDay === null
+                      ? "Sent back — no date on this record."
+                      : `Sent back ${sentDay}`}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {sentBackHidden > 0 && (
+          <p className="mt-2 text-xs text-ink-500">
+            Showing the {SENT_BACK_DISPLAY_LIMIT} most recent; {sentBackHidden} earlier{" "}
+            {sentBackHidden === 1 ? "drive" : "drives"} sent back not listed.
+          </p>
+        )}
+      </section>
     </>
   );
 }

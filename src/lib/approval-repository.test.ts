@@ -304,3 +304,71 @@ describe("reading an approval queue bigger than one page", () => {
     expect(rows[0]?.event).toBeNull();
   });
 });
+
+/**
+ * 2026-11-06: "rejected drive list is not shows". Every read this repository
+ * made asked for status `submitted`, so a refusal — final under §3.3, never
+ * edited or resubmitted — had no read at all. The rows were always readable
+ * (0008's `drives_staff_read` covers rejected); they were simply never asked
+ * for.
+ */
+describe("createSupabaseApprovalRepository — the drives sent back", () => {
+  it("asks for rejected drives, newest decision first", async () => {
+    let url = "";
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
+        url = request.url;
+        return HttpResponse.json([
+          {
+            id: "d9",
+            company_name: "Zoho",
+            role_title: "SDE",
+            role_category: "software_technical",
+            rejection_reason: "Duplicate of PIF-204",
+            approved_at: "2026-11-06T04:00:00Z",
+          },
+        ]);
+      }),
+    );
+
+    const rows = await repo().sentBack();
+
+    expect(url).toContain("status=eq.rejected");
+    expect(url).toContain("order=approved_at.desc");
+    expect(rows).toEqual([
+      {
+        id: "d9",
+        companyName: "Zoho",
+        roleTitle: "SDE",
+        roleCategory: "software_technical",
+        reason: "Duplicate of PIF-204",
+        decidedAt: "2026-11-06T04:00:00Z",
+      },
+    ]);
+  });
+
+  /** 0004 requires a reason on rejection; a null one is a row predating it. */
+  it("keeps a legacy rejection with no reason instead of dropping the row", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([{ id: "d1", company_name: "Zoho", rejection_reason: null }]),
+      ),
+    );
+
+    const rows = await repo().sentBack();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.reason).toBeNull();
+    expect(rows[0]?.decidedAt).toBeNull();
+  });
+
+  it("refuses rather than showing an empty sent-back list", async () => {
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json({ message: "permission denied" }, { status: 401 }),
+      ),
+    );
+
+    await expect(repo().sentBack()).rejects.toBeInstanceOf(ApprovalError);
+  });
+});

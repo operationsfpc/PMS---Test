@@ -7,6 +7,7 @@ import {
   RECRUITER_CSV_COLUMNS,
   RESUME_LINK_DAYS,
   recruiterPackProblem,
+  resumeCellLabel,
   resumeHyperlink,
   resumeLinkShortfall,
   resumePackFilename,
@@ -132,7 +133,7 @@ describe("buildRecruiterCsvRows", () => {
     expect(rows).toHaveLength(1);
     expect(Object.keys(rows[0] ?? {})).toEqual([...RECRUITER_CSV_COLUMNS]);
     expect(rows[0]?.["Resume link"]).toBe(
-      "https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc",
+      '=HYPERLINK("https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc", "cv.pdf")',
     );
     expect(rows[0]?.Name).toBe(
       '=HYPERLINK("https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc", "Asha Ramanathan")',
@@ -164,6 +165,44 @@ describe("buildRecruiterCsvRows", () => {
     ];
     const rows = buildRecruiterCsvRows(withQuote, new Map([["r1", "https://x.com/cv.pdf"]]));
     expect(rows[0]?.Name).toBe('=HYPERLINK("https://x.com/cv.pdf", "Asha ""Joy"" Ramanathan")');
+  });
+
+  it("leaves the resume cell empty rather than naming a file that is not there", () => {
+    const [first] = shortlisted;
+    if (first === undefined) throw new Error("fixture missing");
+    const linkless = [{ ...first, snapshot: { ...first.snapshot, resumeId: "r-none" } }];
+
+    expect(buildRecruiterCsvRows(linkless, new Map())[0]?.["Resume link"]).toBe("");
+  });
+});
+
+/**
+ * 2026-11-06 (Karthik): "the resume column data shows hyperlink name as View
+ * resume — I need the name there instead (eg: thanush.pdf)".
+ *
+ * The signed URL is the only thing the export layer carries about the file, so
+ * the name is read off it: the query token is dropped, the object key's last
+ * segment is what the storage row was written with, and the upload prefixes
+ * (`<student>/<drive>-<timestamp>-`) come off the same way the student's own
+ * record page strips them.
+ */
+describe("resumeCellLabel", () => {
+  it("shows the candidate's own file name", () => {
+    expect(
+      resumeCellLabel(
+        "https://x.supabase.co/storage/v1/object/sign/resumes/s1/thanush.pdf?token=a",
+      ),
+    ).toBe("thanush.pdf");
+  });
+
+  it("drops the upload prefix the storage row carries", () => {
+    expect(
+      resumeCellLabel("https://x/signed/s1/d1-1787027936502-thanush%20krishna.pdf?token=a"),
+    ).toBe("thanush krishna.pdf");
+  });
+
+  it("answers nothing for a candidate with no link, rather than a placeholder", () => {
+    expect(resumeCellLabel("")).toBe("");
   });
 });
 

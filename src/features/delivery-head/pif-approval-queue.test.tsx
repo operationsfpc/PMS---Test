@@ -46,9 +46,20 @@ const pif = {
   roleCategory: null,
 };
 
+/** A drive the Delivery Head has already refused. */
+const sentBack = {
+  id: "d9",
+  companyName: "Zoho",
+  roleTitle: "SDE",
+  roleCategory: null,
+  reason: "Duplicate of PIF-204",
+  decidedAt: "2026-11-06T04:00:00Z",
+};
+
 function repo(overrides: Partial<ApprovalRepository> = {}): ApprovalRepository {
   return {
     pending: async () => [pif],
+    sentBack: async () => [],
     decide: async () => undefined,
     ...overrides,
   };
@@ -94,7 +105,9 @@ describe("PifApprovalQueue", () => {
     const user = userEvent.setup();
     render(<PifApprovalQueue repository={repo({ decide })} />);
 
-    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    await user.click(await screen.findByRole("button", { name: /^approve$/i }));
+    expect(await screen.findByRole("alertdialog")).toBeDefined();
+    await user.click(screen.getByRole("button", { name: /confirm — approve/i }));
 
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0]?.[2]).toEqual({
@@ -103,14 +116,28 @@ describe("PifApprovalQueue", () => {
     });
   });
 
-  it("will not reject without a reason, and says why", async () => {
+  it("asks before either verb, and writes nothing until the answer is given", async () => {
     const decide = vi.fn();
     const user = userEvent.setup();
     render(<PifApprovalQueue repository={repo({ decide })} />);
 
-    await user.click(await screen.findByRole("button", { name: /reject/i }));
+    await user.click(await screen.findByRole("button", { name: /^approve$/i }));
+    await user.click(screen.getByRole("button", { name: /^cancel$/i }));
 
-    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it("will not confirm a rejection that has no reason", async () => {
+    const decide = vi.fn();
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ decide })} />);
+
+    await user.click(await screen.findByRole("button", { name: /reject permanently/i }));
+
+    const confirm = await screen.findByRole("button", { name: /confirm — reject/i });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/No reason has been written yet/)).toBeDefined();
     expect(decide).not.toHaveBeenCalled();
   });
 
@@ -120,7 +147,8 @@ describe("PifApprovalQueue", () => {
     render(<PifApprovalQueue repository={repo({ decide })} />);
 
     await user.type(await screen.findByLabelText(/rejection reason/i), "Duplicate of PIF-204");
-    await user.click(screen.getByRole("button", { name: /reject/i }));
+    await user.click(screen.getByRole("button", { name: /reject permanently/i }));
+    await user.click(await screen.findByRole("button", { name: /confirm — reject/i }));
 
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0]?.[2]).toEqual({
@@ -129,12 +157,32 @@ describe("PifApprovalQueue", () => {
     });
   });
 
+  it("switches Approve off while a rejection reason is written", async () => {
+    const decide = vi.fn();
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ decide })} />);
+
+    const approve = (await screen.findByRole("button", {
+      name: /^approve$/i,
+    })) as HTMLButtonElement;
+    expect(approve.disabled).toBe(false);
+
+    await user.type(screen.getByLabelText(/rejection reason/i), "Salaries do not fit");
+    expect(approve.disabled).toBe(true);
+
+    // Clearing the reason is the only way back, and it is said on screen.
+    await user.click(screen.getByRole("button", { name: /^clear it$/i }));
+    expect(approve.disabled).toBe(false);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
   it("surfaces a refusal from the rules rather than swallowing it", async () => {
     const decide = vi.fn().mockRejectedValue(new ApprovalError("Only a submitted PIF can be…"));
     const user = userEvent.setup();
     render(<PifApprovalQueue repository={repo({ decide })} />);
 
-    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    await user.click(await screen.findByRole("button", { name: /^approve$/i }));
+    await user.click(screen.getByRole("button", { name: /confirm — approve/i }));
 
     expect(await screen.findByRole("alert")).toBeDefined();
     expect(screen.getByText("Goldman Sachs")).toBeDefined();
@@ -213,9 +261,11 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
     const user = userEvent.setup();
     render(<PifApprovalQueue repository={repo({ pending: async () => [noCtcYet], decide })} />);
 
-    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    await user.click(await screen.findByRole("button", { name: /^approve$/i }));
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/offer category must be set/i);
+    const confirm = await screen.findByRole("button", { name: /confirm — approve/i });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/No offer category has been chosen yet/)).toBeDefined();
     expect(decide).not.toHaveBeenCalled();
   });
 
@@ -225,7 +275,8 @@ describe("PifApprovalQueue — a PIF with no CTC (cap-only internship)", () => {
     render(<PifApprovalQueue repository={repo({ pending: async () => [noCtcYet], decide })} />);
 
     await user.selectOptions(await screen.findByLabelText(/offer category/i), "regular");
-    await user.click(screen.getByRole("button", { name: /approve/i }));
+    await user.click(screen.getByRole("button", { name: /^approve$/i }));
+    await user.click(await screen.findByRole("button", { name: /confirm — approve/i }));
 
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0]?.[2]).toEqual({ decision: "approve", offerCategory: "regular" });
@@ -284,7 +335,8 @@ describe("PifApprovalQueue — an internship", () => {
     const user = userEvent.setup();
     render(<PifApprovalQueue repository={repo({ pending: async () => [intern], decide })} />);
 
-    await user.click(await screen.findByRole("button", { name: /approve/i }));
+    await user.click(await screen.findByRole("button", { name: /^approve$/i }));
+    await user.click(await screen.findByRole("button", { name: /confirm — approve/i }));
 
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0]?.[2]).toEqual({
@@ -481,6 +533,7 @@ describe("PifApprovalQueue — a multi-role submission", () => {
     const firstApprove = approveButtons[0];
     if (firstApprove === undefined) throw new Error("approve button missing");
     await user.click(firstApprove);
+    await user.click(await screen.findByRole("button", { name: /confirm — approve/i }));
 
     await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
     expect(decide.mock.calls[0]?.[0]).toBe("d-a");
@@ -492,5 +545,85 @@ describe("PifApprovalQueue — a multi-role submission", () => {
     // The role leaves the group; its sibling stays, still decidable.
     await waitFor(() => expect(screen.queryByText("Member Technical Staff")).toBeNull());
     expect(screen.getByText("QA Engineer")).toBeDefined();
+  });
+});
+
+/**
+ * 2026-11-06: "rejected drive list is not shows". A rejection wrote the row and
+ * dropped the card, so the drives the Delivery Head refused — final and
+ * unedited, §3.3 — had no record on the screen that made the decision.
+ */
+describe("PifApprovalQueue — the drives already sent back", () => {
+  it("names each one with the reason that was written", async () => {
+    render(<PifApprovalQueue repository={repo({ sentBack: async () => [sentBack] })} />);
+
+    expect(await screen.findByText("Sent back")).toBeDefined();
+    expect(screen.getByText("Zoho")).toBeDefined();
+    expect(screen.getByText("SDE")).toBeDefined();
+    expect(screen.getByText("Duplicate of PIF-204")).toBeDefined();
+    expect(screen.getByText("1 drive")).toBeDefined();
+    // The worded date, IST — the same form every other screen uses.
+    expect(screen.getByText("Sent back 6 Nov 2026")).toBeDefined();
+  });
+
+  it("says so plainly when nothing has been sent back", async () => {
+    render(<PifApprovalQueue repository={repo()} />);
+
+    expect(await screen.findByText(/nothing sent back yet/i)).toBeDefined();
+  });
+
+  it("still loads the queue when the sent-back read fails", async () => {
+    render(
+      <PifApprovalQueue
+        repository={repo({
+          sentBack: async () => {
+            throw new ApprovalError("Could not load the drives you sent back.");
+          },
+        })}
+      />,
+    );
+
+    expect(await screen.findByText("Goldman Sachs")).toBeDefined();
+    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(screen.getByText(/Could not load the drives you sent back/)).toBeDefined();
+  });
+
+  it("moves a drive it rejects into the list rather than losing it", async () => {
+    const decide = vi.fn().mockResolvedValue(undefined);
+    // First read: nothing sent back. Second read, after the rejection: this one.
+    let reads = 0;
+    const sentBackRead = vi.fn(async () => {
+      reads += 1;
+      return reads === 1
+        ? []
+        : [{ ...sentBack, id: "d1", companyName: "Goldman Sachs", roleTitle: "Analyst" }];
+    });
+    const user = userEvent.setup();
+    render(<PifApprovalQueue repository={repo({ decide, sentBack: sentBackRead })} />);
+
+    await user.type(await screen.findByLabelText(/rejection reason/i), "Duplicate of PIF-204");
+    await user.click(screen.getByRole("button", { name: /reject permanently/i }));
+    await user.click(await screen.findByRole("button", { name: /confirm — reject permanently/i }));
+
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText("Sent back 6 Nov 2026")).toBeDefined();
+    expect(screen.getByText("Duplicate of PIF-204")).toBeDefined();
+    expect(sentBackRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds the list to the recent end and says how many it left out", async () => {
+    const many = Array.from({ length: 15 }, (_, i) => ({
+      ...sentBack,
+      id: `d${i}`,
+      companyName: `Company ${i}`,
+    }));
+
+    render(<PifApprovalQueue repository={repo({ sentBack: async () => many })} />);
+
+    expect((await screen.findByText(/Showing the 12 most recent/)).textContent).toBe(
+      "Showing the 12 most recent; 3 earlier drives sent back not listed.",
+    );
+    expect(screen.getByText("Company 0")).toBeDefined();
+    expect(screen.queryByText("Company 12")).toBeNull();
   });
 });

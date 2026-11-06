@@ -1,7 +1,7 @@
 import { ErrorPanel } from "@components/error-panel";
 import { Button, Card, PageHeader } from "@components/ui";
 import { toYmd } from "@domain/drive-date-filter";
-import { holdDraftProblem } from "@domain/holds";
+import { defaultReviewDate, holdDraftProblem } from "@domain/holds";
 import { canRecordSelfPlacement, canRequestSelfPlacedHold } from "@domain/participation";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
@@ -35,7 +35,10 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
   const [declaration, setDeclaration] = useState<File | null>(null);
   const [reason, setReason] = useState("");
   const [startsAt, setStartsAt] = useState(() => toYmd(new Date()));
-  const [endsAt, setEndsAt] = useState("");
+  // The review date is mandatory in the database but is the college's own
+  // reminder, not a term the student is agreeing to — so it arrives answered
+  // with the default 0130 names, and the student is not asked to invent one.
+  const [endsAt, setEndsAt] = useState(() => defaultReviewDate(new Date()));
   /** Said after a successful send, so nobody guesses what happens next. */
   const [sent, setSent] = useState<"hold" | "offer" | null>(null);
   const actions = useAsyncAction();
@@ -132,7 +135,7 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
     setOfferLetter(null);
     setDeclaration(null);
     setReason("");
-    setEndsAt("");
+    setEndsAt(defaultReviewDate(new Date()));
     await refresh();
   }
 

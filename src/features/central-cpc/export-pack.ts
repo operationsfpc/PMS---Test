@@ -1,6 +1,7 @@
 import {
   EXPORT_COLUMNS,
   type ExportRow,
+  resumeCellLabel,
   resumeHyperlink,
   type ShortlistEntry,
 } from "@domain/recruiter-export";
@@ -124,6 +125,7 @@ export async function buildRecruiterExcel(
   for (const { snapshot } of included) {
     const p = snapshot.profile;
     const resumeUrl = snapshot.resumeId ? (resumeSignedUrls.get(snapshot.resumeId) ?? "") : "";
+    const resumeLabel = resumeCellLabel(resumeUrl);
     const added = sheet.addRow([
       p.rollNumber,
       p.fullName,
@@ -137,7 +139,7 @@ export async function buildRecruiterExcel(
       p.currentArrears,
       p.historyOfArrears,
       p.technicalSkills,
-      resumeUrl ? "View resume" : "",
+      resumeLabel,
     ]);
 
     if (resumeUrl) {
@@ -150,7 +152,7 @@ export async function buildRecruiterExcel(
         underline: true,
       };
       added.getCell(resumeColIndex).value = {
-        text: "View resume",
+        text: resumeLabel,
         hyperlink: resumeUrl,
       };
       added.getCell(resumeColIndex).font = {

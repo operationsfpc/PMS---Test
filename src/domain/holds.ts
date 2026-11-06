@@ -1,3 +1,4 @@
+import { toYmd } from "./drive-date-filter";
 import type { AppRole, HoldKind } from "./types";
 
 /**
@@ -109,6 +110,21 @@ export function holdWindowLine(hold: HoldWindow, today: Date): string {
 
 /** The bucket's own ceiling (0125), and `student_documents.size_bytes`' check (0003). */
 export const HOLD_ORDER_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * 0130 names thirty days "the form's own default" for a review date, and it is
+ * what that migration wrote for every hold placed before the rule existed. A
+ * student asked to pick one has no basis to choose a different number: the date
+ * is their college's reminder, not a term they are agreeing to.
+ */
+export const HOLD_REVIEW_DEFAULT_DAYS = 30;
+
+/** The review date a form should open with, as the `date` column reads it. */
+export function defaultReviewDate(from: Date): string {
+  const review = new Date(from.getTime());
+  review.setDate(review.getDate() + HOLD_REVIEW_DEFAULT_DAYS);
+  return toYmd(review);
+}
 
 /** What the hold dialog holds before it is sent — everything as typed. */
 export interface HoldDraft {

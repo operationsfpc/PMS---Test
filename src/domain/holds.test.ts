@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   canReleasePlacementHold,
+  defaultReviewDate,
   HOLD_KIND_DESCRIPTIONS,
   HOLD_KIND_LABELS,
   HOLD_ORDER_MAX_BYTES,
   HOLD_READER_ROLES,
+  HOLD_REVIEW_DEFAULT_DAYS,
   type HoldDraft,
   type HoldWindow,
   holdDraftProblem,
@@ -203,5 +205,44 @@ describe("HOLD_ORDER_MAX_BYTES", () => {
   /** Asked before the file is read, so it matches the bucket's own ceiling (0125). */
   it("is the 5 MiB the hold-orders bucket enforces", () => {
     expect(HOLD_ORDER_MAX_BYTES).toBe(5 * 1024 * 1024);
+  });
+});
+
+/**
+ * 2026-11-06, on the student's off-campus form: "this we dont need on the off
+ * campus offer?" The review date cannot be dropped — 0130 made `ends_at` NOT
+ * NULL and the request RPC raises without it — so what the form owes the
+ * student is an answer already in the box, and the number 0130 itself names.
+ */
+describe("defaultReviewDate", () => {
+  it("is the thirty days 0130 writes into its own default", () => {
+    expect(HOLD_REVIEW_DEFAULT_DAYS).toBe(30);
+  });
+
+  it("counts thirty days out, as the date column reads it", () => {
+    expect(defaultReviewDate(new Date(2026, 10, 6))).toBe("2026-12-06");
+  });
+
+  it("crosses the month and the year the calendar has to", () => {
+    expect(defaultReviewDate(new Date(2026, 11, 20))).toBe("2027-01-19");
+  });
+
+  it("answers the validator, so a form sent untouched is not refused", () => {
+    const startsAt = "2026-11-06";
+    expect(
+      holdDraftProblem({
+        kind: "self_placed",
+        reason: "Offer in hand.",
+        startsAt,
+        endsAt: defaultReviewDate(new Date(2026, 10, 6)),
+      }),
+    ).toBeNull();
+  });
+
+  it("is a date a past midnight cannot make look like yesterday", () => {
+    // The box holds the day, not the moment: the time of day is irrelevant.
+    expect(defaultReviewDate(new Date(2026, 10, 6, 0, 5))).toBe(
+      defaultReviewDate(new Date(2026, 10, 6, 23, 55)),
+    );
   });
 });
