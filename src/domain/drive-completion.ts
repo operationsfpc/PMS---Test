@@ -32,7 +32,7 @@ export function canCompleteDrive(role: AppRole): boolean {
 }
 
 /** Shorter than this is not an explanation — the participation-queue bar. */
-const MIN_REASON = 5;
+export const MIN_EARLY_REASON = 5;
 
 export type CompletionDecision =
   | { readonly allowed: true }
@@ -47,7 +47,7 @@ export function decideCompletion(
   reason: string,
 ): CompletionDecision {
   if (readiness.ready) return { allowed: true };
-  if (reason.trim().length < MIN_REASON) {
+  if (reason.trim().length < MIN_EARLY_REASON) {
     return {
       allowed: false,
       reason:

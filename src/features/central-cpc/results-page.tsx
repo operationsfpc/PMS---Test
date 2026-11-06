@@ -1,3 +1,4 @@
+import { OverflowMenu } from "@components/overflow-menu";
 import { StudentIdentity } from "@components/student-identity";
 import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
@@ -14,6 +15,13 @@ import {
 import { describeRoundFreeze, type RoundFacts } from "@domain/round-editing";
 import { ROUND_MODES, roundLocationKind, roundModeLabel } from "@domain/round-mode";
 import { describeParticipantOutcome } from "@domain/round-outcome";
+import {
+  canAdvanceFrom,
+  decideCompletionTiming,
+  describeRoundsAhead,
+  describeRoundWhen,
+  roundsAhead,
+} from "@domain/round-timing";
 import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@domain/rounds";
 import type { AttendanceStatus, DriveStatus, RoundResult } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
@@ -625,10 +633,13 @@ export function DriveRoundsPage({
   driveId,
   view,
   download = browserDownload,
+  now = new Date(),
 }: {
   driveId: string;
   view: DriveRoundsView;
   download?: (filename: string, text: string) => void;
+  /** Passed in, never read inside the domain — the round-date gates below. */
+  now?: Date;
 }) {
   const { toast } = useToast();
   const [rounds, setRounds] = useState<readonly DriveRoundInfo[] | null>(null);
@@ -782,6 +793,13 @@ export function DriveRoundsPage({
 
   async function advance() {
     if (activeRound === null || nextRound === null) return;
+    // The disabled button is the courtesy; this is the guard. The dialog can
+    // only be opened from the button, but a stale render must not write.
+    const gate = canAdvanceFrom(activeRound, now);
+    if (!gate.allowed) {
+      setError(gate.reason);
+      return;
+    }
     setError(null);
     try {
       const moved = await view.advance(activeRound.roundId, nextRound.roundId, proof);
@@ -822,6 +840,18 @@ export function DriveRoundsPage({
    */
   const closed = describeDriveFreeze("rounds", status);
   const completionFreeze = describeDriveFreeze("completion", status);
+
+  /**
+   * 2026-11-06: the round's OWN date, which nothing on this screen consulted
+   * before. Advancing everyone out of an interview set for next Thursday is
+   * not a shortcut — it schedules students for a round whose predecessor was
+   * never sat. A round nobody dated is not held back.
+   */
+  const aheadOfTime = activeRound === null ? null : canAdvanceFrom(activeRound, now);
+  /** The rounds this drive still has to hold, in the order it reaches them. */
+  const roundsToCome = roundsAhead(rounds ?? [], now);
+  /** The active round's own moment, spelled — never the raw stored value. */
+  const roundWhen = activeRound === null ? null : describeRoundWhen(activeRound.scheduledAt);
 
   function openDetails() {
     if (activeRound === null) return;
@@ -1068,14 +1098,23 @@ export function DriveRoundsPage({
 
   async function confirmCompletion() {
     if (completing === null) return;
+    // 2026-11-06: a round the drive still plans to hold is judged before the
+    // outcome count, because it is the louder fact — nobody sat that round yet.
+    // Skipping it stays possible, with the same typed reason Batch C allowed.
+    const timing = decideCompletionTiming(roundsToCome, completionReason);
+    if (!timing.allowed) {
+      setCompletionError(timing.reason);
+      return;
+    }
     // The domain judges the reason — 3b: early completion demands one.
     const decision = decideCompletion(completing, completionReason);
     if (!decision.allowed) {
       setCompletionError(decision.reason);
       return;
     }
+    const needsReason = !completing.ready || roundsToCome.length > 0;
     try {
-      await view.completeDrive(driveId, completing.ready ? null : completionReason.trim());
+      await view.completeDrive(driveId, needsReason ? completionReason.trim() : null);
       setCompleting(null);
       setNotice("Drive marked completed. It now appears under Drives → Completed.");
       toast({
@@ -1199,34 +1238,36 @@ export function DriveRoundsPage({
             )
           )}
 
-          <span className="ml-auto flex gap-2">
-            {/* B2: rename or knock off rounds the company dropped. */}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={closed !== null}
-              isLoading={actions.isPending("rounds:facts")}
-              onClick={() => void actions.run(openManage, "rounds:facts")}
-            >
-              Manage rounds…
-            </Button>
-            {/* C3: the drive is done when every applicant has an outcome — and a
-              drive that never ran, or is already finished, has nothing left to
-              complete. */}
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={completionFreeze !== null}
-              isLoading={actions.isPending("completion:facts")}
-              onClick={() => void actions.run(openCompletion, "completion:facts")}
-            >
-              Mark drive completed…
-            </Button>
-            {/* Said once: when the whole screen is closed, the banner above
-              already carries the reason and repeating it here is noise. */}
-            {closed === null && completionFreeze !== null && (
-              <span className="text-xs text-ink-500">{completionFreeze}</span>
-            )}
+          <span className="ml-auto">
+            {/* 2026-11-06: the two popup-openers move behind the dots. Neither
+                is pressed every day and both open a dialog of their own, so
+                they were taking the tab row's oxygen from the rounds.
+                Said once: when the whole screen is closed, the banner above
+                already carries the reason and repeating it here is noise. */}
+            <OverflowMenu
+              label="Round and drive actions"
+              items={[
+                // B2: rename or knock off rounds the company dropped. The dots
+                // spin through the facts read and step aside when the popup
+                // arrives, because a menu that closes first shows nothing.
+                {
+                  label: "Manage rounds…",
+                  onSelect: () => actions.run(openManage, "rounds:facts"),
+                  disabled: closed !== null,
+                  pending: actions.isPending("rounds:facts"),
+                },
+                // C3: the drive is done when every applicant has an outcome —
+                // and a drive that never ran, or is already finished, has
+                // nothing left to complete.
+                {
+                  label: "Mark drive completed…",
+                  onSelect: () => actions.run(openCompletion, "completion:facts"),
+                  disabled: completionFreeze !== null,
+                  pending: actions.isPending("completion:facts"),
+                  note: closed === null ? completionFreeze : null,
+                },
+              ]}
+            />
           </span>
         </div>
       )}
@@ -1241,8 +1282,7 @@ export function DriveRoundsPage({
                 {/* The tab above already numbers the round; repeating "Round 3"
                     here made the card look like it described a different one. */}
                 <strong>This round:</strong> {roundModeLabel(activeRound.mode)}
-                {activeRound.scheduledAt !== null &&
-                  ` · ${new Date(activeRound.scheduledAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}`}
+                {roundWhen !== null && ` · ${roundWhen}`}
                 {activeRound.venue !== null && ` · at ${activeRound.venue}`}
                 {activeRound.interviewLink !== null && " · shared link set"}
               </p>
@@ -1258,150 +1298,171 @@ export function DriveRoundsPage({
                 !editingDetails &&
                 closed === null && (
                   <Button variant="secondary" size="sm" onClick={openDetails}>
-                    Edit round details
+                    Edit round details…
                   </Button>
                 )
               )}
             </div>
+          </Card>
 
-            {editingDetails && !detailsFrozen && (
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                  Round mode
-                  <select
-                    value={detailsDraft.mode ?? ""}
-                    onChange={(e) => {
-                      const mode = e.target.value === "" ? null : e.target.value;
-                      // G6b: the mode decides WHICH location field exists. The
-                      // abandoned one is cleared, not merely hidden — a hidden
-                      // field still submits (the J2 lesson).
-                      setDetailsDraft((d) =>
-                        roundLocationKind(mode) === "venue"
-                          ? { ...d, mode, interviewLink: null }
-                          : { ...d, mode, venue: null },
-                      );
-                    }}
-                    className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
-                  >
-                    <option value="">Not set</option>
-                    {ROUND_MODES.map((mode) => (
-                      <option key={mode} value={mode}>
-                        {roundModeLabel(mode)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                  Scheduled at (IST)
-                  <input
-                    type="datetime-local"
-                    value={detailsDraft.scheduledAt ?? ""}
-                    onChange={(e) =>
-                      setDetailsDraft((d) => ({
-                        ...d,
-                        scheduledAt: e.target.value === "" ? null : e.target.value,
-                      }))
-                    }
-                    className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
-                  />
-                </label>
-                {roundLocationKind(detailsDraft.mode) === "venue" ? (
-                  // G6b: a physical round happens at an ADDRESS. Offering a URL
-                  // box forced coordinators to lie to it.
+          {/* 2026-11-06: the details form lives in a popup now. It used to
+              unfold inside the card above the results table, so opening it
+              pushed the students being recorded — the reason for being on this
+              screen at all — off the bottom of the window. */}
+          {editingDetails && !detailsFrozen && (
+            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Round details"
+                className="my-auto w-full max-w-2xl rounded-card bg-surface p-6 shadow-xl"
+              >
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  Round {activeRound.sequence} — {activeRound.name}
+                </h2>
+                <p className="mt-1 text-sm text-ink-500">
+                  When and where this round happens, and the students&rsquo; own meeting slots.
+                  Whatever changes is told to the students it reaches.
+                </p>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                    Venue (address)
+                    Round mode
+                    <select
+                      value={detailsDraft.mode ?? ""}
+                      onChange={(e) => {
+                        const mode = e.target.value === "" ? null : e.target.value;
+                        // G6b: the mode decides WHICH location field exists. The
+                        // abandoned one is cleared, not merely hidden — a hidden
+                        // field still submits (the J2 lesson).
+                        setDetailsDraft((d) =>
+                          roundLocationKind(mode) === "venue"
+                            ? { ...d, mode, interviewLink: null }
+                            : { ...d, mode, venue: null },
+                        );
+                      }}
+                      className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                    >
+                      <option value="">Not set</option>
+                      {ROUND_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {roundModeLabel(mode)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                    Scheduled at (IST)
                     <input
-                      type="text"
-                      placeholder="Building, street, city…"
-                      value={detailsDraft.venue ?? ""}
+                      type="datetime-local"
+                      value={detailsDraft.scheduledAt ?? ""}
                       onChange={(e) =>
                         setDetailsDraft((d) => ({
                           ...d,
-                          venue: e.target.value === "" ? null : e.target.value,
+                          scheduledAt: e.target.value === "" ? null : e.target.value,
                         }))
                       }
                       className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
                     />
                   </label>
-                ) : (
-                  <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                    Shared interview link
-                    <input
-                      type="url"
-                      placeholder="https://…"
-                      value={detailsDraft.interviewLink ?? ""}
-                      onChange={(e) =>
-                        setDetailsDraft((d) => ({
-                          ...d,
-                          interviewLink: e.target.value === "" ? null : e.target.value,
-                        }))
-                      }
-                      className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
-                    />
-                  </label>
-                )}
-
-                <div className="sm:col-span-3 flex flex-wrap items-end justify-between gap-3">
-                  <div className="flex flex-col gap-2">
+                  {roundLocationKind(detailsDraft.mode) === "venue" ? (
+                    // G6b: a physical round happens at an ADDRESS. Offering a URL
+                    // box forced coordinators to lie to it.
                     <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
-                      Upload per-student links (CSV: {MEETING_SLOTS_HEADER})
+                      Venue (address)
                       <input
-                        type="file"
-                        accept=".csv,text/csv"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file !== undefined) void stageSlots(file);
-                          e.target.value = "";
-                        }}
-                        className="text-sm"
+                        type="text"
+                        placeholder="Building, street, city…"
+                        value={detailsDraft.venue ?? ""}
+                        onChange={(e) =>
+                          setDetailsDraft((d) => ({
+                            ...d,
+                            venue: e.target.value === "" ? null : e.target.value,
+                          }))
+                        }
+                        className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
                       />
                     </label>
-                    {/* 🔴 UAT 2026-08-27: the file is READ here and sent at
+                  ) : (
+                    <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                      Shared interview link
+                      <input
+                        type="url"
+                        placeholder="https://…"
+                        value={detailsDraft.interviewLink ?? ""}
+                        onChange={(e) =>
+                          setDetailsDraft((d) => ({
+                            ...d,
+                            interviewLink: e.target.value === "" ? null : e.target.value,
+                          }))
+                        }
+                        className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
+                      />
+                    </label>
+                  )}
+
+                  <div className="sm:col-span-3 flex flex-wrap items-end justify-between gap-3">
+                    <div className="flex flex-col gap-2">
+                      <label className="flex flex-col gap-1 text-xs font-medium text-ink-500">
+                        Upload per-student links (CSV: {MEETING_SLOTS_HEADER})
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file !== undefined) void stageSlots(file);
+                            e.target.value = "";
+                          }}
+                          className="text-sm"
+                        />
+                      </label>
+                      {/* 🔴 UAT 2026-08-27: the file is READ here and sent at
                         Save. The sentence is not decoration — it is the only
                         thing standing between a coordinator and a
                         notification they cannot recall. */}
-                    {staged !== null && (
-                      <p role="status" className="text-xs font-medium text-brand-500">
-                        {links(staged.assignments.length)} ready for{" "}
-                        {staged.assignments.length === 1
-                          ? "1 student"
-                          : `${staged.assignments.length} students`}
-                        {staged.unmatched.length > 0 &&
-                          ` · not in this round: ${staged.unmatched.join(", ")}`}
-                        . Nothing is sent until you save.
-                      </p>
-                    )}
-                    {/* UAT 2026-08-26: "there's no sample to reference". This
+                      {staged !== null && (
+                        <p role="status" className="text-xs font-medium text-brand-500">
+                          {links(staged.assignments.length)} ready for{" "}
+                          {staged.assignments.length === 1
+                            ? "1 student"
+                            : `${staged.assignments.length} students`}
+                          {staged.unmatched.length > 0 &&
+                            ` · not in this round: ${staged.unmatched.join(", ")}`}
+                          . Nothing is sent until you save.
+                        </p>
+                      )}
+                      {/* UAT 2026-08-26: "there's no sample to reference". This
                         one is better than a sample — it is this round's own
                         roll numbers, so a filled-in template always matches. */}
-                    <span className="flex items-center gap-2">
-                      <Button variant="secondary" size="sm" onClick={downloadSlotsTemplate}>
-                        Download CSV template
-                      </Button>
-                      <span className="text-xs text-ink-500">
-                        Pre-filled with this round&rsquo;s {(participants ?? []).length}{" "}
-                        {(participants ?? []).length === 1 ? "student" : "students"} — add a link, a
-                        date and a time against each roll number and upload it back. Leave the date
-                        blank to use this round&rsquo;s own date.
+                      <span className="flex items-center gap-2">
+                        <Button variant="secondary" size="sm" onClick={downloadSlotsTemplate}>
+                          Download CSV template
+                        </Button>
+                        <span className="text-xs text-ink-500">
+                          Pre-filled with this round&rsquo;s {(participants ?? []).length}{" "}
+                          {(participants ?? []).length === 1 ? "student" : "students"} — add a link,
+                          a date and a time against each roll number and upload it back. Leave the
+                          date blank to use this round&rsquo;s own date.
+                        </span>
                       </span>
+                    </div>
+                    <span className="flex gap-2">
+                      <Button variant="secondary" size="sm" onClick={cancelDetails}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        isLoading={actions.isPending("details")}
+                        onClick={() => void actions.run(saveDetails, "details")}
+                      >
+                        Save round details
+                      </Button>
                     </span>
                   </div>
-                  <span className="flex gap-2">
-                    <Button variant="secondary" size="sm" onClick={cancelDetails}>
-                      Cancel
-                    </Button>
-                    <Button
-                      size="sm"
-                      isLoading={actions.isPending("details")}
-                      onClick={() => void actions.run(saveDetails, "details")}
-                    >
-                      Save round details
-                    </Button>
-                  </span>
                 </div>
               </div>
-            )}
-          </Card>
+            </div>
+          )}
 
           <ResultsPage
             key={`${active}-${reloadKey}`}
@@ -1426,6 +1487,13 @@ export function DriveRoundsPage({
                 // Nobody can be marked selected on a closed drive either, so
                 // this is not the hint below — it is the banner above.
                 <Button disabled>Advance to Round {nextRound.sequence}</Button>
+              ) : aheadOfTime !== null && !aheadOfTime.allowed ? (
+                // 2026-11-06: the round has not been held yet, and its own
+                // date is the reason — said, not left to be guessed.
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button disabled>Advance to Round {nextRound.sequence}</Button>
+                  <p className="text-sm text-ink-500">{aheadOfTime.reason}</p>
+                </div>
               ) : advancing > 0 ? (
                 <Button
                   isLoading={actions.isPending("advance")}
@@ -1646,16 +1714,29 @@ export function DriveRoundsPage({
             className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">Mark drive completed?</h2>
-            {completing.ready ? (
+            {completing.ready && roundsToCome.length === 0 ? (
               <p className="mt-2 text-sm text-ink-700">
                 Every applicant has a final outcome. The drive moves to Drives → Completed.
               </p>
             ) : (
               <>
+                {/* 2026-11-06: two different reasons a completion is early, each
+                    said once — the round nobody has sat, and the students
+                    without an outcome — and one remedy they both ask for. */}
+                {roundsToCome.length > 0 && (
+                  <p className="mt-2 text-sm text-ink-700">
+                    {describeRoundsAhead(roundsToCome)} — completing the drive now skips it.
+                  </p>
+                )}
+                {!completing.ready && (
+                  <p className="mt-2 text-sm text-ink-700">
+                    {completing.undecided}{" "}
+                    {completing.undecided === 1 ? "student still has" : "students still have"} no
+                    final outcome.
+                  </p>
+                )}
                 <p className="mt-2 text-sm text-ink-700">
-                  {completing.undecided}{" "}
-                  {completing.undecided === 1 ? "student still has" : "students still have"} no
-                  final outcome. Completing now requires a reason — it is audit-logged.
+                  Completing now requires a reason — it is audit-logged.
                 </p>
                 <label
                   className="mt-3 block text-sm font-medium text-ink-900"

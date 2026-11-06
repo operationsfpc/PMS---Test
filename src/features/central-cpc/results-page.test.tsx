@@ -386,6 +386,19 @@ describe("ResultsPage — bulk recording (M2, approved 2026-08-21)", () => {
 });
 
 /**
+ * 2026-11-06: "Manage rounds…" and "Mark drive completed…" sit behind the
+ * three dots now, so a test that wants one presses the dots first. The item is
+ * a menuitem, not a button, and the menu closes itself once the item is taken.
+ */
+async function pickAction(
+  user: ReturnType<typeof userEvent.setup>,
+  name: RegExp,
+): Promise<HTMLElement> {
+  await user.click(await screen.findByRole("button", { name: /round and drive actions/i }));
+  return await screen.findByRole("menuitem", { name });
+}
+
+/**
  * 2026-08-12 (approved spec, WS6): the drive's rounds as numbered tabs, with
  * explicit advancement. "Multiple rounds can be created and added. each round
  * is numbered. in each round, students progress or fail."
@@ -445,6 +458,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
   // 2026-10-18 (UAT, live): the screen offered every verb whatever the drive's
   // status was. A drive that is finished with is closed here, in its words.
   it("closes a completed drive: no new round, no results, no links", async () => {
+    const user = userEvent.setup();
     routed(
       <DriveRoundsPage
         driveId="d1"
@@ -460,9 +474,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     expect(screen.queryByRole("button", { name: /edit round details/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /mark selected/i })).toBeNull();
     // The controls that stay on screen say why they cannot be used.
-    expect(
-      (screen.getByRole("button", { name: /manage rounds/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect(((await pickAction(user, /manage rounds/i)) as HTMLButtonElement).disabled).toBe(true);
     expect(
       (screen.getByRole("button", { name: /advance to round 2/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
@@ -483,6 +495,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
   });
 
   it("refuses to complete a drive that was never published", async () => {
+    const user = userEvent.setup();
     routed(
       <DriveRoundsPage
         driveId="d1"
@@ -491,10 +504,11 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     );
 
     await screen.findByRole("button", { name: /add round/i });
-    expect(
-      (screen.getByRole("button", { name: /mark drive completed/i }) as HTMLButtonElement).disabled,
-    ).toBe(true);
-    expect(screen.getByText(/nothing to complete/i)).toBeDefined();
+    // The grey item carries its own reason — the dots are not a place where a
+    // control goes silent.
+    const complete = (await pickAction(user, /mark drive completed/i)) as HTMLButtonElement;
+    expect(complete.disabled).toBe(true);
+    expect(complete.textContent).toMatch(/nothing to complete/i);
   });
 
   it("advances the selected into the next round, saying how many", async () => {
@@ -1031,7 +1045,7 @@ describe("DriveRoundsPage — manage rounds (B2)", () => {
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={manageView()} />);
 
-    await user.click(await screen.findByRole("button", { name: /manage rounds/i }));
+    await user.click(await pickAction(user, /manage rounds/i));
 
     const dialog = await screen.findByRole("dialog", { name: /manage rounds/i });
     expect(within(dialog).getByText(/frozen — results are recorded/i)).toBeDefined();
@@ -1045,7 +1059,7 @@ describe("DriveRoundsPage — manage rounds (B2)", () => {
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={manageView({ renameRound })} />);
 
-    await user.click(await screen.findByRole("button", { name: /manage rounds/i }));
+    await user.click(await pickAction(user, /manage rounds/i));
     const dialog = await screen.findByRole("dialog", { name: /manage rounds/i });
     const input = within(dialog).getByRole("textbox", { name: /rename round 2/i });
     await user.clear(input);
@@ -1060,7 +1074,7 @@ describe("DriveRoundsPage — manage rounds (B2)", () => {
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={manageView({ removeRound })} />);
 
-    await user.click(await screen.findByRole("button", { name: /manage rounds/i }));
+    await user.click(await pickAction(user, /manage rounds/i));
     const dialog = await screen.findByRole("dialog", { name: /manage rounds/i });
     await user.click(within(dialog).getByRole("button", { name: /remove round 2/i }));
 
@@ -1112,7 +1126,7 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={completionView({ completeDrive })} />);
 
-    await user.click(await screen.findByRole("button", { name: /mark drive completed/i }));
+    await user.click(await pickAction(user, /mark drive completed/i));
     const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
     expect(dialog.textContent).toMatch(/every applicant has a final outcome/i);
     await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
@@ -1133,7 +1147,7 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
       />,
     );
 
-    await user.click(await screen.findByRole("button", { name: /mark drive completed/i }));
+    await user.click(await pickAction(user, /mark drive completed/i));
     const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
     expect(dialog.textContent).toMatch(/3 student/i);
 
@@ -1151,6 +1165,212 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
     await waitFor(() =>
       expect(completeDrive).toHaveBeenCalledWith("d1", "Company closed the process after Round 1"),
     );
+  });
+});
+
+/**
+ * 2026-11-06 ("advance to next rount should be only on time"): the round's OWN
+ * date decides when the cycle may move past it, and a drive with a round still
+ * to come is not closed without saying why.
+ *
+ * `now` is passed in rather than read from the clock, so the gate is judged
+ * against these dates and not against the day the suite happens to run.
+ */
+describe("DriveRoundsPage — the round's own date gates the cycle", () => {
+  const NOW = new Date("2026-08-19T06:00:00Z"); // 11:30 am IST, 19 Aug 2026
+  const HELD = "2026-08-12T10:00"; // last Wednesday — the round took place
+  const TO_COME = "2026-08-27T14:00"; // next Thursday, 2:00 pm — nobody has sat it
+
+  const aptitude = (scheduledAt: string | null) => ({
+    roundId: "r1",
+    sequence: 1,
+    name: "Aptitude",
+    mode: null,
+    scheduledAt,
+    interviewLink: null,
+    venue: null,
+  });
+  const technical = (scheduledAt: string | null) => ({
+    roundId: "r2",
+    sequence: 2,
+    name: "Technical interview",
+    mode: null,
+    scheduledAt,
+    interviewLink: null,
+    venue: null,
+  });
+
+  /** Round 1 is still ahead of itself, so nothing may leave it. */
+  const NOT_HELD = [aptitude(TO_COME), technical(null)];
+  /** Round 1 happened; Round 2 is the one the drive still owes. */
+  const ONE_TO_COME = [aptitude(HELD), technical(TO_COME)];
+
+  function timingView(overrides: Partial<DriveRoundsView> = {}): DriveRoundsView {
+    return {
+      ...view(),
+      rounds: async () => ONE_TO_COME,
+      advance: async () => 1,
+      addRound: async () => undefined,
+      updateRound: async () => undefined,
+      assignSlots: async () => ({ matched: 0, unmatched: [] }),
+      setParticipantSlot: async () => undefined,
+      roundFacts: async () => new Map(),
+      renameRound: async () => undefined,
+      removeRound: async () => undefined,
+      completionFacts: async () => ({ ready: true, undecided: 0 }),
+      completeDrive: async () => undefined,
+      offerHolders: async () => new Set<string>(),
+      driveStatus: async () => "live" as const,
+      ...overrides,
+    };
+  }
+
+  const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
+  /** Someone has been picked in Round 1, so an advance is on the table. */
+  const readyToMove = async (roundId?: string) =>
+    roundId === "r1" || roundId === undefined
+      ? [{ ...PRIYA, result: "selected" as const }, ARJUN]
+      : [];
+
+  it("refuses to advance out of a round that has not been held yet", async () => {
+    const advance = vi.fn();
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        now={NOW}
+        view={timingView({ advance, rounds: async () => NOT_HELD, participants: readyToMove })}
+      />,
+    );
+
+    const button = (await screen.findByRole("button", {
+      name: /advance to round 2/i,
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    // The date is the reason, and it is said with the date.
+    expect(screen.getByText(/has not been held yet/i).textContent).toMatch(
+      /Round 1 \(Aptitude\) is scheduled for 27 Aug 2026, 2:00 pm/i,
+    );
+
+    await user.click(button);
+    expect(advance).not.toHaveBeenCalled();
+  });
+
+  it("advances the moment that round's own time has passed", async () => {
+    const advance = vi.fn().mockResolvedValue(1);
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        now={NOW}
+        view={timingView({ advance, participants: readyToMove })}
+      />,
+    );
+
+    const button = (await screen.findByRole("button", {
+      name: /advance 1 selected to round 2/i,
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(screen.queryByText(/has not been held yet/i)).toBeNull();
+
+    await user.click(button);
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+    await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
+  });
+
+  it("reads the active round's date in words, not as a timestamp", async () => {
+    routed(
+      <DriveRoundsPage driveId="d1" now={NOW} view={timingView({ participants: readyToMove })} />,
+    );
+
+    // The card's own line — so a stored `2026-08-12T10:00` never reaches the
+    // screen raw, and never means a different hour on a machine outside IST.
+    const readout = (await screen.findByText("This round:")).parentElement;
+    expect(readout?.textContent).toMatch(/· 12 Aug 2026, 10:00 am/i);
+    expect(readout?.textContent).not.toMatch(/T10:00|GMT|UTC/i);
+  });
+
+  it("asks for a reason before completing a drive whose round nobody has sat", async () => {
+    const completeDrive = vi.fn();
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        now={NOW}
+        view={timingView({ completeDrive, participants: readyToMove })}
+      />,
+    );
+
+    await user.click(await pickAction(user, /mark drive completed/i));
+    const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
+    // Every applicant has an outcome, and that is no longer enough to close it.
+    expect(dialog.textContent).toMatch(
+      /Round 2 \(Technical interview\) is scheduled for 27 Aug 2026, 2:00 pm and has not been held yet/i,
+    );
+    expect(dialog.textContent).toMatch(/skips it/i);
+    expect(dialog.textContent).not.toMatch(/every applicant has a final outcome/i);
+
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+    expect(completeDrive).not.toHaveBeenCalled();
+    expect(dialog.textContent).toMatch(/give a reason for completing the drive before it/i);
+
+    await user.type(
+      within(dialog).getByRole("textbox", { name: /reason/i }),
+      "Company stopped the process after Round 1",
+    );
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+
+    await waitFor(() =>
+      expect(completeDrive).toHaveBeenCalledWith("d1", "Company stopped the process after Round 1"),
+    );
+  });
+
+  it("completes silently when the round it planned has been held", async () => {
+    const completeDrive = vi.fn();
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        now={NOW}
+        view={timingView({
+          completeDrive,
+          rounds: async () => [aptitude(HELD), technical("2026-08-19T11:00")],
+          participants: readyToMove,
+        })}
+      />,
+    );
+
+    await user.click(await pickAction(user, /mark drive completed/i));
+    const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
+    expect(dialog.textContent).toMatch(/every applicant has a final outcome/i);
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+
+    await waitFor(() => expect(completeDrive).toHaveBeenCalledWith("d1", null));
+  });
+
+  it("holds no round whose date nobody set", async () => {
+    // Most drives predate the field. An absent fact is not evidence, so it
+    // must not become a lock nobody can open.
+    const advance = vi.fn();
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        now={NOW}
+        view={timingView({
+          advance,
+          rounds: async () => [aptitude(null), technical(null)],
+          participants: readyToMove,
+        })}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: /advance 1 selected to round 2/i });
+    await user.click(button);
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
+    await waitFor(() => expect(advance).toHaveBeenCalled());
   });
 });
 
