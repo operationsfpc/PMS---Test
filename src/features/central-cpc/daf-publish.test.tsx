@@ -1210,4 +1210,24 @@ describe("DafPublish — the three tickers interlock", () => {
     expect(screen.getByRole("checkbox", { name: "BCA" })).toBeDefined();
     expect(screen.getByRole("checkbox", { name: "B.E — CSE" })).toBeDefined();
   });
+
+  it("sets application close deadline using 1 day, 2 days, and 3 days quick set presets", async () => {
+    routed(view());
+    expect(await screen.findByRole("button", { name: "1 day" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "2 days" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "3 days" })).toBeDefined();
+
+    const windowEndInput = document.getElementById("window-end") as HTMLInputElement;
+    expect(windowEndInput).toBeDefined();
+
+    // Since DRIVE seeds applicationStart as 2026-08-01, presets offset from windowStart
+    await userEvent.click(screen.getByRole("button", { name: "1 day" }));
+    expect(windowEndInput.value).toBe("2026-08-02T23:59");
+
+    await userEvent.click(screen.getByRole("button", { name: "2 days" }));
+    expect(windowEndInput.value).toBe("2026-08-03T23:59");
+
+    await userEvent.click(screen.getByRole("button", { name: "3 days" }));
+    expect(windowEndInput.value).toBe("2026-08-04T23:59");
+  });
 });

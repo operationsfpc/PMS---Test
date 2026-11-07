@@ -1076,15 +1076,17 @@ export function DafPublish({ view }: { view: PublishView }) {
                 <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
                   <span className="font-medium text-ink-700">Quick set:</span>
                   {[
-                    { label: "+3 days", days: 3 },
-                    { label: "+5 days", days: 5 },
-                    { label: "+1 week", days: 7 },
+                    { label: "1 day", days: 1 },
+                    { label: "2 days", days: 2 },
+                    { label: "3 days", days: 3 },
                   ].map((preset) => (
                     <button
                       key={preset.label}
                       type="button"
                       onClick={() => {
-                        const targetDate = new Date();
+                        const base = openNow || !windowStart ? new Date() : new Date(windowStart);
+                        const validBase = Number.isNaN(base.getTime()) ? new Date() : base;
+                        const targetDate = new Date(validBase.getTime());
                         targetDate.setDate(targetDate.getDate() + preset.days);
                         targetDate.setHours(23, 59, 0, 0);
                         setWindowEnd(toLocalInput(targetDate));
