@@ -53,7 +53,9 @@ const TONE_CLASSES: Record<
 
 const MAX_VISIBLE = 3;
 const DEFAULT_DURATION = 6000;
-const DANGER_DURATION = 0; // sticky
+// A refusal lists fixes the field errors also carry, so it may close — just
+// slower than a confirmation, and never while the pointer rests on it.
+const DANGER_DURATION = 10000;
 
 function dedupeKey(title: string, description?: string): string {
   return `${title}::${description ?? ""}`;
@@ -65,21 +67,28 @@ export function Toast({
   description,
   issues,
   onClose,
+  onPause,
+  onResume,
 }: {
   tone?: ToastTone | undefined;
   title: string;
   description?: string | undefined;
   issues?: readonly string[] | undefined;
   onClose?: (() => void) | undefined;
+  onPause?: (() => void) | undefined;
+  onResume?: (() => void) | undefined;
 }) {
   const style = TONE_CLASSES[tone];
   const Icon = style.iconComponent;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover only pauses the countdown; the dismiss button is the keyboard control
     <div
       role={tone === "danger" ? "alert" : "status"}
       aria-live="polite"
-      className={`pointer-events-auto flex w-full flex-col rounded-2xl border p-4 shadow-xl transition-all ${style.card}`}
+      onMouseEnter={onPause}
+      onMouseLeave={onResume}
+      className={`animate-toast-in pointer-events-auto flex w-full flex-col rounded-2xl border p-4 shadow-xl transition-all ${style.card}`}
     >
       <div className="flex items-start gap-3">
         <div
@@ -142,25 +151,52 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+interface Countdown {
+  timer: number;
+  remaining: number;
+  startedAt: number;
+}
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<readonly ToastItem[]>([]);
-  const timersRef = useRef<Map<string, number>>(new Map());
+  const timersRef = useRef<Map<string, Countdown>>(new Map());
   const seenRef = useRef<Map<string, number>>(new Map());
 
-  const clearTimer = useCallback((id: string) => {
-    const timer = timersRef.current.get(id);
-    if (timer !== undefined) {
-      clearTimeout(timer);
+  const dismiss = useCallback((id: string) => {
+    const entry = timersRef.current.get(id);
+    if (entry !== undefined) {
+      clearTimeout(entry.timer);
       timersRef.current.delete(id);
     }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const dismiss = useCallback(
-    (id: string) => {
-      clearTimer(id);
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+  const startCountdown = useCallback(
+    (id: string, ms: number) => {
+      timersRef.current.set(id, {
+        timer: window.setTimeout(() => dismiss(id), ms),
+        remaining: ms,
+        startedAt: Date.now(),
+      });
     },
-    [clearTimer],
+    [dismiss],
+  );
+
+  const pause = useCallback((id: string) => {
+    const entry = timersRef.current.get(id);
+    if (entry === undefined || entry.timer === 0) return;
+    clearTimeout(entry.timer);
+    entry.remaining -= Date.now() - entry.startedAt;
+    entry.timer = 0;
+  }, []);
+
+  const resume = useCallback(
+    (id: string) => {
+      const entry = timersRef.current.get(id);
+      if (entry === undefined || entry.timer !== 0) return;
+      startCountdown(id, Math.max(entry.remaining, 500));
+    },
+    [startCountdown],
   );
 
   const toast = useCallback(
@@ -188,7 +224,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
       const id = Math.random().toString(36).substring(2, 9);
       const effectiveDuration =
-        duration ?? (tone === "danger" ? DANGER_DURATION : DEFAULT_DURATION);
+        duration !== undefined && duration > 0
+          ? duration
+          : tone === "danger"
+            ? DANGER_DURATION
+            : DEFAULT_DURATION;
       const item: ToastItem = {
         id,
         tone,
@@ -199,32 +239,27 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         createdAt: now,
       };
       setToasts((prev) => [...prev, item]);
-
-      if (effectiveDuration > 0) {
-        const timer = window.setTimeout(() => {
-          dismiss(id);
-        }, effectiveDuration);
-        timersRef.current.set(id, timer);
-      }
+      startCountdown(id, effectiveDuration);
       return id;
     },
-    [dismiss],
+    [startCountdown],
   );
 
   // Cleanup all timers on unmount
   useEffect(() => {
+    const timers = timersRef.current;
     return () => {
-      timersRef.current.forEach((timer) => {
-        clearTimeout(timer);
+      timers.forEach((entry) => {
+        clearTimeout(entry.timer);
       });
-      timersRef.current.clear();
+      timers.clear();
     };
   }, []);
 
   return (
     <ToastContext.Provider value={{ toast, dismiss }}>
       {children}
-      <ToastContainer toasts={toasts} onDismiss={dismiss} />
+      <ToastContainer toasts={toasts} onDismiss={dismiss} onPause={pause} onResume={resume} />
     </ToastContext.Provider>
   );
 }
@@ -242,9 +277,13 @@ export function useAppToast(): ToastContextValue {
 function ToastContainer({
   toasts,
   onDismiss,
+  onPause,
+  onResume,
 }: {
   toasts: readonly ToastItem[];
   onDismiss: (id: string) => void;
+  onPause: (id: string) => void;
+  onResume: (id: string) => void;
 }) {
   if (toasts.length === 0) return null;
 
@@ -254,7 +293,7 @@ function ToastContainer({
   return (
     <section
       aria-label="Notifications"
-      className="fixed inset-x-4 bottom-4 z-[70] flex flex-col gap-2.5 pointer-events-none sm:inset-x-auto sm:right-5 sm:max-w-md"
+      className="pointer-events-none fixed right-4 top-4 z-[70] flex w-[min(26rem,calc(100vw-2rem))] flex-col gap-2.5"
     >
       {visible.map((t) => (
         <Toast
@@ -264,6 +303,8 @@ function ToastContainer({
           description={t.description}
           issues={t.issues}
           onClose={() => onDismiss(t.id)}
+          onPause={() => onPause(t.id)}
+          onResume={() => onResume(t.id)}
         />
       ))}
       {overflow > 0 && (

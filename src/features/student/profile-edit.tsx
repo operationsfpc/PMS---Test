@@ -17,7 +17,7 @@ import {
 import { filenameToCertificateName } from "@domain/storage-path";
 import { useAsyncAction } from "@lib/use-async-action";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import type {
   StudentCertificate,
   StudentCertificatesRepository,
@@ -111,12 +111,12 @@ export function ProfileEditPage({
   repository: StudentProfileRepository;
   certificates: StudentCertificatesRepository;
 }) {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [values, setValues] = useState<StudentProfileValues>(EMPTY);
   const [profiles, setProfiles] = useState<readonly ProfileRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [state, setState] = useState<"idle" | "saved" | "failed">("idle");
   const [problem, setProblem] = useState<string | null>(null);
   const [profileProblems, setProfileProblems] = useState<readonly string[]>([]);
 
@@ -164,19 +164,21 @@ export function ProfileEditPage({
     if (found.length > 0) return;
 
     setSaving(true);
-    setState("idle");
     setProblem(null);
     try {
       await repository.save({ ...values, otherProfiles: normaliseProfileLinks(profiles) });
-      setState("saved");
       toast({
         tone: "success",
         title: "Profile saved",
         description: "Your profile changes have been saved.",
       });
+      if (typeof window !== "undefined" && window.history.state && window.history.state.idx > 0) {
+        navigate(-1);
+      } else {
+        navigate("/student");
+      }
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : "Could not save your profile.";
-      setState("failed");
       setProblem(msg);
       toast({
         tone: "danger",
@@ -563,10 +565,7 @@ export function ProfileEditPage({
           </div>
         </FormSection>
 
-        {state === "saved" && <p className="text-sm text-ink-700">Saved.</p>}
-        {state === "failed" && problem !== null && (
-          <p className="text-sm text-destructive">{problem}</p>
-        )}
+        {problem !== null && <p className="text-sm text-destructive">{problem}</p>}
 
         <div>
           <Button type="submit" isLoading={saving}>

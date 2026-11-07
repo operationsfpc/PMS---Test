@@ -6,6 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 import { ProfileEditPage } from "./profile-edit";
 import type { StudentCertificatesRepository, StudentProfileRepository } from "./profile-repository";
 
+const toastMock = vi.fn();
+vi.mock("@components/toast", async () => {
+  const actual = await vi.importActual<typeof import("@components/toast")>("@components/toast");
+  return {
+    ...actual,
+    useToast: () => ({ toast: toastMock, dismiss: vi.fn() }),
+  };
+});
+
 /**
  * What a verified student may still change themselves.
  *
@@ -81,7 +90,7 @@ const renderPage = (
   certificates: StudentCertificatesRepository = certs(),
 ) =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/student", "/student/profile"]} initialIndex={1}>
       <ProfileEditPage repository={repository} certificates={certificates} />
     </MemoryRouter>,
   );
@@ -152,13 +161,19 @@ describe("ProfileEditPage", () => {
     );
   });
 
-  it("confirms the save, so the student knows it took", async () => {
+  it("confirms the save via toast and redirects back without showing inline saved text", async () => {
     const user = userEvent.setup();
     renderPage(repo());
 
     await user.click(await screen.findByRole("button", { name: /save/i }));
 
-    expect(await screen.findByText(/saved/i)).toBeDefined();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: "success",
+        title: "Profile saved",
+      }),
+    );
+    expect(screen.queryByText(/^saved\.$/i)).toBeNull();
   });
 
   it("says so when it could not save, rather than pretending", async () => {
