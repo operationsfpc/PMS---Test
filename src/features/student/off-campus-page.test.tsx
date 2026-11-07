@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { toYmd } from "@domain/drive-date-filter";
 import { defaultReviewDate } from "@domain/holds";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { OffCampusPage } from "./off-campus-page";

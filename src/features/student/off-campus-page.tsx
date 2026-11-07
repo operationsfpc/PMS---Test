@@ -306,32 +306,30 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
             </div>
 
             {holdFlow && (
-              <>
-                <div className="mt-4">
-                  <label
-                    htmlFor="sp-declaration"
-                    className="mb-1 block text-sm font-medium text-ink-700"
-                  >
-                    <span>Signed declaration</span>
-                    <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
-                      *
-                    </span>
-                    <span className="sr-only"> (required)</span>
-                  </label>
-                  <p className="mb-2 text-xs text-ink-500">
-                    A <strong>handwritten and signed</strong> letter confirming that you have
-                    accepted this offer and are asking for your placements to be held. A clear
-                    photograph is fine. Only your college sees it.
-                  </p>
-                  <input
-                    id="sp-declaration"
-                    type="file"
-                    accept="application/pdf,image/*"
-                    onChange={(e) => setDeclaration(e.target.files?.[0] ?? null)}
-                    className={field}
-                  />
-                </div>
-              </>
+              <div className="mt-4">
+                <label
+                  htmlFor="sp-declaration"
+                  className="mb-1 block text-sm font-medium text-ink-700"
+                >
+                  <span>Signed declaration</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
+                </label>
+                <p className="mb-2 text-xs text-ink-500">
+                  A <strong>handwritten and signed</strong> letter confirming that you have accepted
+                  this offer and are asking for your placements to be held. A clear photograph is
+                  fine. Only your college sees it.
+                </p>
+                <input
+                  id="sp-declaration"
+                  type="file"
+                  accept="application/pdf,image/*"
+                  onChange={(e) => setDeclaration(e.target.files?.[0] ?? null)}
+                  className={field}
+                />
+              </div>
             )}
 
             <div className="mt-4">
