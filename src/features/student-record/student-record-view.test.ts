@@ -78,6 +78,8 @@ function stubHappyPath() {
     ),
     http.get(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json([])),
     http.get(`${BASE}/rest/v1/student_certificates`, () => HttpResponse.json([])),
+    http.get(`${BASE}/rest/v1/opt_out_requests`, () => HttpResponse.json([])),
+    http.get(`${BASE}/rest/v1/self_placement_requests`, () => HttpResponse.json([])),
   );
 }
 
@@ -97,6 +99,8 @@ describe("the student record view", () => {
     ]);
     expect(record?.skills).toEqual([{ skill: "Java", score: 4 }]);
     expect(record?.rolePreferences).toEqual(["software_technical"]);
+    expect(record?.optOuts).toEqual([]);
+    expect(record?.selfPlacements).toEqual([]);
     expect(record?.applications).toEqual([
       {
         applicationId: "a1",
@@ -112,6 +116,86 @@ describe("the student record view", () => {
     ]);
     // The on-campus offer names its drive.
     expect(record?.placement).toMatchObject({ companyName: "Zoho", ctcLpa: 4.5 });
+  });
+
+  it("loads opt-out and self-placement requests with documents", async () => {
+    stubHappyPath();
+    server.use(
+      http.get(`${BASE}/rest/v1/opt_out_requests`, () =>
+        HttpResponse.json([
+          {
+            id: "opt-1",
+            status: "pending",
+            reason: "Pursuing higher studies",
+            declaration_id: "doc-opt",
+            decided_at: null,
+            created_at: "2026-11-01T10:00:00Z",
+          },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/self_placement_requests`, () =>
+        HttpResponse.json([
+          {
+            id: "self-1",
+            status: "verified",
+            company_name: "Google",
+            role_title: "Software Engineer",
+            ctc_lpa: "18.00",
+            stipend_monthly: null,
+            offer_letter_id: "doc-letter",
+            declaration_id: "doc-decl",
+            decided_at: "2026-11-02T10:00:00Z",
+            decision_reason: null,
+            created_at: "2026-11-01T10:00:00Z",
+          },
+        ]),
+      ),
+      http.get(`${BASE}/rest/v1/student_documents`, () =>
+        HttpResponse.json([
+          {
+            id: "doc-opt",
+            kind: "opt_out_declaration",
+            storage_path: "s1/opt_out_signed.pdf",
+            size_bytes: 1024,
+            uploaded_at: "2026-11-01T10:00:00Z",
+          },
+          {
+            id: "doc-letter",
+            kind: "offer_letter",
+            storage_path: "s1/google_offer.pdf",
+            size_bytes: 2048,
+            uploaded_at: "2026-11-01T10:00:00Z",
+          },
+          {
+            id: "doc-decl",
+            kind: "self_placement_declaration",
+            storage_path: "s1/self_declaration.pdf",
+            size_bytes: 1024,
+            uploaded_at: "2026-11-01T10:00:00Z",
+          },
+        ]),
+      ),
+    );
+
+    const record = await createSupabaseStudentRecordView(client()).record("s1");
+    expect(record?.optOuts).toHaveLength(1);
+    expect(record?.optOuts?.[0]).toMatchObject({
+      id: "opt-1",
+      status: "pending",
+      reason: "Pursuing higher studies",
+      declarationFileName: "opt_out_signed.pdf",
+    });
+
+    expect(record?.selfPlacements).toHaveLength(1);
+    expect(record?.selfPlacements?.[0]).toMatchObject({
+      id: "self-1",
+      status: "verified",
+      companyName: "Google",
+      roleTitle: "Software Engineer",
+      ctcLpa: 18,
+      offerLetterFileName: "google_offer.pdf",
+      declarationFileName: "self_declaration.pdf",
+    });
   });
 
   it("is null when the row does not come back — absent and refused look the same", async () => {

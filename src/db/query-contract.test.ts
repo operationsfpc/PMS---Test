@@ -46,6 +46,8 @@ import {
   RECORD_CERTIFICATE_COLUMNS,
   RECORD_DOCUMENT_COLUMNS,
   RECORD_OFFER_COLUMNS,
+  RECORD_OPT_OUT_COLUMNS,
+  RECORD_SELF_PLACEMENT_COLUMNS,
   RECORD_SEMESTER_COLUMNS,
   RECORD_SKILL_COLUMNS,
   RECORD_STUDENT_COLUMNS,
@@ -413,6 +415,8 @@ describe("every hand-written select matches the schema", () => {
     ["student record offers", "offers", RECORD_OFFER_COLUMNS],
     ["student record documents", "student_documents", RECORD_DOCUMENT_COLUMNS],
     ["student record certificates", "student_certificates", RECORD_CERTIFICATE_COLUMNS],
+    ["student record opt-outs", "opt_out_requests", RECORD_OPT_OUT_COLUMNS],
+    ["student record self-placements", "self_placement_requests", RECORD_SELF_PLACEMENT_COLUMNS],
     // 0125: the hold block. Registered because it embeds `profiles` twice on
     // purpose — the one live-hold read and the history read use this same spec.
     ["student placement holds", "student_holds", HOLD_COLUMNS],

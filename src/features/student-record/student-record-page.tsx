@@ -53,6 +53,7 @@ import {
   GraduationCap,
   RotateCcw,
   Search,
+  ShieldAlert,
   Sparkles,
   Trophy,
   Upload,
@@ -129,6 +130,32 @@ export interface StudentRecordResume {
   readonly sizeBytes: number;
   readonly uploadedAt: string;
   readonly downloadUrl: string | null;
+}
+
+export interface StudentRecordOptOut {
+  readonly id: string;
+  readonly status: "pending" | "approved" | "rejected";
+  readonly reason: string;
+  readonly declarationUrl: string | null;
+  readonly declarationFileName: string | null;
+  readonly decidedAt: string | null;
+  readonly createdAt: string;
+}
+
+export interface StudentRecordSelfPlacement {
+  readonly id: string;
+  readonly status: "pending" | "verified" | "rejected";
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly ctcLpa: number | null;
+  readonly stipendMonthly: number | null;
+  readonly offerLetterUrl: string | null;
+  readonly offerLetterFileName: string | null;
+  readonly declarationUrl: string | null;
+  readonly declarationFileName: string | null;
+  readonly decidedAt: string | null;
+  readonly decisionReason: string | null;
+  readonly createdAt: string;
 }
 
 export interface StudentRecordPlacement {
@@ -211,6 +238,8 @@ export interface StudentRecord {
   readonly applications: readonly StudentRecordApplication[];
   readonly offers?: readonly StudentRecordOffer[];
   readonly placement: StudentRecordPlacement | null;
+  readonly optOuts?: readonly StudentRecordOptOut[];
+  readonly selfPlacements?: readonly StudentRecordSelfPlacement[];
 }
 
 export interface StudentRecordView {
@@ -1436,6 +1465,202 @@ export function StudentRecordPage({
     </section>
   );
 
+  const optOuts = record.optOuts ?? [];
+  const latestOptOut = optOuts[0];
+  const isOptedOut = record.participationStatus === "opted_out";
+
+  const optOutSection = (optOuts.length > 0 || isOptedOut) && (
+    <section aria-label="Opt-out status">
+      <Card className="border-amber-200 bg-amber-50/50 p-5 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
+              <ShieldAlert className="size-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-heading text-lg font-bold text-ink-900">
+                  Participation Standing — Opted Out
+                </h2>
+                {latestOptOut && (
+                  <Badge
+                    tone={
+                      latestOptOut.status === "approved"
+                        ? "danger"
+                        : latestOptOut.status === "pending"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {latestOptOut.status === "approved"
+                      ? "Opt-out confirmed"
+                      : latestOptOut.status === "pending"
+                        ? "Awaiting approval"
+                        : "Returned"}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-ink-500">
+                {isOptedOut
+                  ? "This student has stepped out of campus placements."
+                  : "Opt-out request submitted."}
+              </p>
+            </div>
+          </div>
+          {restorePlan !== null && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsRestoreOpen(true)}
+              className="border-amber-300 bg-surface text-amber-900 hover:bg-amber-100/50"
+            >
+              <RotateCcw aria-hidden="true" className="mr-1.5 size-3.5" />
+              Restore to pipeline
+            </Button>
+          )}
+        </div>
+
+        {latestOptOut && (
+          <div className="mt-4 rounded-xl border border-amber-200/80 bg-surface/90 p-4">
+            <p className="text-xs font-semibold tracking-wide text-ink-500 uppercase">
+              Reason recorded
+            </p>
+            <p className="mt-1 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+              {latestOptOut.reason || "No reason recorded"}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-ink-500">
+              <span>Submitted: {onDate(latestOptOut.createdAt)}</span>
+              {latestOptOut.decidedAt && <span>Decided: {onDate(latestOptOut.decidedAt)}</span>}
+            </div>
+
+            {latestOptOut.declarationUrl && (
+              <div className="mt-3 border-t border-line/60 pt-3">
+                <ButtonAnchor
+                  href={latestOptOut.declarationUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  size="sm"
+                  variant="secondary"
+                  className="text-xs"
+                >
+                  <Download className="mr-1.5 size-3.5" />
+                  View signed declaration
+                  {latestOptOut.declarationFileName ? ` (${latestOptOut.declarationFileName})` : ""}
+                </ButtonAnchor>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+
+  const selfPlacements = record.selfPlacements ?? [];
+  const selfPlacementSection = selfPlacements.length > 0 && (
+    <section aria-label="Off-campus requests">
+      <Card className="border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-emerald-100 p-2 text-emerald-800">
+              <Award className="size-5" />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-ink-900">
+                Off-Campus Placement Details
+              </h2>
+              <p className="text-xs text-ink-500">
+                Declared self-placement offer and verified documents
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {selfPlacements.map((req) => (
+            <div key={req.id} className="rounded-xl border border-emerald-200/80 bg-surface/90 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-heading text-base font-bold text-ink-900">
+                      {req.companyName}
+                    </h3>
+                    <Badge
+                      tone={
+                        req.status === "verified"
+                          ? "success"
+                          : req.status === "pending"
+                            ? "warning"
+                            : "danger"
+                      }
+                    >
+                      {req.status === "verified"
+                        ? "Verified"
+                        : req.status === "pending"
+                          ? "Pending verification"
+                          : "Returned"}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-ink-700">
+                    {req.roleTitle ?? "Role title not specified"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  {req.ctcLpa != null && req.ctcLpa > 0 && (
+                    <span className="text-base font-bold text-emerald-700">₹{req.ctcLpa} LPA</span>
+                  )}
+                  {req.stipendMonthly != null && req.stipendMonthly > 0 && (
+                    <p className="text-xs font-semibold text-ink-600">
+                      ₹{req.stipendMonthly.toLocaleString("en-IN")} / mo
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {req.decisionReason && (
+                <div className="mt-2 rounded-lg bg-danger-50 p-2 text-xs text-danger-700">
+                  <span className="font-semibold">Review note:</span> {req.decisionReason}
+                </div>
+              )}
+
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line/60 pt-3 text-xs text-ink-500">
+                <span>Submitted: {onDate(req.createdAt)}</span>
+                {req.decidedAt && <span>Decided: {onDate(req.decidedAt)}</span>}
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  {req.offerLetterUrl && (
+                    <ButtonAnchor
+                      href={req.offerLetterUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      size="sm"
+                      variant="secondary"
+                      className="text-xs"
+                    >
+                      <Download className="mr-1.5 size-3.5" />
+                      Offer Letter
+                    </ButtonAnchor>
+                  )}
+                  {req.declarationUrl && (
+                    <ButtonAnchor
+                      href={req.declarationUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      size="sm"
+                      variant="secondary"
+                      className="text-xs"
+                    >
+                      <Download className="mr-1.5 size-3.5" />
+                      Signed Declaration
+                    </ButtonAnchor>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </section>
+  );
+
   const identitySection = (
     <section aria-label="Identity">
       <Card className="p-5 shadow-xs transition-shadow hover:shadow-sm">
@@ -1839,287 +2064,299 @@ export function StudentRecordPage({
         />
       </div>
 
-      {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
-      {(hold !== null || pending !== null || pastHolds.length > 0) && (
-        <section aria-label="Placement hold" className="flex flex-col gap-3">
-          {pending !== null && (
-            <Card className="border-brand-200 bg-brand-50/60 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-heading text-lg font-bold text-ink-900">
-                  Requested — {HOLD_KIND_LABELS[pending.kind]}
-                </h2>
-                <Badge tone="accent">Awaiting confirmation</Badge>
-              </div>
-
-              <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
-                {pending.reason}
-              </p>
-              <p className="mt-1 text-xs text-ink-500">
-                {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
-              </p>
-              <p className="mt-1 text-xs text-ink-500">
-                Their drives stay open until you confirm this. Confirming closes them.
-              </p>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {pending.documentPath !== null &&
-                  (evidence.offer === null ? (
-                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                      Offer letter on file: {extractOriginalFilename(pending.documentPath)}
-                    </span>
-                  ) : (
-                    <ButtonAnchor
-                      href={evidence.offer}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      aria-label={`Open the offer letter — ${extractOriginalFilename(pending.documentPath)}`}
-                    >
-                      Offer letter
-                    </ButtonAnchor>
-                  ))}
-                {pending.declarationPath !== null &&
-                  (evidence.declaration === null ? (
-                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                      Declaration on file: {extractOriginalFilename(pending.declarationPath)}
-                    </span>
-                  ) : (
-                    <ButtonAnchor
-                      href={evidence.declaration}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      aria-label={`Open the signed declaration — ${extractOriginalFilename(pending.declarationPath)}`}
-                    >
-                      Signed declaration
-                    </ButtonAnchor>
-                  ))}
-              </div>
-
-              {release !== undefined && (
-                <div className="mt-4">
-                  {declining ? (
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="decline-note" className="text-sm font-medium text-ink-700">
-                        Why are you declining?{" "}
-                        <span className="font-normal text-ink-500">(optional)</span>
-                      </label>
-                      <textarea
-                        id="decline-note"
-                        rows={2}
-                        value={declineNote}
-                        onChange={(e) => setDeclineNote(e.target.value)}
-                        placeholder="The letter names a different student. Ask for a signed copy."
-                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="danger"
-                          isLoading={actions.isPending()}
-                          onClick={() => void declineRequest()}
-                        >
-                          Decline request
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          disabled={actions.busy}
-                          onClick={() => setDeclining(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button isLoading={actions.isPending()} onClick={() => void confirmRequest()}>
-                        Confirm hold
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
-                        Decline request
-                      </Button>
-                    </div>
-                  )}
-
-                  {actions.error !== null && (
-                    <p
-                      role="alert"
-                      className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-                    >
-                      {actions.error}
-                    </p>
-                  )}
-                </div>
-              )}
-            </Card>
-          )}
-
-          {hold !== null && (
-            <Card className="border-gold-300 bg-gold-50 p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-heading text-lg font-bold text-ink-900">
-                  On hold — {HOLD_KIND_LABELS[hold.kind]}
-                </h2>
-                <Badge tone={standing === "overdue" ? "danger" : "warning"}>
-                  {standing === "overdue" ? "Review overdue" : "In force"}
-                </Badge>
-              </div>
-
-              <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
-                {hold.reason}
-              </p>
-              <p className="mt-1 text-xs text-ink-500">
-                {holdWindowLine(hold, today)}
-                {hold.heldBy !== null && ` · placed by ${hold.heldBy}`} · placed{" "}
-                {onDate(hold.heldAt)}
-              </p>
-
-              {hold.documentPath !== null && (
-                <p className="mt-3 flex flex-wrap items-center gap-2">
-                  {orderUrl === null ? (
-                    <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
-                      Order on file: {extractOriginalFilename(hold.documentPath)}
-                    </span>
-                  ) : (
-                    <ButtonAnchor
-                      href={orderUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      aria-label={`Open the hold order — ${extractOriginalFilename(hold.documentPath)}`}
-                    >
-                      Hold order
-                    </ButtonAnchor>
-                  )}
-                  <span className="text-xs text-ink-500">The student cannot open this file.</span>
-                </p>
-              )}
-
-              {release !== undefined && (
-                <div className="mt-4">
-                  {lifting ? (
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="release-note" className="text-sm font-medium text-ink-700">
-                        What cleared it?{" "}
-                        <span className="font-normal text-ink-500">(optional)</span>
-                      </label>
-                      <textarea
-                        id="release-note"
-                        rows={2}
-                        value={releaseNote}
-                        onChange={(e) => setReleaseNote(e.target.value)}
-                        placeholder="Cleared with accounts on 3 Nov — receipt filed."
-                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="danger"
-                          isLoading={actions.isPending()}
-                          onClick={() => void lift()}
-                        >
-                          Release hold
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          disabled={actions.busy}
-                          onClick={() => setLifting(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : extending ? (
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
-                        Extend the review to{" "}
-                        <span className="font-bold text-danger-500" aria-hidden="true">
-                          *
-                        </span>
-                      </label>
-                      <input
-                        id="extend-date"
-                        aria-label="Extend the review to"
-                        type="date"
-                        min={dayAfter(hold.endsAt)}
-                        value={extendDate}
-                        onChange={(e) => setExtendDate(e.target.value)}
-                        className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
-                      />
-                      <p className="text-xs text-ink-500">
-                        Only forward — pulling a review earlier is what Release is for. The old date
-                        stays in the audit log.
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          size="sm"
-                          isLoading={actions.isPending()}
-                          disabled={extendDate === "" || extendDate <= hold.endsAt}
-                          onClick={() => void extendHold()}
-                        >
-                          Extend review date
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={actions.busy}
-                          onClick={() => setExtending(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
-                        Release hold
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setExtending(true)}>
-                        Extend review date
-                      </Button>
-                    </div>
-                  )}
-
-                  {actions.error !== null && (
-                    <p
-                      role="alert"
-                      className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
-                    >
-                      {actions.error}
-                    </p>
-                  )}
-                </div>
-              )}
-            </Card>
-          )}
-
-          {pastHolds.length > 0 && (
-            <Card className="p-5">
-              <h2 className="mb-2 font-heading text-lg font-bold text-ink-900">Earlier holds</h2>
-              <ul className="divide-y divide-line text-sm">
-                {pastHolds.map((past) => (
-                  <li key={past.id} className="py-2">
-                    <p className="font-medium text-ink-900">{HOLD_KIND_LABELS[past.kind]}</p>
-                    <p className="break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
-                      {past.reason} · {holdWindowLine(past, today)}
-                      {past.releasedBy !== null && ` by ${past.releasedBy}`}
-                    </p>
-                    {past.releaseNote && (
-                      <p className="mt-1 text-xs font-medium text-ink-600">
-                        Cleared: {past.releaseNote}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
-        </section>
-      )}
-
-      {/* Status history — every move a person made on this standing, and why */}
-      <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
-
       {/* One full-width column: every section gets the whole page, so a table
             never has to fit inside half of it and no column is left empty. */}
       <div id="student-record-content" className="space-y-4">
         {identitySection}
+
+        {/* Holds Section — Exactly preserved for RLS & Hold Management rules */}
+        {(hold !== null || pending !== null || pastHolds.length > 0) && (
+          <section aria-label="Placement hold" className="flex flex-col gap-3">
+            {pending !== null && (
+              <Card className="border-brand-200 bg-brand-50/60 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="font-heading text-lg font-bold text-ink-900">
+                    Requested — {HOLD_KIND_LABELS[pending.kind]}
+                  </h2>
+                  <Badge tone="accent">Awaiting confirmation</Badge>
+                </div>
+
+                <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+                  {pending.reason}
+                </p>
+                <p className="mt-1 text-xs text-ink-500">
+                  {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
+                </p>
+                <p className="mt-1 text-xs text-ink-500">
+                  Their drives stay open until you confirm this. Confirming closes them.
+                </p>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {pending.documentPath !== null &&
+                    (evidence.offer === null ? (
+                      <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                        Offer letter on file: {extractOriginalFilename(pending.documentPath)}
+                      </span>
+                    ) : (
+                      <ButtonAnchor
+                        href={evidence.offer}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        aria-label={`Open the offer letter — ${extractOriginalFilename(pending.documentPath)}`}
+                      >
+                        Offer letter
+                      </ButtonAnchor>
+                    ))}
+                  {pending.declarationPath !== null &&
+                    (evidence.declaration === null ? (
+                      <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                        Declaration on file: {extractOriginalFilename(pending.declarationPath)}
+                      </span>
+                    ) : (
+                      <ButtonAnchor
+                        href={evidence.declaration}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        aria-label={`Open the signed declaration — ${extractOriginalFilename(pending.declarationPath)}`}
+                      >
+                        Signed declaration
+                      </ButtonAnchor>
+                    ))}
+                </div>
+
+                {release !== undefined && (
+                  <div className="mt-4">
+                    {declining ? (
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="decline-note" className="text-sm font-medium text-ink-700">
+                          Why are you declining?{" "}
+                          <span className="font-normal text-ink-500">(optional)</span>
+                        </label>
+                        <textarea
+                          id="decline-note"
+                          rows={2}
+                          value={declineNote}
+                          onChange={(e) => setDeclineNote(e.target.value)}
+                          placeholder="The letter names a different student. Ask for a signed copy."
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="danger"
+                            isLoading={actions.isPending()}
+                            onClick={() => void declineRequest()}
+                          >
+                            Decline request
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            disabled={actions.busy}
+                            onClick={() => setDeclining(false)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          isLoading={actions.isPending()}
+                          onClick={() => void confirmRequest()}
+                        >
+                          Confirm hold
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
+                          Decline request
+                        </Button>
+                      </div>
+                    )}
+
+                    {actions.error !== null && (
+                      <p
+                        role="alert"
+                        className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+                      >
+                        {actions.error}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {hold !== null && (
+              <Card className="border-gold-300 bg-gold-50 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="font-heading text-lg font-bold text-ink-900">
+                    On hold — {HOLD_KIND_LABELS[hold.kind]}
+                  </h2>
+                  <Badge tone={standing === "overdue" ? "danger" : "warning"}>
+                    {standing === "overdue" ? "Review overdue" : "In force"}
+                  </Badge>
+                </div>
+
+                <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
+                  {hold.reason}
+                </p>
+                <p className="mt-1 text-xs text-ink-500">
+                  {holdWindowLine(hold, today)}
+                  {hold.heldBy !== null && ` · placed by ${hold.heldBy}`} · placed{" "}
+                  {onDate(hold.heldAt)}
+                </p>
+
+                {hold.documentPath !== null && (
+                  <p className="mt-3 flex flex-wrap items-center gap-2">
+                    {orderUrl === null ? (
+                      <span className="min-w-0 break-words text-sm text-ink-500 [overflow-wrap:anywhere]">
+                        Order on file: {extractOriginalFilename(hold.documentPath)}
+                      </span>
+                    ) : (
+                      <ButtonAnchor
+                        href={orderUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        aria-label={`Open the hold order — ${extractOriginalFilename(hold.documentPath)}`}
+                      >
+                        Hold order
+                      </ButtonAnchor>
+                    )}
+                    <span className="text-xs text-ink-500">The student cannot open this file.</span>
+                  </p>
+                )}
+
+                {release !== undefined && (
+                  <div className="mt-4">
+                    {lifting ? (
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="release-note" className="text-sm font-medium text-ink-700">
+                          What cleared it?{" "}
+                          <span className="font-normal text-ink-500">(optional)</span>
+                        </label>
+                        <textarea
+                          id="release-note"
+                          rows={2}
+                          value={releaseNote}
+                          onChange={(e) => setReleaseNote(e.target.value)}
+                          placeholder="Cleared with accounts on 3 Nov — receipt filed."
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="danger"
+                            isLoading={actions.isPending()}
+                            onClick={() => void lift()}
+                          >
+                            Release hold
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            disabled={actions.busy}
+                            onClick={() => setLifting(false)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : extending ? (
+                      <div className="flex flex-col gap-2">
+                        <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
+                          Extend the review to{" "}
+                          <span className="font-bold text-danger-500" aria-hidden="true">
+                            *
+                          </span>
+                        </label>
+                        <input
+                          id="extend-date"
+                          aria-label="Extend the review to"
+                          type="date"
+                          min={dayAfter(hold.endsAt)}
+                          value={extendDate}
+                          onChange={(e) => setExtendDate(e.target.value)}
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink-900"
+                        />
+                        <p className="text-xs text-ink-500">
+                          Only forward — pulling a review earlier is what Release is for. The old
+                          date stays in the audit log.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            isLoading={actions.isPending()}
+                            disabled={extendDate === "" || extendDate <= hold.endsAt}
+                            onClick={() => void extendHold()}
+                          >
+                            Extend review date
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={actions.busy}
+                            onClick={() => setExtending(false)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="danger" size="sm" onClick={() => setLifting(true)}>
+                          Release hold
+                        </Button>
+                        <Button variant="secondary" size="sm" onClick={() => setExtending(true)}>
+                          Extend review date
+                        </Button>
+                      </div>
+                    )}
+
+                    {actions.error !== null && (
+                      <p
+                        role="alert"
+                        className="mt-3 rounded-lg border border-danger-500/30 bg-danger-50 px-3 py-2 text-sm text-danger-700"
+                      >
+                        {actions.error}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </Card>
+            )}
+
+            {pastHolds.length > 0 && (
+              <Card className="p-5">
+                <h2 className="mb-2 font-heading text-lg font-bold text-ink-900">Earlier holds</h2>
+                <ul className="divide-y divide-line text-sm">
+                  {pastHolds.map((past) => (
+                    <li key={past.id} className="py-2">
+                      <p className="font-medium text-ink-900">{HOLD_KIND_LABELS[past.kind]}</p>
+                      <p className="break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
+                        {past.reason} · {holdWindowLine(past, today)}
+                        {past.releasedBy !== null && ` by ${past.releasedBy}`}
+                      </p>
+                      {past.releaseNote && (
+                        <p className="mt-1 text-xs font-medium text-ink-600">
+                          Cleared: {past.releaseNote}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            )}
+          </section>
+        )}
+
+        {/* Opt-out Standing and Proof */}
+        {optOutSection}
+
+        {/* Off-Campus (Self-Placement) Details and Proof */}
+        {selfPlacementSection}
+
+        {/* Offers & Internships */}
         {offersSection}
+
+        {/* Status history — every move a person made on this standing, and why */}
+        <StatusHistory events={history} problem={historyProblem} subject={record.fullName} />
+
         {applicationsSection}
         {academicsSection}
         {resumesSection}

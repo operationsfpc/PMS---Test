@@ -874,6 +874,68 @@ describe("StudentRecordPage — a student's self-placed request", () => {
         ["placement", "internship"],
       );
     });
+
+    it("displays opt-out standing details, reason and signed declaration", async () => {
+      const optedOutStudent: StudentRecord = {
+        ...PRIYA,
+        participationStatus: "opted_out",
+        optOuts: [
+          {
+            id: "opt-1",
+            status: "approved",
+            reason: "Pursuing MS in Computer Science in Germany.",
+            declarationUrl: "https://storage.test/opt_out_signed.pdf",
+            declarationFileName: "opt_out_signed.pdf",
+            decidedAt: "2026-10-15T10:00:00Z",
+            createdAt: "2026-10-10T10:00:00Z",
+          },
+        ],
+      };
+
+      show(view(optedOutStudent));
+
+      const optOutRegion = await screen.findByRole("region", { name: /opt-out status/i });
+      expect(
+        within(optOutRegion).getByText(/Pursuing MS in Computer Science in Germany/i),
+      ).toBeDefined();
+      expect(within(optOutRegion).getByText(/Opt-out confirmed/i)).toBeDefined();
+      const declLink = within(optOutRegion).getByRole("link", { name: /view signed declaration/i });
+      expect(declLink.getAttribute("href")).toBe("https://storage.test/opt_out_signed.pdf");
+    });
+
+    it("displays off-campus placement details, package, and proof links", async () => {
+      const selfPlacedStudent: StudentRecord = {
+        ...PRIYA,
+        selfPlacements: [
+          {
+            id: "sp-1",
+            status: "verified",
+            companyName: "MAXX Techno Solution",
+            roleTitle: "Full Stack Developer Intern",
+            ctcLpa: 3.6,
+            stipendMonthly: 15000,
+            offerLetterUrl: "https://storage.test/maxx_offer.pdf",
+            offerLetterFileName: "maxx_offer.pdf",
+            declarationUrl: "https://storage.test/maxx_decl.pdf",
+            declarationFileName: "maxx_decl.pdf",
+            decidedAt: "2026-11-01T10:00:00Z",
+            decisionReason: null,
+            createdAt: "2026-10-25T10:00:00Z",
+          },
+        ],
+      };
+
+      show(view(selfPlacedStudent));
+
+      const offCampusRegion = await screen.findByRole("region", { name: /off-campus requests/i });
+      expect(within(offCampusRegion).getByText("MAXX Techno Solution")).toBeDefined();
+      expect(within(offCampusRegion).getByText("Full Stack Developer Intern")).toBeDefined();
+      expect(within(offCampusRegion).getByText("₹3.6 LPA")).toBeDefined();
+      const offerLink = within(offCampusRegion).getByRole("link", { name: /offer letter/i });
+      expect(offerLink.getAttribute("href")).toBe("https://storage.test/maxx_offer.pdf");
+      const declLink = within(offCampusRegion).getByRole("link", { name: /signed declaration/i });
+      expect(declLink.getAttribute("href")).toBe("https://storage.test/maxx_decl.pdf");
+    });
   });
 });
 

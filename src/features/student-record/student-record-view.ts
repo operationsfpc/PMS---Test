@@ -21,7 +21,9 @@ import type {
   StudentRecord,
   StudentRecordCertificate,
   StudentRecordOffer,
+  StudentRecordOptOut,
   StudentRecordResume,
+  StudentRecordSelfPlacement,
   StudentRecordSemester,
   StudentRecordView,
 } from "./student-record-page";
@@ -77,6 +79,9 @@ export const RECORD_OFFER_COLUMNS =
 export const RECORD_DOCUMENT_COLUMNS =
   "id, kind, role_category, storage_path, size_bytes, uploaded_at";
 export const RECORD_CERTIFICATE_COLUMNS = "id, name, status, document_id";
+export const RECORD_OPT_OUT_COLUMNS = "id, status, reason, declaration_id, decided_at, created_at";
+export const RECORD_SELF_PLACEMENT_COLUMNS =
+  "id, status, company_name, role_title, ctc_lpa, stipend_monthly, offer_letter_id, decided_at, decision_reason, created_at";
 
 export function createSupabaseStudentRecordView(client: SupabaseClient): StudentRecordView {
   return {
@@ -168,6 +173,33 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
         throw new StudentRecordError(
           "Could not read this student's full record. Please try again.",
         );
+      }
+
+      let optOutRows: Array<Record<string, unknown>> = [];
+      let selfPlacementRows: Array<Record<string, unknown>> = [];
+      try {
+        [optOutRows, selfPlacementRows] = await Promise.all([
+          readAllRows((from, to) =>
+            client
+              .from("opt_out_requests")
+              .select(RECORD_OPT_OUT_COLUMNS)
+              .eq("student_id", studentId)
+              .order("created_at", { ascending: false })
+              .range(from, to),
+          ),
+          readAllRows((from, to) =>
+            client
+              .from("self_placement_requests")
+              .select(RECORD_SELF_PLACEMENT_COLUMNS)
+              .eq("student_id", studentId)
+              .order("created_at", { ascending: false })
+              .range(from, to),
+          ),
+        ]);
+      } catch {
+        // Tolerant: student record loads even if caller lacks queue access or tables are empty
+        optOutRows = [];
+        selfPlacementRows = [];
       }
 
       const parsedOffers: Offer[] = offerRows.map((row) => ({
@@ -323,6 +355,102 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
         return item;
       });
 
+      const docById = new Map(documentRows.map((d) => [d.id as string, d]));
+
+      const optOuts: StudentRecordOptOut[] = await Promise.all(
+        optOutRows.map(async (row) => {
+          const decDoc = row.declaration_id
+            ? docById.get(row.declaration_id as string)
+            : documentRows.find((d) => d.kind === "opt_out_declaration");
+          let declarationUrl: string | null = null;
+          let declarationFileName: string | null = null;
+          if (decDoc?.storage_path) {
+            const path = decDoc.storage_path as string;
+            declarationFileName = extractOriginalFilename(path);
+            try {
+              const cleanPath = path.startsWith("declarations/")
+                ? path.slice("declarations/".length)
+                : path;
+              const { data: signed } = await client.storage
+                .from("declarations")
+                .createSignedUrl(cleanPath, 600);
+              declarationUrl = signed?.signedUrl ?? null;
+            } catch {
+              declarationUrl = null;
+            }
+          }
+          return {
+            id: row.id as string,
+            status: row.status as StudentRecordOptOut["status"],
+            reason: (row.reason as string | null) ?? "",
+            declarationUrl,
+            declarationFileName,
+            decidedAt: (row.decided_at as string | null) ?? null,
+            createdAt: (row.created_at as string | null) ?? new Date().toISOString(),
+          };
+        }),
+      );
+
+      const selfPlacements: StudentRecordSelfPlacement[] = await Promise.all(
+        selfPlacementRows.map(async (row) => {
+          const letterDoc = row.offer_letter_id
+            ? docById.get(row.offer_letter_id as string)
+            : undefined;
+          let offerLetterUrl: string | null = null;
+          let offerLetterFileName: string | null = null;
+          if (letterDoc?.storage_path) {
+            const path = letterDoc.storage_path as string;
+            offerLetterFileName = extractOriginalFilename(path);
+            try {
+              const cleanPath = path.startsWith("offer-letters/")
+                ? path.slice("offer-letters/".length)
+                : path;
+              const { data: signed } = await client.storage
+                .from("offer-letters")
+                .createSignedUrl(cleanPath, 600);
+              offerLetterUrl = signed?.signedUrl ?? null;
+            } catch {
+              offerLetterUrl = null;
+            }
+          }
+
+          const decDoc = documentRows.find((d) => d.kind === "self_placement_declaration");
+          let declarationUrl: string | null = null;
+          let declarationFileName: string | null = null;
+          if (decDoc?.storage_path) {
+            const path = decDoc.storage_path as string;
+            declarationFileName = extractOriginalFilename(path);
+            try {
+              const cleanPath = path.startsWith("declarations/")
+                ? path.slice("declarations/".length)
+                : path;
+              const { data: signed } = await client.storage
+                .from("declarations")
+                .createSignedUrl(cleanPath, 600);
+              declarationUrl = signed?.signedUrl ?? null;
+            } catch {
+              declarationUrl = null;
+            }
+          }
+
+          return {
+            id: row.id as string,
+            status: row.status as StudentRecordSelfPlacement["status"],
+            companyName: (row.company_name as string | null) ?? "Company not recorded",
+            roleTitle: (row.role_title as string | null) ?? null,
+            ctcLpa: row.ctc_lpa != null ? Number(row.ctc_lpa) : null,
+            stipendMonthly: row.stipend_monthly != null ? Number(row.stipend_monthly) : null,
+            offerLetterUrl,
+            offerLetterFileName,
+            declarationUrl,
+            declarationFileName,
+            decidedAt: (row.decided_at as string | null) ?? null,
+            decisionReason: (row.decision_reason as string | null) ?? null,
+            createdAt: (row.created_at as string | null) ?? new Date().toISOString(),
+          };
+        }),
+      );
+
       return {
         studentId: student.id as string,
         fullName: (student.full_name as string | null) ?? "Unnamed student",
@@ -427,6 +555,8 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
                 offerCategory: placementRecord.offerCategory,
                 source: placementRecord.source,
               },
+        optOuts,
+        selfPlacements,
       };
     },
 
