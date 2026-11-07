@@ -71,6 +71,7 @@ import {
   TableRow,
 } from "@/components/shadcn/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/shadcn/tabs";
+import { cn } from "@/lib/utils";
 
 export interface StudentRecordSemester {
   readonly semesterNumber: number;
@@ -1471,31 +1472,43 @@ export function StudentRecordPage({
 
   const optOutSection = (optOuts.length > 0 || isOptedOut) && (
     <section aria-label="Opt-out status">
-      <Card className="border-amber-200 bg-amber-50/50 p-5 shadow-xs">
+      <Card
+        className={cn(
+          "p-5 shadow-xs",
+          isOptedOut ? "border-amber-200 bg-amber-50/50" : "border-line/70 bg-surface",
+        )}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="rounded-lg bg-amber-100 p-2 text-amber-800">
+            <div
+              className={cn(
+                "rounded-lg p-2",
+                isOptedOut ? "bg-amber-100 text-amber-800" : "bg-ink-100 text-ink-700",
+              )}
+            >
               <ShieldAlert className="size-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-heading text-lg font-bold text-ink-900">
-                  Participation Standing — Opted Out
+                  {isOptedOut
+                    ? "Participation Standing — Opted Out"
+                    : "Opt-Out Request (Pending Decision)"}
                 </h2>
                 {latestOptOut && (
                   <Badge
                     tone={
-                      latestOptOut.status === "approved"
+                      isOptedOut
                         ? "danger"
                         : latestOptOut.status === "pending"
                           ? "warning"
                           : "neutral"
                     }
                   >
-                    {latestOptOut.status === "approved"
+                    {isOptedOut
                       ? "Opt-out confirmed"
                       : latestOptOut.status === "pending"
-                        ? "Awaiting approval"
+                        ? "Awaiting coordinator decision"
                         : "Returned"}
                   </Badge>
                 )}
@@ -1503,11 +1516,11 @@ export function StudentRecordPage({
               <p className="text-xs text-ink-500">
                 {isOptedOut
                   ? "This student has stepped out of campus placements."
-                  : "Opt-out request submitted."}
+                  : "Student remains eligible and active in campus drives while this request is reviewed."}
               </p>
             </div>
           </div>
-          {restorePlan !== null && (
+          {isOptedOut && restorePlan !== null && (
             <Button
               variant="secondary"
               size="sm"
@@ -1521,7 +1534,7 @@ export function StudentRecordPage({
         </div>
 
         {latestOptOut && (
-          <div className="mt-4 rounded-xl border border-amber-200/80 bg-surface/90 p-4">
+          <div className="mt-4 rounded-xl border border-line/70 bg-surface/90 p-4">
             <p className="text-xs font-semibold tracking-wide text-ink-500 uppercase">
               Reason recorded
             </p>
@@ -1558,7 +1571,7 @@ export function StudentRecordPage({
   const selfPlacements = record.selfPlacements ?? [];
   const selfPlacementSection = selfPlacements.length > 0 && (
     <section aria-label="Off-campus requests">
-      <Card className="border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">
+      <Card className="border-line/70 bg-surface p-5 shadow-xs">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="rounded-lg bg-emerald-100 p-2 text-emerald-800">
@@ -1576,86 +1589,134 @@ export function StudentRecordPage({
         </div>
 
         <div className="space-y-3">
-          {selfPlacements.map((req) => (
-            <div key={req.id} className="rounded-xl border border-emerald-200/80 bg-surface/90 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-heading text-base font-bold text-ink-900">
-                      {req.companyName}
-                    </h3>
-                    <Badge
-                      tone={
-                        req.status === "verified"
-                          ? "success"
-                          : req.status === "pending"
-                            ? "warning"
-                            : "danger"
-                      }
-                    >
-                      {req.status === "verified"
-                        ? "Verified"
-                        : req.status === "pending"
-                          ? "Pending verification"
-                          : "Returned"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-ink-700">
-                    {req.roleTitle ?? "Role title not specified"}
-                  </p>
-                </div>
-                <div className="text-right">
-                  {req.ctcLpa != null && req.ctcLpa > 0 && (
-                    <span className="text-base font-bold text-emerald-700">₹{req.ctcLpa} LPA</span>
-                  )}
-                  {req.stipendMonthly != null && req.stipendMonthly > 0 && (
-                    <p className="text-xs font-semibold text-ink-600">
-                      ₹{req.stipendMonthly.toLocaleString("en-IN")} / mo
+          {selfPlacements.map((req) => {
+            const withdrawalEvent = history.find(
+              (e) =>
+                e.title === "Offer withdrawn" &&
+                e.detail.toLowerCase().includes(req.companyName.toLowerCase()),
+            );
+            const hasActiveOffer = offers.some(
+              (o) =>
+                o.companyName.toLowerCase() === req.companyName.toLowerCase() &&
+                o.source === "self_placed",
+            );
+            const isOfferWithdrawn = withdrawalEvent !== undefined && !hasActiveOffer;
+
+            return (
+              <div
+                key={req.id}
+                className={cn(
+                  "rounded-xl border p-4",
+                  isOfferWithdrawn
+                    ? "border-line/80 bg-surface-muted/40"
+                    : "border-emerald-200/80 bg-surface/90",
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-heading text-base font-bold text-ink-900">
+                        {req.companyName}
+                      </h3>
+                      <Badge
+                        tone={
+                          isOfferWithdrawn
+                            ? "neutral"
+                            : req.status === "verified"
+                              ? "success"
+                              : req.status === "pending"
+                                ? "warning"
+                                : "danger"
+                        }
+                      >
+                        {isOfferWithdrawn
+                          ? "Offer Withdrawn"
+                          : req.status === "verified"
+                            ? "Verified"
+                            : req.status === "pending"
+                              ? "Pending verification"
+                              : "Returned"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-ink-700">
+                      {req.roleTitle ?? "Role title not specified"}
                     </p>
-                  )}
+                  </div>
+                  <div className="text-right">
+                    {req.ctcLpa != null && req.ctcLpa > 0 && (
+                      <span
+                        className={cn(
+                          "text-base font-bold",
+                          isOfferWithdrawn ? "text-ink-400 line-through" : "text-emerald-700",
+                        )}
+                      >
+                        ₹{req.ctcLpa} LPA
+                      </span>
+                    )}
+                    {req.stipendMonthly != null && req.stipendMonthly > 0 && (
+                      <p className="text-xs font-semibold text-ink-600">
+                        ₹{req.stipendMonthly.toLocaleString("en-IN")} / mo
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {isOfferWithdrawn && withdrawalEvent && (
+                  <div className="mt-3 rounded-lg border border-danger-200 bg-danger-50/60 p-3 text-xs text-danger-800">
+                    <p className="font-semibold text-danger-900">Offer Retracted & Withdrawn</p>
+                    <p className="mt-0.5 text-danger-700">
+                      Withdrawn on {onDate(withdrawalEvent.at)}
+                      {withdrawalEvent.byName ? ` by ${withdrawalEvent.byName}` : ""}:
+                      <span className="font-medium italic"> “{withdrawalEvent.reason}”</span>
+                    </p>
+                    <p className="mt-1 text-[11px] text-danger-600">
+                      The off-campus offer was removed from active placement outcomes. The student
+                      is active in campus drives.
+                    </p>
+                  </div>
+                )}
+
+                {req.decisionReason && !isOfferWithdrawn && (
+                  <div className="mt-2 rounded-lg bg-danger-50 p-2 text-xs text-danger-700">
+                    <span className="font-semibold">Review note:</span> {req.decisionReason}
+                  </div>
+                )}
+
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line/60 pt-3 text-xs text-ink-500">
+                  <span>Submitted: {onDate(req.createdAt)}</span>
+                  {req.decidedAt && <span>Decided: {onDate(req.decidedAt)}</span>}
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    {req.offerLetterUrl && (
+                      <ButtonAnchor
+                        href={req.offerLetterUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        size="sm"
+                        variant="secondary"
+                        className="text-xs"
+                      >
+                        <Download className="mr-1.5 size-3.5" />
+                        Offer Letter
+                      </ButtonAnchor>
+                    )}
+                    {req.declarationUrl && (
+                      <ButtonAnchor
+                        href={req.declarationUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        size="sm"
+                        variant="secondary"
+                        className="text-xs"
+                      >
+                        <Download className="mr-1.5 size-3.5" />
+                        Signed Declaration
+                      </ButtonAnchor>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {req.decisionReason && (
-                <div className="mt-2 rounded-lg bg-danger-50 p-2 text-xs text-danger-700">
-                  <span className="font-semibold">Review note:</span> {req.decisionReason}
-                </div>
-              )}
-
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line/60 pt-3 text-xs text-ink-500">
-                <span>Submitted: {onDate(req.createdAt)}</span>
-                {req.decidedAt && <span>Decided: {onDate(req.decidedAt)}</span>}
-                <div className="ml-auto flex flex-wrap items-center gap-2">
-                  {req.offerLetterUrl && (
-                    <ButtonAnchor
-                      href={req.offerLetterUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      size="sm"
-                      variant="secondary"
-                      className="text-xs"
-                    >
-                      <Download className="mr-1.5 size-3.5" />
-                      Offer Letter
-                    </ButtonAnchor>
-                  )}
-                  {req.declarationUrl && (
-                    <ButtonAnchor
-                      href={req.declarationUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      size="sm"
-                      variant="secondary"
-                      className="text-xs"
-                    >
-                      <Download className="mr-1.5 size-3.5" />
-                      Signed Declaration
-                    </ButtonAnchor>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Card>
     </section>
@@ -2323,7 +2384,17 @@ export function StudentRecordPage({
 
             {pastHolds.length > 0 && (
               <Card className="p-5">
-                <h2 className="mb-2 font-heading text-lg font-bold text-ink-900">Earlier holds</h2>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h2 className="font-heading text-lg font-bold text-ink-900">Earlier holds</h2>
+                  {hold === null && pending === null && (
+                    <Badge tone="neutral">No active hold</Badge>
+                  )}
+                </div>
+                {hold === null && pending === null && (
+                  <p className="mb-3 text-xs text-ink-500">
+                    The student is not currently on hold. Previous holds have been released:
+                  </p>
+                )}
                 <ul className="divide-y divide-line text-sm">
                   {pastHolds.map((past) => (
                     <li key={past.id} className="py-2">
