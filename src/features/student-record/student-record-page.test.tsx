@@ -363,17 +363,20 @@ const holdsView = (overrides: Partial<HoldsView> = {}): HoldsView => ({
   ...overrides,
 });
 
+const KAM: AppRole = "key_account_manager";
+
 const showHold = (
   holds: HoldsView,
   release?: (holdId: string, note: string | null) => Promise<void>,
   record: StudentRecord = { ...PRIYA, participationStatus: "on_hold" },
+  role: AppRole = KAM,
 ) =>
   render(
     <MemoryRouter>
       <StudentRecordPage
         studentId="s1"
         view={view(record)}
-        role={MANAGER}
+        role={role}
         holds={holds}
         {...(release === undefined ? {} : { release })}
       />
@@ -747,14 +750,25 @@ describe("StudentRecordPage — a student's self-placed request", () => {
     );
   });
 
-  /** Only the Campus Manager decides; an org reader sees the request as fact. */
+  /** A reader without confirm/release verbs sees the request as fact. */
   it("offers no confirm or decline to a reader who was not handed the verb", async () => {
-    showHold(requested(), undefined, PRIYA);
+    showHold(requested(), undefined, PRIYA, "central_placement_coordinator");
 
     const card = await block();
     expect(within(card).getByText(/requested — self-placed/i)).toBeDefined();
     expect(within(card).queryByRole("button", { name: /confirm hold/i })).toBeNull();
     expect(within(card).queryByRole("button", { name: /decline request/i })).toBeNull();
+  });
+
+  /** Hold flow: Campus Manager sees "Awaiting KAM confirmation" without a confirm button */
+  it("shows awaiting KAM confirmation to the campus manager and offers no confirm button", async () => {
+    showHold(requested(), async () => {}, PRIYA, MANAGER);
+
+    const card = await block();
+    expect(within(card).getByText(/awaiting kam confirmation/i)).toBeDefined();
+    expect(within(card).getByText(/submitted to key account manager for approval/i)).toBeDefined();
+    expect(within(card).queryByRole("button", { name: /confirm hold/i })).toBeNull();
+    expect(within(card).getByRole("button", { name: /decline request/i })).toBeDefined();
   });
 
   /** 0130 raises a sentence ("This request was already declined on ..."). */

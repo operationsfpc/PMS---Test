@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canConfirmPlacementHold,
+  canPlacePlacementHold,
   canReleasePlacementHold,
   defaultReviewDate,
   HOLD_KIND_DESCRIPTIONS,
@@ -55,8 +57,7 @@ describe("HOLD_KIND_LABELS", () => {
 });
 
 describe("HOLD_READER_ROLES", () => {
-  /** The near-side mirror of 0125: campus_manager's own-college policy + is_org_reader(). */
-  it("is every org reader plus the campus manager, and nobody else", () => {
+  it("includes org readers, campus manager, and key account manager", () => {
     expect([...HOLD_READER_ROLES].sort()).toEqual(
       [
         "admin",
@@ -66,12 +67,13 @@ describe("HOLD_READER_ROLES", () => {
         "er_head",
         "enterprise_relations",
         "campus_manager",
+        "key_account_manager",
       ].sort(),
     );
   });
 
-  it("keeps the student and the company roles out", () => {
-    for (const role of ["student", "key_account_manager", "account_executive"] as const) {
+  it("keeps the student and recruiter roles out", () => {
+    for (const role of ["student", "account_executive"] as const) {
       expect(HOLD_READER_ROLES.includes(role)).toBe(false);
     }
   });
@@ -81,15 +83,35 @@ describe("HOLD_READER_ROLES", () => {
   });
 });
 
-describe("canReleasePlacementHold", () => {
-  it("is the campus manager alone, across every role", () => {
-    expect(APP_ROLES.filter(canReleasePlacementHold)).toEqual(["campus_manager"]);
+describe("canConfirmPlacementHold", () => {
+  it("allows KAM and admin to approve/confirm holds", () => {
+    expect(APP_ROLES.filter(canConfirmPlacementHold).sort()).toEqual(
+      ["admin", "key_account_manager"].sort(),
+    );
   });
 
-  /** A fee hold is cleared by the college that raised it, never by HQ. */
-  it("refuses admin, who can read every hold", () => {
-    expect(HOLD_READER_ROLES.includes("admin")).toBe(true);
-    expect(canReleasePlacementHold("admin")).toBe(false);
+  it("refuses campus manager from self-approving", () => {
+    expect(canConfirmPlacementHold("campus_manager")).toBe(false);
+  });
+});
+
+describe("canPlacePlacementHold", () => {
+  it("allows campus manager and admin to place/initiate a hold", () => {
+    expect(APP_ROLES.filter(canPlacePlacementHold).sort()).toEqual(
+      ["admin", "campus_manager"].sort(),
+    );
+  });
+
+  it("refuses key account manager from initiating a hold", () => {
+    expect(canPlacePlacementHold("key_account_manager")).toBe(false);
+  });
+});
+
+describe("canReleasePlacementHold", () => {
+  it("allows campus manager and admin to release an active hold", () => {
+    expect(APP_ROLES.filter(canReleasePlacementHold).sort()).toEqual(
+      ["admin", "campus_manager"].sort(),
+    );
   });
 });
 

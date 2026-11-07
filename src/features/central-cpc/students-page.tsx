@@ -160,6 +160,7 @@ function parseCtc(value: string | null): number | undefined {
 export function StudentDirectoryPage({
   view,
   holds,
+  canPlace = true,
   download = browserDownload,
 }: {
   view: StudentDirectoryView;
@@ -168,6 +169,7 @@ export function StudentDirectoryPage({
    * (0125). Absent — as it is for every other role — draws no Hold button.
    */
   holds?: HoldsView;
+  canPlace?: boolean;
   download?: (filename: string, text: string) => void;
 }) {
   const [params, setParams] = useSearchParams();
@@ -1192,7 +1194,7 @@ export function StudentDirectoryPage({
                               <Badge tone="warning">On hold</Badge>
                             ) : pendingSet.has(student.studentId) ? (
                               <Badge tone="warning">Request waiting</Badge>
-                            ) : (
+                            ) : canPlace !== false ? (
                               <Button
                                 variant="secondary"
                                 size="sm"
@@ -1207,7 +1209,7 @@ export function StudentDirectoryPage({
                               >
                                 Hold
                               </Button>
-                            )}
+                            ) : null}
                           </div>
                         </td>
                       )}
@@ -1237,7 +1239,7 @@ export function StudentDirectoryPage({
           onClose={() => setHolding(null)}
           onPlaced={(student) => {
             setHoldNote(
-              `${student.fullName} is on hold. Every drive is closed to them and nothing reaches them by notification until a Campus Manager releases it from their record.`,
+              `${student.fullName} is on hold (submitted for Key Account Manager approval).`,
             );
             setHolding(null);
             // The row's own "On hold" badge is the proof the write landed, and

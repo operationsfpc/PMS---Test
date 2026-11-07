@@ -14,7 +14,12 @@ import {
 } from "@components/ui";
 import { boardLabel, type SchoolBoard } from "@domain/boards";
 import { groupByCompanyVisit } from "@domain/company-drive";
-import { HOLD_KIND_LABELS, holdStanding, holdWindowLine } from "@domain/holds";
+import {
+  canConfirmPlacementHold,
+  HOLD_KIND_LABELS,
+  holdStanding,
+  holdWindowLine,
+} from "@domain/holds";
 import { describeMarks } from "@domain/marks";
 import { type OfferCategory, offerCategoryLabel } from "@domain/offer-category";
 import { participationStatusLabel, participationStatusTone } from "@domain/participation-status";
@@ -425,6 +430,7 @@ export function StudentRecordPage({
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const canConfirmHold = canConfirmPlacementHold(role);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: reload re-runs the pair on purpose
   useEffect(() => {
@@ -2139,7 +2145,9 @@ export function StudentRecordPage({
                   <h2 className="font-heading text-lg font-bold text-ink-900">
                     Requested — {HOLD_KIND_LABELS[pending.kind]}
                   </h2>
-                  <Badge tone="accent">Awaiting confirmation</Badge>
+                  <Badge tone="accent">
+                    {canConfirmHold ? "Awaiting confirmation" : "Awaiting KAM confirmation"}
+                  </Badge>
                 </div>
 
                 <p className="mt-2 break-words text-sm text-ink-900 [overflow-wrap:anywhere]">
@@ -2149,7 +2157,9 @@ export function StudentRecordPage({
                   {holdWindowLine(pending, today)} · requested {onDate(pending.heldAt)}
                 </p>
                 <p className="mt-1 text-xs text-ink-500">
-                  Their drives stay open until you confirm this. Confirming closes them.
+                  {canConfirmHold
+                    ? "Their drives stay open until you confirm this. Confirming closes them."
+                    : "Submitted to Key Account Manager for approval. Student remains active until approved."}
                 </p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -2185,7 +2195,7 @@ export function StudentRecordPage({
                     ))}
                 </div>
 
-                {release !== undefined && (
+                {(canConfirmHold || release !== undefined) && (
                   <div className="mt-4">
                     {declining ? (
                       <div className="flex flex-col gap-2">
@@ -2220,15 +2230,19 @@ export function StudentRecordPage({
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        <Button
-                          isLoading={actions.isPending()}
-                          onClick={() => void confirmRequest()}
-                        >
-                          Confirm hold
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
-                          Decline request
-                        </Button>
+                        {canConfirmHold && (
+                          <Button
+                            isLoading={actions.isPending()}
+                            onClick={() => void confirmRequest()}
+                          >
+                            Confirm hold
+                          </Button>
+                        )}
+                        {release !== undefined && (
+                          <Button variant="danger" size="sm" onClick={() => setDeclining(true)}>
+                            Decline request
+                          </Button>
+                        )}
                       </div>
                     )}
 

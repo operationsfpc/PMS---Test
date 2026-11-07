@@ -55,11 +55,11 @@ function DialogContent({
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+      <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 pointer-events-none">
         <DialogPrimitive.Content
           data-slot="dialog-content"
           className={cn(
-            "pointer-events-auto relative grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl border bg-card p-6 text-card-foreground shadow-lg outline-none animate-pop-in sm:max-w-lg",
+            "pointer-events-auto relative my-auto grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-xl border border-line bg-surface p-6 text-ink-900 shadow-2xl outline-none animate-pop-in sm:max-w-lg",
             className,
           )}
           {...props}
@@ -68,7 +68,7 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground opacity-70 transition-opacity hover:bg-muted hover:text-foreground hover:opacity-100 focus-visible:outline-2 focus-visible:outline-ring disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+              className="absolute top-4 right-4 rounded-md p-1 text-ink-500 opacity-70 transition-opacity hover:bg-surface-muted hover:text-ink-900 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-brand-500 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
             >
               <XIcon />
               <span className="sr-only">Close</span>

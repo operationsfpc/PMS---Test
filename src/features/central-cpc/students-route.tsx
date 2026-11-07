@@ -15,14 +15,19 @@ export function StudentDirectoryRoute() {
   const role = auth.status === "signed-in" ? auth.role : "student";
 
   /**
-   * The one write this page offers, and only a Campus Manager is handed it —
-   * the near side of 0125, whose `place_student_hold` refuses every other role
-   * and every student outside the manager's own college. Absent, the page draws
-   * no Hold button: RLS has already narrowed the roster to their students.
+   * Holds are visible to Campus Manager, KAM and Admin.
+   * Only Campus Manager places hold requests; KAM approves.
    */
-  const asHolds: HoldsView | undefined = role === "campus_manager" ? holds : undefined;
+  const mayReadHolds =
+    role === "campus_manager" || role === "key_account_manager" || role === "admin";
+  const asHolds: HoldsView | undefined = mayReadHolds ? holds : undefined;
+  const canPlace = role === "campus_manager" || role === "admin";
 
   return (
-    <StudentDirectoryPage view={view} {...(asHolds === undefined ? {} : { holds: asHolds })} />
+    <StudentDirectoryPage
+      view={view}
+      {...(asHolds === undefined ? {} : { holds: asHolds })}
+      canPlace={canPlace}
+    />
   );
 }

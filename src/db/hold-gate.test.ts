@@ -20,6 +20,7 @@ let ids: Awaited<ReturnType<typeof seed>>;
 const MANAGER_A = "62000000-0000-0000-0000-000000000001";
 const MANAGER_B = "62000000-0000-0000-0000-000000000002";
 const NO_SEAT = "62000000-0000-0000-0000-000000000003";
+const KAM_A = "62000000-0000-0000-0000-000000000004";
 
 const status = async (student: string) =>
   (await t.sql(`select participation_status::text c from students where id = $1`, [student]))[0]
@@ -63,6 +64,9 @@ const place = (
     args[3],
   ]);
 
+const confirm = (as: string, hold: string) =>
+  t.asUser(as, `select confirm_student_hold($1) as id`, [hold]);
+
 const release = (as: string, hold: string, note?: string) =>
   t.asUser(as, `select release_student_hold($1, $2) as id`, [hold, note ?? null]);
 
@@ -92,11 +96,13 @@ describe("a placement hold", () => {
     await invite(MANAGER_A, "mgr.a@faceprep.in", "Manager A", "campus_manager");
     await invite(MANAGER_B, "mgr.b@faceprep.in", "Manager B", "campus_manager");
     await invite(NO_SEAT, "mgr.none@faceprep.in", "Manager Without A Seat", "campus_manager");
+    await invite(KAM_A, "kam.a@faceprep.in", "KAM A", "key_account_manager");
 
     await t.sql(
       `insert into staff_campus_assignments (profile_id, campus_id) values
          ((select id from profiles where email = 'mgr.a@faceprep.in'), $1),
-         ((select id from profiles where email = 'mgr.b@faceprep.in'), $2)`,
+         ((select id from profiles where email = 'mgr.b@faceprep.in'), $2),
+         ((select id from profiles where email = 'kam.a@faceprep.in'), $1)`,
       [ids.campusA, ids.campusB],
     );
   });
@@ -117,6 +123,10 @@ describe("a placement hold", () => {
     expect(await status(ids.priya)).toBe("active");
 
     const placed = (await place(MANAGER_A, ids.priya))[0]?.id as string;
+    // Campus Manager initiates the hold; student remains active until KAM approves
+    expect(await status(ids.priya)).toBe("active");
+
+    await confirm(KAM_A, placed);
     expect(await status(ids.priya)).toBe("on_hold");
 
     const hold = await liveHold(ids.priya);
@@ -158,7 +168,8 @@ describe("a placement hold", () => {
       )
     )[0]?.id as string;
 
-    await place(MANAGER_A, ids.priya);
+    const placed = (await place(MANAGER_A, ids.priya))[0]?.id as string;
+    await confirm(KAM_A, placed);
     await t.expectRejection(
       () =>
         t.asUser(
@@ -194,7 +205,7 @@ describe("a placement hold", () => {
           "2026-10-29",
           "2026-12-15",
         ]),
-      /status: on_hold.*nothing to hold/s,
+      /already has a hold, or a request waiting/,
     );
     expect(
       await t.sql(`select count(*)::int c from student_holds where student_id = $1`, [ids.priya]),
@@ -240,6 +251,7 @@ describe("a placement hold", () => {
     // Releasing is the same test, or the first manager's colleagues could undo it.
     await place(MANAGER_A, ids.priya);
     const hold = await holdId(ids.priya);
+    await confirm(KAM_A, hold);
     await t.expectRejection(() => release(ids.centralUser, hold), /Only a Campus Manager/);
     await t.expectRejection(() => release(MANAGER_B, hold), /Only a Campus Manager|assigned to/);
     expect(await status(ids.priya)).toBe("on_hold");
@@ -457,9 +469,6 @@ describe("a placement hold", () => {
         [offer, declaration, args[0], args[1], args[2], args[3], args[4], args[5]],
       );
 
-    const confirm = (as: string, hold: string) =>
-      t.asUser(as, `select confirm_student_hold($1) as id`, [hold]);
-
     const holdRow = async (student: string) =>
       (
         await t.sql(
@@ -579,12 +588,15 @@ describe("a placement hold", () => {
     });
 
     it("places a pause the same way as any other hold", async () => {
-      await place(MANAGER_A, ids.priya, [
-        "pause",
-        "Medical leave agreed with the college",
-        "2026-10-29",
-        "2026-12-15",
-      ]);
+      const placed = (
+        await place(MANAGER_A, ids.priya, [
+          "pause",
+          "Medical leave agreed with the college",
+          "2026-10-29",
+          "2026-12-15",
+        ])
+      )[0]?.id as string;
+      await confirm(KAM_A, placed);
       expect(await status(ids.priya)).toBe("on_hold");
       expect((await liveHold(ids.priya))?.kind).toBe("pause");
 
@@ -636,6 +648,7 @@ describe("a placement hold", () => {
 
     it("moves a confirmed hold's review date forward, and nothing else", async () => {
       const hold = (await place(MANAGER_A, ids.priya))[0]?.id as string;
+      await confirm(KAM_A, hold);
       await extend(MANAGER_A, hold, "2027-01-15");
 
       expect((await liveHold(ids.priya))?.ends_at).toBe("2027-01-15");
@@ -646,6 +659,7 @@ describe("a placement hold", () => {
 
     it("refuses a date that is not after the current review date", async () => {
       const hold = (await place(MANAGER_A, ids.priya))[0]?.id as string;
+      await confirm(KAM_A, hold);
       await t.expectRejection(() => extend(MANAGER_A, hold, "2026-12-15"), /must fall after/);
       await t.expectRejection(() => extend(MANAGER_A, hold, "2026-11-01"), /must fall after/);
       expect((await liveHold(ids.priya))?.ends_at).toBe("2026-12-15");
