@@ -33,12 +33,6 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
   const [ctc, setCtc] = useState("");
   const [offerLetter, setOfferLetter] = useState<File | null>(null);
   const [declaration, setDeclaration] = useState<File | null>(null);
-  const [reason, setReason] = useState("");
-  const [startsAt, setStartsAt] = useState(() => toYmd(new Date()));
-  // The review date is mandatory in the database but is the college's own
-  // reminder, not a term the student is agreeing to — so it arrives answered
-  // with the default 0130 names, and the student is not asked to invent one.
-  const [endsAt, setEndsAt] = useState(() => defaultReviewDate(new Date()));
   /** Said after a successful send, so nobody guesses what happens next. */
   const [sent, setSent] = useState<"hold" | "offer" | null>(null);
   const actions = useAsyncAction();
@@ -88,13 +82,20 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
         throw new Error(decision.reason);
       }
 
+      const autoReason =
+        roleTitle.trim() !== ""
+          ? `Offer from ${company.trim()} (${roleTitle.trim()})`
+          : `Offer from ${company.trim()}`;
+      const defaultStarts = toYmd(new Date());
+      const defaultEnds = defaultReviewDate(new Date());
+
       // The same draft gate the manager's dialog uses, asked before two
       // documents are uploaded.
       const draftProblem = holdDraftProblem({
         kind: "self_placed",
-        reason,
-        startsAt,
-        endsAt,
+        reason: autoReason,
+        startsAt: defaultStarts,
+        endsAt: defaultEnds,
       });
       if (draftProblem !== null) {
         throw new Error(draftProblem);
@@ -106,9 +107,9 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
         ctcLpa: value,
         offerLetter: offerLetter as File,
         declaration: declaration as File,
-        reason: reason.trim(),
-        startsAt,
-        endsAt,
+        reason: autoReason,
+        startsAt: defaultStarts,
+        endsAt: defaultEnds,
       });
       setSent("hold");
     } else {
@@ -134,8 +135,6 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
     setCtc("");
     setOfferLetter(null);
     setDeclaration(null);
-    setReason("");
-    setEndsAt(defaultReviewDate(new Date()));
     await refresh();
   }
 
@@ -331,71 +330,6 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
                     onChange={(e) => setDeclaration(e.target.files?.[0] ?? null)}
                     className={field}
                   />
-                </div>
-
-                <div className="mt-4">
-                  <label
-                    htmlFor="sp-reason"
-                    className="mb-1 block text-sm font-medium text-ink-700"
-                  >
-                    <span>Why hold your placements?</span>
-                    <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
-                      *
-                    </span>
-                    <span className="sr-only"> (required)</span>
-                  </label>
-                  <textarea
-                    id="sp-reason"
-                    rows={3}
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="Offer from Freshworks (SDE), joining January — asking not to be put forward for more drives."
-                    className={field}
-                  />
-                  <p className="mt-1 text-xs text-ink-500">
-                    This is what your college reads with the request.
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label
-                      htmlFor="sp-starts"
-                      className="mb-1 block text-sm font-medium text-ink-700"
-                    >
-                      From
-                    </label>
-                    <input
-                      id="sp-starts"
-                      type="date"
-                      value={startsAt}
-                      onChange={(e) => setStartsAt(e.target.value)}
-                      className={field}
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="sp-ends"
-                      className="mb-1 block text-sm font-medium text-ink-700"
-                    >
-                      <span>Review by</span>
-                      <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
-                        *
-                      </span>
-                      <span className="sr-only"> (required)</span>
-                    </label>
-                    <input
-                      id="sp-ends"
-                      type="date"
-                      value={endsAt}
-                      onChange={(e) => setEndsAt(e.target.value)}
-                      className={field}
-                    />
-                    <p className="mt-1 text-xs text-ink-500">
-                      A reminder for your college, not a switch: the hold stays until they release
-                      it.
-                    </p>
-                  </div>
                 </div>
               </>
             )}

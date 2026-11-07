@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { toYmd } from "@domain/drive-date-filter";
 import { defaultReviewDate } from "@domain/holds";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -180,13 +181,13 @@ describe("OffCampusPage — recording an offer", () => {
  * decide on.
  */
 describe("OffCampusPage — asking for a self-placement hold", () => {
-  it("asks for the declaration, the reason and both ends of the window", async () => {
+  it("asks for the declaration without asking the student for reason or review dates", async () => {
     render(<OffCampusPage view={view()} />);
 
     expect(await screen.findByLabelText(/signed declaration/i)).toBeDefined();
-    expect(screen.getByLabelText(/why hold your placements/i)).toBeDefined();
-    expect(screen.getByLabelText(/^from$/i)).toBeDefined();
-    expect(screen.getByLabelText(/review by/i)).toBeDefined();
+    expect(screen.queryByLabelText(/why hold your placements/i)).toBeNull();
+    expect(screen.queryByLabelText(/^from$/i)).toBeNull();
+    expect(screen.queryByLabelText(/review by/i)).toBeNull();
   });
 
   it("says the drives stay open until the Campus Manager confirms", async () => {
@@ -195,16 +196,13 @@ describe("OffCampusPage — asking for a self-placement hold", () => {
     expect(await screen.findByText(/until they confirm it/i)).toBeDefined();
   });
 
-  it("sends both documents, the reason and the window", async () => {
+  it("sends both documents and auto-generates the reason and window", async () => {
     const requestSelfPlacedHold = vi.fn();
     const user = userEvent.setup({ delay: null });
     render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
 
     await fillOffer(user);
     await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
-    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
-    fireEvent.change(screen.getByLabelText(/^from$/i), { target: { value: "2026-11-02" } });
-    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
     await user.click(screen.getByRole("button", { name: /send hold request/i }));
 
     await waitFor(() =>
@@ -213,9 +211,9 @@ describe("OffCampusPage — asking for a self-placement hold", () => {
           companyName: "Freshworks",
           roleTitle: "SDE",
           ctcLpa: 12,
-          reason: "Offer in hand.",
-          startsAt: "2026-11-02",
-          endsAt: "2027-01-15",
+          reason: "Offer from Freshworks (SDE)",
+          startsAt: toYmd(new Date()),
+          endsAt: defaultReviewDate(new Date()),
           offerLetter: expect.any(File),
           declaration: expect.any(File),
         }),
@@ -231,8 +229,6 @@ describe("OffCampusPage — asking for a self-placement hold", () => {
 
     await fillOffer(user);
     await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
-    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
-    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
     await user.click(screen.getByRole("button", { name: /send hold request/i }));
 
     expect(await screen.findByText(/with your Campus Manager/i)).toBeDefined();
@@ -244,66 +240,10 @@ describe("OffCampusPage — asking for a self-placement hold", () => {
     render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
 
     await fillOffer(user);
-    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
-    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
     await user.click(screen.getByRole("button", { name: /send hold request/i }));
 
     expect(requestSelfPlacedHold).not.toHaveBeenCalled();
     expect((await screen.findByRole("alert")).textContent).toMatch(/handwritten declaration/i);
-  });
-
-  it("opens the review date answered — 0130 refuses a blank", async () => {
-    render(<OffCampusPage view={view()} />);
-
-    const reviewBy = (await screen.findByLabelText(/review by/i)) as HTMLInputElement;
-    expect(reviewBy.value).toBe(defaultReviewDate(new Date()));
-  });
-
-  it("sends the review date it opened with when the student does not change it", async () => {
-    const requestSelfPlacedHold = vi.fn();
-    const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
-
-    await fillOffer(user);
-    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
-    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
-    await user.click(screen.getByRole("button", { name: /send hold request/i }));
-
-    await waitFor(() => expect(requestSelfPlacedHold).toHaveBeenCalledTimes(1));
-    expect(requestSelfPlacedHold).toHaveBeenCalledWith(
-      expect.objectContaining({ endsAt: defaultReviewDate(new Date()) }),
-    );
-  });
-
-  it("still refuses a send once the student clears the review date", async () => {
-    const requestSelfPlacedHold = vi.fn();
-    const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
-
-    await fillOffer(user);
-    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
-    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
-    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "" } });
-    await user.click(screen.getByRole("button", { name: /send hold request/i }));
-
-    expect(requestSelfPlacedHold).not.toHaveBeenCalled();
-    expect((await screen.findByRole("alert")).textContent).toMatch(/should be reviewed/i);
-  });
-
-  it("refuses a review date before the hold starts", async () => {
-    const requestSelfPlacedHold = vi.fn();
-    const user = userEvent.setup({ delay: null });
-    render(<OffCampusPage view={view({ requestSelfPlacedHold })} />);
-
-    await fillOffer(user);
-    await user.upload(screen.getByLabelText(/signed declaration/i), declaration());
-    await user.type(screen.getByLabelText(/why hold your placements/i), "Offer in hand.");
-    fireEvent.change(screen.getByLabelText(/^from$/i), { target: { value: "2027-02-01" } });
-    fireEvent.change(screen.getByLabelText(/review by/i), { target: { value: "2027-01-15" } });
-    await user.click(screen.getByRole("button", { name: /send hold request/i }));
-
-    expect(requestSelfPlacedHold).not.toHaveBeenCalled();
-    expect((await screen.findByRole("alert")).textContent).toMatch(/cannot fall before/i);
   });
 
   it("will not offer the hold request to a student already out of placements", async () => {
