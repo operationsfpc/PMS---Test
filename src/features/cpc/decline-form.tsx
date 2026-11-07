@@ -46,7 +46,11 @@ export function DeclineForm({
   return (
     <div className="w-full rounded-lg border border-danger-500/30 bg-danger-50 p-3">
       <label htmlFor={id} className="mb-1 block text-sm font-medium text-ink-900">
-        Why are you declining {label}?
+        <span>Why are you declining {label}?</span>
+        <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+          *
+        </span>
+        <span className="sr-only"> (required)</span>
       </label>
       <p className="mb-2 text-xs text-ink-700">
         The student is shown this, word for word. It is all they are told.

@@ -330,7 +330,11 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <label htmlFor="staff-name" className="mb-1 block text-sm font-medium text-ink-700">
-                Full name
+                <span>Full name</span>
+                <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </label>
               <input
                 id="staff-name"
@@ -342,7 +346,11 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
             </div>
             <div>
               <label htmlFor="staff-email" className="mb-1 block text-sm font-medium text-ink-700">
-                Email
+                <span>Email</span>
+                <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </label>
               <input
                 id="staff-email"
@@ -355,7 +363,11 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
             </div>
             <div>
               <label htmlFor="staff-role" className="mb-1 block text-sm font-medium text-ink-700">
-                Role
+                <span>Role</span>
+                <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </label>
               <select
                 id="staff-role"
@@ -375,7 +387,11 @@ export function StaffPage({ repository }: { repository: StaffRepository }) {
           {needsCampus && (
             <fieldset className="mt-4">
               <legend className="mb-2 text-sm font-medium text-ink-700">
-                Campuses for this role
+                <span>Campuses for this role</span>
+                <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </legend>
               <div className="flex flex-wrap gap-3">
                 {campuses.map((campus) => (

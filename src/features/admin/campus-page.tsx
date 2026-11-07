@@ -177,7 +177,10 @@ export function CampusPage({
                   htmlFor={`campus-${field.name}`}
                   className="mb-1 block text-sm font-medium text-ink-700"
                 >
-                  {field.label}
+                  <span>{field.label}</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
                 </label>
                 <input
                   id={`campus-${field.name}`}

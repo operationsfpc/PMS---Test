@@ -16,7 +16,7 @@ import type { OfferCategory } from "@domain/offer-category";
 import type { DriveStatus, DriveType, RoleCategory } from "@domain/types";
 import type { StudentContext, VisibilityReason, VisibleDrive } from "@domain/visibility";
 import { isDriveVisibleToStudent } from "@domain/visibility";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * Central CPC — DAF creation and audience targeting. PRD §7.1, §6.2, §6.5.
@@ -64,6 +64,29 @@ export interface ProgrammeLink {
   readonly degree: string;
   /** "" when the degree carries no branches (an MBA). */
   readonly branch: string;
+}
+
+/** The chip's own words: a specialisation reads "BCA — AI and DS", a branchless degree just "MBA". */
+function programmeLabel(programme: ProgrammeLink): string {
+  return programme.branch === "" ? programme.degree : `${programme.degree} — ${programme.branch}`;
+}
+
+/**
+ * The programme chips these colleges actually run, in the order the panel shows
+ * them. No college named means the whole roster, because an empty tick on this
+ * screen means everyone rather than nobody.
+ */
+function programmeOptionsRunBy(
+  programmes: readonly ProgrammeLink[],
+  allLabels: readonly string[],
+  colleges: readonly string[],
+): readonly string[] {
+  if (colleges.length === 0) return allLabels;
+  const running = new Set<string>();
+  for (const programme of programmes) {
+    if (colleges.includes(programme.campus)) running.add(programmeLabel(programme));
+  }
+  return allLabels.filter((label) => running.has(label));
 }
 
 /** Whom the drive is already targeted at. Empty everywhere means "not yet". */
@@ -356,7 +379,9 @@ function CityFilter({
       </div>
       <p className="mt-1 text-xs text-ink-500">
         Tick a city to add every college in it to the list below, and to narrow that list to them.
-        Untick it to take those colleges back out.
+        Untick it to take those colleges back out. Select all cities means the whole roster: it
+        ticks every college and every degree &amp; branch below it, and Clear all cities leaves none
+        of the three ticked.
       </p>
     </fieldset>
   );
@@ -401,6 +426,22 @@ export function DafPublish({ view }: { view: PublishView }) {
   const [windowEnd, setWindowEnd] = useState("");
   const [rounds, setRounds] = useState<readonly DriveRound[]>([]);
   const [roundName, setRoundName] = useState("");
+  const isKeyboardRef = useRef(false);
+
+  const handleDateTimeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
+      const val = e.target.value;
+      setter(val);
+      // Automatically close calendar/time picker dialog when valid date-time is chosen via picker
+      if (val && !isKeyboardRef.current) {
+        const el = e.currentTarget;
+        setTimeout(() => {
+          el.blur();
+        }, 150);
+      }
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -434,7 +475,7 @@ export function DafPublish({ view }: { view: PublishView }) {
           next.drive.targeting.degrees.includes(p.degree) &&
           (p.branch === "" || next.drive.targeting.branches.includes(p.branch))
         ) {
-          const label = p.branch === "" ? p.degree : `${p.degree} — ${p.branch}`;
+          const label = programmeLabel(p);
           if (!seedCombined.includes(label)) seedCombined.push(label);
         }
       }
@@ -492,15 +533,36 @@ export function DafPublish({ view }: { view: PublishView }) {
     setCampuses(next.colleges);
   };
 
+  const programmes = loaded?.options.programmes ?? [];
+
+  /** Every programme the roster runs, in the words its chips use. */
+  const allProgrammeOptions = useMemo(
+    () => [...new Set(programmes.map(programmeLabel))].sort((a, b) => a.localeCompare(b)),
+    [programmes],
+  );
+
   const allCities = citiesOf(colleges);
   const allCityChipsSelected = areAllSelected(allCities, cityFilter);
+  /**
+   * The city panel's bulk action is the screen's one "the whole roster" button.
+   *
+   * The other two offer all-of-what-is-showing, which under a city filter is
+   * part of the roster; every city IS the roster, so this click already answers
+   * the college question. Leaving the programmes panel reading "nothing ticked"
+   * was true — empty there also means everyone — but on screen it is
+   * indistinguishable from a panel nobody had reached, and a choice the chips do
+   * not show is a choice nobody can undo. Both halves move all three lists.
+   */
   const toggleAllCities = (): void => {
     if (allCityChipsSelected) {
       setCityFilter([]);
       setCampuses([]);
+      setCombinedDegreeBranch([]);
     } else {
+      const everyCollege = colleges.map((c) => c.name);
       setCityFilter(allCities);
-      setCampuses(colleges.map((c) => c.name));
+      setCampuses(everyCollege);
+      setCombinedDegreeBranch(programmeOptionsRunBy(programmes, allProgrammeOptions, everyCollege));
     }
   };
 
@@ -523,24 +585,10 @@ export function DafPublish({ view }: { view: PublishView }) {
    * retired-colleges lesson: a chip the screen cannot show is a chip nobody
    * can untick, and the drive would carry targeting invisible to its editor.
    */
-  const programmes = loaded?.options.programmes ?? [];
-
-  // Combined degree-branch options for a single control
-  const combinedDegreeBranchOptions = useMemo(() => {
-    if (programmes.length === 0) return [];
-    const seen = new Set<string>();
-    const options: string[] = [];
-    for (const p of programmes) {
-      // Narrow by campus if any are ticked
-      if (campuses.length > 0 && !campuses.includes(p.campus)) continue;
-      const label = p.branch === "" ? p.degree : `${p.degree} — ${p.branch}`;
-      if (!seen.has(label)) {
-        seen.add(label);
-        options.push(label);
-      }
-    }
-    return options.sort((a, b) => a.localeCompare(b));
-  }, [programmes, campuses]);
+  const combinedDegreeBranchOptions = useMemo(
+    () => programmeOptionsRunBy(programmes, allProgrammeOptions, campuses),
+    [allProgrammeOptions, campuses, programmes],
+  );
 
   // Parse combined "Degree — Branch" labels back into separate arrays
   const parsedDegrees = useMemo(() => {
@@ -852,7 +900,11 @@ export function DafPublish({ view }: { view: PublishView }) {
               />
               <MultiSelect
                 label={
-                  cityFilter.length === 0 ? "Campuses" : `Campuses in ${cityFilter.join(", ")}`
+                  cityFilter.length === 0 || cityFilter.length === allCities.length
+                    ? "Campuses"
+                    : cityFilter.length <= 2
+                      ? `Campuses in ${cityFilter.join(", ")}`
+                      : `Campuses in ${cityFilter.length} cities`
                 }
                 options={visibleColleges}
                 selected={campuses}
@@ -969,7 +1021,17 @@ export function DafPublish({ view }: { view: PublishView }) {
                   type="datetime-local"
                   value={windowStart}
                   disabled={openNow}
-                  onChange={(e) => setWindowStart(e.target.value)}
+                  onChange={(e) => handleDateTimeChange(e, setWindowStart)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    } else {
+                      isKeyboardRef.current = true;
+                    }
+                  }}
+                  onMouseDown={() => {
+                    isKeyboardRef.current = false;
+                  }}
                   className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm disabled:bg-surface-muted disabled:text-ink-500"
                 />
                 {/* The date the coordinator typed is kept, not cleared: unticking
@@ -988,15 +1050,51 @@ export function DafPublish({ view }: { view: PublishView }) {
                   htmlFor="window-end"
                   className="mb-1.5 block text-sm font-medium text-ink-700"
                 >
-                  Applications close
+                  <span>Applications close</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
                 </label>
                 <input
                   id="window-end"
                   type="datetime-local"
                   value={windowEnd}
-                  onChange={(e) => setWindowEnd(e.target.value)}
+                  onChange={(e) => handleDateTimeChange(e, setWindowEnd)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    } else {
+                      isKeyboardRef.current = true;
+                    }
+                  }}
+                  onMouseDown={() => {
+                    isKeyboardRef.current = false;
+                  }}
                   className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
                 />
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-500">
+                  <span className="font-medium text-ink-700">Quick set:</span>
+                  {[
+                    { label: "+3 days", days: 3 },
+                    { label: "+5 days", days: 5 },
+                    { label: "+1 week", days: 7 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        const targetDate = new Date();
+                        targetDate.setDate(targetDate.getDate() + preset.days);
+                        targetDate.setHours(23, 59, 0, 0);
+                        setWindowEnd(toLocalInput(targetDate));
+                      }}
+                      className="rounded-md border border-line bg-surface-muted px-2 py-0.5 font-medium hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 transition-colors"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1124,7 +1222,12 @@ export function DafPublish({ view }: { view: PublishView }) {
                       htmlFor="override-reason"
                       className="mb-1.5 block text-sm font-medium text-ink-700"
                     >
-                      Reason for override (required, audit-logged)
+                      <span>Reason for override</span>
+                      <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="text-xs text-ink-500 font-normal"> (audit-logged)</span>
+                      <span className="sr-only"> (required)</span>
                     </label>
                     <input
                       id="override-reason"

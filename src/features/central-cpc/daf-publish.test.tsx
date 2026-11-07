@@ -559,6 +559,51 @@ describe("DafPublish — area targeting", () => {
     expect(screen.getByRole("checkbox", { name: "Chennai", checked: false })).toBeDefined();
   });
 
+  /**
+   * Every city is the whole roster, so the city panel's bulk action answers the
+   * programme question too. It used to stop at the colleges and leave the third
+   * panel reading "no degree/branch ticked", which is both the true answer here
+   * - empty means everyone - and indistinguishable from a panel nobody had
+   * touched. Both halves of the button now move all three lists together, so
+   * what publishes is what the chips show.
+   */
+  it("selects every programme the roster runs along with the cities", async () => {
+    routed(view());
+
+    await userEvent.click(await screen.findByRole("button", { name: /^Select all cities$/ }));
+
+    expect(screen.getByRole("checkbox", { name: "B.E — CSE", checked: true })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "BCA — AI and DS", checked: true })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "BCA", checked: true })).toBeDefined();
+    // The programme panel is no longer narrowed, so its own bulk action is a clear.
+    expect(
+      screen.getByRole("button", { name: /^Clear all Degrees & branches on 3 campuses$/ }),
+    ).toBeDefined();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Clear all cities$/ }));
+
+    expect(screen.getByRole("checkbox", { name: "B.E — CSE", checked: false })).toBeDefined();
+    expect(screen.getByRole("checkbox", { name: "BCA — AI and DS", checked: false })).toBeDefined();
+    expect(screen.getByText(/every programme on the roster is included/i)).toBeDefined();
+  });
+
+  /**
+   * The programmes panel carries the same header button as the other two — it
+   * only disappears when the panel has no chips to offer, which is the honest
+   * case: there is no "all" of an empty list.
+   */
+  it("selects and clears the programmes on show on its own panel", async () => {
+    routed(view());
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^Select all Degrees & branches$/ }),
+    );
+    expect(screen.getByRole("checkbox", { name: "BCA", checked: true })).toBeDefined();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Clear all Degrees & branches$/ }));
+    expect(screen.getByRole("checkbox", { name: "BCA", checked: false })).toBeDefined();
+  });
+
   it("says what an empty area means, because here empty means everyone", async () => {
     routed(view());
 

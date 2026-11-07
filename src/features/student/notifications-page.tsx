@@ -7,6 +7,7 @@ import {
   filterNotifications,
   formatRelativeTime,
   getNotificationCategory,
+  isDocumentLink,
   NOTIFICATION_FILTERS,
   type NotificationCategory,
   type NotificationFilter,
@@ -140,12 +141,19 @@ function resolvePrimaryAction(note: StudentNotificationRow): PrimaryAction | nul
   }
 
   if (meta.meetingLink) {
-    return {
-      label: "Join Video Interview",
-      href: meta.meetingLink,
-      icon: Video,
-      isExternal: true,
-    };
+    return isDocumentLink(meta.meetingLink)
+      ? {
+          label: "Open document",
+          href: meta.meetingLink,
+          icon: FileText,
+          isExternal: true,
+        }
+      : {
+          label: "Join Video Interview",
+          href: meta.meetingLink,
+          icon: Video,
+          isExternal: true,
+        };
   }
 
   if (
@@ -297,8 +305,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
           </div>
           <h3 className="mt-4 font-heading text-base font-bold text-ink-900">All caught up</h3>
           <p className="mx-auto mt-1.5 max-w-md text-sm text-ink-600">
-            No notifications yet. You will hear here when you are shortlisted, clear a round or
-            receive an offer.
+            No notifications yet. Shortlists, round schedules and offers will appear here.
           </p>
         </Card>
       ) : (
@@ -308,7 +315,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
             <div className="rounded-2xl border border-brand-100 bg-brand-50/70 p-4 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-brand-700">
-                  Total Updates
+                  Total
                 </span>
                 <div className="flex size-7 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
                   <Layers aria-hidden="true" className="size-3.5" />
@@ -320,7 +327,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
             <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">
-                  Action Required
+                  Unread
                 </span>
                 <div className="flex size-7 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
                   <Bell aria-hidden="true" className="size-3.5" />
@@ -332,7 +339,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700">
-                  Acknowledged
+                  Read
                 </span>
                 <div className="flex size-7 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
                   <CheckCircle2 aria-hidden="true" className="size-3.5" />
@@ -518,7 +525,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                               )}
                             </div>
 
-                            <p className="mt-1 text-sm leading-relaxed text-ink-700">
+                            <p className="mt-1 text-sm leading-relaxed text-ink-700 [overflow-wrap:anywhere]">
                               <NotificationBody body={note.body} />
                             </p>
 
@@ -543,7 +550,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                                 className="cursor-pointer ml-auto inline-flex items-center gap-1 font-semibold text-brand-600 hover:text-brand-800 transition-colors"
                               >
                                 <Layers className="size-3.5" />
-                                Focus View
+                                Details
                               </button>
                             </div>
                           </div>
@@ -633,7 +640,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                     {activeReadingNote.read ? (
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                         <CheckCircle2 className="size-3.5" />
-                        Acknowledged
+                        Read
                       </span>
                     ) : (
                       <button
@@ -642,7 +649,7 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                         className="cursor-pointer inline-flex items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 transition-colors"
                       >
                         <CheckCircle2 className="size-3.5" />
-                        Acknowledge
+                        Mark read
                       </button>
                     )}
 
@@ -770,14 +777,22 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                     {readingMeta.meetingLink && (
                       <div className="flex items-center gap-2.5">
                         <div className="flex size-8 shrink-0 items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700">
-                          <Video className="size-4" />
+                          {isDocumentLink(readingMeta.meetingLink) ? (
+                            <FileText className="size-4" />
+                          ) : (
+                            <Video className="size-4" />
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-                            Virtual Interview
+                            {isDocumentLink(readingMeta.meetingLink)
+                              ? "Document"
+                              : "Interview link"}
                           </p>
                           <p className="truncate text-xs font-bold text-emerald-900">
-                            Online Meeting Slot Ready
+                            {isDocumentLink(readingMeta.meetingLink)
+                              ? "Attached file"
+                              : "Ready to join"}
                           </p>
                         </div>
                       </div>
@@ -786,9 +801,9 @@ export function NotificationsPage({ view }: { view: NotificationsView }) {
                 )}
 
                 {/* Sanitized Message */}
-                <div className="rounded-2xl border border-line bg-surface-muted/30 p-4 text-sm leading-relaxed text-ink-800 space-y-2">
+                <div className="rounded-2xl border border-line bg-surface-muted/30 p-4 text-sm leading-relaxed text-ink-800 space-y-2 [overflow-wrap:anywhere]">
                   <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
-                    Official Notice Details
+                    Message
                   </p>
                   <NotificationBody body={activeReadingNote.body} />
                 </div>

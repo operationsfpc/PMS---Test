@@ -453,7 +453,7 @@ export function StudentDashboard({ view }: { view: StudentDashboardView }) {
                               </p>
                               {!note.read && <Badge tone="brand">New</Badge>}
                             </div>
-                            <p className="mt-1 text-sm leading-relaxed text-ink-700">
+                            <p className="mt-1 text-sm leading-relaxed text-ink-700 [overflow-wrap:anywhere]">
                               <NotificationBody body={note.body} />
                             </p>
                             <OfferLetterLink

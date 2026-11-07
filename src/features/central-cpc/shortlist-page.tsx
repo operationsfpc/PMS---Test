@@ -1,6 +1,6 @@
 import { StudentIdentity } from "@components/student-identity";
 import { useToast } from "@components/toast";
-import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
 import { describeDriveFreeze } from "@domain/drive-working";
 import { DEFAULT_RANKING_WEIGHTS, rankApplicants } from "@domain/ranking";
@@ -20,6 +20,7 @@ import { SKILL_SCORE_MAX } from "@domain/skills";
 import type { DriveStatus, RoleCategory } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { buildRecruiterExcel, buildRecruiterZip } from "./export-pack";
 
 export interface ShortlistApplicant {
@@ -593,11 +594,35 @@ export function ShortlistPage({
 
   return (
     <div>
+      <div className="mb-2 flex items-center gap-1.5 text-xs text-ink-500">
+        <Link
+          to={`/drives/${driveId}`}
+          className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+        >
+          ← Back to Drive record
+        </Link>
+        {drive?.companyName && (
+          <>
+            <span className="text-ink-400">·</span>
+            <span>{drive.companyName}</span>
+          </>
+        )}
+      </div>
+
       <PageHeader
         title={drive === null ? "Shortlisting" : `Shortlisting — ${drive.companyName}`}
         {...(drive?.roleTitle == null ? {} : { subtitle: drive.roleTitle })}
         actions={
           <span className="flex flex-wrap items-center gap-2">
+            {alreadyShortlisted.length > 0 && (
+              <ButtonLink
+                size="sm"
+                to={`/central/results?drive=${driveId}`}
+                className="bg-brand-600 hover:bg-brand-700 text-white"
+              >
+                Proceed to Round 1 →
+              </ButtonLink>
+            )}
             {canExport && (
               <>
                 <Button
@@ -771,11 +796,16 @@ export function ShortlistPage({
       {savedCount !== null && (
         <div
           role="status"
-          className="mb-4 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-success-500/30 bg-success-50 px-4 py-3 text-sm text-ink-900"
         >
-          Shortlist saved — <strong>{savedCount}</strong>{" "}
-          {savedCount === 1 ? "student is" : "students are"} on it. The recruiter export reads this
-          list.
+          <div>
+            Shortlist saved — <strong>{savedCount}</strong>{" "}
+            {savedCount === 1 ? "student is" : "students are"} on it. The recruiter export reads
+            this list.
+          </div>
+          <ButtonLink size="sm" to={`/central/results?drive=${driveId}`}>
+            Proceed to Round 1 (Results) →
+          </ButtonLink>
         </div>
       )}
 

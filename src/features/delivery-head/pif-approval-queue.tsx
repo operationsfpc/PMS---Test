@@ -250,7 +250,11 @@ function PendingRoleCard({
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor={`cat-${pif.id}`} className="mb-1 block text-sm font-medium text-ink-900">
-            Offer category
+            <span>Offer category</span>
+            <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required to approve)</span>
           </label>
           <select
             id={`cat-${pif.id}`}
@@ -286,7 +290,11 @@ function PendingRoleCard({
             htmlFor={`reason-${pif.id}`}
             className="mb-1 block text-sm font-medium text-ink-900"
           >
-            Rejection reason
+            <span>Rejection reason</span>
+            <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required to reject)</span>
           </label>
           <input
             id={`reason-${pif.id}`}

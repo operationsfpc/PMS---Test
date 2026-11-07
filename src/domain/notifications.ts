@@ -197,6 +197,17 @@ export function extractNotificationMetadata(body: string): ExtractedNotification
   return meta;
 }
 
+/** Staff sometimes paste a signed JD or offer PDF into the meeting-link field. */
+export function isDocumentLink(url: string): boolean {
+  return url.includes("/storage/v1/object/sign/") || /\.pdf(\?|$)/i.test(url);
+}
+
+/** Null means the URL is short enough to print; longer ones read as noise in a card. */
+export function notificationLinkLabel(url: string): string | null {
+  if (isDocumentLink(url)) return "View document";
+  return url.length > 48 ? "Open link" : null;
+}
+
 /**
  * Strips out redundant email boilerplate from notification messages for in-app viewing:
  * - "Log in to the portal at..."
@@ -204,16 +215,27 @@ export function extractNotificationMetadata(body: string): ExtractedNotification
  * - Email signatures and salutations
  */
 export function cleanNotificationBody(body: string): string {
-  return body
-    .replace(/(?:Please\s+)?(?:Log in|Sign in)\s+to\s+the\s+portal[^\n.]*(?:\.|$)/gi, "")
-    .replace(
-      /Please\s+sign\s+in\s+with\s+your\s+registered\s+Google\s+account[^\n.]*(?:\.|$)/gi,
-      "",
-    )
-    .replace(/Dear\s+(?:Candidate|Student)[^\n,]*,?/gi, "")
-    .replace(/Warm\s+regards,?\s*(?:Placement\s+Cell,?)?\s*(?:FACE\s+Prep\s+Campus)?/gi, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return (
+    body
+      .replace(/(?:Please\s+)?(?:Log in|Sign in)\s+to\s+the\s+portal[^\n.]*(?:\.|$)/gi, "")
+      .replace(
+        /Please\s+sign\s+in\s+with\s+your\s+registered\s+Google\s+account[^\n.]*(?:\.|$)/gi,
+        "",
+      )
+      .replace(/Dear\s+(?:Candidate|Student)[^\n,]*,?/gi, "")
+      .replace(/Warm\s+regards,?\s*(?:Placement\s+Cell,?)?\s*(?:FACE\s+Prep\s+Campus)?/gi, "")
+      // Rows saved by the round triggers carry stiff legacy phrasing; say it
+      // plainly here so notices saved before and after read alike.
+      .replace(/Well done — you advance from (Round \d+ of [^.]+)\./g, "Well done! You cleared $1.")
+      .replace(
+        /Soon you will get notified for round details\./g,
+        "We'll share the next round's details soon.",
+      )
+      .replace(/Please report on time\./g, "Please be on time.")
+      .replace(/Your meeting link:\s*/g, "Meeting link: ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
 }
 
 /**

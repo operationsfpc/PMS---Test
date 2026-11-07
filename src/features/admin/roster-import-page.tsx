@@ -122,7 +122,11 @@ export function RosterImportPage({
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor={campusId} className="mb-1 block text-sm font-medium text-ink-900">
-              Campus
+              <span>Campus</span>
+              <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
             </label>
             <select
               id={campusId}
@@ -140,7 +144,11 @@ export function RosterImportPage({
 
           <div>
             <label htmlFor={fileId} className="mb-1 block text-sm font-medium text-ink-900">
-              Roster file (CSV)
+              <span>Roster file (CSV)</span>
+              <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
             </label>
             <input
               id={fileId}

@@ -148,7 +148,7 @@ function RoleFacts({ drive }: { drive: AeOverviewDrive }) {
     <>
       <p className="mt-1 text-xs text-ink-500">
         {drive.campuses.length === 0
-          ? "Open to every campus"
+          ? "Open to all campuses"
           : `Open to: ${drive.campuses.join(", ")}`}
       </p>
       <p className="mt-1 text-xs font-medium text-ink-700">

@@ -126,7 +126,8 @@ export function Labelled({
           hasError ? "font-semibold text-danger-700" : "font-medium text-ink-900"
         }`}
       >
-        {required ? `${label} *` : label}
+        <span>{label}</span>
+        {required && <span className="ml-0.5 font-bold text-danger-500"> *</span>}
         {hasError && (
           <span
             aria-hidden="true"

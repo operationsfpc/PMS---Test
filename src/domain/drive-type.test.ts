@@ -38,7 +38,7 @@ describe("driveTypeLabel", () => {
 
 describe("driveTypeTone", () => {
   it("gives each type its own tag colour, and a quiet one to the default case", () => {
-    expect(driveTypeTone("placement")).toBe("neutral");
+    expect(driveTypeTone("placement")).toBe("brand");
     expect(driveTypeTone("internship_convertible")).toBe("accent");
     expect(driveTypeTone("internship")).toBe("warning");
     expect(driveTypeTone(null)).toBe("neutral");

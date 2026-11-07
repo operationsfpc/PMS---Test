@@ -16,10 +16,13 @@ import { createSupabaseDriveProgressView } from "./drive-progress-view";
  * scheduled — the answer then carries no invented fact about anyone.
  */
 function onwardFor(role: AppRole | null): DriveProgressOnward {
-  if (role === null) return { shortlist: false, attendance: false };
+  if (role === null) return { shortlist: false, attendance: false, results: false, offers: false };
+  const central = canShortlistFromPortfolio(role);
   return {
-    shortlist: canShortlistFromPortfolio(role),
+    shortlist: central,
     attendance: canMarkAttendance(role, true).allowed,
+    results: central,
+    offers: central,
   };
 }
 

@@ -166,9 +166,16 @@ const dayIn = (iso: string | null | undefined) =>
 export interface DriveProgressOnward {
   readonly shortlist: boolean;
   readonly attendance: boolean;
+  readonly results?: boolean;
+  readonly offers?: boolean;
 }
 
-const NO_ONWARD: DriveProgressOnward = { shortlist: false, attendance: false };
+const NO_ONWARD: DriveProgressOnward = {
+  shortlist: false,
+  attendance: false,
+  results: false,
+  offers: false,
+};
 
 export function DriveProgressPage({
   view,
@@ -642,7 +649,7 @@ function paneRolesFor(
   roles: readonly DriveProgressEntry[],
   selection: Record<string, RoleSelection>,
   onSelect: (driveId: string, next: Partial<RoleSelection>) => void,
-  onward: { readonly shortlist: boolean; readonly attendance: boolean },
+  onward: DriveProgressOnward,
 ): readonly VisitPaneRole[] {
   const types = new Set(roles.map((role) => role.driveType ?? null));
   const mixed = types.size > 1;
@@ -683,6 +690,26 @@ function paneRolesFor(
                 aria-label={`Shortlist the applicants of ${roleLabel}`}
               >
                 Shortlist
+              </ButtonLink>
+            )}
+            {onward.results && (
+              <ButtonLink
+                variant="secondary"
+                size="sm"
+                to={`/central/results?drive=${drive.driveId}`}
+                aria-label={`Rounds & results of ${roleLabel}`}
+              >
+                Rounds
+              </ButtonLink>
+            )}
+            {onward.offers && (
+              <ButtonLink
+                variant="secondary"
+                size="sm"
+                to={`/central/offers?drive=${drive.driveId}`}
+                aria-label={`Final selection of ${roleLabel}`}
+              >
+                Offers
               </ButtonLink>
             )}
             {onward.attendance && (

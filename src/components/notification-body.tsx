@@ -1,4 +1,9 @@
-import { type BodySegment, cleanNotificationBody, linkifyBody } from "@domain/notifications";
+import {
+  type BodySegment,
+  cleanNotificationBody,
+  linkifyBody,
+  notificationLinkLabel,
+} from "@domain/notifications";
 
 /**
  * Spec C (2026-08-21, approved 2026-08-24): one renderer for notification
@@ -31,9 +36,9 @@ export function NotificationBody({ body, clean = true }: { body: string; clean?:
                 href={segment.text}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-brand-500 underline underline-offset-2"
+                className="font-semibold text-brand-500 underline underline-offset-2 [overflow-wrap:anywhere]"
               >
-                {segment.text}
+                {notificationLinkLabel(segment.text) ?? segment.text}
               </a>
             ) : (
               // biome-ignore lint/suspicious/noArrayIndexKey: stable pure split

@@ -92,7 +92,13 @@ export function HoldDialog({
     >
       <div className="flex flex-col gap-5">
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-ink-700">What is the hold for?</legend>
+          <legend className="mb-2 text-sm font-medium text-ink-700">
+            <span>What is the hold for?</span>
+            <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </legend>
           <div className="flex flex-col gap-2">
             {HOLD_KINDS.map((kind) => (
               <label
@@ -126,7 +132,11 @@ export function HoldDialog({
 
         <div>
           <label htmlFor="hold-reason" className="mb-1 block text-sm font-medium text-ink-700">
-            Reason <span className="text-destructive">*</span>
+            <span>Reason</span>
+            <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
           </label>
           <textarea
             id="hold-reason"
@@ -162,7 +172,11 @@ export function HoldDialog({
           </div>
           <div>
             <label htmlFor="hold-ends" className="mb-1 block text-sm font-medium text-ink-700">
-              Review by <span className="text-destructive">*</span>
+              <span>Review by</span>
+              <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
             </label>
             <input
               id="hold-ends"

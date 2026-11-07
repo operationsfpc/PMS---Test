@@ -151,7 +151,10 @@ function formatLocation(locations: string): string {
     .map((part) => {
       const trimmed = part.trim();
       if (!trimmed) return "";
-      return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+      return trimmed
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(" ");
     })
     .filter(Boolean)
     .join(", ");
@@ -160,7 +163,10 @@ function formatLocation(locations: string): string {
 function formatDriveMode(driveMode: string): string {
   if (!driveMode || driveMode.trim() === "") return "Not stated";
   const raw = `${driveMode.replaceAll("_", " ")} drive`;
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
+  return raw
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
 }
 
 function renderCtc(ctcLabel: string) {
@@ -466,9 +472,7 @@ export function DriveRecordPage({
           ) : canPublishDrive(role) && record.status === "submitted" ? (
             <Badge tone="neutral">Submitted — Pending Delivery Head Approval</Badge>
           ) : canShortlistFromPortfolio(role) &&
-            (record.status === "live" ||
-              record.status === "applications_closed" ||
-              record.status === "in_rounds") ? (
+            (record.status === "live" || record.status === "applications_closed") ? (
             <ButtonLink
               size="sm"
               variant="secondary"
@@ -476,6 +480,28 @@ export function DriveRecordPage({
             >
               Shortlist
             </ButtonLink>
+          ) : canShortlistFromPortfolio(role) && record.status === "in_rounds" ? (
+            <div className="flex items-center gap-2">
+              <ButtonLink
+                size="sm"
+                variant="secondary"
+                to={`/central/shortlisting?drive=${record.id}`}
+              >
+                Shortlist
+              </ButtonLink>
+              <ButtonLink size="sm" to={`/central/results?drive=${record.id}`}>
+                Rounds & results →
+              </ButtonLink>
+            </div>
+          ) : canShortlistFromPortfolio(role) && record.status === "completed" ? (
+            <div className="flex items-center gap-2">
+              <ButtonLink size="sm" variant="secondary" to={`/central/results?drive=${record.id}`}>
+                Rounds & results
+              </ButtonLink>
+              <ButtonLink size="sm" to={`/central/offers?drive=${record.id}`}>
+                Final selection
+              </ButtonLink>
+            </div>
           ) : staff && canRaiseDrive(role) ? (
             record.status === "submitted" ? (
               <Badge tone="neutral">Submitted for Approval</Badge>
@@ -678,18 +704,38 @@ export function DriveRecordPage({
             <p className="text-sm text-ink-500">No rounds declared yet.</p>
           ) : (
             <ol className="space-y-2">
-              {record.rounds.map((round) => (
-                <li
-                  key={round.sequence}
-                  className="flex items-start gap-3 rounded-lg border border-line bg-surface-muted px-3.5 py-2.5 text-sm text-ink-800"
-                >
-                  <Badge tone="brand">{round.sequence}</Badge>
-                  <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">
-                    <span className="font-semibold text-ink-900">Round {round.sequence}</span> —{" "}
-                    {round.name}
-                  </span>
-                </li>
-              ))}
+              {record.rounds.map((round) => {
+                const content = (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-muted px-3.5 py-2.5 text-sm text-ink-800 transition-colors hover:border-brand-400 hover:bg-brand-50/30">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <Badge tone="brand">{round.sequence}</Badge>
+                      <span className="min-w-0 flex-1 break-words font-medium [overflow-wrap:anywhere]">
+                        <span className="font-semibold text-ink-900">Round {round.sequence}</span> —{" "}
+                        {round.name}
+                      </span>
+                    </div>
+                    {staff && (
+                      <span className="text-xs font-semibold text-brand-600 shrink-0">
+                        View round →
+                      </span>
+                    )}
+                  </div>
+                );
+                return (
+                  <li key={round.sequence}>
+                    {staff ? (
+                      <Link
+                        to={`/central/results?drive=${record.id}`}
+                        className="block focus:outline-hidden"
+                      >
+                        {content}
+                      </Link>
+                    ) : (
+                      content
+                    )}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </Section>
@@ -984,7 +1030,11 @@ export function DriveRecordPage({
                   htmlFor="record-offer-category"
                   className="mb-1 block text-sm font-medium text-ink-900"
                 >
-                  Offer category
+                  <span>Offer category</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
                 </label>
                 <select
                   id="record-offer-category"
@@ -1015,7 +1065,11 @@ export function DriveRecordPage({
                   htmlFor="record-rejection-reason"
                   className="mb-1 block text-sm font-medium text-ink-900"
                 >
-                  Rejection reason
+                  <span>Rejection reason</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
                 </label>
                 <input
                   id="record-rejection-reason"

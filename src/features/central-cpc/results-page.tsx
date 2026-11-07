@@ -1,7 +1,7 @@
 import { OverflowMenu } from "@components/overflow-menu";
 import { StudentIdentity } from "@components/student-identity";
 import { useToast } from "@components/toast";
-import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import { attendanceLabel } from "@domain/attendance";
 import { type CompletionReadiness, decideCompletion } from "@domain/drive-completion";
 import { describeDriveFreeze } from "@domain/drive-working";
@@ -26,7 +26,7 @@ import { advancedBeyond, advancingParticipants, roundDetailsFrozen } from "@doma
 import type { AttendanceStatus, DriveStatus, RoundResult } from "@domain/types";
 import { describeReadFailure } from "@lib/postgrest-read";
 import { useAsyncAction } from "@lib/use-async-action";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 
 export interface RoundParticipant {
@@ -667,6 +667,7 @@ export function DriveRoundsPage({
   const [reloadKey, setReloadKey] = useState(0);
   /** F4: the details panel, opened per round. */
   const [editingDetails, setEditingDetails] = useState(false);
+  const isKeyboardScheduleRef = useRef(false);
   const [detailsDraft, setDetailsDraft] = useState<RoundDetailsUpdate>({
     mode: null,
     scheduledAt: null,
@@ -1135,9 +1136,32 @@ export function DriveRoundsPage({
 
   return (
     <div>
+      <div className="mb-2 flex items-center gap-1.5 text-xs text-ink-500">
+        <Link
+          to={`/central/shortlisting?drive=${driveId}`}
+          className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+        >
+          ← Back to Shortlist
+        </Link>
+        <span className="text-ink-400">·</span>
+        <Link
+          to={`/drives/${driveId}`}
+          className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
+        >
+          Drive record
+        </Link>
+      </div>
+
       <PageHeader
         title="Rounds & results"
         subtitle="You are recording on behalf of the recruiter. Every result you record is told to the student; advancing schedules them for the next round."
+        actions={
+          <div className="flex items-center gap-2">
+            <ButtonLink size="sm" variant="secondary" to={`/central/offers?drive=${driveId}`}>
+              View offers →
+            </ButtonLink>
+          </div>
+        }
       />
 
       {error !== null && (
@@ -1298,7 +1322,7 @@ export function DriveRoundsPage({
                 !editingDetails &&
                 closed === null && (
                   <Button variant="secondary" size="sm" onClick={openDetails}>
-                    Edit round details…
+                    Edit round details & links…
                   </Button>
                 )
               )}
@@ -1356,12 +1380,29 @@ export function DriveRoundsPage({
                     <input
                       type="datetime-local"
                       value={detailsDraft.scheduledAt ?? ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const val = e.target.value;
                         setDetailsDraft((d) => ({
                           ...d,
-                          scheduledAt: e.target.value === "" ? null : e.target.value,
-                        }))
-                      }
+                          scheduledAt: val === "" ? null : val,
+                        }));
+                        if (val && !isKeyboardScheduleRef.current) {
+                          const el = e.currentTarget;
+                          setTimeout(() => {
+                            el.blur();
+                          }, 150);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.currentTarget.blur();
+                        } else {
+                          isKeyboardScheduleRef.current = true;
+                        }
+                      }}
+                      onMouseDown={() => {
+                        isKeyboardScheduleRef.current = false;
+                      }}
                       className="rounded-lg border border-line px-2 py-2 text-sm text-ink-900"
                     />
                   </label>
@@ -1518,16 +1559,25 @@ export function DriveRoundsPage({
                 </div>
               )
             ) : (
-              <p className="text-sm text-ink-700">
-                This is the final round. Declare offers on{" "}
-                <Link
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200/80 bg-brand-50/50 p-4">
+                <p className="text-sm text-ink-800">
+                  This is the final round. Declare offers on{" "}
+                  <Link
+                    to={`/central/offers?drive=${driveId}`}
+                    className="font-medium text-brand-600 hover:underline"
+                  >
+                    Final selection
+                  </Link>
+                  .
+                </p>
+                <ButtonLink
+                  size="sm"
                   to={`/central/offers?drive=${driveId}`}
-                  className="font-medium text-brand-600 hover:underline"
+                  className="bg-brand-600 hover:bg-brand-700 text-white shrink-0"
                 >
-                  Final selection
-                </Link>
-                .
-              </p>
+                  Declare offers →
+                </ButtonLink>
+              </div>
             )}
           </div>
 

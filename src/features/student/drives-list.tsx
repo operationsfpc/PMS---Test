@@ -403,7 +403,6 @@ export function DrivesList({
                         left.urgent ? "bg-danger-500 text-white" : "bg-surface-muted text-brand-500"
                       }`}
                     >
-                      {left.urgent ? "🔥 " : "⏳ "}
                       {left.label}
                     </p>
                   )}

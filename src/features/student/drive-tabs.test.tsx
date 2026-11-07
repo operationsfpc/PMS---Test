@@ -324,16 +324,17 @@ describe("a hold on the student's own screen", () => {
     expect(within(card).getByText("Two semesters of fees unpaid.")).toBeDefined();
     // en-GB abbreviates September as "Sept"; the day and year are the claim.
     expect(within(card).getByText(/from 01 Sep[a-z]* 2026, review by 15 Dec 2026/i)).toBeDefined();
-    expect(within(card).getByText("In force")).toBeDefined();
+    expect(within(card).getByText("Active")).toBeDefined();
   });
 
   it("says plainly that no drive can be applied to while it runs", async () => {
     render(<DriveTabs view={view({ ...LISTS, hold: HELD })} now={NOW} />);
 
     const card = await screen.findByRole("region", { name: /placement hold/i });
-    expect(within(card).getByText(/cannot apply to any drive/i)).toBeDefined();
-    expect(within(card).getByText(/stops mailing you/i)).toBeDefined();
-    expect(within(card).getByText(/only your campus manager can release it/i)).toBeDefined();
+    expect(within(card).getByText(/can't apply to drives/i)).toBeDefined();
+    expect(within(card).getByText(/or get placement emails/i)).toBeDefined();
+    expect(within(card).getByText(/until your campus manager removes this hold/i)).toBeDefined();
+    expect(within(card).getByText(/it does not end the hold/i)).toBeDefined();
   });
 
   it("reads a self-placed request as waiting, not as a hold", async () => {
@@ -349,9 +350,9 @@ describe("a hold on the student's own screen", () => {
 
     const card = await screen.findByRole("region", { name: /placement hold/i });
     expect(within(card).getByText(/waiting for your campus manager/i)).toBeDefined();
-    expect(within(card).getByText(/awaiting confirmation/i)).toBeDefined();
+    expect(within(card).getByText(/pending/i)).toBeDefined();
     expect(within(card).getByText(/you can still apply/i)).toBeDefined();
-    expect(within(card).queryByText("In force")).toBeNull();
+    expect(within(card).queryByText("Active")).toBeNull();
   });
 
   /** The attachment is the Campus Manager's evidence, not a student document. */

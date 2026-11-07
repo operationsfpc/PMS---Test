@@ -1457,7 +1457,7 @@ describe("DashboardPage — the drives behind a status count", () => {
     expect(within(dialog).getByText("Freshworks")).toBeDefined();
     expect(within(dialog).queryByText("TCS")).toBeNull();
     expect(within(dialog).getByText("Open to: Alliance University")).toBeDefined();
-    expect(within(dialog).getByText("Open to every campus")).toBeDefined();
+    expect(within(dialog).getByText("Open to all campuses")).toBeDefined();
   });
 
   /**

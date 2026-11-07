@@ -1522,7 +1522,7 @@ export function DashboardPage({
                                   <span className="text-xs text-ink-300">·</span>
                                   <p className="text-xs text-ink-500">
                                     {drive.campusNames.length === 0
-                                      ? "Open to every campus"
+                                      ? "Open to all campuses"
                                       : drive.campusNames.join(" · ")}
                                   </p>
                                 </div>
@@ -1536,7 +1536,7 @@ export function DashboardPage({
                                   </Link>
                                   <p className="mt-0.5 text-xs text-ink-500">
                                     {drive.campusNames.length === 0
-                                      ? "Open to every campus"
+                                      ? "Open to all campuses"
                                       : drive.campusNames.join(" · ")}
                                   </p>
                                 </>
@@ -1970,7 +1970,7 @@ export function DashboardPage({
                     </ul>
                     <p className="mt-2 text-xs text-ink-500">
                       {campuses.length === 0
-                        ? "Open to every campus"
+                        ? "Open to all campuses"
                         : `Open to: ${campuses.join(", ")}`}
                     </p>
                   </li>
@@ -1987,7 +1987,7 @@ export function DashboardPage({
           title={funnelDrive.driveName}
           subtitle={
             funnelDrive.campusNames.length === 0
-              ? "Open to every campus"
+              ? "Open to all campuses"
               : funnelDrive.campusNames.join(" · ")
           }
           onClose={() => setFunnelDrive(null)}

@@ -220,7 +220,11 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
         ) : (
           <div className="mt-4">
             <label htmlFor="optout-reason" className="mb-1 block text-sm font-medium text-ink-700">
-              Why are you opting out?
+              <span>Why are you opting out?</span>
+              <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
             </label>
             <textarea
               id="optout-reason"
@@ -238,7 +242,11 @@ export function OptOutPage({ view }: { view: ParticipationView }) {
                 htmlFor="optout-declaration"
                 className="mb-1 block text-sm font-medium text-ink-700"
               >
-                Signed declaration <span className="text-destructive">*</span>
+                <span>Signed declaration</span>
+                <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </label>
               <p className="mb-2 text-xs text-ink-500">
                 A <strong>handwritten and signed</strong> letter confirming that you are opting out.

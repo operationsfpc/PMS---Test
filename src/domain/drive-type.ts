@@ -17,7 +17,7 @@ import type { DriveType } from "./types";
 import { DRIVE_TYPES } from "./types";
 
 /** The tag's colour, named by intent rather than by hex. */
-export type DriveTypeTone = "neutral" | "accent" | "warning";
+export type DriveTypeTone = "neutral" | "accent" | "warning" | "brand";
 
 const LABEL: Readonly<Record<DriveType, string>> = {
   // "Placement" was the stored word and the screen word. The business says
@@ -31,7 +31,7 @@ const LABEL: Readonly<Record<DriveType, string>> = {
 };
 
 const TONE: Readonly<Record<DriveType, DriveTypeTone>> = {
-  placement: "neutral",
+  placement: "brand",
   internship_convertible: "accent",
   internship: "warning",
 };

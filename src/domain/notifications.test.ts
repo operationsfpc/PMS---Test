@@ -6,9 +6,11 @@ import {
   filterNotifications,
   formatRelativeTime,
   getNotificationCategory,
+  isDocumentLink,
   linkifyBody,
   type NotificationItem,
   notificationCarriesOfferLetter,
+  notificationLinkLabel,
   sortNotifications,
 } from "./notifications";
 
@@ -287,6 +289,40 @@ describe("cleanNotificationBody", () => {
     const cleaned = cleanNotificationBody(body);
     expect(cleaned).not.toMatch(/Log in to the portal/i);
     expect(cleaned).not.toMatch(/Please sign in with/i);
+  });
+
+  it("says the round triggers' legacy phrasing plainly", () => {
+    const body =
+      "Well done — you advance from Round 2 of Zoho. Soon you will get notified for round details. Please report on time.";
+    expect(cleanNotificationBody(body)).toBe(
+      "Well done! You cleared Round 2 of Zoho. We'll share the next round's details soon. Please be on time.",
+    );
+  });
+
+  it("shortens the meeting-link lead-in without touching the URL", () => {
+    expect(
+      cleanNotificationBody(
+        "Your meeting link: https://meet.google.com/xyz. Please report on time.",
+      ),
+    ).toBe("Meeting link: https://meet.google.com/xyz. Please be on time.");
+  });
+});
+
+describe("notificationLinkLabel", () => {
+  it("lets a short meeting URL print as itself", () => {
+    expect(notificationLinkLabel("https://meet.google.com/xyz")).toBeNull();
+    expect(isDocumentLink("https://meet.google.com/xyz")).toBe(false);
+  });
+
+  it("names a signed storage PDF instead of printing its token", () => {
+    const url =
+      "https://x.supabase.co/storage/v1/object/sign/job-descriptions/jd-1-offer%20letter.pdf?token=eyJhbGciOiJIUzI1NiJ9";
+    expect(isDocumentLink(url)).toBe(true);
+    expect(notificationLinkLabel(url)).toBe("View document");
+  });
+
+  it("names any other over-long URL", () => {
+    expect(notificationLinkLabel(`https://example.com/${"a".repeat(60)}`)).toBe("Open link");
   });
 });
 

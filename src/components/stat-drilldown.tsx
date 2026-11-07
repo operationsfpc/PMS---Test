@@ -256,7 +256,12 @@ export function StatDrilldown({
         <span className="inline-flex items-center rounded-md border border-brand-200 bg-brand-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
           {eyebrow}
         </span>
-        {href !== undefined && (
+        {/*
+          A count of nobody has no list to open. Most callers build `href` from
+          the population, not from the count, so at zero this button used to
+          walk the reader from "0 students" to every student in the cohort.
+        */}
+        {href !== undefined && people.length > 0 && (
           <ButtonLink size="sm" variant="ghost" to={href} onClick={onClose}>
             {linkLabel ?? "Open this list in All students"}
           </ButtonLink>

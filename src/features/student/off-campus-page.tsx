@@ -242,7 +242,11 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <div>
                 <label htmlFor="sp-company" className="mb-1 block text-sm font-medium text-ink-700">
-                  Company
+                  <span>Company</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
                 </label>
                 <input
                   id="sp-company"
@@ -264,7 +268,11 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
               </div>
               <div>
                 <label htmlFor="sp-ctc" className="mb-1 block text-sm font-medium text-ink-700">
-                  CTC (LPA)
+                  <span>CTC (LPA)</span>
+                  <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                    *
+                  </span>
+                  <span className="sr-only"> (required)</span>
                 </label>
                 <input
                   id="sp-ctc"
@@ -278,7 +286,11 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
 
             <div className="mt-4">
               <label htmlFor="sp-letter" className="mb-1 block text-sm font-medium text-ink-700">
-                Offer letter <span className="text-destructive">*</span>
+                <span>Offer letter</span>
+                <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                  *
+                </span>
+                <span className="sr-only"> (required)</span>
               </label>
               <p className="mb-2 text-xs text-ink-500">
                 {holdFlow
@@ -301,7 +313,11 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
                     htmlFor="sp-declaration"
                     className="mb-1 block text-sm font-medium text-ink-700"
                   >
-                    Signed declaration <span className="text-destructive">*</span>
+                    <span>Signed declaration</span>
+                    <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only"> (required)</span>
                   </label>
                   <p className="mb-2 text-xs text-ink-500">
                     A <strong>handwritten and signed</strong> letter confirming that you have
@@ -322,7 +338,11 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
                     htmlFor="sp-reason"
                     className="mb-1 block text-sm font-medium text-ink-700"
                   >
-                    Why hold your placements? <span className="text-destructive">*</span>
+                    <span>Why hold your placements?</span>
+                    <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only"> (required)</span>
                   </label>
                   <textarea
                     id="sp-reason"
@@ -358,7 +378,11 @@ export function OffCampusPage({ view }: { view: ParticipationView }) {
                       htmlFor="sp-ends"
                       className="mb-1 block text-sm font-medium text-ink-700"
                     >
-                      Review by <span className="text-destructive">*</span>
+                      <span>Review by</span>
+                      <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only"> (required)</span>
                     </label>
                     <input
                       id="sp-ends"

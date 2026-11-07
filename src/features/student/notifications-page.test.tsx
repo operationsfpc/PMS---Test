@@ -130,6 +130,37 @@ describe("links in notification bodies", () => {
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toContain("noopener");
   });
+
+  it("names a signed document link instead of printing its token across the card", async () => {
+    const url =
+      "https://x.supabase.co/storage/v1/object/sign/job-descriptions/jd-1-offer%20letter.pdf?token=eyJhbGciOiJIUzI1NiJ9";
+    render(
+      <MemoryRouter>
+        <NotificationsPage
+          view={{
+            notifications: async () => [
+              {
+                id: "n2",
+                kind: "meeting_link",
+                title: "Zoho — your Round 1 slot",
+                body: `Your Round 1 of Zoho. Your meeting link: ${url} Please report on time.`,
+                createdAt: "2026-08-24T09:00:00Z",
+                read: false,
+              },
+            ],
+            markRead: async () => undefined,
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const link = await screen.findByRole("link", { name: "View document" });
+    expect(link.getAttribute("href")).toBe(url);
+    expect(screen.queryByText(/token=eyJ/)).toBeNull();
+    // A PDF in the meeting-link field is a document, not a video room.
+    expect(screen.getByRole("link", { name: /Open document/ })).toBeDefined();
+    expect(screen.getByText("Please be on time.")).toBeDefined();
+  });
 });
 
 /**

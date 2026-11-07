@@ -160,7 +160,7 @@ describe("AeOverviewPage — my drives", () => {
 
     const dialog = await screen.findByRole("dialog", { name: /open drives/i });
     expect(within(dialog).getByText("Accenture")).toBeDefined();
-    expect(within(dialog).getByText(/open to every campus/i)).toBeDefined();
+    expect(within(dialog).getByText(/open to all campuses/i)).toBeDefined();
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("dialog")).toBeNull();

@@ -1,13 +1,14 @@
 import { ErrorPanel } from "@components/error-panel";
 import { StudentIdentity } from "@components/student-identity";
 import { useToast } from "@components/toast";
-import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
+import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import { describeDriveFreeze } from "@domain/drive-working";
 import type { OfferCategory } from "@domain/offer-category";
 import { offerCountsAsPackage, offerPayProblem } from "@domain/offer-pay";
 import type { DriveStatus, DriveType } from "@domain/types";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 import type { DeclaredOffer } from "./offers-repository";
 
 export interface OfferDrive {
@@ -184,9 +185,32 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
 
   return (
     <div>
+      <div className="mb-2 flex items-center gap-1.5 text-xs text-ink-500">
+        <Link
+          to={`/central/results?drive=${driveId}`}
+          className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+        >
+          ← Back to Rounds & results
+        </Link>
+        <span className="text-ink-400">·</span>
+        <Link
+          to={`/drives/${driveId}`}
+          className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
+        >
+          Drive record
+        </Link>
+      </div>
+
       <PageHeader
         title={drive === null ? "Final selection" : `${drive.companyName} — final selection`}
         subtitle="Being placed is declared here. It is never inferred from the last round."
+        actions={
+          <div className="flex items-center gap-2">
+            <ButtonLink size="sm" variant="secondary" to={`/drives/${driveId}`}>
+              View drive record →
+            </ButtonLink>
+          </div>
+        }
       />
 
       {actions.error !== null && (

@@ -121,6 +121,27 @@ describe("the count→who popup", () => {
     expect(within(dialog).queryByRole("row")).toBeNull();
   });
 
+  /**
+   * The href most callers pass describes the POPULATION the count was taken
+   * from, not the count itself — so at zero, following it showed the reader
+   * every student in the cohort under a heading that said "0 students".
+   */
+  it("offers no way out when the count holds nobody", () => {
+    renderDrilldown({ people: [], href: "/central/students" });
+    const dialog = screen.getByRole("dialog");
+
+    expect(within(dialog).queryByRole("link", { name: /open this list/i })).toBeNull();
+  });
+
+  it("still offers the roster behind a count that holds somebody", () => {
+    renderDrilldown({ people: [ASHA], href: "/central/students?filter=on_campus" });
+    const dialog = screen.getByRole("dialog");
+
+    expect(
+      within(dialog).getByRole("link", { name: /open this list in all students/i }),
+    ).toBeDefined();
+  });
+
   it("filters a count that spans more than one group, and recounts the header", async () => {
     const user = userEvent.setup();
     renderDrilldown({

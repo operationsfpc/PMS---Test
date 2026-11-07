@@ -2020,7 +2020,11 @@ export function StudentRecordPage({
                   ) : extending ? (
                     <div className="flex flex-col gap-2">
                       <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
-                        Extend the review to
+                        <span>Extend the review to</span>
+                        <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                          *
+                        </span>
+                        <span className="sr-only"> (required)</span>
                       </label>
                       <input
                         id="extend-date"

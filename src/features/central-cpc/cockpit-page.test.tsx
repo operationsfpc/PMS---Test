@@ -945,7 +945,7 @@ describe("the colleges a drive targets, on the card", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Open to every campus")).toBeDefined();
+    expect(await screen.findByText("Open to all campuses")).toBeDefined();
   });
 });
 

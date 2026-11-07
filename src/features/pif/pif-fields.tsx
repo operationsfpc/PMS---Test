@@ -478,7 +478,7 @@ export function RoundsEditor<T extends FieldValues>({ api }: { api: PifFieldApi<
         {rounds.map((round, index) => (
           <div key={round.sequence} className="flex flex-wrap items-end gap-2">
             <div className="min-w-56 flex-1">
-              <Labelled label={`Round ${round.sequence} name`}>
+              <Labelled label={`Round ${round.sequence} name`} required>
                 {(id, invalid) => (
                   <input
                     id={id}

@@ -403,9 +403,7 @@ function HoldNotice({
             {pending ? "Waiting for your Campus Manager" : "Your placements are on hold"} —{" "}
             {HOLD_KIND_LABELS[hold.kind]}
           </h2>
-          <Badge tone={pending ? "brand" : "warning"}>
-            {pending ? "Awaiting confirmation" : "In force"}
-          </Badge>
+          <Badge tone={pending ? "brand" : "warning"}>{pending ? "Pending" : "Active"}</Badge>
         </div>
         <p className="mt-1 text-sm text-ink-900">{hold.reason}</p>
         <p className="mt-0.5 text-xs text-ink-500">
@@ -413,8 +411,8 @@ function HoldNotice({
         </p>
         <p className="mt-2 text-sm text-ink-700">
           {pending
-            ? "Until they confirm it, nothing changes — you can still apply, and every drive stays open to you."
-            : "While this is in force you cannot apply to any drive, and the placement office stops mailing you. Only your Campus Manager can release it; the review date is a reminder, not a release."}
+            ? "Nothing changes until your Campus Manager confirms — you can still apply to every drive."
+            : "You can't apply to drives or get placement emails until your Campus Manager removes this hold. The review date is when they check again — it does not end the hold."}
         </p>
       </section>
     </Card>

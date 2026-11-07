@@ -190,7 +190,11 @@ export function EditStaffModal({
               htmlFor="edit-staff-role"
               className="block text-xs font-semibold text-ink-700 uppercase tracking-wider mb-1.5"
             >
-              Role Assignment
+              <span>Role Assignment</span>
+              <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
             </label>
             <div className="relative">
               <select
@@ -290,7 +294,11 @@ export function EditStaffModal({
                     htmlFor="edit-staff-campus"
                     className="block text-xs font-semibold text-ink-700 uppercase tracking-wider"
                   >
-                    Assigned Organisation / Campus <span className="text-destructive">*</span>
+                    <span>Assigned Organisation / Campus</span>
+                    <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                      *
+                    </span>
+                    <span className="sr-only"> (required)</span>
                   </label>
                   <span className="text-xs text-ink-500">Single campus exclusive</span>
                 </div>
@@ -339,7 +347,11 @@ export function EditStaffModal({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-ink-700 uppercase tracking-wider">
-                      Assigned Organisations <span className="text-destructive">*</span>
+                      <span>Assigned Organisations</span>
+                      <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                        *
+                      </span>
+                      <span className="sr-only"> (required)</span>
                     </span>
                     <span className="text-xs font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full border border-brand-200">
                       {selectedCampusIds.length === campuses.length
