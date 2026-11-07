@@ -1,6 +1,7 @@
 import { DrilldownModal } from "@components/drilldown-modal";
 import { StatusChangeDialog, type StatusChangePlan } from "@components/status-change-dialog";
 import { StatusHistory } from "@components/status-history";
+import { useToast } from "@components/toast";
 import {
   Badge,
   Button,
@@ -391,6 +392,7 @@ export function StudentRecordPage({
   const [semFilter, setSemFilter] = useState<"all" | "verified" | "pending">("all");
 
   const actions = useAsyncAction();
+  const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -554,6 +556,11 @@ export function StudentRecordPage({
       setLifting(false);
       setReleaseNote("");
       setReload((count) => count + 1);
+      toast({
+        tone: "success",
+        title: "Hold released",
+        description: `${record?.fullName ?? "Student"} is now active in campus placements.`,
+      });
     }
   }
 
@@ -2020,14 +2027,14 @@ export function StudentRecordPage({
                   ) : extending ? (
                     <div className="flex flex-col gap-2">
                       <label htmlFor="extend-date" className="text-sm font-medium text-ink-700">
-                        <span>Extend the review to</span>
-                        <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                        Extend the review to{" "}
+                        <span className="font-bold text-danger-500" aria-hidden="true">
                           *
                         </span>
-                        <span className="sr-only"> (required)</span>
                       </label>
                       <input
                         id="extend-date"
+                        aria-label="Extend the review to"
                         type="date"
                         min={dayAfter(hold.endsAt)}
                         value={extendDate}
@@ -2092,6 +2099,11 @@ export function StudentRecordPage({
                       {past.reason} · {holdWindowLine(past, today)}
                       {past.releasedBy !== null && ` by ${past.releasedBy}`}
                     </p>
+                    {past.releaseNote && (
+                      <p className="mt-1 text-xs font-medium text-ink-600">
+                        Cleared: {past.releaseNote}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>

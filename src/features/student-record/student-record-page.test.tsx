@@ -410,6 +410,9 @@ describe("StudentRecordPage hold", () => {
     expect(within(card).getByText(/applied to nothing in september\./i)).toBeDefined();
     expect(within(card).getByText(/released 30 Sep/i)).toBeDefined();
     expect(within(card).getByText(/by Meena Krishnan/i)).toBeDefined();
+    expect(
+      within(card).getByText(/cleared: cleared on request — they were mid-project\./i),
+    ).toBeDefined();
   });
 
   /** 0126: the student is told on screen, and 0125 keeps the order for staff. */
