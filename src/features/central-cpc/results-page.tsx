@@ -705,9 +705,6 @@ export function DriveRoundsPage({
    * away — could not take it back, because a notification cannot be recalled.
    */
   const [staged, setStaged] = useState<StagedSlots | null>(null);
-  /** F3: the advance waits behind a confirmation carrying the optional proof. */
-  const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [proof, setProof] = useState<File | null>(null);
   /** B2 (M2, 2026-08-21): the manage-rounds dialog and its per-round facts. */
   const [managing, setManaging] = useState(false);
   const [facts, setFacts] = useState<ReadonlyMap<string, RoundFacts>>(new Map());
@@ -812,40 +809,6 @@ export function DriveRoundsPage({
   const advancing = countAdvancing(
     participants === null ? null : participants.filter((p) => !locked.has(p.applicationId)),
   );
-
-  async function advance() {
-    if (activeRound === null || nextRound === null) return;
-    // The disabled button is the courtesy; this is the guard. The dialog can
-    // only be opened from the button, but a stale render must not write.
-    const gate = canAdvanceFrom(activeRound, now);
-    if (!gate.allowed) {
-      setError(gate.reason);
-      return;
-    }
-    setError(null);
-    try {
-      const moved = await view.advance(activeRound.roundId, nextRound.roundId, proof);
-      const text = `${moved} ${moved === 1 ? "student" : "students"} scheduled for Round ${nextRound.sequence} (${nextRound.name}).`;
-      setNotice(text);
-      toast({
-        tone: "success",
-        title: "Candidates advanced",
-        description: text,
-      });
-      setProof(null);
-      // Re-read the world instead of arguing with it (the F5 bug).
-      await loadParticipants();
-      setReloadKey((k) => k + 1);
-    } catch (cause) {
-      const msg = cause instanceof Error ? cause.message : "Could not advance the students.";
-      setError(msg);
-      toast({
-        tone: "danger",
-        title: "Could not advance candidates",
-        description: msg,
-      });
-    }
-  }
 
   /**
    * G6c (UAT 2026-08-20, Q5 answer a): the active round's details freeze the
@@ -1555,40 +1518,35 @@ export function DriveRoundsPage({
           />
           <div className="mt-4">
             {nextRound !== null ? (
-              closed !== null ? (
-                // Nobody can be marked selected on a closed drive either, so
-                // this is not the hint below — it is the banner above.
-                <Button disabled>Advance to Round {nextRound.sequence}</Button>
-              ) : aheadOfTime !== null && !aheadOfTime.allowed ? (
-                // 2026-11-06: the round has not been held yet, and its own
-                // date is the reason — said, not left to be guessed.
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button disabled>Advance to Round {nextRound.sequence}</Button>
-                  <p className="text-sm text-ink-500">{aheadOfTime.reason}</p>
-                </div>
-              ) : advancing > 0 ? (
-                <Button
-                  isLoading={actions.isPending("advance")}
-                  // The confirmation closes as soon as it is accepted, so this
-                  // is the button that has to carry the wait.
-                  disabled={actions.busy}
-                  onClick={() => setAdvanceOpen(true)}
-                >
-                  Advance {advancing} selected to Round {nextRound.sequence} — schedules them
-                </Button>
-              ) : (
-                // G6a (UAT 2026-08-20): "No Advance to Round 2 button
-                // available." It only appeared once someone was Selected, so a
-                // fresh round showed nothing and the feature read as missing.
-                // It stands disabled now, with the instruction that arms it.
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button disabled>Advance to Round {nextRound.sequence}</Button>
-                  <p className="text-sm text-ink-500">
-                    Mark students as <strong>Selected</strong> first — only selected students
-                    advance to the next round.
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface-muted/40 p-4">
+                <div>
+                  <p className="font-heading text-sm font-bold text-ink-900">
+                    Round {activeRound.sequence} ({activeRound.name})
+                  </p>
+                  <p className="text-xs text-ink-500 mt-0.5">
+                    {aheadOfTime !== null && !aheadOfTime.allowed
+                      ? aheadOfTime.reason
+                      : `Selected candidates automatically advance to Round ${nextRound.sequence} (${nextRound.name}).`}
                   </p>
                 </div>
-              )
+                <Button
+                  variant="secondary"
+                  disabled={closed !== null || (aheadOfTime !== null && !aheadOfTime.allowed)}
+                  onClick={async () => {
+                    if (advancing > 0) {
+                      try {
+                        await view.advance(activeRound.roundId, nextRound.roundId, null);
+                      } catch {
+                        // proceed to switch round
+                      }
+                    }
+                    setActive(nextRound.roundId);
+                  }}
+                  className="shrink-0"
+                >
+                  Move to Round {nextRound.sequence} ({nextRound.name}) →
+                </Button>
+              </div>
             ) : (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-brand-200/80 bg-brand-50/50 p-4">
                 <p className="text-sm text-ink-800">
@@ -1611,65 +1569,6 @@ export function DriveRoundsPage({
               </div>
             )}
           </div>
-
-          {/* F3 (UAT 2026-08-19): the advance asks first, and the company's
-              own instruction — a mail, a screenshot — can travel with it. */}
-          {advanceOpen && nextRound !== null && (
-            <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
-              <div
-                role="alertdialog"
-                aria-label="Confirm advancing"
-                className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
-              >
-                <h2 className="font-heading text-lg font-bold text-ink-900">
-                  Advance {advancing} to Round {nextRound.sequence}?
-                </h2>
-                <p className="mt-2 text-sm text-ink-700">
-                  {advancing} {advancing === 1 ? "student" : "students"} marked{" "}
-                  <strong>selected</strong> will be scheduled for Round {nextRound.sequence} (
-                  {nextRound.name}). Once advanced, their result in this round is final.
-                </p>
-                <div className="mt-4">
-                  <label
-                    htmlFor="advance-proof"
-                    className="mb-1 block text-xs font-medium text-ink-500"
-                  >
-                    Proof of company communication (PDF or image, optional)
-                  </label>
-                  <input
-                    id="advance-proof"
-                    type="file"
-                    accept="application/pdf,image/png,image/jpeg,image/webp"
-                    onChange={(e) => setProof(e.target.files?.[0] ?? null)}
-                    className="text-sm"
-                  />
-                  {proof !== null && (
-                    <p className="mt-1 text-xs text-ink-700">Attached: {proof.name}</p>
-                  )}
-                </div>
-                <div className="mt-5 flex justify-end gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setAdvanceOpen(false);
-                      setProof(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    isLoading={actions.isPending("advance")}
-                    onClick={() => {
-                      setAdvanceOpen(false);
-                      void actions.run(advance, "advance");
-                    }}
-                  >
-                    Confirm — advance and schedule
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
 

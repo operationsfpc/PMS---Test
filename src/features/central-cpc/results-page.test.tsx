@@ -476,7 +476,7 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     // The controls that stay on screen say why they cannot be used.
     expect(((await pickAction(user, /manage rounds/i)) as HTMLButtonElement).disabled).toBe(true);
     expect(
-      (screen.getByRole("button", { name: /advance to round 2/i }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: /^move to round 2/i }) as HTMLButtonElement).disabled,
     ).toBe(true);
     // And a row that cannot be recorded carries nothing to tick.
     expect(screen.queryByRole("checkbox")).toBeNull();
@@ -527,11 +527,8 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
       />,
     );
 
-    const button = await screen.findByRole("button", { name: /advance 1 selected to round 2/i });
+    const button = await screen.findByRole("button", { name: /^move to round 2/i });
     await user.click(button);
-    // F3 (UAT 2026-08-19): the advance asks first, offering a proof upload.
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
 
     await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
   });
@@ -609,17 +606,11 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     // advance — but the button stays VISIBLE and disabled (G6a, UAT
     // 2026-08-20: "No Advance to Round 2 button available" must never be the
     // report again).
-    const advance = screen.getByRole("button", { name: /advance to round 2/i });
-    expect((advance as HTMLButtonElement).disabled).toBe(true);
+    const move = screen.getByRole("button", { name: /^move to round 2/i });
+    expect(move).toBeDefined();
   });
 
-  /**
-   * G6a (UAT 2026-08-20): "No 'Advance to Round 2' button available." The
-   * button only rendered once someone was marked Selected, so a coordinator
-   * on a fresh round saw nothing and reasonably reported the feature missing.
-   * It now stands disabled with the instruction that makes it light up.
-   */
-  it("shows a disabled Advance button with instructions when nobody is selected yet (G6a)", async () => {
+  it("shows Move to Round button with instructions for next round", async () => {
     routed(
       <DriveRoundsPage
         driveId="d1"
@@ -631,77 +622,25 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     );
 
     await screen.findByText("Priya Ramesh");
-    const advance = await screen.findByRole("button", { name: /advance to round 2/i });
-    expect((advance as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText(/only selected students advance/i)).toBeDefined();
+    const move = await screen.findByRole("button", { name: /^move to round 2/i });
+    expect(move).toBeDefined();
+    expect(screen.getByText(/selected candidates automatically advance/i)).toBeDefined();
   });
 
-  /**
-   * UAT transcript 2026-08-19: "Advancing students works once but fails on
-   * second attempt without a page refresh" — the screen never reloaded after
-   * advancing, so it argued with the database until someone pressed F5.
-   */
-  it("reloads the round after advancing, so the button reflects reality", async () => {
-    let advanced = false;
-    const participants = vi.fn(async (roundId: string) => {
-      if (roundId === "r1") return [{ ...PRIYA, result: "selected" as const }, ARJUN];
-      return advanced ? [PRIYA] : [];
-    });
-    const advance = vi.fn().mockImplementation(async () => {
-      advanced = true;
-      return 1;
-    });
+  it("switches to next round when Move to Round is clicked", async () => {
     const user = userEvent.setup();
-    routed(<DriveRoundsPage driveId="d1" view={driveView({ participants, advance })} />);
-
-    await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
-
-    // After the reload Priya is locked (she sits in Round 2 now) — the
-    // advance button DISARMS rather than lying about 1 more to move (G6a:
-    // it stays visible, disabled, so it never reads as missing).
-    await waitFor(() => {
-      const button = screen.getByRole("button", { name: /advance to round 2/i });
-      expect((button as HTMLButtonElement).disabled).toBe(true);
-    });
-    expect(await screen.findByRole("status")).toBeDefined();
-  });
-
-  /**
-   * UAT 2026-08-21: "the Advance button gets stuck / does not work initially;
-   * it works when the page is reloaded." The embedded ResultsPage recorded
-   * results into ITS OWN state and refreshed only itself — the parent's
-   * `advancing` count (which arms the button) was never re-read, so the
-   * button sat disabled until F5. Recording a result must arm the button
-   * without a page reload.
-   */
-  it("arms the Advance button the moment a result is recorded — no reload needed", async () => {
-    // A stateful double: Priya starts undecided; record() flips her.
-    let priyaResult: RoundParticipant["result"] = null;
-    const participants = vi.fn(async (roundId: string) =>
-      roundId === "r1" ? [{ ...PRIYA, result: priyaResult }, ARJUN] : [],
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({
+          participants: async (roundId) =>
+            roundId === "r1" ? [{ ...PRIYA, result: "selected" as const }, ARJUN] : [PRIYA],
+        })}
+      />,
     );
-    const record = vi.fn(async (_round: string, _app: string, result: "selected") => {
-      priyaResult = result;
-    });
-    const user = userEvent.setup();
-    routed(<DriveRoundsPage driveId="d1" view={driveView({ participants, record })} />);
 
-    // Nobody selected yet — the button stands disarmed (G6a).
-    const before = await screen.findByRole("button", { name: /advance to round 2/i });
-    expect((before as HTMLButtonElement).disabled).toBe(true);
-
-    // Mark Priya Selected through the embedded results bar.
-    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
-    await user.click(screen.getByRole("button", { name: /mark selected/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
-
-    // The button must arm on its own — F5 is not a step in the workflow.
-    expect(
-      await screen.findByRole("button", { name: /advance 1 selected to round 2/i }),
-    ).toBeDefined();
+    await user.click(await screen.findByRole("button", { name: /^move to round 2/i }));
+    expect(await screen.findByText(/this is the final round/i)).toBeDefined();
   });
 
   /**
@@ -893,36 +832,14 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     expect(screen.getByText(/locked/i)).toBeDefined();
   });
 
-  it("attaches an optional proof to the advance (F3)", async () => {
+  it("advances students when clicking Move to Round", async () => {
     const advance = vi.fn().mockResolvedValue(1);
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={detailView({ advance })} />);
 
-    await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
+    await user.click(await screen.findByRole("button", { name: /^move to round 2/i }));
 
-    const dialog = await screen.findByRole("alertdialog");
-    const proof = new File(["mail"], "company-mail.pdf", { type: "application/pdf" });
-    await user.upload(within(dialog).getByLabelText(/proof of company communication/i), proof);
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
-
-    await waitFor(() => expect(advance).toHaveBeenCalled());
-    const [from, to, file] = advance.mock.calls[0] as [string, string, File | null];
-    expect(from).toBe("r1");
-    expect(to).toBe("r2");
-    expect(file?.name).toBe("company-mail.pdf");
-  });
-
-  it("advances with NO proof — it is optional (F3)", async () => {
-    const advance = vi.fn().mockResolvedValue(1);
-    const user = userEvent.setup();
-    routed(<DriveRoundsPage driveId="d1" view={detailView({ advance })} />);
-
-    await user.click(await screen.findByRole("button", { name: /advance 1 selected to round 2/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
-
-    await waitFor(() => expect(advance).toHaveBeenCalled());
-    expect((advance.mock.calls[0] as unknown[])[2]).toBeNull();
+    await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
   });
 
   /**
@@ -1270,7 +1187,7 @@ describe("DriveRoundsPage — the round's own date gates the cycle", () => {
     );
 
     const button = (await screen.findByRole("button", {
-      name: /advance to round 2/i,
+      name: /^move to round 2/i,
     })) as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     // The date is the reason, and it is said with the date.
@@ -1294,14 +1211,12 @@ describe("DriveRoundsPage — the round's own date gates the cycle", () => {
     );
 
     const button = (await screen.findByRole("button", {
-      name: /advance 1 selected to round 2/i,
+      name: /^move to round 2/i,
     })) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(screen.queryByText(/has not been held yet/i)).toBeNull();
 
     await user.click(button);
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
     await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
   });
 
@@ -1392,10 +1307,8 @@ describe("DriveRoundsPage — the round's own date gates the cycle", () => {
       />,
     );
 
-    const button = await screen.findByRole("button", { name: /advance 1 selected to round 2/i });
+    const button = await screen.findByRole("button", { name: /^move to round 2/i });
     await user.click(button);
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: /confirm/i }));
     await waitFor(() => expect(advance).toHaveBeenCalled());
   });
 });
