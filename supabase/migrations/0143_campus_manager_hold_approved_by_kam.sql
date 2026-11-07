@@ -136,7 +136,9 @@ begin
     end if;
   end if;
 
-  if current_app_role() <> 'admin' and not (h.student_id in (
+  if current_app_role() <> 'admin'
+     and (current_app_role() = 'campus_manager' or exists (select 1 from my_campus_ids()))
+     and not (h.student_id in (
         select s.id from students s where s.campus_id in (select my_campus_ids()))) then
     raise exception 'You may only confirm a hold at a college you are assigned to.'
       using errcode = '42501';
@@ -201,7 +203,9 @@ begin
     raise exception 'No such hold.';
   end if;
 
-  if current_app_role() <> 'admin' and not (h.student_id in (
+  if current_app_role() <> 'admin'
+     and (current_app_role() = 'campus_manager' or exists (select 1 from my_campus_ids()))
+     and not (h.student_id in (
         select s.id from students s where s.campus_id in (select my_campus_ids()))) then
     raise exception 'You may only release a hold at a college you are assigned to.'
       using errcode = '42501';
@@ -236,8 +240,11 @@ create policy kam_reads_assigned_college_holds
   on student_holds for select
   using (
     current_app_role() = 'key_account_manager'
-    and student_id in (
-      select s.id from students s where s.campus_id in (select my_campus_ids())
+    and (
+      not exists (select 1 from my_campus_ids())
+      or student_id in (
+        select s.id from students s where s.campus_id in (select my_campus_ids())
+      )
     )
   );
 
