@@ -63,7 +63,9 @@ async function uploadEvidence(
     .insert({
       student_id: studentId,
       kind,
-      storage_path: path,
+      // Prefixed deliberately: one column serves two buckets, and the queue's
+      // reader splits the bucket back off (0063's rule for this evidence).
+      storage_path: `${BUCKETS[kind]}/${path}`,
       size_bytes: file.size,
     })
     .select("id")

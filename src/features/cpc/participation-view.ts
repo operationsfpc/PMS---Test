@@ -2,6 +2,7 @@ import {
   canApproveParticipationChange,
   canDeclineParticipationRequest,
 } from "@domain/participation";
+import { objectKeyIn } from "@domain/storage-path";
 import type { AppRole } from "@domain/types";
 import { describeReadFailure, readAllRows } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -14,10 +15,10 @@ export class ParticipationQueueError extends Error {}
  * Both queues embed the student and the evidence behind their claim.
  */
 export const OPT_OUT_QUEUE_COLUMNS =
-  "id, student_id, reason, students(full_name, roll_number, campuses(name)), student_documents(storage_path)";
+  "id, student_id, reason, students(full_name, roll_number, campuses(name)), student_documents(kind, storage_path)";
 
 export const SELF_PLACEMENT_QUEUE_COLUMNS =
-  "id, student_id, company_name, ctc_lpa, students(full_name, roll_number, campuses(name)), student_documents(storage_path)";
+  "id, student_id, company_name, ctc_lpa, students(full_name, roll_number, campuses(name)), student_documents(kind, storage_path)";
 
 const one = <T>(value: unknown): T | null =>
   (Array.isArray(value) ? (value[0] ?? null) : (value ?? null)) as T | null;
@@ -25,26 +26,36 @@ const one = <T>(value: unknown): T | null =>
 /** Long enough to read a document, short enough not to be worth sharing. */
 const SIGNED_URL_TTL_SECONDS = 300;
 
+/** Where each kind of evidence lives, when the row does not say it itself. */
+const EVIDENCE_BUCKET_BY_KIND: Readonly<Record<string, string>> = {
+  offer_letter: "offer-letters",
+  opt_out_declaration: "declarations",
+  self_placement_declaration: "declarations",
+};
+
 /**
  * A short-lived link to a document (PRD §21.2 - nothing is public).
  *
- * `storage_path` carries the bucket, because the two kinds of evidence live in
- * different ones. A path we cannot sign returns null so the screen can say so:
- * a coordinator must never believe they have checked something they could not
- * open.
+ * Participation evidence is stored bucket-prefixed (`<bucket>/<student>/<file>`)
+ * because one column serves two buckets — but rows written while the uploader
+ * dropped the prefix are bare (`<student>/<file>`), and those files exist too.
+ * The kind names the bucket; objectKeyIn takes the path either way. A path we
+ * cannot sign returns null so the screen can say so: a coordinator must never
+ * believe they have checked something they could not open.
  */
 async function signedUrlFor(
   client: SupabaseClient,
-  storagePath: string | null | undefined,
+  evidence: { kind?: string | null; storage_path?: string | null } | null,
 ): Promise<string | null> {
+  const storagePath = evidence?.storage_path;
   if (storagePath === null || storagePath === undefined || storagePath === "") return null;
 
-  const [bucket, ...rest] = storagePath.split("/");
-  if (bucket === undefined || rest.length === 0) return null;
+  const bucket = EVIDENCE_BUCKET_BY_KIND[evidence?.kind ?? ""];
+  if (bucket === undefined) return null;
 
   const { data } = await client.storage
     .from(bucket)
-    .createSignedUrl(rest.join("/"), SIGNED_URL_TTL_SECONDS);
+    .createSignedUrl(objectKeyIn(bucket, storagePath), SIGNED_URL_TTL_SECONDS);
 
   return data?.signedUrl ?? null;
 }
@@ -130,7 +141,7 @@ export function createSupabaseParticipationQueueView(
         one<{ name?: string }>(one<{ campuses?: unknown }>(row.students)?.campuses)?.name ?? null;
 
       const evidenceOf = (row: Record<string, unknown>) =>
-        one<{ storage_path?: string }>(row.student_documents)?.storage_path;
+        one<{ kind?: string | null; storage_path?: string | null }>(row.student_documents);
 
       return {
         optOuts: await Promise.all(

@@ -122,7 +122,10 @@ describe("the pending queue", () => {
           id: "req-1",
           reason: "Higher studies",
           students: { full_name: "Anjali", roll_number: "21CSE1042" },
-          student_documents: { storage_path: "declarations/s1/declaration.jpg" },
+          student_documents: {
+            kind: "opt_out_declaration",
+            storage_path: "declarations/s1/declaration.jpg",
+          },
         },
       ],
       placements: [
@@ -131,7 +134,7 @@ describe("the pending queue", () => {
           company_name: "Freshworks",
           ctc_lpa: 7.5,
           students: { full_name: "Rahul", roll_number: "21CSE1099" },
-          student_documents: { storage_path: "offer-letters/s1/offer.pdf" },
+          student_documents: { kind: "offer_letter", storage_path: "offer-letters/s1/offer.pdf" },
         },
       ],
     });
@@ -140,6 +143,41 @@ describe("the pending queue", () => {
 
     expect(optOuts[0]?.declarationUrl).toBe("https://signed/declarations/s1/declaration.jpg");
     expect(selfPlacements[0]?.offerLetterUrl).toBe("https://signed/offer-letters/s1/offer.pdf");
+  });
+
+  /**
+   * The uploader once dropped the bucket prefix (25d7695), so live rows store
+   * `<student>/<file>` bare. The file is in the bucket all the same — the kind
+   * names it — and "No offer letter was uploaded" over a letter the student
+   * really uploaded is the queue lying about evidence.
+   */
+  it("signs a bare path from the bucket its kind lives in", async () => {
+    stub({
+      optOuts: [
+        {
+          id: "req-1",
+          reason: "Higher studies",
+          students: { full_name: "Anjali", roll_number: "21CSE1042" },
+          student_documents: { kind: "opt_out_declaration", storage_path: "s1/1785-form.pdf" },
+        },
+      ],
+      placements: [
+        {
+          id: "sp-1",
+          company_name: "MAXX Techno Solution",
+          ctc_lpa: 3.6,
+          students: { full_name: "Radhika", roll_number: "A123" },
+          student_documents: { kind: "offer_letter", storage_path: "s1/1785-offer.pdf" },
+        },
+      ],
+    });
+
+    const { optOuts, selfPlacements } = await view().pending();
+
+    expect(optOuts[0]?.declarationUrl).toBe("https://signed/declarations/s1/1785-form.pdf");
+    expect(selfPlacements[0]?.offerLetterUrl).toBe(
+      "https://signed/offer-letters/s1/1785-offer.pdf",
+    );
   });
 
   it("reports a request with no document rather than a dead link", async () => {

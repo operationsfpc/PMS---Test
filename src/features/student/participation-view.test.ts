@@ -399,6 +399,13 @@ describe("requesting a self-placement hold", () => {
         .filter((w) => w.table === "student_documents")
         .map((w) => (w.body as { kind?: string }).kind),
     ).toEqual(["offer_letter", "self_placement_declaration"]);
+    // The recorded path must name the object the upload wrote, bucket and all:
+    // one column serves two buckets, and the queue's reader splits it back off.
+    expect(
+      writes
+        .filter((w) => w.table === "student_documents")
+        .map((w) => (w.body as { storage_path?: string }).storage_path),
+    ).toEqual([uploads[0], uploads[1]]);
   });
 
   it("refuses a student who is already on hold before uploading anything", async () => {
@@ -471,8 +478,12 @@ describe("evidence uploads", () => {
   it("puts an offer letter in the student's own folder, and records it", async () => {
     const { client, uploads } = stubStorage();
     const writes = stub();
+    let document: Record<string, unknown> = {};
     server.use(
-      http.post(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json({ id: "doc-1" })),
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        document = (await request.clone().json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "doc-1" });
+      }),
     );
 
     await createSupabaseParticipationView(client, async () => "s1").recordSelfPlacement({
@@ -483,6 +494,7 @@ describe("evidence uploads", () => {
     });
 
     expect(uploads[0]).toMatch(/^offer-letters\/s1\//);
+    expect(document.storage_path).toBe(uploads[0]);
     const request = writes.find((w) => w.table === "self_placement_requests");
     expect(request?.body).toMatchObject({ offer_letter_id: "doc-1" });
   });
@@ -490,8 +502,12 @@ describe("evidence uploads", () => {
   it("puts a declaration in its own bucket, and records it", async () => {
     const { client, uploads } = stubStorage();
     const writes = stub();
+    let document: Record<string, unknown> = {};
     server.use(
-      http.post(`${BASE}/rest/v1/student_documents`, () => HttpResponse.json({ id: "doc-2" })),
+      http.post(`${BASE}/rest/v1/student_documents`, async ({ request }) => {
+        document = (await request.clone().json()) as Record<string, unknown>;
+        return HttpResponse.json({ id: "doc-2" });
+      }),
     );
 
     await createSupabaseParticipationView(client, async () => "s1").requestOptOut({
@@ -500,6 +516,7 @@ describe("evidence uploads", () => {
     });
 
     expect(uploads[0]).toMatch(/^declarations\/s1\//);
+    expect(document.storage_path).toBe(uploads[0]);
     const request = writes.find((w) => w.table === "opt_out_requests");
     expect(request?.body).toMatchObject({ declaration_id: "doc-2", reason: "Higher studies" });
   });

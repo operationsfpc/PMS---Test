@@ -1,9 +1,8 @@
 -- =============================================================================
 -- FACE Prep Campus — Placement Management System (PMS)
--- Complete Database Schema (Consolidated Migrations 0001 - 0105)
--- Generated automatically for Supabase execution.
+-- Complete Database Schema (Consolidated Migrations 0001 - 0142)
+-- Generated automatically by scripts/setup-database.ts
 -- =============================================================================
-
 
 -- =============================================================================
 -- Migration: 0001_enums.sql
@@ -51,7 +50,6 @@ create type app_role as enum (
   'account_executive', 'delivery_head', 'central_placement_coordinator',
   'key_account_manager', 'enterprise_relations', 'er_head', 'ceo'
 );
-
 
 -- =============================================================================
 -- Migration: 0002_identity.sql
@@ -130,7 +128,6 @@ insert into settings (key, value) values
   ('offer_category_bands', '{"regularMaxLpa": 5, "dreamMaxLpa": 10}'),
   ('absence_limit',        '3'),
   ('max_upload_bytes',     '5242880');
-
 
 -- =============================================================================
 -- Migration: 0003_students.sql
@@ -260,7 +257,6 @@ create table skill_scores (
   recorded_at  timestamptz not null default now(),
   unique (student_id, metric, recorded_at)
 );
-
 
 -- =============================================================================
 -- Migration: 0004_drives.sql
@@ -397,7 +393,6 @@ create table drive_rounds (
   unique (drive_id, sequence)
 );
 
-
 -- =============================================================================
 -- Migration: 0005_applications.sql
 -- =============================================================================
@@ -481,7 +476,6 @@ create table attendance (
 );
 
 create index attendance_absent_idx on attendance (application_id) where status = 'absent';
-
 
 -- =============================================================================
 -- Migration: 0006_outcomes.sql
@@ -579,7 +573,6 @@ create table email_deliveries (
   updated_at          timestamptz not null default now()
 );
 
-
 -- =============================================================================
 -- Migration: 0007_audit.sql
 -- =============================================================================
@@ -667,7 +660,6 @@ create trigger audit_semesters  after insert or update or delete on student_seme
 -- The log is append-only. Nobody, including the service role, may rewrite history.
 create rule audit_log_no_update as on update to audit_log do instead nothing;
 create rule audit_log_no_delete as on delete to audit_log do instead nothing;
-
 
 -- =============================================================================
 -- Migration: 0008_rls.sql
@@ -823,7 +815,6 @@ create policy drives_dh_write on drives for all
 grant usage on schema public to anon, authenticated;
 grant select, insert, update on all tables in schema public to authenticated;
 grant execute on all functions in schema public to authenticated;
-
 
 -- =============================================================================
 -- Migration: 0009_guards.sql
@@ -981,7 +972,6 @@ create trigger enforce_opt_out_irreversible
   before update on students
   for each row execute function enforce_opt_out_irreversible();
 
-
 -- =============================================================================
 -- Migration: 0010_storage.sql
 -- =============================================================================
@@ -1043,7 +1033,6 @@ begin
   $p$;
 end $$;
 
-
 -- =============================================================================
 -- Migration: 0011_reference_degrees.sql
 -- =============================================================================
@@ -1067,7 +1056,6 @@ insert into degrees (name) values
   ('MCA'),
   ('M.Sc CS')
 on conflict (name) do nothing;
-
 
 -- =============================================================================
 -- Migration: 0012_org_hierarchy.sql
@@ -1163,7 +1151,6 @@ create policy write_settings         on settings                 for all using (
 -- 0008's blanket grant only covered tables that existed then.
 grant select, insert, update on cities to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0013_staff_campus_invitations.sql
 -- =============================================================================
@@ -1222,7 +1209,6 @@ begin
   return new;
 end;
 $$;
-
 
 -- =============================================================================
 -- Migration: 0014_self_placement.sql
@@ -1285,7 +1271,6 @@ create policy staff_decides_self_placement
 
 grant select, insert, update on self_placement_requests to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0015_staff_removal.sql
 -- =============================================================================
@@ -1318,7 +1303,6 @@ grant delete on profiles                  to authenticated;
 grant delete on staff_invitations         to authenticated;
 grant delete on staff_campus_invitations  to authenticated;
 grant delete on staff_campus_assignments  to authenticated;
-
 
 -- =============================================================================
 -- Migration: 0016_invitation_accepts_existing_account.sql
@@ -1383,7 +1367,6 @@ $$;
 create trigger accept_invitation_for_existing_account
   after insert or update of role on staff_invitations
   for each row execute function accept_invitation_for_existing_account();
-
 
 -- =============================================================================
 -- Migration: 0017_semester_academics.sql
@@ -1454,7 +1437,6 @@ $$;
 create trigger enforce_semester_cap
   before insert or update on student_semesters
   for each row execute function enforce_semester_cap();
-
 
 -- =============================================================================
 -- Migration: 0018_campus_scoped_readers.sql
@@ -1573,7 +1555,6 @@ create policy staff_decides_self_placement on self_placement_requests for all
   using (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())))
   with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
 
-
 -- =============================================================================
 -- Migration: 0019_drive_owner_reads_shortlist.sql
 -- =============================================================================
@@ -1608,7 +1589,6 @@ create policy offers_read_drive_owner on offers for select
     current_app_role() = 'account_executive'
     and drive_id in (select id from drives where created_by = auth.uid())
   );
-
 
 -- =============================================================================
 -- Migration: 0020_student_may_submit_srf.sql
@@ -1708,7 +1688,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0021_srf_draft.sql
 -- =============================================================================
@@ -1737,7 +1716,6 @@ alter table students
 comment on column students.srf_draft is
   'The student''s unsent registration form. No authority: never read by '
   'eligibility or verification. Cleared when the form is submitted.';
-
 
 -- =============================================================================
 -- Migration: 0022_participation_evidence.sql
@@ -1848,7 +1826,6 @@ begin
       )
   $p$;
 end $$;
-
 
 -- =============================================================================
 -- Migration: 0023_marksheet_evidence.sql
@@ -1963,7 +1940,6 @@ $$;
 create trigger enforce_ug_marksheet_belongs_to_student
   before insert or update on students
   for each row execute function enforce_ug_marksheet_belongs_to_student();
-
 
 -- =============================================================================
 -- Migration: 0024_academic_history.sql
@@ -2081,7 +2057,6 @@ create trigger enforce_diploma_marksheet_belongs_to_student
   before insert or update on students
   for each row execute function enforce_diploma_marksheet_belongs_to_student();
 
-
 -- =============================================================================
 -- Migration: 0025_other_profiles.sql
 -- =============================================================================
@@ -2117,7 +2092,6 @@ begin
       check (jsonb_typeof(other_profiles) = 'array');
   end if;
 end $$;
-
 
 -- =============================================================================
 -- Migration: 0026_optional_diploma_evidence.sql
@@ -2157,7 +2131,6 @@ end $$;
 -- the application - so relaxing that side needs no DDL. The ownership and
 -- kind triggers from 0023/0024 still apply to BOTH: optional to supply, but
 -- if supplied it must be that student's own document, of the right kind.
-
 
 -- =============================================================================
 -- Migration: 0027_student_replaces_own_semesters.sql
@@ -2214,7 +2187,6 @@ grant delete on student_semesters to authenticated;
 --    actually live in.
 create policy semesters_delete_self on student_semesters for delete
   using (student_id = current_student_id() and status = 'pending');
-
 
 -- =============================================================================
 -- Migration: 0028_submit_srf_atomically.sql
@@ -2378,7 +2350,6 @@ $$;
 -- policies written for them.
 grant execute on function submit_srf(jsonb, jsonb, jsonb) to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0029_one_campus_per_coordinator.sql
 -- =============================================================================
@@ -2429,7 +2400,6 @@ drop trigger if exists enforce_one_campus_per_coordinator on staff_campus_assign
 create trigger enforce_one_campus_per_coordinator
   before insert or update on staff_campus_assignments
   for each row execute function enforce_one_campus_per_coordinator();
-
 
 -- =============================================================================
 -- Migration: 0030_students_read_published_drives.sql
@@ -2548,7 +2518,6 @@ end $$;
 grant delete on drive_target_campuses, drive_eligible_degrees,
                 drive_eligible_branches, drive_rounds to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0031_approval_verifies_semesters.sql
 -- =============================================================================
@@ -2625,7 +2594,6 @@ update student_semesters ss
    and ss.status = 'pending'
    and s.srf_status = 'srf_approved'
    and s.srf_decided_by is not null;
-
 
 -- =============================================================================
 -- Migration: 0032_uat_feedback_decisions_and_pif.sql
@@ -2737,7 +2705,6 @@ update drives
 comment on column drives.min_overall_marks is
   'F12: the cutoff as the recruiter stated it. min_overall_cgpa is the normalised figure R5 filters on.';
 
-
 -- =============================================================================
 -- Migration: 0033_drive_specific_resume.sql
 -- =============================================================================
@@ -2785,7 +2752,6 @@ do $$ begin
       check (drive_id is null or kind = 'resume');
   end if;
 end $$;
-
 
 -- =============================================================================
 -- Migration: 0034_student_certificates.sql
@@ -2854,7 +2820,6 @@ grant select, insert, delete on student_certificates to authenticated;
 
 comment on table student_certificates is
   'F17: name + document. F9: one_certificate_per_name is what stops repeat uploads.';
-
 
 -- =============================================================================
 -- Migration: 0035_submit_srf_with_certificates.sql
@@ -3025,7 +2990,6 @@ grant execute on function submit_srf(jsonb, jsonb, jsonb, jsonb) to authenticate
 comment on column students.certifications is
   'SUPERSEDED by student_certificates (0034). No longer written: free text could be neither verified nor de-duplicated - F9/F17, UAT 2026-08-06.';
 
-
 -- =============================================================================
 -- Migration: 0036_campus_programmes.sql
 -- =============================================================================
@@ -3174,7 +3138,6 @@ comment on function backfill_campus_programmes is
 comment on table campus_programmes is
   'F6: degree+branch is one choice, and it belongs to a college for a passing year.';
 
-
 -- =============================================================================
 -- Migration: 0037_skill_repository.sql
 -- =============================================================================
@@ -3294,7 +3257,6 @@ comment on table skill_areas is
   'PRD §5: the catalogue of institutional skill areas. Seeded; Central CPC extends it.';
 comment on table student_skill_scores is
   'PRD §5: one institutional score per student per area, 0-100 (A35). Feeds R11 shortlisting. Internal-only (A36).';
-
 
 -- =============================================================================
 -- Migration: 0038_certificate_verification.sql
@@ -3521,7 +3483,6 @@ $$;
 
 grant execute on function submit_srf(jsonb, jsonb, jsonb, jsonb) to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0039_approval_verifies_certificates.sql
 -- =============================================================================
@@ -3598,7 +3559,6 @@ create trigger verify_certificates_on_srf_approval
 
 comment on function verify_certificates_on_srf_approval is
   'Approving an SRF confirms the certificates submitted with it (2026-08-06). Later uploads stay pending for /cpc/certificates.';
-
 
 -- =============================================================================
 -- Migration: 0040_one_email_one_person.sql
@@ -3720,7 +3680,6 @@ create trigger refuse_student_email_for_staff_invitation
 
 comment on function refuse_staff_email_for_student is
   'P8 root cause (2026-08-06): one address is one identity, because sign-in is by address.';
-
 
 -- =============================================================================
 -- Migration: 0041_apply_gates.sql
@@ -3860,7 +3819,6 @@ create trigger enforce_application_gates
   before insert on applications
   for each row execute function enforce_application_gates();
 
-
 -- =============================================================================
 -- Migration: 0042_verification_is_campus_cpc_only.sql
 -- =============================================================================
@@ -3922,7 +3880,6 @@ create policy campus_cpc_decides_certificates
     current_app_role() = 'campus_placement_coordinator'
     and student_id in (select my_student_ids())
   );
-
 
 -- =============================================================================
 -- Migration: 0043_rounds_reach_the_student.sql
@@ -4218,7 +4175,6 @@ create trigger offer_reaches_student
   after insert on offers
   for each row execute function offer_reaches_student();
 
-
 -- =============================================================================
 -- Migration: 0044_campus_reads_drives.sql
 -- =============================================================================
@@ -4236,7 +4192,6 @@ create trigger offer_reaches_student
 
 create policy drives_campus_read on drives for select
   using (is_campus_reader());
-
 
 -- =============================================================================
 -- Migration: 0045_campus_reads_shortlist.sql
@@ -4261,7 +4216,6 @@ create policy shortlist_campus_read on shortlist_entries for select
       select id from applications where student_id in (select my_student_ids())
     )
   );
-
 
 -- =============================================================================
 -- Migration: 0046_offer_band_edges_move_up.sql
@@ -4349,7 +4303,6 @@ update drives
        from classify_offer_category(coalesce(ctc_max_lpa, ctc_min_lpa));
 
 alter table drives enable trigger enforce_drive_transitions;
-
 
 -- =============================================================================
 -- Migration: 0047_one_verb_one_role.sql
@@ -4439,7 +4392,6 @@ create policy drives_operator_delete on drives for delete
 -- drives_campus_read and drives_student_read all still apply. An AE seeing
 -- only the drives they raised is 0008's rule and remains correct - Karthik,
 -- same day: "An AE cannot see drives raised by other AEs."
-
 
 -- =============================================================================
 -- Migration: 0048_school_boards_and_rejection.sql
@@ -4709,7 +4661,6 @@ create trigger notify_student_of_srf_rejection
   after update on students
   for each row execute function notify_student_of_srf_rejection();
 
-
 -- =============================================================================
 -- Migration: 0049_srf_stores_preferences_and_resumes.sql
 -- =============================================================================
@@ -4959,7 +4910,6 @@ create policy role_preferences_read_staff on student_role_preferences for select
     or (is_campus_staff() and student_id in (select my_student_ids()))
   );
 
-
 -- =============================================================================
 -- Migration: 0050_area_targeting_and_school_marks_gates.sql
 -- =============================================================================
@@ -5150,7 +5100,6 @@ create policy drives_student_read on drives for select
     )
   );
 
-
 -- =============================================================================
 -- Migration: 0051_pif_jd_shift_and_joining.sql
 -- =============================================================================
@@ -5320,7 +5269,6 @@ begin
   $p$;
 end $$;
 
-
 -- =============================================================================
 -- Migration: 0052_skill_scores_on_a_5_point_scale.sql
 -- =============================================================================
@@ -5347,7 +5295,6 @@ alter table student_skill_scores
 alter table student_skill_scores
   add constraint score_within_scale
   check (score >= 1 and score <= 5 and score = round(score));
-
 
 -- =============================================================================
 -- Migration: 0053_uat_stipend_contacts_round_details.sql
@@ -5482,7 +5429,6 @@ begin
       with check (bucket_id = 'advance-proofs' and public.is_operator())
   $p$;
 end $$;
-
 
 -- =============================================================================
 -- Migration: 0054_drive_type_preference_and_round_notices.sql
@@ -5736,7 +5682,6 @@ create trigger meeting_slot_reaches_student
   after update on round_participants
   for each row execute function meeting_slot_reaches_student();
 
-
 -- =============================================================================
 -- Migration: 0055_round_details_freeze.sql
 -- =============================================================================
@@ -5795,7 +5740,6 @@ create trigger round_details_freeze
   before update on drive_rounds
   for each row
   execute function round_details_freeze_guard();
-
 
 -- =============================================================================
 -- Migration: 0056_off_campus_venue_and_cap_only_internships.sql
@@ -5958,7 +5902,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0057_round_editing_absent_alerts_completion.sql
 -- =============================================================================
@@ -6093,7 +6036,6 @@ create trigger notify_absent_student
   after insert or update on attendance
   for each row execute function notify_absent_student();
 
-
 -- =============================================================================
 -- Migration: 0058_skill_catalogue_ae_read.sql
 -- =============================================================================
@@ -6117,7 +6059,6 @@ create trigger notify_absent_student
 create policy skill_areas_ae_read on skill_areas for select
   using (current_app_role() = 'account_executive');
 
-
 -- =============================================================================
 -- Migration: 0059_skill_removal_keeps_scores.sql
 -- =============================================================================
@@ -6136,7 +6077,6 @@ alter table student_skill_scores
   drop constraint student_skill_scores_skill_area_id_fkey,
   add constraint student_skill_scores_skill_area_id_fkey
     foreign key (skill_area_id) references skill_areas(id) on delete restrict;
-
 
 -- =============================================================================
 -- Migration: 0060_live_accepts_attached_jd.sql
@@ -6176,7 +6116,6 @@ alter table drives
       and application_start is not null and application_end is not null
     )
   );
-
 
 -- =============================================================================
 -- Migration: 0061_semester_verification_queue.sql
@@ -6219,7 +6158,6 @@ create policy semesters_delete_self on student_semesters for delete
     student_id = current_student_id()
     and status in ('pending', 'rejected')
   );
-
 
 -- =============================================================================
 -- Migration: 0062_offer_letters.sql
@@ -6294,7 +6232,6 @@ begin
   $p$;
 end $$;
 
-
 -- =============================================================================
 -- Migration: 0063_resume_paths_are_object_keys.sql
 -- =============================================================================
@@ -6335,7 +6272,6 @@ update student_documents
  where kind = 'resume'
    and storage_path like 'resumes/%'
    and length(storage_path) > length('resumes/');
-
 
 -- =============================================================================
 -- Migration: 0064_placement_totals.sql
@@ -6458,7 +6394,6 @@ $$;
 revoke all on function placement_totals() from public;
 grant execute on function placement_totals() to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0065_placement_totals_not_for_anon.sql
 -- =============================================================================
@@ -6484,7 +6419,6 @@ grant execute on function placement_totals() to authenticated;
 -- authorisation check is a second line, never the first.
 
 revoke all on function placement_totals() from anon;
-
 
 -- =============================================================================
 -- Migration: 0066_offer_category_internship.sql
@@ -6522,7 +6456,6 @@ revoke all on function placement_totals() from anon;
 -- `offerCategoryRank` in src/domain/offer-category.ts THROWS for it.
 
 alter type offer_category add value if not exists 'internship' before 'regular';
-
 
 -- =============================================================================
 -- Migration: 0067_internship_category_and_stipend_go_live.sql
@@ -6680,7 +6613,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0068_notifications_say_the_category_and_name_their_drive.sql
 -- =============================================================================
@@ -6788,7 +6720,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0069_backfill_offer_notification_drives.sql
 -- =============================================================================
@@ -6848,7 +6779,6 @@ comment on function link_offer_notifications_to_drives() is
   'only when the student + company pair names exactly one drive.';
 
 select link_offer_notifications_to_drives();
-
 
 -- =============================================================================
 -- Migration: 0070_an_internship_offer_records_a_stipend.sql
@@ -6954,7 +6884,6 @@ comment on constraint offer_records_what_it_pays on offers is
   'everything else an annual CTC — and never both. P10''s other half '
   '(2026-08-27). Mirrors offerPayProblem in src/domain/offer-pay.ts.';
 
-
 -- =============================================================================
 -- Migration: 0071_email_outbox_queue.sql
 -- =============================================================================
@@ -6997,7 +6926,6 @@ create index if not exists email_deliveries_queued_idx
 comment on trigger notification_enqueues_email on notifications is
   'Automatically stages an email_deliveries row for each student notification.';
 
-
 -- =============================================================================
 -- Migration: 0072_opt_out_requests_rls.sql
 -- =============================================================================
@@ -7036,7 +6964,6 @@ create policy staff_decides_opt_out on opt_out_requests for all
   with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
 
 grant select, insert, update on opt_out_requests to authenticated;
-
 
 -- =============================================================================
 -- Migration: 0073_school_grades_and_arrears_sync.sql
@@ -7237,7 +7164,6 @@ update students
      order by student_id, semester_number desc
   ) as latest
  where students.id = latest.student_id;
-
 
 -- =============================================================================
 -- Migration: 0074_fix_arrears_sync_trigger_conflict.sql
@@ -7568,7 +7494,6 @@ update students
   ) as latest
  where students.id = latest.student_id;
 
-
 -- =============================================================================
 -- Migration: 0075_mode_aware_round_notices.sql
 -- =============================================================================
@@ -7827,7 +7752,6 @@ create trigger meeting_slot_reaches_student
   after update on round_participants
   for each row execute function meeting_slot_reaches_student();
 
-
 -- =============================================================================
 -- Migration: 0076_student_lifecycle_email_triggers.sql
 -- =============================================================================
@@ -7947,7 +7871,6 @@ create trigger notify_student_of_srf_approval
   after insert or update of srf_status on students
   for each row execute function notify_student_of_srf_approval();
 
-
 -- =============================================================================
 -- Migration: 0077_scope_student_certificates_to_campus.sql
 -- =============================================================================
@@ -7974,7 +7897,6 @@ create policy student_reads_own_certificates
     or is_org_reader()
     or (is_campus_reader() and student_id in (select my_student_ids()))
   );
-
 
 -- =============================================================================
 -- Migration: 0078_cron_email_dispatcher.sql
@@ -8192,7 +8114,6 @@ select cron.schedule(
   '* * * * *',
   'select process_email_deliveries(50);'
 );
-
 
 -- =============================================================================
 -- Migration: 0079_staff_invitation_email_dispatcher.sql
@@ -8427,7 +8348,6 @@ begin
   return v_count;
 end;
 $$;
-
 
 -- =============================================================================
 -- Migration: 0080_drive_lifecycle_staff_email_triggers.sql
@@ -8760,7 +8680,6 @@ create trigger notify_cpc_on_student_offer
   after insert on offers
   for each row execute function notify_cpc_on_student_offer();
 
-
 -- =============================================================================
 -- Migration: 0081_notify_heads_on_drive_approval.sql
 -- =============================================================================
@@ -9010,7 +8929,6 @@ create trigger notify_drive_lifecycle_roles
   after insert or update of status on drives
   for each row execute function notify_drive_lifecycle_roles();
 
-
 -- =============================================================================
 -- Migration: 0082_notify_students_on_drive_live.sql
 -- =============================================================================
@@ -9164,7 +9082,6 @@ create trigger notify_eligible_students_on_drive_live
 comment on trigger notify_eligible_students_on_drive_live on drives is
   'Notifies all eligible students when a drive goes live. Creates notifications which auto-enqueue emails via 0071.';
 
-
 -- =============================================================================
 -- Migration: 0083_fix_email_dispatch.sql
 -- =============================================================================
@@ -9211,7 +9128,6 @@ begin
   raise notice 'Migration 0083: Reset % emails to queued status. Disabled broken cron job.', v_reset_count;
   raise notice 'Next step: Manually invoke the email-dispatch edge function to process the queue.';
 end $$;
-
 
 -- =============================================================================
 -- Migration: 0084_fix_email_dispatch_v2.sql
@@ -9409,7 +9325,6 @@ select cron.schedule(
   'select process_email_deliveries_fixed(50);'
 );
 
-
 -- =============================================================================
 -- Migration: 0085_simple_email_dispatch.sql
 -- =============================================================================
@@ -9542,7 +9457,6 @@ select cron.schedule(
   '* * * * *',
   'select process_email_deliveries_simple(50);'
 );
-
 
 -- =============================================================================
 -- Migration: 0086_fix_resend_api_key.sql
@@ -9716,7 +9630,6 @@ begin
 
   raise notice 'Migration 0086: Reset % emails to queued. Total queued: %. Cron will process 50/min.', v_reset_count, v_queued_count;
 end $$;
-
 
 -- =============================================================================
 -- Migration: 0087_fix_all_schema_mismatches.sql
@@ -10041,7 +9954,6 @@ select cron.schedule(
 -- ============================================================================
 comment on function process_email_deliveries_simple is
   'Fixed: handles all 11 notification kinds used in the database (was missing 6 kinds)';
-
 
 -- =============================================================================
 -- Migration: 0088_fix_resend_api_key_regression.sql
@@ -10479,7 +10391,6 @@ update email_deliveries
 
 comment on function process_email_deliveries_simple is
   'Fixed: restored valid Resend API key from migration 0086 (was reverted by 0087). Handles all 39 email template kinds from the catalogue (S1-S16, C1-C7, CP1-CP4, A1-A4, DH1-DH3, L1-L2, R1-R4, AD1-AD3).';
-
 
 -- =============================================================================
 -- Migration: 0089_fix_staff_emails_and_dispatch_bugs.sql
@@ -11141,7 +11052,6 @@ update email_deliveries
 -- Migration 0089: Fix staff email dispatch (custom HTML bypass), internship CTC display,
 -- offer drive_id, arrear enum values, dedup guard.
 
-
 -- =============================================================================
 -- Migration: 0090_support_internship_self_placements.sql
 -- =============================================================================
@@ -11173,7 +11083,6 @@ alter table self_placement_requests
 -- This migration only handles the schema; the frontend must branch on drive_type:
 --   internship: offer_category='internship', ctc_lpa=null, stipend_monthly=<value>
 --   placement:  offer_category=<category>, ctc_lpa=<value>, stipend_monthly=null
-
 
 -- =============================================================================
 -- Migration: 0091_rls_overrides_and_disbarment.sql
@@ -11227,7 +11136,6 @@ create policy staff_writes_disbarment on disbarment_decisions for all
 
 grant select on disbarment_decisions to authenticated;
 
-
 -- =============================================================================
 -- Migration: 0092_application_confirmed_notification.sql
 -- =============================================================================
@@ -11269,7 +11177,6 @@ drop trigger if exists notify_student_of_application on applications;
 create trigger notify_student_of_application
   after insert on applications
   for each row execute function notify_student_of_application();
-
 
 -- =============================================================================
 -- Migration: 0093_opt_out_notification_triggers.sql
@@ -11355,7 +11262,6 @@ drop trigger if exists notify_cpc_of_opt_out_submission on opt_out_requests;
 create trigger notify_cpc_of_opt_out_submission
   after insert on opt_out_requests
   for each row execute function notify_cpc_of_opt_out_submission();
-
 
 -- =============================================================================
 -- Migration: 0094_self_placement_notification_triggers.sql
@@ -11444,7 +11350,6 @@ create trigger notify_cpc_of_self_placement_submission
   after insert on self_placement_requests
   for each row execute function notify_cpc_of_self_placement_submission();
 
-
 -- =============================================================================
 -- Migration: 0095_srf_submission_notification_trigger.sql
 -- =============================================================================
@@ -11493,7 +11398,6 @@ create trigger notify_cpc_of_srf_submission
   after update on students
   for each row execute function notify_cpc_of_srf_submission();
 
-
 -- =============================================================================
 -- Migration: 0096_atomic_opt_out_approval.sql
 -- =============================================================================
@@ -11534,7 +11438,6 @@ end;
 $$;
 
 grant execute on function approve_opt_out_atomic to authenticated;
-
 
 -- =============================================================================
 -- Migration: 0097_fix_notification_trigger_bugs.sql
@@ -11616,7 +11519,6 @@ create trigger notify_cpc_of_srf_submission
   after update on students
   for each row execute function notify_cpc_of_srf_submission();
 
-
 -- =============================================================================
 -- Migration: 0098_atomic_campus_assignment.sql
 -- =============================================================================
@@ -11661,7 +11563,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0099_atomic_round_removal.sql
 -- =============================================================================
@@ -11705,7 +11606,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0100_atomic_batch_attendance.sql
 -- =============================================================================
@@ -11741,7 +11641,6 @@ begin
 end;
 $$;
 
-
 -- =============================================================================
 -- Migration: 0101_atomic_schedule_participants.sql
 -- =============================================================================
@@ -11773,7 +11672,6 @@ begin
   select p_round_id, unnest(p_application_ids), 'scheduled'::attendance_status;
 end;
 $$;
-
 
 -- =============================================================================
 -- Migration: 0102_fix_email_dispatch.sql
@@ -11821,7 +11719,6 @@ comment on function process_email_deliveries(int) is
 -- 4. Optional: Drop the function to prevent accidental use
 -- Uncomment if you want to fully remove it:
 -- drop function if exists process_email_deliveries(int);
-
 
 -- =============================================================================
 -- Migration: 0103_fix_email_dispatch_schedule.sql
@@ -11913,7 +11810,6 @@ WHERE n.kind = 'shortlisted'
   AND ed.status = 'queued'
 ORDER BY ed.updated_at ASC
 LIMIT 10;
-
 
 -- =============================================================================
 -- Migration: 0104_shortlist_only_future_queue.sql
@@ -12015,7 +11911,6 @@ WHERE notification_id IN (
   SELECT id FROM notifications WHERE kind != 'shortlisted'
 );
 
-
 -- =============================================================================
 -- Migration: 0105_setup_cron_for_new_project.sql
 -- =============================================================================
@@ -12081,4 +11976,7466 @@ SELECT cron.schedule(
 );
 
 COMMENT ON EXTENSION pg_cron IS 'Scheduled jobs for PMS — executes email-dispatch edge function every 5 minutes.';
+
+-- =============================================================================
+-- Migration: 0106_reenable_drive_emails.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0106: Re-enable drive_published emails + backfill missing deliveries
+-- =============================================================================
+-- Migration 0104 restricted the notification → email trigger to shortlisted
+-- only, as an emergency brake while the dispatch system was being rebuilt.
+-- The Edge Function (email-dispatch) now handles drive_published correctly,
+-- and the cron job (0105) fires it every 5 minutes. This migration:
+--
+-- 1. Updates enqueue_notification_email() to allow both 'shortlisted' AND
+--    'drive_published' notifications into email_deliveries.
+-- 2. Backfills email_deliveries rows for existing drive_published notifications
+--    that were created while the trigger was blocked (Newton School: 30 students).
+-- =============================================================================
+
+-- STEP 1: Allow shortlisted + drive_published through the trigger
+CREATE OR REPLACE FUNCTION enqueue_notification_email()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_email text;
+  v_opted boolean;
+BEGIN
+  -- Only shortlisted and drive_published notifications enter the email outbox
+  IF new.kind NOT IN ('shortlisted', 'drive_published') THEN
+    RETURN new;
+  END IF;
+
+  SELECT email, (participation_status = 'opted_out')
+    INTO v_email, v_opted
+    FROM students
+   WHERE id = new.student_id;
+
+  -- Opted-out students or missing emails do not receive email
+  IF v_opted OR v_email IS NULL OR trim(v_email) = '' THEN
+    RETURN new;
+  END IF;
+
+  INSERT INTO email_deliveries (notification_id, recipient_email, status)
+  VALUES (new.id, lower(trim(v_email)), 'queued')
+  ON CONFLICT (notification_id, recipient_email) DO NOTHING;
+
+  RETURN new;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notification_enqueues_email ON notifications;
+CREATE TRIGGER notification_enqueues_email
+  AFTER INSERT ON notifications
+  FOR EACH ROW EXECUTE FUNCTION enqueue_notification_email();
+
+COMMENT ON FUNCTION enqueue_notification_email() IS
+  'Enqueues shortlisted and drive_published notifications into email_deliveries for dispatch via the email-dispatch edge function.';
+
+-- STEP 2: Backfill drive_published notifications that have no email delivery yet
+INSERT INTO email_deliveries (notification_id, recipient_email, status)
+SELECT n.id, lower(trim(s.email)), 'queued'
+FROM notifications n
+JOIN students s ON s.id = n.student_id
+WHERE n.kind = 'drive_published'
+  AND s.participation_status != 'opted_out'
+  AND s.email IS NOT NULL
+  AND trim(s.email) != ''
+  AND NOT EXISTS (
+    SELECT 1 FROM email_deliveries ed WHERE ed.notification_id = n.id
+  )
+ON CONFLICT (notification_id, recipient_email) DO NOTHING;
+
+-- =============================================================================
+-- Migration: 0107_cancel_stale_drive_backfill.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0107: Cancel stale drive_published backfill for old drives
+-- =============================================================================
+-- Migration 0106 backfilled ALL drive_published notifications that lost their
+-- email_deliveries rows when migration 0104 purged them. This correctly queued
+-- Newton School (Oct 12) but also re-queued old drives (Oct 8-9) whose students
+-- were already notified in-app days ago.
+--
+-- This migration cancels the stale queued deliveries for old drives only.
+-- Newton School emails (already sent) are untouched.
+-- =============================================================================
+
+-- Cancel queued drive_published emails for all drives EXCEPT Newton School
+UPDATE email_deliveries
+SET status = 'cancelled',
+    error = 'Cancelled: stale backfill for old drive (student already notified in-app)'
+WHERE status = 'queued'
+  AND notification_id IN (
+    SELECT n.id
+    FROM notifications n
+    WHERE n.kind = 'drive_published'
+      AND n.drive_id != '24f559f8-b797-4735-ad21-14122aff3500'
+  );
+
+-- =============================================================================
+-- Migration: 0108_email_queue_locking.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0108: Atomic Email Queue Claiming + Retry + Stale-Claim Recovery
+-- =============================================================================
+-- Fixes two dispatch defects in the email pipeline:
+--
+-- 1. Duplicate sends: the edge function previously SELECTed queued rows with
+--    no locking, so two concurrent invocations (cron overlap, manual run)
+--    could claim the same rows and send them twice.
+--    -> claim_email_deliveries() flips queued -> processing atomically using
+--       FOR UPDATE SKIP LOCKED, so no two workers ever hold the same row.
+--
+-- 2. Lost emails: 'failed' was terminal with no retry. A transient Resend
+--    429/5xx or network blip permanently lost the email.
+--    -> attempts are now counted at claim time; retryable failures are
+--       requeued by the edge function (max 3 attempts), and rows stuck in
+--       'processing' (worker crash mid-send) are recovered by a pure-SQL cron.
+-- =============================================================================
+
+ALTER TABLE email_deliveries
+  ADD COLUMN IF NOT EXISTS attempts int NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS claimed_at timestamptz;
+
+-- Index for the stale-claim recovery scan
+CREATE INDEX IF NOT EXISTS email_deliveries_processing_idx
+  ON email_deliveries (claimed_at)
+  WHERE status = 'processing';
+
+-- -----------------------------------------------------------------------------
+-- Atomic claim: queued -> processing, FIFO order, skip rows held by other workers
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION claim_email_deliveries(p_limit int DEFAULT 100)
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE email_deliveries d
+  SET status = 'processing',
+      claimed_at = now(),
+      attempts = d.attempts + 1
+  WHERE d.id IN (
+    SELECT e.id
+    FROM email_deliveries e
+    WHERE e.status = 'queued'
+    ORDER BY e.updated_at ASC
+    LIMIT GREATEST(coalesce(p_limit, 100), 1)
+    FOR UPDATE SKIP LOCKED
+  )
+  RETURNING d.id;
+$$;
+
+COMMENT ON FUNCTION claim_email_deliveries(int) IS
+  'Atomically claims queued email deliveries (queued -> processing) with row locking so concurrent workers never duplicate sends.';
+
+-- -----------------------------------------------------------------------------
+-- Recovery: requeue rows stuck in processing (worker crashed after claiming).
+-- Permanently fail after 3 total attempts.
+-- -----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION recover_stale_email_claims(p_stale interval DEFAULT interval '10 minutes')
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_recovered int;
+BEGIN
+  UPDATE email_deliveries
+  SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'queued' END,
+      error = CASE
+        WHEN attempts >= 3 THEN coalesce(error, '') || ' | max retries exceeded (stale claim)'
+        ELSE error
+      END
+  WHERE status = 'processing'
+    AND claimed_at < now() - p_stale;
+
+  GET DIAGNOSTICS v_recovered = ROW_COUNT;
+  RETURN v_recovered;
+END;
+$$;
+
+COMMENT ON FUNCTION recover_stale_email_claims(interval) IS
+  'Requeues deliveries stuck in processing longer than the stale threshold; fails them permanently after 3 attempts.';
+
+-- -----------------------------------------------------------------------------
+-- Schedule recovery job (pure SQL, no HTTP)
+-- -----------------------------------------------------------------------------
+DO $$
+BEGIN
+  PERFORM cron.unschedule('recover-stale-email-claims');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+SELECT cron.schedule(
+  'recover-stale-email-claims',
+  '*/5 * * * *',
+  'SELECT recover_stale_email_claims();'
+);
+
+-- =============================================================================
+-- Migration: 0109_canonical_dispatch_setup.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0109: Canonical Dispatch Setup (Edge Function + Vault-Backed Cron)
+-- =============================================================================
+-- Records the final email dispatch architecture. The legacy PL/pgSQL
+-- dispatchers were re-created when older migrations were re-run manually,
+-- silently re-enabling a fire-and-forget dispatcher (no provider_message_id,
+-- no retry, no failure detection). This migration makes the Edge Function the
+-- ONLY dispatcher:
+--
+--   cron (every 5 min) -> net.http_post -> email-dispatch edge function
+--                         -> claim_email_deliveries (FOR UPDATE SKIP LOCKED)
+--                         -> Resend batch API -> status sent/failed (+ retry)
+--
+-- PREREQUISITE (do once, via Dashboard SQL Editor):
+--   SELECT vault.create_secret('<SERVICE_ROLE_KEY>', 'service_role_key');
+--   (The key is a secret and is intentionally NOT embedded in this migration.)
+-- =============================================================================
+
+-- STEP 1: Unschedule every legacy dispatcher cron
+DO $$
+DECLARE
+  j text;
+BEGIN
+  FOREACH j IN ARRAY ARRAY[
+    'dispatch-emails-fixed',
+    'dispatch-pending-emails-every-minute',
+    'dispatch-emails-simple',
+    'dispatch-pending-emails-fixed'
+  ] LOOP
+    BEGIN
+      PERFORM cron.unschedule(j);
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+  END LOOP;
+END $$;
+
+-- STEP 2: Drop legacy dispatcher functions (they held hardcoded API keys).
+-- NOTE: enqueue_direct_email() and build_notification_email_html() are kept —
+-- live staff-email triggers (notify_drive_lifecycle_roles, notify_cpc_on_student_offer)
+-- enqueue through them and the edge function dispatches their custom HTML.
+DROP FUNCTION IF EXISTS public.process_email_deliveries(int);
+DROP FUNCTION IF EXISTS public.process_email_deliveries_simple(int);
+DROP FUNCTION IF EXISTS public.process_email_deliveries_fixed(int);
+
+-- STEP 3: Schedule the edge function dispatch, authenticating via vault
+DO $$
+BEGIN
+  PERFORM cron.unschedule('dispatch-shortlist-emails');
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+SELECT cron.schedule(
+  'dispatch-shortlist-emails',
+  '*/5 * * * *',
+  $cron$
+  SELECT net.http_post(
+    url := 'https://apzsuclpydjkmaffppmr.supabase.co/functions/v1/email-dispatch',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key'
+      )
+    ),
+    body := '{}'::jsonb
+  );
+  $cron$
+);
+
+-- =============================================================================
+-- Migration: 0110_instant_email_dispatch.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0110: Instant Email Dispatch on Enqueue
+-- =============================================================================
+-- Adds near-real-time dispatch: every INSERT into email_deliveries with
+-- status='queued' immediately fires the email-dispatch edge function via
+-- pg_net (async, non-blocking). Email latency drops from up to 5 minutes
+-- to a few seconds.
+--
+-- The pg_cron job (0109) is kept as a safety net for anything the instant
+-- path misses (retries requeued by the recovery cron are picked up on the
+-- cron schedule — they UPDATE, not INSERT, so they do not re-fire this).
+--
+-- Requires: vault secret 'service_role_key' (see 0109 prerequisite).
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION trigger_instant_email_dispatch()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF new.status = 'queued' THEN
+    PERFORM net.http_post(
+      url := 'https://apzsuclpydjkmaffppmr.supabase.co/functions/v1/email-dispatch',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (
+          SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'service_role_key'
+        )
+      ),
+      body := '{}'::jsonb
+    );
+  END IF;
+  RETURN new;
+END;
+$$;
+
+-- Deferred so the request is queued only after the inserting transaction
+-- commits; otherwise the edge function can claim before the row is visible
+-- and the delivery would fall back to the cron schedule.
+DROP TRIGGER IF EXISTS email_delivery_requests_dispatch ON email_deliveries;
+CREATE CONSTRAINT TRIGGER email_delivery_requests_dispatch
+  AFTER INSERT ON email_deliveries
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW
+  EXECUTE FUNCTION trigger_instant_email_dispatch();
+
+COMMENT ON FUNCTION trigger_instant_email_dispatch() IS
+  'Fires the email-dispatch edge function immediately after a queued delivery commits; concurrent claim locking prevents duplicate sends when multiple rows enqueue at once.';
+
+-- =============================================================================
+-- Migration: 0111_add_cc_routing.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0111: CC Routing Infrastructure
+-- =============================================================================
+-- Adds CC (carbon copy) support to the email delivery system.
+-- Enables multi-recipient notifications where primary recipient gets To:
+-- and additional stakeholders get CC: on the same email.
+--
+-- CC Routing Rules:
+-- - C1, C2 (Campus Drive Alert, Shortlist): To Campus CPC, CC Central CPC
+-- - C6 (Campus Student Placed): To Campus CPC, CC AE, Delivery Head
+-- - DH1 (PIF Submitted): To Delivery Head, CC Central CPC
+-- - New drives: To eligible students, CC KAM for that campus
+-- =============================================================================
+
+-- 1. Add cc_emails column to email_deliveries
+ALTER TABLE email_deliveries 
+ADD COLUMN IF NOT EXISTS cc_emails TEXT[] DEFAULT '{}';
+
+COMMENT ON COLUMN email_deliveries.cc_emails IS 
+  'Array of CC recipient email addresses; empty array means no CC';
+
+-- 2. Helper function to resolve CC recipients based on notification kind
+CREATE OR REPLACE FUNCTION resolve_cc_recipients(
+  p_notification_kind TEXT,
+  p_campus_id UUID DEFAULT NULL,
+  p_drive_id UUID DEFAULT NULL
+) RETURNS TEXT[] LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_cc_emails TEXT[] := '{}';
+BEGIN
+  -- C1, C2: Campus Drive Alert, Campus Shortlist Ready → CC Central CPC
+  IF p_notification_kind IN ('campus_drive_alert', 'campus_shortlist_ready') THEN
+    SELECT ARRAY_AGG(DISTINCT email) INTO v_cc_emails
+    FROM profiles 
+    WHERE role = 'central_placement_coordinator' 
+      AND is_active = true
+      AND email IS NOT NULL;
+  
+  -- C6: Campus Student Placed → CC AE, Delivery Head
+  ELSIF p_notification_kind = 'campus_student_placed' THEN
+    SELECT ARRAY_AGG(DISTINCT email) INTO v_cc_emails
+    FROM profiles 
+    WHERE role IN ('account_executive', 'delivery_head') 
+      AND is_active = true
+      AND email IS NOT NULL;
+  
+  -- DH1: PIF Submitted → CC Central CPC
+  ELSIF p_notification_kind = 'pif_submitted' THEN
+    SELECT ARRAY_AGG(DISTINCT email) INTO v_cc_emails
+    FROM profiles 
+    WHERE role = 'central_placement_coordinator' 
+      AND is_active = true
+      AND email IS NOT NULL;
+  
+  -- Drive published → CC KAM/Enterprise Relations for that campus
+  ELSIF p_notification_kind = 'drive_published' AND p_campus_id IS NOT NULL THEN
+    SELECT ARRAY_AGG(DISTINCT p.email) INTO v_cc_emails
+    FROM profiles p
+    JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+    WHERE sca.campus_id = p_campus_id
+      AND p.role IN ('key_account_manager', 'enterprise_relations', 'er_head')
+      AND p.is_active = true
+      AND p.email IS NOT NULL;
+  END IF;
+  
+  RETURN COALESCE(v_cc_emails, '{}');
+END;
+$$;
+
+COMMENT ON FUNCTION resolve_cc_recipients IS 
+  'Resolves CC recipient emails based on notification kind and context (campus/drive)';
+
+-- 3. Update enqueue_notification_email() to populate CC
+CREATE OR REPLACE FUNCTION enqueue_notification_email()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_email TEXT;
+  v_opted BOOLEAN;
+  v_campus_id UUID;
+  v_cc_emails TEXT[];
+BEGIN
+  -- Get student email, opt-out status, and campus
+  SELECT email, (participation_status = 'opted_out'), campus_id
+    INTO v_email, v_opted, v_campus_id
+    FROM students WHERE id = NEW.student_id;
+  
+  -- Skip if opted out or no email
+  IF v_opted OR v_email IS NULL OR trim(v_email) = '' THEN
+    RETURN NEW;
+  END IF;
+  
+  -- Resolve CC recipients based on notification kind
+  v_cc_emails := resolve_cc_recipients(NEW.kind, v_campus_id, NEW.drive_id);
+  
+  -- Insert with CC
+  INSERT INTO email_deliveries (notification_id, recipient_email, cc_emails, status)
+  VALUES (NEW.id, lower(trim(v_email)), v_cc_emails, 'queued');
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION enqueue_notification_email IS 
+  'Stages notification in email_deliveries with To and CC recipients';
+
+-- Recreate trigger to use updated function
+DROP TRIGGER IF EXISTS notification_enqueues_email ON notifications;
+CREATE TRIGGER notification_enqueues_email
+  AFTER INSERT ON notifications
+  FOR EACH ROW EXECUTE FUNCTION enqueue_notification_email();
+
+-- =============================================================================
+-- Migration: 0112_kam_drive_notifications.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0112: KAM (Key Account Manager) Drive Notifications
+-- =============================================================================
+-- Notifies KAMs when a new drive is published to their assigned campuses.
+-- Uses staff_campus_assignments to link KAMs to campuses.
+--
+-- Trigger: notify_kam_on_drive_published()
+-- Fires: AFTER INSERT OR UPDATE OF status ON drives
+-- Condition: status changes to 'published'
+-- Recipients: KAMs, Enterprise Relations, ER Heads for target campuses
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION notify_kam_on_drive_published()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_kam_emails TEXT[];
+  v_kam_email TEXT;
+  v_campus RECORD;
+  v_notification_id UUID;
+BEGIN
+  -- Only fire when drive is published (status changes to 'live')
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    -- Get all target campuses for this drive
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      -- Find KAMs/Enterprise Relations for this campus
+      SELECT ARRAY_AGG(DISTINCT p.email) INTO v_kam_emails
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role IN ('key_account_manager', 'enterprise_relations', 'er_head')
+        AND p.is_active = true
+        AND p.email IS NOT NULL;
+      
+      -- Send notification to each KAM
+      IF v_kam_emails IS NOT NULL AND array_length(v_kam_emails, 1) > 0 THEN
+        FOREACH v_kam_email IN ARRAY v_kam_emails LOOP
+          -- Create notification for KAM (no student_id, uses profiles.email lookup)
+          INSERT INTO notifications (kind, title, body, drive_id)
+          VALUES (
+            'kam_drive_alert',
+            'New Drive Published: ' || NEW.company_name || ' — ' || v_campus.campus_name,
+            'A new placement drive has been published for **' || v_campus.campus_name || '**.' || E'\n\n' ||
+            '**Drive Details**' || E'\n' ||
+            '• **Company:** ' || NEW.company_name || E'\n' ||
+            '• **Role:** ' || NEW.role_title || E'\n' ||
+            '• **Drive Type:** ' || COALESCE(NEW.drive_type::text, 'N/A') || E'\n' ||
+            '• **Compensation:** ₹' || COALESCE(NEW.ctc_max_lpa::text, 'N/A') || ' LPA' || E'\n' ||
+            '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n\n' ||
+            'Please coordinate with the campus placement team to ensure eligible candidates are informed.',
+            NEW.id
+          ) RETURNING id INTO v_notification_id;
+          
+          -- Stage email for KAM (direct insert, no student opt-out check)
+          INSERT INTO email_deliveries (notification_id, recipient_email, status)
+          VALUES (v_notification_id, lower(trim(v_kam_email)), 'queued');
+        END LOOP;
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_kam_on_drive_published IS 
+  'Notifies KAMs/Enterprise Relations when a drive is published to their assigned campuses';
+
+DROP TRIGGER IF EXISTS notify_kam_on_drive_published ON drives;
+CREATE TRIGGER notify_kam_on_drive_published
+  AFTER INSERT OR UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_kam_on_drive_published();
+
+-- =============================================================================
+-- Migration: 0113_campus_cpc_notifications.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0113: Campus CPC Notifications (C1, C2, C3, C5)
+-- =============================================================================
+-- Implements notifications for Campus Placement Coordinators:
+-- - C1: Campus Drive Alert (when drive published to campus)
+-- - C2: Campus Shortlist Ready (when shortlist published)
+-- - C3: Verification Queue Digest (daily cron at 9 AM)
+-- - C5: Attendance Pending (when round scheduled)
+-- =============================================================================
+
+-- =============================================================================
+-- C1: Campus Drive Alert
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_campus_cpc_on_drive_published()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      -- Find Campus CPC for this campus
+      SELECT p.email INTO v_cpc_email
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role = 'campus_placement_coordinator'
+        AND p.is_active = true
+        AND p.email IS NOT NULL
+      LIMIT 1;
+      
+      IF v_cpc_email IS NOT NULL THEN
+        INSERT INTO notifications (kind, title, body, drive_id)
+        VALUES (
+          'campus_drive_alert',
+          'New Drive Live for ' || v_campus.campus_name || ': ' || NEW.company_name,
+          'A new placement drive has been published that targets eligible candidates from **' || v_campus.campus_name || '**.' || E'\n\n' ||
+          '**Drive Overview**' || E'\n' ||
+          '• **Company:** ' || NEW.company_name || E'\n' ||
+          '• **Role:** ' || NEW.role_title || E'\n' ||
+          '• **Compensation:** ₹' || COALESCE(NEW.ctc_max_lpa::text, 'N/A') || ' LPA' || E'\n' ||
+          '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n\n' ||
+          'Please encourage eligible candidates to review the terms and apply before the deadline.',
+          NEW.id
+        ) RETURNING id INTO v_notification_id;
+        
+        -- Stage email with CC to Central CPC
+        INSERT INTO email_deliveries (notification_id, recipient_email, cc_emails, status)
+        VALUES (
+          v_notification_id, 
+          lower(trim(v_cpc_email)),
+          resolve_cc_recipients('campus_drive_alert'),
+          'queued'
+        );
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notify_campus_cpc_on_drive_published ON drives;
+CREATE TRIGGER notify_campus_cpc_on_drive_published
+  AFTER INSERT OR UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_campus_cpc_on_drive_published();
+
+-- =============================================================================
+-- C2: Campus Shortlist Ready
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_campus_cpc_on_shortlist()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus_id UUID;
+  v_campus_name TEXT;
+  v_cpc_email TEXT;
+  v_company TEXT;
+  v_role TEXT;
+  v_shortlist_count INT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when shortlist is published (assuming shortlist_status field exists or we use a different trigger point)
+  -- For now, we'll create a manual trigger function that can be called after shortlist is published
+  -- This is a placeholder - actual implementation depends on how shortlists are managed
+  
+  -- Example: If there's a shortlists table or shortlist_status in drive_applications
+  -- This would need to be adapted based on actual schema
+  
+  RETURN NEW;
+END;
+$$;
+
+-- Note: C2 trigger depends on actual shortlist implementation
+-- Will be activated when shortlist publishing workflow is confirmed
+
+-- =============================================================================
+-- C3: Verification Queue Digest (Daily Cron at 9 AM)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION send_verification_queue_digest()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  -- For each campus with pending verifications
+  FOR v_campus IN
+    SELECT s.campus_id, c.name as campus_name, COUNT(*) as pending_count
+    FROM students s
+    JOIN campuses c ON c.id = s.campus_id
+    WHERE s.srf_status = 'submitted'
+    GROUP BY s.campus_id, c.name
+    HAVING COUNT(*) > 0
+  LOOP
+    -- Find Campus CPC
+    SELECT p.email INTO v_cpc_email
+    FROM profiles p
+    JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+    WHERE sca.campus_id = v_campus.campus_id
+      AND p.role = 'campus_placement_coordinator'
+      AND p.is_active = true
+      AND p.email IS NOT NULL
+    LIMIT 1;
+    
+    IF v_cpc_email IS NOT NULL THEN
+      INSERT INTO notifications (kind, title, body)
+      VALUES (
+        'verification_queue_digest',
+        'Verification Queue: ' || v_campus.pending_count || ' Student Profiles Awaiting Approval',
+        'There are currently student registration forms awaiting academic verification on your campus portal.' || E'\n\n' ||
+        '• **Campus:** ' || v_campus.campus_name || E'\n' ||
+        '• **Pending Profiles:** ' || v_campus.pending_count || ' students' || E'\n' ||
+        '• **Pending Checks:** 10th/12th marks, semester CGPA, and marksheet uploads' || E'\n\n' ||
+        'Prompt verification ensures these students become eligible for recruitment drives.'
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email with CC to Central CPC
+      INSERT INTO email_deliveries (notification_id, recipient_email, cc_emails, status)
+      VALUES (
+        v_notification_id,
+        lower(trim(v_cpc_email)),
+        resolve_cc_recipients('verification_queue_digest'),
+        'queued'
+      );
+    END IF;
+  END LOOP;
+END;
+$$;
+
+-- Schedule cron job (daily at 9 AM)
+SELECT cron.schedule(
+  'verification_queue_digest',
+  '0 9 * * *',
+  $$SELECT send_verification_queue_digest()$$
+);
+
+-- =============================================================================
+-- C5: Attendance Pending (when round scheduled)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_cpc_attendance_pending()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_company TEXT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when a round is scheduled (drive_rounds INSERT)
+  IF TG_OP = 'INSERT' THEN
+    -- Get company name
+    SELECT d.company_name INTO v_company
+    FROM drives d WHERE d.id = NEW.drive_id;
+    
+    -- For each target campus of this drive
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.drive_id
+    LOOP
+      -- Find Campus CPC
+      SELECT p.email INTO v_cpc_email
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role = 'campus_placement_coordinator'
+        AND p.is_active = true
+        AND p.email IS NOT NULL
+      LIMIT 1;
+      
+      IF v_cpc_email IS NOT NULL THEN
+        INSERT INTO notifications (kind, title, body, drive_id)
+        VALUES (
+          'attendance_pending',
+          'Action Required: Mark Attendance for ' || v_company || ' — ' || v_campus.campus_name,
+          'A new round has been scheduled for **' || v_company || '** at **' || v_campus.campus_name || '**.' || E'\n\n' ||
+          '**Round Details**' || E'\n' ||
+          '• **Campus:** ' || v_campus.campus_name || E'\n' ||
+          '• **Round:** ' || COALESCE(NEW.round_name, 'Round ' || NEW.round_number) || E'\n' ||
+          '• **Date:** ' || COALESCE(TO_CHAR(NEW.scheduled_date, 'DD Mon YYYY'), 'TBD') || E'\n' ||
+          '• **Time:** ' || COALESCE(TO_CHAR(NEW.scheduled_time, 'HH24:MI'), 'TBD') || E'\n\n' ||
+          'Please mark attendance for all participating students.',
+          NEW.drive_id
+        ) RETURNING id INTO v_notification_id;
+        
+        -- Stage email
+        INSERT INTO email_deliveries (notification_id, recipient_email, status)
+        VALUES (v_notification_id, lower(trim(v_cpc_email)), 'queued');
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notify_cpc_attendance_pending ON drive_rounds;
+CREATE TRIGGER notify_cpc_attendance_pending
+  AFTER INSERT ON drive_rounds
+  FOR EACH ROW EXECUTE FUNCTION notify_cpc_attendance_pending();
+
+-- =============================================================================
+-- Migration: 0114_time_based_reminders.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0114: Time-Based Reminders & Digests (S12, S13, DH3, L1)
+-- =============================================================================
+-- Implements scheduled notifications:
+-- - S12: Drive Deadline Reminder (hourly, 24h before closing)
+-- - S13: Interview Day Reminder (daily 8 AM, for rounds scheduled today)
+-- - DH3: Weekly Operations Digest (Monday 8 AM, for Delivery Head)
+-- - L1: Weekly Leadership Digest (Monday 9 AM, for Principals/Deans)
+--
+-- Also fixes schema issue: makes notifications.student_id nullable to support
+-- staff notifications (KAM, CPC, DH, etc.) that don't reference a student.
+-- =============================================================================
+
+-- =============================================================================
+-- Schema Fix: Allow staff notifications (no student_id)
+-- =============================================================================
+ALTER TABLE notifications 
+  ALTER COLUMN student_id DROP NOT NULL;
+
+COMMENT ON COLUMN notifications.student_id IS
+  'The student this notification is for. NULL for staff notifications (KAM, CPC, DH, etc.).';
+
+-- =============================================================================
+-- S12: Drive Deadline Reminder (24h before application closes)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION send_drive_deadline_reminders()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_drive RECORD;
+  v_student RECORD;
+  v_notification_id UUID;
+BEGIN
+  -- Find drives closing in next 24 hours
+  FOR v_drive IN
+    SELECT d.id, d.company_name, d.role_title, d.application_end, d.ctc_max_lpa
+    FROM drives d
+    WHERE d.status = 'live'
+      AND d.application_end BETWEEN now() AND now() + interval '24 hours'
+  LOOP
+    -- Send to all eligible students who haven't applied yet
+    FOR v_student IN
+      SELECT DISTINCT s.id, s.email, s.full_name
+      FROM students s
+      JOIN drive_target_campuses dtc ON dtc.campus_id = s.campus_id
+      WHERE dtc.drive_id = v_drive.id
+        AND s.srf_status = 'srf_approved'
+        AND s.participation_status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM applications a
+          WHERE a.drive_id = v_drive.id AND a.student_id = s.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n
+          WHERE n.drive_id = v_drive.id
+            AND n.student_id = s.id
+            AND n.kind = 'drive_deadline_reminder'
+        )
+    LOOP
+      -- Create notification
+      INSERT INTO notifications (student_id, kind, title, body, drive_id)
+      VALUES (
+        v_student.id,
+        'drive_deadline_reminder',
+        'Closing Soon: Applications for ' || v_drive.company_name || ' Close in 24 Hours',
+        'This is a reminder that applications for **' || v_drive.company_name || '** (' || v_drive.role_title || ') will close tomorrow at **' || TO_CHAR(v_drive.application_end, 'DD Mon YYYY, HH24:MI') || '**.' || E'\n\n' ||
+        '**Drive Highlights**' || E'\n' ||
+        '• **Role:** ' || v_drive.role_title || E'\n' ||
+        '• **Compensation:** ₹' || COALESCE(v_drive.ctc_max_lpa::text, 'N/A') || ' LPA' || E'\n' ||
+        '• **Application Deadline:** ' || TO_CHAR(v_drive.application_end, 'DD Mon YYYY, HH24:MI') || E'\n\n' ||
+        'If you meet the eligibility criteria and wish to participate, please complete your application before the window closes.',
+        v_drive.id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email (respects opt-out via enqueue_notification_email trigger)
+      -- Note: Since we're directly inserting for cron, we need to check opt-out manually
+      IF v_student.email IS NOT NULL AND trim(v_student.email) <> '' THEN
+        INSERT INTO email_deliveries (notification_id, recipient_email, status)
+        VALUES (v_notification_id, lower(trim(v_student.email)), 'queued');
+      END IF;
+    END LOOP;
+  END LOOP;
+END;
+$$;
+
+COMMENT ON FUNCTION send_drive_deadline_reminders IS
+  'S12: Hourly cron that reminds students about drives closing in 24 hours';
+
+-- Schedule cron job (every hour)
+SELECT cron.schedule(
+  'drive_deadline_reminder',
+  '0 * * * *',
+  $$SELECT send_drive_deadline_reminders()$$
+);
+
+-- =============================================================================
+-- S13: Interview Day Reminder (Daily 8 AM, for rounds scheduled today)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION send_interview_day_reminders()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_round RECORD;
+  v_student RECORD;
+  v_notification_id UUID;
+BEGIN
+  FOR v_round IN
+    SELECT dr.id, dr.drive_id, dr.name as round_name, dr.sequence as round_number, dr.scheduled_at,
+           d.company_name, d.role_title
+    FROM drive_rounds dr
+    JOIN drives d ON d.id = dr.drive_id
+    WHERE dr.scheduled_at::date = CURRENT_DATE
+  LOOP
+    FOR v_student IN
+      SELECT DISTINCT s.id, s.email, s.full_name
+      FROM students s
+      JOIN applications da ON da.student_id = s.id
+      JOIN round_participants rp ON rp.application_id = da.id AND rp.round_id = v_round.id
+      WHERE da.drive_id = v_round.drive_id
+        AND s.participation_status = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n
+          WHERE n.student_id = s.id
+            AND n.drive_id = v_round.drive_id
+            AND n.kind = 'interview_day_reminder'
+            AND n.created_at::date = CURRENT_DATE
+        )
+    LOOP
+      INSERT INTO notifications (student_id, kind, title, body, drive_id)
+      VALUES (
+        v_student.id,
+        'interview_day_reminder',
+        'Reminder: Your ' || COALESCE(v_round.round_name, 'Round ' || v_round.round_number) || ' for ' || v_round.company_name || ' Starts Today',
+        'Your scheduled round for **' || v_round.company_name || '** takes place today.' || E'\n\n' ||
+        '**Schedule Details**' || E'\n' ||
+        '• **Round:** ' || COALESCE(v_round.round_name, 'Round ' || v_round.round_number) || E'\n' ||
+        '• **Date:** ' || TO_CHAR(v_round.scheduled_at, 'DD Mon YYYY') || E'\n' ||
+        '• **Time:** ' || COALESCE(TO_CHAR(v_round.scheduled_at, 'HH24:MI'), 'TBD') || E'\n\n' ||
+        'Please report on time with your college ID card and student credentials ready.',
+        v_round.drive_id
+      ) RETURNING id INTO v_notification_id;
+      
+      IF v_student.email IS NOT NULL AND trim(v_student.email) <> '' THEN
+        INSERT INTO email_deliveries (notification_id, recipient_email, status)
+        VALUES (v_notification_id, lower(trim(v_student.email)), 'queued')
+        ON CONFLICT (notification_id, recipient_email) DO NOTHING;
+      END IF;
+    END LOOP;
+  END LOOP;
+END;
+$$;
+
+COMMENT ON FUNCTION send_interview_day_reminders IS
+  'S13: Daily 8 AM cron that reminds students about rounds scheduled today';
+
+-- Schedule cron job (daily at 8 AM)
+SELECT cron.schedule(
+  'interview_day_reminder',
+  '0 8 * * *',
+  $$SELECT send_interview_day_reminders()$$
+);
+
+-- =============================================================================
+-- DH3: Weekly Operations Digest (Monday 8 AM, for Delivery Head)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION send_weekly_operations_digest()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_dh_email TEXT;
+  v_total_drives INT;
+  v_active_drives INT;
+  v_total_applications INT;
+  v_total_offers INT;
+  v_notification_id UUID;
+BEGIN
+  -- Get Delivery Head email
+  SELECT email INTO v_dh_email
+  FROM profiles
+  WHERE role = 'delivery_head' AND is_active = true
+  LIMIT 1;
+  
+  IF v_dh_email IS NULL THEN RETURN; END IF;
+  
+  -- Aggregate metrics for past week
+  SELECT COUNT(*) INTO v_total_drives 
+  FROM drives 
+  WHERE created_at >= now() - interval '7 days';
+  
+  SELECT COUNT(*) INTO v_active_drives 
+  FROM drives 
+  WHERE status = 'live';
+  
+  SELECT COUNT(*) INTO v_total_applications 
+  FROM drive_applications 
+  WHERE created_at >= now() - interval '7 days';
+  
+  SELECT COUNT(*) INTO v_total_offers 
+  FROM offers 
+  WHERE declared_at >= now() - interval '7 days';
+  
+  -- Create notification (no student_id, staff notification)
+  INSERT INTO notifications (kind, title, body)
+  VALUES (
+    'weekly_operations_digest',
+    'Weekly Operations Digest: ' || TO_CHAR(now() - interval '7 days', 'DD Mon') || ' — ' || TO_CHAR(now(), 'DD Mon YYYY'),
+    '**Weekly Placement Operations Summary**' || E'\n\n' ||
+    '• **New Drives Created:** ' || v_total_drives || E'\n' ||
+    '• **Active Drives:** ' || v_active_drives || E'\n' ||
+    '• **New Applications:** ' || v_total_applications || E'\n' ||
+    '• **Offers Extended:** ' || v_total_offers || E'\n\n' ||
+    'Please review the detailed dashboard for campus-wise breakdown and pending actions.'
+  ) RETURNING id INTO v_notification_id;
+  
+  -- Stage email
+  INSERT INTO email_deliveries (notification_id, recipient_email, status)
+  VALUES (v_notification_id, lower(trim(v_dh_email)), 'queued');
+END;
+$$;
+
+COMMENT ON FUNCTION send_weekly_operations_digest IS
+  'DH3: Monday 8 AM cron that sends weekly operations summary to Delivery Head';
+
+-- Schedule cron job (every Monday at 8 AM)
+SELECT cron.schedule(
+  'weekly_operations_digest',
+  '0 8 * * 1',
+  $$SELECT send_weekly_operations_digest()$$
+);
+
+-- =============================================================================
+-- L1: Weekly Leadership Digest (Monday 9 AM, for Principals/Deans)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION send_weekly_leadership_digest()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus RECORD;
+  v_principal_email TEXT;
+  v_active_drives INT;
+  v_students_participating INT;
+  v_offers_extended INT;
+  v_students_placed INT;
+  v_notification_id UUID;
+BEGIN
+  -- For each campus, send digest to Principal/Dean
+  FOR v_campus IN
+    SELECT c.id, c.name
+    FROM campuses c
+  LOOP
+    -- Find Principal/Dean for this campus
+    SELECT p.email INTO v_principal_email
+    FROM profiles p
+    JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+    WHERE sca.campus_id = v_campus.id
+      AND p.role IN ('principal', 'dean')
+      AND p.is_active = true
+      AND p.email IS NOT NULL
+    LIMIT 1;
+    
+    IF v_principal_email IS NOT NULL THEN
+      -- Aggregate campus metrics for past week
+      SELECT COUNT(DISTINCT d.id) INTO v_active_drives
+      FROM drives d
+      JOIN drive_target_campuses dtc ON dtc.drive_id = d.id
+      WHERE dtc.campus_id = v_campus.id
+        AND d.status = 'live';
+      
+      SELECT COUNT(DISTINCT s.id) INTO v_students_participating
+      FROM students s
+      JOIN drive_applications da ON da.student_id = s.id
+      WHERE s.campus_id = v_campus.id
+        AND da.created_at >= now() - interval '7 days';
+      
+      SELECT COUNT(*) INTO v_offers_extended
+      FROM offers o
+      JOIN students s ON s.id = o.student_id
+      WHERE s.campus_id = v_campus.id
+        AND o.declared_at >= now() - interval '7 days';
+      
+      SELECT COUNT(*) INTO v_students_placed
+      FROM offers o
+      JOIN students s ON s.id = o.student_id
+      WHERE s.campus_id = v_campus.id
+        AND o.declared_at >= now() - interval '7 days'
+        AND o.approved_at IS NOT NULL;
+      
+      -- Create notification (no student_id, staff notification)
+      INSERT INTO notifications (kind, title, body)
+      VALUES (
+        'weekly_placement_digest',
+        'Weekly Placement Digest: ' || v_campus.name,
+        '**Weekly Placement Summary for ' || v_campus.name || '**' || E'\n\n' ||
+        '• **Active Drives:** ' || v_active_drives || E'\n' ||
+        '• **Students Participating:** ' || v_students_participating || E'\n' ||
+        '• **Offers Extended:** ' || v_offers_extended || E'\n' ||
+        '• **Students Placed:** ' || v_students_placed || E'\n\n' ||
+        'Please review the campus dashboard for detailed metrics.'
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_principal_email)), 'queued');
+    END IF;
+  END LOOP;
+END;
+$$;
+
+COMMENT ON FUNCTION send_weekly_leadership_digest IS
+  'L1: Monday 9 AM cron that sends weekly placement summary to Principals/Deans';
+
+-- Schedule cron job (every Monday at 9 AM)
+SELECT cron.schedule(
+  'weekly_leadership_digest',
+  '0 9 * * 1',
+  $$SELECT send_weekly_leadership_digest()$$
+);
+
+-- =============================================================================
+-- Migration: 0115_remaining_templates.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0115: Remaining Email Templates (DH2, L2, R1-R4, AD3)
+-- =============================================================================
+-- Implements final missing templates:
+-- - DH2: Policy Override Alert (when open_to_all_override is requested)
+-- - L2: Super Dream Milestone (when super dream offer is extended)
+-- - R1: Candidate Shortlist (to recruiter SPOC)
+-- - R2: Drive Sourcing Kickoff (to recruiter SPOC)
+-- - R3: Interview Schedule & Roster (to recruiter SPOC)
+-- - R4: Drive Concluded Summary (to recruiter SPOC)
+-- - AD3: Email Delivery Alert (monitoring cron for failed deliveries)
+--
+-- Note: AD2 (Roster Import Complete) is handled by S1 (Welcome & Registration)
+-- which fires when students are imported with srf_status='invited'.
+-- =============================================================================
+
+-- =============================================================================
+-- DH2: Policy Override Alert
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_dh_on_policy_override()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_dh_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when policy override is requested (open_to_all_override changes to true)
+  IF NEW.open_to_all_override = true AND (OLD.open_to_all_override IS DISTINCT FROM true OR TG_OP = 'INSERT') THEN
+    -- Get Delivery Head email
+    SELECT email INTO v_dh_email
+    FROM profiles
+    WHERE role = 'delivery_head' AND is_active = true
+    LIMIT 1;
+    
+    IF v_dh_email IS NOT NULL THEN
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'policy_override_alert',
+        'Policy Override Requested: ' || NEW.company_name,
+        'A policy override has been requested for **' || NEW.company_name || '** (' || COALESCE(NEW.role_title, 'N/A') || ').' || E'\n\n' ||
+        '**Override Details**' || E'\n' ||
+        '• **Drive:** ' || NEW.company_name || E'\n' ||
+        '• **Reason:** ' || COALESCE(NEW.open_to_all_reason, 'Not specified') || E'\n' ||
+        '• **Requested By:** Central CPC' || E'\n\n' ||
+        'This override allows the drive to bypass standard eligibility criteria and category caps. Please review and approve/reject the override request.',
+        NEW.id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_dh_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_dh_on_policy_override IS
+  'DH2: Notifies Delivery Head when a policy override is requested for a drive';
+
+DROP TRIGGER IF EXISTS notify_dh_on_policy_override ON drives;
+CREATE TRIGGER notify_dh_on_policy_override
+  AFTER INSERT OR UPDATE OF open_to_all_override ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_dh_on_policy_override();
+
+-- =============================================================================
+-- L2: Super Dream Milestone (for Principals/Deans)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_leadership_on_super_dream_offer()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus_id UUID;
+  v_campus_name TEXT;
+  v_principal_email TEXT;
+  v_student_name TEXT;
+  v_company TEXT;
+  v_ctc NUMERIC;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when offer is extended for Super Dream category
+  IF NEW.offer_category = 'super_dream' AND TG_OP = 'INSERT' THEN
+    -- Get student and campus info
+    SELECT s.full_name, s.campus_id, c.name
+    INTO v_student_name, v_campus_id, v_campus_name
+    FROM students s
+    JOIN campuses c ON c.id = s.campus_id
+    WHERE s.id = NEW.student_id;
+    
+    -- Get company and CTC
+    SELECT company_name, ctc_lpa INTO v_company, v_ctc
+    FROM offers WHERE id = NEW.id;
+    
+    -- Find Principal/Dean for this campus
+    SELECT p.email INTO v_principal_email
+    FROM profiles p
+    JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+    WHERE sca.campus_id = v_campus_id
+      AND p.role IN ('principal', 'dean')
+      AND p.is_active = true
+      AND p.email IS NOT NULL
+    LIMIT 1;
+    
+    IF v_principal_email IS NOT NULL THEN
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'super_dream_milestone',
+        'Super Dream Offer: ' || v_student_name || ' — ' || v_company,
+        'Heartiest congratulations! **' || v_student_name || '** from **' || v_campus_name || '** has received a **Super Dream** offer from **' || v_company || '** (₹' || v_ctc || ' LPA).' || E'\n\n' ||
+        'This is a significant milestone for your campus placement program and a testament to the quality of your students.',
+        NEW.drive_id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_principal_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_leadership_on_super_dream_offer IS
+  'L2: Notifies Principals/Deans when a Super Dream offer is extended to their students';
+
+DROP TRIGGER IF EXISTS notify_leadership_on_super_dream_offer ON offers;
+CREATE TRIGGER notify_leadership_on_super_dream_offer
+  AFTER INSERT ON offers
+  FOR EACH ROW EXECUTE FUNCTION notify_leadership_on_super_dream_offer();
+
+-- =============================================================================
+-- R1: Candidate Shortlist (to Recruiter SPOC)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_recruiter_on_shortlist()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_recruiter_email TEXT;
+  v_shortlist_count INT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when shortlist is published (using drive_applications status change)
+  -- This is a simplified version - actual implementation depends on shortlist workflow
+  -- For now, we'll create a manual function that can be called after shortlist is published
+  
+  -- Get recruiter SPOC email
+  SELECT spoc_email INTO v_recruiter_email
+  FROM drives WHERE id = NEW.drive_id;
+  
+  IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
+    -- Count shortlisted candidates
+    SELECT COUNT(*) INTO v_shortlist_count
+    FROM drive_applications
+    WHERE drive_id = NEW.drive_id AND status = 'shortlisted';
+    
+    IF v_shortlist_count > 0 THEN
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'recruiter_shortlist',
+        'Candidate Shortlist Published: ' || NEW.company_name,
+        'The candidate shortlist for **' || NEW.company_name || '** has been published.' || E'\n\n' ||
+        '**Shortlist Summary**' || E'\n' ||
+        '• **Total Shortlisted:** ' || v_shortlist_count || ' candidates' || E'\n' ||
+        '• **Next Steps:** Review candidate profiles and schedule rounds' || E'\n\n' ||
+        'Please review the shortlisted candidates and proceed with the next rounds.',
+        NEW.drive_id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_recruiter_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_recruiter_on_shortlist IS
+  'R1: Notifies recruiter SPOC when candidate shortlist is published';
+
+-- Note: This trigger needs to be attached to the appropriate event
+-- For now, it's a placeholder that can be called manually or attached to a shortlist publication workflow
+
+-- =============================================================================
+-- R2: Drive Sourcing Kickoff (to Recruiter SPOC)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_recruiter_on_drive_published()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_recruiter_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when drive is published (status = 'live')
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    SELECT spoc_email INTO v_recruiter_email
+    FROM drives WHERE id = NEW.id;
+    
+    IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'recruiter_sourcing_kickoff',
+        'Drive Live: ' || NEW.company_name || ' — Applications Open',
+        'Your placement drive for **' || NEW.company_name || '** (' || COALESCE(NEW.role_title, 'N/A') || ') is now live and applications are open.' || E'\n\n' ||
+        '**Drive Details**' || E'\n' ||
+        '• **Role:** ' || COALESCE(NEW.role_title, 'N/A') || E'\n' ||
+        '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n' ||
+        '• **Target Campuses:** Multiple campuses' || E'\n\n' ||
+        'You can track applications and candidate progress from the recruiter portal.',
+        NEW.id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_recruiter_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_recruiter_on_drive_published IS
+  'R2: Notifies recruiter SPOC when drive is published and applications open';
+
+DROP TRIGGER IF EXISTS notify_recruiter_on_drive_published ON drives;
+CREATE TRIGGER notify_recruiter_on_drive_published
+  AFTER INSERT OR UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_recruiter_on_drive_published();
+
+-- =============================================================================
+-- R3: Interview Schedule & Roster (to Recruiter SPOC)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_recruiter_on_round_scheduled()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_recruiter_email TEXT;
+  v_company TEXT;
+  v_candidate_count INT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when round is scheduled
+  IF TG_OP = 'INSERT' THEN
+    SELECT d.company_name, d.spoc_email
+    INTO v_company, v_recruiter_email
+    FROM drives d WHERE d.id = NEW.drive_id;
+    
+    IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
+      -- Count candidates scheduled for this round
+      SELECT COUNT(*) INTO v_candidate_count
+      FROM applications
+      WHERE drive_id = NEW.drive_id AND status = 'applied';
+      
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'recruiter_interview_schedule',
+        'Interview Round Scheduled: ' || v_company,
+        'A new interview round has been scheduled for **' || v_company || '**.' || E'\n\n' ||
+        '**Round Details**' || E'\n' ||
+        '• **Round:** ' || COALESCE(NEW.name, 'Round ' || NEW.sequence) || E'\n' ||
+        '• **Date/Time:** ' || COALESCE(TO_CHAR(NEW.scheduled_at, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n' ||
+        '• **Candidates:** ' || v_candidate_count || ' students' || E'\n\n' ||
+        'Please review the candidate roster and prepare for the interview session.',
+        NEW.drive_id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_recruiter_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_recruiter_on_round_scheduled IS
+  'R3: Notifies recruiter SPOC when interview rounds are scheduled';
+
+DROP TRIGGER IF EXISTS notify_recruiter_on_round_scheduled ON drive_rounds;
+CREATE TRIGGER notify_recruiter_on_round_scheduled
+  AFTER INSERT ON drive_rounds
+  FOR EACH ROW EXECUTE FUNCTION notify_recruiter_on_round_scheduled();
+
+-- =============================================================================
+-- R4: Drive Concluded Summary (to Recruiter SPOC)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_recruiter_on_drive_concluded()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_recruiter_email TEXT;
+  v_total_offers INT;
+  v_total_candidates INT;
+  v_notification_id UUID;
+BEGIN
+  -- Fire when drive status changes to 'completed' ('concluded' is not an enum value)
+  IF NEW.status = 'completed' AND OLD.status IS DISTINCT FROM NEW.status THEN
+    SELECT spoc_email INTO v_recruiter_email
+    FROM drives WHERE id = NEW.id;
+    
+    IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
+      -- Count offers and candidates
+      SELECT COUNT(*) INTO v_total_offers
+      FROM offers WHERE drive_id = NEW.id;
+      
+      SELECT COUNT(DISTINCT student_id) INTO v_total_candidates
+      FROM applications WHERE drive_id = NEW.id;
+      
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'recruiter_drive_concluded',
+        'Drive Concluded: ' || NEW.company_name || ' — Final Summary',
+        'Your placement drive for **' || NEW.company_name || '** has been concluded.' || E'\n\n' ||
+        '**Final Summary**' || E'\n' ||
+        '• **Total Candidates:** ' || v_total_candidates || E'\n' ||
+        '• **Offers Extended:** ' || v_total_offers || E'\n' ||
+        '• **Drive Status:** Concluded' || E'\n\n' ||
+        'Thank you for partnering with us. Please review the final report and provide feedback for future drives.',
+        NEW.id
+      ) RETURNING id INTO v_notification_id;
+      
+      -- Stage email
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_recruiter_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_recruiter_on_drive_concluded IS
+  'R4: Notifies recruiter SPOC when drive is concluded with final summary';
+
+DROP TRIGGER IF EXISTS notify_recruiter_on_drive_concluded ON drives;
+CREATE TRIGGER notify_recruiter_on_drive_concluded
+  AFTER UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_recruiter_on_drive_concluded();
+
+-- =============================================================================
+-- AD3: Email Delivery Alert (Monitoring Cron)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION notify_admin_on_delivery_failures()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_admin_email TEXT;
+  v_failed_count INT;
+  v_notification_id UUID;
+BEGIN
+  -- Get admin email
+  SELECT email INTO v_admin_email
+  FROM profiles
+  WHERE role = 'admin' AND is_active = true
+  LIMIT 1;
+  
+  -- Count failed deliveries in last hour
+  SELECT COUNT(*) INTO v_failed_count
+  FROM email_deliveries
+  WHERE status = 'failed'
+    AND updated_at >= now() - interval '1 hour';
+  
+  IF v_admin_email IS NOT NULL AND v_failed_count > 0 THEN
+    INSERT INTO notifications (kind, title, body)
+    VALUES (
+      'email_delivery_alert',
+      'Email Delivery Failures Detected',
+      'There have been **' || v_failed_count || '** email delivery failures in the last hour.' || E'\n\n' ||
+      '**Action Required**' || E'\n' ||
+      '• Check the Resend dashboard for delivery status' || E'\n' ||
+      '• Review database logs for error details' || E'\n' ||
+      '• Verify email addresses and content formatting' || E'\n\n' ||
+      'Please investigate and resolve the delivery issues.'
+    ) RETURNING id INTO v_notification_id;
+    
+    -- Stage email
+    INSERT INTO email_deliveries (notification_id, recipient_email, status)
+    VALUES (v_notification_id, lower(trim(v_admin_email)), 'queued');
+  END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION notify_admin_on_delivery_failures IS
+  'AD3: Hourly monitoring cron that alerts admin about email delivery failures';
+
+-- Schedule cron job (every hour)
+SELECT cron.schedule(
+  'email_delivery_alert',
+  '0 * * * *',
+  $$SELECT notify_admin_on_delivery_failures()$$
+);
+
+-- =============================================================================
+-- Migration: 0116_multi_role_company_drives.sql
+-- =============================================================================
+
+-- 0116 — Multi-Role Company Drives
+--
+-- Architecture: Parent-Child Company Drive Model (Option A)
+-- Introduces companies and company_drives (recruitment event) while preserving
+-- drives as the authoritative execution record for individual roles, applications,
+-- interview rounds, and offers.
+
+-- ----------------------------------------------------------------- companies
+create table if not exists companies (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  industry    text,
+  website     text,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists companies_name_lower_idx on companies (lower(name));
+
+-- ------------------------------------------------------------ company_drives
+-- Represents a single recruitment event or campus visit by a company.
+create table if not exists company_drives (
+  id                 uuid primary key default gen_random_uuid(),
+  company_id         uuid references companies(id) on delete set null,
+  company_name       text not null,
+  drive_mode         drive_mode,
+  venue              text,
+  tentative_date     date,
+  timeline_notes     text,
+  joining_timeline   text,
+  status             drive_status not null default 'draft',
+  created_by         uuid references profiles(id),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create index if not exists company_drives_company_id_idx on company_drives (company_id);
+create index if not exists company_drives_status_idx on company_drives (status);
+create index if not exists company_drives_created_by_idx on company_drives (created_by);
+
+-- ---------------------------------------------------- company_drive_contacts
+create table if not exists company_drive_contacts (
+  id                uuid primary key default gen_random_uuid(),
+  company_drive_id  uuid not null references company_drives(id) on delete cascade,
+  sequence          integer not null check (sequence > 0),
+  name              text,
+  designation       text,
+  email             text,
+  phone             text,
+  unique (company_drive_id, sequence)
+);
+
+create index if not exists company_drive_contacts_drive_idx on company_drive_contacts (company_drive_id);
+
+-- --------------------------------------------- company_drive_target_campuses
+-- Shared default campus targeting configured by Central CPC at event level.
+create table if not exists company_drive_target_campuses (
+  company_drive_id  uuid not null references company_drives(id) on delete cascade,
+  campus_id         uuid not null references campuses(id) on delete cascade,
+  primary key (company_drive_id, campus_id)
+);
+
+create index if not exists company_drive_target_campuses_campus_idx on company_drive_target_campuses (campus_id);
+
+-- ------------------------------------------------------- link drives to event
+alter table drives
+  add column if not exists company_drive_id uuid references company_drives(id) on delete restrict,
+  add column if not exists has_custom_targeting boolean not null default false;
+
+create index if not exists drives_company_drive_id_idx on drives (company_drive_id);
+
+-- ------------------------------------------------- row level security & grants
+alter table companies enable row level security;
+alter table company_drives enable row level security;
+alter table company_drive_contacts enable row level security;
+alter table company_drive_target_campuses enable row level security;
+
+grant select, insert, update on companies to authenticated;
+grant select, insert, update, delete on company_drives to authenticated;
+grant select, insert, update, delete on company_drive_contacts to authenticated;
+grant select, insert, update, delete on company_drive_target_campuses to authenticated;
+
+-- companies policies
+create policy companies_read on companies for select
+  using ((select current_app_role()) is not null);
+
+create policy companies_insert on companies for insert
+  with check ((select current_app_role()) in ('account_executive', 'central_placement_coordinator', 'admin'));
+
+create policy companies_update on companies for update
+  using ((select current_app_role()) in ('account_executive', 'central_placement_coordinator', 'admin'));
+
+-- company_drives policies
+create policy company_drives_read on company_drives for select
+  using ((select current_app_role()) is not null);
+
+create policy company_drives_ae_insert on company_drives for insert
+  with check (
+    (select current_app_role()) = 'account_executive'
+    and created_by = (select auth.uid())
+    and status in ('draft', 'submitted')
+  );
+
+create policy company_drives_ae_update on company_drives for update
+  using (
+    (select current_app_role()) = 'account_executive'
+    and created_by = (select auth.uid())
+    and status = 'draft'
+  )
+  with check (
+    (select current_app_role()) = 'account_executive'
+    and created_by = (select auth.uid())
+  );
+
+create policy company_drives_dh_update on company_drives for update
+  using ((select current_app_role()) = 'delivery_head')
+  with check ((select current_app_role()) = 'delivery_head');
+
+create policy company_drives_operator_update on company_drives for update
+  using (is_operator())
+  with check (is_operator());
+
+-- company_drive_contacts policies
+create policy company_drive_contacts_read on company_drive_contacts for select
+  using ((select current_app_role()) is not null);
+
+create policy company_drive_contacts_write on company_drive_contacts for all
+  using (
+    is_operator()
+    or (select current_app_role()) = 'delivery_head'
+    or exists (
+      select 1 from company_drives cd
+      where cd.id = company_drive_id
+        and cd.created_by = (select auth.uid())
+        and cd.status = 'draft'
+    )
+  );
+
+-- company_drive_target_campuses policies
+create policy company_drive_target_campuses_read on company_drive_target_campuses for select
+  using ((select current_app_role()) is not null);
+
+create policy company_drive_target_campuses_write on company_drive_target_campuses for all
+  using (is_operator());
+
+-- ------------------------------------------------ save_company_drive_with_roles
+-- Atomic transaction boundary for creating or updating a company drive with all
+-- its roles, contacts, and round sequences.
+create or replace function save_company_drive_with_roles(
+  p_event      jsonb,
+  p_contacts   jsonb,
+  p_roles      jsonb,
+  p_status     drive_status default 'draft'
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_actor_id           uuid := auth.uid();
+  v_event_id           uuid;
+  v_company_id         uuid;
+  v_company_name       text;
+  v_industry           text;
+  v_website            text;
+  v_role_entry         jsonb;
+  v_role_id            uuid;
+  v_role_ids           uuid[] := '{}';
+  v_rounds             jsonb;
+  v_round              jsonb;
+  v_contact            jsonb;
+  v_contact_seq        integer;
+  v_existing_event     company_drives%rowtype;
+begin
+  -- 1. Authorization: AE only
+  if current_app_role() <> 'account_executive' then
+    raise exception 'Only Account Executives may create or edit drives.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  -- 2. Extract Event / Company Details
+  v_company_name := trim(p_event->>'companyName');
+  if v_company_name is null or v_company_name = '' then
+    raise exception 'Company name is required.' using errcode = 'check_violation';
+  end if;
+
+  v_industry := nullif(trim(p_event->>'industry'), '');
+  v_website := nullif(trim(p_event->>'companyWebsite'), '');
+
+  -- 3. Resolve or insert company record
+  if (p_event->>'companyId') is not null and (p_event->>'companyId') <> '' then
+    v_company_id := (p_event->>'companyId')::uuid;
+  else
+    -- Match by exact name or insert
+    select id into v_company_id from companies where lower(name) = lower(v_company_name) limit 1;
+    if v_company_id is null then
+      insert into companies (name, industry, website)
+      values (v_company_name, v_industry, v_website)
+      returning id into v_company_id;
+    end if;
+  end if;
+
+  -- 4. Event ID resolution
+  if (p_event->>'id') is not null and (p_event->>'id') <> '' then
+    v_event_id := (p_event->>'id')::uuid;
+    select * into v_existing_event from company_drives where id = v_event_id;
+    if not found then
+      raise exception 'Company drive event not found.' using errcode = 'check_violation';
+    end if;
+    if v_existing_event.created_by <> v_actor_id and not is_operator() then
+      raise exception 'You do not have permission to edit this company drive.'
+        using errcode = 'insufficient_privilege';
+    end if;
+    if v_existing_event.status <> 'draft' and p_status = 'draft' then
+      raise exception 'A submitted company drive cannot be saved as a draft.'
+        using errcode = 'check_violation';
+    end if;
+
+    update company_drives
+    set company_id       = v_company_id,
+        company_name     = v_company_name,
+        drive_mode       = nullif(p_event->>'driveMode', '')::drive_mode,
+        venue            = nullif(trim(p_event->>'venue'), ''),
+        tentative_date   = nullif(p_event->>'tentativeDate', '')::date,
+        timeline_notes   = nullif(trim(p_event->>'timelineNotes'), ''),
+        joining_timeline = nullif(trim(p_event->>'joiningTimeline'), ''),
+        status           = p_status,
+        updated_at       = now()
+    where id = v_event_id;
+  else
+    v_event_id := gen_random_uuid();
+    insert into company_drives (
+      id, company_id, company_name, drive_mode, venue, tentative_date,
+      timeline_notes, joining_timeline, status, created_by
+    )
+    values (
+      v_event_id,
+      v_company_id,
+      v_company_name,
+      nullif(p_event->>'driveMode', '')::drive_mode,
+      nullif(trim(p_event->>'venue'), ''),
+      nullif(p_event->>'tentativeDate', '')::date,
+      nullif(trim(p_event->>'timelineNotes'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), ''),
+      p_status,
+      v_actor_id
+    );
+  end if;
+
+  -- 5. Contacts at Event Level
+  delete from company_drive_contacts where company_drive_id = v_event_id;
+  v_contact_seq := 1;
+  for v_contact in select * from jsonb_array_elements(coalesce(p_contacts, '[]'::jsonb))
+  loop
+    if nullif(trim(v_contact->>'name'), '') is not null
+       or nullif(trim(v_contact->>'email'), '') is not null
+       or nullif(trim(v_contact->>'phone'), '') is not null then
+      insert into company_drive_contacts (company_drive_id, sequence, name, designation, email, phone)
+      values (
+        v_event_id,
+        v_contact_seq,
+        nullif(trim(v_contact->>'name'), ''),
+        nullif(trim(v_contact->>'designation'), ''),
+        nullif(trim(v_contact->>'email'), ''),
+        nullif(trim(v_contact->>'phone'), '')
+      );
+      v_contact_seq := v_contact_seq + 1;
+    end if;
+  end loop;
+
+  -- 6. Insert / Update Each Role
+  for v_role_entry in select * from jsonb_array_elements(coalesce(p_roles, '[]'::jsonb))
+  loop
+    if (v_role_entry->>'id') is not null and (v_role_entry->>'id') <> '' then
+      v_role_id := (v_role_entry->>'id')::uuid;
+    else
+      v_role_id := gen_random_uuid();
+    end if;
+
+    insert into drives (
+      id,
+      company_drive_id,
+      company_name,
+      industry,
+      company_website,
+      drive_mode,
+      venue,
+      tentative_date,
+      role_title,
+      role_category,
+      drive_type,
+      openings,
+      work_locations,
+      ctc_min_lpa,
+      ctc_max_lpa,
+      ctc_breakup,
+      stipend_min_monthly,
+      stipend_max_monthly,
+      shift_type,
+      shift_night_timing,
+      bond_details,
+      jd_storage_path,
+      jd_file_name,
+      jd_size_bytes,
+      job_description,
+      min_overall_marks,
+      min_overall_cgpa_scale,
+      min_overall_cgpa,
+      min_tenth_percentage,
+      min_twelfth_percentage,
+      arrears_policy,
+      eligible_passing_years,
+      mandatory_skills,
+      joining_timeline,
+      joining_immediate_notes,
+      joining_later_notes,
+      timeline_notes,
+      round_count,
+      status,
+      created_by
+    )
+    values (
+      v_role_id,
+      v_event_id,
+      v_company_name,
+      v_industry,
+      v_website,
+      nullif(p_event->>'driveMode', '')::drive_mode,
+      nullif(trim(p_event->>'venue'), ''),
+      nullif(p_event->>'tentativeDate', '')::date,
+      nullif(trim(v_role_entry->>'roleTitle'), ''),
+      nullif(v_role_entry->>'roleCategory', '')::role_category,
+      nullif(v_role_entry->>'driveType', '')::drive_type,
+      (v_role_entry->>'openings')::integer,
+      nullif(trim(v_role_entry->>'workLocations'), ''),
+      (v_role_entry->>'ctcMinLpa')::numeric,
+      (v_role_entry->>'ctcMaxLpa')::numeric,
+      nullif(trim(v_role_entry->>'ctcBreakup'), ''),
+      (v_role_entry->>'stipendMinMonthly')::integer,
+      (v_role_entry->>'stipendMaxMonthly')::integer,
+      nullif(trim(v_role_entry->>'shiftType'), ''),
+      nullif(trim(v_role_entry->>'shiftNightTiming'), ''),
+      nullif(trim(v_role_entry->>'bondDetails'), ''),
+      nullif(trim(v_role_entry->>'jdStoragePath'), ''),
+      nullif(trim(v_role_entry->>'jdFileName'), ''),
+      (v_role_entry->>'jdSizeBytes')::integer,
+      nullif(trim(v_role_entry->>'jobDescription'), ''),
+      (v_role_entry->>'minOverallMarks')::numeric,
+      coalesce(v_role_entry->>'minOverallCgpaScale', 'cgpa')::marks_scale,
+      (v_role_entry->>'minOverallCgpa')::numeric,
+      (v_role_entry->>'minTenthPercentage')::numeric,
+      (v_role_entry->>'minTwelfthPercentage')::numeric,
+      coalesce(v_role_entry->>'arrearsPolicy', 'flexible')::arrear_policy,
+      coalesce(
+        (select array_agg(elem::integer) from jsonb_array_elements_text(v_role_entry->'eligiblePassingYears') elem),
+        '{}'::integer[]
+      ),
+      nullif(trim(v_role_entry->>'mandatorySkills'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), ''),
+      nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
+      nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
+      nullif(trim(p_event->>'timelineNotes'), ''),
+      coalesce(jsonb_array_length(v_role_entry->'rounds'), 0),
+      p_status,
+      v_actor_id
+    )
+    on conflict (id) do update set
+      company_drive_id        = v_event_id,
+      company_name            = v_company_name,
+      industry                = v_industry,
+      company_website         = v_website,
+      drive_mode              = nullif(p_event->>'driveMode', '')::drive_mode,
+      venue                   = nullif(trim(p_event->>'venue'), ''),
+      tentative_date          = nullif(p_event->>'tentativeDate', '')::date,
+      role_title              = nullif(trim(v_role_entry->>'roleTitle'), ''),
+      role_category           = nullif(v_role_entry->>'roleCategory', '')::role_category,
+      drive_type              = nullif(v_role_entry->>'driveType', '')::drive_type,
+      openings                = (v_role_entry->>'openings')::integer,
+      work_locations          = nullif(trim(v_role_entry->>'workLocations'), ''),
+      ctc_min_lpa             = (v_role_entry->>'ctcMinLpa')::numeric,
+      ctc_max_lpa             = (v_role_entry->>'ctcMaxLpa')::numeric,
+      ctc_breakup             = nullif(trim(v_role_entry->>'ctcBreakup'), ''),
+      stipend_min_monthly     = (v_role_entry->>'stipendMinMonthly')::integer,
+      stipend_max_monthly     = (v_role_entry->>'stipendMaxMonthly')::integer,
+      shift_type              = nullif(trim(v_role_entry->>'shiftType'), ''),
+      shift_night_timing      = nullif(trim(v_role_entry->>'shiftNightTiming'), ''),
+      bond_details            = nullif(trim(v_role_entry->>'bondDetails'), ''),
+      jd_storage_path         = coalesce(nullif(trim(v_role_entry->>'jdStoragePath'), ''), drives.jd_storage_path),
+      jd_file_name            = coalesce(nullif(trim(v_role_entry->>'jdFileName'), ''), drives.jd_file_name),
+      jd_size_bytes           = coalesce((v_role_entry->>'jdSizeBytes')::integer, drives.jd_size_bytes),
+      job_description         = nullif(trim(v_role_entry->>'jobDescription'), ''),
+      min_overall_marks       = (v_role_entry->>'minOverallMarks')::numeric,
+      min_overall_cgpa_scale  = coalesce(v_role_entry->>'minOverallCgpaScale', 'cgpa')::marks_scale,
+      min_overall_cgpa        = (v_role_entry->>'minOverallCgpa')::numeric,
+      min_tenth_percentage    = (v_role_entry->>'minTenthPercentage')::numeric,
+      min_twelfth_percentage  = (v_role_entry->>'minTwelfthPercentage')::numeric,
+      arrears_policy          = coalesce(v_role_entry->>'arrearsPolicy', 'flexible')::arrear_policy,
+      eligible_passing_years  = coalesce(
+        (select array_agg(elem::integer) from jsonb_array_elements_text(v_role_entry->'eligiblePassingYears') elem),
+        '{}'::integer[]
+      ),
+      mandatory_skills        = nullif(trim(v_role_entry->>'mandatorySkills'), ''),
+      joining_timeline        = nullif(trim(p_event->>'joiningTimeline'), ''),
+      joining_immediate_notes = nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
+      joining_later_notes     = nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
+      timeline_notes          = nullif(trim(p_event->>'timelineNotes'), ''),
+      round_count             = coalesce(jsonb_array_length(v_role_entry->'rounds'), 0),
+      status                  = p_status;
+
+    -- Replace rounds for this role
+    delete from drive_rounds where drive_id = v_role_id;
+    v_rounds := coalesce(v_role_entry->'rounds', '[]'::jsonb);
+    for v_round in select * from jsonb_array_elements(v_rounds)
+    loop
+      insert into drive_rounds (drive_id, sequence, name)
+      values (v_role_id, (v_round->>'sequence')::integer, trim(v_round->>'name'));
+    end loop;
+
+    -- Mirror event contacts to role drive_contacts for backward compatibility
+    delete from drive_contacts where drive_id = v_role_id;
+    insert into drive_contacts (drive_id, sequence, name, designation, email, phone)
+    select v_role_id, sequence, name, designation, email, phone
+    from company_drive_contacts
+    where company_drive_id = v_event_id;
+
+    v_role_ids := array_append(v_role_ids, v_role_id);
+  end loop;
+
+  return jsonb_build_object(
+    'eventId', v_event_id,
+    'roleIds', v_role_ids,
+    'status', p_status
+  );
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0117_fix_drive_status_triggers.sql
+-- =============================================================================
+
+-- 0117 — Fix Invalid 'published' Value in drive_status Triggers
+--
+-- The drive_status enum consists of:
+-- ('draft', 'submitted', 'approved', 'live', 'applications_closed', 'in_rounds', 'completed', 'rejected')
+--
+-- Migrations 0112, 0113, 0114, and 0115 checked for NEW.status = 'published',
+-- causing PostgreSQL to reject any INSERT/UPDATE on table drives with:
+-- "ERROR: invalid input value for enum drive_status: 'published'"
+--
+-- This migration updates all trigger functions to check for NEW.status = 'live'
+-- matching the canonical drive_status enum.
+
+-- 1. Fix KAM notification trigger function
+CREATE OR REPLACE FUNCTION notify_kam_on_drive_published()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_kam_emails TEXT[];
+  v_kam_email TEXT;
+  v_campus RECORD;
+  v_notification_id UUID;
+BEGIN
+  -- Only fire when drive is live (status changes to 'live')
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      SELECT ARRAY_AGG(p.email) INTO v_kam_emails
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role IN ('campus_manager', 'key_account_manager', 'enterprise_relations', 'er_head');
+      
+      IF v_kam_emails IS NOT NULL AND array_length(v_kam_emails, 1) > 0 THEN
+        FOREACH v_kam_email IN ARRAY v_kam_emails
+        LOOP
+          INSERT INTO notifications (kind, title, body, drive_id, campus_id)
+          VALUES (
+            'drive_published',
+            'New Drive Published: ' || NEW.company_name || ' — ' || v_campus.campus_name,
+            'A new placement drive has been published for **' || v_campus.campus_name || '**.' || E'\n\n' ||
+            '**Company:** ' || NEW.company_name || E'\n' ||
+            '**Role:** ' || COALESCE(NEW.role_title, 'Various Roles') || E'\n' ||
+            '**Mode:** ' || COALESCE(NEW.drive_mode::TEXT, 'Not specified') || E'\n' ||
+            '**Application Deadline:** ' || COALESCE(TO_CHAR(NEW.tentative_date, 'DD Mon YYYY'), 'To be announced') || E'\n\n' ||
+            'Please coordinate with campus placement coordinators to ensure student readiness.',
+            NEW.id,
+            v_campus.campus_id
+          )
+          RETURNING id INTO v_notification_id;
+          
+          INSERT INTO notification_recipients (notification_id, recipient_email, status)
+          VALUES (v_notification_id, v_kam_email, 'queued');
+        END LOOP;
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+-- 2. Fix Campus CPC notification trigger function
+CREATE OR REPLACE FUNCTION notify_campus_cpc_on_drive_published()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      SELECT p.email INTO v_cpc_email
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role = 'campus_placement_coordinator'
+      LIMIT 1;
+      
+      IF v_cpc_email IS NOT NULL THEN
+        INSERT INTO notifications (kind, title, body, drive_id, campus_id)
+        VALUES (
+          'drive_published',
+          'Drive Published: ' || NEW.company_name,
+          'A new placement drive has been published that targets eligible candidates from **' || v_campus.campus_name || '**.' || E'\n\n' ||
+          '**Company:** ' || NEW.company_name || E'\n' ||
+          '**Role:** ' || COALESCE(NEW.role_title, 'Various Roles') || E'\n' ||
+          '**Mode:** ' || COALESCE(NEW.drive_mode::TEXT, 'Not specified') || E'\n' ||
+          '**Drive Date:** ' || COALESCE(TO_CHAR(NEW.tentative_date, 'DD Mon YYYY'), 'To be announced') || E'\n\n' ||
+          'You can monitor student registrations and verification readiness in the campus coordinator dashboard.',
+          NEW.id,
+          v_campus.campus_id
+        )
+        RETURNING id INTO v_notification_id;
+        
+        INSERT INTO notification_recipients (notification_id, recipient_email, status)
+        VALUES (v_notification_id, v_cpc_email, 'queued');
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+-- 3. Fix Recruiter SPOC notification trigger function
+CREATE OR REPLACE FUNCTION notify_recruiter_on_drive_published()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_recruiter_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    SELECT spoc_email INTO v_recruiter_email
+    FROM drives WHERE id = NEW.id;
+    
+    IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'drive_published',
+        'Placement Drive Published: ' || NEW.company_name,
+        'The placement drive for **' || NEW.company_name || '** is now live.' || E'\n\n' ||
+        '**Role:** ' || COALESCE(NEW.role_title, 'Various Roles') || E'\n' ||
+        'Eligible students can now apply.',
+        NEW.id
+      )
+      RETURNING id INTO v_notification_id;
+      
+      INSERT INTO notification_recipients (notification_id, recipient_email, status)
+      VALUES (v_notification_id, v_recruiter_email, 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+-- =============================================================================
+-- Migration: 0118_backfill_company_drives.sql
+-- =============================================================================
+
+-- 0118 — Backfill legacy standalone drives into company_drives
+--
+-- Migration 0116 introduced company_drives (recruitment events) and linked
+-- roles via drives.company_drive_id — but only for drives raised AFTER it.
+-- Every drive raised before it has company_drive_id NULL, so it can never be
+-- grouped with a sibling role, never appears in the event picker, and an
+-- "+ Add Role to this Drive" aimed at it would fail the foreign key.
+--
+-- This gives each legacy drive its own event row (a one-role event is exactly
+-- what it is), copies the event-level facts the drive already carries, and
+-- mirrors its drive_contacts up to company_drive_contacts — the same shape the
+-- save_company_drive_with_roles RPC leaves behind.
+--
+-- Idempotent: only drives with company_drive_id IS NULL are touched, so
+-- running it twice (Dashboard + db push) is safe.
+
+do $$
+declare
+  v_drive      record;
+  v_company_id uuid;
+  v_event_id   uuid;
+begin
+  for v_drive in
+    select id, company_name, industry, company_website, drive_mode, venue,
+           tentative_date, timeline_notes, joining_timeline, status, created_by, created_at
+    from drives
+    where company_drive_id is null
+  loop
+    -- Resolve or create the company, matching the RPC's exact-name rule.
+    select id into v_company_id
+    from companies
+    where lower(name) = lower(trim(v_drive.company_name))
+    limit 1;
+    if v_company_id is null then
+      insert into companies (name, industry, website)
+      values (trim(v_drive.company_name), v_drive.industry, v_drive.company_website)
+      returning id into v_company_id;
+    end if;
+
+    insert into company_drives (
+      company_id, company_name, drive_mode, venue, tentative_date,
+      timeline_notes, joining_timeline, status, created_by, created_at
+    )
+    values (
+      v_company_id, v_drive.company_name, v_drive.drive_mode, v_drive.venue,
+      v_drive.tentative_date, v_drive.timeline_notes, v_drive.joining_timeline,
+      v_drive.status, v_drive.created_by, v_drive.created_at
+    )
+    returning id into v_event_id;
+
+    update drives set company_drive_id = v_event_id where id = v_drive.id;
+
+    insert into company_drive_contacts (company_drive_id, sequence, name, designation, email, phone)
+    select v_event_id, sequence, name, designation, email, phone
+    from drive_contacts
+    where drive_id = v_drive.id;
+  end loop;
+end $$;
+
+-- =============================================================================
+-- Migration: 0119_eligibility_gates_before_the_override.sql
+-- =============================================================================
+
+-- 0119 — The eligibility gates the override could not be trusted to respect
+--
+-- `enforce_application_gates` (0041, last restated in 0056) checked the drive's
+-- status, the window, the SRF, participation, campus targeting and the 10th/12th
+-- bars, and then:
+--
+--     if d.open_to_all_override then return new; end if;
+--
+-- Everything BELOW that line was the ladder and the preferences, which R5a says
+-- the override exists to bypass. Everything the company actually asked for —
+-- `min_overall_cgpa`, `arrears_policy`, `drive_eligible_degrees`,
+-- `drive_eligible_branches`, `eligible_passing_years` — was never checked at
+-- apply time AT ALL, for any student, override or not. Those five rules existed
+-- in one place only: `evaluateEligibility` in the browser. A crafted POST went
+-- straight through.
+--
+-- So the answer to "should an open-to-all drive reach a student who fails the
+-- criteria?" (2026-10-15) is: on screen no, in the database yes. The publish
+-- screen counts an audience with those rules applied, ticked or not, and the
+-- database then admitted people outside it. Worse, on a prestige drive the
+-- override made the hole total, because it returned before any of it.
+--
+-- This moves all four gates ABOVE the short-circuit, which is where the domain
+-- already has them (src/domain/visibility.ts: eligibility, then the override).
+-- `drives_student_read` stays coarse on purpose — what a student may LIST is not
+-- what a student may WIN, and a read policy that returns fewer rows is a
+-- support ticket, not a safeguard. The apply gate is the one that has to be
+-- right.
+--
+-- Arrears and CGPA are judged on the LATEST VERIFIED semester, not on what the
+-- student typed last (§7.2, src/domain/academics.ts) — an unchecked number cannot
+-- decide whether somebody may apply, and the semester rows a student writes
+-- themselves arrive `pending`. Until a coordinator verifies any line, the figures
+-- the coordinator imported for the roster stand in, exactly as the browser does:
+-- locking out a cohort nobody has checked yet is a worse answer than judging it
+-- on the number the college gave us.
+--
+-- Mirrors src/domain/eligibility.ts and src/domain/academics.ts; change both or
+-- neither. The full function is restated because CREATE OR REPLACE cannot patch
+-- a body. Tests: src/db/apply-guard.test.ts.
+
+create or replace function enforce_application_gates() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  d drives%rowtype;
+  s students%rowtype;
+  highest_rank integer;
+  drive_rank   integer;
+  -- The standing eligibility is measured on (§7.2).
+  verified_cgpa      numeric;
+  verified_arrears   integer;
+  verified_history   integer;
+  cgpa_value         numeric;
+  standing_arrears   integer;
+  arrear_history     integer;
+begin
+  if current_student_id() is null then
+    return new;
+  end if;
+
+  select * into d from drives where id = new.drive_id;
+
+  if d.status <> 'live' then
+    raise exception 'This drive is not open.' using errcode = 'check_violation';
+  end if;
+
+  if d.application_start is null or d.application_end is null
+     or now() < d.application_start or now() > d.application_end then
+    raise exception 'The application window for this drive is closed.'
+      using errcode = 'check_violation';
+  end if;
+
+  select * into s from students where id = new.student_id;
+
+  if s.srf_status <> 'srf_approved' then
+    raise exception 'Your registration form has not been approved yet.'
+      using errcode = 'check_violation';
+  end if;
+
+  if s.participation_status <> 'active' then
+    raise exception 'You have opted out of campus placements or are not currently eligible.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- --------------------------------------------- what the company asked for
+  -- Degrees and branches are link tables, so "no rows" is the one case that
+  -- must NOT refuse: an empty list means ANY degree, never no degree (R2). The
+  -- same shape the campus gate above already uses.
+  if exists (select 1 from drive_eligible_degrees dd where dd.drive_id = d.id)
+     and not exists (
+       select 1 from drive_eligible_degrees dd
+        where dd.drive_id = d.id and dd.degree_id = s.degree_id
+     ) then
+    raise exception 'This drive is not open to your degree.'
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (select 1 from drive_eligible_branches bb where bb.drive_id = d.id)
+     and not exists (
+       select 1 from drive_eligible_branches bb
+        where bb.drive_id = d.id and bb.branch_id = s.branch_id
+     ) then
+    raise exception 'This drive is not open to your branch.'
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (select 1 from drive_target_campuses tc where tc.drive_id = d.id)
+     and not exists (
+       select 1 from drive_target_campuses tc
+        where tc.drive_id = d.id and tc.campus_id = s.campus_id
+     ) then
+    raise exception 'This drive is not open to your campus.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Same shape, different storage: passing years are an array on the drive
+  -- rather than a link table, and an empty array is the same silence.
+  -- `eligible_passing_years` has been asked by every drive since 0004 and
+  -- checked by nobody until now — the batch that graduates is exactly what a
+  -- recruiter names, and a 2025 student applying to a 2026-only drive takes a
+  -- seat the company did not offer.
+  if array_length(d.eligible_passing_years, 1) is not null
+     and not (s.passing_year = any (d.eligible_passing_years)) then
+    raise exception 'This drive is not open to your passing year.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ------------------------------------------------- the school marks bars
+  if d.min_tenth_percentage is not null
+     and (s.tenth_percentage is null or s.tenth_percentage < d.min_tenth_percentage) then
+    raise exception 'This drive requires at least % in your 10th.', d.min_tenth_percentage
+      using errcode = 'check_violation';
+  end if;
+
+  if d.min_twelfth_percentage is not null
+     and (s.twelfth_percentage is null or s.twelfth_percentage < d.min_twelfth_percentage) then
+    raise exception 'This drive requires at least % in your 12th.', d.min_twelfth_percentage
+      using errcode = 'check_violation';
+  end if;
+
+  -- ------------------------------------------------------- the CGPA and arrears
+  -- `cgpa` and `current_arrears` are NOT NULL on a semester row, so a null here
+  -- means the student has no verified line at all rather than a zeroed one.
+  -- Arrear HISTORY is the max over every verified semester, not just the latest
+  -- one: a backlog cleared in semester 3 is still on the record (`academics.ts`
+  -- takes the same maximum).
+  select latest.cgpa,
+         latest.current_arrears,
+         (select max(m.history_of_arrears)
+            from student_semesters m
+           where m.student_id = new.student_id and m.status = 'verified')
+    into verified_cgpa, verified_arrears, verified_history
+    from student_semesters latest
+   where latest.student_id = new.student_id
+     and latest.status = 'verified'
+   order by latest.semester_number desc
+   limit 1;
+
+  if verified_cgpa is not null then
+    cgpa_value       := verified_cgpa;
+    standing_arrears := verified_arrears;
+    arrear_history   := coalesce(verified_history, 0);
+  else
+    cgpa_value       := coalesce(s.overall_cgpa, 0);
+    standing_arrears := coalesce(s.current_arrears, 0);
+    arrear_history   := coalesce(s.history_of_arrears, 0);
+  end if;
+
+  if d.min_overall_cgpa is not null and cgpa_value < d.min_overall_cgpa then
+    raise exception 'This drive requires a CGPA of at least %, and yours is %.',
+      d.min_overall_cgpa, cgpa_value
+      using errcode = 'check_violation';
+  end if;
+
+  -- `no_history` is strictly stronger than `no_standing`: it forbids cleared
+  -- backlogs as well as live ones (decision Q6).
+  if d.arrears_policy in ('no_standing', 'no_history') and standing_arrears > 0 then
+    raise exception 'This drive asks for no standing arrears, and you have %.', standing_arrears
+      using errcode = 'check_violation';
+  end if;
+
+  if d.arrears_policy = 'no_history' and arrear_history > 0 then
+    raise exception 'This drive asks for no history of arrears, and yours has %.', arrear_history
+      using errcode = 'check_violation';
+  end if;
+
+  -- R5a: the override bypasses the preference gates below — never the ones
+  -- above. Everything the company asked for is now checked BEFORE this line, so
+  -- a prestige drive widens WHO MAY ASK, not WHO MAY QUALIFY.
+  if d.open_to_all_override then
+    return new;
+  end if;
+
+  -- ------------------------------------------------------------- the area
+  if d.role_category is not null
+     and exists (select 1 from student_role_preferences p where p.student_id = new.student_id)
+     and not exists (
+       select 1 from student_role_preferences p
+        where p.student_id = new.student_id and p.category = d.role_category
+     ) then
+    raise exception
+      'This drive is for an area you did not choose on your registration form.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ----------------------------------------- D1: the drive-type preference
+  -- Same semantics as the area: an empty list is silence, and silence is not
+  -- refusal. A student who asked only for internships is not shown — and here,
+  -- not admitted to — a placement drive.
+  if d.drive_type is not null
+     and cardinality(s.drive_type_preferences) > 0
+     and not (d.drive_type = any (s.drive_type_preferences)) then
+    raise exception
+      'This drive''s drive type is not among the ones you asked for in your preferences.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- R4 — the internship cap, PLAIN internship drives only (Q1b, 2026-08-21,
+  -- superseding decision Q2). A convertible drive falls through to the
+  -- ladder below, which is what decides a placement.
+  if d.drive_type = 'internship' and exists (
+       select 1 from offers o
+        where o.student_id = new.student_id
+          and o.drive_type in ('internship', 'internship_convertible')
+     ) then
+    raise exception 'You have already accepted an internship offer.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- R3/R5 — the ladder. Rank mirrors offerCategoryRank in
+  -- src/domain/offer-category.ts; change both or neither.
+  if d.drive_type in ('placement', 'internship_convertible')
+     and d.offer_category is not null then
+    select max(case o.offer_category
+                 when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+               end)
+      into highest_rank
+      from offers o
+     where o.student_id = new.student_id
+       and o.drive_type in ('placement', 'internship_convertible')
+       and o.offer_category is not null;
+
+    drive_rank := case d.offer_category
+                    when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                  end;
+
+    if highest_rank is not null and drive_rank <= highest_rank then
+      raise exception
+        'You are already placed at this category or higher, so this drive is not open to you.'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- =============================================================================
+-- The same audience, seen from the drive's side
+-- =============================================================================
+--
+-- The gate above decides who may APPLY. This trigger decides who the drive is
+-- mailed to when it goes live, and the two had drifted apart three ways:
+--
+--   1. It read `students.overall_cgpa`, `current_arrears` and
+--      `history_of_arrears` — the imported roster — where the gate reads the
+--      latest VERIFIED semester and falls back to the roster only until a
+--      coordinator verifies anything (§7.2). A student whose transcript says
+--      6.00 under a 7.5 bar was mailed an invitation the database then refused.
+--   2. It never applied the area preference, the drive-type preference, the
+--      internship cap or the ladder — the four gates below R5a's short-circuit
+--      — so it mailed students who had asked not to be shown this kind of
+--      drive, and students already placed at this rung or higher.
+--   3. It did not know the override existed, so on a prestige drive it kept
+--      those four exclusions to itself instead of mailing the widened audience
+--      the gate admits.
+--
+-- What is deliberately NOT mirrored: the application window. A drive is
+-- published ahead of its window on purpose, and the "new drive" mail is what
+-- tells the cohort it is coming. Eligibility is mirrored; timing is not.
+--
+-- Mirrors the function above; change both or neither. Proven to agree by
+-- src/db/apply-guard.test.ts, which compares who is mailed against who is
+-- admitted for the same students.
+
+create or replace function notify_eligible_students_on_drive_live()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_student_rec record;
+  v_notification_id uuid;
+  v_drive_title text;
+  v_body text;
+  v_ctc_display text;
+  v_students_notified integer := 0;
+begin
+  if new.status <> 'live' or (tg_op = 'update' and old.status is not distinct from 'live') then
+    return new;
+  end if;
+
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
+
+  v_drive_title := new.company_name || ' — ' || coalesce(new.role_title, 'Placement Opportunity');
+
+  -- `latest` and `hist` are the two figures §7.2 takes from the transcript: the
+  -- newest verified semester, and the worst arrear history across every
+  -- verified one — a backlog cleared in semester 3 is still on the record.
+  for v_student_rec in
+    select s.id, s.full_name
+      from students s
+      left join lateral (
+        select m.cgpa, m.current_arrears
+          from student_semesters m
+         where m.student_id = s.id and m.status = 'verified'
+         order by m.semester_number desc
+         limit 1
+      ) latest on true
+      left join lateral (
+        select max(m.history_of_arrears) as history_of_arrears
+          from student_semesters m
+         where m.student_id = s.id and m.status = 'verified'
+      ) hist on true
+     where s.srf_status = 'srf_approved'
+       and s.participation_status = 'active'
+
+       -- --------------------------------------------- what the company asked for
+       and (
+         not exists (select 1 from drive_target_campuses dtc where dtc.drive_id = new.id)
+         or exists (
+           select 1 from drive_target_campuses dtc
+            where dtc.drive_id = new.id and dtc.campus_id = s.campus_id
+         )
+       )
+       and (
+         not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_degrees ded
+            where ded.drive_id = new.id and ded.degree_id = s.degree_id
+         )
+       )
+       and (
+         not exists (select 1 from drive_eligible_branches deb where deb.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_branches deb
+            where deb.drive_id = new.id and deb.branch_id = s.branch_id
+         )
+       )
+       and (
+         array_length(new.eligible_passing_years, 1) is null
+         or s.passing_year = any (new.eligible_passing_years)
+       )
+
+       -- ------------------------------------------------- the school marks bars
+       and (
+         new.min_tenth_percentage is null
+         or (s.tenth_percentage is not null and s.tenth_percentage >= new.min_tenth_percentage)
+       )
+       and (
+         new.min_twelfth_percentage is null
+         or (s.twelfth_percentage is not null
+             and s.twelfth_percentage >= new.min_twelfth_percentage)
+       )
+
+       -- ---------------------------------------------------- the CGPA and arrears
+       and (
+         new.min_overall_cgpa is null
+         or coalesce(latest.cgpa, s.overall_cgpa, 0) >= new.min_overall_cgpa
+       )
+       and (
+         new.arrears_policy = 'flexible'
+         or coalesce(latest.current_arrears, s.current_arrears, 0) = 0
+       )
+       and (
+         new.arrears_policy <> 'no_history'
+         or case when latest.cgpa is not null
+                 then coalesce(hist.history_of_arrears, 0)
+                 else coalesce(s.history_of_arrears, 0)
+            end = 0
+       )
+
+       -- R5a: below this line is the audience the override widens — which is
+       -- exactly why it has to be skipped here as well as in the gate.
+       and (
+         new.open_to_all_override
+         or (
+              ------------------------------------------------------ the area
+              (
+                new.role_category is null
+                or not exists (
+                  select 1 from student_role_preferences p where p.student_id = s.id
+                )
+                or exists (
+                  select 1 from student_role_preferences p
+                   where p.student_id = s.id and p.category = new.role_category
+                )
+              )
+              -- ------------------------------------------------- the drive type
+              and (
+                new.drive_type is null
+                or coalesce(cardinality(s.drive_type_preferences), 0) = 0
+                or new.drive_type = any (s.drive_type_preferences)
+              )
+              -- ------------------------------------------------ internship cap
+              and (
+                new.drive_type <> 'internship'
+                or not exists (
+                  select 1 from offers o
+                   where o.student_id = s.id
+                     and o.drive_type in ('internship', 'internship_convertible')
+                )
+              )
+              -- ------------------------------------------------------ the ladder
+              and (
+                new.drive_type not in ('placement', 'internship_convertible')
+                or new.offer_category is null
+                or not exists (
+                  select 1 from offers o
+                   where o.student_id = s.id
+                     and o.drive_type in ('placement', 'internship_convertible')
+                     and o.offer_category is not null
+                     and case o.offer_category
+                           when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                         end
+                       >= case new.offer_category
+                           when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                         end
+                )
+              )
+         )
+       )
+
+       -- Dedup guard: skip students already notified about this drive.
+       and not exists (
+         select 1 from notifications n
+          where n.student_id = s.id
+            and n.kind = 'drive_published'
+            and n.drive_id = new.id
+       )
+  loop
+    v_body := 'A new placement drive is now open for applications at your campus.' || E'\n\n' ||
+              '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n';
+
+    if new.application_end is not null then
+      v_body := v_body || '**Application Deadline:** ' ||
+                to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
+    end if;
+
+    v_body := v_body || E'\n' || 'Log in to the portal to view full details and submit your application.';
+
+    insert into notifications (student_id, kind, title, body, drive_id)
+    values (
+      v_student_rec.id,
+      'drive_published',
+      'New Drive: ' || v_drive_title,
+      v_body,
+      new.id
+    )
+    returning id into v_notification_id;
+
+    v_students_notified := v_students_notified + 1;
+  end loop;
+
+  raise notice 'Drive % went live: notified % eligible students', new.id, v_students_notified;
+
+  return new;
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0120_fix_drive_published_triggers_and_create_notification.sql
+-- =============================================================================
+
+-- 0120 — Fix Drive Published Notification Triggers and Add create_notification Safeguard
+--
+-- Background:
+-- When publishing a drive (status -> 'live'), triggers on the 'drives' table fire:
+-- 1. notify_kam_on_drive_published()
+-- 2. notify_campus_cpc_on_drive_published()
+-- 3. notify_recruiter_on_drive_published()
+--
+-- A previous script attempted to replace these triggers with PERFORM create_notification(...),
+-- but create_notification did not exist in PostgreSQL. When Central CPC publishes a drive,
+-- PostgreSQL failed with:
+-- "ERROR: function create_notification(unknown, text, text, uuid[], uuid, unknown, uuid) does not exist"
+--
+-- This migration:
+-- 1. Restores the canonical implementations of all 3 triggers using direct inserts
+--    into 'notifications' and 'email_deliveries' (matching the system's email outbox queue).
+-- 2. Defines create_notification(...) as a robust safeguard so any legacy or external
+--    invocations succeed seamlessly.
+
+-- =============================================================================
+-- 1. Helper Function: create_notification (Safeguard)
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.create_notification(
+  p_kind text,
+  p_title text,
+  p_body text,
+  p_recipients uuid[],
+  p_drive_id uuid DEFAULT NULL::uuid,
+  p_scheduled_for timestamptz DEFAULT NULL::timestamptz,
+  p_campus_id uuid DEFAULT NULL::uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_recipient_id uuid;
+  v_notification_id uuid;
+  v_recipient_email text;
+  v_is_student boolean;
+BEGIN
+  IF p_recipients IS NULL OR array_length(p_recipients, 1) = 0 THEN
+    RETURN;
+  END IF;
+
+  FOREACH v_recipient_id IN ARRAY p_recipients LOOP
+    -- If recipient is a student, insert student notification (email auto-queued by trigger)
+    SELECT EXISTS(SELECT 1 FROM students WHERE id = v_recipient_id) INTO v_is_student;
+    
+    IF v_is_student THEN
+      INSERT INTO notifications (student_id, kind, title, body, drive_id)
+      VALUES (v_recipient_id, p_kind, p_title, p_body, p_drive_id);
+    ELSE
+      -- Profile (staff/admin/recruiter) -> insert notification & queue email delivery
+      SELECT email INTO v_recipient_email FROM profiles WHERE id = v_recipient_id;
+      IF v_recipient_email IS NOT NULL AND trim(v_recipient_email) <> '' THEN
+        INSERT INTO notifications (kind, title, body, drive_id)
+        VALUES (p_kind, p_title, p_body, p_drive_id)
+        RETURNING id INTO v_notification_id;
+
+        INSERT INTO email_deliveries (notification_id, recipient_email, status)
+        VALUES (v_notification_id, lower(trim(v_recipient_email)), 'queued');
+      END IF;
+    END IF;
+  END LOOP;
+END;
+$$;
+
+COMMENT ON FUNCTION public.create_notification IS
+  'Safeguard helper to create notifications for students or staff profiles and queue email deliveries';
+
+-- =============================================================================
+-- 2. Fix notify_kam_on_drive_published
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.notify_kam_on_drive_published()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_kam_emails TEXT[];
+  v_kam_email TEXT;
+  v_campus RECORD;
+  v_notification_id UUID;
+BEGIN
+  -- Only fire when drive is live (status changes to 'live')
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      SELECT ARRAY_AGG(DISTINCT p.email) INTO v_kam_emails
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role IN ('key_account_manager', 'enterprise_relations', 'er_head')
+        AND p.is_active = true
+        AND p.email IS NOT NULL;
+      
+      IF v_kam_emails IS NOT NULL AND array_length(v_kam_emails, 1) > 0 THEN
+        FOREACH v_kam_email IN ARRAY v_kam_emails LOOP
+          INSERT INTO notifications (kind, title, body, drive_id)
+          VALUES (
+            'kam_drive_alert',
+            'New Drive Published: ' || NEW.company_name || ' — ' || v_campus.campus_name,
+            'A new placement drive has been published for **' || v_campus.campus_name || '**.' || E'\n\n' ||
+            '**Drive Details**' || E'\n' ||
+            '• **Company:** ' || NEW.company_name || E'\n' ||
+            '• **Role:** ' || COALESCE(NEW.role_title, 'Various Roles') || E'\n' ||
+            '• **Drive Type:** ' || COALESCE(NEW.drive_type::text, 'N/A') || E'\n' ||
+            '• **Compensation:** ₹' || COALESCE(NEW.ctc_max_lpa::text, 'N/A') || ' LPA' || E'\n' ||
+            '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n\n' ||
+            'Please coordinate with the campus placement team to ensure eligible candidates are informed.',
+            NEW.id
+          ) RETURNING id INTO v_notification_id;
+          
+          INSERT INTO email_deliveries (notification_id, recipient_email, status)
+          VALUES (v_notification_id, lower(trim(v_kam_email)), 'queued');
+        END LOOP;
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notify_kam_on_drive_published ON drives;
+CREATE TRIGGER notify_kam_on_drive_published
+  AFTER INSERT OR UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_kam_on_drive_published();
+
+-- =============================================================================
+-- 3. Fix notify_campus_cpc_on_drive_published
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.notify_campus_cpc_on_drive_published()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      SELECT p.email INTO v_cpc_email
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role = 'campus_placement_coordinator'
+        AND p.is_active = true
+        AND p.email IS NOT NULL
+      LIMIT 1;
+      
+      IF v_cpc_email IS NOT NULL THEN
+        INSERT INTO notifications (kind, title, body, drive_id)
+        VALUES (
+          'campus_drive_alert',
+          'New Drive Live for ' || v_campus.campus_name || ': ' || NEW.company_name,
+          'A new placement drive has been published that targets eligible candidates from **' || v_campus.campus_name || '**.' || E'\n\n' ||
+          '**Drive Overview**' || E'\n' ||
+          '• **Company:** ' || NEW.company_name || E'\n' ||
+          '• **Role:** ' || COALESCE(NEW.role_title, 'Various Roles') || E'\n' ||
+          '• **Compensation:** ₹' || COALESCE(NEW.ctc_max_lpa::text, 'N/A') || ' LPA' || E'\n' ||
+          '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n\n' ||
+          'Please encourage eligible candidates to review the terms and apply before the deadline.',
+          NEW.id
+        ) RETURNING id INTO v_notification_id;
+        
+        INSERT INTO email_deliveries (notification_id, recipient_email, cc_emails, status)
+        VALUES (
+          v_notification_id, 
+          lower(trim(v_cpc_email)),
+          resolve_cc_recipients('campus_drive_alert', v_campus.campus_id, NEW.id),
+          'queued'
+        );
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notify_campus_cpc_on_drive_published ON drives;
+CREATE TRIGGER notify_campus_cpc_on_drive_published
+  AFTER INSERT OR UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_campus_cpc_on_drive_published();
+
+-- =============================================================================
+-- 4. Fix notify_recruiter_on_drive_published
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.notify_recruiter_on_drive_published()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_recruiter_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    SELECT spoc_email INTO v_recruiter_email
+    FROM drives WHERE id = NEW.id;
+    
+    IF v_recruiter_email IS NOT NULL AND trim(v_recruiter_email) <> '' THEN
+      INSERT INTO notifications (kind, title, body, drive_id)
+      VALUES (
+        'recruiter_sourcing_kickoff',
+        'Drive Live: ' || NEW.company_name || ' — Applications Open',
+        'Your placement drive for **' || NEW.company_name || '** (' || COALESCE(NEW.role_title, 'N/A') || ') is now live and applications are open.' || E'\n\n' ||
+        '**Drive Details**' || E'\n' ||
+        '• **Role:** ' || COALESCE(NEW.role_title, 'N/A') || E'\n' ||
+        '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n' ||
+        '• **Target Campuses:** Multiple campuses' || E'\n\n' ||
+        'You can track applications and candidate progress from the recruiter portal.',
+        NEW.id
+      ) RETURNING id INTO v_notification_id;
+      
+      INSERT INTO email_deliveries (notification_id, recipient_email, status)
+      VALUES (v_notification_id, lower(trim(v_recruiter_email)), 'queued');
+    END IF;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notify_recruiter_on_drive_published ON drives;
+CREATE TRIGGER notify_recruiter_on_drive_published
+  AFTER INSERT OR UPDATE OF status ON drives
+  FOR EACH ROW EXECUTE FUNCTION notify_recruiter_on_drive_published();
+
+-- =============================================================================
+-- Migration: 0121_fix_drives_student_read_override.sql
+-- =============================================================================
+
+-- 0121 — Fix drives_student_read RLS Policy for open_to_all_override
+--
+-- Background:
+-- When a drive has open_to_all_override = true, the domain logic (src/domain/visibility.ts)
+-- explicitly bypasses the student role category and drive type preference filters so that
+-- all eligible students at targeted campuses can view and apply to the drive.
+--
+-- However, the database SELECT RLS policy 'drives_student_read' (from migration 0050)
+-- was missing an 'open_to_all_override = true' clause:
+--   and (
+--     role_category is null
+--     or not exists (select 1 from student_role_preferences p where p.student_id = current_student_id())
+--     or exists (select 1 from student_role_preferences p where p.student_id = current_student_id() and p.category = drives.role_category)
+--   )
+--
+-- This caused PostgreSQL to hide open-to-all drives from any student who had selected
+-- different role categories on their registration form.
+--
+-- This migration updates 'drives_student_read' to allow students to read drives
+-- when open_to_all_override is true.
+
+DROP POLICY IF EXISTS drives_student_read ON public.drives;
+
+CREATE POLICY drives_student_read ON public.drives FOR SELECT
+  USING (
+    current_student_id() IS NOT NULL
+    AND status IN ('live', 'applications_closed', 'in_rounds', 'completed')
+    AND (
+      NOT EXISTS (SELECT 1 FROM drive_target_campuses t WHERE t.drive_id = drives.id)
+      OR EXISTS (
+        SELECT 1 FROM drive_target_campuses t
+        JOIN students me ON me.id = current_student_id()
+        WHERE t.drive_id = drives.id AND t.campus_id = me.campus_id
+      )
+    )
+    AND (
+      open_to_all_override = true
+      OR role_category IS NULL
+      OR NOT EXISTS (SELECT 1 FROM student_role_preferences p WHERE p.student_id = current_student_id())
+      OR EXISTS (
+        SELECT 1 FROM student_role_preferences p
+        WHERE p.student_id = current_student_id() AND p.category = drives.role_category
+      )
+    )
+  );
+
+COMMENT ON POLICY drives_student_read ON public.drives IS
+  'Allows students to view published drives matching their campus, role preferences, or open-to-all override';
+
+-- =============================================================================
+-- Migration: 0122_campus_coordinator_shortlists.sql
+-- =============================================================================
+
+-- 0122 — The campus placement coordinator shortlists their own students.
+--
+-- Until now three layers disagreed about who may shortlist. The domain and the
+-- route guard let a campus placement coordinator onto /central/shortlisting and
+-- the portfolio offered them the button (F15, and `canShortlistFromPortfolio`),
+-- while `shortlist_staff_only` (0008) gated writes on `is_operator()` — admin and
+-- central_placement_coordinator only. The coordinator ticked students, pressed
+-- Save and was refused by code and then, had the code moved, by RLS.
+--
+-- This gives the campus coordinator the write the interface already promised,
+-- bounded the same way every other campus staff policy is bounded: `my_student_ids()`.
+-- `applications_read_staff` (0018) already hides another campus's applicants, so a
+-- coordinator who cannot read the application cannot produce its row here either.
+--
+-- Deliberately narrower than `is_campus_staff()`, which also covers campus_manager:
+-- a campus manager reads and follows drives, they do not choose candidates.
+--
+-- Supersedes 0045's closing note ("shortlisting stays the Central CPC's decision")
+-- for THIS role only. 0045's read policy is untouched and still needed: rank,
+-- score and rationale remain invisible to students under PRD 13.1, and this
+-- migration says nothing about them.
+--
+-- Upsert note: the screen writes with `upsert(..., { onConflict: "application_id" })`,
+-- which Postgres runs as INSERT plus UPDATE-on-conflict. Both commands need both
+-- clauses, so `using` and `with check` carry the identical predicate — as 0043 does
+-- for attendance, the other campus-marked-at-the-venue table.
+--
+-- Two consequences, accepted rather than fixed (2026-10-23):
+--
+--   * `rank` is now per-reader. The screen writes the rank of the list the
+--     person can see, and a campus coordinator sees only their own students —
+--     so their save renumbers the same rows from 1 over their campus, while the
+--     Central CPC's save numbers them over the whole drive. Whichever of the
+--     two saved last owns the ordering, and the recruiter's pack sorts by it.
+--     The same holds for the advisory target count: a coordinator whose tab
+--     holds 8 of the 40 applicants is warned about a shortfall against a
+--     recruiter's ask it cannot see the whole of. Both are left as they are —
+--     rank and target are advisory, the decision itself is what is recorded.
+--   * The export stays Central. `exports_operator_insert` (0043) still requires
+--     `is_operator()`, so a campus coordinator who pressed "Export shortlist
+--     (CSV)" got the file and then failed to write the `recruiter_exports` row
+--     that says it left. The screen now hides both export buttons from that
+--     role (`canExportShortlist`) instead of walking them into that dead end.
+--     Widening it means widening the policy — a new data-sharing right, which
+--     is the client's call and not this file's.
+
+drop policy if exists shortlist_campus_write on public.shortlist_entries;
+
+create policy shortlist_campus_write on public.shortlist_entries
+  for insert to authenticated
+  with check (
+    current_app_role() = 'campus_placement_coordinator'
+    and application_id in (
+      select id from applications where student_id in (select my_student_ids())
+    )
+  );
+
+create policy shortlist_campus_revise on public.shortlist_entries
+  for update to authenticated
+  using (
+    current_app_role() = 'campus_placement_coordinator'
+    and application_id in (
+      select id from applications where student_id in (select my_student_ids())
+    )
+  )
+  with check (
+    current_app_role() = 'campus_placement_coordinator'
+    and application_id in (
+      select id from applications where student_id in (select my_student_ids())
+    )
+  );
+
+comment on policy shortlist_campus_write on public.shortlist_entries is
+  'Campus placement coordinator may shortlist applicants who are their own students (0122)';
+
+comment on policy shortlist_campus_revise on public.shortlist_entries is
+  'Campus placement coordinator may revise a shortlist decision for their own students (0122)';
+
+-- =============================================================================
+-- Migration: 0123_stop_staff_notification_triggers.sql
+-- =============================================================================
+
+-- 0123 - Stop the staff-notification triggers from refusing the student's own write.
+--
+-- Three triggers (0093 opt-outs, 0094 self-placements, 0095 SRF submissions, re-created unchanged by
+-- 0097) all notify the campus coordinator the same way:
+--
+--   insert into notifications (student_id, kind, title, body)
+--   select p.id, ... from profiles p where p.role = 'campus_placement_coordinator' ...
+--
+-- `p.id` is a PROFILE id, and `notifications.student_id` is `uuid not null references students(id)`
+-- (0006). The two id spaces do not overlap - a coordinator is never also a student row - so the
+-- insert raises a foreign-key violation, and because it runs inside the student's own statement the
+-- student's write is rolled back with it.
+--
+-- 0097 was written to "fix notification trigger bugs" and left this untouched.
+--
+-- On production it cost eighteen days of SRF submissions: the last form that committed was
+-- 2026-10-10T09:25:37, the `application_confirmed` rows introduced by 0092 begin at
+-- 2026-10-10T10:00:20, and `notifications` holds 18,891 rows of which ZERO are of kind
+-- `srf_submitted`. Students were told "Could not submit your form. Please try again." and retried -
+-- one of them left 232 uploaded files behind, because uploads happen before the transaction and
+-- nothing writes document rows until `submit_srf` commits.
+--
+-- Dropping the triggers, not repairing them: the notification could never have been read. The only
+-- SELECT policy on `notifications` is `student_id = current_student_id()` (0008), which is NULL for
+-- a coordinator - even the row they were trying to insert was invisible to the person it was for.
+-- The queue at /cpc/verification is how coordinators already find submissions, and it is how the 30
+-- approved S-VYASA forms were approved.
+--
+-- The functions stay in place, unused, so restoring a correctly addressed staff notice later is a
+-- `create trigger` away.
+
+drop trigger if exists notify_cpc_of_srf_submission on students;
+drop trigger if exists notify_cpc_of_opt_out_submission on opt_out_requests;
+drop trigger if exists notify_cpc_of_self_placement_submission on self_placement_requests;
+
+-- =============================================================================
+-- Migration: 0124_hold_status_values.sql
+-- =============================================================================
+
+-- 0124_hold_status_values.sql
+--
+-- A placement hold needs one new state and one new document kind. This file
+-- adds the labels and nothing else, on purpose.
+--
+-- Postgres will not let a newly added enum label be USED in the same
+-- transaction that adds it, and every migration here runs inside one. Measured
+-- on PGlite 2026-10-29, not remembered:
+--
+--   alter type colors add value 'blue'; insert into t values ('blue');
+--     -> ERROR:  unsafe use of new value "blue" of enum type colors
+--   (the same two statements, sent as two separate round trips)
+--     -> both succeed
+--
+-- So a multi-statement script IS one implicit transaction, here and in the
+-- Dashboard. Put the table and the status flip below these statements and the
+-- migration dies with a message that names neither holds nor the reason it
+-- failed. Hence 0125 creates the table and 0126 restates the gates.
+--
+-- Precedent for the value-only shape: 0022:19 and 0066:32. That second one is
+-- the cautionary case — offer_category needed `before 'regular'` because enum
+-- labels sort by the order they were added, not by name, so a value appended
+-- late lands at the END of any ORDER BY over the column. participation_status
+-- is never ordered, ranked or array_positioned anywhere in supabase/ or src/,
+-- which is what makes appending 'on_hold' safe here.
+--
+-- 'on_hold' is a fourth state, not a synonym for the other three:
+--   active      — in placements.
+--   opted_out   — the student's own, irreversible decision (0009:141).
+--   disbarred   — a Central CPC sanction (0006:59, 0091:29).
+--   on_hold     — a Campus Manager's dated, releasable bar. Releasable is the
+--                 point, so 0009's irreversibility guard must keep allowing
+--                 on_hold -> active, and it does: it only fires when leaving
+--                 opted_out.
+--
+-- 'hold_order' is the manager's evidence — the fee demand, the offer letter
+-- behind a self-placed call. It is a student document so the storage path,
+-- the size cap and the cascade on student delete all come free from 0003:75.
+
+alter type participation_status add value if not exists 'on_hold';
+
+alter type document_kind add value if not exists 'hold_order';
+
+-- =============================================================================
+-- Migration: 0125_student_placement_holds.sql
+-- =============================================================================
+
+-- 0125_student_placement_holds.sql
+--
+-- A Campus Manager bars one of their own students from drives: fees unpaid, a
+-- offer taken off campus, or simply not trying. Dated, reasoned, releasable.
+--
+-- WHAT THIS IS NOT, stated first because the neighbours are close:
+--   opt_out_requests (0006:45) is the STUDENT'S decision, and 0009:141 makes it
+--     irreversible. A hold is the college's decision and 0009 does not touch it.
+--   disbarment_decisions (0006:59) is a Central CPC sanction for absences.
+--   drives.on_hold (0004:48) stops a DRIVE. This stops a STUDENT.
+--   self_placement_requests (0014:13) is a student raising their own offer for
+--     verification, which becomes an `offers` row. The 'self_placed' kind here is
+--     the manager acting on what they already know, with no request and no offer.
+--
+-- WHY participation_status CARRIES THE BITE (0124 added the label):
+--   The refusal is already stated as `participation_status <> 'active'` in
+--   enforce_application_gates (0119:80) and as `= 'active'` in the drive-live
+--   fan-out (0119:331) and the reminders (0114:47,118). A fourth state joins
+--   those with no edit, so a held student cannot apply and is never mailed about
+--   a new drive. 0126 widens the five places that test `= 'opted_out'` — the
+--   email outbox and the round notices — which a new state would otherwise slip
+--   past. The alternative, a predicate added to each gate, would have to be
+--   remembered by every notifier written after this one.
+--
+--   So the status is the effect and this table is the cause. Neither is
+--   authoritative alone: the hold says why, who and until when; the status is
+--   what the gates read. place_student_hold and release_student_hold are the
+--   only way to move either, which is why they are functions and not policies.
+--
+-- WHY THE WINDOW DOES NOT RELEASE ANYTHING:
+--   ends_at is a review date, not a switch. The student stays on hold until a
+--   Campus Manager presses Release, and the roster marks the date overdue. A
+--   sweep that flipped participation_status on a timer would need pg_cron, which
+--   this project has already been burned by once (0104 removed the cron email
+--   dispatcher for marking mail sent without delivery), and a date crossing
+--   inside a background job is a state change nobody signed. If the end date is
+--   to bind, say so and this becomes a scheduled function on a timer.
+--
+-- WHY held_by HAS NO ON DELETE:
+--   0015:16-20 is the precedent and it is deliberate — profiles.id is referenced
+--   plainly by drives.created_by, approved_by and published_by, so Postgres
+--   refuses to delete a staff member whose work is on record and the admin
+--   screen turns that into "deactivate instead". Attribution (PRD 19) outranks
+--   convenience. `on delete set null` would erase who barred a student.
+--
+-- WHAT THE STUDENT SEES:
+--   Their own live hold — kind, reason, window — through
+--   "student reads own live hold". Not the attachment: hold-orders is missing
+--   from the student policies in 0022:79-101 on purpose, so a fee demand stays
+--   with the college that wrote it. This is not a notification and sends no
+--   mail. Without it, the drives screen is simply empty, which is the failure
+--   this repo has spent a month fixing ("let every read refuse aloud").
+
+create type hold_kind as enum ('fees', 'self_placed', 'idle');
+
+create table student_holds (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references students(id) on delete cascade,
+  kind         hold_kind not null,
+  reason       text not null check (trim(reason) <> ''),
+  starts_at    date not null default current_date,
+  ends_at      date,
+  document_id  uuid references student_documents(id) on delete set null,
+
+  held_by      uuid not null references profiles(id),
+  held_at      timestamptz not null default now(),
+
+  released_by  uuid references profiles(id),
+  released_at  timestamptz,
+  release_note text,
+
+  -- A hold that ends before it starts is a typo in a date field.
+  constraint hold_window_is_ordered check (ends_at is null or ends_at >= starts_at),
+
+  -- released_at and released_by move together or not at all: a released hold
+  -- with no name on it is the erased attribution 0015 refuses elsewhere.
+  constraint hold_release_is_attributed
+    check ((released_at is null) = (released_by is null)),
+
+  -- A note without a release is nothing.
+  constraint hold_note_needs_release
+    check (release_note is null or released_at is not null)
+);
+
+-- One live hold per student. A second `fees` hold on top of an `idle` one would
+-- leave the screen guessing which reason is the operative one, and the release
+-- button unable to say what it is lifting.
+create unique index one_live_hold_per_student
+  on student_holds (student_id)
+  where released_at is null;
+
+-- The roster's "on hold" filter and the student record both ask this question
+-- by student, and the partial index above answers it.
+create index student_holds_history_idx on student_holds (student_id, held_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Place
+-- ---------------------------------------------------------------------------
+create or replace function place_student_hold(
+  p_student_id  uuid,
+  p_kind        hold_kind,
+  p_reason      text,
+  p_starts_at   date default current_date,
+  p_ends_at     date default null,
+  p_document_id uuid  default null
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor  uuid;
+  campus uuid;
+  state  participation_status;
+  v_name text;
+  hold   uuid;
+begin
+  -- Every check below is repeated inside the function rather than trusted to
+  -- the browser, because the function is security definer and therefore runs
+  -- with rights the caller does not have. RLS would refuse the write anyway;
+  -- refusing here is what gives the caller a sentence instead of zero rows.
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'A hold is placed by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if current_app_role() <> 'campus_manager' then
+    raise exception 'Only a Campus Manager may place a placement hold.'
+      using errcode = '42501';
+  end if;
+
+  select campus_id, participation_status, full_name
+    into campus, state, v_name
+    from students where id = p_student_id;
+
+  if campus is null then
+    raise exception 'No such student.';
+  end if;
+
+  -- Their own college, by the seat on staff_campus_assignments — the same
+  -- scoping 0008:63 and 0018:58 use. A Campus Manager with no seat holds nobody,
+  -- which is correct and worth knowing before the screen is demoed.
+  if not (campus in (select my_campus_ids())) then
+    raise exception 'You may only hold a student at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  -- 'active' only. An opted-out student cannot be held, because releasing the
+  -- hold would set them active and 0009:141 forbids leaving opted_out — the
+  -- placement screen would look broken and the student would be stuck. A
+  -- disbarred student is already barred by a stronger, Central decision.
+  if state <> 'active' then
+    raise exception '% is not in placements right now (status: %), so there is nothing to hold.',
+      v_name, state;
+  end if;
+
+  insert into student_holds (student_id, kind, reason, starts_at, ends_at, document_id, held_by)
+  values (p_student_id, p_kind, trim(p_reason), coalesce(p_starts_at, current_date),
+          p_ends_at, p_document_id, actor)
+  returning id into hold;
+
+  update students set participation_status = 'on_hold' where id = p_student_id;
+
+  return hold;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Release
+-- ---------------------------------------------------------------------------
+create or replace function release_student_hold(
+  p_hold_id      uuid,
+  p_release_note text default null
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor uuid;
+  h     student_holds;
+begin
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'A hold is released by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if current_app_role() <> 'campus_manager' then
+    raise exception 'Only a Campus Manager may release a placement hold.'
+      using errcode = '42501';
+  end if;
+
+  select * into h from student_holds where id = p_hold_id for update;
+
+  if h.id is null then
+    -- Not "no such hold": a manager reading another college's id must not learn
+    -- it exists. student_holds has no select policy for them either, so this is
+    -- the same answer they would get from a list.
+    raise exception 'No such hold.';
+  end if;
+
+  if not (h.student_id in (
+        select s.id from students s where s.campus_id in (select my_campus_ids()))) then
+    raise exception 'You may only release a hold at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  if h.released_at is not null then
+    raise exception 'This hold was already released on %.', h.released_at::date;
+  end if;
+
+  update student_holds
+     set released_by  = actor,
+         released_at  = now(),
+         release_note = nullif(trim(coalesce(p_release_note, '')), '')
+   where id = p_hold_id;
+
+  -- `and participation_status = 'on_hold'` is the whole point of this line.
+  -- If the student was disbarred, or opted out on their own way, while the hold
+  -- was on, lifting the hold must not silently undo the stronger decision.
+  update students
+     set participation_status = 'active'
+   where id = h.student_id
+     and participation_status = 'on_hold';
+
+  return h.student_id;
+end;
+$$;
+
+grant execute on function place_student_hold   to authenticated;
+grant execute on function release_student_hold to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Read. No insert/update/delete policy: the two functions above are the only
+-- way in, and they run as their owner.
+-- ---------------------------------------------------------------------------
+alter table student_holds enable row level security;
+alter table student_holds force  row level security;
+
+create policy student_reads_own_live_hold
+  on student_holds for select
+  using (student_id = current_student_id() and released_at is null);
+
+create policy campus_manager_reads_own_college_holds
+  on student_holds for select
+  using (
+    current_app_role() = 'campus_manager'
+    and student_id in (
+      select s.id from students s where s.campus_id in (select my_campus_ids())
+    )
+  );
+
+-- Central roles, admin, delivery head, CEO: the escalation path for a fee hold
+-- runs through them, and a hold nobody above the college can see is a rumour.
+create policy org_readers_see_every_hold
+  on student_holds for select
+  using (is_org_reader());
+
+grant select on student_holds to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Audit (PRD 19). 0007's generic trigger reads a `reason` column, which this
+-- table has, so both the placement and the release land in audit_log with the
+-- actor taken from auth.uid(). The `students` flip is already covered by
+-- audit_students. Note what the log's reason column holds for a release row:
+-- the original reason they were held, not the note that lifted it — that lives
+-- on the row in release_note, where the screen can show both.
+-- ---------------------------------------------------------------------------
+create trigger audit_holds
+  after insert or update on student_holds
+  for each row execute function audit_row();
+
+-- ---------------------------------------------------------------------------
+-- The optional attachment. Private, and named by the student whose hold it is.
+-- ---------------------------------------------------------------------------
+do $$
+begin
+  if to_regclass('storage.buckets') is null then
+    return;
+  end if;
+
+  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('hold-orders', 'hold-orders', false, 5242880,
+          array['application/pdf','image/jpeg','image/png'])
+  on conflict (id) do update
+    set file_size_limit    = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types,
+        public             = false;
+
+  execute $p$ drop policy if exists "campus managers upload hold orders" on storage.objects $p$;
+  execute $p$
+    create policy "campus managers upload hold orders" on storage.objects for insert
+      with check (
+        bucket_id = 'hold-orders'
+        and public.current_app_role() = 'campus_manager'
+        and (storage.foldername(name))[1] in (
+          select s.id::text from public.students s
+           where s.campus_id in (select public.my_campus_ids())
+        )
+      )
+  $p$;
+
+  execute $p$ drop policy if exists "college staff read hold orders" on storage.objects $p$;
+  execute $p$
+    create policy "college staff read hold orders" on storage.objects for select
+      using (
+        bucket_id = 'hold-orders'
+        and (
+          public.is_org_reader()
+          or (
+            public.current_app_role() = 'campus_manager'
+            and (storage.foldername(name))[1] in (
+              select s.id::text from public.students s
+               where s.campus_id in (select public.my_campus_ids())
+            )
+          )
+        )
+      )
+  $p$;
+end $$;
+
+-- =============================================================================
+-- Migration: 0126_hold_reaches_the_student.sql
+-- =============================================================================
+
+-- 0126_hold_reaches_the_student.sql
+--
+-- 0125 gave a Campus Manager the hold and 0124 the status that carries it. This
+-- is the half the request was actually about: "no notification can get to the
+-- student".
+--
+-- WHY EDITS WERE NEEDED AT ALL. A fourth state is caught for free by any gate
+-- that asks `participation_status = 'active'` (or `<> 'active'`) — that is the
+-- apply gate (0119), the drive-live fan-out (0119) and the reminders (0114), and
+-- none of them were touched here. It is NOT caught by a gate that asks
+-- `= 'opted_out'`, which is a list of one. Five live functions asked that, and
+-- every one of them would have gone on talking to a held student as if nothing
+-- had happened.
+--
+-- WHAT CHANGED, one rule everywhere: the question is now "is this student in
+-- placements", answered `participation_status = 'active'`, which is the same
+-- shape the two gates that were already right have always used. So the whole
+-- set is greppable as one pattern, and a fifth status added later is refused by
+-- all of them at once rather than remembered by each.
+--
+--   enqueue_notification_email    every student email in the product (0111)
+--   round_details_reach_students  round schedule notification     (0075)
+--   shortlist_reaches_student     shortlist notification          (0075)
+--   round_result_reaches_student  cleared / not selected          (0075)
+--   meeting_slot_reaches_student  personal slot + link            (0075)
+--   offer_reaches_student         offer extended                  (0089)
+--   notify_absent_student         marked absent                   (0057)
+--   shortlist_respects_opt_out    the WRITE guard, not mail       (0043)
+--   enforce_application_gates     refusal sentence only           (0119)
+--
+-- The last two are the ones to read twice:
+--
+--   shortlist_respects_opt_out is widened with the mail. A held student who can
+--     still be shortlisted is scheduled into Round 1 and given an attendance
+--     row; only the notice is missing. The override it names — an explicit
+--     `opt_out_override_reason` — still works, and the sentence now says which
+--     state it is refusing, because "this student has opted out" is a lie about
+--     somebody the college held.
+--
+--   enforce_application_gates refused a held student with "You have opted out of
+--     campus placements or are not currently eligible." That has always been a
+--     guess at three different facts. It now names the student's own state, in
+--     the same words src/features/student/apply-repository.ts uses, so the
+--     screen and the database cannot tell the student two different stories.
+--
+-- ONE CONSEQUENCE THAT IS NOT ABOUT HOLDS, stated rather than slipped in:
+--   `disbarred` students were mailed until now, because disbarment is neither
+--   active nor opted_out and no gate ever asked about it. A student barred by
+--   Central for absences was being sent "You are shortlisted for X" for a drive
+--   the apply gate refuses them. Reading the rule as `= 'active'` fixes that at
+--   the same time. If the intent is that a disbarred student keeps receiving
+--   mail, this is the line to change — and src/db/held-student-mail.test.ts is
+--   the test that will fail when it does.
+--
+-- CHECKED AND DELIBERATELY NOT CHANGED:
+--   0009:141 enforce_opt_out_irreversible — fires only when LEAVING opted_out,
+--     so `on_hold -> active` on release is legal. That is what makes Release
+--     work, and it must stay exactly as it is.
+--   0076 student lifecycle mail (roster invitation, SRF approval) and 0048's
+--     SRF rejection notice skip only opted_out, and they should. Those are about
+--     the student's own registration, which a college hold does not cancel; a
+--     held student whose form was just approved needs to know. Making them
+--     active-only would also send a hold-order "you have been held" mail, which
+--     is not what this feature decided — the hold is read on screen, not mailed.
+--   0064 placement_totals buckets `opted_out` separately from the eligible
+--     denominator. A hold is releasable and temporary, so the batch total must
+--     not move when a manager presses Hold and move back when they press
+--     Release; a held student stays in `eligible`, exactly as a disbarred
+--     student already does. The held count belongs on the roster, not in the
+--     placement percentage.
+--   0112/0113/0114/0115 — every one of those inserts into email_deliveries with
+--     a STAFF recipient (KAM, campus CPC, principal/dean, Delivery Head); they
+--     join students only to compose the sentence. Nothing here reaches them.
+--   0020:86, 0009:93, 0074:81 — `is distinct from old.participation_status`,
+--     which is a change detector, not a filter.
+--
+-- Mirrors: src/domain/visibility.ts and src/features/student/apply-repository.ts
+-- both need an `on_hold` reading of the same rule (tasks 119/123). Tests:
+-- src/db/held-student-mail.test.ts, and src/db/hold-gate.test.ts for the table.
+
+-- ---------------------------------------------------------------------------
+-- The outbox. Every notification addressed to a student becomes an email here,
+-- so this is the one place that decides whether the student hears at all.
+-- ---------------------------------------------------------------------------
+create or replace function enqueue_notification_email()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_email  text;
+  v_active boolean;
+  v_campus_id uuid;
+  v_cc_emails text[];
+begin
+  -- Get student email, whether they are still in placements, and campus
+  SELECT email, (participation_status = 'active'), campus_id
+    INTO v_email, v_active, v_campus_id
+    FROM students WHERE id = NEW.student_id;
+
+  -- `coalesce(..., false)` is load-bearing twice over. A notification with no
+  -- student_id (every staff notification) selects no row, so v_active is NULL,
+  -- and `not NULL` is NULL — which would sail past this guard and enqueue mail
+  -- to nobody. The same trap 0064 names for placement_totals.
+  IF not coalesce(v_active, false) OR v_email IS NULL OR trim(v_email) = '' THEN
+    RETURN NEW;
+  END IF;
+
+  -- Resolve CC recipients based on notification kind
+  v_cc_emails := resolve_cc_recipients(NEW.kind, v_campus_id, NEW.drive_id);
+
+  -- Insert with CC
+  INSERT INTO email_deliveries (notification_id, recipient_email, cc_emails, status)
+  VALUES (NEW.id, lower(trim(v_email)), v_cc_emails, 'queued');
+
+  RETURN NEW;
+END;
+$$;
+
+comment on function enqueue_notification_email is
+  'Stages notification in email_deliveries with To and CC recipients; students not in placements are skipped';
+
+-- ---------------------------------------------------------------------------
+-- The four round notices. Each writes a `notifications` row, which the outbox
+-- above would now refuse to mail — but the in-app bell reads that row directly,
+-- so "nothing at all" has to be decided here too.
+-- ---------------------------------------------------------------------------
+create or replace function round_details_reach_students() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_company text;
+  v_body    text;
+begin
+  if new.round_mode is not distinct from old.round_mode
+     and new.round_scheduled_at is not distinct from old.round_scheduled_at
+     and new.round_interview_link is not distinct from old.round_interview_link
+     and new.venue is not distinct from old.venue then
+    return new;  -- renames and proofs are not schedule news
+  end if;
+
+  select company_name into v_company from drives where id = new.drive_id;
+
+  v_body := 'Round ' || new.sequence || ' (' || new.name || ') of ' || v_company
+    || case when new.round_scheduled_at is not null
+            then ' is scheduled for '
+              || to_char(new.round_scheduled_at at time zone 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+              || ' IST'
+            else ' has updated details' end
+    || case when new.round_mode is not null
+            then '. Mode: ' || replace(new.round_mode, '_', ' ') else '' end
+    || case when new.round_mode = 'virtual' and new.round_interview_link is not null and length(trim(new.round_interview_link)) > 0
+            then '. Join at: ' || trim(new.round_interview_link)
+            when new.round_mode in ('on_campus', 'physical_outside_campus') and new.venue is not null and length(trim(new.venue)) > 0
+            then '. Venue: ' || trim(new.venue)
+            else '' end
+    || '. Please report on time.';
+
+  insert into notifications (student_id, kind, title, body)
+  select a.student_id, 'round_scheduled',
+         v_company || ' — Round ' || new.sequence || ' schedule', v_body
+    from round_participants rp
+    join applications a on a.id = rp.application_id
+    join students s on s.id = a.student_id
+   where rp.round_id = new.id
+     and s.participation_status = 'active';
+
+  return new;
+end;
+$$;
+
+create or replace function shortlist_reaches_student() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_first_round uuid;
+  v_company     text;
+  v_student     uuid;
+  v_out_of_placements boolean;
+begin
+  select a.student_id, d.company_name, s.participation_status <> 'active'
+    into v_student, v_company, v_out_of_placements
+    from applications a
+    join drives d on d.id = a.drive_id
+    join students s on s.id = a.student_id
+   where a.id = new.application_id;
+
+  select dr.id into v_first_round
+    from drive_rounds dr
+    join applications a on a.drive_id = dr.drive_id
+   where a.id = new.application_id
+   order by dr.sequence
+   limit 1;
+
+  if new.included and (tg_op = 'INSERT' or not old.included) then
+    -- Schedule Round 1. A drive published before rounds existed has none;
+    -- the notification still goes, and scheduling happens on the attendance
+    -- screen as before.
+    if v_first_round is not null then
+      insert into round_participants (round_id, application_id, added_by)
+      values (v_first_round, new.application_id, new.decided_by)
+      on conflict (round_id, application_id) do nothing;
+
+      insert into attendance (round_id, application_id, status)
+      values (v_first_round, new.application_id, 'scheduled')
+      on conflict (round_id, application_id) do nothing;
+    end if;
+
+    -- D7: a student out of placements gets NO notification, overridden or not —
+    -- and since 0125 that includes one their college has held.
+    if not v_out_of_placements then
+      insert into notifications (student_id, kind, title, body)
+      values (
+        v_student,
+        'shortlisted',
+        'You are shortlisted for ' || v_company,
+        'You are on the shortlist for ' || v_company ||
+        '. Soon you will get notified for round details. Please report on time.'
+      );
+    end if;
+  end if;
+
+  -- Un-including takes back an untouched Round 1 slot. Anything already
+  -- marked or decided stays: history is not rewritten by a checkbox.
+  if not new.included and tg_op = 'UPDATE' and old.included and v_first_round is not null then
+    delete from attendance
+     where round_id = v_first_round
+       and application_id = new.application_id
+       and status = 'scheduled'
+       and marked_by is null
+       and not exists (select 1 from round_results r
+                        where r.round_id = v_first_round
+                          and r.application_id = new.application_id);
+    delete from round_participants rp
+     where rp.round_id = v_first_round
+       and rp.application_id = new.application_id
+       and not exists (select 1 from attendance att
+                        where att.round_id = v_first_round
+                          and att.application_id = new.application_id);
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function round_result_reaches_student() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student  uuid;
+  v_company  text;
+  v_sequence integer;
+  v_out_of_placements boolean;
+begin
+  if new.result not in ('selected', 'rejected') then
+    return new;  -- waitlisted / on_hold are interim states, not outcomes
+  end if;
+  if tg_op = 'UPDATE' and old.result = new.result then
+    return new;  -- re-saving the same result is not news
+  end if;
+
+  select a.student_id, d.company_name, s.participation_status <> 'active'
+    into v_student, v_company, v_out_of_placements
+    from applications a
+    join drives d on d.id = a.drive_id
+    join students s on s.id = a.student_id
+   where a.id = new.application_id;
+
+  select sequence into v_sequence from drive_rounds where id = new.round_id;
+
+  if v_out_of_placements then
+    return new;
+  end if;
+
+  if new.result = 'selected' then
+    insert into notifications (student_id, kind, title, body)
+    values (
+      v_student,
+      'round_cleared',
+      'You cleared Round ' || v_sequence || ' of ' || v_company,
+      'Well done — you advance from Round ' || v_sequence || ' of ' || v_company ||
+      '. Soon you will get notified for round details. Please report on time.'
+    );
+  else
+    insert into notifications (student_id, kind, title, body)
+    values (
+      v_student,
+      'round_not_selected',
+      'Round ' || v_sequence || ' of ' || v_company || ': not selected',
+      'You were not selected in Round ' || v_sequence || ' of ' || v_company || '.'
+    );
+  end if;
+
+  return new;
+end;
+$$;
+
+create or replace function meeting_slot_reaches_student() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student  uuid;
+  v_company  text;
+  v_sequence integer;
+  v_out_of_placements boolean;
+begin
+  if new.meeting_link is not distinct from old.meeting_link
+     and new.participant_scheduled_at is not distinct from old.participant_scheduled_at then
+    return new;
+  end if;
+  if new.meeting_link is null and new.participant_scheduled_at is null then
+    return new;  -- clearing a slot is housekeeping, not news
+  end if;
+
+  select a.student_id, d.company_name, r.sequence,
+         s.participation_status <> 'active'
+    into v_student, v_company, v_sequence, v_out_of_placements
+    from applications a
+    join drives d on d.id = a.drive_id
+    join students s on s.id = a.student_id
+    join drive_rounds r on r.id = new.round_id
+   where a.id = new.application_id;
+
+  if v_out_of_placements then
+    return new;
+  end if;
+
+  insert into notifications (student_id, kind, title, body)
+  values (
+    v_student,
+    'meeting_link',
+    v_company || ' — your Round ' || v_sequence || ' slot',
+    'Your Round ' || v_sequence || ' of ' || v_company
+      || case when new.participant_scheduled_at is not null
+              then ' is at '
+                || to_char(new.participant_scheduled_at at time zone 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+                || ' IST'
+              else '' end
+      || case when new.meeting_link is not null
+              then '. Your meeting link: ' || new.meeting_link else '' end
+      || '. Please report on time.'
+  );
+
+  return new;
+end;
+$$;
+
+-- An offer on a held student. Most often this is the 'self_placed' hold doing
+-- exactly what it says: the manager already knows about the offer, and the
+-- student does not need the portal announcing it back to them.
+create or replace function offer_reaches_student() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_out_of_placements boolean;
+begin
+  if new.source <> 'on_campus' then
+    return new;
+  end if;
+
+  select participation_status <> 'active' into v_out_of_placements
+    from students where id = new.student_id;
+  if v_out_of_placements then
+    return new;
+  end if;
+
+  insert into notifications (student_id, kind, title, body, drive_id)
+  values (
+    new.student_id,
+    'offer',
+    'Offer from ' || new.company_name,
+    case
+      when new.offer_category = 'internship'
+        then 'Congratulations — ' || new.company_name || ' has made you an internship offer.'
+      when new.offer_category is not null
+        then 'Congratulations — ' || new.company_name || ' has made you an offer ('
+             || replace(new.offer_category::text, '_', ' ') || ').'
+      else 'Congratulations — ' || new.company_name || ' has made you an offer.'
+    end,
+    new.drive_id
+  );
+
+  return new;
+end;
+$$;
+
+create or replace function notify_absent_student() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_student   uuid;
+  v_company   text;
+  v_round     text;
+  v_out_of_placements boolean;
+begin
+  -- Fire only when a row BECOMES absent — re-saving an absent row is not
+  -- a second absence, and neither is confirming a different status.
+  if new.status <> 'absent' or (tg_op = 'UPDATE' and old.status = 'absent') then
+    return new;
+  end if;
+
+  select a.student_id, d.company_name, s.participation_status <> 'active'
+    into v_student, v_company, v_out_of_placements
+    from applications a
+    join drives d on d.id = a.drive_id
+    join students s on s.id = a.student_id
+   where a.id = new.application_id;
+
+  select coalesce(dr.name, 'Round ' || dr.sequence)
+    into v_round
+    from drive_rounds dr
+   where dr.id = new.round_id;
+
+  -- The application row is gone or unreadable: nothing to say, nobody to say
+  -- it to. Never fail the attendance write over its own side effect.
+  if v_student is null or v_out_of_placements then
+    return new;
+  end if;
+
+  insert into notifications (student_id, kind, title, body)
+  values (
+    v_student,
+    'absent',
+    'Marked absent — ' || coalesce(v_company, 'a drive'),
+    'You were marked absent for ' || coalesce(v_round, 'a round') || ' of the ' ||
+    coalesce(v_company, 'drive') || ' drive. Absences across drives are counted ' ||
+    'and repeated absence is reviewed. Contact your placement coordinator if ' ||
+    'this is a mistake.'
+  );
+
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- The shortlist write guard. The function keeps its 0043 name — renaming it
+-- would mean dropping and recreating the trigger for a word — but it no longer
+-- answers only to opt-out. A held student who can be shortlisted is scheduled
+-- into Round 1 with no notice, which is the silent half-state this repo has
+-- been closing all month.
+-- ---------------------------------------------------------------------------
+create or replace function shortlist_respects_opt_out() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  v_state text;
+begin
+  if new.included
+     and (tg_op = 'INSERT' or old.included is distinct from new.included
+          or old.opt_out_override_reason is distinct from new.opt_out_override_reason) then
+    select participation_status::text into v_state
+      from students s
+      join applications a on a.student_id = s.id
+     where a.id = new.application_id
+       and s.participation_status <> 'active';
+
+    if v_state is not null
+       and (new.opt_out_override_reason is null
+            or length(trim(new.opt_out_override_reason)) = 0) then
+      raise exception
+        'This student % and cannot be shortlisted. Overriding needs an explicit reason.',
+        (case v_state
+          when 'opted_out' then 'has opted out of placements'
+          when 'on_hold'   then 'is on a hold placed by their college'
+          else 'is ' || replace(v_state, '_', ' ')
+        end)
+      using errcode = 'check_violation';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- The apply gate. Same gates in the same order — the full body is restated
+-- because CREATE OR REPLACE cannot patch a body, and 0119's header is the
+-- record of why every one of them sits where it does. Only the participation
+-- sentence changes: it used to guess, and it now says which of the three
+-- states the student is actually in.
+--
+-- The three sentences match REFUSALS in src/features/student/apply-repository.ts
+-- word for word, so the student's screen and the row-level refusal cannot
+-- disagree.
+-- ---------------------------------------------------------------------------
+create or replace function enforce_application_gates() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  d drives%rowtype;
+  s students%rowtype;
+  highest_rank integer;
+  drive_rank   integer;
+  -- The standing eligibility is measured on (§7.2).
+  verified_cgpa      numeric;
+  verified_arrears   integer;
+  verified_history   integer;
+  cgpa_value         numeric;
+  standing_arrears   integer;
+  arrear_history     integer;
+  -- RAISE's first argument has to be a string literal, so the sentence is
+  -- chosen into a variable and substituted with % rather than written inline.
+  v_refusal          text;
+begin
+  if current_student_id() is null then
+    return new;
+  end if;
+
+  select * into d from drives where id = new.drive_id;
+
+  if d.status <> 'live' then
+    raise exception 'This drive is not open.' using errcode = 'check_violation';
+  end if;
+
+  if d.application_start is null or d.application_end is null
+     or now() < d.application_start or now() > d.application_end then
+    raise exception 'The application window for this drive is closed.'
+      using errcode = 'check_violation';
+  end if;
+
+  select * into s from students where id = new.student_id;
+
+  if s.srf_status <> 'srf_approved' then
+    raise exception 'Your registration form has not been approved yet.'
+      using errcode = 'check_violation';
+  end if;
+
+  if s.participation_status <> 'active' then
+    v_refusal := case s.participation_status
+      when 'opted_out' then 'You have opted out of campus placements.'
+      when 'on_hold'   then 'Your college has placed a hold on your placements. Contact your placement office.'
+      else 'You are not currently eligible to apply. Contact your coordinator.'
+    end;
+    raise exception '%', v_refusal using errcode = 'check_violation';
+  end if;
+
+  -- --------------------------------------------- what the company asked for
+  -- Degrees and branches are link tables, so "no rows" is the one case that
+  -- must NOT refuse: an empty list means ANY degree, never no degree (R2). The
+  -- same shape the campus gate above already uses.
+  if exists (select 1 from drive_eligible_degrees dd where dd.drive_id = d.id)
+     and not exists (
+       select 1 from drive_eligible_degrees dd
+        where dd.drive_id = d.id and dd.degree_id = s.degree_id
+     ) then
+    raise exception 'This drive is not open to your degree.'
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (select 1 from drive_eligible_branches bb where bb.drive_id = d.id)
+     and not exists (
+       select 1 from drive_eligible_branches bb
+        where bb.drive_id = d.id and bb.branch_id = s.branch_id
+     ) then
+    raise exception 'This drive is not open to your branch.'
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (select 1 from drive_target_campuses tc where tc.drive_id = d.id)
+     and not exists (
+       select 1 from drive_target_campuses tc
+        where tc.drive_id = d.id and tc.campus_id = s.campus_id
+     ) then
+    raise exception 'This drive is not open to your campus.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Same shape, different storage: passing years are an array on the drive
+  -- rather than a link table, and an empty array is the same silence.
+  -- `eligible_passing_years` has been asked by every drive since 0004 and
+  -- checked by nobody until now — the batch that graduates is exactly what a
+  -- recruiter names, and a 2025 student applying to a 2026-only drive takes a
+  -- seat the company did not offer.
+  if array_length(d.eligible_passing_years, 1) is not null
+     and not (s.passing_year = any (d.eligible_passing_years)) then
+    raise exception 'This drive is not open to your passing year.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ------------------------------------------------- the school marks bars
+  if d.min_tenth_percentage is not null
+     and (s.tenth_percentage is null or s.tenth_percentage < d.min_tenth_percentage) then
+    raise exception 'This drive requires at least % in your 10th.', d.min_tenth_percentage
+      using errcode = 'check_violation';
+  end if;
+
+  if d.min_twelfth_percentage is not null
+     and (s.twelfth_percentage is null or s.twelfth_percentage < d.min_twelfth_percentage) then
+    raise exception 'This drive requires at least % in your 12th.', d.min_twelfth_percentage
+      using errcode = 'check_violation';
+  end if;
+
+  -- ------------------------------------------------------- the CGPA and arrears
+  -- `cgpa` and `current_arrears` are NOT NULL on a semester row, so a null here
+  -- means the student has no verified line at all rather than a zeroed one.
+  -- Arrear HISTORY is the max over every verified semester, not just the latest
+  -- one: a backlog cleared in semester 3 is still on the record (`academics.ts`
+  -- takes the same maximum).
+  select latest.cgpa,
+         latest.current_arrears,
+         (select max(m.history_of_arrears)
+            from student_semesters m
+           where m.student_id = new.student_id and m.status = 'verified')
+    into verified_cgpa, verified_arrears, verified_history
+    from student_semesters latest
+   where latest.student_id = new.student_id
+     and latest.status = 'verified'
+   order by latest.semester_number desc
+   limit 1;
+
+  if verified_cgpa is not null then
+    cgpa_value       := verified_cgpa;
+    standing_arrears := verified_arrears;
+    arrear_history   := coalesce(verified_history, 0);
+  else
+    cgpa_value       := coalesce(s.overall_cgpa, 0);
+    standing_arrears := coalesce(s.current_arrears, 0);
+    arrear_history   := coalesce(s.history_of_arrears, 0);
+  end if;
+
+  if d.min_overall_cgpa is not null and cgpa_value < d.min_overall_cgpa then
+    raise exception 'This drive requires a CGPA of at least %, and yours is %.',
+      d.min_overall_cgpa, cgpa_value
+      using errcode = 'check_violation';
+  end if;
+
+  -- `no_history` is strictly stronger than `no_standing`: it forbids cleared
+  -- backlogs as well as live ones (decision Q6).
+  if d.arrears_policy in ('no_standing', 'no_history') and standing_arrears > 0 then
+    raise exception 'This drive asks for no standing arrears, and you have %.', standing_arrears
+      using errcode = 'check_violation';
+  end if;
+
+  if d.arrears_policy = 'no_history' and arrear_history > 0 then
+    raise exception 'This drive asks for no history of arrears, and yours has %.', arrear_history
+      using errcode = 'check_violation';
+  end if;
+
+  -- R5a: the override bypasses the preference gates below — never the ones
+  -- above. Everything the company asked for is now checked BEFORE this line, so
+  -- a prestige drive widens WHO MAY ASK, not WHO MAY QUALIFY.
+  if d.open_to_all_override then
+    return new;
+  end if;
+
+  -- ------------------------------------------------------------- the area
+  if d.role_category is not null
+     and exists (select 1 from student_role_preferences p where p.student_id = new.student_id)
+     and not exists (
+       select 1 from student_role_preferences p
+        where p.student_id = new.student_id and p.category = d.role_category
+     ) then
+    raise exception
+      'This drive is for an area you did not choose on your registration form.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ----------------------------------------- D1: the drive-type preference
+  -- Same semantics as the area: an empty list is silence, and silence is not
+  -- refusal. A student who asked only for internships is not shown — and here,
+  -- not admitted to — a placement drive.
+  if d.drive_type is not null
+     and cardinality(s.drive_type_preferences) > 0
+     and not (d.drive_type = any (s.drive_type_preferences)) then
+    raise exception
+      'This drive''s drive type is not among the ones you asked for in your preferences.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- R4 — the internship cap, PLAIN internship drives only (Q1b, 2026-08-21,
+  -- superseding decision Q2). A convertible drive falls through to the
+  -- ladder below, which is what decides a placement.
+  if d.drive_type = 'internship' and exists (
+       select 1 from offers o
+        where o.student_id = new.student_id
+          and o.drive_type in ('internship', 'internship_convertible')
+     ) then
+    raise exception 'You have already accepted an internship offer.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- R3/R5 — the ladder. Rank mirrors offerCategoryRank in
+  -- src/domain/offer-category.ts; change both or neither.
+  if d.drive_type in ('placement', 'internship_convertible')
+     and d.offer_category is not null then
+    select max(case o.offer_category
+                 when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+               end)
+      into highest_rank
+      from offers o
+     where o.student_id = new.student_id
+       and o.drive_type in ('placement', 'internship_convertible')
+       and o.offer_category is not null;
+
+    drive_rank := case d.offer_category
+                    when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                  end;
+
+    if highest_rank is not null and drive_rank <= highest_rank then
+      raise exception
+        'You are already placed at this category or higher, so this drive is not open to you.'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0127_campus_managers_file_hold_orders.sql
+-- =============================================================================
+
+-- 0127_campus_managers_file_hold_orders.sql
+--
+-- The last thing 0125 could not do: file the attachment.
+--
+-- A hold has an optional document (the request was "reason as text box with
+-- attachment non manditory"). 0125 gave `student_holds` a `document_id` and made
+-- the `hold-orders` bucket insertable by a Campus Manager, but the row naming
+-- that object lives in `student_documents`, and the only insert policy there is
+-- the student's own (0049:203). So the dialog could upload the fee demand and
+-- then be refused the row: the hold would place with no attachment and the
+-- manager would believe the evidence was filed with it.
+--
+-- One narrow policy closes it. A Campus Manager, a hold order, a student at a
+-- college they sit on — `my_campus_ids()`, the same scoping 0125's own bucket
+-- policy and `place_student_hold` use. Nothing else may be filed this way: a
+-- manager still cannot insert a marksheet, a resume or an offer letter.
+--
+-- What is deliberately NOT here is update and delete. A hold order is filed once,
+-- with the hold, and 0007's audit trigger has already recorded that decision;
+-- rewriting the document behind it would leave the log describing evidence that
+-- no longer exists. `on delete set null` (0125) is the only way it leaves the row.
+
+drop policy if exists documents_insert_hold_order on student_documents;
+create policy documents_insert_hold_order on student_documents for insert
+  with check (
+    current_app_role() = 'campus_manager'
+    and kind = 'hold_order'
+    and student_id in (
+      select s.id from students s where s.campus_id in (select my_campus_ids())
+    )
+  );
+
+-- =============================================================================
+-- Migration: 0128_ae_reads_all_drives.sql
+-- =============================================================================
+
+-- 0128 — Account Executives can view all company drives.
+--
+-- Business requirement: Account Executives need visibility across all company drives
+-- (live, in-rounds, completed, and past drives), not just the ones they personally raised,
+-- while editing remains scoped to their own drafts.
+
+-- 1. Drives: AE can view all drives
+drop policy if exists drives_ae_read on drives;
+create policy drives_ae_read on drives for select
+  using (current_app_role() = 'account_executive');
+
+-- 2. Applications: AE can read applications to see applicant counts
+drop policy if exists applications_read_drive_owner on applications;
+create policy applications_read_drive_owner on applications for select
+  using (current_app_role() = 'account_executive');
+
+-- 3. Shortlist entries: AE can read shortlist counts across drives
+drop policy if exists shortlist_read_drive_owner on shortlist_entries;
+create policy shortlist_read_drive_owner on shortlist_entries for select
+  using (current_app_role() = 'account_executive');
+
+-- 4. Offers: AE can read offer counts across drives
+drop policy if exists offers_read_drive_owner on offers;
+create policy offers_read_drive_owner on offers for select
+  using (current_app_role() = 'account_executive');
+
+-- 5. Attendance: AE can follow drive attendance
+drop policy if exists attendance_ae_read on attendance;
+create policy attendance_ae_read on attendance for select
+  using (current_app_role() = 'account_executive');
+
+-- 6. Round participants: AE can follow round participation
+drop policy if exists rounds_ae_read on round_participants;
+create policy rounds_ae_read on round_participants for select
+  using (current_app_role() = 'account_executive');
+
+-- 7. Round results: AE can follow round results
+drop policy if exists results_ae_read on round_results;
+create policy results_ae_read on round_results for select
+  using (current_app_role() = 'account_executive');
+
+-- =============================================================================
+-- Migration: 0129_remove_central_cpc_drive_emails.sql
+-- =============================================================================
+
+-- 0129 — Remove new drive / drive approval emails for Central Placement Coordinator.
+--
+-- Business requirement: Central Placement Coordinators configure, approve and publish
+-- drives directly in the PMS portal, so automated email alerts for new/approved drives
+-- are redundant and should not be dispatched to them.
+
+CREATE OR REPLACE FUNCTION public.notify_drive_lifecycle_roles()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_ae_name       text;
+  v_ae_email      text;
+  v_staff_rec     record;
+  v_cpc_rec       record;
+  v_subject       text;
+  v_title         text;
+  v_subtitle      text;
+  v_body          text;
+  v_ctc_display   text;
+begin
+  -- Format CTC display
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
+
+  -- Lookup Sourcing AE details
+  if new.created_by is not null then
+    select full_name, email into v_ae_name, v_ae_email
+      from profiles
+     where id = new.created_by;
+  end if;
+
+  -- A. PIF SUBMITTED -> Notify Delivery Head & ER Head
+  if new.status = 'submitted' and (tg_op = 'INSERT' or old.status is distinct from 'submitted') then
+    v_subject := 'Action Required: PIF Submitted for Review — ' || new.company_name;
+    v_title := 'Placement Initiation Form Under Review';
+    v_subtitle := 'A new placement drive has been submitted for classification and review.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role Title:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n' ||
+              '**Sourced By (AE):** ' || coalesce(v_ae_name, 'Account Executive') || E'\n\n' ||
+              'Please review the compensation structure, eligibility criteria, and approve or request revisions.';
+
+    for v_staff_rec in
+      select email, full_name from profiles where role in ('delivery_head', 'er_head') and is_active = true
+      union
+      select email, full_name from staff_invitations where role in ('delivery_head', 'er_head') and accepted_at is null
+    loop
+      perform enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_staff_rec.full_name, 'Head of Placement / ER'),
+        v_body,
+        'Open PIF Approvals',
+        'https://pms.faceprepcampus.com/delivery-head/pif-approvals'
+      );
+    end loop;
+  end if;
+
+  -- B. PIF APPROVED -> Notify AE and Delivery Head / ER Head (Central CPC email removed per 0129)
+  if new.status = 'approved' and (tg_op = 'INSERT' or old.status is distinct from 'approved') then
+    -- 1. Notify Sourcing AE
+    if v_ae_email is not null then
+      v_subject := 'Good News: PIF Approved — ' || new.company_name;
+      v_title := 'Placement Initiation Form Approved';
+      v_subtitle := 'Your sourced drive has been approved and moved to the publishing queue.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+                '**Category:** ' || coalesce(new.offer_category::text, 'Standard') || E'\n' ||
+                '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+                'Your PIF has been approved by the Delivery Head and assigned to Central Placement Coordinators for drive scheduling and campus publishing.';
+
+      perform enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_ae_name, 'Account Executive'),
+        v_body,
+        'View Sourced Drives',
+        'https://pms.faceprepcampus.com/my-drives'
+      );
+    end if;
+
+    -- 2. Notify Delivery Head & ER Head (Drive Transferred to Central CPC)
+    v_subject := 'Drive Approved: Transferred to Central CPC — ' || new.company_name;
+    v_title := 'Placement Drive Approved';
+    v_subtitle := 'The drive has been approved and moved to Central Placement Coordinator for campus scheduling.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**Category:** ' || coalesce(new.offer_category::text, 'Standard') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'Placement Initiation Form has been approved and assigned to Central Placement Coordinators to configure campus targeting and take the drive live.';
+
+    for v_staff_rec in
+      select email, full_name from profiles where role in ('delivery_head', 'er_head') and is_active = true
+      union
+      select email, full_name from staff_invitations where role in ('delivery_head', 'er_head') and accepted_at is null
+    loop
+      perform enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_staff_rec.full_name, 'Head of Placement / ER'),
+        v_body,
+        'View Placement Drives',
+        'https://pms.faceprepcampus.com/delivery-head/pif-approvals'
+      );
+    end loop;
+  end if;
+
+  -- C. PIF REJECTED -> Notify AE
+  if new.status = 'rejected' and (tg_op = 'INSERT' or old.status is distinct from 'rejected') then
+    if v_ae_email is not null then
+      v_subject := 'Action Required: PIF Revision Requested — ' || new.company_name;
+      v_title := 'PIF Requires Changes';
+      v_subtitle := 'Feedback has been provided on your submitted Placement Initiation Form.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+                '**Review Feedback:** ' || coalesce(new.rejection_reason, 'Please review the submitted parameters and consult with Delivery Head.') || E'\n\n' ||
+                'Please update the PIF with the requested changes and resubmit for approval.';
+
+      perform enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_ae_name, 'Account Executive'),
+        v_body,
+        'Revise PIF Details',
+        'https://pms.faceprepcampus.com/ae/pif'
+      );
+    end if;
+  end if;
+
+  -- D. DRIVE LIVE -> Notify AE and Target Campus CPCs
+  if new.status = 'live' and (tg_op = 'INSERT' or old.status is distinct from 'live') then
+    if v_ae_email is not null then
+      v_subject := 'Your Account is Live: Placement Drive Published — ' || new.company_name;
+      v_title := 'Placement Drive Published';
+      v_subtitle := 'Your sourced drive is now actively accepting applications.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+                '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+                'Central CPC has published your drive live across targeted partner campuses. Eligible students can now submit their applications.';
+
+      perform enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_ae_name, 'Account Executive'),
+        v_body,
+        'View Account Overview',
+        'https://pms.faceprepcampus.com/ae/overview'
+      );
+    end if;
+
+    v_subject := 'New Campus Placement Drive Active — ' || new.company_name;
+    v_title := 'New Campus Placement Drive Active';
+    v_subtitle := 'A new placement drive has been published for eligible students at your campus.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'The drive is now active on the student portal. Please ensure eligible candidates complete their applications before the deadline.';
+
+    for v_cpc_rec in
+      select distinct u.email, u.full_name
+        from (
+          select p.email, p.full_name
+            from staff_campus_assignments a
+            join profiles p on p.id = a.profile_id
+            join drive_target_campuses dtc on dtc.campus_id = a.campus_id
+           where dtc.drive_id = new.id
+             and p.role = 'campus_placement_coordinator'
+             and p.is_active = true
+          union
+          select sci.email, coalesce(si.full_name, 'Campus Placement Coordinator') as full_name
+            from staff_campus_invitations sci
+            join staff_invitations si on lower(si.email) = lower(sci.email)
+            join drive_target_campuses dtc on dtc.campus_id = sci.campus_id
+           where dtc.drive_id = new.id
+             and si.role = 'campus_placement_coordinator'
+        ) u
+    loop
+      perform enqueue_direct_email(
+        v_cpc_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        coalesce(v_cpc_rec.full_name, 'Campus Placement Coordinator'),
+        v_body,
+        'View Drive Cohort',
+        'https://pms.faceprepcampus.com/cpc/drives'
+      );
+    end loop;
+  end if;
+
+  return new;
+end;
+$function$;
+
+-- Also remove central_placement_coordinator from CC on pif_submitted
+CREATE OR REPLACE FUNCTION public.resolve_cc_recipients(
+  p_notification_kind text,
+  p_campus_id uuid DEFAULT NULL::uuid
+)
+RETURNS text[]
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_cc_emails TEXT[] := '{}';
+BEGIN
+  IF p_notification_kind IN ('campus_drive_alert', 'campus_shortlist_ready') THEN
+    SELECT ARRAY_AGG(DISTINCT email) INTO v_cc_emails
+    FROM profiles 
+    WHERE role = 'central_placement_coordinator' 
+      AND is_active = true
+      AND email IS NOT NULL;
+  
+  ELSIF p_notification_kind = 'campus_student_placed' THEN
+    SELECT ARRAY_AGG(DISTINCT email) INTO v_cc_emails
+    FROM profiles 
+    WHERE role IN ('account_executive', 'delivery_head') 
+      AND is_active = true
+      AND email IS NOT NULL;
+  
+  -- pif_submitted no longer CCs central_placement_coordinator
+  ELSIF p_notification_kind = 'pif_submitted' THEN
+    v_cc_emails := '{}';
+  
+  ELSIF p_notification_kind = 'drive_published' AND p_campus_id IS NOT NULL THEN
+    SELECT ARRAY_AGG(DISTINCT p.email) INTO v_cc_emails
+    FROM profiles p
+    JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+    WHERE sca.campus_id = p_campus_id
+      AND p.role IN ('key_account_manager', 'enterprise_relations', 'er_head')
+      AND p.is_active = true
+      AND p.email IS NOT NULL;
+  END IF;
+  
+  RETURN COALESCE(v_cc_emails, '{}');
+END;
+$function$;
+
+-- =============================================================================
+-- Migration: 0130_hold_pause_and_self_placed_requests.sql
+-- =============================================================================
+
+-- 0130_hold_pause_and_self_placed_requests.sql
+--
+-- Three decisions taken 2026-10-29, after the hold reached the Campus Manager:
+--
+--   1. Every hold names both ends of its window. `ends_at` stops being optional
+--      — but it is STILL a review date, not a switch. Nothing in this file
+--      releases a hold; a date passing only changes the word on the screen
+--      (holdStanding's 'overdue'). 0125:30-37 explains why, and it has not
+--      changed.
+--   2. A fourth kind, `pause`, for a break that is neither fees, an off-campus
+--      offer, nor idleness. Same mechanics, same release.
+--   3. A student may ask for a self-placed hold themselves, with two documents
+--      (offer letter + handwritten declaration). It closes nothing until a
+--      Campus Manager confirms it: a self-report that shut a student's own
+--      drives the moment they typed it would be an escape hatch, not a record.
+--
+-- WHY THE NEW ENUM LABELS ARE NOT USED BELOW: Postgres refuses to use a label
+-- added in the same transaction, measured in 0124:6-19. 'self_placed' and
+-- 'offer_letter' are old labels and are used freely; 'pause' and
+-- 'self_placement_declaration' are added here and referenced only from the
+-- client. That is also why the declaration's document_kind is not validated in
+-- the function below — ownership is what the function can check safely.
+
+alter type hold_kind add value if not exists 'pause';
+
+alter type document_kind add value if not exists 'self_placement_declaration';
+
+-- ---------------------------------------------------------------------------
+-- Every hold names its review date.
+--
+-- The 0124/0125 tables have only ever been written by this effort, so a null
+-- `ends_at` can only be a row placed before this rule existed. Thirty days is
+-- the form's own default; it is written here rather than guessed at read time,
+-- and it is a review date like any other — the hold is still released by hand.
+-- ---------------------------------------------------------------------------
+update student_holds set ends_at = starts_at + 30 where ends_at is null;
+
+alter table student_holds alter column ends_at set not null;
+
+alter table student_holds drop constraint hold_window_is_ordered;
+alter table student_holds
+  add constraint hold_window_is_ordered check (ends_at >= starts_at);
+
+-- ---------------------------------------------------------------------------
+-- A student-filed request: same table, same release, plus the two documents and
+-- the confirmation that separates "asked for" from "in force".
+-- ---------------------------------------------------------------------------
+alter table student_holds
+  add column if not exists declaration_id uuid references student_documents(id) on delete set null,
+  add column if not exists confirmed_at timestamptz,
+  add column if not exists confirmed_by uuid references profiles(id);
+
+-- Nobody placed a request but the student, so the author is no longer required.
+-- A staff-placed hold still stamps held_by, and confirm_student_hold is what
+-- puts a name on a request.
+alter table student_holds alter column held_by drop not null;
+
+-- Confirmation, like release, is attributed or absent — never half.
+alter table student_holds
+  add constraint hold_confirmation_is_attributed
+  check ((confirmed_at is null) = (confirmed_by is null));
+
+-- An unconfirmed row is exactly a student's request: self_placed, no held_by,
+-- both documents filed. Enforced here so the screen never has to guess.
+alter table student_holds
+  add constraint hold_request_has_evidence
+  check (
+    confirmed_at is not null
+    or (kind = 'self_placed' and held_by is null
+        and document_id is not null and declaration_id is not null)
+  );
+
+-- ---------------------------------------------------------------------------
+-- Place (staff). Same function as 0125, now with a review date to name and a
+-- confirmation stamped at insert — the manager already made the decision, so a
+-- staff row is born confirmed.
+-- ---------------------------------------------------------------------------
+create or replace function place_student_hold(
+  p_student_id  uuid,
+  p_kind        hold_kind,
+  p_reason      text,
+  p_starts_at   date default current_date,
+  p_ends_at     date default null,
+  p_document_id uuid default null
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor  uuid;
+  campus uuid;
+  state  participation_status;
+  v_name text;
+  hold   uuid;
+begin
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'A hold is placed by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if current_app_role() <> 'campus_manager' then
+    raise exception 'Only a Campus Manager may place a placement hold.'
+      using errcode = '42501';
+  end if;
+
+  select campus_id, participation_status, full_name
+    into campus, state, v_name
+    from students where id = p_student_id;
+
+  if campus is null then
+    raise exception 'No such student.';
+  end if;
+
+  if not (campus in (select my_campus_ids())) then
+    raise exception 'You may only hold a student at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  if state <> 'active' then
+    raise exception '% is not in placements right now (status: %), so there is nothing to hold.',
+      v_name, state;
+  end if;
+
+  if p_ends_at is null then
+    raise exception 'Say when the hold should be reviewed.';
+  end if;
+
+  if p_ends_at < coalesce(p_starts_at, current_date) then
+    raise exception 'The review date cannot fall before the hold starts.';
+  end if;
+
+  -- The unique index would refuse this anyway; asking first is what turns a
+  -- unique violation into a sentence the dialog can show.
+  if exists (select 1 from student_holds where student_id = p_student_id and released_at is null) then
+    raise exception '% already has a hold, or a request waiting on them.', v_name;
+  end if;
+
+  insert into student_holds (
+    student_id, kind, reason, starts_at, ends_at, document_id, held_by, confirmed_at, confirmed_by
+  )
+  values (
+    p_student_id, p_kind, trim(p_reason), coalesce(p_starts_at, current_date),
+    p_ends_at, p_document_id, actor, now(), actor
+  )
+  returning id into hold;
+
+  update students set participation_status = 'on_hold' where id = p_student_id;
+
+  return hold;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Request (student). Files the pending row and touches nothing else: the drives
+-- stay open and the mail keeps arriving until a Campus Manager confirms.
+--
+-- One submission, two rows, one transaction: the offer request 0014 already
+-- owns (so the coordinator can verify it and it reaches the statistic) and the
+-- hold request this file adds. Written together because a student who is told
+-- "sent" must not end up with one of them missing — the client cannot wrap
+-- two calls in a transaction, so the database does.
+-- ---------------------------------------------------------------------------
+create or replace function request_self_placed_hold(
+  p_offer_document_id uuid,
+  p_declaration_id    uuid,
+  p_reason            text,
+  p_starts_at         date,
+  p_ends_at           date,
+  p_company_name      text,
+  p_role_title        text,
+  p_ctc_lpa           numeric
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor uuid;
+  state participation_status;
+  hold  uuid;
+begin
+  actor := current_student_id();
+  if actor is null then
+    raise exception 'A self-placed request is filed by the student themselves.'
+      using errcode = '42501';
+  end if;
+
+  select participation_status into state from students where id = actor;
+  if state is null then
+    raise exception 'No such student.';
+  end if;
+  if state <> 'active' then
+    raise exception 'You are not in placements right now (status: %), so this request would change nothing.',
+      state;
+  end if;
+
+  if p_company_name is null or trim(p_company_name) = '' then
+    raise exception 'Name the company you have joined.';
+  end if;
+  if p_ctc_lpa is null or p_ctc_lpa <= 0 then
+    raise exception 'Say the CTC in LPA.';
+  end if;
+  if p_reason is null or trim(p_reason) = '' then
+    raise exception 'Say what the request is for.';
+  end if;
+  if p_ends_at is null then
+    raise exception 'Say when the pause should be reviewed.';
+  end if;
+  if p_ends_at < coalesce(p_starts_at, current_date) then
+    raise exception 'The review date cannot fall before the pause starts.';
+  end if;
+
+  -- The kind is checked for the letter because 'offer_letter' predates this
+  -- file. The declaration's kind is not checked here — its label is created
+  -- above, and Postgres refuses a new label in the same transaction (0124).
+  if not exists (
+    select 1 from student_documents
+     where id = p_offer_document_id and student_id = actor and kind = 'offer_letter'
+  ) then
+    raise exception 'File your offer letter first.';
+  end if;
+  if not exists (
+    select 1 from student_documents where id = p_declaration_id and student_id = actor
+  ) then
+    raise exception 'File the handwritten declaration first.';
+  end if;
+
+  if exists (select 1 from student_holds where student_id = actor and released_at is null) then
+    raise exception 'There is already a hold, or a request waiting, on your placements.';
+  end if;
+
+  insert into student_holds (
+    student_id, kind, reason, starts_at, ends_at, document_id, declaration_id, held_by
+  )
+  values (
+    actor, 'self_placed', trim(p_reason), coalesce(p_starts_at, current_date),
+    p_ends_at, p_offer_document_id, p_declaration_id, null
+  )
+  returning id into hold;
+
+  insert into self_placement_requests (
+    student_id, company_name, role_title, ctc_lpa, offer_letter_id
+  )
+  values (
+    actor, trim(p_company_name), nullif(trim(coalesce(p_role_title, '')), ''), p_ctc_lpa,
+    p_offer_document_id
+  );
+
+  return hold;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Confirm (Campus Manager). The request becomes the hold it asked to be: this
+-- is the one statement that closes the student's drives.
+-- ---------------------------------------------------------------------------
+create or replace function confirm_student_hold(p_hold_id uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor  uuid;
+  h      student_holds;
+  state  participation_status;
+  v_name text;
+begin
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'A hold is confirmed by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if current_app_role() <> 'campus_manager' then
+    raise exception 'Only a Campus Manager may confirm a placement hold.'
+      using errcode = '42501';
+  end if;
+
+  select * into h from student_holds where id = p_hold_id for update;
+
+  if h.id is null then
+    raise exception 'No such hold.';
+  end if;
+
+  if not (h.student_id in (
+        select s.id from students s where s.campus_id in (select my_campus_ids()))) then
+    raise exception 'You may only confirm a hold at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  if h.released_at is not null then
+    raise exception 'This request was already declined on %.', h.released_at::date;
+  end if;
+
+  if h.confirmed_at is not null then
+    raise exception 'This hold was already confirmed on %.', h.confirmed_at::date;
+  end if;
+
+  select participation_status, full_name into state, v_name
+    from students where id = h.student_id;
+
+  if state <> 'active' then
+    raise exception '% is not in placements right now (status: %), so the hold cannot be confirmed.',
+      v_name, state;
+  end if;
+
+  update student_holds
+     set confirmed_at = now(),
+         confirmed_by = actor
+   where id = p_hold_id;
+
+  update students
+     set participation_status = 'on_hold'
+   where id = h.student_id
+     and participation_status = 'active';
+
+  return h.student_id;
+end;
+$$;
+
+grant execute on function request_self_placed_hold to authenticated;
+grant execute on function confirm_student_hold     to authenticated;
+
+-- =============================================================================
+-- Migration: 0131_hold_extension.sql
+-- =============================================================================
+
+-- 0131_hold_extension.sql
+--
+-- Extending a live hold's review date.
+--
+-- A hold's `ends_at` has been a review date since 0130 made it mandatory —
+-- never a switch, never a release. But the dialog forces the manager to name
+-- one at placement time, and a fee dispute that outlives the date it was
+-- guessed at needs somewhere to go that is not "release it and place a new
+-- one". Re-placing would close and reopen the same block, lose the audit
+-- thread between the two rows, and — worse — flip participation_status off
+-- and back on, which the notifier half of 0126 would read as two decisions.
+--
+-- So: one function that moves the date forward, by the same person who placed
+-- the hold, under the same rules as 0125's place/release:
+--
+--   - Campus Manager only, and only at a college they sit on.
+--   - The hold must be CONFIRMED and unreleased. A pending request is the
+--     student's words, not a decision; extending one would mean nothing.
+--   - The new date must fall strictly AFTER the current one. This is an
+--     extension, not a second opinion about the old one — pulling a review
+--     earlier is what Release is for, and the record should say which
+--     happened.
+--
+-- There is no note parameter: `student_holds` has no column for one, the
+-- reason the student is shown must stay the reason it was placed with, and
+-- `audit_holds` (0125:265) already lands the actor and the new `ends_at` in
+-- audit_log on this update. Inventing a place to store prose nobody reads is
+-- how audit trails rot.
+
+create or replace function extend_student_hold(
+  p_hold_id uuid,
+  p_ends_at date
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor uuid;
+  h     student_holds;
+begin
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'A hold is extended by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if current_app_role() <> 'campus_manager' then
+    raise exception 'Only a Campus Manager may extend a placement hold.'
+      using errcode = '42501';
+  end if;
+
+  select * into h from student_holds where id = p_hold_id for update;
+
+  if h.id is null then
+    -- The same answer release gives a manager reading another college's id:
+    -- not "no such hold", because the sentence would confirm it exists.
+    raise exception 'No such hold.';
+  end if;
+
+  if not (h.student_id in (
+        select s.id from students s where s.campus_id in (select my_campus_ids()))) then
+    raise exception 'You may only extend a hold at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  if h.released_at is not null then
+    raise exception 'This hold was already released on %.', h.released_at::date;
+  end if;
+
+  if h.confirmed_at is null then
+    raise exception 'This request has not been confirmed, so there is no hold to extend.';
+  end if;
+
+  if p_ends_at is null then
+    raise exception 'Say the review date the hold is extended to.';
+  end if;
+
+  if p_ends_at <= h.ends_at then
+    raise exception 'The new review date must fall after the current one (%).', h.ends_at;
+  end if;
+
+  update student_holds
+     set ends_at = p_ends_at
+   where id = p_hold_id;
+
+  return h.student_id;
+end;
+$$;
+
+grant execute on function extend_student_hold to authenticated;
+
+-- =============================================================================
+-- Migration: 0132_staff_manage_student_preferences_and_resumes.sql
+-- =============================================================================
+
+-- 0132 — Staff Manage Student Preferences and Resumes
+--
+-- Enables staff (Central CPC, Campus Placement Coordinators, Campus Managers, Admins)
+-- to manage student role category preferences, drive type preferences, and category resumes
+-- directly from the individual student record page (/students/:studentId).
+
+-- 1. Allow staff to write to student_role_preferences
+DROP POLICY IF EXISTS role_preferences_write_staff ON public.student_role_preferences;
+CREATE POLICY role_preferences_write_staff ON public.student_role_preferences
+  FOR ALL
+  USING (is_operator() OR (is_campus_staff() AND student_id IN (SELECT my_student_ids())))
+  WITH CHECK (is_operator() OR (is_campus_staff() AND student_id IN (SELECT my_student_ids())));
+
+-- 2. Allow staff to write to student_documents (for resumes and student documents)
+DROP POLICY IF EXISTS documents_write_staff ON public.student_documents;
+CREATE POLICY documents_write_staff ON public.student_documents
+  FOR ALL
+  USING (is_operator() OR (is_campus_staff() AND student_id IN (SELECT my_student_ids())))
+  WITH CHECK (is_operator() OR (is_campus_staff() AND student_id IN (SELECT my_student_ids())));
+
+-- 3. Allow staff to upload resumes to the storage bucket
+DO $$
+BEGIN
+  IF to_regclass('storage.buckets') IS NULL THEN
+    RETURN;
+  END IF;
+
+  EXECUTE $p$ DROP POLICY IF EXISTS "staff upload resumes" ON storage.objects $p$;
+  EXECUTE $p$
+    CREATE POLICY "staff upload resumes" ON storage.objects
+      FOR INSERT
+      WITH CHECK (
+        bucket_id = 'resumes'
+        AND current_app_role() IS NOT NULL
+      )
+  $p$;
+
+  EXECUTE $p$ DROP POLICY IF EXISTS "staff update resumes" ON storage.objects $p$;
+  EXECUTE $p$
+    CREATE POLICY "staff update resumes" ON storage.objects
+      FOR UPDATE
+      USING (
+        bucket_id = 'resumes'
+        AND current_app_role() IS NOT NULL
+      )
+  $p$;
+END $$;
+
+-- 4. Atomic function to sync student role categories and drive type preferences
+CREATE OR REPLACE FUNCTION public.staff_update_student_preferences(
+  p_student_id UUID,
+  p_role_categories text[],
+  p_drive_type_preferences text[]
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NOT (is_operator() OR (is_campus_staff() AND p_student_id IN (SELECT my_student_ids()))) THEN
+    RAISE EXCEPTION 'Not authorised to update preferences for this student';
+  END IF;
+
+  UPDATE public.students
+  SET drive_type_preferences = p_drive_type_preferences::drive_type[],
+      updated_at = NOW()
+  WHERE id = p_student_id;
+
+  DELETE FROM public.student_role_preferences WHERE student_id = p_student_id;
+
+  IF p_role_categories IS NOT NULL AND array_length(p_role_categories, 1) > 0 THEN
+    INSERT INTO public.student_role_preferences (student_id, category)
+    SELECT p_student_id, unnest(p_role_categories)::role_category;
+  END IF;
+END;
+$$;
+
+-- 5. Helper function for staff to save or replace a student resume
+CREATE OR REPLACE FUNCTION public.staff_save_student_resume(
+  p_student_id UUID,
+  p_role_category role_category,
+  p_storage_path TEXT,
+  p_size_bytes INTEGER
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NOT (is_operator() OR (is_campus_staff() AND p_student_id IN (SELECT my_student_ids()))) THEN
+    RAISE EXCEPTION 'Not authorised to save resume for this student';
+  END IF;
+
+  DELETE FROM public.student_documents
+  WHERE student_id = p_student_id
+    AND kind = 'resume'
+    AND role_category = p_role_category
+    AND drive_id IS NULL;
+
+  INSERT INTO public.student_documents (student_id, kind, role_category, storage_path, size_bytes)
+  VALUES (p_student_id, 'resume', p_role_category, p_storage_path, p_size_bytes);
+END;
+$$;
+
+-- =============================================================================
+-- Migration: 0133_staff_restores_participation_and_student_reads_history.sql
+-- =============================================================================
+
+-- 0133 — A coordinator, a campus manager or a KAM may return an opted-out
+-- student to the pipeline, and the student reads who did it and why.
+--
+-- WHY THIS EXISTS
+--   Opting out is written as a permanent act. 0006:45 calls it
+--   "student-initiated only, CPC-approved, IRREVERSIBLE" and 0009:138-151 puts
+--   that in the database as a BEFORE UPDATE trigger. In practice the decision
+--   gets made on wrong information: a student opts out because they think they
+--   are placed, or because a fee demand they were told about was never put in
+--   front of them, and the only way back is for somebody with database access
+--   to run SQL. This makes the way back a staff action with a name, a date and
+--   a reason on it — and shows all three to the student, which is what the
+--   request asked for ("cpc can change them to normal with reason and that
+--   history should be shown for students").
+--
+-- THE GUARD, AND WHY IT IS NOT SIMPLY DROPPED
+--   enforce_opt_out_irreversible is a plain BEFORE UPDATE trigger with no role
+--   test in it. Triggers run whatever the row's writer is, so it refuses a
+--   SECURITY DEFINER function just as surely as it refuses the student. Dropping
+--   it to let the RPC through would also let every other path through, and the
+--   irreversibility is the point of PRD 16.1 — a student who can flip the flag
+--   to dodge one drive and back for the next makes the roster untrustworthy.
+--   So the guard stays, and gains one narrow exception: the transition is
+--   allowed when the transaction carries a marker that only restore_participation
+--   sets, for that one student. A direct `update students set
+--   participation_status = 'active'` — by the student, by any other role, by any
+--   future screen that forgot the rule — is still refused with a sentence.
+--   The marker is transaction-local (set_config(..., true)), so it cannot leak
+--   into another request on the same connection.
+--   The refusal keeps 0009's word "irreversible" in it on purpose: security
+--   suite (src/db/security.test.ts:199) asserts on that sentence, and PRD 16.1's
+--   promise is still exactly what it was — irreversible through every path a
+--   client can take, reversible only by a named staff member giving a reason.
+--
+-- WHO MAY DO IT
+--   campus_placement_coordinator, campus_manager, key_account_manager — the
+--   three the request named. All three are already is_campus_reader() (0018:30)
+--   and all three are scoped by my_student_ids(), so a KAM returns a student at
+--   a college mapped to them and nobody else's. NOTE THE DEVIATION: 0018:20 sets
+--   "KAM reads, campus staff writes", and this hands the KAM one write. It is
+--   deliberate and it is the only write the KAM gets; everything else about
+--   student standing still belongs to is_campus_staff().
+--   central_placement_coordinator and admin are NOT granted here: the ask named
+--   the campus trio, and an organisation-wide undo button on every student is a
+--   bigger door than the one that was asked for.
+--
+-- WHAT IT DELIBERATELY DOES NOT DO
+--   on_hold -> active is already release_student_hold's (0125:169-224) and this
+--   refuses it aloud rather than leaving two buttons that do one job.
+--   disbarred is a Central sanction (0006:60) and no campus role may lift it.
+--   No notification, no mail (0123 and 0129 stopped staff mail, and the request
+--   was for the history to be shown, not broadcast).
+--
+-- DISCLOSED SIDE EFFECTS
+--   1. A restored student starts receiving drive mail again by itself:
+--      enqueue_notification_email (0126:85-115) drops mail for any student who
+--      is not 'active' at :102. That is the intent of the restore, but it does
+--      mean the student's inbox is not quiet just because nothing was sent at
+--      the moment of the change.
+--   2. A student who is restored and opts out AGAIN used to be blocked by
+--      one_approved_opt_out_per_student (0006:56), a unique partial index over
+--      every 'verified' request they will ever have. opt_out_requests therefore
+--      gains reversed_at/reversed_by, the index only counts unreversed
+--      approvals, and restore_participation stamps the open approval. Their
+--      first opt-out stays on record; it simply stops reserving the slot.
+--      notify_student_of_opt_out_decision (0093:16) early-returns unless the
+--      status itself moves, so the stamp sends nothing.
+--   3. Every gate that 0126 widened from '= opted_out' to '<> active' flips back
+--      with the status: the student is shortlistable, includable in a DAF and
+--      able to apply again from the moment of the change. That is the feature.
+
+-- ---------------------------------------------------------------------------
+-- The history. Append-only, and the student reads it.
+-- ---------------------------------------------------------------------------
+create table participation_status_changes (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references students(id) on delete cascade,
+
+  from_status  participation_status not null,
+  to_status    participation_status not null,
+
+  -- The reason is what makes this a decision rather than a edit. It is demanded
+  -- here, not in the browser, because this function is security definer and the
+  -- browser is not the only caller.
+  reason       text not null check (char_length(trim(reason)) between 1 and 1000),
+
+  changed_by   uuid not null references profiles(id),
+  changed_at   timestamptz not null default now(),
+
+  -- A row that records no change is a lie in an audit table.
+  constraint change_actually_changes check (from_status is distinct from to_status)
+);
+
+-- The student's own record page and the staff history block both ask "everything
+-- that happened to this student's standing, newest first".
+create index participation_changes_student_idx
+  on participation_status_changes (student_id, changed_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Read. No insert/update/delete policy: restore_participation is the only way
+-- in, and it runs as its owner — the shape 0125:230 sets for student_holds.
+--
+-- Unlike a hold, the history is NOT hidden once it is spent. 0125:236-238 shows
+-- a student only their live hold; here the whole ledger is visible, because a
+-- reason that vanishes when the decision is over is exactly the erasure this
+-- table exists to prevent.
+-- ---------------------------------------------------------------------------
+alter table participation_status_changes enable row level security;
+alter table participation_status_changes force row level security;
+
+create policy student_reads_own_participation_changes
+  on participation_status_changes for select
+  using (student_id = current_student_id());
+
+-- Campus roles see their own colleges' changes. is_campus_reader() rather than
+-- is_campus_staff(), because a KAM who returns a student must be able to read
+-- what a coordinator did to the same student a month later.
+create policy campus_staff_reads_own_college_changes
+  on participation_status_changes for select
+  using (
+    is_campus_reader()
+    and student_id in (select my_student_ids())
+  );
+
+create policy org_readers_see_every_participation_change
+  on participation_status_changes for select
+  using (is_org_reader());
+
+grant select on participation_status_changes to authenticated;
+
+-- PRD 19. audit_row (0007:18-57) reads `id`/`student_id` and a generic `reason`
+-- column, both of which this table has.
+create trigger audit_participation_changes
+  after insert on participation_status_changes
+  for each row execute function audit_row();
+
+-- ---------------------------------------------------------------------------
+-- An approved opt-out that has been undone must stop reserving the student's
+-- one slot (side effect 2 above). Attributed as a release is in 0125:77-78:
+-- who and when move together, or neither happened.
+-- ---------------------------------------------------------------------------
+alter table opt_out_requests
+  add column if not exists reversed_by uuid references profiles(id),
+  add column if not exists reversed_at timestamptz;
+
+alter table opt_out_requests
+  drop constraint if exists opt_out_reversal_is_attributed;
+alter table opt_out_requests
+  add constraint opt_out_reversal_is_attributed
+  check ((reversed_at is null) = (reversed_by is null));
+
+drop index if exists one_approved_opt_out_per_student;
+create unique index one_approved_opt_out_per_student
+  on opt_out_requests (student_id)
+  where status = 'verified' and reversed_at is null;
+
+-- ---------------------------------------------------------------------------
+-- The write.
+-- ---------------------------------------------------------------------------
+create or replace function restore_participation(
+  p_student_id uuid,
+  p_reason     text
+) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor    uuid;
+  state    participation_status;
+  v_name   text;
+  v_change uuid;
+begin
+  -- Repeated here rather than trusted to the caller, in the words 0125:115-118
+  -- uses for the same reason: this function holds rights the caller does not,
+  -- and a refusal here is a sentence instead of zero rows.
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'A participation status is restored by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if current_app_role() not in
+     ('campus_placement_coordinator', 'campus_manager', 'key_account_manager') then
+    raise exception 'Only a Campus Placement Coordinator, a Campus Manager or a Key Account Manager may return a student to the pipeline.'
+      using errcode = '42501';
+  end if;
+
+  if p_reason is null or trim(p_reason) = '' then
+    raise exception 'Say why the student is coming back. The reason is shown to them.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Same ceiling as the student's own opt-out reason (MAX_OPT_OUT_REASON), so
+  -- neither side gets a field the other cannot fill.
+  if char_length(trim(p_reason)) > 1000 then
+    raise exception 'The reason must fit in 1000 characters.'
+      using errcode = 'check_violation';
+  end if;
+
+  select participation_status, full_name
+    into state, v_name
+    from students where id = p_student_id;
+
+  if not found then
+    raise exception 'No such student.';
+  end if;
+
+  if p_student_id not in (select my_student_ids()) then
+    raise exception 'You may only return a student at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  -- 'opted_out' only. A held student is released, not restored; a disbarred
+  -- student is a Central decision; an active student has nothing to do.
+  if state <> 'opted_out' then
+    raise exception '% is not opted out (status: %), so there is nothing to return.',
+      v_name, state;
+  end if;
+
+  -- The marker the amended guard looks for, set BEFORE the update it authorises
+  -- and cleared after it. Transaction-local, so it cannot outlive this call.
+  perform set_config('app.participation_restore', p_student_id::text, true);
+
+  insert into participation_status_changes
+    (student_id, from_status, to_status, reason, changed_by)
+  values
+    (p_student_id, 'opted_out', 'active', trim(p_reason), actor)
+  returning id into v_change;
+
+  update students
+     set participation_status = 'active'
+   where id = p_student_id;
+
+  -- Free the slot, and leave the original decision readable.
+  update opt_out_requests
+     set reversed_at = now(),
+         reversed_by = actor
+   where student_id = p_student_id
+     and status = 'verified'
+     and reversed_at is null;
+
+  perform set_config('app.participation_restore', '', true);
+
+  return v_change;
+end;
+$$;
+
+grant execute on function restore_participation to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The guard, amended. Same name, same trigger, same refusal — one exception,
+-- and it is narrow: the student named in the marker, leaving opted_out, in a
+-- transaction that marker opened.
+-- ---------------------------------------------------------------------------
+create or replace function enforce_opt_out_irreversible() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if old.participation_status = 'opted_out' and new.participation_status <> 'opted_out' then
+    if coalesce(current_setting('app.participation_restore', true), '') <> new.id::text then
+      raise exception
+        'Opting out is irreversible except through restore_participation, which records who, why and which student.'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- ROLLBACK (run by hand if this migration is ever undone; nothing here is
+-- applied for you)
+--
+--   drop trigger  if exists audit_participation_changes on participation_status_changes;
+--   drop function if exists restore_participation(uuid, text);
+--   drop table    if exists participation_status_changes cascade;
+--
+--   alter table opt_out_requests
+--     drop constraint if exists opt_reversal_is_attributed,
+--     drop constraint if exists opt_out_reversal_is_attributed;
+--   alter table opt_out_requests
+--     drop column if exists reversed_by,
+--     drop column if exists reversed_at;
+--   drop index if exists one_approved_opt_out_per_student;
+--   create unique index one_approved_opt_out_per_student
+--     on opt_out_requests (student_id) where status = 'verified';
+--
+--   -- then re-apply 0009:138-147's body verbatim:
+--   create or replace function enforce_opt_out_irreversible() returns trigger
+--   language plpgsql set search_path = public as $$
+--   begin
+--     if old.participation_status = 'opted_out' and new.participation_status <> 'opted_out' then
+--       raise exception 'Opting out is irreversible; the student cannot rejoin placements.'
+--         using errcode = 'check_violation';
+--     end if;
+--     return new;
+--   end;
+--   $$;
+--
+-- CHECK IT LANDED (read-only, safe to paste after applying):
+--   select pg_get_indexdef('one_approved_opt_out_per_student'::regclass);
+--     -- must end: WHERE ((status = 'verified') AND (reversed_at IS NULL))
+--   select prosrc from pg_proc where proname = 'enforce_opt_out_irreversible';
+--     -- must mention app.participation_restore: the amended guard, not 0009's
+-- ---------------------------------------------------------------------------
+
+-- =============================================================================
+-- Migration: 0134_withdrawing_an_offer_returns_the_student_to_the_funnel.sql
+-- =============================================================================
+
+-- 0134 — Withdrawing an offer puts the student back in the funnel, and the
+-- withdrawal keeps a name, a date and a reason the student can read.
+--
+-- WHY THIS EXISTS
+--   A placement is a row in `offers` (0006:3-32) and nothing else, so "this
+--   student is no longer placed" has to mean "that row is gone". Today it can
+--   be made gone by any coordinator, campus manager or operator with an
+--   ordinary DELETE: 0018:79-82 leaves `offers_write_staff` as a `for all`
+--   policy. Nothing is asked for, nothing is kept except the audit before-image
+--   (0007:64, staff-only), and the student finds their placement vanished with no
+--   explanation. The request was that a placed student be put back to normal by
+--   a CAM, a KAM or the CPC "with reason", and that the history be shown to
+--   them — which for a placed student is exactly this act.
+--
+-- WHY ARCHIVE-AND-DELETE, NOT A withdrawn_at COLUMN
+--   Every reader of "placed" is a query over `offers`: the apply gates
+--   (0041:95, 0119:222, 0126:662), the placement totals (0064:77-89), the drive
+--   caps, the round notifiers, the statistics, and the student's own placements
+--   screen. A flag would require each of them to remember
+--   `where withdrawn_at is null`, and a missed one is a wrong count that reports
+--   itself as fine. Deleting the row makes all of them correct at the same
+--   instant, and `offer_withdrawals` is what makes the deletion accountable
+--   rather than destructive.
+--
+-- WHO MAY DO IT
+--   The three roles the request named — campus_placement_coordinator,
+--   campus_manager, key_account_manager — scoped to my_student_ids(), plus
+--   is_operator() (admin, central_placement_coordinator).
+--   NOTE THE DIFFERENCE FROM 0133, which refused the operators: those roles can
+--   DELETE an offer today, so refusing them here would take a working action
+--   away rather than putting one back. What they lose is the silence.
+--   The KAM keeps the same single write it was given in 0133, and the same
+--   deviation from 0018:20's "KAM reads, campus staff writes" is disclosed there.
+--
+-- WHAT IT DELIBERATELY DOES NOT DO
+--   It changes no participation_status. A placed student is already 'active' —
+--   placement lives in `offers`, not in the enum — and the two status moves this
+--   project now has are restore_participation (0133, opted_out -> active) and
+--   release_student_hold (0125:169-224, on_hold -> active). This adds no third.
+--   It releases no hold. A student confirmed onto a self_placed hold (0130:253)
+--   keeps it when their offer is withdrawn, because a hold is closed by
+--   release_student_hold and nothing else; the record screen has to offer both
+--   actions, and says so.
+--   No notification, no mail, for the same reason as 0133: the history is
+--   shown, not broadcast.
+--
+-- DISCLOSED SIDE EFFECTS
+--   1. placement_record_overrides.offer_id cascades (0006:37-43), and 0007 does
+--      not audit that table, so a Central "this is their reported record" choice
+--      would vanish unrecorded. The RPC therefore copies the override row into
+--      the archive (record_override) before deleting the offer.
+--   2. The offer letter object stays in Storage. 0051's order is object-then-row
+--      and an orphan object is invisible and cheap; the archive keeps
+--      attachment_path, so the letter a withdrawal is written against is still
+--      reachable by the staff and the student who can read it.
+--   3. A self-placed offer's approval lives in `self_placement_requests`, which
+--      has no link to the `offers` row it produced (0014, 0130:236). That request
+--      stays 'approved' after the withdrawal. Nothing re-approves it — the queue
+--      reads pending rows — but it is history, not a live claim, and the
+--      withdrawal is the row that says what the placement is now.
+--   4. `delete on offers` is revoked from `authenticated` (0008:149 granted only
+--      select/insert/update, but Supabase's own default privileges grant DELETE
+--      on public tables, so the door was open in the project and shut only by
+--      policy). `service_role` is untouched: a server-side import can still
+--      remove a row, as it can for every table here.
+
+-- ---------------------------------------------------------------------------
+-- The archive. One row per offer removed, and the student reads their own.
+-- ---------------------------------------------------------------------------
+create table offer_withdrawals (
+  id           uuid primary key default gen_random_uuid(),
+  -- Not a FK: the row it describes is the one this function deletes. The
+  -- snapshot below is the evidence; this is the key that says what it was.
+  offer_id     uuid not null,
+  student_id   uuid not null references students(id) on delete cascade,
+
+  -- The handful of columns the screens show without parsing the snapshot.
+  drive_id     uuid,
+  source       offer_source not null,
+  company_name text not null,
+  role_title   text,
+  ctc_lpa      numeric(6,2) not null,
+
+  reason       text not null check (char_length(trim(reason)) between 1 and 1000),
+
+  withdrawn_by uuid not null references profiles(id),
+  withdrawn_at timestamptz not null default now(),
+
+  -- The offer exactly as it was, so a withdrawn placement can be reconstructed
+  -- and the totals run that dropped it can be argued with.
+  offer           jsonb not null,
+  record_override jsonb,
+
+  -- A withdrawal that archives somebody else's offer is a mis-keyed insert.
+  constraint withdrawal_archives_the_offer_it_names
+    check (offer_id = ((offer ->> 'id')::uuid))
+);
+
+create index offer_withdrawals_student_idx
+  on offer_withdrawals (student_id, withdrawn_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Read. No insert/update/delete policy: withdraw_offer is the only way in, and
+-- it runs as its owner — the shape 0133 sets for participation_status_changes.
+-- The record is kept after the fact rather than expiring with it, because a
+-- placement that was taken back is the kind of thing a college is asked about
+-- a year later.
+-- ---------------------------------------------------------------------------
+alter table offer_withdrawals enable row level security;
+alter table offer_withdrawals force row level security;
+
+create policy student_reads_own_offer_withdrawals
+  on offer_withdrawals for select
+  using (student_id = current_student_id());
+
+create policy campus_readers_see_their_own_colleges_withdrawals
+  on offer_withdrawals for select
+  using (
+    is_campus_reader()
+    and student_id in (select my_student_ids())
+  );
+
+create policy org_readers_see_every_offer_withdrawal
+  on offer_withdrawals for select
+  using (is_org_reader());
+
+grant select on offer_withdrawals to authenticated;
+
+-- PRD 19. audit_row (0007:18-57) reads `id`/`student_id` and a generic `reason`
+-- column, both of which this table has.
+create trigger audit_offer_withdrawals
+  after insert on offer_withdrawals
+  for each row execute function audit_row();
+
+-- ---------------------------------------------------------------------------
+-- The silent door, shut. `for all` made every writer a deleter; a placement is
+-- now removed by a function that asks why. Two policies, because one policy
+-- covers one command.
+-- ---------------------------------------------------------------------------
+drop policy if exists offers_write_staff on offers;
+
+create policy offers_write_staff_insert on offers for insert to authenticated
+  with check (
+    is_operator() or (is_campus_staff() and student_id in (select my_student_ids()))
+  );
+
+create policy offers_write_staff_update on offers for update to authenticated
+  using (
+    is_operator() or (is_campus_staff() and student_id in (select my_student_ids()))
+  )
+  with check (
+    is_operator() or (is_campus_staff() and student_id in (select my_student_ids()))
+  );
+
+revoke delete on table offers from authenticated;
+
+-- ---------------------------------------------------------------------------
+-- The write.
+-- ---------------------------------------------------------------------------
+create or replace function withdraw_offer(p_offer_id uuid, p_reason text)
+returns uuid
+language plpgsql security definer set search_path = public as $$
+declare
+  actor        uuid;
+  v_offer      offers%ROWTYPE;
+  v_override   jsonb;
+  v_withdrawal uuid;
+begin
+  -- Repeated here rather than trusted to the caller: this function holds rights
+  -- the caller does not, so a refusal must be a sentence, not zero rows.
+  select id into actor from profiles where id = auth.uid() and is_active;
+  if actor is null then
+    raise exception 'An offer is withdrawn by a signed-in staff member.'
+      using errcode = '42501';
+  end if;
+
+  if not (
+    is_operator()
+    or current_app_role() in (
+      'campus_placement_coordinator', 'campus_manager', 'key_account_manager'
+    )
+  ) then
+    raise exception
+      'Only a campus placement coordinator, a campus manager, a key account manager or a central operator may withdraw an offer.'
+      using errcode = '42501';
+  end if;
+
+  -- The reason is what makes this a decision rather than a DELETE. The student
+  -- reads it, so it is demanded here, in the same 1000 characters 0133 gives the
+  -- restore and the opt-out shares.
+  if p_reason is null or trim(p_reason) = '' then
+    raise exception 'Say why the offer is being withdrawn. The student is shown this.';
+  end if;
+  if char_length(trim(p_reason)) > 1000 then
+    raise exception 'The reason must fit in 1000 characters.';
+  end if;
+
+  select * into v_offer from offers where id = p_offer_id;
+  if v_offer.id is null then
+    raise exception 'No such offer.';
+  end if;
+
+  if not (is_operator() or v_offer.student_id in (select my_student_ids())) then
+    raise exception 'You may only withdraw an offer of a student at a college you are assigned to.'
+      using errcode = '42501';
+  end if;
+
+  select to_jsonb(o) into v_override
+    from placement_record_overrides o where o.offer_id = v_offer.id;
+
+  insert into offer_withdrawals (
+    offer_id, student_id, drive_id, source, company_name, role_title, ctc_lpa,
+    reason, withdrawn_by, offer, record_override
+  )
+  values (
+    v_offer.id, v_offer.student_id, v_offer.drive_id, v_offer.source,
+    v_offer.company_name, v_offer.role_title, v_offer.ctc_lpa,
+    trim(p_reason), actor, to_jsonb(v_offer), v_override
+  )
+  returning id into v_withdrawal;
+
+  delete from offers where id = p_offer_id;
+
+  return v_withdrawal;
+end;
+$$;
+
+grant execute on function withdraw_offer to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- ROLLBACK (paste-ready, and it only undoes what this file did):
+--
+--   revoke execute on function withdraw_offer(uuid, text) from authenticated;
+--   drop function withdraw_offer(uuid, text);
+--   drop trigger if exists audit_offer_withdrawals on offer_withdrawals;
+--   drop table offer_withdrawals;
+--
+--   grant delete on table offers to authenticated;
+--   drop policy if exists offers_write_staff_insert on offers;
+--   drop policy if exists offers_write_staff_update on offers;
+--   create policy offers_write_staff on offers for all
+--     using (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())))
+--     with check (is_operator() or (is_campus_staff() and student_id in (select my_student_ids())));
+-- ---------------------------------------------------------------------------
+--
+-- CHECK IT LANDED (read-only, safe to paste after applying):
+--   select polname, polcmd from pg_policy where polrelid = 'offers'::regclass order by polname;
+--     -- offers_read_self (S), offers_read_staff (S), offers_read_drive_owner (S),
+--     --    offers_write_staff_insert (I), offers_write_staff_update (U).
+--     -- There must be no `D` row and no policy still called offers_write_staff.
+--   select relacl from pg_class where relname = 'offers';
+--     -- the authenticated entry must read /arwd=... with no D:
+--     --    {authenticated=arwd/...} becomes {authenticated=arw/...}
+--   select count(*) from offer_withdrawals;
+--     -- 0 before anyone withdraws anything, then one row per offer removed.
+-- ---------------------------------------------------------------------------
+
+-- =============================================================================
+-- Migration: 0135_a_submitted_visit_flips_its_status_last.sql
+-- =============================================================================
+
+-- 0135 — the visit flips to 'submitted' LAST, not before its children.
+--
+-- The symptom (test project, 2026-10-31): an Account Executive pressed
+-- "Submit for approval" on a multi-role PIF and PostgREST answered 403 on
+-- /rest/v1/rpc/save_company_drive_with_roles. Saving the same PIF as a draft
+-- worked. Only submitting failed, for every AE, every time.
+--
+-- Why: `company_drive_contacts_write` is a single FOR ALL policy with only a
+-- USING clause, and Postgres applies USING as the INSERT check too. Its AE
+-- branch admits the AE's own visit only `and cd.status = 'draft'`. The RPC
+-- wrote the visit's status FIRST (`status = p_status`, step 4) and its
+-- contacts after (step 5) — so by the time a contact was inserted, the visit
+-- it belongs to was already 'submitted' and the policy refused the row. A
+-- draft never hits this because p_status is 'draft' and the visit stays
+-- draft-legal throughout.
+--
+-- The fix is ordering, not permission. Every write that the AE's own draft
+-- guards cover happens while the visit is still a draft, and the flip that
+-- ends the AE's edit is the last statement of the transaction. Nothing outside
+-- this function can see the interim row: PostgREST runs the call in one
+-- transaction, and any failure below rolls all of it back.
+--
+-- Deliberately NOT changed: the policies. Weakening
+-- `company_drive_contacts_write` to accept a submitted visit would let an AE
+-- rewrite the contacts of a drive the Delivery Head has already approved. The
+-- guards are right; the RPC was writing around them in the wrong order.
+--
+-- Also fixed here, because it failed the same way for the same reason and
+-- would otherwise look like the same bug: a re-submit of a visit that has
+-- already left 'draft' used to update zero rows silently (the UPDATE's USING
+-- excludes it), then 403 on a table the AE has never heard of. It is now
+-- refused up front, in the sentence the AE reads.
+
+-- ---------------------------------------------------------------------------
+-- Reversible on purpose: the undo at the bottom restores 0116's definition.
+-- ---------------------------------------------------------------------------
+
+create or replace function save_company_drive_with_roles(
+  p_event      jsonb,
+  p_contacts   jsonb,
+  p_roles      jsonb,
+  p_status     drive_status default 'draft'
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_actor_id           uuid := auth.uid();
+  v_event_id           uuid;
+  v_company_id         uuid;
+  v_company_name       text;
+  v_industry           text;
+  v_website            text;
+  v_role_entry         jsonb;
+  v_role_id            uuid;
+  v_role_ids           uuid[] := '{}';
+  v_rounds             jsonb;
+  v_round              jsonb;
+  v_contact            jsonb;
+  v_contact_seq        integer;
+  v_existing_event     company_drives%rowtype;
+  v_final_status       drive_status;
+begin
+  -- 1. Authorization: AE only
+  if current_app_role() <> 'account_executive' then
+    raise exception 'Only Account Executives may create or edit drives.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  -- 2. Extract Event / Company Details
+  v_company_name := trim(p_event->>'companyName');
+  if v_company_name is null or v_company_name = '' then
+    raise exception 'Company name is required.' using errcode = 'check_violation';
+  end if;
+
+  v_industry := nullif(trim(p_event->>'industry'), '');
+  v_website := nullif(trim(p_event->>'companyWebsite'), '');
+
+  -- 3. Resolve or insert company record
+  if (p_event->>'companyId') is not null and (p_event->>'companyId') <> '' then
+    v_company_id := (p_event->>'companyId')::uuid;
+  else
+    -- Match by exact name or insert
+    select id into v_company_id from companies where lower(name) = lower(v_company_name) limit 1;
+    if v_company_id is null then
+      insert into companies (name, industry, website)
+      values (v_company_name, v_industry, v_website)
+      returning id into v_company_id;
+    end if;
+  end if;
+
+  -- 4. Event ID resolution — the visit's STATUS is not written here.
+  if (p_event->>'id') is not null and (p_event->>'id') <> '' then
+    v_event_id := (p_event->>'id')::uuid;
+    select * into v_existing_event from company_drives where id = v_event_id;
+    if not found then
+      raise exception 'Company drive event not found.' using errcode = 'check_violation';
+    end if;
+    if v_existing_event.created_by <> v_actor_id and not is_operator() then
+      raise exception 'You do not have permission to edit this company drive.'
+        using errcode = 'insufficient_privilege';
+    end if;
+    if v_existing_event.status <> 'draft' then
+      -- Replaces 0116's narrower guard, which only refused a DRAFT over a
+      -- submitted visit and let a re-submit through to fail three writes later.
+      raise exception 'This visit has already left the draft stage (%), so it can no longer be edited from the PIF. Raise a new visit instead.', v_existing_event.status
+        using errcode = 'check_violation';
+    end if;
+
+    update company_drives
+    set company_id       = v_company_id,
+        company_name     = v_company_name,
+        drive_mode       = nullif(p_event->>'driveMode', '')::drive_mode,
+        venue            = nullif(trim(p_event->>'venue'), ''),
+        tentative_date   = nullif(p_event->>'tentativeDate', '')::date,
+        timeline_notes   = nullif(trim(p_event->>'timelineNotes'), ''),
+        joining_timeline = nullif(trim(p_event->>'joiningTimeline'), ''),
+        updated_at       = now()
+    where id = v_event_id;
+  else
+    v_event_id := gen_random_uuid();
+    -- 'draft', even for a submission: the contacts and roles below are only
+    -- writable while the visit is a draft, and step 7 flips it in this same
+    -- transaction.
+    insert into company_drives (
+      id, company_id, company_name, drive_mode, venue, tentative_date,
+      timeline_notes, joining_timeline, status, created_by
+    )
+    values (
+      v_event_id,
+      v_company_id,
+      v_company_name,
+      nullif(p_event->>'driveMode', '')::drive_mode,
+      nullif(trim(p_event->>'venue'), ''),
+      nullif(p_event->>'tentativeDate', '')::date,
+      nullif(trim(p_event->>'timelineNotes'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), ''),
+      'draft',
+      v_actor_id
+    );
+  end if;
+
+  -- 5. Contacts at Event Level — allowed because the visit is still a draft.
+  delete from company_drive_contacts where company_drive_id = v_event_id;
+  v_contact_seq := 1;
+  for v_contact in select * from jsonb_array_elements(coalesce(p_contacts, '[]'::jsonb))
+  loop
+    if nullif(trim(v_contact->>'name'), '') is not null
+       or nullif(trim(v_contact->>'email'), '') is not null
+       or nullif(trim(v_contact->>'phone'), '') is not null then
+      insert into company_drive_contacts (company_drive_id, sequence, name, designation, email, phone)
+      values (
+        v_event_id,
+        v_contact_seq,
+        nullif(trim(v_contact->>'name'), ''),
+        nullif(trim(v_contact->>'designation'), ''),
+        nullif(trim(v_contact->>'email'), ''),
+        nullif(trim(v_contact->>'phone'), '')
+      );
+      v_contact_seq := v_contact_seq + 1;
+    end if;
+  end loop;
+
+  -- 6. Insert / Update Each Role
+  for v_role_entry in select * from jsonb_array_elements(coalesce(p_roles, '[]'::jsonb))
+  loop
+    if (v_role_entry->>'id') is not null and (v_role_entry->>'id') <> '' then
+      v_role_id := (v_role_entry->>'id')::uuid;
+    else
+      v_role_id := gen_random_uuid();
+    end if;
+
+    insert into drives (
+      id,
+      company_drive_id,
+      company_name,
+      industry,
+      company_website,
+      drive_mode,
+      venue,
+      tentative_date,
+      role_title,
+      role_category,
+      drive_type,
+      openings,
+      work_locations,
+      ctc_min_lpa,
+      ctc_max_lpa,
+      ctc_breakup,
+      stipend_min_monthly,
+      stipend_max_monthly,
+      shift_type,
+      shift_night_timing,
+      bond_details,
+      jd_storage_path,
+      jd_file_name,
+      jd_size_bytes,
+      job_description,
+      min_overall_marks,
+      min_overall_cgpa_scale,
+      min_overall_cgpa,
+      min_tenth_percentage,
+      min_twelfth_percentage,
+      arrears_policy,
+      eligible_passing_years,
+      mandatory_skills,
+      joining_timeline,
+      joining_immediate_notes,
+      joining_later_notes,
+      timeline_notes,
+      round_count,
+      status,
+      created_by
+    )
+    values (
+      v_role_id,
+      v_event_id,
+      v_company_name,
+      v_industry,
+      v_website,
+      nullif(p_event->>'driveMode', '')::drive_mode,
+      nullif(trim(p_event->>'venue'), ''),
+      nullif(p_event->>'tentativeDate', '')::date,
+      nullif(trim(v_role_entry->>'roleTitle'), ''),
+      nullif(v_role_entry->>'roleCategory', '')::role_category,
+      nullif(v_role_entry->>'driveType', '')::drive_type,
+      (v_role_entry->>'openings')::integer,
+      nullif(trim(v_role_entry->>'workLocations'), ''),
+      (v_role_entry->>'ctcMinLpa')::numeric,
+      (v_role_entry->>'ctcMaxLpa')::numeric,
+      nullif(trim(v_role_entry->>'ctcBreakup'), ''),
+      (v_role_entry->>'stipendMinMonthly')::integer,
+      (v_role_entry->>'stipendMaxMonthly')::integer,
+      nullif(trim(v_role_entry->>'shiftType'), ''),
+      nullif(trim(v_role_entry->>'shiftNightTiming'), ''),
+      nullif(trim(v_role_entry->>'bondDetails'), ''),
+      nullif(trim(v_role_entry->>'jdStoragePath'), ''),
+      nullif(trim(v_role_entry->>'jdFileName'), ''),
+      (v_role_entry->>'jdSizeBytes')::integer,
+      nullif(trim(v_role_entry->>'jobDescription'), ''),
+      (v_role_entry->>'minOverallMarks')::numeric,
+      coalesce(v_role_entry->>'minOverallCgpaScale', 'cgpa')::marks_scale,
+      (v_role_entry->>'minOverallCgpa')::numeric,
+      (v_role_entry->>'minTenthPercentage')::numeric,
+      (v_role_entry->>'minTwelfthPercentage')::numeric,
+      coalesce(v_role_entry->>'arrearsPolicy', 'flexible')::arrear_policy,
+      coalesce(
+        (select array_agg(elem::integer) from jsonb_array_elements_text(v_role_entry->'eligiblePassingYears') elem),
+        '{}'::integer[]
+      ),
+      nullif(trim(v_role_entry->>'mandatorySkills'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), '')::joining_timeline,
+      nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
+      nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
+      nullif(trim(p_event->>'timelineNotes'), ''),
+      coalesce(jsonb_array_length(v_role_entry->'rounds'), 0),
+      p_status,
+      v_actor_id
+    )
+    on conflict (id) do update set
+      company_drive_id        = v_event_id,
+      company_name            = v_company_name,
+      industry                = v_industry,
+      company_website         = v_website,
+      drive_mode              = nullif(p_event->>'driveMode', '')::drive_mode,
+      venue                   = nullif(trim(p_event->>'venue'), ''),
+      tentative_date          = nullif(p_event->>'tentativeDate', '')::date,
+      role_title              = nullif(trim(v_role_entry->>'roleTitle'), ''),
+      role_category           = nullif(v_role_entry->>'roleCategory', '')::role_category,
+      drive_type              = nullif(v_role_entry->>'driveType', '')::drive_type,
+      openings                = (v_role_entry->>'openings')::integer,
+      work_locations          = nullif(trim(v_role_entry->>'workLocations'), ''),
+      ctc_min_lpa             = (v_role_entry->>'ctcMinLpa')::numeric,
+      ctc_max_lpa             = (v_role_entry->>'ctcMaxLpa')::numeric,
+      ctc_breakup             = nullif(trim(v_role_entry->>'ctcBreakup'), ''),
+      stipend_min_monthly     = (v_role_entry->>'stipendMinMonthly')::integer,
+      stipend_max_monthly     = (v_role_entry->>'stipendMaxMonthly')::integer,
+      shift_type              = nullif(trim(v_role_entry->>'shiftType'), ''),
+      shift_night_timing      = nullif(trim(v_role_entry->>'shiftNightTiming'), ''),
+      bond_details            = nullif(trim(v_role_entry->>'bondDetails'), ''),
+      jd_storage_path         = coalesce(nullif(trim(v_role_entry->>'jdStoragePath'), ''), drives.jd_storage_path),
+      jd_file_name            = coalesce(nullif(trim(v_role_entry->>'jdFileName'), ''), drives.jd_file_name),
+      jd_size_bytes           = coalesce((v_role_entry->>'jdSizeBytes')::integer, drives.jd_size_bytes),
+      job_description         = nullif(trim(v_role_entry->>'jobDescription'), ''),
+      min_overall_marks       = (v_role_entry->>'minOverallMarks')::numeric,
+      min_overall_cgpa_scale  = coalesce(v_role_entry->>'minOverallCgpaScale', 'cgpa')::marks_scale,
+      min_overall_cgpa        = (v_role_entry->>'minOverallCgpa')::numeric,
+      min_tenth_percentage    = (v_role_entry->>'minTenthPercentage')::numeric,
+      min_twelfth_percentage  = (v_role_entry->>'minTwelfthPercentage')::numeric,
+      arrears_policy          = coalesce(v_role_entry->>'arrearsPolicy', 'flexible')::arrear_policy,
+      eligible_passing_years  = coalesce(
+        (select array_agg(elem::integer) from jsonb_array_elements_text(v_role_entry->'eligiblePassingYears') elem),
+        '{}'::integer[]
+      ),
+      mandatory_skills        = nullif(trim(v_role_entry->>'mandatorySkills'), ''),
+      joining_timeline        = nullif(trim(p_event->>'joiningTimeline'), '')::joining_timeline,
+      joining_immediate_notes = nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
+      joining_later_notes     = nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
+      timeline_notes          = nullif(trim(p_event->>'timelineNotes'), ''),
+      round_count             = coalesce(jsonb_array_length(v_role_entry->'rounds'), 0),
+      status                  = p_status;
+
+    -- Replace rounds for this role
+    delete from drive_rounds where drive_id = v_role_id;
+    v_rounds := coalesce(v_role_entry->'rounds', '[]'::jsonb);
+    for v_round in select * from jsonb_array_elements(v_rounds)
+    loop
+      insert into drive_rounds (drive_id, sequence, name)
+      values (v_role_id, (v_round->>'sequence')::integer, trim(v_round->>'name'));
+    end loop;
+
+    -- Mirror event contacts to role drive_contacts for backward compatibility
+    delete from drive_contacts where drive_id = v_role_id;
+    insert into drive_contacts (drive_id, sequence, name, designation, email, phone)
+    select v_role_id, sequence, name, designation, email, phone
+    from company_drive_contacts
+    where company_drive_id = v_event_id;
+
+    v_role_ids := array_append(v_role_ids, v_role_id);
+  end loop;
+
+  -- 7. LAST: the visit leaves draft. Kept after every child write because the
+  -- AE's write policies on those children are all conditioned on 'draft'.
+  update company_drives
+     set status     = p_status,
+         updated_at = now()
+   where id = v_event_id
+  returning status into v_final_status;
+
+  if v_final_status is null then
+    -- The visit is there — its contacts and roles were just written — so an
+    -- UPDATE that matched nothing can only be a policy that stopped this role
+    -- moving it out of draft. Refusing is the honest answer: returning a PIF
+    -- that silently stayed a draft would tell the AE it was submitted.
+    raise exception 'The visit could not be moved out of its draft stage — the database would not let this role change it.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return jsonb_build_object(
+    'eventId', v_event_id,
+    'roleIds', v_role_ids,
+    'status', p_status
+  );
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0136_separate_degrees_and_branches.sql
+-- =============================================================================
+
+-- 0136_separate_degrees_and_branches.sql
+-- Separates combined degree names into canonical degrees and branches.
+-- Normalises degree credentials (B.E., B.Tech, B.Sc, BCA, MCA, M.Sc) and maps
+-- disciplines to branches table.
+
+-- 1. Ensure clean canonical degrees exist
+insert into degrees (name) values
+  ('B.Sc'),
+  ('B.E.'),
+  ('B.Tech'),
+  ('M.Sc'),
+  ('BCA'),
+  ('MCA')
+on conflict (name) do nothing;
+
+-- 2. Ensure canonical branches exist under degrees
+insert into branches (degree_id, name)
+select d.id, b.name
+from degrees d
+cross join (
+  values
+    ('B.Sc', 'Artificial Intelligence and Machine Learning'),
+    ('B.Sc', 'Computer Science with Artificial Intelligence'),
+    ('B.Sc', 'Artificial Intelligence'),
+    ('B.Sc', 'Computer Technology'),
+    ('B.E.', 'Computer Science and Engineering'),
+    ('B.E.', 'Information Technology'),
+    ('B.E.', 'Electronics and Communication Engineering'),
+    ('B.E.', 'Mechanical Engineering'),
+    ('B.E.', 'Civil Engineering'),
+    ('B.E.', 'Electrical and Electronics Engineering'),
+    ('B.Tech', 'Artificial Intelligence and Data Science'),
+    ('B.Tech', 'Information Technology'),
+    ('B.Tech', 'Computer Science and Business Systems'),
+    ('M.Sc', 'Computer Science')
+) as b(degree_name, name)
+where d.name = b.degree_name
+on conflict (degree_id, name) do nothing;
+
+-- =============================================================================
+-- Migration: 0137_branch_tick_binds_only_its_own_degree.sql
+-- =============================================================================
+
+-- ============================================================================
+-- 0137 — A branch tick binds only the degree it belongs to
+--
+-- THE FLAW. The publish screen ticks whole programmes — "BCA", "B.Sc — AI and
+-- ML" — and the two link tables flatten that into a degree list and a branch
+-- list. Both gates then read those lists as one AND, so a degree ticked BESIDE
+-- another degree's branches refuses every student of it: none of the ticked
+-- branches can be theirs, and a non-empty branch list admits nobody whose branch
+-- is not named — not even a student with no branch at all. The degree tick did
+-- nothing.
+--
+-- This is what emptied the test project's audience on 2026-11-05. Every open
+-- drive ticks B.Sc branches beside BCA and MCA, so BCA and MCA students see no
+-- drives and are never notified, while the publish screen counts an audience
+-- that agrees with the ticks. The report was "student 124 received no drives".
+--
+-- THE RULE, in words: a ticked branch narrows the students who run the degree
+-- that owns it, and nobody else. A branch tick with NO degree tick still binds
+-- every student, because then the specialisation is the whole targeting — that
+-- is the tightening 0119 was written for, and it holds.
+--
+-- src/domain/eligibility.ts already carries this rule, with the same wording,
+-- and the student's list and the publish screen's audience count are both
+-- computed from it. The database is the one place that can still refuse an
+-- application the browser just offered, and it decides who is notified. Both
+-- have to say the same thing, or the student sees the drive and is refused on
+-- Apply.
+--
+-- WHAT CHANGES VISIBLY
+--   Nothing on the screens — they already show the audience this rule gives.
+--   This makes the database agree with them, so a student is not refused after
+--   being offered the drive, and a drive going live notifies the programmes its
+--   ticks name instead of only the one whose branches were listed. Students
+--   already notified stay notified; nothing here re-sends.
+--
+-- HOW IT IS WRITTEN
+--   Both function bodies are the repo's own latest restatements of them — 0126
+--   for the gate, 0119 for the notifier — with ONLY the branch block changed, so
+--   nothing else can drift and this file applies in order on any project. It is
+--   replayed by `pnpm db:types` and the src/db suite against a fresh database,
+--   which is why it carries no transaction and no project guard: either one
+--   would abort that build for every developer.
+--
+-- HOW TO RUN IT BY HAND
+--   scripts/paste-0137-test.sql — the same two statements, wrapped in one
+--   transaction with the precondition checked and the audience read back.
+--
+-- UNDO  scripts/undo-0137-branch-tick.sql
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. The gate that refuses an application
+-- ---------------------------------------------------------------------------
+-- Restated from supabase/migrations/0126_hold_reaches_the_student.sql, which is the body the test project is
+-- running there today, code for code.
+create or replace function enforce_application_gates() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  d drives%rowtype;
+  s students%rowtype;
+  highest_rank integer;
+  drive_rank   integer;
+  -- The standing eligibility is measured on (§7.2).
+  verified_cgpa      numeric;
+  verified_arrears   integer;
+  verified_history   integer;
+  cgpa_value         numeric;
+  standing_arrears   integer;
+  arrear_history     integer;
+  -- RAISE's first argument has to be a string literal, so the sentence is
+  -- chosen into a variable and substituted with % rather than written inline.
+  v_refusal          text;
+begin
+  if current_student_id() is null then
+    return new;
+  end if;
+
+  select * into d from drives where id = new.drive_id;
+
+  if d.status <> 'live' then
+    raise exception 'This drive is not open.' using errcode = 'check_violation';
+  end if;
+
+  if d.application_start is null or d.application_end is null
+     or now() < d.application_start or now() > d.application_end then
+    raise exception 'The application window for this drive is closed.'
+      using errcode = 'check_violation';
+  end if;
+
+  select * into s from students where id = new.student_id;
+
+  if s.srf_status <> 'srf_approved' then
+    raise exception 'Your registration form has not been approved yet.'
+      using errcode = 'check_violation';
+  end if;
+
+  if s.participation_status <> 'active' then
+    v_refusal := case s.participation_status
+      when 'opted_out' then 'You have opted out of campus placements.'
+      when 'on_hold'   then 'Your college has placed a hold on your placements. Contact your placement office.'
+      else 'You are not currently eligible to apply. Contact your coordinator.'
+    end;
+    raise exception '%', v_refusal using errcode = 'check_violation';
+  end if;
+
+  -- --------------------------------------------- what the company asked for
+  -- Degrees and branches are link tables, so "no rows" is the one case that
+  -- must NOT refuse: an empty list means ANY degree, never no degree (R2). The
+  -- same shape the campus gate above already uses.
+  if exists (select 1 from drive_eligible_degrees dd where dd.drive_id = d.id)
+     and not exists (
+       select 1 from drive_eligible_degrees dd
+        where dd.drive_id = d.id and dd.degree_id = s.degree_id
+     ) then
+    raise exception 'This drive is not open to your degree.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- 0137: the branch tick binds the students who run the degree that owns it.
+  -- No degrees ticked means the branches are the whole targeting, so they bind
+  -- everyone; degrees ticked beside a branch that belongs to none of them bind
+  -- only their own.
+  if exists (select 1 from drive_eligible_branches bb where bb.drive_id = d.id)
+     and (
+       not exists (select 1 from drive_eligible_degrees dd where dd.drive_id = d.id)
+       or exists (
+         select 1 from drive_eligible_branches bb
+           join branches br on br.id = bb.branch_id
+          where bb.drive_id = d.id and br.degree_id = s.degree_id
+       )
+     )
+     and not exists (
+       select 1 from drive_eligible_branches bb
+        where bb.drive_id = d.id and bb.branch_id = s.branch_id
+     ) then
+    raise exception 'This drive is not open to your branch.'
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (select 1 from drive_target_campuses tc where tc.drive_id = d.id)
+     and not exists (
+       select 1 from drive_target_campuses tc
+        where tc.drive_id = d.id and tc.campus_id = s.campus_id
+     ) then
+    raise exception 'This drive is not open to your campus.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- Same shape, different storage: passing years are an array on the drive
+  -- rather than a link table, and an empty array is the same silence.
+  -- `eligible_passing_years` has been asked by every drive since 0004 and
+  -- checked by nobody until now — the batch that graduates is exactly what a
+  -- recruiter names, and a 2025 student applying to a 2026-only drive takes a
+  -- seat the company did not offer.
+  if array_length(d.eligible_passing_years, 1) is not null
+     and not (s.passing_year = any (d.eligible_passing_years)) then
+    raise exception 'This drive is not open to your passing year.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ------------------------------------------------- the school marks bars
+  if d.min_tenth_percentage is not null
+     and (s.tenth_percentage is null or s.tenth_percentage < d.min_tenth_percentage) then
+    raise exception 'This drive requires at least % in your 10th.', d.min_tenth_percentage
+      using errcode = 'check_violation';
+  end if;
+
+  if d.min_twelfth_percentage is not null
+     and (s.twelfth_percentage is null or s.twelfth_percentage < d.min_twelfth_percentage) then
+    raise exception 'This drive requires at least % in your 12th.', d.min_twelfth_percentage
+      using errcode = 'check_violation';
+  end if;
+
+  -- ------------------------------------------------------- the CGPA and arrears
+  -- `cgpa` and `current_arrears` are NOT NULL on a semester row, so a null here
+  -- means the student has no verified line at all rather than a zeroed one.
+  -- Arrear HISTORY is the max over every verified semester, not just the latest
+  -- one: a backlog cleared in semester 3 is still on the record (`academics.ts`
+  -- takes the same maximum).
+  select latest.cgpa,
+         latest.current_arrears,
+         (select max(m.history_of_arrears)
+            from student_semesters m
+           where m.student_id = new.student_id and m.status = 'verified')
+    into verified_cgpa, verified_arrears, verified_history
+    from student_semesters latest
+   where latest.student_id = new.student_id
+     and latest.status = 'verified'
+   order by latest.semester_number desc
+   limit 1;
+
+  if verified_cgpa is not null then
+    cgpa_value       := verified_cgpa;
+    standing_arrears := verified_arrears;
+    arrear_history   := coalesce(verified_history, 0);
+  else
+    cgpa_value       := coalesce(s.overall_cgpa, 0);
+    standing_arrears := coalesce(s.current_arrears, 0);
+    arrear_history   := coalesce(s.history_of_arrears, 0);
+  end if;
+
+  if d.min_overall_cgpa is not null and cgpa_value < d.min_overall_cgpa then
+    raise exception 'This drive requires a CGPA of at least %, and yours is %.',
+      d.min_overall_cgpa, cgpa_value
+      using errcode = 'check_violation';
+  end if;
+
+  -- `no_history` is strictly stronger than `no_standing`: it forbids cleared
+  -- backlogs as well as live ones (decision Q6).
+  if d.arrears_policy in ('no_standing', 'no_history') and standing_arrears > 0 then
+    raise exception 'This drive asks for no standing arrears, and you have %.', standing_arrears
+      using errcode = 'check_violation';
+  end if;
+
+  if d.arrears_policy = 'no_history' and arrear_history > 0 then
+    raise exception 'This drive asks for no history of arrears, and yours has %.', arrear_history
+      using errcode = 'check_violation';
+  end if;
+
+  -- R5a: the override bypasses the preference gates below — never the ones
+  -- above. Everything the company asked for is now checked BEFORE this line, so
+  -- a prestige drive widens WHO MAY ASK, not WHO MAY QUALIFY.
+  if d.open_to_all_override then
+    return new;
+  end if;
+
+  -- ------------------------------------------------------------- the area
+  if d.role_category is not null
+     and exists (select 1 from student_role_preferences p where p.student_id = new.student_id)
+     and not exists (
+       select 1 from student_role_preferences p
+        where p.student_id = new.student_id and p.category = d.role_category
+     ) then
+    raise exception
+      'This drive is for an area you did not choose on your registration form.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- ----------------------------------------- D1: the drive-type preference
+  -- Same semantics as the area: an empty list is silence, and silence is not
+  -- refusal. A student who asked only for internships is not shown — and here,
+  -- not admitted to — a placement drive.
+  if d.drive_type is not null
+     and cardinality(s.drive_type_preferences) > 0
+     and not (d.drive_type = any (s.drive_type_preferences)) then
+    raise exception
+      'This drive''s drive type is not among the ones you asked for in your preferences.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- R4 — the internship cap, PLAIN internship drives only (Q1b, 2026-08-21,
+  -- superseding decision Q2). A convertible drive falls through to the
+  -- ladder below, which is what decides a placement.
+  if d.drive_type = 'internship' and exists (
+       select 1 from offers o
+        where o.student_id = new.student_id
+          and o.drive_type in ('internship', 'internship_convertible')
+     ) then
+    raise exception 'You have already accepted an internship offer.'
+      using errcode = 'check_violation';
+  end if;
+
+  -- R3/R5 — the ladder. Rank mirrors offerCategoryRank in
+  -- src/domain/offer-category.ts; change both or neither.
+  if d.drive_type in ('placement', 'internship_convertible')
+     and d.offer_category is not null then
+    select max(case o.offer_category
+                 when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+               end)
+      into highest_rank
+      from offers o
+     where o.student_id = new.student_id
+       and o.drive_type in ('placement', 'internship_convertible')
+       and o.offer_category is not null;
+
+    drive_rank := case d.offer_category
+                    when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                  end;
+
+    if highest_rank is not null and drive_rank <= highest_rank then
+      raise exception
+        'You are already placed at this category or higher, so this drive is not open to you.'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------------
+-- 2. The notifier that decides who is told about a drive
+-- ---------------------------------------------------------------------------
+-- Restated from supabase/migrations/0119_eligibility_gates_before_the_override.sql. On the test project this replaces more than
+-- the branch block: what is deployed there predates 0119's verified-transcript
+-- eligibility, so a drive going live there stops notifying students on the
+-- strength of a self-reported CGPA and starts using the verified semester, the
+-- same figure the apply gate and the browser already judge.
+create or replace function notify_eligible_students_on_drive_live()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_student_rec record;
+  v_notification_id uuid;
+  v_drive_title text;
+  v_body text;
+  v_ctc_display text;
+  v_students_notified integer := 0;
+begin
+  if new.status <> 'live' or (tg_op = 'update' and old.status is not distinct from 'live') then
+    return new;
+  end if;
+
+  if new.ctc_min_lpa is not null and new.ctc_max_lpa is not null then
+    if new.ctc_min_lpa = new.ctc_max_lpa then
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    else
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    end if;
+  else
+    v_ctc_display := 'As per policy';
+  end if;
+
+  v_drive_title := new.company_name || ' — ' || coalesce(new.role_title, 'Placement Opportunity');
+
+  -- `latest` and `hist` are the two figures §7.2 takes from the transcript: the
+  -- newest verified semester, and the worst arrear history across every
+  -- verified one — a backlog cleared in semester 3 is still on the record.
+  for v_student_rec in
+    select s.id, s.full_name
+      from students s
+      left join lateral (
+        select m.cgpa, m.current_arrears
+          from student_semesters m
+         where m.student_id = s.id and m.status = 'verified'
+         order by m.semester_number desc
+         limit 1
+      ) latest on true
+      left join lateral (
+        select max(m.history_of_arrears) as history_of_arrears
+          from student_semesters m
+         where m.student_id = s.id and m.status = 'verified'
+      ) hist on true
+     where s.srf_status = 'srf_approved'
+       and s.participation_status = 'active'
+
+       -- --------------------------------------------- what the company asked for
+       and (
+         not exists (select 1 from drive_target_campuses dtc where dtc.drive_id = new.id)
+         or exists (
+           select 1 from drive_target_campuses dtc
+            where dtc.drive_id = new.id and dtc.campus_id = s.campus_id
+         )
+       )
+       and (
+         not exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
+         or exists (
+           select 1 from drive_eligible_degrees ded
+            where ded.drive_id = new.id and ded.degree_id = s.degree_id
+         )
+       )
+       -- 0137: the exact mirror of the branch gate in enforce_application_gates.
+       -- A ticked branch narrows only the students who run the degree that owns
+       -- it, so a branch list belonging to none of the ticked degrees narrows
+       -- nobody — and the notifier must not stay silent about a drive those
+       -- students are then admitted to.
+       and (
+         not exists (select 1 from drive_eligible_branches deb where deb.drive_id = new.id)
+         or (
+           exists (select 1 from drive_eligible_degrees ded where ded.drive_id = new.id)
+           and not exists (
+             select 1 from drive_eligible_branches deb
+               join branches br on br.id = deb.branch_id
+              where deb.drive_id = new.id
+                and br.degree_id = s.degree_id
+           )
+         )
+         or exists (
+           select 1 from drive_eligible_branches deb
+            where deb.drive_id = new.id
+              and deb.branch_id = s.branch_id
+         )
+       )
+       and (
+         array_length(new.eligible_passing_years, 1) is null
+         or s.passing_year = any (new.eligible_passing_years)
+       )
+
+       -- ------------------------------------------------- the school marks bars
+       and (
+         new.min_tenth_percentage is null
+         or (s.tenth_percentage is not null and s.tenth_percentage >= new.min_tenth_percentage)
+       )
+       and (
+         new.min_twelfth_percentage is null
+         or (s.twelfth_percentage is not null
+             and s.twelfth_percentage >= new.min_twelfth_percentage)
+       )
+
+       -- ---------------------------------------------------- the CGPA and arrears
+       and (
+         new.min_overall_cgpa is null
+         or coalesce(latest.cgpa, s.overall_cgpa, 0) >= new.min_overall_cgpa
+       )
+       and (
+         new.arrears_policy = 'flexible'
+         or coalesce(latest.current_arrears, s.current_arrears, 0) = 0
+       )
+       and (
+         new.arrears_policy <> 'no_history'
+         or case when latest.cgpa is not null
+                 then coalesce(hist.history_of_arrears, 0)
+                 else coalesce(s.history_of_arrears, 0)
+            end = 0
+       )
+
+       -- R5a: below this line is the audience the override widens — which is
+       -- exactly why it has to be skipped here as well as in the gate.
+       and (
+         new.open_to_all_override
+         or (
+              ------------------------------------------------------ the area
+              (
+                new.role_category is null
+                or not exists (
+                  select 1 from student_role_preferences p where p.student_id = s.id
+                )
+                or exists (
+                  select 1 from student_role_preferences p
+                   where p.student_id = s.id and p.category = new.role_category
+                )
+              )
+              -- ------------------------------------------------- the drive type
+              and (
+                new.drive_type is null
+                or coalesce(cardinality(s.drive_type_preferences), 0) = 0
+                or new.drive_type = any (s.drive_type_preferences)
+              )
+              -- ------------------------------------------------ internship cap
+              and (
+                new.drive_type <> 'internship'
+                or not exists (
+                  select 1 from offers o
+                   where o.student_id = s.id
+                     and o.drive_type in ('internship', 'internship_convertible')
+                )
+              )
+              -- ------------------------------------------------------ the ladder
+              and (
+                new.drive_type not in ('placement', 'internship_convertible')
+                or new.offer_category is null
+                or not exists (
+                  select 1 from offers o
+                   where o.student_id = s.id
+                     and o.drive_type in ('placement', 'internship_convertible')
+                     and o.offer_category is not null
+                     and case o.offer_category
+                           when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                         end
+                       >= case new.offer_category
+                           when 'regular' then 1 when 'dream' then 2 when 'super_dream' then 3
+                         end
+                )
+              )
+         )
+       )
+
+       -- Dedup guard: skip students already notified about this drive.
+       and not exists (
+         select 1 from notifications n
+          where n.student_id = s.id
+            and n.kind = 'drive_published'
+            and n.drive_id = new.id
+       )
+  loop
+    v_body := 'A new placement drive is now open for applications at your campus.' || E'\n\n' ||
+              '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || coalesce(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n';
+
+    if new.application_end is not null then
+      v_body := v_body || '**Application Deadline:** ' ||
+                to_char(new.application_end, 'DD Mon YYYY, HH12:MI AM') || E'\n';
+    end if;
+
+    v_body := v_body || E'\n' || 'Log in to the portal to view full details and submit your application.';
+
+    insert into notifications (student_id, kind, title, body, drive_id)
+    values (
+      v_student_rec.id,
+      'drive_published',
+      'New Drive: ' || v_drive_title,
+      v_body,
+      new.id
+    )
+    returning id into v_notification_id;
+
+    v_students_notified := v_students_notified + 1;
+  end loop;
+
+  raise notice 'Drive % went live: notified % eligible students', new.id, v_students_notified;
+
+  return new;
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0138_drive_work_type.sql
+-- =============================================================================
+
+-- ============================================================================
+-- 0138 — What kind of work a role is: hybrid, work from home, work from office
+--
+-- THE ASK. "on pif i need new dropdown work type as Hybrid, work from home,
+-- work from office" — read it on the PIF, write it on the PIF, store it, and
+-- say it on the card. Recruiters state this about the job itself, and right now
+-- the only place it can go is free text.
+--
+-- WHY A THIRD COLUMN AND NOT ONE OF THE TWO THAT LOOK LIKE IT.
+--   drive_mode is where the RECRUITMENT PROCESS happens — on campus, outside
+--   campus, virtual, pooled. A virtual drive is often conducted for a job whose
+--   people sit in an office, so it cannot carry this answer.
+--   work_locations is what the AE types — "Chennai / Bangalore", "Remote +
+--   Delhi" — and the PIF's own placeholder invites "Hybrid" into it. Free text
+--   can be neither filtered nor counted nor printed the same way twice, which
+--   is exactly why this question deserves its own column.
+--   Both stay as they are. This is the third question, about the JOB.
+--
+-- PER ROLE, LIKE DRIVE TYPE. A visit can hire a work-from-office engineer and a
+-- remote intern on the same day, so the answer belongs on drives beside
+-- drive_type and work_locations, not on the company_drives visit above them.
+--
+-- OPTIONAL, AND BLANK STAYS BLANK. Nullable, no default, no check: an AE who
+-- has not asked the company is never made up an answer, and a PIF is never
+-- refused for it. "Not stated" is what the staff screens say; the student
+-- screens print nothing rather than a question the student cannot answer.
+--
+-- WHAT CHANGES VISIBLY
+--   Nothing until the app follows this file. The dropdown, both write paths and
+--   the three cards are src work (tasks 258-263); a PIF raised today stores no
+--   work type whichever way the column is spelled here.
+--
+-- THE RPC, AND WHY THIS FILE IS PORTABLE
+--   save_company_drive_with_roles names every column it writes, so a new column
+--   means restating it. The statement below is 0135's, with three lines inserted
+--   beside where work_locations already sits — the insert list, the value cast
+--   and the on-conflict update — and nothing else. scratch/check-0138-body.mjs
+--   proved that is the body the test project runs today: identical once comments
+--   and line endings are normalised away. So a project that has applied 0135
+--   gets exactly one new column here, and no project gets a rollback of anything.
+--
+-- HOW TO RUN
+--   Applied in order by CI and by the PGlite schema build (`pnpm db:types` and
+--   the src/db suite), which is why this file carries no transaction and no
+--   project guard. For the SQL Editor, use scripts/paste-0138-test.sql: the same
+--   statements in one transaction, with the precondition checked first and the
+--   four read-backs above at the end.
+--
+-- UNDO  scripts/undo-0138-drive-work-type.sql
+-- ============================================================================
+
+-- ---------------------------------------------------------------------------
+-- 1. The vocabulary
+-- ---------------------------------------------------------------------------
+create type work_type as enum ('hybrid', 'work_from_home', 'work_from_office');
+
+-- ---------------------------------------------------------------------------
+-- 2. The column
+-- ---------------------------------------------------------------------------
+alter table drives add column if not exists work_type work_type;
+
+comment on column drives.work_type is
+  'What kind of work the role is: hybrid, work from home, or work from office. '
+  'NULL means the company has not said, and no screen makes it up. Per role, '
+  'because one visit can hire a work-from-office engineer and a remote intern on '
+  'the same day. Not drive_mode, which says where the recruitment process '
+  'happens, and not work_locations, which is the cities the AE typed.';
+
+-- ---------------------------------------------------------------------------
+-- 3. The multi-role PIF RPC, with the three lines that write it
+-- ---------------------------------------------------------------------------
+create or replace function save_company_drive_with_roles(
+  p_event      jsonb,
+  p_contacts   jsonb,
+  p_roles      jsonb,
+  p_status     drive_status default 'draft'
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_actor_id           uuid := auth.uid();
+  v_event_id           uuid;
+  v_company_id         uuid;
+  v_company_name       text;
+  v_industry           text;
+  v_website            text;
+  v_role_entry         jsonb;
+  v_role_id            uuid;
+  v_role_ids           uuid[] := '{}';
+  v_rounds             jsonb;
+  v_round              jsonb;
+  v_contact            jsonb;
+  v_contact_seq        integer;
+  v_existing_event     company_drives%rowtype;
+  v_final_status       drive_status;
+begin
+  -- 1. Authorization: AE only
+  if current_app_role() <> 'account_executive' then
+    raise exception 'Only Account Executives may create or edit drives.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  -- 2. Extract Event / Company Details
+  v_company_name := trim(p_event->>'companyName');
+  if v_company_name is null or v_company_name = '' then
+    raise exception 'Company name is required.' using errcode = 'check_violation';
+  end if;
+
+  v_industry := nullif(trim(p_event->>'industry'), '');
+  v_website := nullif(trim(p_event->>'companyWebsite'), '');
+
+  -- 3. Resolve or insert company record
+  if (p_event->>'companyId') is not null and (p_event->>'companyId') <> '' then
+    v_company_id := (p_event->>'companyId')::uuid;
+  else
+    -- Match by exact name or insert
+    select id into v_company_id from companies where lower(name) = lower(v_company_name) limit 1;
+    if v_company_id is null then
+      insert into companies (name, industry, website)
+      values (v_company_name, v_industry, v_website)
+      returning id into v_company_id;
+    end if;
+  end if;
+
+  -- 4. Event ID resolution — the visit's STATUS is not written here.
+  if (p_event->>'id') is not null and (p_event->>'id') <> '' then
+    v_event_id := (p_event->>'id')::uuid;
+    select * into v_existing_event from company_drives where id = v_event_id;
+    if not found then
+      raise exception 'Company drive event not found.' using errcode = 'check_violation';
+    end if;
+    if v_existing_event.created_by <> v_actor_id and not is_operator() then
+      raise exception 'You do not have permission to edit this company drive.'
+        using errcode = 'insufficient_privilege';
+    end if;
+    if v_existing_event.status <> 'draft' then
+      -- Replaces 0116's narrower guard, which only refused a DRAFT over a
+      -- submitted visit and let a re-submit through to fail three writes later.
+      raise exception 'This visit has already left the draft stage (%), so it can no longer be edited from the PIF. Raise a new visit instead.', v_existing_event.status
+        using errcode = 'check_violation';
+    end if;
+
+    update company_drives
+    set company_id       = v_company_id,
+        company_name     = v_company_name,
+        drive_mode       = nullif(p_event->>'driveMode', '')::drive_mode,
+        venue            = nullif(trim(p_event->>'venue'), ''),
+        tentative_date   = nullif(p_event->>'tentativeDate', '')::date,
+        timeline_notes   = nullif(trim(p_event->>'timelineNotes'), ''),
+        joining_timeline = nullif(trim(p_event->>'joiningTimeline'), ''),
+        updated_at       = now()
+    where id = v_event_id;
+  else
+    v_event_id := gen_random_uuid();
+    -- 'draft', even for a submission: the contacts and roles below are only
+    -- writable while the visit is a draft, and step 7 flips it in this same
+    -- transaction.
+    insert into company_drives (
+      id, company_id, company_name, drive_mode, venue, tentative_date,
+      timeline_notes, joining_timeline, status, created_by
+    )
+    values (
+      v_event_id,
+      v_company_id,
+      v_company_name,
+      nullif(p_event->>'driveMode', '')::drive_mode,
+      nullif(trim(p_event->>'venue'), ''),
+      nullif(p_event->>'tentativeDate', '')::date,
+      nullif(trim(p_event->>'timelineNotes'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), ''),
+      'draft',
+      v_actor_id
+    );
+  end if;
+
+  -- 5. Contacts at Event Level — allowed because the visit is still a draft.
+  delete from company_drive_contacts where company_drive_id = v_event_id;
+  v_contact_seq := 1;
+  for v_contact in select * from jsonb_array_elements(coalesce(p_contacts, '[]'::jsonb))
+  loop
+    if nullif(trim(v_contact->>'name'), '') is not null
+       or nullif(trim(v_contact->>'email'), '') is not null
+       or nullif(trim(v_contact->>'phone'), '') is not null then
+      insert into company_drive_contacts (company_drive_id, sequence, name, designation, email, phone)
+      values (
+        v_event_id,
+        v_contact_seq,
+        nullif(trim(v_contact->>'name'), ''),
+        nullif(trim(v_contact->>'designation'), ''),
+        nullif(trim(v_contact->>'email'), ''),
+        nullif(trim(v_contact->>'phone'), '')
+      );
+      v_contact_seq := v_contact_seq + 1;
+    end if;
+  end loop;
+
+  -- 6. Insert / Update Each Role
+  for v_role_entry in select * from jsonb_array_elements(coalesce(p_roles, '[]'::jsonb))
+  loop
+    if (v_role_entry->>'id') is not null and (v_role_entry->>'id') <> '' then
+      v_role_id := (v_role_entry->>'id')::uuid;
+    else
+      v_role_id := gen_random_uuid();
+    end if;
+
+    insert into drives (
+      id,
+      company_drive_id,
+      company_name,
+      industry,
+      company_website,
+      drive_mode,
+      venue,
+      tentative_date,
+      role_title,
+      role_category,
+      drive_type,
+      openings,
+      work_locations,
+      work_type,
+      ctc_min_lpa,
+      ctc_max_lpa,
+      ctc_breakup,
+      stipend_min_monthly,
+      stipend_max_monthly,
+      shift_type,
+      shift_night_timing,
+      bond_details,
+      jd_storage_path,
+      jd_file_name,
+      jd_size_bytes,
+      job_description,
+      min_overall_marks,
+      min_overall_cgpa_scale,
+      min_overall_cgpa,
+      min_tenth_percentage,
+      min_twelfth_percentage,
+      arrears_policy,
+      eligible_passing_years,
+      mandatory_skills,
+      joining_timeline,
+      joining_immediate_notes,
+      joining_later_notes,
+      timeline_notes,
+      round_count,
+      status,
+      created_by
+    )
+    values (
+      v_role_id,
+      v_event_id,
+      v_company_name,
+      v_industry,
+      v_website,
+      nullif(p_event->>'driveMode', '')::drive_mode,
+      nullif(trim(p_event->>'venue'), ''),
+      nullif(p_event->>'tentativeDate', '')::date,
+      nullif(trim(v_role_entry->>'roleTitle'), ''),
+      nullif(v_role_entry->>'roleCategory', '')::role_category,
+      nullif(v_role_entry->>'driveType', '')::drive_type,
+      (v_role_entry->>'openings')::integer,
+      nullif(trim(v_role_entry->>'workLocations'), ''),
+      nullif(v_role_entry->>'workType', '')::work_type,
+      (v_role_entry->>'ctcMinLpa')::numeric,
+      (v_role_entry->>'ctcMaxLpa')::numeric,
+      nullif(trim(v_role_entry->>'ctcBreakup'), ''),
+      (v_role_entry->>'stipendMinMonthly')::integer,
+      (v_role_entry->>'stipendMaxMonthly')::integer,
+      nullif(trim(v_role_entry->>'shiftType'), ''),
+      nullif(trim(v_role_entry->>'shiftNightTiming'), ''),
+      nullif(trim(v_role_entry->>'bondDetails'), ''),
+      nullif(trim(v_role_entry->>'jdStoragePath'), ''),
+      nullif(trim(v_role_entry->>'jdFileName'), ''),
+      (v_role_entry->>'jdSizeBytes')::integer,
+      nullif(trim(v_role_entry->>'jobDescription'), ''),
+      (v_role_entry->>'minOverallMarks')::numeric,
+      coalesce(v_role_entry->>'minOverallCgpaScale', 'cgpa')::marks_scale,
+      (v_role_entry->>'minOverallCgpa')::numeric,
+      (v_role_entry->>'minTenthPercentage')::numeric,
+      (v_role_entry->>'minTwelfthPercentage')::numeric,
+      coalesce(v_role_entry->>'arrearsPolicy', 'flexible')::arrear_policy,
+      coalesce(
+        (select array_agg(elem::integer) from jsonb_array_elements_text(v_role_entry->'eligiblePassingYears') elem),
+        '{}'::integer[]
+      ),
+      nullif(trim(v_role_entry->>'mandatorySkills'), ''),
+      nullif(trim(p_event->>'joiningTimeline'), '')::joining_timeline,
+      nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
+      nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
+      nullif(trim(p_event->>'timelineNotes'), ''),
+      coalesce(jsonb_array_length(v_role_entry->'rounds'), 0),
+      p_status,
+      v_actor_id
+    )
+    on conflict (id) do update set
+      company_drive_id        = v_event_id,
+      company_name            = v_company_name,
+      industry                = v_industry,
+      company_website         = v_website,
+      drive_mode              = nullif(p_event->>'driveMode', '')::drive_mode,
+      venue                   = nullif(trim(p_event->>'venue'), ''),
+      tentative_date          = nullif(p_event->>'tentativeDate', '')::date,
+      role_title              = nullif(trim(v_role_entry->>'roleTitle'), ''),
+      role_category           = nullif(v_role_entry->>'roleCategory', '')::role_category,
+      drive_type              = nullif(v_role_entry->>'driveType', '')::drive_type,
+      openings                = (v_role_entry->>'openings')::integer,
+      work_locations          = nullif(trim(v_role_entry->>'workLocations'), ''),
+      work_type              = nullif(v_role_entry->>'workType', '')::work_type,
+      ctc_min_lpa             = (v_role_entry->>'ctcMinLpa')::numeric,
+      ctc_max_lpa             = (v_role_entry->>'ctcMaxLpa')::numeric,
+      ctc_breakup             = nullif(trim(v_role_entry->>'ctcBreakup'), ''),
+      stipend_min_monthly     = (v_role_entry->>'stipendMinMonthly')::integer,
+      stipend_max_monthly     = (v_role_entry->>'stipendMaxMonthly')::integer,
+      shift_type              = nullif(trim(v_role_entry->>'shiftType'), ''),
+      shift_night_timing      = nullif(trim(v_role_entry->>'shiftNightTiming'), ''),
+      bond_details            = nullif(trim(v_role_entry->>'bondDetails'), ''),
+      jd_storage_path         = coalesce(nullif(trim(v_role_entry->>'jdStoragePath'), ''), drives.jd_storage_path),
+      jd_file_name            = coalesce(nullif(trim(v_role_entry->>'jdFileName'), ''), drives.jd_file_name),
+      jd_size_bytes           = coalesce((v_role_entry->>'jdSizeBytes')::integer, drives.jd_size_bytes),
+      job_description         = nullif(trim(v_role_entry->>'jobDescription'), ''),
+      min_overall_marks       = (v_role_entry->>'minOverallMarks')::numeric,
+      min_overall_cgpa_scale  = coalesce(v_role_entry->>'minOverallCgpaScale', 'cgpa')::marks_scale,
+      min_overall_cgpa        = (v_role_entry->>'minOverallCgpa')::numeric,
+      min_tenth_percentage    = (v_role_entry->>'minTenthPercentage')::numeric,
+      min_twelfth_percentage  = (v_role_entry->>'minTwelfthPercentage')::numeric,
+      arrears_policy          = coalesce(v_role_entry->>'arrearsPolicy', 'flexible')::arrear_policy,
+      eligible_passing_years  = coalesce(
+        (select array_agg(elem::integer) from jsonb_array_elements_text(v_role_entry->'eligiblePassingYears') elem),
+        '{}'::integer[]
+      ),
+      mandatory_skills        = nullif(trim(v_role_entry->>'mandatorySkills'), ''),
+      joining_timeline        = nullif(trim(p_event->>'joiningTimeline'), '')::joining_timeline,
+      joining_immediate_notes = nullif(trim(v_role_entry->>'joiningImmediateNotes'), ''),
+      joining_later_notes     = nullif(trim(v_role_entry->>'joiningLaterNotes'), ''),
+      timeline_notes          = nullif(trim(p_event->>'timelineNotes'), ''),
+      round_count             = coalesce(jsonb_array_length(v_role_entry->'rounds'), 0),
+      status                  = p_status;
+
+    -- Replace rounds for this role
+    delete from drive_rounds where drive_id = v_role_id;
+    v_rounds := coalesce(v_role_entry->'rounds', '[]'::jsonb);
+    for v_round in select * from jsonb_array_elements(v_rounds)
+    loop
+      insert into drive_rounds (drive_id, sequence, name)
+      values (v_role_id, (v_round->>'sequence')::integer, trim(v_round->>'name'));
+    end loop;
+
+    -- Mirror event contacts to role drive_contacts for backward compatibility
+    delete from drive_contacts where drive_id = v_role_id;
+    insert into drive_contacts (drive_id, sequence, name, designation, email, phone)
+    select v_role_id, sequence, name, designation, email, phone
+    from company_drive_contacts
+    where company_drive_id = v_event_id;
+
+    v_role_ids := array_append(v_role_ids, v_role_id);
+  end loop;
+
+  -- 7. LAST: the visit leaves draft. Kept after every child write because the
+  -- AE's write policies on those children are all conditioned on 'draft'.
+  update company_drives
+     set status     = p_status,
+         updated_at = now()
+   where id = v_event_id
+  returning status into v_final_status;
+
+  if v_final_status is null then
+    -- The visit is there — its contacts and roles were just written — so an
+    -- UPDATE that matched nothing can only be a policy that stopped this role
+    -- moving it out of draft. Refusing is the honest answer: returning a PIF
+    -- that silently stayed a draft would tell the AE it was submitted.
+    raise exception 'The visit could not be moved out of its draft stage — the database would not let this role change it.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return jsonb_build_object(
+    'eventId', v_event_id,
+    'roleIds', v_role_ids,
+    'status', p_status
+  );
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0139_round_date_gates_the_advance.sql
+-- =============================================================================
+
+-- 0139: a round whose own date has not arrived cannot be advanced out of
+--
+-- 2026-11-06 ("advance to next rount should be only on time"): the Rounds &
+-- results screen now refuses "Advance to Round N" until the round being LEFT
+-- has passed its own date, in src/domain/round-timing.ts. A greyed button is a
+-- courtesy — it can be clicked past by anything that calls the API directly,
+-- and a stale tab in a second browser window does exactly that. This is the
+-- same rule where it cannot be talked out of.
+--
+-- schedule_round_participants() is called by ONE thing: the advance
+-- (rounds-repository.ts -> results-view.ts). It is told the round the students
+-- ARRIVE in, so the round being left behind is the one before it on the same
+-- drive — drive_rounds has `unique (drive_id, sequence)`, so there is at most
+-- one.
+--
+-- Two rules the domain already keeps, kept here:
+-- - A round with NO date is never blocked. Most drives were built before
+--   `round_scheduled_at` (0053) existed, and an absent fact is not evidence.
+-- - Round 1 has no predecessor, so the shortlist's automatic scheduling into
+--   Round 1 (0043) is untouched.
+--
+-- Nothing else changes: the two inserts are the ones 0101 made atomic, in the
+-- order they ran, with the same rows.
+
+create or replace function schedule_round_participants(
+  p_round_id uuid,
+  p_application_ids uuid[],
+  p_added_by uuid
+)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  -- The refusal, already in the words the coordinator would have read on
+  -- screen. Null when nothing is holding the advance back.
+  v_hold text;
+begin
+  select
+    format(
+      'Round %s (%s) is scheduled for %s and has not been held yet — advance it once that time has passed.',
+      prior.sequence,
+      prior.name,
+      to_char(
+        prior.round_scheduled_at at time zone 'Asia/Kolkata',
+        'DD Mon YYYY, FMHH12:MI AM'
+      )
+    )
+    into v_hold
+  from drive_rounds target
+  join drive_rounds prior
+    on prior.drive_id = target.drive_id
+   and prior.sequence = target.sequence - 1
+  where target.id = p_round_id
+    and prior.round_scheduled_at is not null
+    and prior.round_scheduled_at > now();
+
+  if v_hold is not null then
+    raise exception '%', v_hold using errcode = 'check_violation';
+  end if;
+
+  insert into round_participants (round_id, application_id, added_by)
+  select p_round_id, unnest(p_application_ids), p_added_by;
+
+  insert into attendance (round_id, application_id, status)
+  select p_round_id, unnest(p_application_ids), 'scheduled'::attendance_status;
+end;
+$$;
+
+-- =============================================================================
+-- Migration: 0140_email_send_brake.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0140: An outbound-email brake that needs no deploy
+-- =============================================================================
+-- Backfilling rounds and results for drives that ended long ago would mail
+-- every student and coordinator on those drives all over again, years late.
+-- This adds one switch - settings.'email_send_paused' - read at the single
+-- point every email in the product passes through: the INSERT into
+-- email_deliveries.
+--
+-- While the switch is on, a row that arrives as 'queued' is born 'suppressed'
+-- instead. Nothing in the pipeline looks at 'suppressed':
+--   * claim_email_deliveries (0108) takes only status = 'queued',
+--   * the instant-dispatch trigger (0110) fires only when new.status = 'queued',
+--   * recover_stale_email_claims (0108) only sees 'processing'.
+-- So no mail can leave, whichever path wrote the row - the notification outbox
+-- (0126), the staff lifecycle triggers (0080/0081/0129), the KAM and campus
+-- digests (0112/0113), the reminder crons (0114), or the admin screen's own
+-- invitation insert (src/features/admin/staff-repository.ts). Braking any one
+-- of those would leave the others running, which is the failure this avoids.
+--
+-- 'suppressed' is a hold, not a deletion: the row still says who would have
+-- been mailed and against which notification, and setting it back to 'queued'
+-- sends it. Switching the brake OFF releases nothing that was suppressed while
+-- it was ON - there is no backlog waiting to flood out when the brake comes off.
+--
+-- WHAT THIS DOES NOT SILENCE, stated rather than slipped past: the in-app bell.
+-- The notifications rows are still written, so a backfilled round still appears
+-- in the student's portal. Mail is the part a backfill cannot take back.
+-- =============================================================================
+
+-- 1. The switch. `coalesce` is load-bearing: no row at all means not paused,
+--    so a project that has never had this migration's seed applied still sends.
+CREATE OR REPLACE FUNCTION email_send_paused()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT coalesce(
+    (SELECT value = 'true'::jsonb FROM settings WHERE key = 'email_send_paused'),
+    false
+  );
+$$;
+
+COMMENT ON FUNCTION email_send_paused() IS
+  'The outbound-email brake: true when settings.email_send_paused is true. Read at the email_deliveries INSERT, so it covers every enqueue path in the product.';
+
+-- 2. The brake, at the one chokepoint all of them share. Only a row arriving
+--    as 'queued' is rewritten; anything else is left exactly as written.
+CREATE OR REPLACE FUNCTION email_deliveries_suppressed_while_paused()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF new.status = 'queued' AND email_send_paused() THEN
+    new.status := 'suppressed';
+  END IF;
+  RETURN new;
+END;
+$$;
+
+COMMENT ON FUNCTION email_deliveries_suppressed_while_paused() IS
+  'Before-insert brake: while email_send_paused() is on, a queued delivery is born suppressed so no dispatcher can claim it. Reversible per row, with nothing deleted.';
+
+DROP TRIGGER IF EXISTS email_deliveries_suppressed_while_paused ON email_deliveries;
+CREATE TRIGGER email_deliveries_suppressed_while_paused
+  BEFORE INSERT ON email_deliveries
+  FOR EACH ROW
+  EXECUTE FUNCTION email_deliveries_suppressed_while_paused();
+
+-- 3. The switch itself, off. An existing key is never overwritten: a brake
+--    pulled by hand must survive a re-run of this migration.
+INSERT INTO settings (key, value)
+VALUES ('email_send_paused', 'false'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- =============================================================================
+-- Migration: 0141_fix_round_notifications.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0141: Fix drive_rounds insert trigger and participant slot notice
+-- =============================================================================
+-- 1. notify_cpc_attendance_pending (from 0113) referenced non-existent columns:
+--    NEW.round_name, NEW.round_number, NEW.scheduled_date, NEW.scheduled_time.
+--    The actual columns on drive_rounds are: name, sequence, scheduled_at.
+--    This caused every round addition (POST /rest/v1/drive_rounds) to fail
+--    with 400 Bad Request ("record new has no field round_name").
+--
+-- 2. meeting_slot_reaches_student (from 0126) assumed meeting_link was always
+--    a URL and blindly prepended ". Your meeting link: ". If a coordinator
+--    enters a comment or note, it produced bizarre notices like:
+--    "Your meeting link: Congratulations you have cleared the 1st round."
+--    Now checks if meeting_link is a URL vs comment/note.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION notify_cpc_attendance_pending()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_company TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    SELECT d.company_name INTO v_company
+    FROM drives d WHERE d.id = NEW.drive_id;
+    
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.drive_id
+    LOOP
+      SELECT p.email INTO v_cpc_email
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role = 'campus_placement_coordinator'
+        AND p.is_active = true
+        AND p.email IS NOT NULL
+      LIMIT 1;
+      
+      IF v_cpc_email IS NOT NULL THEN
+        INSERT INTO notifications (kind, title, body, drive_id)
+        VALUES (
+          'attendance_pending',
+          'Action Required: Mark Attendance for ' || v_company || ' — ' || v_campus.campus_name,
+          'A new round has been scheduled for **' || v_company || '** at **' || v_campus.campus_name || '**.' || E'\n\n' ||
+          '**Round Details**' || E'\n' ||
+          '• **Campus:** ' || v_campus.campus_name || E'\n' ||
+          '• **Round:** ' || COALESCE(NEW.name, 'Round ' || NEW.sequence) || E'\n' ||
+          '• **Date:** ' || COALESCE(TO_CHAR(NEW.scheduled_at, 'DD Mon YYYY'), 'TBD') || E'\n' ||
+          '• **Time:** ' || COALESCE(TO_CHAR(NEW.scheduled_at, 'HH24:MI'), 'TBD') || E'\n\n' ||
+          'Please mark attendance for all participating students.',
+          NEW.drive_id
+        ) RETURNING id INTO v_notification_id;
+        
+        INSERT INTO email_deliveries (notification_id, recipient_email, status)
+        VALUES (v_notification_id, lower(trim(v_cpc_email)), 'queued');
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS notify_cpc_attendance_pending ON drive_rounds;
+CREATE TRIGGER notify_cpc_attendance_pending
+  AFTER INSERT ON drive_rounds
+  FOR EACH ROW EXECUTE FUNCTION notify_cpc_attendance_pending();
+
+CREATE OR REPLACE FUNCTION meeting_slot_reaches_student()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_student           uuid;
+  v_company           text;
+  v_sequence          integer;
+  v_out_of_placements boolean;
+  v_has_url           boolean;
+  v_has_time          boolean;
+  v_title             text;
+  v_body              text;
+BEGIN
+  IF NEW.meeting_link IS NOT DISTINCT FROM OLD.meeting_link
+     AND NEW.participant_scheduled_at IS NOT DISTINCT FROM OLD.participant_scheduled_at THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.meeting_link IS NULL AND NEW.participant_scheduled_at IS NULL THEN
+    RETURN NEW;  -- clearing a slot is housekeeping, not news
+  END IF;
+
+  SELECT a.student_id, d.company_name, r.sequence,
+         s.participation_status <> 'active'
+    INTO v_student, v_company, v_sequence, v_out_of_placements
+    FROM applications a
+    JOIN drives d ON d.id = a.drive_id
+    JOIN students s ON s.id = a.student_id
+    JOIN drive_rounds r ON r.id = NEW.round_id
+   WHERE a.id = NEW.application_id;
+
+  IF v_out_of_placements THEN
+    RETURN NEW;
+  END IF;
+
+  v_has_url  := NEW.meeting_link IS NOT NULL AND NEW.meeting_link ~* '^https?://';
+  v_has_time := NEW.participant_scheduled_at IS NOT NULL;
+
+  IF v_has_time OR v_has_url THEN
+    v_title := v_company || ' — your Round ' || v_sequence || ' slot';
+  ELSE
+    v_title := v_company || ' — Round ' || v_sequence || ' update';
+  END IF;
+
+  v_body := 'Your Round ' || v_sequence || ' of ' || v_company
+    || CASE WHEN v_has_time
+            THEN ' is at '
+              || TO_CHAR(NEW.participant_scheduled_at AT TIME ZONE 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+              || ' IST'
+            ELSE '' END
+    || CASE WHEN v_has_url
+            THEN '. Your meeting link: ' || NEW.meeting_link
+            WHEN NEW.meeting_link IS NOT NULL AND LENGTH(TRIM(NEW.meeting_link)) > 0
+            THEN '. Note: ' || TRIM(NEW.meeting_link)
+            ELSE '' END
+    || CASE WHEN v_has_time OR v_has_url
+            THEN '. Please report on time.'
+            ELSE '' END;
+
+  INSERT INTO notifications (student_id, kind, title, body)
+  VALUES (
+    v_student,
+    'meeting_link',
+    v_title,
+    v_body
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS meeting_slot_reaches_student ON round_participants;
+CREATE TRIGGER meeting_slot_reaches_student
+  AFTER UPDATE ON round_participants
+  FOR EACH ROW EXECUTE FUNCTION meeting_slot_reaches_student();
+
+-- =============================================================================
+-- Migration: 0142_exclude_creator_from_drive_lifecycle_alerts.sql
+-- =============================================================================
+
+-- =============================================================================
+-- Migration 0142: Exclude drive creator and publisher from self-notification emails
+-- =============================================================================
+-- When a Central CPC or staff member creates or publishes a placement drive,
+-- they should not receive redundant alert emails telling them that the drive
+-- they just created or published has been approved or gone live.
+--
+-- This migration updates:
+-- 1. notify_drive_lifecycle_roles(): excludes creator and acting user from Central CPC alerts
+-- 2. notify_campus_cpc_on_drive_published(): excludes creator and publisher from Campus CPC live alerts
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION notify_drive_lifecycle_roles()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_ae_name       text;
+  v_ae_email      text;
+  v_staff_rec     record;
+  v_cpc_rec       record;
+  v_subject       text;
+  v_title         text;
+  v_subtitle      text;
+  v_body          text;
+  v_ctc_display   text;
+BEGIN
+  -- Format CTC display
+  IF new.ctc_min_lpa IS NOT NULL AND new.ctc_max_lpa IS NOT NULL THEN
+    IF new.ctc_min_lpa = new.ctc_max_lpa THEN
+      v_ctc_display := new.ctc_min_lpa::text || ' LPA';
+    ELSE
+      v_ctc_display := new.ctc_min_lpa::text || ' - ' || new.ctc_max_lpa::text || ' LPA';
+    END IF;
+  ELSE
+    v_ctc_display := 'As per policy';
+  END IF;
+
+  -- Lookup Sourcing AE details
+  IF new.created_by IS NOT NULL THEN
+    SELECT full_name, email INTO v_ae_name, v_ae_email
+      FROM profiles
+     WHERE id = new.created_by;
+  END IF;
+
+  -- A. PIF SUBMITTED -> Notify Delivery Head & ER Head (DH1)
+  IF new.status = 'submitted' AND (tg_op = 'INSERT' OR old.status IS DISTINCT FROM 'submitted') THEN
+    v_subject := 'Action Required: PIF Submitted for Review — ' || new.company_name;
+    v_title := 'Placement Initiation Form Under Review';
+    v_subtitle := 'A new placement drive has been submitted for classification and review.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role Title:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n' ||
+              '**Sourced By (AE):** ' || COALESCE(v_ae_name, 'Account Executive') || E'\n\n' ||
+              'Please review the compensation structure, eligibility criteria, and approve or request revisions.';
+
+    FOR v_staff_rec IN
+      SELECT email, full_name FROM profiles WHERE role IN ('delivery_head', 'er_head') AND is_active = true
+      UNION
+      SELECT email, full_name FROM staff_invitations WHERE role IN ('delivery_head', 'er_head') AND accepted_at IS NULL
+    LOOP
+      PERFORM enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_staff_rec.full_name, 'Head of Placement / ER'),
+        v_body,
+        'Open PIF Approvals',
+        'https://pms.faceprepcampus.com/delivery-head/pif-approvals'
+      );
+    END LOOP;
+  END IF;
+
+  -- B. PIF APPROVED -> Notify AE (A1), Central CPC (CP1), and Heads (Delivery Head & ER Head)
+  IF new.status = 'approved' AND (tg_op = 'INSERT' OR old.status IS DISTINCT FROM 'approved') THEN
+    -- 1. Notify Sourcing AE (A1)
+    IF v_ae_email IS NOT NULL THEN
+      v_subject := 'Good News: PIF Approved — ' || new.company_name;
+      v_title := 'Placement Initiation Form Approved';
+      v_subtitle := 'Your sourced drive has been approved and moved to the publishing queue.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+                '**Category:** ' || COALESCE(new.offer_category::text, 'Standard') || E'\n' ||
+                '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+                'Your PIF has been approved by the Delivery Head and assigned to Central Placement Coordinators for drive scheduling and campus publishing.';
+
+      PERFORM enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_ae_name, 'Account Executive'),
+        v_body,
+        'View Sourced Drives',
+        'https://pms.faceprepcampus.com/my-drives'
+      );
+    END IF;
+
+    -- 2. Notify Central CPC (CP1) — exclude the person who created or approved the drive
+    v_subject := 'Drive Approved: Ready for Round Setup & Publishing — ' || new.company_name;
+    v_title := 'Placement Drive Approved';
+    v_subtitle := 'New approved drive ready for campus targeting and schedule setup.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+              '**Category:** ' || COALESCE(new.offer_category::text, 'Standard') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'Delivery Head has approved the Placement Initiation Form. Please configure the round schedule, target campuses, and publish the drive live.';
+
+    FOR v_staff_rec IN
+      SELECT email, full_name FROM profiles
+       WHERE role = 'central_placement_coordinator'
+         AND is_active = true
+         AND id IS DISTINCT FROM new.created_by
+         AND id IS DISTINCT FROM auth.uid()
+      UNION
+      SELECT email, full_name FROM staff_invitations
+       WHERE role = 'central_placement_coordinator'
+         AND accepted_at IS NULL
+    LOOP
+      PERFORM enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_staff_rec.full_name, 'Central Placement Coordinator'),
+        v_body,
+        'Configure & Publish',
+        'https://pms.faceprepcampus.com/central/drives/yet-to-publish'
+      );
+    END LOOP;
+
+    -- 3. Notify Delivery Head & ER Head (Drive Transferred to Central CPC)
+    v_subject := 'Drive Approved: Transferred to Central CPC — ' || new.company_name;
+    v_title := 'Placement Drive Approved';
+    v_subtitle := 'The drive has been approved and moved to Central Placement Coordinator for campus scheduling.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+              '**Category:** ' || COALESCE(new.offer_category::text, 'Standard') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'Placement Initiation Form has been approved and assigned to Central Placement Coordinators to configure campus targeting and take the drive live.';
+
+    FOR v_staff_rec IN
+      SELECT email, full_name FROM profiles
+       WHERE role IN ('delivery_head', 'er_head')
+         AND is_active = true
+         AND id IS DISTINCT FROM auth.uid()
+      UNION
+      SELECT email, full_name FROM staff_invitations
+       WHERE role IN ('delivery_head', 'er_head')
+         AND accepted_at IS NULL
+    LOOP
+      PERFORM enqueue_direct_email(
+        v_staff_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_staff_rec.full_name, 'Head of Placement / ER'),
+        v_body,
+        'View Sourced Drives',
+        'https://pms.faceprepcampus.com/delivery-head/pif-approvals'
+      );
+    END LOOP;
+  END IF;
+
+  -- C. PIF REJECTED / REVISION REQUESTED -> Notify AE (A2)
+  IF new.status = 'rejected' AND (tg_op = 'INSERT' OR old.status IS DISTINCT FROM 'rejected') THEN
+    IF v_ae_email IS NOT NULL THEN
+      v_subject := 'Action Required: PIF Revision Requested — ' || new.company_name;
+      v_title := 'PIF Requires Changes';
+      v_subtitle := 'Feedback has been provided on your submitted Placement Initiation Form.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+                '**Review Feedback:** ' || COALESCE(new.rejection_reason, 'Please review the submitted parameters and consult with Delivery Head.') || E'\n\n' ||
+                'Please update the PIF with the requested changes and resubmit for approval.';
+
+      PERFORM enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_ae_name, 'Account Executive'),
+        v_body,
+        'Revise PIF Details',
+        'https://pms.faceprepcampus.com/ae/pif'
+      );
+    END IF;
+  END IF;
+
+  -- D. DRIVE LIVE -> Notify AE (A3), Target Campus CPCs (C1), and Leadership Heads
+  IF new.status = 'live' AND (tg_op = 'INSERT' OR old.status IS DISTINCT FROM 'live') THEN
+    -- 1. Notify Sourcing AE (A3)
+    IF v_ae_email IS NOT NULL THEN
+      v_subject := 'Your Account is Live: Placement Drive Published — ' || new.company_name;
+      v_title := 'Placement Drive Published';
+      v_subtitle := 'Your sourced drive is now actively accepting applications.';
+      v_body := '**Company:** ' || new.company_name || E'\n' ||
+                '**Role:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+                '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+                'Central CPC has published your drive live across targeted partner campuses. Eligible students can now submit their applications.';
+
+      PERFORM enqueue_direct_email(
+        v_ae_email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_ae_name, 'Account Executive'),
+        v_body,
+        'View Account Overview',
+        'https://pms.faceprepcampus.com/ae/overview'
+      );
+    END IF;
+
+    -- 2. Notify Campus CPCs assigned to targeted campuses (C1)
+    v_subject := 'New Campus Placement Drive Active — ' || new.company_name;
+    v_title := 'New Campus Placement Drive Active';
+    v_subtitle := 'A new placement drive has been published for eligible students at your campus.';
+    v_body := '**Company:** ' || new.company_name || E'\n' ||
+              '**Role:** ' || COALESCE(new.role_title, 'Not specified') || E'\n' ||
+              '**CTC Range:** ' || v_ctc_display || E'\n\n' ||
+              'The drive is now active on the student portal. Please ensure eligible candidates complete their applications before the deadline.';
+
+    FOR v_cpc_rec IN
+      SELECT DISTINCT u.email, u.full_name
+        FROM (
+          SELECT p.email, p.full_name
+            FROM staff_campus_assignments a
+            JOIN profiles p ON p.id = a.profile_id
+            JOIN drive_target_campuses dtc ON dtc.campus_id = a.campus_id
+           WHERE dtc.drive_id = new.id
+             AND p.role = 'campus_placement_coordinator'
+             AND p.is_active = true
+             AND p.id IS DISTINCT FROM new.created_by
+             AND p.id IS DISTINCT FROM new.published_by
+             AND p.id IS DISTINCT FROM auth.uid()
+          UNION
+          SELECT sci.email, COALESCE(si.full_name, 'Campus Placement Coordinator') AS full_name
+            FROM staff_campus_invitations sci
+            JOIN staff_invitations si ON lower(si.email) = lower(sci.email)
+            JOIN drive_target_campuses dtc ON dtc.campus_id = sci.campus_id
+           WHERE dtc.drive_id = new.id
+             AND si.role = 'campus_placement_coordinator'
+        ) u
+    LOOP
+      PERFORM enqueue_direct_email(
+        v_cpc_rec.email,
+        v_subject,
+        v_title,
+        v_subtitle,
+        COALESCE(v_cpc_rec.full_name, 'Campus Placement Coordinator'),
+        v_body,
+        'View Drive Cohort',
+        'https://pms.faceprepcampus.com/cpc/drives'
+      );
+    END LOOP;
+  END IF;
+
+  RETURN new;
+END;
+$$;
+
+-- Also update notify_campus_cpc_on_drive_published to avoid self-notifying publisher/creator
+CREATE OR REPLACE FUNCTION public.notify_campus_cpc_on_drive_published()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_campus RECORD;
+  v_cpc_email TEXT;
+  v_notification_id UUID;
+BEGIN
+  IF NEW.status = 'live' AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'live') THEN
+    FOR v_campus IN
+      SELECT dtc.campus_id, c.name as campus_name
+      FROM drive_target_campuses dtc
+      JOIN campuses c ON c.id = dtc.campus_id
+      WHERE dtc.drive_id = NEW.id
+    LOOP
+      SELECT p.email INTO v_cpc_email
+      FROM profiles p
+      JOIN staff_campus_assignments sca ON sca.profile_id = p.id
+      WHERE sca.campus_id = v_campus.campus_id
+        AND p.role = 'campus_placement_coordinator'
+        AND p.is_active = true
+        AND p.email IS NOT NULL
+        AND p.id IS DISTINCT FROM NEW.created_by
+        AND p.id IS DISTINCT FROM NEW.published_by
+        AND p.id IS DISTINCT FROM auth.uid()
+      LIMIT 1;
+      
+      IF v_cpc_email IS NOT NULL THEN
+        INSERT INTO notifications (kind, title, body, drive_id)
+        VALUES (
+          'campus_drive_alert',
+          'New Drive Live for ' || v_campus.campus_name || ': ' || NEW.company_name,
+          'A new placement drive has been published that targets eligible candidates from **' || v_campus.campus_name || '**.' || E'\n\n' ||
+          '**Drive Overview**' || E'\n' ||
+          '• **Company:** ' || NEW.company_name || E'\n' ||
+          '• **Role:** ' || COALESCE(NEW.role_title, 'Various Roles') || E'\n' ||
+          '• **Compensation:** ₹' || COALESCE(NEW.ctc_max_lpa::text, 'N/A') || ' LPA' || E'\n' ||
+          '• **Application Deadline:** ' || COALESCE(TO_CHAR(NEW.application_end, 'DD Mon YYYY, HH24:MI'), 'TBD') || E'\n\n' ||
+          'Please encourage eligible candidates to review the terms and apply before the deadline.',
+          NEW.id
+        ) RETURNING id INTO v_notification_id;
+        
+        INSERT INTO email_deliveries (notification_id, recipient_email, cc_emails, status)
+        VALUES (
+          v_notification_id, 
+          lower(trim(v_cpc_email)),
+          resolve_cc_recipients('campus_drive_alert', v_campus.campus_id, NEW.id),
+          'queued'
+        );
+      END IF;
+    END LOOP;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$;
 
