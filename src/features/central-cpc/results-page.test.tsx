@@ -536,6 +536,32 @@ describe("DriveRoundsPage — numbered rounds, explicit advancement", () => {
     await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
   });
 
+  it("marks student as selected and automatically moves them to next round in a single step", async () => {
+    const advance = vi.fn().mockResolvedValue(1);
+    const record = vi.fn();
+    const user = userEvent.setup();
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={driveView({
+          record,
+          advance,
+          participants: async (roundId) => (roundId === "r1" ? [PRIYA, ARJUN] : []),
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole("checkbox", { name: /priya ramesh/i }));
+    await user.click(screen.getByRole("button", { name: /mark selected & move to round 2/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/move 1 student to round 2/i);
+    await user.click(within(dialog).getByRole("button", { name: /confirm — select & advance/i }));
+
+    await waitFor(() => expect(record).toHaveBeenCalledWith("r1", "app1", "selected"));
+    await waitFor(() => expect(advance).toHaveBeenCalledWith("r1", "r2", null));
+  });
+
   it("offers no advancement from the last round — final selection lives there", async () => {
     const user = userEvent.setup();
     routed(
@@ -963,7 +989,7 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     expect(assignSlots).not.toHaveBeenCalled();
   });
 
-  it("saves one student's own link from their row (F5)", async () => {
+  it("saves one student's own comment from their row", async () => {
     const setParticipantSlot = vi.fn();
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={detailView({ setParticipantSlot })} />);
@@ -971,16 +997,16 @@ describe("DriveRoundsPage — round details, proof and meeting links", () => {
     const row = (await screen.findByText("Priya Ramesh")).closest("li");
     if (row === null) throw new Error("row not found");
     await user.type(
-      within(row).getByLabelText(/meeting link for priya ramesh/i),
-      "https://meet.google.com/priya",
+      within(row).getByLabelText(/comment for priya ramesh/i),
+      "Strong performance in round 1",
     );
-    await user.click(within(row).getByRole("button", { name: /save link/i }));
+    await user.click(within(row).getByRole("button", { name: /save comment/i }));
 
     await waitFor(() =>
       expect(setParticipantSlot).toHaveBeenCalledWith(
         "r1",
         "app1",
-        "https://meet.google.com/priya",
+        "Strong performance in round 1",
         null,
       ),
     );

@@ -148,6 +148,8 @@ export function ResultsPage({
   saveSlot,
   closed = null,
   onRecorded,
+  nextRound = null,
+  onAdvanceSelected,
 }: {
   roundId: string;
   view: ResultsView;
@@ -163,7 +165,7 @@ export function ResultsPage({
    * re-decided — the student who has been offered the job.
    */
   offered?: ReadonlySet<string>;
-  /** F5: when given, each row offers the student's own meeting link. */
+  /** F5: when given, each row offers the student's own comment / meeting link. */
   saveSlot?: (applicationId: string, meetingLink: string) => Promise<void>;
   /**
    * Why the whole round is closed to edits — the drive's own state, said by
@@ -178,6 +180,8 @@ export function ResultsPage({
    * the participants, which this page's writes would otherwise never touch.
    */
   onRecorded?: () => void | Promise<void>;
+  nextRound?: DriveRoundInfo | null;
+  onAdvanceSelected?: () => Promise<number | undefined>;
 }) {
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -238,10 +242,21 @@ export function ResultsPage({
         await view.record(roundId, applicationId, result);
       }
       setChecked(new Set());
+      let advanceMsg = "";
+      if (result === "selected" && onAdvanceSelected !== undefined && nextRound !== null) {
+        try {
+          const moved = await onAdvanceSelected();
+          if (typeof moved === "number" && moved > 0) {
+            advanceMsg = ` and moved to Round ${nextRound.sequence} (${nextRound.name})`;
+          }
+        } catch {
+          // If auto-advance was prevented (e.g. round scheduled in future), results are still saved
+        }
+      }
       toast({
         tone: "success",
         title: "Results recorded",
-        description: `Recorded ${result.replaceAll("_", " ")} for ${count} candidate(s).`,
+        description: `Recorded ${result.replaceAll("_", " ")}${advanceMsg} for ${count} candidate(s).`,
       });
       await refresh();
       await onRecorded?.();
@@ -415,7 +430,7 @@ export function ResultsPage({
                             <SlotEditor participant={participant} saveSlot={saveSlot} />
                           ) : participant.meetingLink != null && participant.meetingLink !== "" ? (
                             <p className="mt-2 text-xs text-ink-500">
-                              Meeting link set · this row is closed
+                              Comment: {participant.meetingLink}
                             </p>
                           ) : null)}
                       </StudentIdentity>
@@ -455,7 +470,9 @@ export function ResultsPage({
                 isLoading={actions.isPending("record:selected")}
                 onClick={() => requestRecord("selected")}
               >
-                Mark Selected
+                {nextRound !== null
+                  ? `Mark Selected & Move to Round ${nextRound.sequence}`
+                  : "Mark Selected"}
               </Button>
               <Button
                 size="sm"
@@ -488,14 +505,18 @@ export function ResultsPage({
             className="my-auto w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
           >
             <h2 className="font-heading text-lg font-bold text-ink-900">
-              Mark {checked.size} {checked.size === 1 ? "student" : "students"} as{" "}
-              <span className="capitalize">{label(pending)}</span>?
+              {pending === "selected" && nextRound !== null
+                ? `Move ${checked.size} ${checked.size === 1 ? "student" : "students"} to Round ${nextRound.sequence}?`
+                : `Mark ${checked.size} ${checked.size === 1 ? "student" : "students"} as ${label(pending)}?`}
             </h2>
             <p className="mt-2 text-sm text-ink-700">
               <strong>{checkedNames.join(", ")}</strong> will be recorded as{" "}
               <strong className="capitalize">{label(pending)}</strong> in this round and{" "}
               <strong>notified immediately</strong>.
-              {pending === "selected" && " Advancing them later schedules the next round."}
+              {pending === "selected" &&
+                (nextRound !== null
+                  ? ` They will automatically move to Round ${nextRound.sequence} (${nextRound.name}).`
+                  : " Offers can be declared in Final selection.")}
             </p>
             <div className="mt-5 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setPending(null)}>
@@ -509,7 +530,9 @@ export function ResultsPage({
                     void actions.run(() => recordChecked(request), `record:${request}`);
                 }}
               >
-                Confirm — record and notify
+                {pending === "selected" && nextRound !== null
+                  ? `Confirm — select & advance to Round ${nextRound.sequence}`
+                  : "Confirm — record and notify"}
               </Button>
             </div>
           </div>
@@ -533,28 +556,26 @@ function SlotEditor({
   participant: RoundParticipant;
   saveSlot: (applicationId: string, meetingLink: string) => Promise<void>;
 }) {
-  const [link, setLink] = useState(participant.meetingLink ?? "");
+  const [comment, setComment] = useState(participant.meetingLink ?? "");
   const [saved, setSaved] = useState(false);
   const [failed, setFailed] = useState(false);
-  const fieldId = `meeting-link-${participant.applicationId}`;
+  const fieldId = `comment-${participant.applicationId}`;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
-      {/* The field had only an aria-label, so a coordinator scanning the row
-          saw a URL box with nothing saying what it was for. */}
       <label htmlFor={fieldId} className="text-xs font-medium text-ink-500">
-        Meeting link
+        Comment
       </label>
       <input
         id={fieldId}
-        type="url"
-        aria-label={`Meeting link for ${participant.studentName}`}
-        placeholder="https://…"
-        value={link}
+        type="text"
+        aria-label={`Comment for ${participant.studentName}`}
+        placeholder="Add comment or notes…"
+        value={comment}
         onChange={(e) => {
           setSaved(false);
           setFailed(false);
-          setLink(e.target.value);
+          setComment(e.target.value);
         }}
         className="w-64 rounded-lg border border-line px-2 py-1 text-xs text-ink-900"
       />
@@ -564,7 +585,7 @@ function SlotEditor({
         onClick={() => {
           // Promise.resolve: a test double may return undefined, and a crash
           // in a click handler is a silent one.
-          void Promise.resolve(saveSlot(participant.applicationId, link.trim())).then(
+          void Promise.resolve(saveSlot(participant.applicationId, comment.trim())).then(
             () => setSaved(true),
             () => {
               setSaved(false);
@@ -573,7 +594,7 @@ function SlotEditor({
           );
         }}
       >
-        Save link
+        Save comment
       </Button>
       {saved && <span className="text-xs text-success-700">✓ Saved</span>}
       {failed && (
@@ -1512,7 +1533,17 @@ export function DriveRoundsPage({
             locked={locked}
             offered={offered}
             closed={closed}
+            nextRound={nextRound}
             onRecorded={loadParticipants}
+            onAdvanceSelected={async () => {
+              if (activeRound === null || nextRound === null) return 0;
+              const gate = canAdvanceFrom(activeRound, now);
+              if (!gate.allowed) return 0;
+              const moved = await view.advance(activeRound.roundId, nextRound.roundId, null);
+              await loadParticipants();
+              setReloadKey((k) => k + 1);
+              return moved;
+            }}
             saveSlot={(applicationId, meetingLink) =>
               view.setParticipantSlot(
                 activeRound.roundId,
