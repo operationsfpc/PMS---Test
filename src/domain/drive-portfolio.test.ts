@@ -224,16 +224,13 @@ describe("canShortlistFromPortfolio", () => {
   });
 
   it("lets nobody else near it", () => {
-    for (const role of APP_ROLES.filter(
-      (r) => r !== "central_placement_coordinator" && r !== "campus_placement_coordinator",
-    )) {
+    for (const role of APP_ROLES.filter((r) => r !== "central_placement_coordinator")) {
       expect(canShortlistFromPortfolio(role)).toBe(false);
     }
   });
 
-  /** The campus coordinator shortlists their own campus's applicants (§13.1). */
-  it("lets the campus coordinator shortlist", () => {
-    expect(canShortlistFromPortfolio("campus_placement_coordinator")).toBe(true);
+  it("does not let the campus coordinator shortlist", () => {
+    expect(canShortlistFromPortfolio("campus_placement_coordinator")).toBe(false);
   });
 });
 

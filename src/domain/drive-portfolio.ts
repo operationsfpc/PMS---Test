@@ -15,19 +15,13 @@ import { type ApplicantRound, applicationProgress } from "./student-progress";
 import type { AppRole, DriveStatus } from "./types";
 
 /**
- * Who may shortlist from the drive portfolio. F15 (UAT 2026-08-06).
+ * Who may shortlist from the drive portfolio.
  *
- * The same screen now serves the AE, the Delivery Head and the Central CPC -
- * "must be the present for Central Placement Coordinator WITH SHORTLISTING
- * ACCESS". Only one of them may act on it.
- *
- * Shortlisting decides which students a recruiter ever sees (PRD 13.1), so it
- * belongs to the coordinators. The AE is the recruiter's own contact and the
- * Delivery Head approved the commercials; neither should be choosing
- * candidates, however convenient the button would be.
+ * Shortlisting decides which students a recruiter ever sees (PRD §13.1), so it
+ * belongs strictly to the Central Placement Coordinator.
  */
 export function canShortlistFromPortfolio(role: AppRole): boolean {
-  return role === "central_placement_coordinator" || role === "campus_placement_coordinator";
+  return role === "central_placement_coordinator";
 }
 
 /**

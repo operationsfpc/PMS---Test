@@ -497,27 +497,15 @@ describe("saving the shortlist", () => {
   });
 
   /**
-   * 0122: the campus coordinator shortlists their own students. The screen has
-   * always invited them in — `canShortlistFromPortfolio` and the route guard say
-   * so — so this write must ask the same question rather than a narrower one and
-   * refuse someone the interface just authorised.
+   * Only the Central Placement Coordinator has access to shortlisting.
    */
-  it("lets the campus placement coordinator save their decision", async () => {
+  it("refuses the campus placement coordinator from saving shortlist decisions", async () => {
     const { writes } = stub();
 
-    await view("campus_placement_coordinator").saveShortlist("d1", [decision]);
-
-    expect(writes[0]).toEqual([
-      {
-        application_id: "app-1",
-        included: true,
-        rank: 1,
-        score: 91.5,
-        rationale: "Top coding score",
-        decided_by: "cpc-1",
-        opt_out_override_reason: null,
-      },
-    ]);
+    await expect(
+      view("campus_placement_coordinator").saveShortlist("d1", [decision]),
+    ).rejects.toThrow(/placement coordinators/i);
+    expect(writes).toHaveLength(0);
   });
 
   it("refuses a role that chooses nothing, like the AE who raised the drive", async () => {

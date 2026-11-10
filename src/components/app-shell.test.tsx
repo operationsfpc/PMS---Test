@@ -361,15 +361,11 @@ describe("AppShell navigation", () => {
   });
 
   /**
-   * 0122: a campus coordinator shortlists their own students, so the screen
-   * they write from belongs in their sidebar — not only behind a drive card
-   * they first have to find.
+   * Only the Central Placement Coordinator has access to shortlisting.
    */
-  it("gives the campus coordinator the shortlisting screen", () => {
+  it("does not offer the campus coordinator the shortlisting screen", () => {
     shellFor(signedIn("campus_placement_coordinator"));
-    expect(screen.getByRole("link", { name: "Shortlisting" }).getAttribute("href")).toBe(
-      "/central/shortlisting",
-    );
+    expect(screen.queryByRole("link", { name: "Shortlisting" })).toBeNull();
   });
 
   /**
