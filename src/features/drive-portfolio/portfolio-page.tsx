@@ -116,7 +116,8 @@ function groupPortfolioByEvent(drives: readonly PortfolioDrive[]): PortfolioEven
     return {
       eventId: key,
       companyName: first.companyName,
-      tentativeDate: first.tentativeDate ?? null,
+      tentativeDate:
+        roles.find((r) => r.tentativeDate)?.tentativeDate ?? first.tentativeDate ?? null,
       driveMode: null,
       venue: null,
       roles,
@@ -895,14 +896,17 @@ export function DrivePortfolioPage({
                 <p className="text-sm text-ink-600 mt-0.5">
                   <span className="font-semibold text-ink-800">{drive.roleTitle}</span>
                   {ctc !== null && ` · ${ctc}`}
+                  {drive.tentativeDate && ` · Drive date: ${describeVisitDay(drive.tentativeDate)}`}
                   {closeDate !== null &&
                     ` · applications ${closed ? "closed" : "close"} ${closeDate}`}
                 </p>
               </>
             )}
-            {nested && closeDate !== null && (
+            {nested && (
               <p className="text-xs text-ink-500">
-                applications {closed ? "closed" : "close"} {closeDate}
+                {drive.tentativeDate && `Drive date: ${describeVisitDay(drive.tentativeDate)}`}
+                {drive.tentativeDate && closeDate !== null && " · "}
+                {closeDate !== null && `applications ${closed ? "closed" : "close"} ${closeDate}`}
               </p>
             )}
             <div className="mt-2.5 flex flex-wrap items-center gap-2">

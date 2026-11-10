@@ -1,4 +1,5 @@
 import type { SchoolBoard } from "@domain/boards";
+import { isShortlisted } from "@domain/drive-funnel";
 import type { OfferCategory } from "@domain/offer-category";
 import type { Offer } from "@domain/offers";
 import { resolveDisplayedPlacement } from "@domain/offers";
@@ -534,7 +535,7 @@ export function createSupabaseStudentRecordView(client: SupabaseClient): Student
             companyDriveId: drive?.companyDriveId ?? null,
             tentativeDate: drive?.tentativeDate ?? null,
             appliedAt: (row.applied_at as string | null) ?? null,
-            shortlisted: rows(row.shortlist_entries).some((entry) => entry.included === true),
+            shortlisted: isShortlisted(row.shortlist_entries),
             hasOffer: offeredDrives.has(row.drive_id as string),
           };
         }),

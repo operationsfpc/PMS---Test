@@ -1,3 +1,4 @@
+import { isShortlisted } from "@domain/drive-funnel";
 import type { ApplicantRound } from "@domain/student-progress";
 import type {
   AttendanceStatus,
@@ -192,7 +193,7 @@ export function createSupabasePortfolioView(client: SupabaseClient): PortfolioVi
               studentName: (profile.fullName as string | undefined) ?? "Unnamed applicant",
               rollNumber: (profile.rollNumber as string | undefined) ?? "—",
               campus: one<{ name?: string }>(campus?.campuses)?.name ?? "—",
-              shortlisted: rows(application.shortlist_entries).some((s) => s.included === true),
+              shortlisted: isShortlisted(application.shortlist_entries),
               hasOffer: won.has(`${driveId}::${application.student_id as string}`),
               rounds: applicantRounds,
             };

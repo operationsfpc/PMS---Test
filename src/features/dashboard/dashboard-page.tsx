@@ -1520,6 +1520,14 @@ export function DashboardPage({
                                     View role record →
                                   </Link>
                                   <span className="text-xs text-ink-300">·</span>
+                                  {drive.tentativeDate && (
+                                    <>
+                                      <span className="text-xs font-medium text-ink-600">
+                                        Drive date: {describeVisitDay(drive.tentativeDate)}
+                                      </span>
+                                      <span className="text-xs text-ink-300">·</span>
+                                    </>
+                                  )}
                                   <p className="text-xs text-ink-500">
                                     {drive.campusNames.length === 0
                                       ? "Open to all campuses"
@@ -1535,6 +1543,11 @@ export function DashboardPage({
                                     {drive.driveName}
                                   </Link>
                                   <p className="mt-0.5 text-xs text-ink-500">
+                                    {drive.tentativeDate && (
+                                      <span className="font-medium text-ink-600 mr-1.5">
+                                        Drive date: {describeVisitDay(drive.tentativeDate)} ·
+                                      </span>
+                                    )}
                                     {drive.campusNames.length === 0
                                       ? "Open to all campuses"
                                       : drive.campusNames.join(" · ")}

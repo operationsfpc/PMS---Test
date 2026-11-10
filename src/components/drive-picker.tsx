@@ -43,6 +43,18 @@ const raisedLabel = (iso: string | null): string | null =>
         year: "numeric",
       })}`;
 
+const driveDateLabel = (dateStr: string | null | undefined): string | null => {
+  if (!dateStr || dateStr.trim() === "") return null;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return `Drive date: ${d.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })}`;
+};
+
 /**
  * The domain's comparators, over this component's own field name.
  *
@@ -151,7 +163,7 @@ function RoleRow({
           <span className="ml-2 text-sm text-ink-500">— {drive.roleTitle}</span>
         )}
         <p className="text-xs text-ink-500">
-          {[raisedLabel(drive.raisedOn), drive.ctcLabel]
+          {[driveDateLabel(drive.tentativeDate), raisedLabel(drive.raisedOn), drive.ctcLabel]
             .filter((part) => part !== null)
             .join(" · ")}
         </p>
@@ -187,6 +199,11 @@ function Visit({
           <span className="min-w-0 break-words [overflow-wrap:anywhere]">
             {visit[0]?.companyName}
           </span>
+          {visit[0]?.tentativeDate && (
+            <span className="text-xs font-normal text-ink-500">
+              · {driveDateLabel(visit[0]?.tentativeDate)}
+            </span>
+          )}
           <Badge tone={mixed ? "neutral" : driveTypeTone(singleType ?? null)}>
             {mixed ? "Mixed types" : driveTypeLabel(singleType ?? null)}
           </Badge>
@@ -232,7 +249,7 @@ function Visit({
                   </span>
                 </td>
                 <td className="py-2 pr-3 text-xs text-ink-600">
-                  {[raisedLabel(role.raisedOn), role.ctcLabel]
+                  {[driveDateLabel(role.tentativeDate), raisedLabel(role.raisedOn), role.ctcLabel]
                     .filter((part) => part !== null)
                     .join(" · ")}
                 </td>

@@ -140,9 +140,24 @@ export function driveFunnel(participation: DriveParticipation): DriveFunnel {
  * Being called is `round_participants`; attendance is what happened after.
  */
 
-/** One shortlist row that includes them is enough. */
-export const isShortlisted = (entries: readonly { readonly included: boolean | null }[]): boolean =>
-  entries.some((entry) => entry.included === true);
+/** One shortlist row that includes them is enough (handles both array and single-object embeds from PostgREST). */
+export const isShortlisted = (
+  entries:
+    | readonly { readonly included: boolean | null }[]
+    | { readonly included?: boolean | null }
+    | null
+    | undefined
+    | unknown,
+): boolean => {
+  if (entries === null || entries === undefined) return false;
+  if (Array.isArray(entries)) {
+    return entries.some((entry) => (entry as { included?: boolean | null })?.included === true);
+  }
+  if (typeof entries === "object") {
+    return (entries as { included?: boolean | null }).included === true;
+  }
+  return false;
+};
 
 /** A student who has been called to at least one round. */
 export const isInRounds = (rounds: number): boolean => rounds > 0;

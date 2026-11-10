@@ -194,11 +194,7 @@ export function createSupabaseDriveProgressView(client: SupabaseClient): DrivePr
           // Every shortlist row, not the first: a student the coordinator
           // re-included after a withdrawal is not decided by whichever row
           // PostgREST happened to embed first.
-          shortlisted: isShortlisted(
-            (Array.isArray(row.shortlist_entries) ? row.shortlist_entries : []).map((entry) => ({
-              included: (entry as { included?: boolean | null }).included ?? null,
-            })),
-          ),
+          shortlisted: isShortlisted(row.shortlist_entries),
           rounds: studentRounds,
           offer: offerByKey.get(`${studentId}:${driveId}`) ?? null,
         };

@@ -1,4 +1,5 @@
 import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
+import { isShortlisted } from "@domain/drive-funnel";
 import { describeDriveVenue } from "@domain/drive-venue";
 import { describeJoining } from "@domain/joining";
 import type { OfferCategory } from "@domain/offer-category";
@@ -581,7 +582,6 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         applicants: applications.map((a) => {
           const student = one<Record<string, unknown>>(a.students);
           const applicationId = a.id as string;
-          const shortlistRows = asRows(a.shortlist_entries);
 
           // C8: the same facts the portfolio's funnel counts, assembled per
           // applicant so `filterFunnelStage` gives this page the same answer.
@@ -618,7 +618,7 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
               "",
             appliedAt: a.applied_at as string,
             snapshot: snapshotEnvelope,
-            shortlisted: shortlistRows.some((s) => s.included === true),
+            shortlisted: isShortlisted(a.shortlist_entries),
             hasOffer: offered.has(a.student_id as string),
             rounds: applicantRounds,
           };
