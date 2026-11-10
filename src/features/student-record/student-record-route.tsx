@@ -37,7 +37,8 @@ export function StudentRecordRoute() {
   // admit, the student included; which *move* the page may offer is the
   // record's own question, since it depends on the student's standing.
   const mayReadStatus = canReadStatusHistory(role);
-  const canManagePreferences = role !== "student";
+  // Only admin may edit preferences (role categories, drive types, resumes)
+  const canManagePreferences = role === "admin";
 
   if (studentId === undefined) {
     return (

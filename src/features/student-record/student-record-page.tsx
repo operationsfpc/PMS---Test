@@ -66,7 +66,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { Skeleton } from "@/components/shadcn/skeleton";
 import {
   Table,
   TableBody,
@@ -290,8 +289,15 @@ export const DRIVE_TYPE_LABEL: Record<DriveType, string> = {
 };
 
 /** The placeholder tiles and panel columns, shaped like the real page so the read does not reflow. */
-const LOADING_STATS = ["cgpa", "arrears", "history", "school", "outcomes", "applications"];
-const LOADING_SECTIONS = ["identity", "offers", "academics", "applications", "resume", "portfolio"];
+const _LOADING_STATS = ["cgpa", "arrears", "history", "school", "outcomes", "applications"];
+const _LOADING_SECTIONS = [
+  "identity",
+  "offers",
+  "academics",
+  "applications",
+  "resume",
+  "portfolio",
+];
 
 /**
  * A declared figure with the scale the student chose, spelled out.
@@ -715,7 +721,7 @@ export function StudentRecordPage({
   const today = new Date();
   const standing = hold === null ? null : holdStanding(hold, today);
   const badgeRepeatsHold = hold !== null && record.participationStatus === "on_hold";
-  const hasStaffControls = canManagePreferences || view.updatePreferences !== undefined;
+  const hasStaffControls = canManagePreferences;
 
   /*
    * The two status moves, gated on this side exactly as `restore_participation`
@@ -1738,13 +1744,18 @@ export function StudentRecordPage({
           <h2 className="font-heading text-lg font-bold text-ink-900">Identity</h2>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
           <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
             <p className="text-xs font-semibold text-ink-500">Programme</p>
             <p className="mt-1 font-medium text-ink-900 break-words">
               {record.degree}
               {record.branch !== "" && ` — ${record.branch}`} · {record.passingYear}
             </p>
+            {record.programmeLevel && (
+              <span className="mt-1 inline-block uppercase text-[10px] font-semibold text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">
+                {record.programmeLevel}
+              </span>
+            )}
           </div>
           <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
             <p className="text-xs font-semibold text-ink-500">Email</p>
@@ -1757,9 +1768,15 @@ export function StudentRecordPage({
             </p>
           </div>
           <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
-            <p className="text-xs font-semibold text-ink-500">WhatsApp / Alt</p>
+            <p className="text-xs font-semibold text-ink-500">WhatsApp</p>
             <p className="mt-1 font-medium text-ink-900 break-all">
-              {record.whatsapp ?? record.alternateContact ?? "Not recorded"}
+              {record.whatsapp ?? "Not recorded"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-line/60 bg-surface-muted/40 p-3">
+            <p className="text-xs font-semibold text-ink-500">Alternate Contact</p>
+            <p className="mt-1 font-medium text-ink-900 break-all">
+              {record.alternateContact ?? "Not recorded"}
             </p>
           </div>
         </div>

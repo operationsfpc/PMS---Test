@@ -1,14 +1,7 @@
 import { DrilldownModal } from "@components/drilldown-modal";
 import { Button } from "@components/ui";
 import { toYmd } from "@domain/drive-date-filter";
-import {
-  HOLD_KIND_DESCRIPTIONS,
-  HOLD_KIND_LABELS,
-  HOLD_ORDER_MAX_BYTES,
-  type HoldDraft,
-  holdDraftProblem,
-} from "@domain/holds";
-import { HOLD_KINDS } from "@domain/types";
+import { HOLD_ORDER_MAX_BYTES, type HoldDraft, holdDraftProblem } from "@domain/holds";
 import type { HoldsView } from "@lib/holds-view";
 import { useAsyncAction } from "@lib/use-async-action";
 import { useState } from "react";
@@ -43,7 +36,7 @@ export function HoldDialog({
   onPlaced: (student: HoldTarget) => void;
 }) {
   const [draft, setDraft] = useState<HoldDraft>({
-    kind: null,
+    kind: "pause",
     reason: "",
     startsAt: toYmd(new Date()),
     endsAt: "",
@@ -91,48 +84,9 @@ export function HoldDialog({
       onClose={onClose}
     >
       <div className="flex flex-col gap-5">
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-ink-700">
-            <span>What is the hold for?</span>
-            <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
-              *
-            </span>
-            <span className="sr-only"> (required)</span>
-          </legend>
-          <div className="flex flex-col gap-2">
-            {HOLD_KINDS.map((kind) => (
-              <label
-                key={kind}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                  draft.kind === kind
-                    ? "border-brand-500 bg-brand-50"
-                    : "border-field bg-surface hover:border-brand-400"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="hold-kind"
-                  className="mt-1"
-                  checked={draft.kind === kind}
-                  onChange={() => {
-                    change({ kind });
-                    setProblem(null);
-                  }}
-                />
-                <span>
-                  <span className="block text-sm font-semibold text-ink-900">
-                    {HOLD_KIND_LABELS[kind]}
-                  </span>
-                  <span className="block text-xs text-ink-500">{HOLD_KIND_DESCRIPTIONS[kind]}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-
         <div>
           <label htmlFor="hold-reason" className="mb-1 block text-sm font-medium text-ink-700">
-            <span>Reason</span>
+            <span>Hold Reason / Comments</span>
             <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
               *
             </span>
@@ -146,11 +100,12 @@ export function HoldDialog({
               change({ reason: e.target.value });
               setProblem(null);
             }}
-            placeholder="Two semesters of fees unpaid — cleared with accounts on 3 Nov."
+            placeholder="Reason for placing placement hold (e.g. pending training clearance, administrative hold)..."
             className={field}
           />
           <p className="mt-1 text-xs text-ink-500">
-            The student is shown this on their own screen. The attachment is not sent to them.
+            The student is shown this reason on their own screen. Supporting attachments are
+            internal only.
           </p>
         </div>
 
