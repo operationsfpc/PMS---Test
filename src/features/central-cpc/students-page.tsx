@@ -1238,9 +1238,7 @@ export function StudentDirectoryPage({
           holds={holds}
           onClose={() => setHolding(null)}
           onPlaced={(student) => {
-            setHoldNote(
-              `${student.fullName} is on hold (submitted for Key Account Manager approval).`,
-            );
+            setHoldNote(`${student.fullName} is on hold.`);
             setHolding(null);
             // The row's own "On hold" badge is the proof the write landed, and
             // it comes from the roster — so the roster is re-read rather than

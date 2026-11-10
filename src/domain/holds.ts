@@ -57,21 +57,21 @@ export const HOLD_READER_ROLES: readonly AppRole[] = [
   "enterprise_relations",
 ];
 
-/** Who may initiate/handle a placement hold: Campus Manager (and admin). */
+/** Who may initiate/handle a placement hold: Central Placement Coordinator (and admin). */
 export const canPlacePlacementHold = (role: AppRole): boolean =>
-  role === "campus_manager" || role === "admin";
+  role === "central_placement_coordinator" || role === "admin";
 
-/** Who may approve/confirm a pending placement hold: Key Account Manager (and admin). */
+/** Who may approve/confirm a pending placement hold: Central Placement Coordinator (and admin). */
 export const canConfirmPlacementHold = (role: AppRole): boolean =>
-  role === "key_account_manager" || role === "admin";
+  role === "central_placement_coordinator" || role === "admin";
 
-/** And who may release an active hold: Campus Manager (and admin). */
+/** And who may release an active hold: Central Placement Coordinator (and admin). */
 export const canReleasePlacementHold = (role: AppRole): boolean =>
-  role === "campus_manager" || role === "admin";
+  role === "central_placement_coordinator" || role === "admin";
 
-/** Who may decline a pending hold request: Key Account Manager, Campus Manager, or admin. */
+/** Who may decline a pending hold request: Central Placement Coordinator or admin. */
 export const canDeclinePlacementHold = (role: AppRole): boolean =>
-  role === "key_account_manager" || role === "campus_manager" || role === "admin";
+  role === "central_placement_coordinator" || role === "admin";
 
 export interface HoldWindow {
   readonly kind: HoldKind;

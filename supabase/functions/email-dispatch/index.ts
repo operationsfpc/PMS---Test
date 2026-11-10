@@ -657,6 +657,20 @@ serve(async (req: Request) => {
         buttonLabel = "Review Delivery Logs";
         targetUrl = `${PORTAL_URL}/dashboard`;
         break;
+      // Placement Hold
+      case "placement_hold":
+      case "student_held":
+        subject = notificationTitle || "Important: Placement Participation on Hold";
+        templateTitle = "Placement Participation on Hold";
+        buttonLabel = "View Profile Status";
+        targetUrl = `${PORTAL_URL}/student`;
+        break;
+      case "placement_hold_released":
+        subject = notificationTitle || "Placement Hold Released";
+        templateTitle = "Placement Hold Released";
+        buttonLabel = "View Open Drives";
+        targetUrl = `${PORTAL_URL}/student`;
+        break;
       default:
         templateTitle = notificationTitle;
         buttonLabel = "View on PMS Portal";

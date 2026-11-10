@@ -87,7 +87,8 @@ export function canRestoreParticipation(actor: AppRole, status: ParticipationSta
   if (status === "on_hold") {
     return {
       allowed: false,
-      reason: "Their hold is released by their Campus Manager, not by a status change.",
+      reason:
+        "Their hold is released by the Central Placement Coordinator, not by a status change.",
     };
   }
   if (status === "disbarred") {

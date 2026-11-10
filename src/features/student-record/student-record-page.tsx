@@ -2163,7 +2163,7 @@ export function StudentRecordPage({
                     Requested — {HOLD_KIND_LABELS[pending.kind]}
                   </h2>
                   <Badge tone="accent">
-                    {canConfirmHold ? "Awaiting confirmation" : "Awaiting KAM confirmation"}
+                    {canConfirmHold ? "Awaiting confirmation" : "Awaiting Central CPC confirmation"}
                   </Badge>
                 </div>
 
@@ -2176,7 +2176,7 @@ export function StudentRecordPage({
                 <p className="mt-1 text-xs text-ink-500">
                   {canConfirmHold
                     ? "Their drives stay open until you confirm this. Confirming closes them."
-                    : "Submitted to Key Account Manager for approval. Student remains active until approved."}
+                    : "Submitted to Central Placement Coordinator for approval. Student remains active until approved."}
                 </p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">

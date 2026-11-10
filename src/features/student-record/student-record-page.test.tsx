@@ -369,7 +369,7 @@ const showHold = (
   holds: HoldsView,
   release?: (holdId: string, note: string | null) => Promise<void>,
   record: StudentRecord = { ...PRIYA, participationStatus: "on_hold" },
-  role: AppRole = KAM,
+  role: AppRole = "central_placement_coordinator",
 ) =>
   render(
     <MemoryRouter>
@@ -752,7 +752,7 @@ describe("StudentRecordPage — a student's self-placed request", () => {
 
   /** A reader without confirm/release verbs sees the request as fact. */
   it("offers no confirm or decline to a reader who was not handed the verb", async () => {
-    showHold(requested(), undefined, PRIYA, "central_placement_coordinator");
+    showHold(requested(), undefined, PRIYA, KAM);
 
     const card = await block();
     expect(within(card).getByText(/requested — self-placed/i)).toBeDefined();
@@ -760,13 +760,15 @@ describe("StudentRecordPage — a student's self-placed request", () => {
     expect(within(card).queryByRole("button", { name: /decline request/i })).toBeNull();
   });
 
-  /** Hold flow: Campus Manager sees "Awaiting KAM confirmation" without a confirm button */
-  it("shows awaiting KAM confirmation to the campus manager and offers no confirm button", async () => {
+  /** Hold flow: Campus Manager sees "Awaiting Central CPC confirmation" without a confirm button */
+  it("shows awaiting Central CPC confirmation to the campus manager and offers no confirm button", async () => {
     showHold(requested(), async () => {}, PRIYA, MANAGER);
 
     const card = await block();
-    expect(within(card).getByText(/awaiting kam confirmation/i)).toBeDefined();
-    expect(within(card).getByText(/submitted to key account manager for approval/i)).toBeDefined();
+    expect(within(card).getByText(/awaiting central cpc confirmation/i)).toBeDefined();
+    expect(
+      within(card).getByText(/submitted to central placement coordinator for approval/i),
+    ).toBeDefined();
     expect(within(card).queryByRole("button", { name: /confirm hold/i })).toBeNull();
     expect(within(card).getByRole("button", { name: /decline request/i })).toBeDefined();
   });
@@ -1037,7 +1039,9 @@ describe("StudentRecordPage status change", () => {
     showStatus({ ...PRIYA, participationStatus: "on_hold" }, MANAGER);
 
     expect(screen.queryByRole("button", { name: /change status/i })).toBeNull();
-    expect(await screen.findByText(/hold is released by their campus manager/i)).toBeDefined();
+    expect(
+      await screen.findByText(/hold is released by the central placement coordinator/i),
+    ).toBeDefined();
   });
 
   it("says nothing to a disbarred student's reader that a status change will help", async () => {

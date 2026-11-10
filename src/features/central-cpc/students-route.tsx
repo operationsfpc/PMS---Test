@@ -1,3 +1,4 @@
+import { canPlacePlacementHold, HOLD_READER_ROLES } from "@domain/holds";
 import { useAuth } from "@lib/auth-context";
 import { createSupabaseHoldsView, type HoldsView } from "@lib/holds-view";
 import { supabase } from "@lib/supabase";
@@ -15,13 +16,11 @@ export function StudentDirectoryRoute() {
   const role = auth.status === "signed-in" ? auth.role : "student";
 
   /**
-   * Holds are visible to Campus Manager, KAM and Admin.
-   * Only Campus Manager places hold requests; KAM approves.
+   * Holds are managed by Central Placement Coordinator and Admin.
    */
-  const mayReadHolds =
-    role === "campus_manager" || role === "key_account_manager" || role === "admin";
+  const mayReadHolds = HOLD_READER_ROLES.includes(role);
   const asHolds: HoldsView | undefined = mayReadHolds ? holds : undefined;
-  const canPlace = role === "campus_manager" || role === "admin";
+  const canPlace = canPlacePlacementHold(role);
 
   return (
     <StudentDirectoryPage

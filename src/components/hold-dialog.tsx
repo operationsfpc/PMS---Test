@@ -80,7 +80,7 @@ export function HoldDialog({
     <DrilldownModal
       eyebrow="Placement hold"
       title={`Hold ${target.fullName}`}
-      subtitle={`Roll ${target.rollNumber} — hold request is submitted to Key Account Manager for approval.`}
+      subtitle={`Roll ${target.rollNumber} — student will be placed on placement hold.`}
       onClose={onClose}
     >
       <div className="flex flex-col gap-5">

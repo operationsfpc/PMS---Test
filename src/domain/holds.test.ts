@@ -84,34 +84,40 @@ describe("HOLD_READER_ROLES", () => {
 });
 
 describe("canConfirmPlacementHold", () => {
-  it("allows KAM and admin to approve/confirm holds", () => {
+  it("allows central placement coordinator and admin to approve/confirm holds", () => {
     expect(APP_ROLES.filter(canConfirmPlacementHold).sort()).toEqual(
-      ["admin", "key_account_manager"].sort(),
+      ["admin", "central_placement_coordinator"].sort(),
     );
   });
 
-  it("refuses campus manager from self-approving", () => {
+  it("refuses campus manager and key account manager", () => {
     expect(canConfirmPlacementHold("campus_manager")).toBe(false);
+    expect(canConfirmPlacementHold("key_account_manager")).toBe(false);
   });
 });
 
 describe("canPlacePlacementHold", () => {
-  it("allows campus manager and admin to place/initiate a hold", () => {
+  it("allows central placement coordinator and admin to place a hold", () => {
     expect(APP_ROLES.filter(canPlacePlacementHold).sort()).toEqual(
-      ["admin", "campus_manager"].sort(),
+      ["admin", "central_placement_coordinator"].sort(),
     );
   });
 
-  it("refuses key account manager from initiating a hold", () => {
+  it("refuses key account manager and campus manager from initiating a hold", () => {
     expect(canPlacePlacementHold("key_account_manager")).toBe(false);
+    expect(canPlacePlacementHold("campus_manager")).toBe(false);
   });
 });
 
 describe("canReleasePlacementHold", () => {
-  it("allows campus manager and admin to release an active hold", () => {
+  it("allows central placement coordinator and admin to release an active hold", () => {
     expect(APP_ROLES.filter(canReleasePlacementHold).sort()).toEqual(
-      ["admin", "campus_manager"].sort(),
+      ["admin", "central_placement_coordinator"].sort(),
     );
+  });
+
+  it("refuses campus manager from releasing a hold", () => {
+    expect(canReleasePlacementHold("campus_manager")).toBe(false);
   });
 });
 

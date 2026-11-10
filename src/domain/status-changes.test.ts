@@ -145,7 +145,7 @@ describe("canRestoreParticipation", () => {
     const decision = canRestoreParticipation("campus_manager", "on_hold");
     expect(decision.allowed).toBe(false);
     expect(decision.allowed === false && decision.reason).toMatch(/hold is released/i);
-    expect(decision.allowed === false && decision.reason).toMatch(/Campus Manager/);
+    expect(decision.allowed === false && decision.reason).toMatch(/Central Placement Coordinator/);
   });
 
   it("refuses a disbarred student, whose sanction is Central's", () => {

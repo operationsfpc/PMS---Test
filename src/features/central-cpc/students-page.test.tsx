@@ -653,9 +653,7 @@ describe("StudentDirectoryPage holds", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: "Hold Rahul Nair" }));
-    // The page's own filter chips are radios too, so the dialog is scoped.
     const dialog = screen.getByRole("dialog");
-    await user.click(within(dialog).getByRole("radio", { name: /^Fees/ }));
     await user.type(
       within(dialog).getByRole("textbox", { name: /reason/i }),
       "Two semesters of fees unpaid.",
@@ -669,7 +667,7 @@ describe("StudentDirectoryPage holds", () => {
     expect(await screen.findByText(/is on hold/)).toBeDefined();
     expect(place).toHaveBeenCalledWith({
       studentId: "s2",
-      kind: "fees",
+      kind: "pause",
       reason: "Two semesters of fees unpaid.",
       startsAt: expect.any(String),
       endsAt: "2026-12-15",
@@ -690,7 +688,7 @@ describe("StudentDirectoryPage holds", () => {
   });
 
   /** Nothing is sent while the draft is wrong, so no half-placed hold exists. */
-  it("refuses a hold with neither a kind nor a reason before asking the database", async () => {
+  it("refuses a hold without a reason before asking the database", async () => {
     const user = userEvent.setup();
     const place = vi.fn(async () => "hold-1");
     showHolds([UNPLACED], holdsView({ place }));
@@ -699,7 +697,7 @@ describe("StudentDirectoryPage holds", () => {
     await user.click(screen.getByRole("button", { name: /place hold/i }));
 
     expect(place).not.toHaveBeenCalled();
-    expect((await screen.findByRole("alert")).textContent).toMatch(/Choose what the hold is for/);
+    expect((await screen.findByRole("alert")).textContent).toMatch(/Give the reason/);
   });
 
   /** 0125's raised sentence is the manager's only explanation, so it is shown. */
@@ -709,14 +707,13 @@ describe("StudentDirectoryPage holds", () => {
       [UNPLACED],
       holdsView({
         place: async () => {
-          throw new Error("Only a Campus Manager may place a placement hold.");
+          throw new Error("Only the Central Placement Coordinator may place a placement hold.");
         },
       }),
     );
 
     await user.click(await screen.findByRole("button", { name: "Hold Rahul Nair" }));
     const dialog = screen.getByRole("dialog");
-    await user.click(within(dialog).getByRole("radio", { name: /^Self-placed/ }));
     await user.type(
       within(dialog).getByRole("textbox", { name: /reason/i }),
       "Offer already in hand.",
@@ -726,7 +723,9 @@ describe("StudentDirectoryPage holds", () => {
     });
     await user.click(within(dialog).getByRole("button", { name: /place hold/i }));
 
-    expect((await screen.findByRole("alert")).textContent).toMatch(/Only a Campus Manager/);
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /Only the Central Placement Coordinator/,
+    );
     expect(screen.queryByText(/is on hold/)).toBeNull();
   });
 
