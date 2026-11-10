@@ -57,6 +57,17 @@ export interface DriveApplicantRow {
   readonly rounds: readonly ApplicantRound[];
 }
 
+export interface DriveNonApplicantRow {
+  readonly studentId: string;
+  readonly fullName: string;
+  readonly rollNumber: string;
+  readonly campus: string;
+  readonly degree: string;
+  readonly branch: string;
+  readonly cgpa: string;
+  readonly reason?: string | undefined;
+}
+
 export interface DriveRecord {
   readonly id: string;
   readonly companyDriveId: string | null;
@@ -112,6 +123,8 @@ export interface DriveRecord {
   readonly recruiters: readonly DriveRecruiterContact[];
   readonly provenance: DriveProvenance;
   readonly applicants: readonly DriveApplicantRow[];
+  readonly eligibleNotApplied?: readonly DriveNonApplicantRow[];
+  readonly cannotApply?: readonly DriveNonApplicantRow[];
   /**
    * 2026-10-15: other roles under the same company drive event, so the page
    * can show "Other Roles in This Drive" — null/empty means this drive is
@@ -161,9 +174,9 @@ export const RECORD_DRIVE_COLUMNS = `
   approver:profiles!drives_approved_by_fkey(full_name),
   publisher:profiles!drives_published_by_fkey(full_name),
   drive_rounds(id, sequence, name),
-  drive_eligible_degrees(degrees(name)),
-  drive_eligible_branches(branches(name)),
-  drive_target_campuses(campuses(name))
+  drive_eligible_degrees(degree_id, degrees(name)),
+  drive_eligible_branches(branch_id, branches(name)),
+  drive_target_campuses(campus_id, campuses(name))
 `;
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
@@ -313,6 +326,129 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
       );
       const offered = new Set(offerRows.map((o) => o.student_id as string));
 
+      const min = (row.ctc_min_lpa as number | null | undefined) ?? null;
+      const max = (row.ctc_max_lpa as number | null | undefined) ?? null;
+      const cgpa = (row.min_overall_cgpa as number | null | undefined) ?? null;
+      const cgpaScale = (row.min_overall_cgpa_scale as string | null | undefined) ?? "cgpa";
+      const tenth = (row.min_tenth_percentage as number | null | undefined) ?? null;
+      const twelfth = (row.min_twelfth_percentage as number | null | undefined) ?? null;
+
+      const targetCampuses = asRows(row.drive_target_campuses);
+      const targetCampusIds = targetCampuses
+        .map((tc) => (tc.campus_id as string | undefined) ?? null)
+        .filter((id): id is string => typeof id === "string" && id !== "");
+
+      const eligibleDegrees = asRows(row.drive_eligible_degrees);
+      const eligibleDegreeIds = eligibleDegrees
+        .map((d) => (d.degree_id as string | undefined) ?? null)
+        .filter((id): id is string => typeof id === "string" && id !== "");
+
+      const eligibleBranches = asRows(row.drive_eligible_branches);
+      const eligibleBranchIds = eligibleBranches
+        .map((b) => (b.branch_id as string | undefined) ?? null)
+        .filter((id): id is string => typeof id === "string" && id !== "");
+
+      const eligiblePassingYears = ((row.eligible_passing_years as unknown[]) ?? []).map(Number);
+      const arrearsPolicy = (row.arrears_policy as string) ?? "flexible";
+
+      let allCampusStudents: Array<Record<string, unknown>> = [];
+      if (targetCampusIds.length > 0) {
+        try {
+          allCampusStudents = await readAllRows((from, to) =>
+            client
+              .from("students")
+              .select(
+                "id, full_name, roll_number, srf_status, participation_status, degree_id, branch_id, passing_year, overall_cgpa, tenth_percentage, twelfth_percentage, current_arrears, history_of_arrears, campuses(name), degrees(name), branches(name)",
+              )
+              .in("campus_id", targetCampusIds)
+              .range(from, to),
+          );
+        } catch {
+          allCampusStudents = [];
+        }
+      }
+
+      const appliedStudentIdSet = new Set(applications.map((a) => a.student_id as string));
+
+      const eligibleNotApplied: DriveNonApplicantRow[] = [];
+      const cannotApply: DriveNonApplicantRow[] = [];
+
+      for (const s of allCampusStudents) {
+        const studentId = s.id as string;
+        if (appliedStudentIdSet.has(studentId)) continue;
+
+        const studentCampus = one<{ name?: string }>(s.campuses)?.name ?? "";
+        const studentDegree = one<{ name?: string }>(s.degrees)?.name ?? "";
+        const studentBranch = one<{ name?: string }>(s.branches)?.name ?? "";
+        const studentCgpa = s.overall_cgpa != null ? `${s.overall_cgpa} CGPA` : "—";
+
+        let refusalReason: string | null = null;
+
+        if (s.srf_status !== "srf_approved") {
+          refusalReason =
+            s.srf_status === "srf_submitted"
+              ? "Registration pending verification"
+              : s.srf_status === "srf_rejected"
+                ? "Registration rejected"
+                : "Registration not completed";
+        } else if (s.participation_status === "on_hold") {
+          refusalReason = "Participation on hold";
+        } else if (s.participation_status === "opted_out") {
+          refusalReason = "Opted out of placements";
+        } else if (s.participation_status === "disbarred") {
+          refusalReason = "Disbarred from placements";
+        } else if (
+          eligibleDegreeIds.length > 0 &&
+          !eligibleDegreeIds.includes(s.degree_id as string)
+        ) {
+          refusalReason = `Degree not eligible (${studentDegree || "Other degree"})`;
+        } else if (
+          eligibleBranchIds.length > 0 &&
+          s.branch_id &&
+          !eligibleBranchIds.includes(s.branch_id as string)
+        ) {
+          refusalReason = `Branch not eligible (${studentBranch || "Other branch"})`;
+        } else if (
+          eligiblePassingYears.length > 0 &&
+          !eligiblePassingYears.includes(Number(s.passing_year))
+        ) {
+          refusalReason = `Batch mismatch (${s.passing_year})`;
+        } else if (cgpa !== null && (s.overall_cgpa == null || Number(s.overall_cgpa) < cgpa)) {
+          refusalReason = `CGPA below cutoff (${s.overall_cgpa ?? "—"} < ${cgpa})`;
+        } else if (
+          tenth !== null &&
+          (s.tenth_percentage == null || Number(s.tenth_percentage) < tenth)
+        ) {
+          refusalReason = `10th marks below cutoff (${s.tenth_percentage ?? "—"}% < ${tenth}%)`;
+        } else if (
+          twelfth !== null &&
+          (s.twelfth_percentage == null || Number(s.twelfth_percentage) < twelfth)
+        ) {
+          refusalReason = `12th marks below cutoff (${s.twelfth_percentage ?? "—"}% < ${twelfth}%)`;
+        } else if (arrearsPolicy === "no_standing" && (Number(s.current_arrears) || 0) > 0) {
+          refusalReason = `Standing arrears not permitted (${s.current_arrears} active)`;
+        } else if (arrearsPolicy === "no_history" && (Number(s.history_of_arrears) || 0) > 0) {
+          refusalReason = `History of arrears not permitted (${s.history_of_arrears} recorded)`;
+        }
+
+        const item: DriveNonApplicantRow = {
+          studentId,
+          fullName: (s.full_name as string) ?? "Student",
+          rollNumber: (s.roll_number as string) ?? "",
+          campus: studentCampus,
+          degree: studentDegree,
+          branch: studentBranch,
+          cgpa: studentCgpa,
+          reason: refusalReason ?? undefined,
+        };
+
+        if (refusalReason !== null) {
+          cannotApply.push(item);
+        } else {
+          eligibleNotApplied.push(item);
+        }
+      }
+
       // The same signed-and-short-lived treatment as everywhere else (0051).
       let jobDescriptionUrl: string | null = null;
       const jdPath = (row.jd_storage_path as string | null) ?? null;
@@ -367,16 +503,6 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
           };
         });
       }
-
-      // `?? null` throughout: a column a select DID ask for still reads
-      // `undefined` off a partial row, and `undefined === null` is false —
-      // "≥ undefined CGPA" is the label that bug prints.
-      const min = (row.ctc_min_lpa as number | null | undefined) ?? null;
-      const max = (row.ctc_max_lpa as number | null | undefined) ?? null;
-      const cgpa = (row.min_overall_cgpa as number | null | undefined) ?? null;
-      const cgpaScale = (row.min_overall_cgpa_scale as string | null | undefined) ?? "cgpa";
-      const tenth = (row.min_tenth_percentage as number | null | undefined) ?? null;
-      const twelfth = (row.min_twelfth_percentage as number | null | undefined) ?? null;
 
       return {
         id: row.id as string,
@@ -497,6 +623,8 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
             rounds: applicantRounds,
           };
         }),
+        eligibleNotApplied,
+        cannotApply,
         siblingRoles: siblingRoles,
       };
     },

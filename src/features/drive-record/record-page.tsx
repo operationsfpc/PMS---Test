@@ -6,6 +6,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@components/alert-dialog";
+import { TablePager } from "@components/table-pager";
 import { useToast } from "@components/toast";
 import {
   Badge,
@@ -40,7 +41,7 @@ import {
 import { roleCategoryLabel, roleCategoryStyle } from "@domain/role-category";
 import type { AppRole, DriveStatus, DriveType } from "@domain/types";
 import { workTypeLabel } from "@domain/work-type";
-import { ExternalLink, FileText, TriangleAlert } from "lucide-react";
+import { ExternalLink, FileText, Search, TriangleAlert } from "lucide-react";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
@@ -307,6 +308,12 @@ export function DriveRecordPage({
   const [record, setRecord] = useState<DriveRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSnapshot, setOpenSnapshot] = useState<string | null>(null);
+  const [audienceTab, setAudienceTab] = useState<"applied" | "eligible" | "cannot_apply">(
+    "applied",
+  );
+  const [audienceSearch, setAudienceSearch] = useState("");
+  const [audiencePage, setAudiencePage] = useState(0);
+  const [audiencePageSize, setAudiencePageSize] = useState(25);
   const [deciding, setDeciding] = useState<"approve" | "reject" | null>(null);
   const [category, setCategory] = useState<OfferCategory | null>(null);
   const [reason, setReason] = useState("");
@@ -774,112 +781,376 @@ export function DriveRecordPage({
           </dl>
         </Section>
 
-        {staff && record.applicants.length > 0 && (
-          <Section title={`Applicants (${record.applicants.length})`}>
-            <div className="scroll-bare overflow-x-auto rounded-lg border border-line">
-              <Table>
-                <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
-                  <TableRow className="border-line">
-                    <TableHead className="pl-4">Student</TableHead>
-                    <TableHead>Roll number</TableHead>
-                    <TableHead>Campus</TableHead>
-                    <TableHead>Applied</TableHead>
-                    <TableHead className="pr-4 text-right">
-                      <span className="sr-only">Snapshot</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="bg-surface">
-                  {record.applicants.map((applicant) => {
-                    const isOpen = openSnapshot === applicant.applicationId;
-                    return (
-                      <Fragment key={applicant.applicationId}>
-                        <TableRow className="border-line">
-                          <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
-                            <Link
-                              to={`/students/${applicant.studentId}`}
-                              className="text-brand-600 hover:underline"
-                            >
-                              {applicant.fullName}
-                            </Link>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {applicant.rollNumber}
-                          </TableCell>
-                          <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
-                            {applicant.campus}
-                          </TableCell>
-                          <TableCell className="text-ink-600">
-                            {when(applicant.appliedAt)}
-                          </TableCell>
-                          <TableCell className="pr-4 text-right">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              aria-expanded={isOpen}
-                              aria-controls={`snapshot-${applicant.applicationId}`}
-                              onClick={() =>
-                                setOpenSnapshot(isOpen ? null : applicant.applicationId)
-                              }
-                            >
-                              {isOpen ? "Hide snapshot" : "View snapshot"}
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                        {/* The snapshot belongs to its own row, so it opens inside the
-                              table rather than under it, where it read as the last row's. */}
-                        {isOpen && (
-                          <TableRow className="border-line hover:bg-transparent">
-                            <TableCell colSpan={5} className="p-0 pt-1 pb-4">
-                              <section
-                                id={`snapshot-${applicant.applicationId}`}
-                                aria-label={`Snapshot of ${applicant.fullName}`}
-                                className="rounded-lg bg-surface-muted p-4"
-                              >
-                                <p className="mb-2 flex items-start gap-1.5 text-xs font-semibold text-gold-800">
-                                  <TriangleAlert
-                                    className="mt-px size-3.5 shrink-0"
-                                    aria-hidden="true"
-                                  />
-                                  The profile as it was AT APPLY TIME — what the recruiter received,
-                                  never the live profile.
-                                </p>
-                                <dl className="grid gap-3 sm:grid-cols-3">
-                                  <Fact
-                                    label="CGPA"
-                                    value={fromSnapshot(applicant.snapshot, "overallCgpa")}
-                                  />
-                                  <Fact
-                                    label="10th %"
-                                    value={fromSnapshot(applicant.snapshot, "tenthPercentage")}
-                                  />
-                                  <Fact
-                                    label="12th %"
-                                    value={fromSnapshot(applicant.snapshot, "twelfthPercentage")}
-                                  />
-                                  <Fact
-                                    label="Current arrears"
-                                    value={fromSnapshot(applicant.snapshot, "currentArrears")}
-                                  />
-                                  <Fact
-                                    label="Degree"
-                                    value={fromSnapshot(applicant.snapshot, "degree")}
-                                  />
-                                  <Fact
-                                    label="Branch"
-                                    value={fromSnapshot(applicant.snapshot, "branch")}
-                                  />
-                                </dl>
-                              </section>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+        {staff && (
+          <Section title={`Applicants & Student Audience (${record.applicants.length})`}>
+            {(() => {
+              const eligibleNotApplied = record.eligibleNotApplied ?? [];
+              const cannotApply = record.cannotApply ?? [];
+
+              const query = audienceSearch.trim().toLowerCase();
+
+              const filteredApplied = record.applicants.filter((a) => {
+                if (!query) return true;
+                return (
+                  a.fullName.toLowerCase().includes(query) ||
+                  a.rollNumber.toLowerCase().includes(query) ||
+                  a.campus.toLowerCase().includes(query)
+                );
+              });
+
+              const filteredEligible = eligibleNotApplied.filter((e) => {
+                if (!query) return true;
+                return (
+                  e.fullName.toLowerCase().includes(query) ||
+                  e.rollNumber.toLowerCase().includes(query) ||
+                  e.campus.toLowerCase().includes(query) ||
+                  e.degree.toLowerCase().includes(query) ||
+                  e.branch.toLowerCase().includes(query)
+                );
+              });
+
+              const filteredCannotApply = cannotApply.filter((c) => {
+                if (!query) return true;
+                return (
+                  c.fullName.toLowerCase().includes(query) ||
+                  c.rollNumber.toLowerCase().includes(query) ||
+                  c.campus.toLowerCase().includes(query) ||
+                  c.degree.toLowerCase().includes(query) ||
+                  c.branch.toLowerCase().includes(query) ||
+                  (c.reason ?? "").toLowerCase().includes(query)
+                );
+              });
+
+              const currentList =
+                audienceTab === "applied"
+                  ? filteredApplied
+                  : audienceTab === "eligible"
+                    ? filteredEligible
+                    : filteredCannotApply;
+
+              const pagedItems = currentList.slice(
+                audiencePage * audiencePageSize,
+                (audiencePage + 1) * audiencePageSize,
+              );
+
+              return (
+                <div className="flex flex-col gap-4">
+                  {/* Audience Sub-Navigation Tabs and Search */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAudienceTab("applied");
+                          setAudiencePage(0);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                          audienceTab === "applied"
+                            ? "bg-brand-600 text-white shadow-2xs"
+                            : "bg-surface-muted text-ink-700 hover:bg-surface hover:text-ink-900 border border-line"
+                        }`}
+                      >
+                        Applied ({record.applicants.length})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAudienceTab("eligible");
+                          setAudiencePage(0);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                          audienceTab === "eligible"
+                            ? "bg-brand-600 text-white shadow-2xs"
+                            : "bg-surface-muted text-ink-700 hover:bg-surface hover:text-ink-900 border border-line"
+                        }`}
+                      >
+                        Eligible — Not Applied ({eligibleNotApplied.length})
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAudienceTab("cannot_apply");
+                          setAudiencePage(0);
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                          audienceTab === "cannot_apply"
+                            ? "bg-brand-600 text-white shadow-2xs"
+                            : "bg-surface-muted text-ink-700 hover:bg-surface hover:text-ink-900 border border-line"
+                        }`}
+                      >
+                        Cannot Apply ({cannotApply.length})
+                      </button>
+                    </div>
+
+                    <div className="relative w-full sm:w-64">
+                      <Search
+                        className="absolute left-2.5 top-2.5 size-3.5 text-ink-400"
+                        aria-hidden="true"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Search by name, roll, campus..."
+                        value={audienceSearch}
+                        onChange={(e) => {
+                          setAudienceSearch(e.target.value);
+                          setAudiencePage(0);
+                        }}
+                        className="w-full rounded-md border border-line bg-surface py-1.5 pl-8 pr-3 text-xs text-ink-900 placeholder:text-ink-400 focus:border-brand-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  {/* View 1: Applied */}
+                  {audienceTab === "applied" &&
+                    (filteredApplied.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-ink-500">
+                        {record.applicants.length === 0
+                          ? "No students have applied to this drive yet."
+                          : "No applied students match your search."}
+                      </p>
+                    ) : (
+                      <div className="scroll-bare overflow-x-auto rounded-lg border border-line">
+                        <Table>
+                          <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
+                            <TableRow className="border-line">
+                              <TableHead className="pl-4">Student</TableHead>
+                              <TableHead>Roll number</TableHead>
+                              <TableHead>Campus</TableHead>
+                              <TableHead>Applied</TableHead>
+                              <TableHead className="pr-4 text-right">
+                                <span className="sr-only">Snapshot</span>
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody className="bg-surface">
+                            {(pagedItems as typeof filteredApplied).map((applicant) => {
+                              const isOpen = openSnapshot === applicant.applicationId;
+                              return (
+                                <Fragment key={applicant.applicationId}>
+                                  <TableRow className="border-line">
+                                    <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                                      <Link
+                                        to={`/students/${applicant.studentId}`}
+                                        className="text-brand-600 hover:underline"
+                                      >
+                                        {applicant.fullName}
+                                      </Link>
+                                    </TableCell>
+                                    <TableCell className="font-mono text-xs">
+                                      {applicant.rollNumber}
+                                    </TableCell>
+                                    <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
+                                      {applicant.campus}
+                                    </TableCell>
+                                    <TableCell className="text-ink-600">
+                                      {when(applicant.appliedAt)}
+                                    </TableCell>
+                                    <TableCell className="pr-4 text-right">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        aria-expanded={isOpen}
+                                        aria-controls={`snapshot-${applicant.applicationId}`}
+                                        onClick={() =>
+                                          setOpenSnapshot(isOpen ? null : applicant.applicationId)
+                                        }
+                                      >
+                                        {isOpen ? "Hide snapshot" : "View snapshot"}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                  {isOpen && (
+                                    <TableRow className="border-line hover:bg-transparent">
+                                      <TableCell colSpan={5} className="p-0 pt-1 pb-4">
+                                        <section
+                                          id={`snapshot-${applicant.applicationId}`}
+                                          aria-label={`Snapshot of ${applicant.fullName}`}
+                                          className="rounded-lg bg-surface-muted p-4"
+                                        >
+                                          <p className="mb-2 flex items-start gap-1.5 text-xs font-semibold text-gold-800">
+                                            <TriangleAlert
+                                              className="mt-px size-3.5 shrink-0"
+                                              aria-hidden="true"
+                                            />
+                                            The profile as it was AT APPLY TIME — what the recruiter
+                                            received, never the live profile.
+                                          </p>
+                                          <dl className="grid gap-3 sm:grid-cols-3">
+                                            <Fact
+                                              label="CGPA"
+                                              value={fromSnapshot(
+                                                applicant.snapshot,
+                                                "overallCgpa",
+                                              )}
+                                            />
+                                            <Fact
+                                              label="10th %"
+                                              value={fromSnapshot(
+                                                applicant.snapshot,
+                                                "tenthPercentage",
+                                              )}
+                                            />
+                                            <Fact
+                                              label="12th %"
+                                              value={fromSnapshot(
+                                                applicant.snapshot,
+                                                "twelfthPercentage",
+                                              )}
+                                            />
+                                            <Fact
+                                              label="Current arrears"
+                                              value={fromSnapshot(
+                                                applicant.snapshot,
+                                                "currentArrears",
+                                              )}
+                                            />
+                                            <Fact
+                                              label="Degree"
+                                              value={fromSnapshot(applicant.snapshot, "degree")}
+                                            />
+                                            <Fact
+                                              label="Branch"
+                                              value={fromSnapshot(applicant.snapshot, "branch")}
+                                            />
+                                          </dl>
+                                        </section>
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ))}
+
+                  {/* View 2: Eligible Not Applied */}
+                  {audienceTab === "eligible" &&
+                    (filteredEligible.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-ink-500">
+                        {eligibleNotApplied.length === 0
+                          ? "All eligible students on targeted campuses have applied."
+                          : "No eligible students match your search."}
+                      </p>
+                    ) : (
+                      <div className="scroll-bare overflow-x-auto rounded-lg border border-line">
+                        <Table>
+                          <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
+                            <TableRow className="border-line">
+                              <TableHead className="pl-4">Student</TableHead>
+                              <TableHead>Roll number</TableHead>
+                              <TableHead>Campus</TableHead>
+                              <TableHead>Degree & Branch</TableHead>
+                              <TableHead>CGPA</TableHead>
+                              <TableHead className="pr-4 text-right">Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody className="bg-surface">
+                            {(pagedItems as typeof filteredEligible).map((student) => (
+                              <TableRow key={student.studentId} className="border-line">
+                                <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                                  <Link
+                                    to={`/students/${student.studentId}`}
+                                    className="text-brand-600 hover:underline"
+                                  >
+                                    {student.fullName}
+                                  </Link>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {student.rollNumber}
+                                </TableCell>
+                                <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
+                                  {student.campus}
+                                </TableCell>
+                                <TableCell className="text-xs text-ink-700">
+                                  {student.degree} {student.branch ? `— ${student.branch}` : ""}
+                                </TableCell>
+                                <TableCell className="font-medium text-xs text-ink-900">
+                                  {student.cgpa}
+                                </TableCell>
+                                <TableCell className="pr-4 text-right">
+                                  <Badge tone="neutral">Not applied</Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ))}
+
+                  {/* View 3: Cannot Apply */}
+                  {audienceTab === "cannot_apply" &&
+                    (filteredCannotApply.length === 0 ? (
+                      <p className="py-6 text-center text-sm text-ink-500">
+                        {cannotApply.length === 0
+                          ? "All students on targeted campuses meet the criteria."
+                          : "No ineligible students match your search."}
+                      </p>
+                    ) : (
+                      <div className="scroll-bare overflow-x-auto rounded-lg border border-line">
+                        <Table>
+                          <TableHeader className="text-xs uppercase tracking-wide text-ink-500">
+                            <TableRow className="border-line">
+                              <TableHead className="pl-4">Student</TableHead>
+                              <TableHead>Roll number</TableHead>
+                              <TableHead>Campus</TableHead>
+                              <TableHead>Degree & Branch</TableHead>
+                              <TableHead>CGPA</TableHead>
+                              <TableHead className="pr-4 text-right">Reason Cannot Apply</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody className="bg-surface">
+                            {(pagedItems as typeof filteredCannotApply).map((student) => (
+                              <TableRow key={student.studentId} className="border-line">
+                                <TableCell className="max-w-[200px] pl-4 break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
+                                  <Link
+                                    to={`/students/${student.studentId}`}
+                                    className="text-brand-600 hover:underline"
+                                  >
+                                    {student.fullName}
+                                  </Link>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  {student.rollNumber}
+                                </TableCell>
+                                <TableCell className="max-w-[180px] break-words [overflow-wrap:anywhere]">
+                                  {student.campus}
+                                </TableCell>
+                                <TableCell className="text-xs text-ink-700">
+                                  {student.degree} {student.branch ? `— ${student.branch}` : ""}
+                                </TableCell>
+                                <TableCell className="font-medium text-xs text-ink-900">
+                                  {student.cgpa}
+                                </TableCell>
+                                <TableCell className="pr-4 text-right">
+                                  <span className="inline-flex items-center rounded-full bg-danger-50 text-danger-700 border border-danger-200/80 px-2.5 py-0.5 text-[11px] font-medium">
+                                    {student.reason}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ))}
+
+                  {/* Table Pager */}
+                  {currentList.length > audiencePageSize && (
+                    <TablePager
+                      page={audiencePage}
+                      pageSize={audiencePageSize}
+                      total={currentList.length}
+                      unit="students"
+                      onPage={setAudiencePage}
+                      onPageSize={setAudiencePageSize}
+                    />
+                  )}
+                </div>
+              );
+            })()}
           </Section>
         )}
 

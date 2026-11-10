@@ -28,21 +28,14 @@ import type { AppRole, DriveType, OfferSource, ParticipationStatus } from "./typ
  * offering a button that will fail.
  */
 
-/** Whom 0133 lets return a student to the pipeline — the three the ask named. */
+/** The three campus roles that may return a student to the pipeline (0133:180-184). */
 export const PARTICIPATION_RESTORE_ROLES: readonly AppRole[] = [
   "campus_placement_coordinator",
   "campus_manager",
   "key_account_manager",
 ];
 
-/**
- * Whom 0134 lets withdraw an offer: the same three, plus `is_operator()`
- * (0008:28 — admin and central_placement_coordinator).
- *
- * The deliberate difference from the restore. Those two roles can already
- * `DELETE` an offer; refusing them here would take a working action away rather
- * than putting one back. What they lose is the silence.
- */
+/** The campus trio plus the two central operators (0134:177-186). */
 export const OFFER_WITHDRAWAL_ROLES: readonly AppRole[] = [
   ...PARTICIPATION_RESTORE_ROLES,
   "admin",
