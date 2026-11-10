@@ -264,3 +264,4 @@ $$;
 grant execute on function place_student_hold   to authenticated;
 grant execute on function confirm_student_hold to authenticated;
 grant execute on function release_student_hold to authenticated;
+
