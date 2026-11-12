@@ -507,6 +507,7 @@ describe("createSupabaseDrivesView — the detail behind View more", () => {
       expect.anything(),
       expect.any(Date),
       resume,
+      expect.anything(),
     );
   });
 });

@@ -44,6 +44,9 @@ export interface StudentContext {
 
 export interface VisibleDrive {
   readonly id: string;
+  readonly companyName?: string | null;
+  readonly companyDriveId?: string | null;
+  readonly tentativeDate?: string | null;
   readonly status: DriveStatus;
   readonly driveType: DriveType;
   readonly offerCategory: OfferCategory | null;
@@ -188,12 +191,64 @@ export type ApplyRefusal =
   | "drive_not_live"
   | "window_not_open"
   | "window_closed"
-  | "already_applied";
+  | "already_applied"
+  | "already_applied_role";
 
 export interface ApplyResult {
   readonly allowed: boolean;
   readonly reason: ApplyRefusal | "allowed";
   readonly failures?: readonly EligibilityFailure[];
+}
+
+export interface AppliedEventIdentity {
+  readonly id: string;
+  readonly companyDriveId?: string | null;
+  readonly companyName?: string | null;
+  readonly tentativeDate?: string | null;
+}
+
+/**
+ * Checks whether an application already exists for another role under the same
+ * recruitment event (matching company_drive_id or same company + tentative date).
+ */
+export function isSameEventApplication(
+  drive: {
+    readonly id: string;
+    readonly companyDriveId?: string | null;
+    readonly companyName?: string | null;
+    readonly tentativeDate?: string | null;
+  },
+  appliedEvents: readonly AppliedEventIdentity[],
+): boolean {
+  const targetCompany = (drive.companyName ?? "").trim().toLowerCase().replaceAll(/\s+/g, " ");
+  const targetDate = drive.tentativeDate?.trim().slice(0, 10);
+
+  return appliedEvents.some((applied) => {
+    if (applied.id === drive.id) return false;
+
+    // Check 1: Shared company_drive_id
+    if (
+      drive.companyDriveId &&
+      applied.companyDriveId &&
+      drive.companyDriveId === applied.companyDriveId
+    ) {
+      return true;
+    }
+
+    // Check 2: Same company name + same tentative date
+    if (targetCompany !== "" && targetDate) {
+      const appliedCompany = (applied.companyName ?? "")
+        .trim()
+        .toLowerCase()
+        .replaceAll(/\s+/g, " ");
+      const appliedDate = applied.tentativeDate?.trim().slice(0, 10);
+      if (appliedCompany === targetCompany && appliedDate === targetDate) {
+        return true;
+      }
+    }
+
+    return false;
+  });
 }
 
 /**
@@ -207,6 +262,7 @@ export function canApply(
   drive: VisibleDrive,
   now: Date,
   appliedDriveIds: readonly string[] = [],
+  appliedEvents: readonly AppliedEventIdentity[] = [],
 ): ApplyResult {
   const visibility = isDriveVisibleToStudent(student, drive);
   if (!visibility.visible) {
@@ -232,6 +288,10 @@ export function canApply(
 
   if (appliedDriveIds.includes(drive.id)) {
     return { allowed: false, reason: "already_applied" };
+  }
+
+  if (isSameEventApplication(drive, appliedEvents)) {
+    return { allowed: false, reason: "already_applied_role" };
   }
 
   return { allowed: true, reason: "allowed" };

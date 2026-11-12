@@ -139,6 +139,29 @@ describe("createSupabaseApplyRepository", () => {
 
     await expect(repo().apply(student, drive, [], NOW)).rejects.toThrow(/already applied/i);
   });
+
+  it("refuses an application if candidate already applied to another role in the same drive", async () => {
+    let called = false;
+    server.use(
+      http.post(`${BASE}/rest/v1/applications`, () => {
+        called = true;
+        return HttpResponse.json({});
+      }),
+    );
+
+    const targetDrive = {
+      ...drive,
+      id: "d2",
+      companyDriveId: "event-1",
+    };
+
+    const appliedEvents = [{ id: "d1", companyDriveId: "event-1" }];
+
+    await expect(
+      repo().apply(student, targetDrive, ["d1"], NOW, undefined, appliedEvents),
+    ).rejects.toThrow("You have already applied for another role in this drive.");
+    expect(called).toBe(false);
+  });
 });
 
 /**

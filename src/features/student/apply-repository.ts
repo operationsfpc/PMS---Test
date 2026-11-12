@@ -2,7 +2,7 @@ import { buildApplicationSnapshot, type SnapshotStudent } from "@domain/applicat
 import type { Offer } from "@domain/offers";
 import { sanitizeStorageFileName } from "@domain/storage-path";
 import type { AcademicProfile, ParticipationStatus, RoleCategory, SrfStatus } from "@domain/types";
-import { canApply, type VisibleDrive } from "@domain/visibility";
+import { type AppliedEventIdentity, canApply, type VisibleDrive } from "@domain/visibility";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export class ApplyError extends Error {}
@@ -34,6 +34,7 @@ export interface ApplyRepository {
      * given it is what the recruiter reads.
      */
     driveResume?: File,
+    appliedEvents?: readonly AppliedEventIdentity[],
   ): Promise<void>;
 }
 
@@ -60,6 +61,7 @@ const REFUSALS: Record<string, string> = {
   window_not_open: "Applications for this drive have not opened yet.",
   window_closed: "Applications for this drive have closed.",
   already_applied: "You have already applied to this drive.",
+  already_applied_role: "You have already applied for another role in this drive.",
 };
 
 /**
@@ -75,7 +77,7 @@ const REFUSALS: Record<string, string> = {
  */
 export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepository {
   return {
-    async apply(student, drive, appliedDriveIds, now, driveResume) {
+    async apply(student, drive, appliedDriveIds, now, driveResume, appliedEvents = []) {
       const verdict = canApply(
         {
           srfStatus: student.srfStatus,
@@ -87,6 +89,7 @@ export function createSupabaseApplyRepository(client: SupabaseClient): ApplyRepo
         drive,
         now,
         appliedDriveIds,
+        appliedEvents,
       );
 
       if (!verdict.allowed) {

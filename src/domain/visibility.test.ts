@@ -370,6 +370,34 @@ describe("canApply", () => {
     expect(result).toMatchObject({ allowed: false, reason: "already_applied" });
   });
 
+  it("refuses an application to another role under the same company_drive_id", () => {
+    const targetDrive = drive({
+      id: "drive-2",
+      companyDriveId: "event-123",
+      companyName: "TatvaOps",
+    });
+    const appliedEvents = [{ id: "drive-1", companyDriveId: "event-123", companyName: "TatvaOps" }];
+    const result = canApply(student(), targetDrive, during, ["drive-1"], appliedEvents);
+    expect(result).toMatchObject({ allowed: false, reason: "already_applied_role" });
+  });
+
+  it("refuses an application to another role under the same company and tentative date", () => {
+    const targetDrive = drive({
+      id: "drive-2",
+      companyName: "TatvaOps",
+      tentativeDate: "2026-11-20T00:00:00.000Z",
+    });
+    const appliedEvents = [
+      {
+        id: "drive-1",
+        companyName: "tatvaops",
+        tentativeDate: "2026-11-20T10:00:00.000Z",
+      },
+    ];
+    const result = canApply(student(), targetDrive, during, ["drive-1"], appliedEvents);
+    expect(result).toMatchObject({ allowed: false, reason: "already_applied_role" });
+  });
+
   it("allows application when the student applied to a different drive", () => {
     expect(canApply(student(), drive({ id: "drive-1" }), during, ["drive-9"]).allowed).toBe(true);
   });

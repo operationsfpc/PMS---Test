@@ -7,7 +7,7 @@ import { describeShift } from "@domain/shift";
 import { classifyStudentDrive } from "@domain/student-drive-lists";
 import { type ApplicantRound, applicationProgress } from "@domain/student-progress";
 import type { AcademicProfile, DriveStatus, RoleCategory } from "@domain/types";
-import { canApply } from "@domain/visibility";
+import { type AppliedEventIdentity, canApply } from "@domain/visibility";
 import { asWorkType } from "@domain/work-type";
 import { readAll, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -43,6 +43,7 @@ const REFUSALS: Record<string, string> = {
   window_not_open: "Applications for this drive have not opened yet.",
   window_closed: "Applications for this drive have closed.",
   already_applied: "You have already applied to this drive.",
+  already_applied_role: "You have already applied for another role in this drive.",
   drive_not_live: "This drive is not open.",
 };
 
@@ -202,7 +203,9 @@ export function createSupabaseDrivesView(
       readAll((from, to) =>
         client
           .from("applications")
-          .select("id, drive_id, applied_at")
+          .select(
+            "id, drive_id, applied_at, drives(id, company_drive_id, company_name, tentative_date)",
+          )
           .eq("student_id", row.id)
           .range(from, to),
       ),
@@ -312,13 +315,38 @@ export function createSupabaseDrivesView(
       id: string;
       drive_id: string;
       applied_at: string;
+      drives?:
+        | {
+            id?: string;
+            company_drive_id?: string | null;
+            company_name?: string | null;
+            tentative_date?: string | null;
+          }
+        | Array<{
+            id?: string;
+            company_drive_id?: string | null;
+            company_name?: string | null;
+            tentative_date?: string | null;
+          }>
+        | null;
     }>;
+
+    const appliedEvents = applicationRows.map((a) => {
+      const d = Array.isArray(a.drives) ? a.drives[0] : a.drives;
+      return {
+        id: a.drive_id,
+        companyDriveId: (d?.company_drive_id as string | null) ?? null,
+        companyName: (d?.company_name as string | null) ?? null,
+        tentativeDate: (d?.tentative_date as string | null) ?? null,
+      };
+    });
 
     return {
       student,
       drives: drives as Array<Record<string, unknown>>,
       applications: applicationRows,
       appliedIds: applicationRows.map((a) => a.drive_id),
+      appliedEvents,
     };
   }
 
@@ -371,6 +399,9 @@ export function createSupabaseDrivesView(
       applicationStart: new Date(raw.application_start as string),
       applicationEnd: new Date(raw.application_end as string),
       roleCategory: raw.role_category as RoleCategory,
+      companyDriveId: (raw.company_drive_id as string | null) ?? null,
+      companyName: (raw.company_name as string | null) ?? null,
+      tentativeDate: (raw.tentative_date as string | null) ?? null,
       criteria: {
         eligibleDegrees: linkedNames(raw.drive_eligible_degrees, "degrees"),
         eligibleBranches: linkedNames(raw.drive_eligible_branches, "branches"),
@@ -426,6 +457,7 @@ export function createSupabaseDrivesView(
     drives: Array<Record<string, unknown>>,
     appliedIds: string[],
     now: Date,
+    appliedEvents: readonly AppliedEventIdentity[] = [],
   ): Promise<readonly OpenDrive[]> {
     const jdLinks = await signJobDescriptions(drives);
 
@@ -443,11 +475,14 @@ export function createSupabaseDrivesView(
         drive,
         now,
         appliedIds,
+        appliedEvents,
       );
 
       const hidden =
         !verdict.allowed &&
-        !["window_not_open", "window_closed", "already_applied"].includes(verdict.reason);
+        !["window_not_open", "window_closed", "already_applied", "already_applied_role"].includes(
+          verdict.reason,
+        );
       if (hidden) return [];
 
       const min = raw.ctc_min_lpa as number | null;
@@ -510,28 +545,36 @@ export function createSupabaseDrivesView(
 
   return {
     async openDrives(): Promise<readonly OpenDrive[]> {
-      const { student, drives, appliedIds } = await load();
-      return buildOpenCards(student, drives, appliedIds, clock());
+      const { student, drives, appliedIds, appliedEvents } = await load();
+      return buildOpenCards(student, drives, appliedIds, clock(), appliedEvents);
     },
 
     async openDrive(driveId: string): Promise<OpenDrive | null> {
-      const { student, drives, appliedIds } = await load();
+      const { student, drives, appliedIds, appliedEvents } = await load();
       const [card] = await buildOpenCards(
         student,
         drives.filter((drive) => drive.id === driveId),
         appliedIds,
         clock(),
+        appliedEvents,
       );
       return card ?? null;
     },
 
     async apply(driveId, resume) {
-      const { student, drives, appliedIds } = await load();
+      const { student, drives, appliedIds, appliedEvents } = await load();
       const raw = drives.find((d) => d.id === driveId);
       if (raw === undefined) throw new Error("Drive not found");
       // D2: null means "send the saved per-area resume" — the snapshot
       // builder picks it when no drive-specific file arrives.
-      await applyRepo.apply(student, toDrive(raw), appliedIds, clock(), resume ?? undefined);
+      await applyRepo.apply(
+        student,
+        toDrive(raw),
+        appliedIds,
+        clock(),
+        resume ?? undefined,
+        appliedEvents,
+      );
     },
 
     /**
@@ -549,7 +592,7 @@ export function createSupabaseDrivesView(
      * drive the student is mid-interview with.
      */
     async lists(): Promise<StudentDriveLists> {
-      const { student, drives, applications, appliedIds } = await load();
+      const { student, drives, applications, appliedIds, appliedEvents } = await load();
       const now = clock();
 
       const applicationByDrive = new Map(applications.map((a) => [a.drive_id, a]));
@@ -680,13 +723,16 @@ export function createSupabaseDrivesView(
           drive,
           now,
           appliedIds,
+          appliedEvents,
         );
 
         // R5's hides still hide: "you missed it" about a drive the student
         // was never eligible for is a reproach nobody earned.
         const hidden =
           !verdict.allowed &&
-          !["window_not_open", "window_closed", "drive_not_live"].includes(verdict.reason);
+          !["window_not_open", "window_closed", "drive_not_live", "already_applied_role"].includes(
+            verdict.reason,
+          );
         // Counted on the way past, because the empty list has to be able to
         // say WHICH of its two silences this is. `lists()` already holds every
         // live drive; a screen that only sees the survivors cannot.
@@ -708,7 +754,7 @@ export function createSupabaseDrivesView(
       // The open cards go through the SAME builder as `openDrives`, so the
       // To-apply tab and the old list cannot describe a drive differently.
       // Reuses the already-loaded data instead of calling openDrives() again.
-      const openCards = await buildOpenCards(student, drives, appliedIds, now);
+      const openCards = await buildOpenCards(student, drives, appliedIds, now, appliedEvents);
 
       return {
         toApply: openCards.filter((card) => toApplyIds.has(card.id)),

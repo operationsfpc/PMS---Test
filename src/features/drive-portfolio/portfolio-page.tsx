@@ -110,8 +110,16 @@ function groupPortfolioByEvent(drives: readonly PortfolioDrive[]): PortfolioEven
   return Array.from(groups.entries()).map(([key, roles]) => {
     const first = roles[0];
     if (!first) throw new Error("Group has no roles");
-    const allApplicants = roles.flatMap((r) => r.applicants);
-    const funnel = summariseFunnel(allApplicants);
+    const studentMap = new Map<string, PortfolioApplicant>();
+    for (const applicant of roles.flatMap((r) => r.applicants)) {
+      const existing = studentMap.get(applicant.studentId);
+      if (!existing) {
+        studentMap.set(applicant.studentId, applicant);
+      } else if (applicant.hasOffer || (!existing.hasOffer && applicant.shortlisted)) {
+        studentMap.set(applicant.studentId, applicant);
+      }
+    }
+    const funnel = summariseFunnel(Array.from(studentMap.values()));
 
     return {
       eventId: key,
