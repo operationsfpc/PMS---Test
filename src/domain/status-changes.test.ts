@@ -63,27 +63,9 @@ describe("the two role lists mirror the two RPCs", () => {
     );
   });
 
-  /**
-   * 0134:177-186 — `is_operator()` (0008:28) on top of the same three.
-   *
-   * The difference is the whole argument of that migration: admin and the
-   * central coordinator could already DELETE an offer, so the withdrawal keeps
-   * them and the restore — which hands the KAM its only write — does not.
-   */
-  it("withdraws through the campus trio plus the operators", () => {
-    expect([...OFFER_WITHDRAWAL_ROLES].sort()).toEqual(
-      [
-        "campus_placement_coordinator",
-        "campus_manager",
-        "key_account_manager",
-        "admin",
-        "central_placement_coordinator",
-      ].sort(),
-    );
-    const extra = OFFER_WITHDRAWAL_ROLES.filter(
-      (role) => !PARTICIPATION_RESTORE_ROLES.includes(role),
-    );
-    expect([...extra].sort()).toEqual(["admin", "central_placement_coordinator"]);
+  /** Only admin is allowed to withdraw an offer. */
+  it("withdraws through admin only", () => {
+    expect([...OFFER_WITHDRAWAL_ROLES].sort()).toEqual(["admin"]);
   });
 
   /** The mirror of both migrations' three select policies. */
@@ -160,19 +142,29 @@ describe("canRestoreParticipation", () => {
 });
 
 describe("canWithdrawOffer", () => {
-  it("allows the campus trio and both operators", () => {
-    for (const role of OFFER_WITHDRAWAL_ROLES) {
-      expect(canWithdrawOffer(role)).toEqual({ allowed: true });
-    }
+  it("allows only the admin role", () => {
+    expect(canWithdrawOffer("admin")).toEqual({ allowed: true });
+    expect(OFFER_WITHDRAWAL_ROLES).toEqual(["admin"]);
   });
 
-  /** 0134:183-185, word for word, so the dialog and the refusal cannot disagree. */
-  it("refuses everyone else with the database's own sentence", () => {
-    const decision = canWithdrawOffer("account_executive");
-    expect(decision.allowed).toBe(false);
-    expect(decision.allowed === false && decision.reason).toBe(
-      "Only a campus placement coordinator, a campus manager, a key account manager or a central operator may withdraw an offer.",
-    );
+  it("refuses coordinators, managers, and all non-admin staff with the database's own sentence", () => {
+    const nonAdminRoles = [
+      "campus_placement_coordinator",
+      "campus_manager",
+      "key_account_manager",
+      "central_placement_coordinator",
+      "account_executive",
+      "delivery_head",
+      "student",
+    ] as const;
+
+    for (const role of nonAdminRoles) {
+      const decision = canWithdrawOffer(role);
+      expect(decision.allowed).toBe(false);
+      expect(decision.allowed === false && decision.reason).toBe(
+        "Only an administrator may withdraw an offer.",
+      );
+    }
   });
 });
 

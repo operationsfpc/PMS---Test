@@ -228,3 +228,4 @@ CREATE TRIGGER notify_eligible_students_on_drive_live
   AFTER INSERT OR UPDATE OF status ON drives
   FOR EACH ROW
   EXECUTE FUNCTION notify_eligible_students_on_drive_live();
+

@@ -3,7 +3,7 @@ import type { StatusEvent } from "@domain/status-changes";
 import type { AppRole } from "@domain/types";
 import type { Hold, HoldsView } from "@lib/holds-view";
 import type { StatusChangesView } from "@lib/status-changes-view";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -98,6 +98,7 @@ const view = (record: StudentRecord | null = PRIYA): StudentRecordView => ({
 });
 
 /** As expressions: biome reads a literal role="…" prop as an ARIA role. */
+const ADMIN = "admin" as const;
 const COORDINATOR = "campus_placement_coordinator" as const;
 const MANAGER = "campus_manager" as const;
 const DELIVERY_HEAD = "delivery_head" as const;
@@ -1146,14 +1147,23 @@ describe("StudentRecordPage status change", () => {
 });
 
 describe("StudentRecordPage offer withdrawal", () => {
-  it("offers the move on each offer row for a role 0134 admits", async () => {
-    showStatus(PLACED, MANAGER);
+  it("offers the move on each offer row for admin only", async () => {
+    showStatus(PLACED, ADMIN);
     expect(await screen.findByRole("button", { name: /withdraw the zoho offer/i })).toBeDefined();
   });
 
-  it("keeps it from a role that may not delete an offer", async () => {
-    showStatus(PLACED, DELIVERY_HEAD);
+  it("keeps it from non-admin roles (manager, coordinator, delivery head)", async () => {
+    showStatus(PLACED, MANAGER);
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+    expect(screen.queryByRole("button", { name: /withdraw the zoho offer/i })).toBeNull();
 
+    cleanup();
+    showStatus(PLACED, COORDINATOR);
+    await screen.findByRole("heading", { name: /priya ramesh/i });
+    expect(screen.queryByRole("button", { name: /withdraw the zoho offer/i })).toBeNull();
+
+    cleanup();
+    showStatus(PLACED, DELIVERY_HEAD);
     await screen.findByRole("heading", { name: /priya ramesh/i });
     expect(screen.queryByRole("button", { name: /withdraw the zoho offer/i })).toBeNull();
   });
@@ -1161,7 +1171,7 @@ describe("StudentRecordPage offer withdrawal", () => {
   it("asks for the reason before it takes an offer back", async () => {
     const user = userEvent.setup();
     const withdraw = vi.fn(async (_offerId: string, _reason: string) => {});
-    showStatus(PLACED, COORDINATOR, ledger({ withdraw }));
+    showStatus(PLACED, ADMIN, ledger({ withdraw }));
 
     await user.click(await screen.findByRole("button", { name: /withdraw the zoho offer/i }));
     const dialog = await screen.findByRole("dialog", { name: /withdraw the zoho offer/i });
@@ -1175,7 +1185,7 @@ describe("StudentRecordPage offer withdrawal", () => {
   it("sends the offer id with the reason and closes once it goes through", async () => {
     const user = userEvent.setup();
     const withdraw = vi.fn(async (_offerId: string, _reason: string) => {});
-    showStatus(PLACED, COORDINATOR, ledger({ withdraw }));
+    showStatus(PLACED, ADMIN, ledger({ withdraw }));
 
     await user.click(await screen.findByRole("button", { name: /withdraw the zoho offer/i }));
     const dialog = await screen.findByRole("dialog", { name: /withdraw the zoho offer/i });

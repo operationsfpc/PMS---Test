@@ -35,11 +35,9 @@ export const PARTICIPATION_RESTORE_ROLES: readonly AppRole[] = [
   "key_account_manager",
 ];
 
-/** The campus trio plus the two central operators (0134:177-186). */
+/** Only the administrator may withdraw an offer. */
 export const OFFER_WITHDRAWAL_ROLES: readonly AppRole[] = [
-  ...PARTICIPATION_RESTORE_ROLES,
   "admin",
-  "central_placement_coordinator",
 ];
 
 /**
@@ -103,13 +101,12 @@ export function canRestoreParticipation(actor: AppRole, status: ParticipationSta
   return { allowed: true };
 }
 
-/** Whom 0134 lets withdraw an offer, whatever the student's standing is. */
+/** Only the administrator may withdraw an offer. */
 export function canWithdrawOffer(actor: AppRole): Decision {
   if (!OFFER_WITHDRAWAL_ROLES.includes(actor)) {
     return {
       allowed: false,
-      reason:
-        "Only a campus placement coordinator, a campus manager, a key account manager or a central operator may withdraw an offer.",
+      reason: "Only an administrator may withdraw an offer.",
     };
   }
   return { allowed: true };
