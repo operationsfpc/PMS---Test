@@ -813,6 +813,14 @@ describe("recipient and CC routing verification (resolveTemplateRouting)", () =>
     expect(routing.ccRoles).not.toContain("central_placement_coordinator");
   });
 
+  it("verifies S2 (drive_published) does NOT CC Key Account Manager or other staff", () => {
+    const routing = resolveTemplateRouting("drive_published");
+    expect(routing.templateCode).toBe("S2");
+    expect(routing.targetRole).toBe("student");
+    expect(routing.ccRoles).toEqual([]);
+    expect(routing.ccRoles).not.toContain("key_account_manager");
+  });
+
   it("verifies new notification templates routing", () => {
     expect(resolveTemplateRouting("placement_paused")).toEqual({
       templateCode: "S_PAUSED",

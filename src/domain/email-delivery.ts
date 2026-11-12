@@ -250,7 +250,7 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
       return {
         templateCode: "S2",
         targetRole: "student",
-        ccRoles: ["campus_placement_coordinator"],
+        ccRoles: [],
       };
     // S3: Shortlisted Candidates
     case "shortlisted":
