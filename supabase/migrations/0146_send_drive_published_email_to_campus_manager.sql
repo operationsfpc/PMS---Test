@@ -75,9 +75,12 @@ CREATE TRIGGER notify_kam_on_drive_published
   FOR EACH ROW EXECUTE FUNCTION notify_kam_on_drive_published();
 
 -- Update CC routing for drive_published to also include campus_manager
+DROP FUNCTION IF EXISTS public.resolve_cc_recipients(text, uuid);
+
 CREATE OR REPLACE FUNCTION public.resolve_cc_recipients(
   p_notification_kind text,
-  p_campus_id uuid DEFAULT NULL::uuid
+  p_campus_id uuid DEFAULT NULL::uuid,
+  p_drive_id uuid DEFAULT NULL::uuid
 )
 RETURNS text[]
 LANGUAGE plpgsql
