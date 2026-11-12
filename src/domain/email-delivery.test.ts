@@ -805,6 +805,42 @@ describe("recipient and CC routing verification (resolveTemplateRouting)", () =>
     ]);
   });
 
+  it("verifies C1 (campus_drive_alert) does NOT CC Central Placement Coordinator", () => {
+    const routing = resolveTemplateRouting("campus_drive_alert");
+    expect(routing.templateCode).toBe("C1");
+    expect(routing.targetRole).toBe("campus_placement_coordinator");
+    expect(routing.ccRoles).toEqual([]);
+    expect(routing.ccRoles).not.toContain("central_placement_coordinator");
+  });
+
+  it("verifies new notification templates routing", () => {
+    expect(resolveTemplateRouting("placement_paused")).toEqual({
+      templateCode: "S_PAUSED",
+      targetRole: "student",
+      ccRoles: ["campus_placement_coordinator"],
+    });
+    expect(resolveTemplateRouting("off_campus_verified")).toEqual({
+      templateCode: "S_OFF_VERIFIED",
+      targetRole: "student",
+      ccRoles: ["campus_placement_coordinator"],
+    });
+    expect(resolveTemplateRouting("off_campus_rejected")).toEqual({
+      templateCode: "S_OFF_REJECTED",
+      targetRole: "student",
+      ccRoles: ["campus_placement_coordinator"],
+    });
+    expect(resolveTemplateRouting("srf_resubmitted")).toEqual({
+      templateCode: "C_SRF_RESUBMIT",
+      targetRole: "campus_placement_coordinator",
+      ccRoles: [],
+    });
+    expect(resolveTemplateRouting("student_opt_out_alert")).toEqual({
+      templateCode: "C_OPT_OUT_ALERT",
+      targetRole: "campus_placement_coordinator",
+      ccRoles: ["campus_manager"],
+    });
+  });
+
   it("attaches AD1 metadata to composeStaffInviteEmail output", () => {
     const invite = composeStaffInviteEmail({
       email: "cpc@college.edu",

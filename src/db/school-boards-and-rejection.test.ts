@@ -128,6 +128,7 @@ describe("the student is told their form was sent back", () => {
     );
 
   beforeEach(async () => {
+    await t.sql(`delete from notifications`);
     await t.sql(`update students set srf_status = 'srf_submitted' where id = $1`, [ids.priya]);
     /**
      * Signing in is what binds `auth_user_id`, and `students_update_self` keys

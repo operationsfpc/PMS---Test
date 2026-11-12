@@ -657,7 +657,7 @@ serve(async (req: Request) => {
         buttonLabel = "Review Delivery Logs";
         targetUrl = `${PORTAL_URL}/dashboard`;
         break;
-      // Placement Hold
+      // Placement Hold & Pause
       case "placement_hold":
       case "student_held":
         subject = notificationTitle || "Important: Placement Participation on Hold";
@@ -670,6 +670,40 @@ serve(async (req: Request) => {
         templateTitle = "Placement Hold Released";
         buttonLabel = "View Open Drives";
         targetUrl = `${PORTAL_URL}/student`;
+        break;
+      case "placement_paused":
+        subject =
+          notificationTitle || "Notice: Placement Participation Paused — 5 Drives Unapplied";
+        templateTitle = "Placement Participation Paused";
+        buttonLabel = "Contact Placement Cell";
+        targetUrl = `${PORTAL_URL}/student`;
+        break;
+      // Off-Campus Offer Verification Outcomes
+      case "off_campus_verified":
+        subject = notificationTitle || "Off-Campus Placement Offer Verified";
+        templateTitle = "Off-Campus Offer Verified";
+        buttonLabel = "View Placement Record";
+        targetUrl = `${PORTAL_URL}/student/profile`;
+        break;
+      case "off_campus_rejected":
+        subject = notificationTitle || "Off-Campus Offer Verification Requires Attention";
+        templateTitle = "Off-Campus Offer Verification Requires Attention";
+        buttonLabel = "Update Submission";
+        targetUrl = `${PORTAL_URL}/student/profile`;
+        break;
+      // SRF Resubmitted (Staff alert)
+      case "srf_resubmitted":
+        subject = notificationTitle || "Student Registration Form Resubmitted for Review";
+        templateTitle = "Registration Form Resubmitted";
+        buttonLabel = "Review Registration";
+        targetUrl = `${PORTAL_URL}/cpc/verification`;
+        break;
+      // Student Opt-Out Alert (Staff alert)
+      case "student_opt_out_alert":
+        subject = notificationTitle || "Placement Opt-Out Notice";
+        templateTitle = "Placement Opt-Out Notice";
+        buttonLabel = "View Candidate Directory";
+        targetUrl = `${PORTAL_URL}/cpc/students`;
         break;
       default:
         templateTitle = notificationTitle;

@@ -354,13 +354,51 @@ export function resolveTemplateRouting(kind: string): TemplateRoutingInfo {
         ccRoles: ["campus_placement_coordinator"],
       };
 
+    // Placement Paused
+    case "placement_paused":
+      return {
+        templateCode: "S_PAUSED",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
+
+    // Off-Campus Decisions
+    case "off_campus_verified":
+      return {
+        templateCode: "S_OFF_VERIFIED",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
+    case "off_campus_rejected":
+      return {
+        templateCode: "S_OFF_REJECTED",
+        targetRole: "student",
+        ccRoles: ["campus_placement_coordinator"],
+      };
+
+    // SRF Resubmitted (Staff alert)
+    case "srf_resubmitted":
+      return {
+        templateCode: "C_SRF_RESUBMIT",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: [],
+      };
+
+    // Student Opt-Out Alert (Staff alert)
+    case "student_opt_out_alert":
+      return {
+        templateCode: "C_OPT_OUT_ALERT",
+        targetRole: "campus_placement_coordinator",
+        ccRoles: ["campus_manager"],
+      };
+
     // C1: Campus Placement Coordinator — Campus Drive Alert
     case "campus_drive_alert":
     case "cpc_drive_alert":
       return {
         templateCode: "C1",
         targetRole: "campus_placement_coordinator",
-        ccRoles: ["central_placement_coordinator"],
+        ccRoles: [], // Central CPC excluded from live drive alerts
       };
     // C2: Campus Placement Coordinator — Campus Shortlist Ready
     case "campus_shortlist_ready":
@@ -945,6 +983,41 @@ export function composeStudentNotificationEmail(
       title = "Email Delivery Exception Alert";
       button = "Review Delivery Logs";
       url = `${portalUrl}/dashboard`;
+      break;
+    }
+    case "placement_paused": {
+      subject = data.title || "Notice: Placement Participation Paused — 5 Drives Unapplied";
+      title = "Placement Participation Paused";
+      button = "Contact Placement Cell";
+      url = `${portalUrl}/student`;
+      break;
+    }
+    case "off_campus_verified": {
+      subject = data.title || "Off-Campus Placement Offer Verified";
+      title = "Off-Campus Offer Verified";
+      button = "View Placement Record";
+      url = `${portalUrl}/student/profile`;
+      break;
+    }
+    case "off_campus_rejected": {
+      subject = data.title || "Off-Campus Offer Verification Requires Attention";
+      title = "Off-Campus Offer Verification Requires Attention";
+      button = "Update Submission";
+      url = `${portalUrl}/student/profile`;
+      break;
+    }
+    case "srf_resubmitted": {
+      subject = data.title || "Student Registration Form Resubmitted for Review";
+      title = "Registration Form Resubmitted";
+      button = "Review Registration";
+      url = `${portalUrl}/cpc/verification`;
+      break;
+    }
+    case "student_opt_out_alert": {
+      subject = data.title || "Placement Opt-Out Notice";
+      title = "Placement Opt-Out Notice";
+      button = "View Candidate Directory";
+      url = `${portalUrl}/cpc/students`;
       break;
     }
     default: {
