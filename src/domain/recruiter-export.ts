@@ -15,6 +15,7 @@ import { extractOriginalFilename } from "./storage-path";
 export const EXPORT_COLUMNS = [
   "Roll number",
   "Name",
+  "College",
   "Email",
   "Degree",
   "Branch",
@@ -38,6 +39,7 @@ export interface ShortlistEntry {
   readonly applicationId: string;
   readonly included: boolean;
   readonly snapshot: ApplicationSnapshot;
+  readonly college?: string | null;
 }
 
 export interface RecruiterExport {
@@ -51,11 +53,18 @@ export interface RecruiterExport {
 export function buildRecruiterExport(entries: readonly ShortlistEntry[]): RecruiterExport {
   const included = entries.filter((e) => e.included);
 
-  const rows = included.map(({ snapshot }): ExportRow => {
+  const rows = included.map((entry): ExportRow => {
+    const { snapshot } = entry;
     const p = snapshot.profile;
+    const college =
+      entry.college ??
+      (p as { college?: string }).college ??
+      (p as { campus?: string }).campus ??
+      "";
     return {
       "Roll number": p.rollNumber,
       Name: p.fullName,
+      College: college,
       Email: p.email,
       Degree: p.degree,
       Branch: p.branch,
@@ -116,16 +125,20 @@ export function buildRecruiterCsvRows(
 ): readonly RecruiterCsvRow[] {
   const included = entries.filter((e) => e.included);
 
-  return included.map(({ snapshot }): RecruiterCsvRow => {
+  return included.map((entry): RecruiterCsvRow => {
+    const { snapshot } = entry;
     const p = snapshot.profile;
     const resumeUrl = snapshot.resumeId ? (resumeSignedUrls.get(snapshot.resumeId) ?? "") : "";
-    const name = resumeUrl
-      ? `=HYPERLINK("${resumeUrl}", "${p.fullName.replaceAll('"', '""')}")`
-      : p.fullName;
     const resumeLabel = resumeCellLabel(resumeUrl);
+    const college =
+      entry.college ??
+      (p as { college?: string }).college ??
+      (p as { campus?: string }).campus ??
+      "";
     return {
       "Roll number": p.rollNumber,
-      Name: name,
+      Name: p.fullName,
+      College: college,
       Email: p.email,
       Degree: p.degree,
       Branch: p.branch,

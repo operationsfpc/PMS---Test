@@ -258,6 +258,7 @@ export function createSupabaseDrivesView(
       fullName: row.full_name as string,
       rollNumber: row.roll_number as string,
       email: row.email as string,
+      college: academics.campus,
       degree: academics.degree,
       branch: academics.branch,
       passingYear: academics.passingYear,

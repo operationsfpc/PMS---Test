@@ -40,8 +40,6 @@ export async function buildRecruiterZip(
   sheet.addRow([...EXPORT_COLUMNS, "Resume"]);
   sheet.getRow(1).font = { bold: true };
 
-  const nameColIndex = EXPORT_COLUMNS.indexOf("Name") + 1;
-
   for (const row of rows) {
     const values = EXPORT_COLUMNS.map((column) => row[column]);
     const added = sheet.addRow([...values, ""]);
@@ -52,10 +50,6 @@ export async function buildRecruiterZip(
       // open the specified file" to. The TEXT stays human; the LINK is
       // encoded, exactly as Excel writes it itself.
       const link = resumeHyperlink(file.filename);
-      added.getCell(nameColIndex).value = {
-        text: String(row.Name),
-        hyperlink: link,
-      };
       added.getCell(EXPORT_COLUMNS.length + 1).value = {
         text: file.filename,
         hyperlink: link,
@@ -118,17 +112,23 @@ export async function buildRecruiterExcel(
   const headerRow = sheet.addRow([...EXPORT_COLUMNS, "Resume link"]);
   headerRow.font = { bold: true };
 
-  const nameColIndex = EXPORT_COLUMNS.indexOf("Name") + 1;
   const resumeColIndex = EXPORT_COLUMNS.length + 1;
 
   const included = entries.filter((e) => e.included);
-  for (const { snapshot } of included) {
+  for (const entry of included) {
+    const { snapshot } = entry;
     const p = snapshot.profile;
     const resumeUrl = snapshot.resumeId ? (resumeSignedUrls.get(snapshot.resumeId) ?? "") : "";
     const resumeLabel = resumeCellLabel(resumeUrl);
+    const college =
+      entry.college ??
+      (p as { college?: string }).college ??
+      (p as { campus?: string }).campus ??
+      "";
     const added = sheet.addRow([
       p.rollNumber,
       p.fullName,
+      college,
       p.email,
       p.degree,
       p.branch,
@@ -143,14 +143,7 @@ export async function buildRecruiterExcel(
     ]);
 
     if (resumeUrl) {
-      added.getCell(nameColIndex).value = {
-        text: p.fullName,
-        hyperlink: resumeUrl,
-      };
-      added.getCell(nameColIndex).font = {
-        color: { argb: "FF2563EB" },
-        underline: true,
-      };
+      // Candidate name is kept plain text (no hyperlink); only the Resume link column is hyperlinked.
       added.getCell(resumeColIndex).value = {
         text: resumeLabel,
         hyperlink: resumeUrl,

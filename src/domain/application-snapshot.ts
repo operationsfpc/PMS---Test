@@ -20,6 +20,7 @@ export interface SnapshotStudent {
   readonly historyOfArrears: number;
   readonly technicalSkills: string;
   readonly resumes: readonly SnapshotResume[];
+  readonly college?: string;
 }
 
 export type SnapshotProfile = Omit<SnapshotStudent, "resumes">;

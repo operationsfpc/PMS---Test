@@ -100,6 +100,17 @@ describe("buildRecruiterExport", () => {
     expect(Object.keys(result.rows[0] ?? {})).toEqual([...EXPORT_COLUMNS]);
   });
 
+  it("includes candidate college in exported rows when provided", () => {
+    const [first] = shortlisted;
+    if (first === undefined) throw new Error("fixture missing");
+    const withCollege = [{ ...first, college: "Takshashila University" }];
+    const result = buildRecruiterExport(withCollege);
+    expect(result.rows[0]?.College).toBe("Takshashila University");
+
+    const csvRows = buildRecruiterCsvRows(withCollege, new Map());
+    expect(csvRows[0]?.College).toBe("Takshashila University");
+  });
+
   it("lists the resumes to bundle, and only for exported candidates", () => {
     const result = buildRecruiterExport(shortlisted);
     expect(result.resumeIds).toEqual(["r1"]);
@@ -135,9 +146,7 @@ describe("buildRecruiterCsvRows", () => {
     expect(rows[0]?.["Resume link"]).toBe(
       '=HYPERLINK("https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc", "cv.pdf")',
     );
-    expect(rows[0]?.Name).toBe(
-      '=HYPERLINK("https://supabase.co/storage/v1/object/sign/resumes/s1/cv.pdf?token=abc", "Asha Ramanathan")',
-    );
+    expect(rows[0]?.Name).toBe("Asha Ramanathan");
   });
 
   it("leaves Resume link empty and keeps plain name when a candidate has no resume on file", () => {
@@ -151,7 +160,7 @@ describe("buildRecruiterCsvRows", () => {
     expect(rows[0]?.Name).toBe("Asha Ramanathan");
   });
 
-  it("escapes quotes in student full name when constructing HYPERLINK formula", () => {
+  it("keeps student full name as plain text without HYPERLINK formula", () => {
     const [first] = shortlisted;
     if (first === undefined) throw new Error("fixture missing");
     const withQuote = [
@@ -164,7 +173,7 @@ describe("buildRecruiterCsvRows", () => {
       },
     ];
     const rows = buildRecruiterCsvRows(withQuote, new Map([["r1", "https://x.com/cv.pdf"]]));
-    expect(rows[0]?.Name).toBe('=HYPERLINK("https://x.com/cv.pdf", "Asha ""Joy"" Ramanathan")');
+    expect(rows[0]?.Name).toBe('Asha "Joy" Ramanathan');
   });
 
   it("leaves the resume cell empty rather than naming a file that is not there", () => {

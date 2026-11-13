@@ -262,16 +262,25 @@ export function createSupabaseShortlistView(
       const rows = await readAllRows((from, to) =>
         client
           .from("applications")
-          .select("id, profile_snapshot, shortlist_entries(included)")
+          .select("id, profile_snapshot, shortlist_entries(included), students(campuses(name))")
           .eq("drive_id", driveId)
           .range(from, to),
       );
 
-      return rows.map((row) => ({
-        applicationId: row.id as string,
-        included: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
-        snapshot: row.profile_snapshot as ShortlistEntry["snapshot"],
-      }));
+      return rows.map((row) => {
+        const student = one<{ campuses?: unknown }>(row.students);
+        const liveCollege = one<{ name?: string }>(student?.campuses)?.name ?? "";
+        const envelope = (row.profile_snapshot ?? {}) as Record<string, unknown>;
+        const profile = (envelope.profile ?? envelope ?? {}) as Record<string, unknown>;
+        const snapshotCollege =
+          (profile.college as string | undefined) ?? (profile.campus as string | undefined) ?? "";
+        return {
+          applicationId: row.id as string,
+          included: one<{ included?: boolean }>(row.shortlist_entries)?.included === true,
+          snapshot: row.profile_snapshot as ShortlistEntry["snapshot"],
+          college: liveCollege || snapshotCollege || "",
+        };
+      });
     },
 
     /**

@@ -16,6 +16,7 @@ const rows = [
   {
     "Roll number": "124",
     Name: "Thanush Krishna",
+    College: "PSG College of Technology",
     Email: "t@x.in",
     Degree: "BCA",
     Branch: "AI and DS",
@@ -143,25 +144,28 @@ describe("the Resume link a recruiter actually clicks", () => {
     );
   });
 
-  it("hyperlinks the candidate's name to their resume in shortlist.xlsx", async () => {
+  it("keeps the candidate's name as plain text and hyperlinks the resume column in shortlist.xlsx", async () => {
     const { workbook } = await packed();
     const sheet = workbook.worksheets[0];
     const header = sheet?.getRow(1).values as unknown[];
-    const nameCell = sheet?.getRow(2).getCell(header.indexOf("Name")).value as {
+    const nameCell = sheet?.getRow(2).getCell(header.indexOf("Name")).value;
+    expect(nameCell).toBe("Thanush Krishna");
+    const resumeCell = sheet?.getRow(2).getCell(header.indexOf("Resume")).value as {
       hyperlink?: string;
       text?: string;
     };
-    expect(nameCell?.hyperlink).toBe("resumes/124%20-%20Thanush%20Krishna.pdf");
-    expect(nameCell?.text).toBe("Thanush Krishna");
+    expect(resumeCell?.hyperlink).toBe("resumes/124%20-%20Thanush%20Krishna.pdf");
+    expect(resumeCell?.text).toBe("124 - Thanush Krishna.pdf");
   });
 });
 
 describe("buildRecruiterExcel", () => {
-  it("generates an Excel sheet with frozen columns up to register number & name, and hyperlinked resumes", async () => {
+  it("generates an Excel sheet with frozen columns up to register number & name, college column, and hyperlinked resumes", async () => {
     const entries = [
       {
         applicationId: "a1",
         included: true,
+        college: "Takshashila University",
         snapshot: {
           profile: {
             id: "s1",
@@ -202,14 +206,14 @@ describe("buildRecruiterExcel", () => {
       ]),
     );
 
-    // Name cell has direct resume hyperlink
+    // Name cell is plain text (no hyperlink)
     const header = sheet?.getRow(1).values as unknown[];
-    const nameCell = sheet?.getRow(2).getCell(header.indexOf("Name")).value as {
-      hyperlink?: string;
-      text?: string;
-    };
-    expect(nameCell?.hyperlink).toBe("https://supabase.co/signed/resume.pdf");
-    expect(nameCell?.text).toBe("Thanush Krishna");
+    const nameCell = sheet?.getRow(2).getCell(header.indexOf("Name")).value;
+    expect(nameCell).toBe("Thanush Krishna");
+
+    // College column is present and contains the candidate's college
+    const collegeCell = sheet?.getRow(2).getCell(header.indexOf("College")).value;
+    expect(collegeCell).toBe("Takshashila University");
 
     // Resume link cell says which file it opens, not "View resume"
     const linkCell = sheet?.getRow(2).getCell(header.indexOf("Resume link")).value as {

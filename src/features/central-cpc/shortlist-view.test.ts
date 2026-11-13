@@ -560,6 +560,7 @@ describe("exporting", () => {
         applicationId: "app-1",
         included: true,
         snapshot: { profile: { rollNumber: "R1", fullName: "Priya" }, resumeId: "res-1" },
+        college: "PSG College of Technology",
       },
     ]);
   });
