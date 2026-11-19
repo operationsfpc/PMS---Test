@@ -1,4 +1,5 @@
 import type { DriveProgressStudentItem } from "@components/drive-roster";
+import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import { countDistinctEvents } from "@domain/company-drive";
 import type { PlacementCtc } from "@domain/ctc-statistics";
 import { isShortlisted, type RoundParticipant } from "@domain/drive-funnel";
@@ -9,6 +10,7 @@ import type {
   DriveStatus,
   DriveType,
   ParticipationStatus,
+  RoleCategory,
   RoundResult,
   SrfStatus,
 } from "@domain/types";
@@ -52,7 +54,7 @@ const branchOwnerDegrees = (value: unknown): readonly string[] =>
  * would count the whole roster as eligible - see the same fix in drives-view.
  */
 export const DASHBOARD_LIVE_DRIVE_COLUMNS = `
-  id, company_name, role_title, status, drive_type, offer_category,
+  id, company_name, role_title, role_category, status, drive_type, offer_category,
   company_drive_id, tentative_date,
   open_to_all_override, application_start, application_end,
   min_overall_cgpa, min_tenth_percentage, min_twelfth_percentage,
@@ -82,7 +84,10 @@ export const DASHBOARD_COHORT_COLUMNS = `
   id, full_name, roll_number, participation_status, srf_status, campus_id, passing_year,
   overall_cgpa, tenth_percentage, twelfth_percentage,
   current_arrears, history_of_arrears,
-  degrees(name), branches(name), campuses(name, cities(name))
+  drive_type_preferences,
+  degrees(name), branches(name), campuses(name, cities(name)),
+  student_role_preferences(category),
+  student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 
 /** Exported for the same reason. */
@@ -310,18 +315,40 @@ export function createSupabaseDashboardView(
        */
       const contexts = cohortRows.map((row) => {
         const campus = one<{ name?: string; cities?: unknown }>(row.campuses);
+        const semesters = ((row.student_semesters ?? []) as Array<Record<string, unknown>>).map(
+          (m): SemesterRecord => ({
+            semesterNumber: Number(m.semester_number),
+            cgpa: Number(m.cgpa),
+            currentArrears: Number(m.current_arrears ?? 0),
+            historyOfArrears: Number(m.history_of_arrears ?? 0),
+            verified: m.status === "verified",
+          }),
+        );
+        const standing = academicStandingFrom(semesters);
+        const standingCgpa = standing?.cgpa != null ? standing.cgpa : Number(row.overall_cgpa ?? 0);
+
         const academics: AcademicProfile = {
           degree: one<{ name?: string }>(row.degrees)?.name ?? "",
           branch: one<{ name?: string }>(row.branches)?.name ?? "",
           passingYear: Number(row.passing_year ?? 0),
-          overallCgpa: Number(row.overall_cgpa ?? 0),
+          overallCgpa: standingCgpa,
           tenthPercentage: Number(row.tenth_percentage ?? 0),
           twelfthPercentage: Number(row.twelfth_percentage ?? 0),
-          currentArrears: Number(row.current_arrears ?? 0),
-          historyOfArrears: Number(row.history_of_arrears ?? 0),
+          currentArrears: standing?.currentArrears ?? Number(row.current_arrears ?? 0),
+          historyOfArrears: standing?.historyOfArrears ?? Number(row.history_of_arrears ?? 0),
           city: one<{ name?: string }>(campus?.cities)?.name ?? "",
           campus: campus?.name ?? "",
         };
+
+        const roleCategories = (
+          (row.student_role_preferences ?? []) as Array<Record<string, unknown>>
+        )
+          .map((p) => p.category as RoleCategory)
+          .filter((c) => c !== undefined);
+
+        const driveTypePreferences = (
+          Array.isArray(row.drive_type_preferences) ? row.drive_type_preferences : []
+        ) as DriveType[];
 
         return {
           studentId: row.id as string,
@@ -329,6 +356,8 @@ export function createSupabaseDashboardView(
           participationStatus: (row.participation_status as ParticipationStatus) ?? "active",
           academics,
           offers: offersByStudent.get(row.id as string) ?? [],
+          roleCategories,
+          driveTypePreferences,
         };
       });
 
@@ -344,6 +373,7 @@ export function createSupabaseDashboardView(
 
         const drive: VisibleDrive = {
           id: driveId,
+          roleCategory: (row.role_category as RoleCategory | null) ?? null,
           status: (row.status as DriveStatus | null) ?? "live",
           driveType: (row.drive_type as DriveType | null) ?? "placement",
           offerCategory: (row.offer_category as VisibleDrive["offerCategory"]) ?? null,

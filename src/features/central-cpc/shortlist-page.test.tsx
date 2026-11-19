@@ -1422,3 +1422,96 @@ describe("the recruiter pack names resume files safely", () => {
     ).toEqual(["resumes/124 - AnuPriya.pdf"]);
   });
 });
+
+describe("ShortlistPage — filter by campus name", () => {
+  const CAMPUS_APPLICANTS: readonly ShortlistApplicant[] = [
+    {
+      ...STRONG,
+      applicationId: "app-psg-1",
+      studentId: "s-psg-1",
+      studentName: "Aarav Kumar",
+      college: "PSG College of Technology",
+      overallCgpa: 9.4,
+    },
+    {
+      ...STRONG,
+      applicationId: "app-bdu-1",
+      studentId: "s-bdu-1",
+      studentName: "Gowtham S",
+      college: "Bharathidasan College Of Arts & Science",
+      overallCgpa: 8.8,
+    },
+    {
+      ...WEAK,
+      applicationId: "app-bdu-2",
+      studentId: "s-bdu-2",
+      studentName: "Divya R",
+      college: "Bharathidasan College Of Arts & Science",
+      overallCgpa: 7.5,
+    },
+  ];
+
+  it("filters applicants by typing a partial campus name and lets Clear restore all", async () => {
+    const user = userEvent.setup();
+    show(view({ applicants: async () => CAMPUS_APPLICANTS }));
+
+    await screen.findByText("Aarav Kumar");
+    const campusInput = screen.getByRole("combobox", { name: /filter by campus/i });
+    await user.type(campusInput, "bharathidasan");
+
+    expect(screen.queryByText("Aarav Kumar")).toBeNull();
+    expect(screen.getByText("Gowtham S")).toBeDefined();
+    expect(screen.getByText("Divya R")).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+    expect(screen.getByText("Aarav Kumar")).toBeDefined();
+    expect(screen.getByText("Gowtham S")).toBeDefined();
+    expect(screen.getByText("Divya R")).toBeDefined();
+  });
+
+  it("scopes Select all to the filtered campus while preserving selections from other campuses", async () => {
+    const user = userEvent.setup();
+    const saveShortlist = vi.fn().mockResolvedValue(undefined);
+    show(view({ applicants: async () => CAMPUS_APPLICANTS, saveShortlist }));
+
+    await screen.findByText("Aarav Kumar");
+    const campusInput = screen.getByRole("combobox", { name: /filter by campus/i });
+
+    // Select PSG campus via dropdown option and select all shown (1)
+    await user.click(campusInput);
+    await user.click(screen.getByRole("option", { name: /psg college of technology/i }));
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+    expect(screen.getByRole("button", { name: /shortlist 1/i })).toBeDefined();
+
+    // Switch filter to Bharathidasan and select all shown (2) -> total becomes 3
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+    await user.type(campusInput, "Bharathidasan");
+    expect(screen.getByText(/1 more selected from other campuses/i)).toBeDefined();
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+    expect(screen.getByRole("button", { name: /shortlist 3/i })).toBeDefined();
+
+    // Deselecting all in Bharathidasan leaves PSG candidate selected
+    await user.click(screen.getByRole("checkbox", { name: /select all/i }));
+    expect(screen.getByRole("button", { name: /shortlist 1/i })).toBeDefined();
+
+    // Save persists the PSG selection
+    await user.click(screen.getByRole("button", { name: /shortlist 1/i }));
+    await user.click(await confirmButton());
+
+    await waitFor(() => expect(saveShortlist).toHaveBeenCalledTimes(1));
+    const [, decisions] = saveShortlist.mock.calls[0] as [string, ShortlistDecision[]];
+    expect(decisions.filter((d) => d.included).map((d) => d.applicationId)).toEqual(["app-psg-1"]);
+  });
+
+  it("shows a campus-specific empty message when no applicants match", async () => {
+    const user = userEvent.setup();
+    show(view({ applicants: async () => CAMPUS_APPLICANTS }));
+
+    await screen.findByText("Aarav Kumar");
+    await user.type(screen.getByRole("combobox", { name: /filter by campus/i }), "No Such Campus");
+
+    expect(
+      screen.getByText(/no unshortlisted applicants match campus "No Such Campus"/i),
+    ).toBeDefined();
+  });
+});

@@ -1,3 +1,4 @@
+import { Combobox } from "@components/combobox";
 import { StudentIdentity } from "@components/student-identity";
 import { useToast } from "@components/toast";
 import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
@@ -242,6 +243,7 @@ export function ShortlistPage({
    * read-only now; only the undecided can be selected and shortlisted.
    */
   const [tab, setTab] = useState<"pending" | "shortlisted">("pending");
+  const [campusQuery, setCampusQuery] = useState("");
 
   const refresh = useCallback(async () => {
     /*
@@ -315,13 +317,40 @@ export function ShortlistPage({
     () => ranked.map((candidate, index) => ({ candidate, rank: index + 1 })),
     [ranked],
   );
+  const normalizedCampusQuery = campusQuery.trim().toLowerCase();
+  const campusOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of applicants ?? []) {
+      if ((a.shortlisted === true) !== (tab === "shortlisted")) continue;
+      const name = a.college?.trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([name, count]) => ({
+        value: name,
+        label: name,
+        sublabel: `${count} ${count === 1 ? "applicant" : "applicants"}`,
+      }));
+  }, [applicants, tab]);
   const visibleRanked = useMemo(
     () =>
-      rankedWithPosition.filter(
-        ({ candidate }) =>
-          (byId.get(candidate.applicationId)?.shortlisted === true) === (tab === "shortlisted"),
-      ),
-    [rankedWithPosition, byId, tab],
+      rankedWithPosition.filter(({ candidate }) => {
+        const applicant = byId.get(candidate.applicationId);
+        if ((applicant?.shortlisted === true) !== (tab === "shortlisted")) return false;
+        if (normalizedCampusQuery === "") return true;
+        return (applicant?.college ?? "").toLowerCase().includes(normalizedCampusQuery);
+      }),
+    [rankedWithPosition, byId, tab, normalizedCampusQuery],
+  );
+  const visibleIdSet = useMemo(
+    () => new Set(visibleRanked.map(({ candidate }) => candidate.applicationId)),
+    [visibleRanked],
+  );
+  const selectedOutsideFilter = useMemo(
+    () => selected.filter((id) => !visibleIdSet.has(id)).length,
+    [selected, visibleIdSet],
   );
 
   const withoutCv = useMemo(
@@ -353,24 +382,35 @@ export function ShortlistPage({
   }
 
   /**
-   * D9 (UAT 2026-08-19): every applicant who is actually selectable — an
-   * opted-out student without an override is not, and "select all" must never
-   * sweep one in by stealth.
+   * D9 (UAT 2026-08-19): every visible applicant who is actually selectable —
+   * an opted-out student without an override is not, and "select all" must
+   * never sweep one in by stealth, nor sweep in applicants hidden by a campus
+   * filter.
    */
   const selectable = useMemo(
     () =>
-      (applicants ?? [])
+      visibleRanked
+        .map(({ candidate }) => byId.get(candidate.applicationId))
+        .filter((a): a is ShortlistApplicant => a !== undefined)
         .filter((a) => !a.shortlisted)
         .filter((a) => !(a.optedOut || a.onHold) || overrides[a.applicationId] !== undefined)
         .map((a) => a.applicationId),
-    [applicants, overrides],
+    [visibleRanked, byId, overrides],
   );
   const allSelected = selectable.length > 0 && selectable.every((id) => selected.includes(id));
 
   function toggleAll() {
     setSavedCount(null);
     setAcknowledgedTarget(false);
-    setSelected(allSelected ? [] : selectable);
+    setSelected((current) => {
+      if (allSelected) {
+        const visibleSet = new Set(selectable);
+        return current.filter((id) => !visibleSet.has(id));
+      }
+      const merged = new Set(current);
+      for (const id of selectable) merged.add(id);
+      return [...merged];
+    });
   }
 
   /**
@@ -873,29 +913,49 @@ export function ShortlistPage({
           )}
 
           {/* The two tabs (2026-08-21): decided people are read-only. */}
-          <div className="mb-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setTab("pending")}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-                tab === "pending"
-                  ? "border-brand-500 bg-brand-600 text-white"
-                  : "border-field bg-surface text-ink-700 hover:border-brand-400"
-              }`}
-            >
-              Not shortlisted ({applicants.length - alreadyShortlisted.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("shortlisted")}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
-                tab === "shortlisted"
-                  ? "border-brand-500 bg-brand-600 text-white"
-                  : "border-field bg-surface text-ink-700 hover:border-brand-400"
-              }`}
-            >
-              Shortlisted ({alreadyShortlisted.length})
-            </button>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTab("pending")}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                  tab === "pending"
+                    ? "border-brand-500 bg-brand-600 text-white"
+                    : "border-field bg-surface text-ink-700 hover:border-brand-400"
+                }`}
+              >
+                Not shortlisted ({applicants.length - alreadyShortlisted.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("shortlisted")}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+                  tab === "shortlisted"
+                    ? "border-brand-500 bg-brand-600 text-white"
+                    : "border-field bg-surface text-ink-700 hover:border-brand-400"
+                }`}
+              >
+                Shortlisted ({alreadyShortlisted.length})
+              </button>
+            </div>
+
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <div className="w-full sm:w-72">
+                <Combobox
+                  aria-label="Filter by campus"
+                  value={campusQuery}
+                  onChange={setCampusQuery}
+                  options={campusOptions}
+                  placeholder="Search by campus name…"
+                  allowCustom={false}
+                />
+              </div>
+              {normalizedCampusQuery !== "" && (
+                <Button variant="secondary" size="sm" onClick={() => setCampusQuery("")}>
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* D9: one box for the lot. Indeterminate states are more honest as
@@ -903,24 +963,38 @@ export function ShortlistPage({
               A closed drive offers no selection at all — not a tick that
               cannot be saved. */}
           {tab === "pending" && visibleRanked.length > 0 && freeze === null && (
-            <div className="mb-3 flex items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3">
-              <input
-                type="checkbox"
-                aria-label="Select all applicants"
-                checked={allSelected}
-                onChange={toggleAll}
-              />
-              <span className="text-sm font-medium text-ink-700">
-                Select all ({selectable.length})
-              </span>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line bg-surface px-4 py-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  aria-label="Select all applicants"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                />
+                <span className="text-sm font-medium text-ink-700">
+                  {normalizedCampusQuery !== ""
+                    ? `Select all shown (${selectable.length})`
+                    : `Select all (${selectable.length})`}
+                </span>
+              </div>
+              {normalizedCampusQuery !== "" && (
+                <span className="text-xs text-ink-500">
+                  Showing {visibleRanked.length} of {applicants.length - alreadyShortlisted.length}
+                  {selectedOutsideFilter > 0
+                    ? ` · ${selectedOutsideFilter} more selected from other campuses`
+                    : ""}
+                </span>
+              )}
             </div>
           )}
           {visibleRanked.length === 0 && (
             <Card>
               <p className="p-6 text-sm text-ink-700">
-                {tab === "pending"
-                  ? "Everyone who applied is already on the shortlist."
-                  : "Nobody is on the shortlist yet."}
+                {normalizedCampusQuery !== ""
+                  ? `No ${tab === "pending" ? "unshortlisted" : "shortlisted"} applicants match campus "${campusQuery.trim()}".`
+                  : tab === "pending"
+                    ? "Everyone who applied is already on the shortlist."
+                    : "Nobody is on the shortlist yet."}
               </p>
             </Card>
           )}

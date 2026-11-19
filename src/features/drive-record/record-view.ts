@@ -1,17 +1,29 @@
+import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import { JOB_DESCRIPTION_BUCKET } from "@domain/attachments";
 import { isShortlisted } from "@domain/drive-funnel";
 import { describeDriveVenue } from "@domain/drive-venue";
 import { describeJoining } from "@domain/joining";
 import type { OfferCategory } from "@domain/offer-category";
+import type { Offer } from "@domain/offers";
+import { ROLE_CATEGORY_LABELS } from "@domain/role-category";
 import { describeShift } from "@domain/shift";
 import type { ApplicantRound } from "@domain/student-progress";
 import type {
+  AcademicProfile,
   AttendanceStatus,
   DriveStatus,
+  DriveType,
+  ParticipationStatus,
   RoleCategory,
   RoundResult,
+  SrfStatus,
   WorkType,
 } from "@domain/types";
+import {
+  isDriveVisibleToStudent,
+  type StudentContext,
+  type VisibleDrive,
+} from "@domain/visibility";
 import { asWorkType } from "@domain/work-type";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -161,7 +173,7 @@ export interface DriveRecordView {
  */
 export const RECORD_DRIVE_COLUMNS = `
   id, company_drive_id, company_name, industry, company_website, role_title, additional_designations,
-  role_category, status, drive_type, drive_mode, venue, offer_category, openings,
+  role_category, status, drive_type, drive_mode, venue, offer_category, openings, open_to_all_override,
   ctc_min_lpa, ctc_max_lpa, ctc_breakup, bond_details, work_locations, work_type,
   application_start, application_end, tentative_date,
   shift_type, shift_night_timing, joining_timeline, joining_immediate_notes,
@@ -176,8 +188,8 @@ export const RECORD_DRIVE_COLUMNS = `
   publisher:profiles!drives_published_by_fkey(full_name),
   drive_rounds(id, sequence, name),
   drive_eligible_degrees(degree_id, degrees(name)),
-  drive_eligible_branches(branch_id, branches(name)),
-  drive_target_campuses(campus_id, campuses(name))
+  drive_eligible_branches(branch_id, branches(name, degrees(name))),
+  drive_target_campuses(campus_id, campuses(name, cities(name)))
 `;
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
@@ -185,6 +197,21 @@ export const RECORD_APPLICANT_COLUMNS = `
   id, student_id, applied_at, profile_snapshot,
   students(full_name, roll_number, campuses(name)),
   shortlist_entries(included)
+`;
+
+/**
+ * Paged query for all students on targeted campuses.
+ * Includes verified semester marks, career role preferences, and offers so
+ * the "Eligible — Not Applied" tab reflects the actual candidates who can apply.
+ */
+export const RECORD_CAMPUS_STUDENT_COLUMNS = `
+  id, full_name, roll_number, srf_status, participation_status, degree_id, branch_id, passing_year,
+  overall_cgpa, tenth_percentage, twelfth_percentage, current_arrears, history_of_arrears,
+  drive_type_preferences,
+  campuses(name, cities(name)), degrees(name), branches(name),
+  offers(id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source),
+  student_role_preferences(category),
+  student_semesters(semester_number, cgpa, current_arrears, history_of_arrears, status)
 `;
 
 const ARREARS_LABEL: Record<string, string> = {
@@ -207,6 +234,29 @@ function linkedNames(rows: unknown, key: string): readonly string[] {
   if (!Array.isArray(rows)) return [];
   return rows
     .map((row) => one<{ name?: string }>((row as Record<string, unknown>)[key])?.name)
+    .filter((name): name is string => typeof name === "string" && name !== "");
+}
+
+function branchOwnerDegrees(rows: unknown): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  const owners: string[] = [];
+  for (const link of rows as Array<Record<string, unknown>>) {
+    const degree = one<{ name?: string }>(one<Record<string, unknown>>(link.branches)?.degrees);
+    const name = degree?.name;
+    if (typeof name === "string" && name !== "" && !owners.includes(name)) owners.push(name);
+  }
+  return owners;
+}
+
+function targetedCities(rows: unknown): readonly string[] {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map(
+      (row) =>
+        one<{ name?: string }>(
+          one<{ cities?: unknown }>((row as Record<string, unknown>).campuses)?.cities,
+        )?.name,
+    )
     .filter((name): name is string => typeof name === "string" && name !== "");
 }
 
@@ -339,131 +389,12 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
         .map((tc) => (tc.campus_id as string | undefined) ?? null)
         .filter((id): id is string => typeof id === "string" && id !== "");
 
-      const eligibleDegrees = asRows(row.drive_eligible_degrees);
-      const eligibleDegreeIds = eligibleDegrees
-        .map((d) => (d.degree_id as string | undefined) ?? null)
-        .filter((id): id is string => typeof id === "string" && id !== "");
-
-      const eligibleBranches = asRows(row.drive_eligible_branches);
-      const eligibleBranchIds = eligibleBranches
-        .map((b) => (b.branch_id as string | undefined) ?? null)
-        .filter((id): id is string => typeof id === "string" && id !== "");
-
-      const eligiblePassingYears = ((row.eligible_passing_years as unknown[]) ?? []).map(Number);
-      const arrearsPolicy = (row.arrears_policy as string) ?? "flexible";
-
-      let allCampusStudents: Array<Record<string, unknown>> = [];
-      if (targetCampusIds.length > 0) {
-        try {
-          allCampusStudents = await readAllRows((from, to) =>
-            client
-              .from("students")
-              .select(
-                "id, full_name, roll_number, srf_status, participation_status, degree_id, branch_id, passing_year, overall_cgpa, tenth_percentage, twelfth_percentage, current_arrears, history_of_arrears, campuses(name), degrees(name), branches(name)",
-              )
-              .in("campus_id", targetCampusIds)
-              .range(from, to),
-          );
-        } catch {
-          allCampusStudents = [];
-        }
-      }
-
-      const appliedStudentIdSet = new Set(applications.map((a) => a.student_id as string));
-
-      const eligibleNotApplied: DriveNonApplicantRow[] = [];
-      const cannotApply: DriveNonApplicantRow[] = [];
-
-      for (const s of allCampusStudents) {
-        const studentId = s.id as string;
-        if (appliedStudentIdSet.has(studentId)) continue;
-
-        const studentCampus = one<{ name?: string }>(s.campuses)?.name ?? "";
-        const studentDegree = one<{ name?: string }>(s.degrees)?.name ?? "";
-        const studentBranch = one<{ name?: string }>(s.branches)?.name ?? "";
-        const studentCgpa = s.overall_cgpa != null ? `${s.overall_cgpa} CGPA` : "—";
-
-        let refusalReason: string | null = null;
-
-        if (s.srf_status !== "srf_approved") {
-          refusalReason =
-            s.srf_status === "srf_submitted"
-              ? "Registration pending verification"
-              : s.srf_status === "srf_rejected"
-                ? "Registration rejected"
-                : "Registration not completed";
-        } else if (s.participation_status === "on_hold") {
-          refusalReason = "Participation on hold";
-        } else if (s.participation_status === "opted_out") {
-          refusalReason = "Opted out of placements";
-        } else if (s.participation_status === "disbarred") {
-          refusalReason = "Disbarred from placements";
-        } else if (
-          eligibleDegreeIds.length > 0 &&
-          !eligibleDegreeIds.includes(s.degree_id as string)
-        ) {
-          refusalReason = `Degree not eligible (${studentDegree || "Other degree"})`;
-        } else if (
-          eligibleBranchIds.length > 0 &&
-          s.branch_id &&
-          !eligibleBranchIds.includes(s.branch_id as string)
-        ) {
-          refusalReason = `Branch not eligible (${studentBranch || "Other branch"})`;
-        } else if (
-          eligiblePassingYears.length > 0 &&
-          !eligiblePassingYears.includes(Number(s.passing_year))
-        ) {
-          refusalReason = `Batch mismatch (${s.passing_year})`;
-        } else if (cgpa !== null && (s.overall_cgpa == null || Number(s.overall_cgpa) < cgpa)) {
-          refusalReason = `CGPA below cutoff (${s.overall_cgpa ?? "—"} < ${cgpa})`;
-        } else if (
-          tenth !== null &&
-          (s.tenth_percentage == null || Number(s.tenth_percentage) < tenth)
-        ) {
-          refusalReason = `10th marks below cutoff (${s.tenth_percentage ?? "—"}% < ${tenth}%)`;
-        } else if (
-          twelfth !== null &&
-          (s.twelfth_percentage == null || Number(s.twelfth_percentage) < twelfth)
-        ) {
-          refusalReason = `12th marks below cutoff (${s.twelfth_percentage ?? "—"}% < ${twelfth}%)`;
-        } else if (arrearsPolicy === "no_standing" && (Number(s.current_arrears) || 0) > 0) {
-          refusalReason = `Standing arrears not permitted (${s.current_arrears} active)`;
-        } else if (arrearsPolicy === "no_history" && (Number(s.history_of_arrears) || 0) > 0) {
-          refusalReason = `History of arrears not permitted (${s.history_of_arrears} recorded)`;
-        }
-
-        const item: DriveNonApplicantRow = {
-          studentId,
-          fullName: (s.full_name as string) ?? "Student",
-          rollNumber: (s.roll_number as string) ?? "",
-          campus: studentCampus,
-          degree: studentDegree,
-          branch: studentBranch,
-          cgpa: studentCgpa,
-          reason: refusalReason ?? undefined,
-        };
-
-        if (refusalReason !== null) {
-          cannotApply.push(item);
-        } else {
-          eligibleNotApplied.push(item);
-        }
-      }
-
-      // The same signed-and-short-lived treatment as everywhere else (0051).
-      let jobDescriptionUrl: string | null = null;
-      const jdPath = (row.jd_storage_path as string | null) ?? null;
-      if (jdPath !== null && jdPath !== "") {
-        const { data } = await client.storage
-          .from(JOB_DESCRIPTION_BUCKET)
-          .createSignedUrl(jdPath, JD_LINK_TTL_SECONDS);
-        jobDescriptionUrl = data?.signedUrl ?? null;
-      }
-
       // 2026-10-15: fetch sibling roles under the same company drive event,
-      // so the page can show "Other Roles in This Drive".
+      // so the page can show "Other Roles in This Drive" and enforce 0147.
       const companyDriveId = (row.company_drive_id as string | null) ?? null;
       let siblingRoles: SiblingRole[] = [];
+      let siblingAppliedStudentIds = new Set<string>();
+
       if (companyDriveId !== null) {
         const { data: siblingRows, error: siblingError } = await client
           .from("drives")
@@ -473,13 +404,12 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
           .eq("company_drive_id", companyDriveId)
           .neq("id", driveId);
 
-        // A refused read here used to answer `undefined`, and the card showed
-        // "no other roles under this visit" — a wrong fact about a live drive.
         if (siblingError !== null) {
           throw new DriveRecordError("Could not read the other roles under this visit.");
         }
 
-        siblingRoles = asRows(siblingRows).map((s) => {
+        const siblingList = asRows(siblingRows);
+        siblingRoles = siblingList.map((s) => {
           const sMin = (s.ctc_min_lpa as number | null) ?? null;
           const sMax = (s.ctc_max_lpa as number | null) ?? null;
           const stipendMin = (s.stipend_min_monthly as number | null) ?? null;
@@ -503,6 +433,230 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
                   : `₹${stipendMin}–${stipendMax} / month`,
           };
         });
+
+        const siblingDriveIds = siblingList.map((s) => s.id as string);
+        if (siblingDriveIds.length > 0) {
+          try {
+            const { data: siblingApps } = await client
+              .from("applications")
+              .select("student_id")
+              .in("drive_id", siblingDriveIds);
+            siblingAppliedStudentIds = new Set(
+              asRows(siblingApps).map((a) => a.student_id as string),
+            );
+          } catch {
+            siblingAppliedStudentIds = new Set();
+          }
+        }
+      }
+
+      const visibleDrive: VisibleDrive = {
+        id: driveId,
+        companyName: text(row.company_name),
+        companyDriveId: (row.company_drive_id as string | null) ?? null,
+        tentativeDate: (row.tentative_date as string | null) ?? null,
+        status: (row.status as DriveStatus | null) ?? "live",
+        driveType: (row.drive_type as DriveType | null) ?? "placement",
+        offerCategory: (row.offer_category as OfferCategory | null) ?? null,
+        openToAllOverride: Boolean(row.open_to_all_override),
+        roleCategory: (row.role_category as RoleCategory | null) ?? null,
+        applicationStart: new Date((row.application_start as string) ?? 0),
+        applicationEnd: new Date((row.application_end as string) ?? 0),
+        criteria: {
+          eligibleDegrees: linkedNames(row.drive_eligible_degrees, "degrees"),
+          eligibleBranches: linkedNames(row.drive_eligible_branches, "branches"),
+          eligibleBranchDegrees: branchOwnerDegrees(row.drive_eligible_branches),
+          eligiblePassingYears: ((row.eligible_passing_years as unknown[]) ?? []).map(Number),
+          minOverallCgpa: (row.min_overall_cgpa as number | null) ?? null,
+          minTenthPercentage: (row.min_tenth_percentage as number | null) ?? null,
+          minTwelfthPercentage: (row.min_twelfth_percentage as number | null) ?? null,
+          arrearPolicy:
+            (row.arrears_policy as "flexible" | "no_standing" | "no_history") ?? "flexible",
+          targetCities: targetedCities(row.drive_target_campuses),
+          targetCampuses: linkedNames(row.drive_target_campuses, "campuses"),
+        },
+      };
+
+      let allCampusStudents: Array<Record<string, unknown>> = [];
+      if (targetCampusIds.length > 0) {
+        try {
+          allCampusStudents = await readAllRows((from, to) =>
+            client
+              .from("students")
+              .select(RECORD_CAMPUS_STUDENT_COLUMNS)
+              .in("campus_id", targetCampusIds)
+              .range(from, to),
+          );
+        } catch {
+          allCampusStudents = [];
+        }
+      }
+
+      const appliedStudentIdSet = new Set(applications.map((a) => a.student_id as string));
+
+      const eligibleNotApplied: DriveNonApplicantRow[] = [];
+      const cannotApply: DriveNonApplicantRow[] = [];
+
+      for (const s of allCampusStudents) {
+        const studentId = s.id as string;
+        if (appliedStudentIdSet.has(studentId)) continue;
+
+        const studentCampus = one<{ name?: string }>(s.campuses)?.name ?? "";
+        const studentDegree = one<{ name?: string }>(s.degrees)?.name ?? "";
+        const studentBranch = one<{ name?: string }>(s.branches)?.name ?? "";
+
+        const semesters = ((s.student_semesters ?? []) as Array<Record<string, unknown>>).map(
+          (m): SemesterRecord => ({
+            semesterNumber: Number(m.semester_number),
+            cgpa: Number(m.cgpa),
+            currentArrears: Number(m.current_arrears ?? 0),
+            historyOfArrears: Number(m.history_of_arrears ?? 0),
+            verified: m.status === "verified",
+          }),
+        );
+        const standing = academicStandingFrom(semesters);
+        const standingCgpa = standing?.cgpa != null ? standing.cgpa : Number(s.overall_cgpa ?? 0);
+
+        const academics: AcademicProfile = {
+          degree: studentDegree,
+          branch: studentBranch,
+          passingYear: Number(s.passing_year ?? 0),
+          overallCgpa: standingCgpa,
+          tenthPercentage: (s.tenth_percentage as number | null) ?? 0,
+          twelfthPercentage: (s.twelfth_percentage as number | null) ?? 0,
+          currentArrears: standing?.currentArrears ?? Number(s.current_arrears ?? 0),
+          historyOfArrears: standing?.historyOfArrears ?? Number(s.history_of_arrears ?? 0),
+          city: one<{ name?: string }>(one<{ cities?: unknown }>(s.campuses)?.cities)?.name ?? "",
+          campus: studentCampus,
+        };
+
+        const offers = ((s.offers ?? []) as Array<Record<string, unknown>>).map(
+          (o): Offer => ({
+            id: o.id as string,
+            driveId: (o.drive_id as string | null) ?? "",
+            driveType: o.drive_type as DriveType,
+            offerCategory: (o.offer_category as OfferCategory | null) ?? null,
+            ctcLpa: Number(o.ctc_lpa ?? 0),
+            declaredAt: new Date(o.declared_at as string),
+            source: o.source as Offer["source"],
+          }),
+        );
+
+        const roleCategories = (
+          (s.student_role_preferences ?? []) as Array<Record<string, unknown>>
+        )
+          .map((p) => p.category as RoleCategory)
+          .filter((c) => c !== undefined);
+
+        const driveTypePreferences = (
+          Array.isArray(s.drive_type_preferences) ? s.drive_type_preferences : []
+        ) as DriveType[];
+
+        const studentContext: StudentContext = {
+          srfStatus: (s.srf_status as SrfStatus | null) ?? "invited",
+          participationStatus: (s.participation_status as ParticipationStatus) ?? "active",
+          academics,
+          offers,
+          roleCategories,
+          driveTypePreferences,
+        };
+
+        const studentCgpa = academics.overallCgpa != null ? `${academics.overallCgpa} CGPA` : "—";
+        const visibility = isDriveVisibleToStudent(studentContext, visibleDrive);
+
+        if (!visibility.visible) {
+          let refusalReason: string;
+          if (visibility.reason === "srf_not_approved") {
+            refusalReason =
+              s.srf_status === "srf_submitted"
+                ? "Registration pending verification"
+                : s.srf_status === "srf_rejected"
+                  ? "Registration rejected"
+                  : "Registration not completed";
+          } else if (visibility.reason === "on_hold") {
+            refusalReason = "Participation on hold";
+          } else if (visibility.reason === "opted_out") {
+            refusalReason = "Opted out of placements";
+          } else if (visibility.reason === "disbarred") {
+            refusalReason = "Disbarred from placements";
+          } else if (visibility.reason === "area_not_chosen") {
+            const roleName = row.role_category
+              ? (ROLE_CATEGORY_LABELS[row.role_category as RoleCategory] ?? row.role_category)
+              : "specified track";
+            refusalReason = `Career role preference not selected (${roleName})`;
+          } else if (visibility.reason === "drive_type_not_preferred") {
+            refusalReason = `Drive type preference not selected (${row.drive_type ?? "Drive type"})`;
+          } else if (visibility.reason === "internship_cap_consumed") {
+            refusalReason = "Internship cap consumed (already accepted internship offer)";
+          } else if (visibility.reason === "placed_at_equal_or_higher") {
+            refusalReason = "Already placed at this category or higher";
+          } else if (visibility.reason === "not_eligible") {
+            const failure = visibility.failures?.[0];
+            if (failure?.code === "degree") {
+              refusalReason = `Degree not eligible (${studentDegree || "Other degree"})`;
+            } else if (failure?.code === "branch") {
+              refusalReason = `Branch not eligible (${studentBranch || "Other branch"})`;
+            } else if (failure?.code === "passing_year") {
+              refusalReason = `Batch mismatch (${s.passing_year})`;
+            } else if (failure?.code === "overall_cgpa") {
+              refusalReason = `CGPA below cutoff (${academics.overallCgpa} < ${row.min_overall_cgpa})`;
+            } else if (failure?.code === "tenth") {
+              refusalReason = `10th marks below cutoff (${academics.tenthPercentage}% < ${row.min_tenth_percentage}%)`;
+            } else if (failure?.code === "twelfth") {
+              refusalReason = `12th marks below cutoff (${academics.twelfthPercentage}% < ${row.min_twelfth_percentage}%)`;
+            } else if (failure?.code === "current_arrears") {
+              refusalReason = `Standing arrears not permitted (${academics.currentArrears} active)`;
+            } else if (failure?.code === "arrear_history") {
+              refusalReason = `History of arrears not permitted (${academics.historyOfArrears} recorded)`;
+            } else {
+              refusalReason = failure?.message ?? "Academic criteria not met";
+            }
+          } else {
+            refusalReason = "Not eligible";
+          }
+
+          cannotApply.push({
+            studentId,
+            fullName: (s.full_name as string) ?? "Student",
+            rollNumber: (s.roll_number as string) ?? "",
+            campus: studentCampus,
+            degree: studentDegree,
+            branch: studentBranch,
+            cgpa: studentCgpa,
+            reason: refusalReason,
+          });
+        } else if (siblingAppliedStudentIds.has(studentId)) {
+          cannotApply.push({
+            studentId,
+            fullName: (s.full_name as string) ?? "Student",
+            rollNumber: (s.roll_number as string) ?? "",
+            campus: studentCampus,
+            degree: studentDegree,
+            branch: studentBranch,
+            cgpa: studentCgpa,
+            reason: "Already applied to another role in this drive",
+          });
+        } else {
+          eligibleNotApplied.push({
+            studentId,
+            fullName: (s.full_name as string) ?? "Student",
+            rollNumber: (s.roll_number as string) ?? "",
+            campus: studentCampus,
+            degree: studentDegree,
+            branch: studentBranch,
+            cgpa: studentCgpa,
+          });
+        }
+      }
+
+      // The same signed-and-short-lived treatment as everywhere else (0051).
+      let jobDescriptionUrl: string | null = null;
+      const jdPath = (row.jd_storage_path as string | null) ?? null;
+      if (jdPath !== null && jdPath !== "") {
+        const { data } = await client.storage
+          .from(JOB_DESCRIPTION_BUCKET)
+          .createSignedUrl(jdPath, JD_LINK_TTL_SECONDS);
+        jobDescriptionUrl = data?.signedUrl ?? null;
       }
 
       return {

@@ -86,6 +86,7 @@ function stub(
     participants?: unknown[];
     results?: unknown[];
     attendance?: unknown[];
+    students?: unknown[];
   } = {},
 ) {
   const applicationQueries: string[] = [];
@@ -104,6 +105,7 @@ function stub(
     ),
     http.get(`${BASE}/rest/v1/round_results`, () => HttpResponse.json(opts.results ?? [])),
     http.get(`${BASE}/rest/v1/attendance`, () => HttpResponse.json(opts.attendance ?? [])),
+    http.get(`${BASE}/rest/v1/students`, () => HttpResponse.json(opts.students ?? [])),
     http.post(`${BASE}/storage/v1/object/sign/job-descriptions/d1/jd-1.pdf`, () =>
       HttpResponse.json({ signedURL: "/signed/jd-1.pdf" }),
     ),
@@ -316,5 +318,157 @@ describe("createSupabaseDriveRecordView", () => {
     });
     const record = await view().record("d1");
     expect(record?.eligibility.cgpaLabel).toBe("≥ 75%");
+  });
+
+  it("classifies students with non-matching role preference under cannotApply and matching under eligibleNotApplied", async () => {
+    const driveWithCampus = {
+      ...driveRow,
+      id: "d-tech",
+      role_category: "technical_support_it_ops",
+      drive_target_campuses: [{ campus_id: "c1", campuses: { name: "KGiSL" } }],
+      drive_eligible_degrees: [{ degree_id: "deg1", degrees: { name: "B.E" } }],
+      drive_eligible_branches: [],
+      eligible_passing_years: [2026],
+      min_overall_cgpa: 7.0,
+      min_tenth_percentage: null,
+      min_twelfth_percentage: null,
+      arrears_policy: "flexible",
+    };
+
+    const studentMismatched = {
+      id: "s-mismatch",
+      full_name: "Kathiravan V",
+      roll_number: "2426J0631",
+      srf_status: "srf_approved",
+      participation_status: "active",
+      degree_id: "deg1",
+      branch_id: null,
+      passing_year: 2026,
+      overall_cgpa: 8.0,
+      tenth_percentage: 85,
+      twelfth_percentage: 80,
+      current_arrears: 0,
+      history_of_arrears: 0,
+      campuses: { name: "KGiSL", cities: { name: "Coimbatore" } },
+      degrees: { name: "B.E" },
+      branches: null,
+      offers: [],
+      student_role_preferences: [{ category: "software_technical" }],
+      student_semesters: [],
+    };
+
+    const studentMatched = {
+      id: "s-matched",
+      full_name: "Lingeswaran S",
+      roll_number: "2426J0633",
+      srf_status: "srf_approved",
+      participation_status: "active",
+      degree_id: "deg1",
+      branch_id: null,
+      passing_year: 2026,
+      overall_cgpa: 8.0,
+      tenth_percentage: 85,
+      twelfth_percentage: 80,
+      current_arrears: 0,
+      history_of_arrears: 0,
+      campuses: { name: "KGiSL", cities: { name: "Coimbatore" } },
+      degrees: { name: "B.E" },
+      branches: null,
+      offers: [],
+      student_role_preferences: [{ category: "technical_support_it_ops" }],
+      student_semesters: [],
+    };
+
+    stub({
+      drive: driveWithCampus,
+      applications: [],
+      students: [studentMismatched, studentMatched],
+    });
+
+    const record = await view().record("d-tech");
+
+    expect(record?.eligibleNotApplied?.map((e) => e.studentId)).toEqual(["s-matched"]);
+    expect(record?.cannotApply?.map((c) => ({ id: c.studentId, reason: c.reason }))).toEqual([
+      {
+        id: "s-mismatch",
+        reason: "Career role preference not selected (Technical Support / IT Operations)",
+      },
+    ]);
+  });
+
+  it("classifies candidate who applied to sibling role under same company visit as cannotApply", async () => {
+    const drive1 = {
+      ...driveRow,
+      id: "d-role1",
+      company_drive_id: "cd-event-1",
+      role_category: null,
+      drive_target_campuses: [{ campus_id: "c1", campuses: { name: "KGiSL" } }],
+      drive_eligible_degrees: [],
+      drive_eligible_branches: [],
+      eligible_passing_years: [],
+    };
+
+    const studentA = {
+      id: "s-applicant",
+      full_name: "Student A",
+      roll_number: "2426J0001",
+      srf_status: "srf_approved",
+      participation_status: "active",
+      degree_id: null,
+      branch_id: null,
+      passing_year: 2026,
+      overall_cgpa: 8.0,
+      tenth_percentage: 85,
+      twelfth_percentage: 80,
+      current_arrears: 0,
+      history_of_arrears: 0,
+      campuses: { name: "KGiSL", cities: { name: "Coimbatore" } },
+      degrees: null,
+      branches: null,
+      offers: [],
+      student_role_preferences: [],
+      student_semesters: [],
+    };
+
+    // Sibling role d-role2 has application by studentA
+    stub({
+      drive: drive1,
+      applications: [],
+      students: [studentA],
+    });
+
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("company_drive_id") === "eq.cd-event-1") {
+          return HttpResponse.json([
+            {
+              id: "d-role2",
+              role_title: "Role 2",
+              drive_type: "placement",
+              status: "live",
+              ctc_min_lpa: 5,
+              ctc_max_lpa: 6,
+            },
+          ]);
+        }
+        return HttpResponse.json(drive1);
+      }),
+      http.get(`${BASE}/rest/v1/applications`, ({ request }) => {
+        const url = new URL(request.url);
+        if (url.searchParams.get("drive_id")?.includes("d-role2")) {
+          return HttpResponse.json([{ student_id: "s-applicant" }]);
+        }
+        return HttpResponse.json([]);
+      }),
+    );
+
+    const record = await view().record("d-role1");
+    expect(record?.cannotApply?.map((c) => ({ id: c.studentId, reason: c.reason }))).toEqual([
+      {
+        id: "s-applicant",
+        reason: "Already applied to another role in this drive",
+      },
+    ]);
   });
 });

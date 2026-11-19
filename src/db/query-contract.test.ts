@@ -25,7 +25,11 @@ import {
   DASHBOARD_LIVE_DRIVE_COLUMNS,
 } from "@features/dashboard/dashboard-view";
 import { PORTFOLIO_DRIVE_COLUMNS } from "@features/drive-portfolio/portfolio-view";
-import { RECORD_APPLICANT_COLUMNS, RECORD_DRIVE_COLUMNS } from "@features/drive-record/record-view";
+import {
+  RECORD_APPLICANT_COLUMNS,
+  RECORD_CAMPUS_STUDENT_COLUMNS,
+  RECORD_DRIVE_COLUMNS,
+} from "@features/drive-record/record-view";
 import { SRF_PROFILE_COLUMNS } from "@features/srf/srf-profile";
 import {
   DRIVE_COLUMNS,
@@ -374,6 +378,7 @@ describe("every hand-written select matches the schema", () => {
     // constraint name is guessed wrong, so it is proved here.
     ["drive record", "drives", RECORD_DRIVE_COLUMNS],
     ["drive record applicants", "applications", RECORD_APPLICANT_COLUMNS],
+    ["drive record campus students", "students", RECORD_CAMPUS_STUDENT_COLUMNS],
     // N7: the Drives lists read the student's applications with their ids.
     ["student drive lists applications", "applications", "id, drive_id, applied_at"],
     ["drive progress offers", "offers", "student_id, drive_id, ctc_lpa, offer_category"],
