@@ -257,7 +257,7 @@ export function createSupabaseResultsView(
         .select("id")
         .single();
 
-      if (error !== null) throw new ResultsViewError("Could not add the round.");
+      if (error !== null) throw new ResultsViewError(error.message || "Could not add the round.");
     },
 
     /**
