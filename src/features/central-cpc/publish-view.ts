@@ -60,6 +60,7 @@ export const PUBLISH_COHORT_COLUMNS = `
   id, full_name, srf_status, participation_status, passing_year,
   overall_cgpa, tenth_percentage, twelfth_percentage,
   current_arrears, history_of_arrears,
+  drive_type_preferences,
   degrees(name), branches(name), campuses(name, cities(name)),
   offers(id, drive_id, drive_type, offer_category, ctc_lpa, declared_at, source),
   student_role_preferences(category),
@@ -176,6 +177,9 @@ function toCandidate(row: Record<string, unknown>): PublishCandidate {
     roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>).map(
       (p) => p.category as RoleCategory,
     ),
+    driveTypePreferences: (Array.isArray(row.drive_type_preferences)
+      ? row.drive_type_preferences
+      : []) as PublishCandidate["driveTypePreferences"],
     participationStatus: row.participation_status as PublishCandidate["participationStatus"],
     academics,
     offers: offers.map(

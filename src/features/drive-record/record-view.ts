@@ -478,18 +478,15 @@ export function createSupabaseDriveRecordView(client: SupabaseClient): DriveReco
       };
 
       let allCampusStudents: Array<Record<string, unknown>> = [];
-      if (targetCampusIds.length > 0) {
-        try {
-          allCampusStudents = await readAllRows((from, to) =>
-            client
-              .from("students")
-              .select(RECORD_CAMPUS_STUDENT_COLUMNS)
-              .in("campus_id", targetCampusIds)
-              .range(from, to),
-          );
-        } catch {
-          allCampusStudents = [];
-        }
+      try {
+        allCampusStudents = await readAllRows((from, to) => {
+          const query = client.from("students").select(RECORD_CAMPUS_STUDENT_COLUMNS);
+          return targetCampusIds.length > 0
+            ? query.in("campus_id", targetCampusIds).range(from, to)
+            : query.range(from, to);
+        });
+      } catch {
+        allCampusStudents = [];
       }
 
       const appliedStudentIdSet = new Set(applications.map((a) => a.student_id as string));
