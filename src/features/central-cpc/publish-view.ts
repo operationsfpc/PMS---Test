@@ -177,9 +177,9 @@ function toCandidate(row: Record<string, unknown>): PublishCandidate {
     roleCategories: ((row.student_role_preferences ?? []) as Array<Record<string, unknown>>).map(
       (p) => p.category as RoleCategory,
     ),
-    driveTypePreferences: (Array.isArray(row.drive_type_preferences)
-      ? row.drive_type_preferences
-      : []) as PublishCandidate["driveTypePreferences"],
+    driveTypePreferences: Array.isArray(row.drive_type_preferences)
+      ? (row.drive_type_preferences as readonly DriveType[])
+      : [],
     participationStatus: row.participation_status as PublishCandidate["participationStatus"],
     academics,
     offers: offers.map(
