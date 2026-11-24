@@ -36,8 +36,19 @@ describe("canCompleteDrive", () => {
 });
 
 describe("decideCompletion", () => {
-  it("allows a ready drive with no reason at all", () => {
-    expect(decideCompletion({ ready: true, undecided: 0 }, "")).toEqual({ allowed: true });
+  it("refuses a completion without a reason even when ready — reason is always required and audit-logged", () => {
+    const decision = decideCompletion({ ready: true, undecided: 0 }, "");
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.reason).toMatch(/reason/i);
+  });
+
+  it("allows a ready drive with a valid reason", () => {
+    expect(
+      decideCompletion(
+        { ready: true, undecided: 0 },
+        "All rounds completed and final offers rolled out",
+      ),
+    ).toEqual({ allowed: true });
   });
 
   it("refuses an early completion without a reason — the students deserve a why", () => {

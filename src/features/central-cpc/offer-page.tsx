@@ -197,13 +197,17 @@ export function OfferPage({ driveId, view }: { driveId: string; view: OfferView 
           to={`/drives/${driveId}`}
           className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
         >
-          Drive record
+          {drive === null ? "Drive record" : `${drive.companyName} · Drive record`}
         </Link>
       </div>
 
       <PageHeader
-        title={drive === null ? "Final selection" : `${drive.companyName} — final selection`}
-        subtitle="Being placed is declared here. It is never inferred from the last round."
+        title={drive === null ? "Final selection" : `Final selection — ${drive.companyName}`}
+        subtitle={
+          drive?.roleTitle
+            ? `${drive.roleTitle} · Being placed is declared here. It is never inferred from the last round.`
+            : "Being placed is declared here. It is never inferred from the last round."
+        }
         actions={
           <div className="flex items-center gap-2">
             <ButtonLink size="sm" variant="secondary" to={`/drives/${driveId}`}>

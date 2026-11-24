@@ -11,7 +11,13 @@ declare
   v_student record;
   v_missed_count integer;
   v_paused_count integer := 0;
+  v_admin_id uuid;
 begin
+  select id into v_admin_id 
+    from profiles 
+   where role in ('central_placement_coordinator', 'delivery_head', 'admin') 
+   order by created_at asc limit 1;
+
   for v_student in
     select s.id, s.full_name, s.campus_id, s.degree_id, s.branch_id, s.passing_year,
            s.tenth_percentage, s.twelfth_percentage, s.overall_cgpa,
@@ -73,14 +79,15 @@ begin
       -- If student doesn't already have an unreleased hold
       if not exists (select 1 from student_holds where student_id = v_student.id and released_at is null) then
         insert into student_holds (
-          student_id, kind, reason, starts_at, ends_at, confirmed_at
+          student_id, kind, reason, starts_at, ends_at, confirmed_at, confirmed_by
         ) values (
           v_student.id,
           'pause',
           'Auto-paused: You have not applied for 5 eligible placement drives. Please meet your Campus Manager to review your standing.',
           current_date,
           current_date + interval '14 days',
-          now()
+          now(),
+          v_admin_id
         );
 
         update students

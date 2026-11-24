@@ -111,6 +111,50 @@ export function createSupabaseResultsView(
       return DRIVE_STATUSES.includes(status as DriveStatus) ? (status as DriveStatus) : null;
     },
 
+    async driveInfo(driveId) {
+      const { data, error } = await client
+        .from("drives")
+        .select("company_name, role_title, status")
+        .eq("id", driveId)
+        .maybeSingle();
+
+      if (error !== null) throw new ResultsViewError("Could not read this drive's state.");
+      if (data === null) return null;
+      const raw = data as { company_name?: unknown; role_title?: unknown; status?: unknown };
+      const status = raw.status;
+      return {
+        companyName: (raw.company_name as string | null) ?? "Unnamed drive",
+        roleTitle: (raw.role_title as string | null) ?? null,
+        status: DRIVE_STATUSES.includes(status as DriveStatus) ? (status as DriveStatus) : null,
+      };
+    },
+
+    async roundMeta(roundId) {
+      const { data, error } = await client
+        .from("drive_rounds")
+        .select("sequence, name, drive_id, drives(company_name, role_title)")
+        .eq("id", roundId)
+        .maybeSingle();
+
+      if (error !== null || data === null) return null;
+      const raw = data as {
+        sequence?: unknown;
+        name?: unknown;
+        drive_id?: unknown;
+        drives?:
+          | { company_name?: unknown; role_title?: unknown }
+          | Array<{ company_name?: unknown; role_title?: unknown }>;
+      };
+      const drive = Array.isArray(raw.drives) ? raw.drives[0] : raw.drives;
+      return {
+        companyName: (drive?.company_name as string | null) ?? "Unnamed drive",
+        roleTitle: (drive?.role_title as string | null) ?? null,
+        roundSequence: Number(raw.sequence ?? 1),
+        roundName: (raw.name as string | null) ?? "",
+        driveId: (raw.drive_id as string | null) ?? "",
+      };
+    },
+
     /** F4 (UAT 2026-08-19): the round's details, edited after creation. */
     async updateRound(roundId, details) {
       const isVirtual = details.mode === "virtual";

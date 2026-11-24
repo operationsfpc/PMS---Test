@@ -2,7 +2,12 @@ import { DrivePicker } from "@components/drive-picker";
 import { ErrorPanel } from "@components/error-panel";
 import { Card, LottieLoader, PageHeader } from "@components/ui";
 import { useAuth } from "@lib/auth-context";
-import { fetchDriveRounds, type PickerRound } from "@lib/drive-picker-data";
+import {
+  type DriveHeaderInfo,
+  fetchDriveHeaderInfo,
+  fetchDriveRounds,
+  type PickerRound,
+} from "@lib/drive-picker-data";
 import { supabase } from "@lib/supabase";
 import { usePickerDrives } from "@lib/use-picker-drives";
 import { useEffect, useState } from "react";
@@ -36,9 +41,23 @@ export function AttendanceRoute() {
   );
 
   const { drives, failed, retry } = usePickerDrives(roundId === null && driveId === null);
+  const [driveHeader, setDriveHeader] = useState<DriveHeaderInfo | null>(null);
   const [rounds, setRounds] = useState<readonly PickerRound[] | null>(null);
   const [roundsFailed, setRoundsFailed] = useState(false);
   const [roundsAttempt, setRoundsAttempt] = useState(0);
+
+  useEffect(() => {
+    if (roundId !== null || driveId === null) return;
+    let live = true;
+    fetchDriveHeaderInfo(supabase(), driveId)
+      .then((info) => {
+        if (live && info !== null) setDriveHeader(info);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [roundId, driveId]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: roundsAttempt re-runs the read on purpose
   useEffect(() => {
@@ -68,7 +87,33 @@ export function AttendanceRoute() {
   if (driveId !== null) {
     return (
       <>
-        <PageHeader title="Attendance" subtitle="Choose the round to mark." />
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-ink-500">
+          <Link
+            to="/cpc/attendance"
+            className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+          >
+            ← Back to Attendance
+          </Link>
+          <span className="text-ink-400">·</span>
+          <Link
+            to={`/drives/${driveId}`}
+            className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
+          >
+            {driveHeader?.companyName
+              ? `${driveHeader.companyName} · Drive record`
+              : "Drive record"}
+          </Link>
+        </div>
+        <PageHeader
+          title={
+            driveHeader?.companyName ? `Attendance — ${driveHeader.companyName}` : "Attendance"
+          }
+          subtitle={
+            driveHeader?.roleTitle
+              ? `${driveHeader.roleTitle} · Choose the round to mark.`
+              : "Choose the round to mark."
+          }
+        />
         {roundsFailed ? (
           <ErrorPanel
             onRetry={() => {

@@ -235,4 +235,42 @@ describe("resumeLinks", () => {
     expect(links?.size).toBe(0);
     expect(batches).toEqual([]);
   });
+
+  it("reports an internship offer with stipend and internship driveType", async () => {
+    stub(
+      [student("s-intern", "Fatim Rakshana")],
+      [
+        offer({
+          id: "o-int",
+          student_id: "s-intern",
+          drive_id: "d-stepout",
+          source: "on_campus",
+          drive_type: "internship",
+          offer_category: null,
+          ctc_lpa: null,
+          stipend_monthly: 5000,
+          company_name: null,
+          role_title: null,
+        }),
+      ],
+    );
+    server.use(
+      http.get(`${BASE}/rest/v1/drives`, () =>
+        HttpResponse.json([{ id: "d-stepout", company_name: "StepOut", role_title: "Intern" }]),
+      ),
+    );
+
+    const [row] = await createSupabaseStudentDirectoryView(client()).students();
+
+    expect(row?.hasInternship).toBe(true);
+    expect(row?.placement).toEqual({
+      companyName: "StepOut",
+      roleTitle: "Intern",
+      ctcLpa: null,
+      stipendMonthly: 5000,
+      offerCategory: null,
+      driveType: "internship",
+      source: "on_campus",
+    });
+  });
 });

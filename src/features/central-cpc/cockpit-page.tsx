@@ -386,6 +386,17 @@ export function CockpitPage({
       <PageHeader
         title={scope?.title ?? "Drive cockpit"}
         subtitle={scope?.subtitle ?? "Every drive, and what it is waiting for."}
+        actions={
+          inScope !== null ? (
+            <Badge
+              tone={inScope.length > 0 ? "warning" : "neutral"}
+              variant="pill"
+              className="text-sm font-medium"
+            >
+              {inScope.length} {inScope.length === 1 ? "drive" : "drives"}
+            </Badge>
+          ) : undefined
+        }
       />
 
       {reviewsFailed && (
@@ -437,6 +448,9 @@ export function CockpitPage({
         <LottieLoader size="fullscreen" message="Loading drives…" />
       ) : drives.length === 0 ? (
         <div className="rounded-lg border border-dashed border-line p-6 text-center">
+          <Badge tone="neutral" variant="pill" className="mb-2">
+            0 drives
+          </Badge>
           <p className="text-sm font-medium text-ink-700">{scope?.empty ?? "No drives yet."}</p>
           <p className="mt-1 text-sm text-ink-500">
             An Account Executive raises a PIF, the Delivery Head approves it, and it appears here.

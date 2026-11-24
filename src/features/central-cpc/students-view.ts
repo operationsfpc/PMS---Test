@@ -166,7 +166,8 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
           driveId: (row.drive_id as string | null) ?? "",
           driveType: row.drive_type as DriveType,
           offerCategory: (row.offer_category as Offer["offerCategory"]) ?? null,
-          ctcLpa: Number(row.ctc_lpa ?? 0),
+          ctcLpa: row.ctc_lpa === null ? null : Number(row.ctc_lpa),
+          stipendMonthly: row.stipend_monthly === null ? null : Number(row.stipend_monthly),
           declaredAt: new Date(row.declared_at as string),
           source: row.source as Offer["source"],
         });
@@ -192,6 +193,47 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
         const drive = record === null ? undefined : drives.get(record.driveId);
         const named = record === null ? undefined : offerNames.get(record.id);
 
+        const internshipOffers = offers.filter((o) => o.driveType === "internship");
+        let bestInternship: Offer | undefined;
+        for (const o of internshipOffers) {
+          if (
+            !bestInternship ||
+            (o.stipendMonthly ?? 0) > (bestInternship.stipendMonthly ?? 0) ||
+            ((o.stipendMonthly ?? 0) === (bestInternship.stipendMonthly ?? 0) &&
+              o.declaredAt < bestInternship.declaredAt)
+          ) {
+            bestInternship = o;
+          }
+        }
+        const internshipDrive = bestInternship ? drives.get(bestInternship.driveId) : undefined;
+        const internshipNamed = bestInternship ? offerNames.get(bestInternship.id) : undefined;
+
+        const displayedPlacement =
+          record !== null
+            ? {
+                companyName: drive?.companyName ?? named?.companyName ?? "Company not recorded",
+                roleTitle: drive?.roleTitle ?? named?.roleTitle ?? null,
+                ctcLpa: record.ctcLpa,
+                stipendMonthly: record.stipendMonthly ?? null,
+                offerCategory: record.offerCategory,
+                driveType: record.driveType,
+                source: record.source,
+              }
+            : bestInternship !== undefined
+              ? {
+                  companyName:
+                    internshipDrive?.companyName ??
+                    internshipNamed?.companyName ??
+                    "Company not recorded",
+                  roleTitle: internshipDrive?.roleTitle ?? internshipNamed?.roleTitle ?? null,
+                  ctcLpa: null,
+                  stipendMonthly: bestInternship.stipendMonthly ?? null,
+                  offerCategory: null,
+                  driveType: "internship" as const,
+                  source: bestInternship.source,
+                }
+              : null;
+
         return {
           studentId,
           fullName: (row.full_name as string | null) ?? "Unnamed student",
@@ -212,16 +254,8 @@ export function createSupabaseStudentDirectoryView(client: SupabaseClient): Stud
           // still counts this student. Reading the source of `placement`
           // instead would lose them from the list that card opens.
           hasSelfPlacement: offers.some((o) => o.source === "self_placed"),
-          placement:
-            record === null
-              ? null
-              : {
-                  companyName: drive?.companyName ?? named?.companyName ?? "Company not recorded",
-                  roleTitle: drive?.roleTitle ?? named?.roleTitle ?? null,
-                  ctcLpa: record.ctcLpa,
-                  offerCategory: record.offerCategory,
-                  source: record.source,
-                },
+          hasInternship: offers.some((o) => o.driveType === "internship"),
+          placement: displayedPlacement,
         };
       });
     },

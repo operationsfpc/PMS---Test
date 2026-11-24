@@ -32,27 +32,33 @@ export function canCompleteDrive(role: AppRole): boolean {
 }
 
 /** Shorter than this is not an explanation — the participation-queue bar. */
-export const MIN_EARLY_REASON = 5;
+export const MIN_COMPLETION_REASON = 5;
+export const MIN_EARLY_REASON = MIN_COMPLETION_REASON;
 
 export type CompletionDecision =
   | { readonly allowed: true }
   | { readonly allowed: false; readonly reason: string };
 
 /**
- * Ready drives complete silently. Early completion demands a reason the
- * audit log (and the undecided students) can be shown.
+ * Completing a drive requires a reason that is audit-logged to drives.completed_reason.
+ * Early completion also notes undecided students.
  */
 export function decideCompletion(
   readiness: CompletionReadiness,
   reason: string,
 ): CompletionDecision {
-  if (readiness.ready) return { allowed: true };
-  if (reason.trim().length < MIN_EARLY_REASON) {
+  if (reason.trim().length < MIN_COMPLETION_REASON) {
+    if (!readiness.ready) {
+      return {
+        allowed: false,
+        reason:
+          `${readiness.undecided} student(s) still have no final outcome. ` +
+          "Give a reason for completing the drive early — it is audit-logged.",
+      };
+    }
     return {
       allowed: false,
-      reason:
-        `${readiness.undecided} student(s) still have no final outcome. ` +
-        "Give a reason for completing the drive early — it is audit-logged.",
+      reason: "Give a reason for completing the drive — it is audit-logged.",
     };
   }
   return { allowed: true };

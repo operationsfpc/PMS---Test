@@ -1064,7 +1064,7 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
 
   const routed = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
-  it("completes a fully-decided drive without demanding a reason", async () => {
+  it("demands a reason even on a fully-decided drive, and sends it", async () => {
     const completeDrive = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
     routed(<DriveRoundsPage driveId="d1" view={completionView({ completeDrive })} />);
@@ -1072,9 +1072,21 @@ describe("DriveRoundsPage — mark drive completed (C3, answer 3b)", () => {
     await user.click(await pickAction(user, /mark drive completed/i));
     const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
     expect(dialog.textContent).toMatch(/every applicant has a final outcome/i);
+
+    // Refused when reason is empty
+    await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
+    expect(completeDrive).not.toHaveBeenCalled();
+    expect(dialog.textContent).toMatch(/give a reason/i);
+
+    await user.type(
+      within(dialog).getByRole("textbox", { name: /reason/i }),
+      "All rounds completed and offers finalised",
+    );
     await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
 
-    await waitFor(() => expect(completeDrive).toHaveBeenCalledWith("d1", null));
+    await waitFor(() =>
+      expect(completeDrive).toHaveBeenCalledWith("d1", "All rounds completed and offers finalised"),
+    );
   });
 
   it("demands a reason when students are still undecided, and sends it", async () => {
@@ -1267,7 +1279,7 @@ describe("DriveRoundsPage — the round's own date gates the cycle", () => {
     );
   });
 
-  it("completes silently when the round it planned has been held", async () => {
+  it("completes with reason when the round it planned has been held", async () => {
     const completeDrive = vi.fn();
     const user = userEvent.setup();
     routed(
@@ -1285,9 +1297,16 @@ describe("DriveRoundsPage — the round's own date gates the cycle", () => {
     await user.click(await pickAction(user, /mark drive completed/i));
     const dialog = await screen.findByRole("alertdialog", { name: /complete/i });
     expect(dialog.textContent).toMatch(/every applicant has a final outcome/i);
+
+    await user.type(
+      within(dialog).getByRole("textbox", { name: /reason/i }),
+      "All rounds completed on schedule",
+    );
     await user.click(within(dialog).getByRole("button", { name: /complete drive/i }));
 
-    await waitFor(() => expect(completeDrive).toHaveBeenCalledWith("d1", null));
+    await waitFor(() =>
+      expect(completeDrive).toHaveBeenCalledWith("d1", "All rounds completed on schedule"),
+    );
   });
 
   it("holds no round whose date nobody set", async () => {
@@ -1924,5 +1943,26 @@ describe("the CSV upload waits for Save", () => {
 
     await waitFor(() => expect(updateRound).toHaveBeenCalledTimes(1));
     expect(assignSlots).not.toHaveBeenCalled();
+  });
+
+  it("displays the company name in breadcrumb and header when driveInfo is available", async () => {
+    routed(
+      <DriveRoundsPage
+        driveId="d1"
+        view={view({
+          driveInfo: async () => ({
+            companyName: "Acme Corp",
+            roleTitle: "Software Engineer",
+            status: "live",
+          }),
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /Rounds & results — Acme Corp/i }),
+    ).not.toBeNull();
+    expect(screen.getByText(/Acme Corp · Drive record/i)).not.toBeNull();
+    expect(screen.getByText(/Software Engineer · You are recording on behalf/i)).not.toBeNull();
   });
 });

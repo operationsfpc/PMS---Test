@@ -46,9 +46,24 @@ export interface RoundParticipant {
   readonly participantScheduledAt?: string | null;
 }
 
+export interface RoundMeta {
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly roundSequence: number;
+  readonly roundName: string;
+  readonly driveId: string;
+}
+
+export interface DriveSummary {
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+  readonly status: DriveStatus | null;
+}
+
 export interface ResultsView {
   participants(roundId: string): Promise<readonly RoundParticipant[]>;
   record(roundId: string, applicationId: string, result: RoundResult): Promise<void>;
+  roundMeta?(roundId: string): Promise<RoundMeta | null>;
 }
 
 export interface DriveRoundInfo {
@@ -86,6 +101,7 @@ export interface DriveRoundsView extends ResultsView {
    * evidence of a closed drive, so the screen keeps its behaviour.
    */
   driveStatus(driveId: string): Promise<DriveStatus | null>;
+  driveInfo?(driveId: string): Promise<DriveSummary | null>;
   /**
    * Schedules the current round's `selected` into the next. Returns how many.
    * F3: an optional proof of the company's instruction travels with it.
@@ -150,6 +166,7 @@ export function ResultsPage({
   onRecorded,
   nextRound = null,
   onAdvanceSelected,
+  driveName,
 }: {
   roundId: string;
   view: ResultsView;
@@ -182,8 +199,10 @@ export function ResultsPage({
   onRecorded?: () => void | Promise<void>;
   nextRound?: DriveRoundInfo | null;
   onAdvanceSelected?: () => Promise<number | undefined>;
+  driveName?: string | undefined;
 }) {
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
+  const [roundMeta, setRoundMeta] = useState<RoundMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   /**
    * Kept apart from `error`, which is about a WRITE: recording a batch and
@@ -231,6 +250,20 @@ export function ResultsPage({
   useEffect(() => {
     void refresh();
   }, [refresh, attempt]);
+
+  useEffect(() => {
+    if (driveName !== undefined || view.roundMeta === undefined) return;
+    let live = true;
+    view
+      .roundMeta(roundId)
+      .then((meta) => {
+        if (live && meta !== null) setRoundMeta(meta);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [roundId, view, driveName]);
 
   async function recordChecked(result: RoundResult) {
     setError(null);
@@ -316,12 +349,39 @@ export function ResultsPage({
 
   return (
     <div>
+      {roundMeta !== null && driveName === undefined && (
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-ink-500">
+          <Link
+            to={`/central/results?drive=${roundMeta.driveId}`}
+            className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+          >
+            ← Back to Rounds & results
+          </Link>
+          <span className="text-ink-400">·</span>
+          <Link
+            to={`/drives/${roundMeta.driveId}`}
+            className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
+          >
+            {roundMeta.companyName} · Drive record
+          </Link>
+        </div>
+      )}
       <PageHeader
-        title="Round results"
+        title={
+          driveName
+            ? `Round results — ${driveName}`
+            : roundMeta
+              ? `Round results — ${roundMeta.companyName} (Round ${roundMeta.roundSequence}: ${roundMeta.roundName})`
+              : "Round results"
+        }
         // exactOptionalPropertyTypes: the prop is omitted, not set to undefined.
         {...(participants === null
           ? {}
-          : { subtitle: `${advancing} of ${participants.length} advance.` })}
+          : {
+              subtitle: roundMeta?.roleTitle
+                ? `${roundMeta.roleTitle} · ${advancing} of ${participants.length} advance.`
+                : `${advancing} of ${participants.length} advance.`,
+            })}
       />
 
       {error !== null && (
@@ -666,6 +726,7 @@ export function DriveRoundsPage({
   const [rounds, setRounds] = useState<readonly DriveRoundInfo[] | null>(null);
   /** 2026-10-18: the drive's own lifecycle state, which closes this whole screen. */
   const [status, setStatus] = useState<DriveStatus | null>(null);
+  const [driveInfo, setDriveInfo] = useState<DriveSummary | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const [participants, setParticipants] = useState<readonly RoundParticipant[] | null>(null);
   /** F1: applications sitting in any round after the active one. */
@@ -731,17 +792,20 @@ export function DriveRoundsPage({
      * offers "+ Add round" over rounds that exist but could not be read.
      */
     try {
-      const [loaded, loadedStatus] = await Promise.all([
+      const [loaded, loadedStatus, loadedInfo] = await Promise.all([
         view.rounds(driveId),
         view.driveStatus(driveId),
+        view.driveInfo ? view.driveInfo(driveId) : Promise.resolve(null),
       ]);
-      setStatus(loadedStatus);
+      setStatus(loadedStatus ?? loadedInfo?.status ?? null);
+      setDriveInfo(loadedInfo);
       setRounds(loaded);
       setActive((current) => current ?? loaded[0]?.roundId ?? null);
       setReadProblem(null);
     } catch (cause) {
       setRounds(null);
       setStatus(null);
+      setDriveInfo(null);
       setReadProblem(
         describeReadFailure(cause, "We could not read the rounds on this drive. Please try again."),
       );
@@ -1097,9 +1161,8 @@ export function DriveRoundsPage({
       setCompletionError(decision.reason);
       return;
     }
-    const needsReason = !completing.ready || roundsToCome.length > 0;
     try {
-      await view.completeDrive(driveId, needsReason ? completionReason.trim() : null);
+      await view.completeDrive(driveId, completionReason.trim());
       setCompleting(null);
       setNotice("Drive marked completed. It now appears under Drives → Completed.");
       toast({
@@ -1132,13 +1195,21 @@ export function DriveRoundsPage({
           to={`/drives/${driveId}`}
           className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
         >
-          Drive record
+          {driveInfo?.companyName ? `${driveInfo.companyName} · Drive record` : "Drive record"}
         </Link>
       </div>
 
       <PageHeader
-        title="Rounds & results"
-        subtitle="You are recording on behalf of the recruiter. Every result you record is told to the student; advancing schedules them for the next round."
+        title={
+          driveInfo?.companyName
+            ? `Rounds & results — ${driveInfo.companyName}`
+            : "Rounds & results"
+        }
+        subtitle={
+          driveInfo?.roleTitle
+            ? `${driveInfo.roleTitle} · You are recording on behalf of the recruiter. Every result you record is told to the student; advancing schedules them for the next round.`
+            : "You are recording on behalf of the recruiter. Every result you record is told to the student; advancing schedules them for the next round."
+        }
         actions={
           <div className="flex items-center gap-2">
             <ButtonLink size="sm" variant="secondary" to={`/central/offers?drive=${driveId}`}>
@@ -1493,6 +1564,7 @@ export function DriveRoundsPage({
             key={`${active}-${reloadKey}`}
             roundId={active}
             view={view}
+            driveName={driveInfo?.companyName}
             locked={locked}
             offered={offered}
             closed={closed}
@@ -1715,24 +1787,32 @@ export function DriveRoundsPage({
                     final outcome.
                   </p>
                 )}
-                <p className="mt-2 text-sm text-ink-700">
-                  Completing now requires a reason — it is audit-logged.
-                </p>
-                <label
-                  className="mt-3 block text-sm font-medium text-ink-900"
-                  htmlFor="completion-reason"
-                >
-                  Reason
-                </label>
-                <input
-                  id="completion-reason"
-                  value={completionReason}
-                  onChange={(e) => setCompletionReason(e.target.value)}
-                  placeholder="e.g. Company closed the process after Round 2"
-                  className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
-                />
               </>
             )}
+            <p className="mt-2 text-sm text-ink-700">
+              Completing requires a reason — it is audit-logged.
+            </p>
+            <label
+              className="mt-3 block text-sm font-medium text-ink-900"
+              htmlFor="completion-reason"
+            >
+              <span>Reason</span>
+              <span className="ml-0.5 font-bold text-danger-500" aria-hidden="true">
+                *
+              </span>
+              <span className="sr-only"> (required)</span>
+            </label>
+            <input
+              id="completion-reason"
+              value={completionReason}
+              onChange={(e) => setCompletionReason(e.target.value)}
+              placeholder={
+                completing.ready && roundsToCome.length === 0
+                  ? "e.g. All rounds conducted and offers finalised"
+                  : "e.g. Company closed the process after Round 2"
+              }
+              className="mt-1 w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
             {completionError !== null && (
               <p role="status" className="mt-2 text-sm text-destructive">
                 {completionError}

@@ -57,7 +57,7 @@ export const PUBLISH_COLLEGE_COLUMNS = "name, is_active, cities(name)";
 
 /** Exported so src/db/query-contract.test.ts can prove it against the real schema. */
 export const PUBLISH_COHORT_COLUMNS = `
-  id, full_name, srf_status, participation_status, passing_year,
+  id, full_name, roll_number, srf_status, participation_status, passing_year,
   overall_cgpa, tenth_percentage, twelfth_percentage,
   current_arrears, history_of_arrears,
   drive_type_preferences,
@@ -170,6 +170,7 @@ function toCandidate(row: Record<string, unknown>): PublishCandidate {
   return {
     id: row.id as string,
     name: row.full_name as string,
+    rollNumber: (row.roll_number as string | null) ?? null,
     srfStatus: row.srf_status as PublishCandidate["srfStatus"],
     // The audience a drive is published to is the audience that can apply, so
     // the area preference has to be counted here too - or the number on the

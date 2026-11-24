@@ -187,6 +187,31 @@ describe("StudentDirectoryPage", () => {
     expect(screen.queryByText("Rahul Nair")).toBeNull();
   });
 
+  it("filters to placed on internship and renders stipend and badge", async () => {
+    const INTERN = {
+      ...UNPLACED,
+      studentId: "s-int",
+      fullName: "Fatim Rakshana",
+      hasInternship: true,
+      placement: {
+        companyName: "StepOut",
+        roleTitle: "Intern",
+        ctcLpa: null,
+        stipendMonthly: 5000,
+        offerCategory: null,
+        driveType: "internship" as const,
+        source: "on_campus" as const,
+      },
+    };
+    show([PLACED, UNPLACED, INTERN], "/central/students?filter=internship");
+    expect(await screen.findByText("Fatim Rakshana")).toBeDefined();
+    expect(screen.getByText("StepOut")).toBeDefined();
+    expect(screen.getByText("Internship")).toBeDefined();
+    expect(screen.getByText(/₹5,000\/mo/)).toBeDefined();
+    expect(screen.queryByText("Anjali Subramanian")).toBeNull();
+    expect(screen.queryByText("Rahul Nair")).toBeNull();
+  });
+
   it("searches by name, roll number or company", async () => {
     const user = userEvent.setup();
     show();

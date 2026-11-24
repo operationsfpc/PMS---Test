@@ -18,7 +18,7 @@
 import { sameMoney } from "./math";
 import type { OfferCategory } from "./offer-category";
 import { countsAsSubmitted, countsAsVerified } from "./registration-funnel";
-import type { OfferSource, ParticipationStatus, SrfStatus } from "./types";
+import type { DriveType, OfferSource, ParticipationStatus, SrfStatus } from "./types";
 
 /** The one offer reported as this student's placement, flattened for display. */
 export interface DirectoryPlacement {
@@ -26,7 +26,9 @@ export interface DirectoryPlacement {
   readonly roleTitle: string | null;
   /** Null when the offer records no annual figure (0070). */
   readonly ctcLpa: number | null;
+  readonly stipendMonthly?: number | null;
   readonly offerCategory: OfferCategory | null;
+  readonly driveType?: DriveType;
   /**
    * C1 (UAT 2026-08-19): a self-placed student IS placed here. The source is
    * carried so the row can say so — R9's reported statistic still excludes
@@ -66,6 +68,10 @@ export interface DirectoryStudent {
    * list their own card opened.
    */
   readonly hasSelfPlacement: boolean;
+  /**
+   * Holds an internship offer (on-campus or self-placed).
+   */
+  readonly hasInternship?: boolean;
 }
 
 /**
@@ -83,6 +89,7 @@ export type DirectoryFilter =
   | "placed"
   | "on_campus"
   | "self_placed"
+  | "internship"
   | "not_placed"
   | "never_applied"
   | "opted_out"
@@ -131,7 +138,8 @@ export interface DirectorySummary {
  * participation column answer the placement question is how a placed student
  * silently disappears from a report.
  */
-const isPlaced = (student: DirectoryStudent): boolean => student.placement !== null;
+const isPlaced = (student: DirectoryStudent): boolean =>
+  student.placement !== null && student.placement.driveType !== "internship";
 
 /**
  * Placed ON CAMPUS — the figure PRD §16.2 reports and the overview's card.
@@ -141,7 +149,10 @@ const isPlaced = (student: DirectoryStudent): boolean => student.placement !== n
  * population as `hasOnCampusPlacement`, and not a second definition of it.
  */
 const isPlacedOnCampus = (student: DirectoryStudent): boolean =>
-  student.placement?.source === "on_campus";
+  student.placement?.source === "on_campus" && student.placement.driveType !== "internship";
+
+const isPlacedOnInternship = (student: DirectoryStudent): boolean =>
+  Boolean(student.hasInternship || student.placement?.driveType === "internship");
 
 /** The evidence the funnel's middle stages are judged on. */
 const evidence = (student: DirectoryStudent) => ({
@@ -160,8 +171,10 @@ const matchesFilter = (student: DirectoryStudent, filter: DirectoryFilter): bool
       return isPlacedOnCampus(student);
     case "self_placed":
       return student.hasSelfPlacement;
+    case "internship":
+      return isPlacedOnInternship(student);
     case "not_placed":
-      return !isPlaced(student);
+      return !isPlaced(student) && !isPlacedOnInternship(student);
     /**
      * The population the `idle` hold kind (0130) is for: still in placements,
      * no placement record, and not one application to their name. A student
@@ -169,7 +182,10 @@ const matchesFilter = (student: DirectoryStudent, filter: DirectoryFilter): bool
      */
     case "never_applied":
       return (
-        student.participationStatus === "active" && !isPlaced(student) && student.applications === 0
+        student.participationStatus === "active" &&
+        !isPlaced(student) &&
+        !isPlacedOnInternship(student) &&
+        student.applications === 0
       );
     case "opted_out":
       return student.participationStatus === "opted_out";

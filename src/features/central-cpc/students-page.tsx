@@ -77,6 +77,7 @@ const FILTERS: readonly { readonly value: DirectoryFilter; readonly label: strin
   { value: "placed", label: "Placed" },
   { value: "on_campus", label: "Placed on campus" },
   { value: "self_placed", label: "Self-placed" },
+  { value: "internship", label: "Placed on internship" },
   { value: "not_placed", label: "Not placed" },
   // 2026-10-29: the students the `idle` hold kind (0130) exists for — in
   // placements, unplaced, and never having applied to a single drive.
@@ -239,7 +240,11 @@ export function StudentDirectoryPage({
 
   const isPlacementFilter = useCallback(
     (f: string): f is DirectoryFilter =>
-      f === "placed" || f === "on_campus" || f === "self_placed" || f === "not_placed",
+      f === "placed" ||
+      f === "on_campus" ||
+      f === "self_placed" ||
+      f === "internship" ||
+      f === "not_placed",
     [],
   );
 
@@ -487,11 +492,14 @@ export function StudentDirectoryPage({
     let notPlaced = 0;
     let onCampus = 0;
     let selfPlaced = 0;
+    let internship = 0;
     for (const s of studentsForPlacement) {
-      if (s.placement !== null) {
+      if (s.placement !== null && s.placement.driveType !== "internship") {
         placed++;
         if (s.placement.source === "on_campus") onCampus++;
         if (s.placement.source === "self_placed") selfPlaced++;
+      } else if (s.hasInternship || s.placement?.driveType === "internship") {
+        internship++;
       } else {
         notPlaced++;
       }
@@ -500,6 +508,7 @@ export function StudentDirectoryPage({
       { value: "placed", label: "Placed (All)", count: placed },
       { value: "on_campus", label: "On-campus", count: onCampus },
       { value: "self_placed", label: "Self-placed", count: selfPlaced },
+      { value: "internship", label: "Placed on internship", count: internship },
       { value: "not_placed", label: "Not placed", count: notPlaced },
     ];
   }, [studentsForPlacement]);
@@ -646,9 +655,14 @@ export function StudentDirectoryPage({
         Applications: String(s.applications),
         Company: s.placement?.companyName ?? "",
         Role: s.placement?.roleTitle ?? "",
-        "CTC (LPA)": s.placement === null ? "" : String(s.placement.ctcLpa),
+        "CTC (LPA)":
+          s.placement === null || s.placement.ctcLpa === null ? "" : String(s.placement.ctcLpa),
         "Offer category":
-          s.placement?.offerCategory == null ? "" : offerCategoryLabel(s.placement.offerCategory),
+          s.placement?.offerCategory == null
+            ? s.placement?.driveType === "internship"
+              ? "Internship"
+              : ""
+            : offerCategoryLabel(s.placement.offerCategory),
         Source:
           s.placement === null
             ? ""
@@ -874,7 +888,9 @@ export function StudentDirectoryPage({
                           ? "On-campus"
                           : f === "self_placed"
                             ? "Self-placed"
-                            : "Not placed"
+                            : f === "internship"
+                              ? "Placed on internship"
+                              : "Not placed"
                     }`
                   : f === "submitted"
                     ? "Registration: Form submitted"
@@ -993,10 +1009,15 @@ export function StudentDirectoryPage({
               <strong className="text-ink-900">{visible.length} students</strong> of {summary.total}
             </span>
             <Button size="sm" variant="ghost" onClick={() => update({ filter: "placed" })}>
-              {summary.placed} placed
+              {filterCounts.placed ?? summary.placed} placed
             </Button>
+            {Boolean(filterCounts.internship) && (
+              <Button size="sm" variant="ghost" onClick={() => update({ filter: "internship" })}>
+                {filterCounts.internship} on internship
+              </Button>
+            )}
             <Button size="sm" variant="ghost" onClick={() => update({ filter: "not_placed" })}>
-              {summary.notPlaced} not placed
+              {filterCounts.not_placed ?? summary.notPlaced} not placed
             </Button>
           </p>
 
@@ -1166,6 +1187,11 @@ export function StudentDirectoryPage({
                           <>
                             <p className="max-w-[200px] break-words font-medium text-ink-900 [overflow-wrap:anywhere]">
                               {student.placement.companyName}
+                              {student.placement.driveType === "internship" && (
+                                <span className="ml-2 rounded bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium text-sky-700 border border-sky-200">
+                                  Internship
+                                </span>
+                              )}
                               {student.placement.source === "self_placed" && (
                                 <span className="ml-2 rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink-500">
                                   Self-placed
@@ -1173,10 +1199,26 @@ export function StudentDirectoryPage({
                               )}
                             </p>
                             <p className="max-w-[200px] break-words text-xs text-ink-500 [overflow-wrap:anywhere]">
-                              {student.placement.roleTitle ?? "Role not recorded"} · ₹
-                              {student.placement.ctcLpa} LPA
-                              {student.placement.offerCategory !== null &&
-                                ` · ${offerCategoryLabel(student.placement.offerCategory)}`}
+                              {student.placement.roleTitle ??
+                                (student.placement.driveType === "internship"
+                                  ? "Intern"
+                                  : "Role not recorded")}
+                              {student.placement.driveType === "internship" ? (
+                                student.placement.stipendMonthly !== null &&
+                                student.placement.stipendMonthly !== undefined ? (
+                                  ` · ₹${student.placement.stipendMonthly.toLocaleString("en-IN")}/mo`
+                                ) : (
+                                  " · Stipend not recorded"
+                                )
+                              ) : (
+                                <>
+                                  {student.placement.ctcLpa !== null
+                                    ? ` · ₹${student.placement.ctcLpa} LPA`
+                                    : ""}
+                                  {student.placement.offerCategory !== null &&
+                                    ` · ${offerCategoryLabel(student.placement.offerCategory)}`}
+                                </>
+                              )}
                             </p>
                           </>
                         )}

@@ -512,4 +512,42 @@ describe("filterDirectory — the facts the table does not print", () => {
       ),
     ).toEqual(["Anjali Subramanian", "Meera Iyer"]);
   });
+
+  describe("internship filter", () => {
+    const INTERN: DirectoryStudent = {
+      ...UNPLACED,
+      studentId: "s-intern",
+      fullName: "Fatim Rakshana",
+      hasInternship: true,
+      placement: {
+        companyName: "StepOut",
+        roleTitle: "Intern",
+        ctcLpa: null,
+        stipendMonthly: 5000,
+        offerCategory: null,
+        driveType: "internship",
+        source: "on_campus",
+      },
+    };
+
+    const COHORT = [PLACED, UNPLACED, INTERN];
+
+    it("filters students placed on internship", () => {
+      expect(names(filterDirectory(COHORT, { filter: "internship", query: "" }))).toEqual([
+        "Fatim Rakshana",
+      ]);
+    });
+
+    it("excludes internship students from placed ladder filter", () => {
+      expect(names(filterDirectory(COHORT, { filter: "placed", query: "" }))).toEqual([
+        "Anjali Subramanian",
+      ]);
+    });
+
+    it("excludes internship students from not_placed filter", () => {
+      expect(names(filterDirectory(COHORT, { filter: "not_placed", query: "" }))).toEqual([
+        "Rahul Nair",
+      ]);
+    });
+  });
 });

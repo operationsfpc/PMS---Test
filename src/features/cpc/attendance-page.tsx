@@ -1,7 +1,9 @@
 import { Badge, Button, ButtonLink, Card, LottieLoader, PageHeader } from "@components/ui";
 import { ABSENCE_LIMIT, needsDisbarmentReview } from "@domain/attendance";
 import type { AttendanceStatus } from "@domain/types";
+import type { RoundHeaderInfo } from "@lib/drive-picker-data";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router";
 
 export interface ScheduledStudent {
   readonly applicationId: string;
@@ -24,6 +26,7 @@ export interface AttendanceView {
     roundId: string,
     entries: readonly { applicationId: string; status: AttendanceStatus }[],
   ): Promise<void>;
+  roundMeta?(roundId: string): Promise<RoundHeaderInfo | null>;
 }
 
 /**
@@ -40,9 +43,24 @@ export interface AttendanceView {
 export function AttendancePage({ roundId, view }: { roundId: string; view: AttendanceView }) {
   const [rows, setRows] = useState<readonly ScheduledStudent[] | null>(null);
   const [present, setPresent] = useState<readonly string[]>([]);
+  const [roundMeta, setRoundMeta] = useState<RoundHeaderInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (view.roundMeta === undefined) return;
+    let live = true;
+    view
+      .roundMeta(roundId)
+      .then((m) => {
+        if (live && m !== null) setRoundMeta(m);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [view, roundId]);
 
   const load = useCallback(async () => {
     try {
@@ -92,9 +110,37 @@ export function AttendancePage({ roundId, view }: { roundId: string; view: Atten
 
   return (
     <>
+      {roundMeta !== null && (
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-ink-500">
+          <Link
+            to={
+              roundMeta.driveId ? `/cpc/attendance?drive=${roundMeta.driveId}` : "/cpc/attendance"
+            }
+            className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+          >
+            ← Back to Attendance
+          </Link>
+          {roundMeta.driveId && (
+            <>
+              <span className="text-ink-400">·</span>
+              <Link
+                to={`/drives/${roundMeta.driveId}`}
+                className="font-medium text-ink-600 hover:text-brand-700 hover:underline"
+              >
+                {roundMeta.companyName} · Drive record
+              </Link>
+            </>
+          )}
+        </div>
+      )}
+
       <PageHeader
-        title="Attendance"
-        subtitle="Only students the recruiter scheduled for this round can be marked."
+        title={roundMeta !== null ? `Attendance — ${roundMeta.companyName}` : "Attendance"}
+        subtitle={
+          roundMeta !== null
+            ? `${roundMeta.roleTitle ? `${roundMeta.roleTitle} · ` : ""}Round ${roundMeta.sequence}: ${roundMeta.name} · Only students the recruiter scheduled for this round can be marked.`
+            : "Only students the recruiter scheduled for this round can be marked."
+        }
       />
 
       {error !== null && (

@@ -1,3 +1,4 @@
+import { type DrilldownPerson, StatDrilldown } from "@components/stat-drilldown";
 import { useToast } from "@components/toast";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { type DriveReadiness, missingBeforeGoLive } from "@domain/drive-lifecycle";
@@ -35,6 +36,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 export interface PublishCandidate extends StudentContext {
   readonly id: string;
   readonly name: string;
+  readonly rollNumber?: string | null;
 }
 
 /**
@@ -233,6 +235,11 @@ const EXCLUSION_LABEL: Record<ExclusionKey, string> = {
   internship_cap_consumed: "Internship cap already used",
   placed_at_equal_or_higher: "Placed at an equal or higher category",
 };
+
+interface ExcludedCandidate {
+  readonly candidate: PublishCandidate;
+  readonly failure?: string | undefined;
+}
 
 /**
  * A chip list with an honest "Select all".
@@ -473,7 +480,9 @@ export function DafPublish({ view }: { view: PublishView }) {
       for (const p of next.options.programmes) {
         if (
           next.drive.targeting.degrees.includes(p.degree) &&
-          (p.branch === "" || next.drive.targeting.branches.includes(p.branch))
+          (next.drive.targeting.branches.length === 0 ||
+            p.branch === "" ||
+            next.drive.targeting.branches.includes(p.branch))
         ) {
           const label = programmeLabel(p);
           if (!seedCombined.includes(label)) seedCombined.push(label);
@@ -682,13 +691,13 @@ export function DafPublish({ view }: { view: PublishView }) {
   );
 
   const audience = useMemo(() => {
-    const included: string[] = [];
-    const excluded = new Map<ExclusionKey, number>();
+    const included: PublishCandidate[] = [];
+    const excludedMap = new Map<ExclusionKey, ExcludedCandidate[]>();
     if (drive !== null) {
       for (const student of cohort) {
         const result = isDriveVisibleToStudent(student, drive);
         if (result.visible) {
-          included.push(student.name);
+          included.push(student);
           continue;
         }
         /**
@@ -709,11 +718,104 @@ export function DafPublish({ view }: { view: PublishView }) {
             : result.reason === "visible"
               ? "not_eligible"
               : result.reason;
-        excluded.set(key, (excluded.get(key) ?? 0) + 1);
+
+        let failureMsg: string | undefined;
+        if (result.failures && result.failures.length > 0) {
+          failureMsg = result.failures.map((f) => f.message).join("; ");
+        } else if (result.reason === "placed_at_equal_or_higher") {
+          failureMsg = "Placed at equal or higher category";
+        } else if (result.reason === "internship_cap_consumed") {
+          failureMsg = "Internship cap reached";
+        } else if (result.reason === "opted_out") {
+          failureMsg = "Opted out of placements";
+        } else if (result.reason === "on_hold") {
+          failureMsg = "On hold by college";
+        } else if (result.reason === "disbarred") {
+          failureMsg = "Disbarred from placements";
+        } else if (result.reason === "srf_not_approved") {
+          failureMsg = "SRF not yet verified";
+        } else if (result.reason === "area_not_chosen") {
+          failureMsg = "Role area not chosen in preferences";
+        } else if (result.reason === "drive_type_not_preferred") {
+          failureMsg = "Drive type not preferred in preferences";
+        }
+
+        const list = excludedMap.get(key) ?? [];
+        list.push({ candidate: student, failure: failureMsg });
+        excludedMap.set(key, list);
       }
     }
-    return { included, excluded: [...excluded.entries()] };
+    const excludedEntries = [...excludedMap.entries()].map(([reason, items]) => ({
+      reason,
+      count: items.length,
+      items,
+    }));
+    return { included, excluded: excludedEntries };
   }, [drive, cohort]);
+
+  const [drilldown, setDrilldown] = useState<{
+    open: boolean;
+    eyebrow: string;
+    title: string;
+    people: readonly DrilldownPerson[];
+    note?: string | null;
+  } | null>(null);
+
+  const openIncludedDrilldown = useCallback(() => {
+    const people: DrilldownPerson[] = audience.included.map((student) => {
+      const prog = student.academics.branch
+        ? `${student.academics.degree} — ${student.academics.branch}`
+        : student.academics.degree;
+      return {
+        id: student.id,
+        name: student.name,
+        rollNumber: student.rollNumber ?? null,
+        campus: student.academics.campus || "Unknown Campus",
+        programme: prog,
+        cgpa: student.academics.overallCgpa,
+        status: "Eligible",
+        group: student.academics.campus || "Unknown Campus",
+      };
+    });
+
+    setDrilldown({
+      open: true,
+      eyebrow: "Live Audience",
+      title: `${people.length} Eligible ${people.length === 1 ? "Student" : "Students"}`,
+      note: "These students meet all criteria and targeting for this drive and will be notified upon publish.",
+      people,
+    });
+  }, [audience.included]);
+
+  const openExcludedDrilldown = useCallback(
+    (reason: ExclusionKey, items: readonly ExcludedCandidate[]) => {
+      const reasonLabel = EXCLUSION_LABEL[reason];
+      const people: DrilldownPerson[] = items.map(({ candidate, failure }) => {
+        const prog = candidate.academics.branch
+          ? `${candidate.academics.degree} — ${candidate.academics.branch}`
+          : candidate.academics.degree;
+        return {
+          id: candidate.id,
+          name: candidate.name,
+          rollNumber: candidate.rollNumber ?? null,
+          campus: candidate.academics.campus || "Unknown Campus",
+          programme: prog,
+          cgpa: candidate.academics.overallCgpa,
+          status: failure || reasonLabel,
+          group: candidate.academics.campus || "Unknown Campus",
+        };
+      });
+
+      setDrilldown({
+        open: true,
+        eyebrow: "Excluded Cohort",
+        title: `${people.length} Excluded — ${reasonLabel}`,
+        note: `Students excluded under "${reasonLabel}" based on current drive criteria and student profile.`,
+        people,
+      });
+    },
+    [],
+  );
 
   const overrideIncomplete = openToAll && overrideReason.trim() === "";
 
@@ -858,6 +960,23 @@ export function DafPublish({ view }: { view: PublishView }) {
       <PageHeader
         title={`Publish drive — ${loadedDrive.companyName}`}
         subtitle={loadedDrive.subtitle}
+        actions={
+          <button
+            type="button"
+            onClick={openIncludedDrilldown}
+            className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-full"
+            title="Click to view eligible students"
+          >
+            <Badge
+              tone="brand"
+              variant="pill"
+              className="text-sm font-semibold px-3 py-1 hover:bg-brand-100 transition-colors cursor-pointer"
+            >
+              {audience.included.length} eligible{" "}
+              {audience.included.length === 1 ? "student" : "students"}
+            </Badge>
+          </button>
+        }
       />
 
       {/* Item 38 (2026-08-21): the role's skills, alongside the company info —
@@ -1255,9 +1374,22 @@ export function DafPublish({ view }: { view: PublishView }) {
           <Card className="overflow-hidden">
             <div className="border-b border-line bg-brand-600 px-4 py-3 text-white">
               <p className="text-xs uppercase tracking-wide text-white/70">Live audience</p>
-              <p className="font-heading text-3xl font-bold" data-testid="audience-count">
-                {audience.included.length}
-              </p>
+              <button
+                type="button"
+                onClick={openIncludedDrilldown}
+                className="group flex items-baseline gap-2 text-left cursor-pointer focus:outline-none"
+                title="Click to view eligible students list"
+              >
+                <p
+                  className="font-heading text-3xl font-bold group-hover:underline"
+                  data-testid="audience-count"
+                >
+                  {audience.included.length}
+                </p>
+                <span className="text-xs text-white/80 underline decoration-white/50 group-hover:text-white">
+                  view list →
+                </span>
+              </button>
               <p className="text-xs text-white/70">
                 of {cohort.length} students will see this drive
               </p>
@@ -1283,10 +1415,21 @@ export function DafPublish({ view }: { view: PublishView }) {
                 <p className="text-sm text-ink-500">Nobody is excluded.</p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
-                  {audience.excluded.map(([reason, count]) => (
-                    <li key={reason} className="flex items-start justify-between gap-2 text-sm">
-                      <span className="text-ink-500">{EXCLUSION_LABEL[reason]}</span>
-                      <span className="font-semibold text-ink-900">{count}</span>
+                  {audience.excluded.map(({ reason, count, items }) => (
+                    <li key={reason}>
+                      <button
+                        type="button"
+                        onClick={() => openExcludedDrilldown(reason, items)}
+                        className="w-full flex items-start justify-between gap-2 text-sm text-left rounded p-1 -mx-1 hover:bg-surface-muted transition-colors cursor-pointer group"
+                        title={`Click to view ${count} excluded students`}
+                      >
+                        <span className="text-ink-500 group-hover:text-ink-900 group-hover:underline">
+                          {EXCLUSION_LABEL[reason]}
+                        </span>
+                        <span className="font-semibold text-ink-900 group-hover:text-brand-600">
+                          {count} →
+                        </span>
+                      </button>
                     </li>
                   ))}
                 </ul>
@@ -1336,6 +1479,17 @@ export function DafPublish({ view }: { view: PublishView }) {
           </Card>
         </div>
       </div>
+
+      {drilldown && (
+        <StatDrilldown
+          open={drilldown.open}
+          onClose={() => setDrilldown(null)}
+          eyebrow={drilldown.eyebrow}
+          title={drilldown.title}
+          people={drilldown.people}
+          note={drilldown.note ?? null}
+        />
+      )}
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { countAbsences } from "@domain/attendance";
 import type { AttendanceStatus } from "@domain/types";
+import { fetchRoundHeaderInfo } from "@lib/drive-picker-data";
 import { readAllRows, readAllRowsByIds } from "@lib/postgrest-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseRoundsRepository } from "../central-cpc/rounds-repository";
@@ -119,6 +120,10 @@ export function createSupabaseAttendanceView(
 
     async markBatch(roundId, entries) {
       await rounds.markBatchAttendance(roundId, entries, true);
+    },
+
+    async roundMeta(roundId) {
+      return fetchRoundHeaderInfo(client, roundId);
     },
   };
 }

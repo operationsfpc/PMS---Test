@@ -561,6 +561,51 @@ describe("live drives", () => {
     expect(within(live).getByText(/no application window set/i)).toBeDefined();
   });
 
+  it("shows 'Applications closed' when window has passed and no offers rolled out yet", async () => {
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          liveDrives: [
+            {
+              ...(SNAPSHOT.liveDrives[0] as (typeof SNAPSHOT.liveDrives)[number]),
+              applicationStart: "2026-08-01T00:00:00Z",
+              applicationEnd: "2026-08-15T00:00:00Z",
+              offers: 0,
+            },
+          ],
+        })}
+      />,
+    );
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText(/applications closed/i)).toBeDefined();
+    expect(within(live).queryByText(/^closed$/i)).toBeNull();
+  });
+
+  it("shows 'Closed' only when coordinator rolled out offers for that drive", async () => {
+    render(
+      <DashboardPage
+        title="Executive overview"
+        view={view({
+          ...SNAPSHOT,
+          liveDrives: [
+            {
+              ...(SNAPSHOT.liveDrives[0] as (typeof SNAPSHOT.liveDrives)[number]),
+              applicationStart: "2026-08-01T00:00:00Z",
+              applicationEnd: "2026-08-15T00:00:00Z",
+              offers: 2,
+            },
+          ],
+        })}
+      />,
+    );
+
+    const live = await screen.findByRole("region", { name: /open drives/i });
+    expect(within(live).getByText(/^closed$/i)).toBeDefined();
+  });
+
   it("says so when no drive is open, rather than showing an empty list", async () => {
     render(
       <DashboardPage title="Executive overview" view={view({ ...SNAPSHOT, liveDrives: [] })} />,

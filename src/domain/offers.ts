@@ -23,6 +23,7 @@ export interface Offer {
    * zero is the shape of the bug that put ₹10 LPA against ₹15,000 a month.
    */
   readonly ctcLpa: number | null;
+  readonly stipendMonthly?: number | null;
   readonly declaredAt: Date;
   readonly source: OfferSource;
 }

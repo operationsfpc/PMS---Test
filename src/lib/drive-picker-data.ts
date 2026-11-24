@@ -68,3 +68,68 @@ export async function fetchDriveRounds(
     }))
     .sort((a, b) => a.sequence - b.sequence);
 }
+
+export interface DriveHeaderInfo {
+  readonly driveId: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+}
+
+export async function fetchDriveHeaderInfo(
+  client: SupabaseClient,
+  driveId: string,
+): Promise<DriveHeaderInfo | null> {
+  const { data, error } = await client
+    .from("drives")
+    .select("id, company_name, role_title")
+    .eq("id", driveId)
+    .maybeSingle();
+
+  if (error !== null || data === null) return null;
+  const raw = data as { id?: string; company_name?: string | null; role_title?: string | null };
+  return {
+    driveId: raw.id ?? driveId,
+    companyName: raw.company_name ?? "Unnamed drive",
+    roleTitle: raw.role_title ?? null,
+  };
+}
+
+export interface RoundHeaderInfo {
+  readonly roundId: string;
+  readonly sequence: number;
+  readonly name: string;
+  readonly driveId: string;
+  readonly companyName: string;
+  readonly roleTitle: string | null;
+}
+
+export async function fetchRoundHeaderInfo(
+  client: SupabaseClient,
+  roundId: string,
+): Promise<RoundHeaderInfo | null> {
+  const { data, error } = await client
+    .from("drive_rounds")
+    .select("id, sequence, name, drive_id, drives(id, company_name, role_title)")
+    .eq("id", roundId)
+    .maybeSingle();
+
+  if (error !== null || data === null) return null;
+  const raw = data as {
+    id?: string;
+    sequence?: number;
+    name?: string;
+    drive_id?: string;
+    drives?:
+      | { id?: string; company_name?: string | null; role_title?: string | null }
+      | Array<{ id?: string; company_name?: string | null; role_title?: string | null }>;
+  };
+  const drive = Array.isArray(raw.drives) ? raw.drives[0] : raw.drives;
+  return {
+    roundId: raw.id ?? roundId,
+    sequence: Number(raw.sequence ?? 1),
+    name: raw.name ?? "",
+    driveId: raw.drive_id ?? drive?.id ?? "",
+    companyName: drive?.company_name ?? "Unnamed drive",
+    roleTitle: drive?.role_title ?? null,
+  };
+}

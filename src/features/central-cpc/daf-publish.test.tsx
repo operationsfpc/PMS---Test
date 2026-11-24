@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import type { CollegeOption } from "@domain/drive-targeting";
 import type { AcademicProfile } from "@domain/types";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -1229,5 +1229,128 @@ describe("DafPublish — the three tickers interlock", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "3 days" }));
     expect(windowEndInput.value).toBe("2026-08-04T23:59");
+  });
+
+  describe("drilldown popups for audience and exclusions", () => {
+    it("opens live audience drilldown modal when clicking the live audience count", async () => {
+      const testCohort: PublishCandidate[] = [
+        candidate("s1", "Asha Rani", {
+          rollNumber: "21CSE1001",
+          academics: academics({ campus: "Alliance University", overallCgpa: 8.5 }),
+        }),
+        candidate("s2", "Vikram Kumar", {
+          rollNumber: "21CSE1002",
+          academics: academics({ campus: "VIT Bangalore", overallCgpa: 9.1 }),
+        }),
+      ];
+      routed(view({}, testCohort));
+
+      await screen.findByRole("heading", { name: /publish drive — zoho/i });
+      expect(count()).toBe(2);
+
+      const audienceBtn = screen.getByTestId("audience-count").closest("button");
+      expect(audienceBtn).not.toBeNull();
+      if (audienceBtn) await userEvent.click(audienceBtn);
+
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Live Audience")).toBeDefined();
+      expect(within(dialog).getByRole("heading", { name: /2 Eligible Students/i })).toBeDefined();
+      expect(within(dialog).getByText("Asha Rani")).toBeDefined();
+      expect(within(dialog).getByText("Vikram Kumar")).toBeDefined();
+      expect(within(dialog).getByText("21CSE1001")).toBeDefined();
+      expect(within(dialog).getByText("21CSE1002")).toBeDefined();
+      expect(within(dialog).getByText("Alliance University")).toBeDefined();
+      expect(within(dialog).getByText("VIT Bangalore")).toBeDefined();
+
+      expect(within(dialog).getByRole("tab", { name: /^all \(/i })).toBeDefined();
+      expect(within(dialog).getByRole("tab", { name: /alliance university/i })).toBeDefined();
+      expect(within(dialog).getByRole("tab", { name: /vit bangalore/i })).toBeDefined();
+
+      const link = within(dialog).getByRole("link", { name: "Asha Rani" });
+      expect(link.getAttribute("href")).toBe("/students/s1");
+    });
+
+    it("opens live audience drilldown modal when clicking the header badge", async () => {
+      const testCohort: PublishCandidate[] = [
+        candidate("s1", "Asha Rani", {
+          rollNumber: "21CSE1001",
+          academics: academics({ campus: "Alliance University", overallCgpa: 8.5 }),
+        }),
+      ];
+      routed(view({}, testCohort));
+
+      await screen.findByRole("heading", { name: /publish drive — zoho/i });
+
+      const badgeBtn = screen.getByRole("button", { name: /1 eligible student/i });
+      await userEvent.click(badgeBtn);
+
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Asha Rani")).toBeDefined();
+    });
+
+    it("opens excluded cohort drilldown modal when clicking an exclusion item", async () => {
+      const testCohort: PublishCandidate[] = [
+        candidate("s1", "Asha Rani", {
+          rollNumber: "21CSE1001",
+          academics: academics({ campus: "Alliance University", overallCgpa: 8.5 }),
+        }),
+        candidate("s2", "Low CGPA Student", {
+          rollNumber: "21CSE1002",
+          academics: academics({ campus: "Alliance University", overallCgpa: 6.2 }),
+        }),
+      ];
+      routed(view({}, testCohort));
+
+      await screen.findByRole("heading", { name: /publish drive — zoho/i });
+
+      const cgpaInput = document.getElementById("min-cgpa") as HTMLInputElement;
+      await userEvent.clear(cgpaInput);
+      await userEvent.type(cgpaInput, "7.0");
+
+      expect(count()).toBe(1);
+
+      const exclusionBtn = screen.getByRole("button", { name: /do not meet the academic bars/i });
+      await userEvent.click(exclusionBtn);
+
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Excluded Cohort")).toBeDefined();
+      expect(
+        within(dialog).getByRole("heading", {
+          name: /1 Excluded — Do not meet the academic bars/i,
+        }),
+      ).toBeDefined();
+      expect(within(dialog).getByText("Low CGPA Student")).toBeDefined();
+      expect(within(dialog).getByText("21CSE1002")).toBeDefined();
+      expect(
+        within(dialog).getByText(/Overall CGPA is 6.2, below the required minimum of 7/i),
+      ).toBeDefined();
+    });
+
+    it("dynamically reflects updated criteria in the drilldown modal", async () => {
+      const testCohort: PublishCandidate[] = [
+        candidate("s1", "Student High", {
+          academics: academics({ campus: "Alliance University", overallCgpa: 8.5 }),
+        }),
+        candidate("s2", "Student Mid", {
+          academics: academics({ campus: "Alliance University", overallCgpa: 7.5 }),
+        }),
+      ];
+      routed(view({}, testCohort));
+
+      await screen.findByRole("heading", { name: /publish drive — zoho/i });
+      expect(count()).toBe(2);
+
+      const cgpaInput = document.getElementById("min-cgpa") as HTMLInputElement;
+      await userEvent.type(cgpaInput, "8.0");
+      expect(count()).toBe(1);
+
+      const audienceBtn = screen.getByTestId("audience-count").closest("button");
+      expect(audienceBtn).not.toBeNull();
+      if (audienceBtn) await userEvent.click(audienceBtn);
+
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Student High")).toBeDefined();
+      expect(within(dialog).queryByText("Student Mid")).toBeNull();
+    });
   });
 });

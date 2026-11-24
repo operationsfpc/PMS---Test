@@ -284,7 +284,15 @@ function LiveDriveRole({
 
       <div className="flex flex-wrap items-center gap-2">
         {window.urgent && <Badge tone="danger">Closing soon</Badge>}
-        <Badge tone={window.state === "open" ? "brand" : "neutral"}>{window.label}</Badge>
+        {window.state === "closed" ? (
+          drive.offers > 0 ? (
+            <Badge tone="neutral">Closed</Badge>
+          ) : (
+            <Badge tone="warning">Applications closed</Badge>
+          )
+        ) : (
+          <Badge tone={window.state === "open" ? "brand" : "neutral"}>{window.label}</Badge>
+        )}
       </div>
     </div>
   );

@@ -45,6 +45,7 @@ function statusTone(status: string): Tone {
     s === "approved" ||
     s === "cleared" ||
     s === "active" ||
+    s.includes("eligible") ||
     s.includes("selected") ||
     s === "offer" ||
     s.includes("accepted")
@@ -67,7 +68,11 @@ function statusTone(status: string): Tone {
     s.includes("absent") ||
     s.includes("hold") ||
     s.includes("failed") ||
-    s.includes("disqualif")
+    s.includes("disqualif") ||
+    s.includes("not eligible") ||
+    s.includes("excluded") ||
+    s.includes("below") ||
+    s.includes("arrear")
   ) {
     return "danger";
   }
