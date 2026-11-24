@@ -218,6 +218,7 @@ export function createSupabaseDashboardView(
 
       const onCampus = new Set<string>();
       const selfPlaced = new Set<string>();
+      const internship = new Set<string>();
 
       // Kept per student so R9 can pick the ONE offer that is their placement
       // record. Averaging every row instead would count a student holding three
@@ -240,6 +241,10 @@ export function createSupabaseDashboardView(
           source: offer.source as Offer["source"],
         });
         offersByStudent.set(studentId, forStudent);
+
+        if (offer.drive_type === "internship") {
+          internship.add(studentId);
+        }
 
         if (offer.source === "self_placed") {
           selfPlaced.add(studentId);
@@ -697,6 +702,7 @@ export function createSupabaseDashboardView(
           hasApplied: applied.has(row.id as string),
           hasOnCampusPlacement: onCampus.has(row.id as string),
           hasSelfPlacement: selfPlaced.has(row.id as string),
+          hasInternship: internship.has(row.id as string),
           // F4: the campus switcher filters on these, so every row carries
           // them. A student with no campus stays on the roster and is named
           // as unassigned rather than quietly dropped.

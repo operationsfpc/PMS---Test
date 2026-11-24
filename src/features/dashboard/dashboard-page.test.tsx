@@ -1164,11 +1164,15 @@ describe("every card opens the students behind it", () => {
       render(<DashboardPage view={view()} title="Placement overview" />);
 
       const dialog = await press(await headline(name), title);
-      for (const person of people) {
-        expect(within(dialog).getByText(person)).toBeDefined();
+      if (count === 0) {
+        expect(within(dialog).getByText(/Nobody is in this count yet/i)).toBeDefined();
+      } else {
+        for (const person of people) {
+          expect(within(dialog).getByText(person)).toBeDefined();
+        }
+        counted(dialog, count);
+        expect(directory(dialog).getAttribute("href")).toBe(href);
       }
-      counted(dialog, count);
-      expect(directory(dialog).getAttribute("href")).toBe(href);
     },
   );
 
@@ -1208,6 +1212,12 @@ describe("every card opens the students behind it", () => {
       people: ["Priya Ramesh"],
       href: "/central/students?filter=on_campus",
     },
+    {
+      stage: "Placed on internship",
+      count: 0,
+      people: [],
+      href: "/central/students?filter=internship",
+    },
   ];
 
   it.each(FUNNEL)(
@@ -1216,15 +1226,18 @@ describe("every card opens the students behind it", () => {
       render(<DashboardPage view={view()} title="Placement overview" />);
 
       const overview = await screen.findByRole("region", { name: /students overview/i });
-      const dialog = await press(
-        within(overview).getByRole("button", { name: new RegExp(stage, "i") }),
-        new RegExp(`^${stage}$`, "i"),
-      );
-      for (const person of people) {
-        expect(within(dialog).getByText(person)).toBeDefined();
+      const button = within(overview).getByText(stage).closest("button");
+      if (!button) throw new Error(`Button for ${stage} not found`);
+      const dialog = await press(button, new RegExp(`^${stage}$`, "i"));
+      if (count === 0) {
+        expect(within(dialog).getByText(/Nobody is in this count yet/i)).toBeDefined();
+      } else {
+        for (const person of people) {
+          expect(within(dialog).getByText(person)).toBeDefined();
+        }
+        counted(dialog, count);
+        expect(directory(dialog).getAttribute("href")).toBe(href);
       }
-      counted(dialog, count);
-      expect(directory(dialog).getAttribute("href")).toBe(href);
     },
   );
 

@@ -17,10 +17,11 @@ export interface FunnelStudent {
   readonly participationStatus: ParticipationStatus;
   readonly hasApplied: boolean;
   readonly hasOnCampusPlacement: boolean;
+  readonly hasInternship?: boolean;
 }
 
 export interface FunnelStage {
-  readonly key: "on_roster" | "submitted" | "verified" | "placed";
+  readonly key: "on_roster" | "submitted" | "verified" | "placed" | "internship";
   readonly label: string;
   readonly count: number;
   readonly percentOfRoster: number;
@@ -37,6 +38,7 @@ export interface FunnelEvidence {
   readonly srfStatus: SrfStatus;
   readonly hasApplied: boolean;
   readonly hasOnCampusPlacement: boolean;
+  readonly hasInternship?: boolean;
 }
 
 /**
@@ -49,10 +51,16 @@ export interface FunnelEvidence {
  * until the list disagreed with the number that opened it.
  */
 export const countsAsSubmitted = (student: FunnelEvidence): boolean =>
-  SUBMITTED.includes(student.srfStatus) || student.hasApplied || student.hasOnCampusPlacement;
+  SUBMITTED.includes(student.srfStatus) ||
+  student.hasApplied ||
+  student.hasOnCampusPlacement ||
+  Boolean(student.hasInternship);
 
 export const countsAsVerified = (student: FunnelEvidence): boolean =>
-  student.srfStatus === "srf_approved" || student.hasApplied || student.hasOnCampusPlacement;
+  student.srfStatus === "srf_approved" ||
+  student.hasApplied ||
+  student.hasOnCampusPlacement ||
+  Boolean(student.hasInternship);
 
 /**
  * Who stands in each funnel row (2026-10-16).
@@ -72,6 +80,7 @@ export const FUNNEL_STAGE_MATCH: Readonly<
   // an opted-out student who holds an offer still stands in this row, because
   // the stage reports a fact about them rather than the placement rate.
   placed: (student) => student.hasOnCampusPlacement,
+  internship: (student) => Boolean(student.hasInternship),
 };
 
 /**
@@ -98,6 +107,7 @@ export function registrationFunnel(students: readonly FunnelStudent[]): readonly
   const roster = students.length;
 
   const placed = students.filter(FUNNEL_STAGE_MATCH.placed).length;
+  const internship = students.filter(FUNNEL_STAGE_MATCH.internship).length;
 
   // Applying is no longer reported, but it is still EVIDENCE: a student who
   // applied was necessarily verified, whatever their status column now says.
@@ -110,6 +120,7 @@ export function registrationFunnel(students: readonly FunnelStudent[]): readonly
     { key: "submitted", label: "Registration form submitted", count: submitted },
     { key: "verified", label: "Verified by a coordinator", count: verified },
     { key: "placed", label: "Placed", count: placed },
+    { key: "internship", label: "Placed on internship", count: internship },
   ];
 
   return stages.map((stage) => ({

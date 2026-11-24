@@ -24,6 +24,7 @@ const student = (over: Partial<FunnelStudent> = {}): FunnelStudent => ({
   participationStatus: "active",
   hasApplied: false,
   hasOnCampusPlacement: false,
+  hasInternship: false,
   ...over,
 });
 
@@ -136,6 +137,7 @@ describe("registrationFunnel", () => {
       "Registration form submitted",
       "Verified by a coordinator",
       "Placed",
+      "Placed on internship",
     ]);
   });
 
@@ -237,6 +239,7 @@ describe("FUNNEL_STAGE_MATCH", () => {
     ["submitted", 5],
     ["verified", 4],
     ["placed", 1],
+    ["internship", 0],
   ] as const)("lists exactly the %s students the funnel counted", (key, count) => {
     expect(cohort.filter(FUNNEL_STAGE_MATCH[key])).toHaveLength(count);
     expect(registrationFunnel(cohort).find((s) => s.key === key)?.count).toBe(count);
@@ -249,6 +252,7 @@ describe("FUNNEL_STAGE_MATCH", () => {
     expect(FUNNEL_STAGE_MATCH.submitted(fresh)).toBe(false);
     expect(FUNNEL_STAGE_MATCH.verified(fresh)).toBe(false);
     expect(FUNNEL_STAGE_MATCH.placed(fresh)).toBe(false);
+    expect(FUNNEL_STAGE_MATCH.internship(fresh)).toBe(false);
   });
 
   /**

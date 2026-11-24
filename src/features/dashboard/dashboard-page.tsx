@@ -66,6 +66,7 @@ export type DashboardStudent = StudentPlacementFacts & {
   readonly cgpa: number | null;
   readonly srfStatus: SrfStatus;
   readonly hasApplied: boolean;
+  readonly hasInternship?: boolean;
   /** F4: the campus switcher filters on this, so it must be per student. */
   readonly campusId: string;
   readonly campusName: string;
@@ -97,6 +98,7 @@ function toPerson(student: DashboardStudent): DrilldownPerson {
  */
 function stageOf(student: DashboardStudent): string {
   if (student.hasOnCampusPlacement) return "Placed";
+  if (student.hasInternship) return "Internship";
   if (FUNNEL_STAGE_MATCH.verified(student)) return "Verified";
   if (FUNNEL_STAGE_MATCH.submitted(student)) return "Form submitted";
   return "Not submitted";
@@ -365,6 +367,7 @@ const FUNNEL_FILTER: Readonly<Record<string, DirectoryFilter | undefined>> = {
   // counts on-campus placements only (PRD 16.2). The link used to open a
   // longer list than the number that opened it.
   placed: "on_campus",
+  internship: "internship",
 };
 
 /**
