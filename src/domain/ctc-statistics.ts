@@ -46,9 +46,14 @@ const EMPTY: CtcStatistics = {
  * as earning ₹19.5.
  */
 export function summariseCtc(records: readonly PlacementCtc[]): CtcStatistics {
-  if (records.length === 0) return EMPTY;
+  // Only ladder categories (Regular, Dream, Super Dream) count towards the package figures.
+  // Internships (category null or "internship") are strictly excluded.
+  const ladderRecords = records.filter(
+    (r) => r.category !== null && (LADDER_CATEGORIES as readonly string[]).includes(r.category),
+  );
+  if (ladderRecords.length === 0) return EMPTY;
 
-  const sorted = records.map((r) => r.ctcLpa).sort((a, b) => a - b);
+  const sorted = ladderRecords.map((r) => r.ctcLpa).sort((a, b) => a - b);
   const total = sorted.reduce((sum, ctc) => sum + ctc, 0);
 
   const middle = Math.floor(sorted.length / 2);

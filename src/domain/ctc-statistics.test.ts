@@ -152,15 +152,15 @@ describe("summariseCtcByCategory", () => {
   });
 
   /**
-   * A plain internship is not on the ladder and carries no category (PRD §11).
-   * It is still a real placement, so it is counted in the headline and simply
-   * has no category row.
+   * Plain internships (null category or "internship") are not ladder placements
+   * (PRD §11 & client requirement: "this should take from placed like regular, that kind of not internship").
+   * They have no category row AND are excluded from the headline CTC figures.
    */
-  it("leaves an uncategorised placement out of the category breakdown", () => {
+  it("leaves an uncategorised placement out of the category breakdown and CTC figures", () => {
     const records = [record("s1", 8, "dream"), record("s2", 3, null)];
 
     expect(summariseCtcByCategory(records)).toHaveLength(1);
-    expect(summariseCtc(records).count).toBe(2);
+    expect(summariseCtc(records).count).toBe(1);
   });
 
   it("returns nothing when nobody is placed", () => {

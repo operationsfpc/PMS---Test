@@ -3,6 +3,7 @@ import { academicStandingFrom, type SemesterRecord } from "@domain/academics";
 import { countDistinctEvents } from "@domain/company-drive";
 import type { PlacementCtc } from "@domain/ctc-statistics";
 import { isShortlisted, type RoundParticipant } from "@domain/drive-funnel";
+import { LADDER_CATEGORIES } from "@domain/offer-category";
 import { type Offer, resolvePlacementRecord } from "@domain/offers";
 import type {
   AcademicProfile,
@@ -440,6 +441,12 @@ export function createSupabaseDashboardView(
         // a zero in the package figures is the board-meeting number that is
         // wrong and looks deliberate (0070).
         if (record.ctcLpa === null) continue;
+        if (
+          record.offerCategory === null ||
+          !(LADDER_CATEGORIES as readonly string[]).includes(record.offerCategory)
+        ) {
+          continue;
+        }
         placements.push({ studentId, ctcLpa: record.ctcLpa, category: record.offerCategory });
       }
 
