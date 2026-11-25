@@ -812,13 +812,12 @@ export function StudentDirectoryPage({
             </div>
           )}
 
-          {/* Compact filter strip: population chips on one line, search beside them.
-          Column filters live in the table headers now, not in dropdowns above. */}
-          <div className="mb-4 flex flex-wrap items-center gap-3 w-full min-w-0 max-w-full">
+          {/* Population chips filter strip with responsive wrapping and clean search/clear alignment */}
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div
               role="radiogroup"
               aria-label="Filter students"
-              className="flex min-w-0 max-w-full flex-1 flex-nowrap gap-1.5 scroll-bare overflow-x-auto"
+              className="flex flex-wrap items-center gap-1.5"
             >
               {FILTERS.map((option) => {
                 const isOptionActive =
@@ -828,10 +827,10 @@ export function StudentDirectoryPage({
                 return (
                   <label
                     key={option.value}
-                    className={`shrink-0 cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
+                    className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${
                       isOptionActive
-                        ? "border-brand-500 bg-brand-600 text-white"
-                        : "border-field bg-surface text-ink-700 hover:border-brand-400"
+                        ? "border-brand-500 bg-brand-600 text-white shadow-xs"
+                        : "border-field bg-surface text-ink-700 hover:border-brand-400 hover:bg-surface-muted/50"
                     }`}
                   >
                     <input
@@ -861,19 +860,21 @@ export function StudentDirectoryPage({
                 );
               })}
             </div>
-            <input
-              type="search"
-              aria-label="Search students"
-              placeholder="Name, roll, company…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="ml-auto shrink-0 rounded-lg border border-line px-3 py-1 text-sm text-ink-900 sm:max-w-[200px]"
-            />
-            {anyFilterActive && (
-              <Button variant="ghost" size="sm" onClick={clearAll}>
-                Clear all
-              </Button>
-            )}
+            <div className="flex shrink-0 items-center gap-2 self-start lg:self-center">
+              <input
+                type="search"
+                aria-label="Search students"
+                placeholder="Name, roll, company…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-full rounded-lg border border-line px-3 py-1 text-sm text-ink-900 sm:w-[200px]"
+              />
+              {anyFilterActive && (
+                <Button variant="ghost" size="sm" onClick={clearAll} className="shrink-0 text-xs">
+                  Clear all
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Active filter chips: whenever the list is narrowed, show the active filters with quick clear buttons */}
