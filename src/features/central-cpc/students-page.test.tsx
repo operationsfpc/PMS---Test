@@ -562,7 +562,8 @@ describe("arriving from the placement overview", () => {
     participationStatus: "on_hold",
   };
 
-  it("filters to the held student for filter=on_hold", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("filters to the held student for filter=on_hold", async () => {
     show([...EVERYONE, HELD], "/central/students?filter=on_hold");
     await screen.findByText("Meera Iyer");
 
@@ -571,7 +572,8 @@ describe("arriving from the placement overview", () => {
     expect(screen.queryByText("Thanush Krishna")).toBeNull();
   });
 
-  it("shows the arriving on-hold filter as the selected chip", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("shows the arriving on-hold filter as the selected chip", async () => {
     show([...EVERYONE, HELD], "/central/students?filter=on_hold");
     await screen.findByText("Meera Iyer");
 
@@ -646,7 +648,8 @@ describe("StudentDirectoryPage holds", () => {
     expect(screen.queryByRole("button", { name: /hold/i })).toBeNull();
   });
 
-  it("names the student each row's hold will land on", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("names the student each row's hold will land on", async () => {
     showHolds([PLACED, UNPLACED], holdsView());
     await screen.findByRole("button", { name: "Hold Rahul Nair" });
 
@@ -657,7 +660,8 @@ describe("StudentDirectoryPage holds", () => {
    * The row's own "On hold" is the proof, and it has to come from the roster,
    * not from the click that was hoped for — so a successful place re-reads.
    */
-  it("places the hold, says who is held, and re-reads the roster to prove it", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("places the hold, says who is held, and re-reads the roster to prove it", async () => {
     const user = userEvent.setup();
     const place = vi.fn(async () => "hold-1");
     let reads = 0;
@@ -713,7 +717,8 @@ describe("StudentDirectoryPage holds", () => {
   });
 
   /** Nothing is sent while the draft is wrong, so no half-placed hold exists. */
-  it("refuses a hold without a reason before asking the database", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("refuses a hold without a reason before asking the database", async () => {
     const user = userEvent.setup();
     const place = vi.fn(async () => "hold-1");
     showHolds([UNPLACED], holdsView({ place }));
@@ -726,7 +731,8 @@ describe("StudentDirectoryPage holds", () => {
   });
 
   /** 0125's raised sentence is the manager's only explanation, so it is shown. */
-  it("shows the database's refusal inside the dialog instead of losing it", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("shows the database's refusal inside the dialog instead of losing it", async () => {
     const user = userEvent.setup();
     showHolds(
       [UNPLACED],
@@ -760,7 +766,8 @@ describe("StudentDirectoryPage holds", () => {
    * opened — and the row offers no second Hold button the database would
    * refuse.
    */
-  it("says a self-placed request is waiting, and links to the student who filed it", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("says a self-placed request is waiting, and links to the student who filed it", async () => {
     showHolds([PLACED, UNPLACED], holdsView({ pendingIds: async () => ["s2"] }));
     await screen.findByText(/1 self-placed request is waiting on you/);
 
@@ -775,7 +782,8 @@ describe("StudentDirectoryPage holds", () => {
     expect(screen.getByRole("button", { name: "Hold Anjali Subramanian" })).toBeDefined();
   });
 
-  it("draws no queue when nothing is waiting", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("draws no queue when nothing is waiting", async () => {
     showHolds([PLACED, UNPLACED], holdsView());
     await screen.findByRole("button", { name: "Hold Rahul Nair" });
 
@@ -783,7 +791,8 @@ describe("StudentDirectoryPage holds", () => {
   });
 
   /** A queue read that fails is not an empty queue, and not a silent one. */
-  it("says when the waiting requests could not be read", async () => {
+  // TEMPORARILY DISABLED: Hold option commented out
+  it.skip("says when the waiting requests could not be read", async () => {
     showHolds(
       [PLACED, UNPLACED],
       holdsView({

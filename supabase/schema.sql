@@ -22769,3 +22769,8 @@ update students s
         and h.released_at is null
    );
 
+
+-- ============================================================================
+-- Migration: 0159_temporarily_disable_auto_pause.sql
+-- ============================================================================
+drop trigger if exists trg_auto_pause_on_drive_close on drives;

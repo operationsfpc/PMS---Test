@@ -4,7 +4,8 @@ import {
   ColumnFilterSearch,
 } from "@components/column-filter";
 import { ErrorPanel } from "@components/error-panel";
-import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
+// TEMPORARILY DISABLED: Hold option commented out
+// import { HoldDialog, type HoldTarget } from "@components/hold-dialog";
 import { TablePager } from "@components/table-pager";
 import { Badge, Button, Card, LottieLoader, PageHeader } from "@components/ui";
 import { serialiseCsv } from "@domain/csv";
@@ -86,7 +87,8 @@ const FILTERS: readonly { readonly value: DirectoryFilter; readonly label: strin
   // 2026-10-29: the roster's participation status is already shown on every
   // row, but the chip is the way a manager reaches the held students without
   // scrolling. The domain supports it; the chip was simply missing.
-  { value: "on_hold", label: "On hold" },
+  // TEMPORARILY DISABLED: Hold option commented out
+  // { value: "on_hold", label: "On hold" },
 ];
 
 /** The canonical order the two status dropdowns list their options in. */
@@ -161,7 +163,7 @@ function parseCtc(value: string | null): number | undefined {
 export function StudentDirectoryPage({
   view,
   holds,
-  canPlace = true,
+  canPlace: _canPlace = true,
   download = browserDownload,
 }: {
   view: StudentDirectoryView;
@@ -187,10 +189,11 @@ export function StudentDirectoryPage({
   const [exportNote, setExportNote] = useState<string | null>(null);
   /** The export failing — not the same complaint as the roster not loading. */
   const [exportProblem, setExportProblem] = useState<string | null>(null);
-  /** The student whose hold form is open. */
-  const [holding, setHolding] = useState<HoldTarget | null>(null);
-  /** Which student is now held, said once the write has landed. */
-  const [holdNote, setHoldNote] = useState<string | null>(null);
+  // TEMPORARILY DISABLED: Hold option commented out
+  // /** The student whose hold form is open. */
+  // const [holding, setHolding] = useState<HoldTarget | null>(null);
+  // /** Which student is now held, said once the write has landed. */
+  // const [holdNote, setHoldNote] = useState<string | null>(null);
   /** Students whose self-placed request is waiting on this manager (0130). */
   const [pending, setPending] = useState<readonly string[]>([]);
   /** The queue read failing — a request nobody can see is one nobody answers. */
@@ -762,8 +765,7 @@ export function StudentDirectoryPage({
         </div>
       )}
 
-      {/* Said out loud because a hold that landed silently is a hold the next
-          manager believes was never placed. */}
+      {/* TEMPORARILY DISABLED: Hold option commented out
       {holdNote !== null && (
         <p
           role="status"
@@ -772,6 +774,7 @@ export function StudentDirectoryPage({
           {holdNote}
         </p>
       )}
+      */}
 
       {students.length === 0 ? (
         <Card className="p-6">
@@ -1233,11 +1236,13 @@ export function StudentDirectoryPage({
                             >
                               Profile →
                             </Link>
-                            {student.participationStatus === "on_hold" ? (
-                              <Badge tone="warning">On hold</Badge>
-                            ) : pendingSet.has(student.studentId) ? (
-                              <Badge tone="warning">Request waiting</Badge>
-                            ) : canPlace !== false ? (
+                            {
+                              student.participationStatus === "on_hold" ? (
+                                <Badge tone="warning">On hold</Badge>
+                              ) : pendingSet.has(student.studentId) ? (
+                                <Badge tone="warning">Request waiting</Badge>
+                              ) : null /* TEMPORARILY DISABLED: Hold button commented out
+                            : canPlace !== false ? (
                               <Button
                                 variant="secondary"
                                 size="sm"
@@ -1252,7 +1257,8 @@ export function StudentDirectoryPage({
                               >
                                 Hold
                               </Button>
-                            ) : null}
+                            ) : null */
+                            }
                           </div>
                         </td>
                       )}
@@ -1275,6 +1281,7 @@ export function StudentDirectoryPage({
         </>
       )}
 
+      {/* TEMPORARILY DISABLED: Hold option commented out
       {holding !== null && holds !== undefined && (
         <HoldDialog
           target={holding}
@@ -1290,6 +1297,7 @@ export function StudentDirectoryPage({
           }}
         />
       )}
+      */}
     </div>
   );
 }

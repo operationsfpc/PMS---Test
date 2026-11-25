@@ -23117,3 +23117,8 @@ select p.id, sci.campus_id
 from public.profiles p
 join public.staff_campus_invitations sci on lower(sci.email) = lower(p.email)
 on conflict do nothing;
+
+-- ============================================================================
+-- Migration: 0159_temporarily_disable_auto_pause.sql
+-- ============================================================================
+drop trigger if exists trg_auto_pause_on_drive_close on drives;
